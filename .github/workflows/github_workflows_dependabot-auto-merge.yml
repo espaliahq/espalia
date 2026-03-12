@@ -1,0 +1,47 @@
+name: Auto-merge Dependabot PRs
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find PR for this workflow run
+        id: find-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "${{ github.event.workflow_run.head_branch }}" \
+            --author "app/dependabot" \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+
+          if [ -z "$PR" ]; then
+            echo "No open Dependabot PR found for branch ${{ github.event.workflow_run.head_branch }}"
+            exit 0
+          fi
+
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
+      - name: Merge PR
+        if: steps.find-pr.outputs.pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ steps.find-pr.outputs.pr }}" \
+            --repo "${{ github.repository }}" \
+            --squash \
+            --delete-branch
