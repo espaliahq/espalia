@@ -1,0 +1,38 @@
+services:
+  rails-app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+
+    volumes:
+      - ../..:/workspaces:cached
+
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+
+    # Uncomment the next line to use a non-root user for all processes.
+    user: vscode
+
+    environment:
+      DB_HOST: postgres
+      SELENIUM_HOST: selenium
+      CAPYBARA_SERVER_PORT: "45678"
+
+    depends_on:
+    - selenium
+    - postgres
+
+  selenium:
+    image: selenium/standalone-chromium:latest
+    platform: linux/amd64
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    tmpfs:
+    - /var/lib/postgresql/data/pgdata
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
