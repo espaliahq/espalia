@@ -60,6 +60,8 @@ group :development, :test do
 
   # Factory Bot for dynamic testing fixtures
   gem "factory_bot_rails"
+
+  gem "erb_lint"
 end
 
 group :development do
