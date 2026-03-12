@@ -19,7 +19,12 @@ gem "turbo-rails"
 # Hotwire's modest JavaScript framework [https://stimulus.hotwired.dev]
 gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
-gem "jbuilder"
+
+gem "devise", "~> 5.0.2"
+gem "invisible_captcha", "~> 2.0"
+gem "noticed", "~> 3.0"
+gem "prefixed_ids", "~> 1.2"
+gem "tailwindcss-rails", "~> 4.0"
 
 # Phlex - Object-oriented views for semantic components
 gem "phlex", "~> 2.4.1"
@@ -61,7 +66,8 @@ group :development, :test do
   # Factory Bot for dynamic testing fixtures
   gem "factory_bot_rails"
 
-  gem "erb_lint"
+  gem "erb_lint", require: false
+  gem "mailbin", "~> 1.0"
 end
 
 group :development do

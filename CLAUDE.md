@@ -8,6 +8,15 @@ This is an open-source, multi-tenant platform for operationalising career growth
 
 The system embodies the philosophy that **performance is multi-dimensional and culture is the sum of consistently demonstrated behaviours**. Career paths serve as a cultural blueprint (what behaviours to reward), a performance map (what good looks like at each level), and a development roadmap (how to grow within or across roles).
 
+## Guidance Files
+
+This project uses a layered guidance system:
+
+1. **CLAUDE.md** (this file) - Development commands and architecture overview
+2. **Cursor Rules** (`.cursor/rules/*.mdc`) - Technology-specific standards
+
+When in doubt, by order of precedence.
+
 ## Architecture
 
 Four domain aggregates — two event-sourced via RES, two standard ActiveRecord:
