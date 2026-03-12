@@ -1,0 +1,207 @@
+---
+title: Career Growth Framework — Entity Relationships
+---
+classDiagram
+    direction TB
+
+    %% ══════════ PLATFORM ══════════
+
+    class FrameworkTemplate {
+        +uuid id
+        +string name
+        +text description
+        +uuid author_tenant_id
+        +string[] tags
+        +jsonb snapshot
+        No acts_as_tenant
+    }
+
+    %% ══════════ AUTH (Devise) ══════════
+
+    class User {
+        +uuid id
+        +uuid tenant_id
+        +string email
+        +string encrypted_password
+        +uuid person_id [nullable]
+        +enum system_role
+        Devise modules
+        acts_as_tenant :tenant
+    }
+
+    %% ══════════ STATE-BASED ══════════
+
+    class Tenant {
+        +uuid id
+        +string name
+        +string slug
+        +jsonb settings
+        +jsonb sso_config
+        +jsonb hris_config
+        +jsonb notification_config
+    }
+
+    class Person {
+        +uuid id
+        +uuid tenant_id
+        +string external_id
+        +string name
+        +string email
+        +uuid manager_id
+        +enum status
+        acts_as_tenant :tenant
+    }
+
+    %% ══════════ FRAMEWORK (ES projected state) ══════════
+
+    class Framework {
+        +uuid id
+        +uuid tenant_id
+        +string name
+        +int current_published_version
+        +bool draft_in_progress
+        RES stream per framework
+    }
+
+    class RoleFamily {
+        +uuid id
+        +string name
+    }
+
+    class Role {
+        +uuid id
+        +string name
+        +string code
+        +enum track
+    }
+
+    class Level {
+        +uuid id
+        +int ordinal
+        +string title
+        +string code
+    }
+
+    class CapabilityCategory {
+        +uuid id
+        +string name
+        +text description
+    }
+
+    class Capability {
+        +uuid id
+        +uuid stable_id
+        +string name
+        +enum status
+    }
+
+    class CapabilityRoleBinding {
+        +uuid id
+        +decimal weight
+        +enum requirement_type
+    }
+
+    class BehaviouralExpectation {
+        +uuid id
+        +uuid stable_id
+        +text description
+        Canonical - RATED
+    }
+
+    class RoleIllustration {
+        +uuid id
+        +uuid stable_id
+        +int ordinal
+        +text description
+        Clarifying - NOT rated
+    }
+
+    class FrameworkCollaborator {
+        +uuid person_id
+        +enum role
+        +uuid scope_role_id
+    }
+
+    class SuggestedEdit {
+        +uuid id
+        +uuid author_id
+        +enum target_entity_type
+        +text suggested_value
+        +bool requires_reassessment
+        +enum status
+    }
+
+    class FrameworkMigration {
+        +uuid id
+        +uuid from_stable_id
+        +uuid to_stable_id
+        +enum mapping_type
+        +bool requires_reassessment
+        +text reason
+    }
+
+    %% ══════════ PERSON DEV (ES projected state) ══════════
+
+    class PersonDevelopmentStream {
+        +uuid person_id
+        +uuid framework_id
+        RES stream per person+framework
+    }
+
+    class AssessmentState {
+        Per capability: self/mgr/aligned
+        acts_as_tenant :tenant
+    }
+
+    class EvidenceItem {
+        +uuid id
+        +enum source
+        +enum evidence_type
+        +text content
+        +ExternalReference ext_ref
+        acts_as_tenant :tenant
+    }
+
+    class GrowthPlanState {
+        +text goal
+        +enum goal_type
+        +date target_date
+        +enum status
+        acts_as_tenant :tenant
+    }
+
+    %% ══════════ RELATIONSHIPS ══════════
+
+    FrameworkTemplate ..> Framework : forked into
+
+    Tenant "1" --> "*" User : has users
+    Tenant "1" --> "*" Person : employs
+    Tenant "1" --> "*" Framework : owns
+
+    User "0..1" --> "0..1" Person : linked to
+
+    Person "*" --> "0..1" Person : reports to
+
+    Framework "1" --> "*" RoleFamily
+    Framework "1" --> "*" CapabilityCategory
+    Framework "1" --> "*" FrameworkMigration
+    Framework "1" --> "*" FrameworkCollaborator
+    Framework "1" --> "*" SuggestedEdit
+
+    RoleFamily "1" --> "*" Role
+    Role "1" --> "*" Level
+
+    CapabilityCategory "1" --> "*" Capability
+    Capability "1" --> "*" CapabilityRoleBinding
+    Role "1" --> "*" CapabilityRoleBinding
+
+    Capability "1" --> "*" BehaviouralExpectation
+    Level "1" --> "*" BehaviouralExpectation
+
+    BehaviouralExpectation "1" --> "*" RoleIllustration
+    Role "1" --> "*" RoleIllustration
+
+    Person "1" --> "1" PersonDevelopmentStream
+    PersonDevelopmentStream --> AssessmentState
+    PersonDevelopmentStream --> EvidenceItem
+    PersonDevelopmentStream --> GrowthPlanState

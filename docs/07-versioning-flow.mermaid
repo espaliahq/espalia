@@ -1,0 +1,97 @@
+---
+title: Framework Versioning — Event-Sourced Model (Single RES Stream)
+---
+flowchart TB
+    subgraph Stream["Single RES Stream: tenant-abc/Framework-fw1"]
+        direction TB
+
+        subgraph Published["Published State (version N)"]
+            PE1["... prior events ..."]
+            PE2["FrameworkVersionPublished { version: N }"]
+        end
+
+        subgraph Editorial["Editorial Changes (apply immediately to published projection)"]
+            ED1["EditSuggested → SuggestionApproved"]
+            ED2["BehaviouralExpectationUpdated"]
+            ED3["RoleIllustrationAdded"]
+            ED_NOTE["Applied immediately by Published projection.
+            No draft phase needed.
+            Can flow during a draft phase too."]
+        end
+
+        subgraph DraftPhase["Draft Phase (structural changes accumulate)"]
+            D1["DraftVersionStarted { target_version: N+1 }"]
+            D2["CapabilityAdded { stable_id: X5 }"]
+            D3["CapabilityArchived { id: ..., reason: merge source }"]
+            D4["BindingWeightChanged { ... }"]
+            D5["MigrationMappingDefined
+            { from: X1, to: X1, type: same }"]
+            D6["MigrationMappingDefined
+            { from: X3, to: null, type: archived }"]
+            D7["MigrationMappingDefined
+            { from: X2, to: X5+X6, type: split,
+              requires_reassessment: true }"]
+            D8["FrameworkVersionPublished { version: N+1 }"]
+
+            DRAFT_NOTE["Structural events between DraftVersionStarted
+            and FrameworkVersionPublished:
+            • SKIPPED by Published projection
+            • INCLUDED in Draft/Editor projection"]
+        end
+
+        Published --> Editorial
+        Published --> DraftPhase
+        Editorial -.-> DraftPhase
+    end
+
+    subgraph TwoProjections["Two Projections of Same Stream"]
+        direction LR
+        subgraph PubProj["Published Projection"]
+            PP1["Skips structural events during draft.
+            Applies editorial events immediately.
+            What assessors and managers see.
+            Standard AR read models with acts_as_tenant."]
+        end
+        subgraph DraftProj["Draft / Editor Projection"]
+            DP1["Replays ALL events to head.
+            Shows pending structural changes.
+            Shows inline suggested edits.
+            What framework editors see."]
+        end
+    end
+
+    Stream --> TwoProjections
+
+    subgraph OnPublish["On FrameworkVersionPublished"]
+        I1["Published projection advances —
+        incorporates all structural changes"]
+        I2["Completed assessments:
+        preserved via replay to prior
+        FullAlignmentCompleted"]
+        I3["In-progress assessments:
+        FrameworkVersionMigrated event
+        in each person dev stream"]
+
+        subgraph MigrationRules["Per-capability Migration"]
+            M1["same → rating carries"]
+            M2["evolved → carries, reassessment likely"]
+            M3["split → blank, reassessment always"]
+            M4["archived → relink or dismiss"]
+            M5["new → blank, no predecessor"]
+        end
+
+        I3 --> MigrationRules
+        GATE["Cannot reach FullAlignmentCompleted
+        until all resolved"]
+        MigrationRules --> GATE
+    end
+
+    DraftPhase --> OnPublish
+
+    style Published fill:#d4edda,stroke:#28a745
+    style Editorial fill:#d4edda,stroke:#28a745
+    style DraftPhase fill:#cce5ff,stroke:#004085
+    style PubProj fill:#d4edda,stroke:#28a745
+    style DraftProj fill:#cce5ff,stroke:#004085
+    style MigrationRules fill:#fff3cd,stroke:#ffc107
+    style GATE fill:#f8d7da,stroke:#721c24

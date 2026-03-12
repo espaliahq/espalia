@@ -1,0 +1,75 @@
+---
+title: Domain Event Flow (Rails 8 + RailsEventStore)
+---
+flowchart LR
+    subgraph FrameworkStream["Framework Event Stream (RES)"]
+        direction TB
+        FVP[FrameworkVersionPublished]
+        SA[SuggestionApproved]
+        BEU[BehaviouralExpectationUpdated]
+        SA --> BEU
+    end
+
+    subgraph PersonDevStream["Person Development Streams (RES)"]
+        direction TB
+        ER[EvidenceRecorded]
+        SR[SelfRated]
+        MR[ManagerRated]
+        CA[CapabilityAligned]
+        FAC[FullAlignmentCompleted]
+        CIR[CheckInRecorded]
+        GPA[GrowthPlanAgreed]
+        FVM[FrameworkVersionMigrated]
+        RAF[ReassessmentFlagged]
+    end
+
+    subgraph SyncProjections["Synchronous Projections (same tx)"]
+        FPS[Frameworks::Projections::PublishedState]
+        PCA[PersonDev::Projections::CurrentAssessment]
+        PGP[PersonDev::Projections::GrowthPlan]
+        PEC[PersonDev::Projections::EvidenceCollection]
+    end
+
+    subgraph AsyncHandlers["Async Handlers (Solid Queue)"]
+        HRIS[HRIS Adapter]
+        Notif[Notification Dispatcher]
+        Sched[Cron Scheduler]
+    end
+
+    subgraph ReportingProjections["Reporting Projections (async)"]
+        GA[Reporting::GapAnalysis]
+        TR[Reporting::TrendAnalysis]
+        FR[Reporting::Freshness]
+        PR[Reporting::PromotionReadiness]
+    end
+
+    BEU --> FPS
+    FVP --> FPS
+    FVP --> FVM
+
+    SR --> PCA
+    MR --> PCA
+    CA --> PCA
+    ER --> PEC
+    GPA --> PGP
+    CIR --> PGP
+
+    FVP --> Notif
+    SR --> Notif
+    FAC --> Notif
+    GPA --> Notif
+
+    FAC --> GA
+    FAC --> TR
+    FAC --> PR
+    CIR --> FR
+
+    Sched -->|CheckInOverdue| Notif
+    Sched -->|GrowthPlanStale| Notif
+    HRIS -->|PersonSynced| PersonDevStream
+
+    style FrameworkStream fill:#B7D5E8,stroke:#5580AA
+    style PersonDevStream fill:#D5E8B7,stroke:#7DAA55
+    style SyncProjections fill:#E8D5B7,stroke:#8B7355
+    style AsyncHandlers fill:#E8E8B7,stroke:#AAAA55
+    style ReportingProjections fill:#E8B7D5,stroke:#AA5580

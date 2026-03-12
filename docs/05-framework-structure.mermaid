@@ -1,0 +1,70 @@
+---
+title: Framework Structure — Two-Layer Expectation Model
+---
+flowchart TB
+    subgraph FW["Framework (event-sourced, single RES stream)"]
+        direction TB
+
+        subgraph Roles["RoleFamily → Role → Level"]
+            RF1[Engineering] --> R1[Software Engineer]
+            RF1 --> R2[Engineering Manager]
+            RF2[Product] --> R3[Product Manager]
+            R1 --> L1["E1, E2, E3, E4, E5, E6, E7, E8"]
+            R2 --> L2["EM3, EM4, EM5, EM6, EM7"]
+            R3 --> L3["PM2, PM3, PM4, PM5, PM6"]
+        end
+
+        subgraph Capabilities["CapabilityCategory → Capability"]
+            CC1["Thinking & Delivery"] --> C1[Strategic & Critical Thinking]
+            CC1 --> C2["Commit, Deliver, Celebrate"]
+            CC2["Communication"] --> C3[Clear & Impactful Communication]
+            CC3["Technical Craft"] --> C4[Cloud Architecture]
+        end
+
+        subgraph Bindings["CapabilityRoleBinding (scoping + weighting)"]
+            B1["C1 → Engineer: weight=1.0, must_have"]
+            B2["C1 → EM: weight=1.2, must_have"]
+            B3["C1 → PM: weight=1.5, must_have"]
+            B4["C4 → Engineer: weight=1.5, flexible"]
+            B5["C4 → EM: weight=0.8, flexible"]
+            B6["C4 → PM: NOT BOUND"]
+        end
+    end
+
+    subgraph TwoLayer["Two-Layer Expectation Model"]
+        direction TB
+
+        subgraph Layer1["Layer 1: BehaviouralExpectation — RATED"]
+            BE["Strategic Thinking × L3:
+            'Assesses challenges with a critical lens,
+            considers trade-offs, and makes sound
+            decisions with incomplete information'
+            stable_id: X1"]
+        end
+
+        subgraph Layer2["Layer 2: RoleIllustration — NOT rated"]
+            RI1["Engineer E3:
+            'Evaluates technical approaches weighing
+            maintenance cost, timeline, and capability'"]
+            RI2["Engineer E3:
+            'Identifies when a simpler solution serves
+            the business need and advocates for it'"]
+            RI3["PM PM3:
+            'Prioritises by synthesising market signals,
+            customer feedback, and business constraints'"]
+            RI4["EM EM3:
+            'Balances team capability development
+            with delivery commitments'"]
+        end
+
+        BE --> RI1
+        BE --> RI2
+        BE --> RI3
+        BE --> RI4
+    end
+
+    C1 --> BE
+
+    style Layer1 fill:#d4edda,stroke:#28a745
+    style Layer2 fill:#cce5ff,stroke:#004085
+    style Bindings fill:#fff3cd,stroke:#ffc107

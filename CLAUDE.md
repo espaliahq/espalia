@@ -1,6 +1,118 @@
-# RAILS-CLAUDE.MD
+# CLAUDE.MD
 
 Reusable AI coding guidelines for a modern Rails 8 application with Hotwire, Phlex, TailwindCSS v4, and PostgreSQL.
+
+## System Overview
+
+This is an open-source, multi-tenant platform for operationalising career growth frameworks, built with **Rails 8** and **RailsEventStore (RES)**. Organisations define career paths — role families, roles, levels, capabilities, and behavioural expectations — and use the platform to run self-assessments, manager alignment conversations, evidence collection, and growth planning.
+
+The system embodies the philosophy that **performance is multi-dimensional and culture is the sum of consistently demonstrated behaviours**. Career paths serve as a cultural blueprint (what behaviours to reward), a performance map (what good looks like at each level), and a development roadmap (how to grow within or across roles).
+
+## Architecture
+
+Four domain aggregates — two event-sourced via RES, two standard ActiveRecord:
+
+**Event-sourced (RailsEventStore + AggregateRoot):**
+
+- **Framework** — The career path blueprint. One RES stream per framework (`tenant-{id}/Framework-{id}`). Contains roles, capabilities, expectations, illustrations, versioning, and collaborative editing via inline suggested edits. Produces two projections: a published view (what everyone sees) and a draft/editor view (includes pending structural changes and inline suggestions).
+
+- **Person Development** — One RES stream per person per framework (`tenant-{id}/PersonDev-{person_id}-{framework_id}`). The unified development journey — evidence, self-ratings, manager ratings, alignment conversations, growth plans, focus areas, and check-ins in one stream. An "assessment" is a projection. An "alignment agreement" is a formalising event.
+
+**State-based (standard ActiveRecord):**
+
+- **Tenant** — Organisation configuration, SSO, HRIS sync config, notification preferences.
+- **Person** — Org chart entity (name, email, role, level, manager). Often synced from HRIS.
+
+**Authentication entity (Devise, separate from domain):**
+
+- **User** — Authentication identity. Has credentials, sessions, Devise modules. Linked to a Person via optional `person_id`. Not every Person has a User (HRIS imports). Not every User has a Person (tenant admins).
+
+## Multi-tenancy
+
+Uses `acts_as_tenant` with row-level `tenant_id` isolation on all tenant-scoped ActiveRecord models (Person, User, all projection read models, FrameworkTemplate when tenant-authored).
+
+The RES event store tables (`event_store_events`, `event_store_events_in_streams`) are NOT managed by acts_as_tenant. Tenant isolation in the event store is achieved via **tenant-namespaced stream names**: `tenant-{tenant_id}/Framework-{framework_id}`. Stream names are always constructed via `EventStreamNaming` helper — never built by hand.
+
+Event handlers (projections) set tenant context from event metadata before touching any ActiveRecord read models:
+
+```ruby
+ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
+  # update projection read models — acts_as_tenant scoping is active
+end
+```
+
+## Key Domain Concepts
+
+**Two-layer expectations:** `BehaviouralExpectation` (one per Capability × Level) is the canonical definition people are rated against. `RoleIllustration` (multiple per Capability × Role × Level) provides clarifying examples — NOT separately rated.
+
+**Capability scoping via bindings:** `CapabilityRoleBinding` ties a capability to a role with `weight` and `requirement_type` (`must_have` | `flexible`). No category-level scope — bindings are the source of truth.
+
+**stable_id:** UUID linking the "same" concept across framework versions. Enables trend analysis and evidence continuity across framework evolution.
+
+**Framework versioning:** Single event stream. Draft phase bracketed by `DraftVersionStarted` / `FrameworkVersionPublished` events. Published projection skips structural events during draft. Editorial changes (suggested edits) flow independently and apply immediately.
+
+**Suggested edits:** Atomic, inline suggestions (Google Docs style). Three review tiers: illustrations (light), capability descriptions (moderate), canonical expectations (high). Applied immediately on approval.
+
+**Assessment migration:** On new version publish, person development streams receive `FrameworkVersionMigrated`. Ratings migrate per mapping rules. Nothing silently dropped — archived capabilities surface for relink/dismiss.
+
+## Project Structure
+
+```
+app/
+├── models/                          # State-based ActiveRecord
+│   ├── tenant.rb                    # acts_as_tenant root
+│   ├── person.rb                    # acts_as_tenant :tenant
+│   ├── user.rb                      # Devise + acts_as_tenant :tenant
+│   └── application_record.rb
+│
+├── contexts/                        # Domain bounded contexts (RES)
+│   ├── frameworks/
+│   │   ├── events/                  # RES event classes
+│   │   ├── commands/                # Command objects
+│   │   ├── aggregate.rb             # include AggregateRoot
+│   │   ├── command_handler.rb
+│   │   └── projections/             # Synchronous read model builders
+│   │
+│   ├── person_development/
+│   │   ├── events/
+│   │   ├── commands/
+│   │   ├── aggregate.rb
+│   │   ├── command_handler.rb
+│   │   └── projections/
+│   │
+│   └── reporting/                   # Cross-stream read models
+│
+├── read_models/                     # ActiveRecord models for projections
+│   ├── framework_state/             # Published framework tables
+│   ├── assessment_state.rb
+│   ├── growth_plan_state.rb
+│   └── reporting/
+│
+├── integrations/                    # HRIS, notifications, SSO adapters
+│
+└── controllers/
+    └── api/v1/                      # JSON API
+```
+
+## Design Documents
+
+- `docs/01-architecture-and-design.md` — Full architecture, ADRs, aggregate definitions, event schemas, Rails implementation patterns
+- `docs/02-glossary.md` — Domain and technical term definitions
+- `docs/03-entity-relationships.mermaid` — ERD across all aggregates
+- `docs/04-event-flow.mermaid` — Domain event flow between aggregates
+- `docs/05-framework-structure.mermaid` — Two-layer expectation model
+- `docs/06-person-development-timeline.mermaid` — Worked example of person development events
+- `docs/07-versioning-flow.mermaid` — Framework versioning in event-sourced model
+
+## Deployment Model
+
+Open-source core runs standalone with Postgres + Solid Queue. Optional SaaS control plane (not open-source) wraps the core with tenant provisioning, billing, and managed SSO routing. Domain modules must never depend on SaaS infrastructure.
+
+## V1 Integrations
+
+- **HRIS sync** (HiBob, BambooHR) — pluggable adapter pattern, creates/updates Person records
+- **Notifications** (Slack, Teams, email) — noticed, RES async handlers via Solid Queue, outbox pattern
+- **SSO/SAML** — Devise + OmniAuth, tenant-level SSO config
 
 ## Development Commands
 
@@ -590,6 +702,7 @@ test/
 
 - **Rails 8** with Hotwire (Turbo + Stimulus)
 - **PostgreSQL** with UUID v7 primary keys, JSONB columns
+- **RailsEventStore (RES) ~> 2.16+** — Event store, aggregate roots, projections, event subscriptions
 - **SolidQueue** (jobs), **SolidCache** (cache), **SolidCable** (websockets)
 - **Import Maps** for JavaScript (no Node.js dependency)
 - **TailwindCSS v4** via tailwindcss-rails gem

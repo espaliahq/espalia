@@ -1,0 +1,101 @@
+---
+title: Person Development Stream — Event Timeline Example
+---
+flowchart TB
+    subgraph Stream["RES Stream: tenant-abc/PersonDev-alice-fw1"]
+        direction TB
+
+        E1["PersonAssignedToFramework
+        role: Engineer, level: E3"]
+
+        E2["EvidenceRecorded
+        capability: Strategic Thinking (stable_id: X1)
+        source: peer, type: code_review
+        external_ref: {system: github, url: PR #421}"]
+
+        E3["EvidenceRecorded
+        capability: Quality First (stable_id: X2)
+        source: self, type: project_outcome"]
+
+        E4["AssessmentCycleOpened
+        cycle: Q1 2026, type: regular"]
+
+        E5["SelfRated
+        Strategic Thinking → L3
+        Quality First → L3
+        Communication → L2"]
+
+        E6["ManagerRated
+        Strategic Thinking → L3
+        Quality First → L3
+        Communication → L3"]
+
+        E7["AlignmentConversationStarted
+        mode: async"]
+
+        E8["AlignmentCommentAdded
+        cap: Communication
+        manager: 'Retro facilitation was strong L3'"]
+
+        E9["CapabilityAligned
+        Communication → L3 (upgraded from self L2)"]
+
+        E10["FullAlignmentCompleted
+        cycle: Q1 2026
+        ← RES SNAPSHOT POINT"]
+
+        E11["GrowthGoalSet
+        goal: Promotion to Staff E4
+        target: End of 2026"]
+
+        E12["FocusAreaAdded
+        title: Cloud Architecture depth
+        gap: Limited AWS knowledge"]
+
+        E13["GrowthPlanAgreed"]
+
+        E14["CheckInRecorded
+        date: 2026-02-01
+        progress: Started AWS course"]
+
+        E15["EvidenceRecorded
+        capability: Cloud Architecture (stable_id: X3)
+        source: manager, type: project_outcome"]
+
+        E16["FocusAreaStatusChanged
+        Cloud Architecture → in_progress"]
+
+        E17["FrameworkVersionMigrated
+        v1 → v2"]
+
+        E18["ReassessmentFlagged
+        Strategic Thinking: expectations tightened"]
+
+        E1 --> E2 --> E3 --> E4 --> E5 --> E6 --> E7 --> E8 --> E9
+        E9 --> E10 --> E11 --> E12 --> E13 --> E14 --> E15 --> E16
+        E16 --> E17 --> E18
+    end
+
+    subgraph Projections["Synchronous Projections (ActiveRecord read models)"]
+        P1["AssessmentState
+        Strategic Thinking: aligned L3 ⚠️ needs reassessment
+        Quality First: aligned L3
+        Communication: aligned L3
+        Cloud Arch: not yet aligned"]
+
+        P2["GrowthPlanState
+        Goal: E4 promotion by end 2026
+        Focus: Cloud Architecture (in progress)
+        Last check-in: 2026-02-01 ⚠️ 39 days ago"]
+
+        P3["EvidenceItems
+        4 items across 3 capabilities
+        1 with external ref (GitHub PR)"]
+    end
+
+    Stream --> Projections
+
+    style E10 fill:#d4edda,stroke:#28a745
+    style E13 fill:#d4edda,stroke:#28a745
+    style E17 fill:#fff3cd,stroke:#ffc107
+    style E18 fill:#f8d7da,stroke:#721c24
