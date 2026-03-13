@@ -73,6 +73,9 @@ end
 group :development do
   # Use console on exceptions pages [https://github.com/rails/web-console]
   gem "web-console"
+
+  # Process manager for Procfile.dev (runs Rails server + Tailwind CSS watcher)
+  gem "overmind", require: false
 end
 
 group :test do
