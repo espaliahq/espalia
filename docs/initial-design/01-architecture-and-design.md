@@ -206,7 +206,7 @@ end
 
 **Decision:** Modular monolith. Domain modules don't depend on SaaS infrastructure.
 
-**Implementation:** The SaaS control plane (tenant provisioning, billing, SSO routing) is a separate deployment wrapping the core. Self-hosted mode runs the core directly with local auth and manual tenant setup.
+**Implementation:** The SaaS control plane (tenant provisioning, billing, SSO routing) is a separate module, the core can work with or without it. 
 
 ### ADR-5: Event-sourced versioning (single stream, draft phase)
 
