@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: InterVariable, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* https://rsms.me/inter/lab */
+  --font-sans--font-feature-settings: 'liga', 'cv02', 'cv03', 'cv04', 'cv11';
+
+  --color-primary: #32c8c8;
+  --color-secondary: #079191;
+}
