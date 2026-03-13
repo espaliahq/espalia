@@ -36,5 +36,3 @@
 /app/assets/builds/*
 !/app/assets/builds/.keep
 
-# Agent files that shouldn't be checked in.
-.cursor/rules
