@@ -106,5 +106,8 @@ gem "json_translate"
 # Type-safe structured objects in JSONB columns
 gem "store_model", "~> 4.5"
 
+# Event sourcing for Framework and Person Development aggregates
+gem "rails_event_store", "~> 2.16"
+
 # We recommend using strong migrations when your app is in production
 # gem "strong_migrations"

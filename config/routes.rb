@@ -6,6 +6,11 @@ Rails.application.routes.draw do
       controller: "users/tenant_switches",
       as: :users_tenant_switch
   end
+  # RailsEventStore browser for debugging event streams (global admins only)
+  authenticate :user, ->(u) { u.global_admin? } do
+    mount RailsEventStore::Browser => "/res"
+  end
+
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
