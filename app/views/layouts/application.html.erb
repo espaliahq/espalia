@@ -11,6 +11,12 @@
 
     <%= yield :head %>
 
+    <% if defined?(current_tenant) && current_tenant&.google_font_url %>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="<%= current_tenant.google_font_url %>" rel="stylesheet" data-turbo-track="reload">
+    <% end %>
+
     <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
     <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
 
@@ -23,9 +29,39 @@
     <%# Application-specific styles %>
     <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
     <%= javascript_importmap_tags %>
+
+    <% if defined?(current_tenant) && current_tenant %>
+      <% light = current_tenant.theme_css_variables_light %>
+      <% dark = current_tenant.theme_css_variables_dark %>
+      <% if light.any? || dark.any? %>
+        <style id="tenant-theme" data-turbo-track="reload">
+          <% if light.any? %>
+            :root { <%= light.map { |k, v| "#{k}:#{v}" }.join('; ').html_safe %> }
+          <% end %>
+          <% if dark.any? %>
+            @media (prefers-color-scheme: dark) {
+              :root { <%= dark.map { |k, v| "#{k}:#{v}" }.join('; ').html_safe %> }
+            }
+          <% end %>
+        </style>
+      <% end %>
+    <% end %>
   </head>
 
   <body>
+    <%# Devise pages handle flash inline — skip the toast to avoid duplication %>
+    <% unless devise_controller? %>
+      <% if flash[:notice] %>
+        <div class="fixed top-4 right-4 z-50 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 shadow-sm" role="alert">
+          <%= flash[:notice] %>
+        </div>
+      <% end %>
+      <% if flash[:alert] %>
+        <div class="fixed top-4 right-4 z-50 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 shadow-sm" role="alert">
+          <%= flash[:alert] %>
+        </div>
+      <% end %>
+    <% end %>
     <%= yield %>
   </body>
 </html>

@@ -56,11 +56,12 @@ Four domain aggregates — two event-sourced via RES, two standard ActiveRecord:
 
 **Authentication entity (Devise, separate from domain):**
 
-- **User** — Authentication identity. Has credentials, sessions, Devise modules. Linked to a Person via optional `person_id`. Not every Person has a User (HRIS imports). Not every User has a Person (tenant admins).
+- **User** — Global authentication identity. Has credentials, sessions, Devise modules. NOT tenant-scoped — a single User can belong to multiple tenants via `TenantUser` join records. Has a `global_admin` flag for platform-level administration.
+- **TenantUser** — Tenant-scoped join record linking a User to a Tenant. Carries the user's role within that tenant (`member` | `admin`) and an optional link to the Person domain entity.
 
 ## Multi-tenancy
 
-Uses `acts_as_tenant` with row-level `tenant_id` isolation on all tenant-scoped ActiveRecord models (Person, User, all projection read models, FrameworkTemplate when tenant-authored).
+Uses `acts_as_tenant` with row-level `tenant_id` isolation on all tenant-scoped ActiveRecord models (Person, TenantUser, all projection read models, FrameworkTemplate when tenant-authored). `User` is NOT tenant-scoped — it is a global identity. Tenant context is resolved per-request from `session[:current_tenant_id]` and stored on `ActsAsTenant.current_tenant`.
 
 The RES event store tables (`event_store_events`, `event_store_events_in_streams`) are NOT managed by acts_as_tenant. Tenant isolation in the event store is achieved via **tenant-namespaced stream names**: `tenant-{tenant_id}/Framework-{framework_id}`. Stream names are always constructed via `EventStreamNaming` helper — never built by hand.
 
@@ -137,7 +138,7 @@ app/
 
 ## Deployment Model
 
-Open-source core runs standalone with Postgres + Solid Queue. Optional SaaS control plane (not open-source) wraps the core with tenant provisioning, billing, and managed SSO routing. Domain modules must never depend on SaaS infrastructure.
+Runs standalone with Postgres + Solid Queue. Includes a SaaS control plane (tenant provisioning, billing, managed SSO routing) as part of the open-source codebase. Domain modules must never depend on SaaS control plane infrastructure.
 
 ## V1 Integrations
 

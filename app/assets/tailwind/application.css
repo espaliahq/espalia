@@ -10,4 +10,15 @@
 
   --color-primary: #32c8c8;
   --color-secondary: #079191;
+  --color-nav-bg: #32c8c8;
+  --color-nav-fg: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #5ee0e0;
+    --color-secondary: #0ababa;
+    --color-nav-bg: #1a1a2e;
+    --color-nav-fg: #e2e8f0;
+  }
 }

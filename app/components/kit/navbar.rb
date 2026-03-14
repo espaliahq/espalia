@@ -3,15 +3,26 @@
 # Top navigation bar with brand name and mobile hamburger toggle.
 #
 # @example
-#   render Components::Kit::Navbar.new(app_name: "GrowthOS")
+#   render Components::Kit::Navbar.new(
+#     app_name: "GrowthOS",
+#     user: current_user,
+#     current_tenant: ActsAsTenant.current_tenant,
+#     tenants: current_user.tenants
+#   )
 class Components::Kit::Navbar < Components::Base
   # @param app_name [String] The application name displayed in the navbar
-  def initialize(app_name:)
+  # @param user [User, nil] The currently signed-in user
+  # @param current_tenant [Tenant, nil] The active tenant
+  # @param tenants [Array<Tenant>] All tenants the user belongs to
+  def initialize(app_name:, user: nil, current_tenant: nil, tenants: [])
     @app_name = app_name
+    @user = user
+    @current_tenant = current_tenant
+    @tenants = tenants
   end
 
   def view_template
-    nav(class: "flex items-center justify-between h-16 px-4 bg-primary text-white shadow-sm shrink-0") do
+    nav(class: "flex items-center justify-between h-16 px-4 bg-nav-bg text-nav-fg shadow-sm shrink-0") do
       left_section
       right_section
     end
@@ -22,7 +33,7 @@ class Components::Kit::Navbar < Components::Base
   def left_section
     div(class: "flex items-center gap-3") do
       hamburger_button
-      span(class: "text-lg font-bold tracking-tight") { @app_name }
+      span(class: "text-lg font-bold tracking-tight") { "#{@current_tenant&.name} #{@app_name}" }
     end
   end
 
@@ -53,8 +64,16 @@ class Components::Kit::Navbar < Components::Base
 
   def right_section
     div(class: "flex items-center gap-2") do
-      div(class: "h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-medium") do
-        plain "U"
+      if @user
+        render Components::Kit::UserMenu.new(
+          user: @user,
+          current_tenant: @current_tenant,
+          tenants: @tenants
+        )
+      else
+        div(class: "h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-medium") do
+          plain "U"
+        end
       end
     end
   end

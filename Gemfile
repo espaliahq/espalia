@@ -9,7 +9,6 @@ gem "rails", "~> 8.1.0"
 gem "propshaft", "~> 1.0"
 # Use postgresql as the database for Active Record
 gem "pg"
-gem "sqlite3"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma"
 # Use JavaScript with ESM import maps [https://github.com/rails/importmap-rails]
@@ -20,10 +19,13 @@ gem "turbo-rails"
 gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 
+gem "acts_as_tenant", "~> 0.6"
 gem "devise", "~> 5.0.2"
 gem "invisible_captcha", "~> 2.0"
 gem "noticed", "~> 3.0"
+gem "pagy", "~> 9.0"
 gem "prefixed_ids", "~> 1.2"
+gem "pundit", "~> 2.4"
 gem "tailwindcss-rails", "~> 4.0"
 
 # Phlex - Object-oriented views for semantic components

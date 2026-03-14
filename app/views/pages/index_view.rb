@@ -10,12 +10,26 @@ class Views::Pages::IndexView < Views::Base
     { label: "Home", href: "/" }
   ].freeze
 
+  # @param user [User, nil] the currently signed-in user
+  # @param current_tenant [Tenant, nil] the active tenant
+  # @param tenants [Array<Tenant>] all tenants the user belongs to
+  def initialize(user: nil, current_tenant: nil, tenants: [])
+    @user = user
+    @current_tenant = current_tenant
+    @tenants = tenants
+  end
+
   def view_template
     div(
       class: "min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950",
       data: { controller: "sidebar" }
     ) do
-      render Components::Kit::Navbar.new(app_name: "GrowthOS")
+      render Components::Kit::Navbar.new(
+        app_name: "GrowthOS",
+        user: @user,
+        current_tenant: @current_tenant,
+        tenants: @tenants
+      )
 
       div(class: "flex flex-1") do
         render Components::Kit::Sidebar.new(links: NAV_LINKS)
@@ -29,7 +43,21 @@ class Views::Pages::IndexView < Views::Base
   def main_content
     main(class: "flex-1 p-6 overflow-auto") do
       h1(class: "text-2xl font-bold text-gray-900 dark:text-white mb-6") { "Welcome to GrowthOS" }
+      example_buttons
       stat_cards
+    end
+  end
+
+  def example_buttons
+    div(class: "flex gap-4 mb-6") do
+      button(
+        type: "button",
+        class: "rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
+      ) { "Primary" }
+      button(
+        type: "button",
+        class: "rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-white hover:bg-secondary/90 transition-colors"
+      ) { "Secondary" }
     end
   end
 

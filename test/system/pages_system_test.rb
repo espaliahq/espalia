@@ -10,6 +10,16 @@ class PagesSystemTest < ApplicationSystemTestCase
     # Reset to desktop viewport before each test — the browser window is shared
     # across tests, so a mobile resize in one test would persist to the next.
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+
+    @tenant = FactoryBot.create(:tenant)
+    @user = FactoryBot.create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) { FactoryBot.create(:tenant_user, tenant: @tenant, user: @user) }
+
+    visit new_user_session_path
+    fill_in "Email", with: @user.email
+    fill_in "Password", with: "password123"
+    click_button "Log in"
+    assert_current_path root_path
   end
 
   context "index page" do
@@ -54,9 +64,8 @@ class PagesSystemTest < ApplicationSystemTestCase
     should "hide hamburger button on desktop" do
       visit root_path
 
-      # Button is rendered but hidden via md:hidden
-      hamburger = find("[data-action='sidebar#toggle']", visible: :all)
-      assert hamburger[:class].include?("md:hidden")
+      # md:hidden applies display:none at md+ — button should not be visible
+      assert_no_selector "[data-action='sidebar#toggle']"
     end
   end
 end
