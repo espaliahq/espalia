@@ -18,19 +18,19 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
   end
 
   context "tenant theming" do
-    should "inject CSS variables for current tenant" do
+    should "inject CSS variables for current tenant via style tag" do
       visit root_path
       screenshot("first_tenant_theme")
 
-      html_style = find("body")[:style] || ""
+      theme_style = evaluate_script("document.getElementById('tenant-theme')?.textContent || ''")
       # First auto-selected tenant's colours should be present
-      assert_match(/--color-primary/, html_style)
-      assert_match(/--color-secondary/, html_style)
+      assert_match(/--color-primary/, theme_style)
+      assert_match(/--color-secondary/, theme_style)
     end
 
     should "change CSS variables after switching tenant" do
       visit root_path
-      initial_style = find("body")[:style] || ""
+      initial_style = evaluate_script("document.getElementById('tenant-theme')?.textContent || ''")
       screenshot("before_switch")
 
       # Open menu and find which tenant is NOT current, then switch to it
@@ -42,7 +42,7 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
       end
       screenshot("after_switch")
 
-      new_style = find("body")[:style] || ""
+      new_style = evaluate_script("document.getElementById('tenant-theme')?.textContent || ''")
       assert_not_equal initial_style, new_style, "CSS variables should change after tenant switch"
     end
   end

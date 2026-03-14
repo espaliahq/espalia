@@ -35,6 +35,21 @@ class TenantTest < ActiveSupport::TestCase
     should allow_value("#ffffff").for(:nav_fg_color)
     should_not allow_value("white").for(:nav_fg_color)
 
+    should allow_value("#ff0000").for(:primary_color_dark)
+    should allow_value("").for(:primary_color_dark)
+    should allow_value(nil).for(:primary_color_dark)
+    should_not allow_value("red").for(:primary_color_dark)
+
+    should allow_value("#00ff00").for(:secondary_color_dark)
+    should_not allow_value("blue").for(:secondary_color_dark)
+
+    should allow_value("#112233").for(:nav_bg_color_dark)
+    should allow_value("").for(:nav_bg_color_dark)
+    should_not allow_value("not-hex").for(:nav_bg_color_dark)
+
+    should allow_value("#ffffff").for(:nav_fg_color_dark)
+    should_not allow_value("white").for(:nav_fg_color_dark)
+
     should allow_value("Poppins").for(:font_family)
     should allow_value("Space Grotesk").for(:font_family)
     should allow_value("").for(:font_family)
@@ -43,33 +58,62 @@ class TenantTest < ActiveSupport::TestCase
     should_not allow_value("url(evil)").for(:font_family)
   end
 
-  context "#theme_css_variables" do
+  context "#theme_css_variables_light" do
     should "return empty hash when no colours set" do
       tenant = build(:tenant)
-      assert_equal({}, tenant.theme_css_variables)
+      assert_equal({}, tenant.theme_css_variables_light)
     end
 
     should "return primary variable when set" do
       tenant = build(:tenant, primary_color: "#ff0000")
-      assert_equal({ "--color-primary" => "#ff0000" }, tenant.theme_css_variables)
+      assert_equal({ "--color-primary" => "#ff0000" }, tenant.theme_css_variables_light)
     end
 
     should "return both variables when both set" do
       tenant = build(:tenant, primary_color: "#ff0000", secondary_color: "#00ff00")
       expected = { "--color-primary" => "#ff0000", "--color-secondary" => "#00ff00" }
-      assert_equal expected, tenant.theme_css_variables
+      assert_equal expected, tenant.theme_css_variables_light
     end
 
     should "include nav colours when set" do
       tenant = build(:tenant, nav_bg_color: "#1e1b4b", nav_fg_color: "#e0e7ff")
-      vars = tenant.theme_css_variables
+      vars = tenant.theme_css_variables_light
       assert_equal "#1e1b4b", vars["--color-nav-bg"]
       assert_equal "#e0e7ff", vars["--color-nav-fg"]
     end
 
     should "include font-sans override when font_family set" do
       tenant = build(:tenant, font_family: "Poppins")
-      vars = tenant.theme_css_variables
+      vars = tenant.theme_css_variables_light
+      assert_equal '"Poppins", ui-sans-serif, system-ui, sans-serif', vars["--font-sans"]
+    end
+  end
+
+  context "#theme_css_variables_dark" do
+    should "return empty hash when no dark colours set" do
+      tenant = build(:tenant)
+      assert_equal({}, tenant.theme_css_variables_dark)
+    end
+
+    should "return dark primary variable when set" do
+      tenant = build(:tenant, primary_color_dark: "#ff6666")
+      assert_equal({ "--color-primary" => "#ff6666" }, tenant.theme_css_variables_dark)
+    end
+
+    should "return all dark variables when set" do
+      tenant = build(:tenant,
+        primary_color_dark: "#ff6666", secondary_color_dark: "#66ff66",
+        nav_bg_color_dark: "#111111", nav_fg_color_dark: "#eeeeee")
+      vars = tenant.theme_css_variables_dark
+      assert_equal "#ff6666", vars["--color-primary"]
+      assert_equal "#66ff66", vars["--color-secondary"]
+      assert_equal "#111111", vars["--color-nav-bg"]
+      assert_equal "#eeeeee", vars["--color-nav-fg"]
+    end
+
+    should "include font-sans override when font_family set" do
+      tenant = build(:tenant, font_family: "Poppins")
+      vars = tenant.theme_css_variables_dark
       assert_equal '"Poppins", ui-sans-serif, system-ui, sans-serif', vars["--font-sans"]
     end
   end

@@ -15,31 +15,47 @@ class Tenant < ApplicationRecord
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
 
-  store_accessor :settings, :primary_color, :secondary_color, :nav_bg_color, :nav_fg_color, :font_family
+  store_accessor :settings,
+    :primary_color, :primary_color_dark,
+    :secondary_color, :secondary_color_dark,
+    :nav_bg_color, :nav_bg_color_dark,
+    :nav_fg_color, :nav_fg_color_dark,
+    :font_family
 
   normalizes :slug, with: ->(s) { s.downcase.strip.gsub(/[^a-z0-9-]/, "-").gsub(/-+/, "-").delete_prefix("-").delete_suffix("-") }
 
   validates :name, presence: true
   validates :slug, presence: true, uniqueness: true,
     format: { with: /\A[a-z0-9-]+\z/, message: "must contain only lowercase letters, numbers, and dashes" }
-  validates :primary_color, format: { with: HEX_COLOR_FORMAT }, allow_blank: true
-  validates :secondary_color, format: { with: HEX_COLOR_FORMAT }, allow_blank: true
-  validates :nav_bg_color, format: { with: HEX_COLOR_FORMAT }, allow_blank: true
-  validates :nav_fg_color, format: { with: HEX_COLOR_FORMAT }, allow_blank: true
+  validates :primary_color, :primary_color_dark,
+    :secondary_color, :secondary_color_dark,
+    :nav_bg_color, :nav_bg_color_dark,
+    :nav_fg_color, :nav_fg_color_dark,
+    format: { with: HEX_COLOR_FORMAT }, allow_blank: true
   validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
 
-  # Returns CSS variable overrides for tenant-specific theme colours.
-  #
-  # Only includes variables for colours that have been set. When empty,
-  # the defaults from TailwindCSS @theme apply.
+  # Returns CSS variable overrides for light mode.
   #
   # @return [Hash{String => String}]
-  def theme_css_variables
+  def theme_css_variables_light
     vars = {}
     vars["--color-primary"] = primary_color if primary_color.present?
     vars["--color-secondary"] = secondary_color if secondary_color.present?
     vars["--color-nav-bg"] = nav_bg_color if nav_bg_color.present?
     vars["--color-nav-fg"] = nav_fg_color if nav_fg_color.present?
+    vars["--font-sans"] = "\"#{font_family}\", ui-sans-serif, system-ui, sans-serif" if font_family.present?
+    vars
+  end
+
+  # Returns CSS variable overrides for dark mode.
+  #
+  # @return [Hash{String => String}]
+  def theme_css_variables_dark
+    vars = {}
+    vars["--color-primary"] = primary_color_dark if primary_color_dark.present?
+    vars["--color-secondary"] = secondary_color_dark if secondary_color_dark.present?
+    vars["--color-nav-bg"] = nav_bg_color_dark if nav_bg_color_dark.present?
+    vars["--color-nav-fg"] = nav_fg_color_dark if nav_fg_color_dark.present?
     vars["--font-sans"] = "\"#{font_family}\", ui-sans-serif, system-ui, sans-serif" if font_family.present?
     vars
   end

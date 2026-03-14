@@ -29,9 +29,26 @@
     <%# Application-specific styles %>
     <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
     <%= javascript_importmap_tags %>
+
+    <% if defined?(current_tenant) && current_tenant %>
+      <% light = current_tenant.theme_css_variables_light %>
+      <% dark = current_tenant.theme_css_variables_dark %>
+      <% if light.any? || dark.any? %>
+        <style id="tenant-theme" data-turbo-track="reload">
+          <% if light.any? %>
+            body { <%= safe_join(light.map { |k, v| "#{k}:#{v}" }, '; ') %> }
+          <% end %>
+          <% if dark.any? %>
+            @media (prefers-color-scheme: dark) {
+              body { <%= safe_join(dark.map { |k, v| "#{k}:#{v}" }, '; ') %> }
+            }
+          <% end %>
+        </style>
+      <% end %>
+    <% end %>
   </head>
 
-  <body<% if defined?(current_tenant) && current_tenant&.theme_css_variables&.any? %> style="<%= safe_join(current_tenant.theme_css_variables.map { |k, v| "#{k}:#{v}" }, '; ') %>"<% end %>>
+  <body>
     <%# Devise pages handle flash inline — skip the toast to avoid duplication %>
     <% unless devise_controller? %>
       <% if flash[:notice] %>
