@@ -16,17 +16,25 @@ classDiagram
         No acts_as_tenant
     }
 
-    %% ══════════ AUTH (Devise) ══════════
+    %% ══════════ AUTH (Devise — Global) ══════════
 
     class User {
         +uuid id
-        +uuid tenant_id
         +string email
         +string encrypted_password
+        +bool global_admin
+        NOT tenant-scoped
+        has_prefix_id :usr
+    }
+
+    class TenantUser {
+        +uuid id
+        +uuid tenant_id
+        +uuid user_id
         +uuid person_id [nullable]
-        +enum system_role
-        Devise modules
+        +enum role [member, admin]
         acts_as_tenant :tenant
+        has_prefix_id :tnu
     }
 
     %% ══════════ STATE-BASED ══════════
@@ -35,21 +43,17 @@ classDiagram
         +uuid id
         +string name
         +string slug
-        +jsonb settings
-        +jsonb sso_config
-        +jsonb hris_config
-        +jsonb notification_config
+        +jsonb settings [theme]
     }
 
     class Person {
         +uuid id
         +uuid tenant_id
-        +string external_id
-        +string name
         +string email
+        +jsonb name_translations
         +uuid manager_id
-        +enum status
         acts_as_tenant :tenant
+        has_prefix_id :per
     }
 
     %% ══════════ FRAMEWORK (ES projected state) ══════════
@@ -174,11 +178,12 @@ classDiagram
 
     FrameworkTemplate ..> Framework : forked into
 
-    Tenant "1" --> "*" User : has users
+    User "1" --> "*" TenantUser : memberships
+    Tenant "1" --> "*" TenantUser : members
+    TenantUser "0..1" --> "0..1" Person : linked to
+
     Tenant "1" --> "*" Person : employs
     Tenant "1" --> "*" Framework : owns
-
-    User "0..1" --> "0..1" Person : linked to
 
     Person "*" --> "0..1" Person : reports to
 

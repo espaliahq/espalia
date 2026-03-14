@@ -28,7 +28,7 @@ An open-source, multi-tenant platform that operationalises career growth framewo
 
 ### ADR-1: Multi-tenancy — acts_as_tenant with row-level isolation
 
-**Decision:** `acts_as_tenant` gem with `tenant_id` on all tenant-scoped tables. Tenant set per-request via `Current.tenant` / `set_current_tenant_through_filter`.
+**Decision:** `acts_as_tenant` gem with `tenant_id` on all tenant-scoped tables. Tenant set per-request via `session[:current_tenant_id]` / `set_current_tenant_through_filter`. `ActsAsTenant.current_tenant` available throughout request.
 
 **Why:** Simplest operationally — single database, standard ActiveRecord, works for self-hosted and SaaS. Schema-per-tenant (Apartment) adds operational complexity. Database-per-tenant is overkill for v1.
 
@@ -38,11 +38,11 @@ An open-source, multi-tenant platform that operationalises career growth framewo
 # app/lib/event_stream_naming.rb
 module EventStreamNaming
   def self.framework_stream(framework_id)
-    "tenant-#{Current.tenant.id}/Framework-#{framework_id}"
+    "tenant-#{ActsAsTenant.current_tenant.id}/Framework-#{framework_id}"
   end
 
   def self.person_development_stream(person_id, framework_id)
-    "tenant-#{Current.tenant.id}/PersonDev-#{person_id}-#{framework_id}"
+    "tenant-#{ActsAsTenant.current_tenant.id}/PersonDev-#{person_id}-#{framework_id}"
   end
 end
 ```
@@ -51,7 +51,7 @@ Every event is published with `tenant_id` in metadata:
 
 ```ruby
 event_store.publish(event, stream_name: stream_name,
-  metadata: { tenant_id: Current.tenant.id, actor_id: current_person.id })
+  metadata: { tenant_id: ActsAsTenant.current_tenant.id, actor_id: current_person.id })
 ```
 
 Projection handlers set tenant context from event metadata:
@@ -67,41 +67,60 @@ class Frameworks::Projections::PublishedState
 end
 ```
 
-### ADR-2: Authentication — Devise (User) separate from domain (Person)
+### ADR-2: Authentication — Global User + TenantUser join, separate from domain Person
 
-**Decision:** `User` (Devise) and `Person` (domain) are separate models with an optional link.
+**Decision:** Three-model architecture: `User` (global Devise identity), `TenantUser` (tenant-scoped membership with role), and `Person` (domain entity). A single User can belong to multiple tenants.
 
 **Why:** They represent different concerns with different lifecycles:
-- **User** = authentication identity. Credentials, sessions, Devise modules (confirmable, lockable, recoverable, trackable). Has a `system_role` (tenant_admin, member).
-- **Person** = domain entity. Org chart position, role, level, manager. Source of truth for "who did what" in event streams. May be synced from HRIS.
+- **User** = global authentication identity. Credentials, sessions, Devise modules. NOT tenant-scoped — a single User can belong to multiple tenants. Has a `global_admin` flag for platform-level administration.
+- **TenantUser** = tenant-scoped join record linking a User to a Tenant. Carries the user's role within that tenant (`member` | `admin`) and an optional link to the Person domain entity.
+- **Person** = domain entity. Org chart position, manager. Source of truth for "who did what" in event streams. May be synced from HRIS.
 
 Not every Person has a User (HRIS-imported people not yet invited). Not every User has a Person (tenant admins who configure but aren't assessed).
 
 ```ruby
-# app/models/user.rb
+# app/models/user.rb — Global identity (NOT tenant-scoped)
 class User < ApplicationRecord
-  devise :database_authenticatable, :recoverable, :rememberable,
-         :validatable, :confirmable, :lockable, :trackable
+  devise :database_authenticatable, :registerable, :recoverable,
+         :rememberable, :validatable
 
-  acts_as_tenant :tenant
+  has_prefix_id :usr
 
-  belongs_to :person, optional: true
+  has_many :tenant_users, dependent: :destroy
+  has_many :tenants, through: :tenant_users
 
-  enum :system_role, { member: "member", tenant_admin: "tenant_admin" }
+  attribute :global_admin, :boolean, default: false
 end
 
-# app/models/person.rb
+# app/models/tenant_user.rb — Tenant-scoped membership
+class TenantUser < ApplicationRecord
+  acts_as_tenant :tenant
+  has_prefix_id :tnu
+
+  belongs_to :tenant
+  belongs_to :user
+  belongs_to :person, optional: true
+
+  ROLES = { member: "member", admin: "admin" }
+  enum :role, ROLES, default: :member
+
+  validates_uniqueness_to_tenant :user_id
+end
+
+# app/models/person.rb — Domain entity
 class Person < ApplicationRecord
   acts_as_tenant :tenant
+  has_prefix_id :per
 
-  has_one :user
-
+  translates :name
   belongs_to :manager, class_name: "Person", optional: true
-  has_many :reports, class_name: "Person", foreign_key: :manager_id
+  has_many :direct_reports, class_name: "Person", foreign_key: :manager_id, dependent: :nullify
+  has_one :tenant_user, dependent: :nullify
+  has_one :user, through: :tenant_user
 end
 ```
 
-The controller boundary translates `current_user` → `current_person`:
+The controller boundary resolves tenant from session and translates to `current_person`:
 
 ```ruby
 class ApplicationController < ActionController::Base
@@ -109,15 +128,21 @@ class ApplicationController < ActionController::Base
   set_current_tenant_through_filter
   before_action :set_tenant
 
+  def current_tenant_user
+    @current_tenant_user ||= current_user.tenant_users.find_by(tenant: ActsAsTenant.current_tenant)
+  end
+  helper_method :current_tenant_user
+
   def current_person
-    @current_person ||= current_user.person
+    @current_person ||= current_tenant_user&.person
   end
   helper_method :current_person
 
   private
 
   def set_tenant
-    set_current_tenant(current_user.tenant)
+    tenant = Tenant.find_by(id: session[:current_tenant_id])
+    set_current_tenant(tenant)
   end
 end
 ```
@@ -263,6 +288,14 @@ end
 └─────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────┐
+│ GLOBAL (not tenant-scoped)                                              │
+│  ┌──────────┐                                                           │
+│  │  User     │  Devise auth identity, global_admin flag                 │
+│  │  (Devise) │  has_many :tenant_users / :tenants                       │
+│  └──────────┘                                                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
 │ TENANT BOUNDARY (acts_as_tenant :tenant on all models below)            │
 │                                                                         │
 │  State-based (ActiveRecord)        Event-sourced (RES AggregateRoot)   │
@@ -271,10 +304,10 @@ end
 │  │  (config) │ │  (org)    │       │  (blueprint)  │ │ (journey)     │  │
 │  └──────────┘ └──────────┘        └──────────────┘ └───────────────┘  │
 │                                                                         │
-│  ┌──────────┐                      Projections (ActiveRecord read      │
-│  │  User     │                     models, acts_as_tenant)             │
-│  │  (Devise) │                     ┌─────────────────────────────┐    │
-│  └──────────┘                      │ FrameworkState::*            │    │
+│  ┌────────────┐                    Projections (ActiveRecord read      │
+│  │ TenantUser  │                   models, acts_as_tenant)             │
+│  │ (membership)│                   ┌─────────────────────────────┐    │
+│  └────────────┘                    │ FrameworkState::*            │    │
 │                                    │ AssessmentState              │    │
 │                                    │ GrowthPlanState              │    │
 │                                    │ Reporting::*                 │    │
@@ -288,50 +321,95 @@ end
 
 ```ruby
 # Schema: tenants
-#   id, name, slug (unique), settings (jsonb),
-#   sso_config (jsonb), hris_config (jsonb), notification_config (jsonb)
+#   id (uuid), name, slug (unique),
+#   settings (jsonb) — theme customisation
 
 class Tenant < ApplicationRecord
-  has_many :users
-  has_many :people
+  has_many :tenant_users, dependent: :destroy
+  has_many :users, through: :tenant_users
+  has_many :people, dependent: :destroy
+
+  store_accessor :settings,
+    :primary_color, :primary_color_dark,
+    :secondary_color, :secondary_color_dark,
+    :nav_bg_color, :nav_bg_color_dark,
+    :nav_fg_color, :nav_fg_color_dark,
+    :font_family
 end
 ```
 
-Settings jsonb includes: `assessment_cadence`, `growth_plan_cadence`, `check_in_cadence`, `default_evidence_types`.
+Settings jsonb currently stores theme customisation (colours, font). Additional JSONB columns for `sso_config`, `hris_config`, and `notification_config` are planned for V1 integrations but not yet implemented.
 
-### 3.3 User (Devise + ActiveRecord)
+### 3.3 User (Devise — Global Identity)
 
 ```ruby
 # Schema: users
-#   id, tenant_id, email, encrypted_password, person_id (nullable),
-#   system_role (enum: member, tenant_admin),
-#   + all Devise columns
+#   id (uuid), email (unique, global), encrypted_password,
+#   global_admin (boolean, default: false),
+#   reset_password_token, reset_password_sent_at, remember_created_at
+#
+# NOT tenant-scoped — a single User can belong to multiple tenants
 
 class User < ApplicationRecord
-  devise :database_authenticatable, :recoverable, :rememberable,
-         :validatable, :confirmable, :lockable, :trackable
-  acts_as_tenant :tenant
-  belongs_to :person, optional: true
-  enum :system_role, { member: "member", tenant_admin: "tenant_admin" }
+  devise :database_authenticatable, :registerable, :recoverable,
+         :rememberable, :validatable
+
+  has_prefix_id :usr
+
+  has_many :tenant_users, dependent: :destroy
+  has_many :tenants, through: :tenant_users
+
+  attribute :global_admin, :boolean, default: false
 end
 ```
+
+### 3.3b TenantUser (Tenant-scoped Membership)
+
+```ruby
+# Schema: tenant_users
+#   id (uuid), tenant_id, user_id, person_id (nullable),
+#   role (string, default: "member")
+#   Unique index on [tenant_id, user_id]
+
+class TenantUser < ApplicationRecord
+  acts_as_tenant :tenant
+  has_prefix_id :tnu
+
+  belongs_to :tenant
+  belongs_to :user
+  belongs_to :person, optional: true
+
+  ROLES = { member: "member", admin: "admin" }
+  enum :role, ROLES, default: :member
+
+  validates_uniqueness_to_tenant :user_id
+end
+```
+
+TenantUser carries the user's role within a tenant and optionally links to a Person domain entity. The `person_id` association is the bridge between authentication (User → TenantUser) and domain (Person).
 
 ### 3.4 Person (ActiveRecord)
 
 ```ruby
-# Schema: persons
-#   id, tenant_id, external_id (HRIS ID), name, email,
-#   current_role_id, current_level_id, manager_id,
-#   start_date, status (enum: active, inactive, offboarded),
-#   sync_metadata (jsonb)
+# Schema: people
+#   id (uuid), tenant_id, email,
+#   name_translations (jsonb, json_translate),
+#   manager_id (uuid, nullable, self-referencing)
 
 class Person < ApplicationRecord
   acts_as_tenant :tenant
-  has_one :user
+  has_prefix_id :per
+
+  translates :name
+
   belongs_to :manager, class_name: "Person", optional: true
-  has_many :reports, class_name: "Person", foreign_key: :manager_id
+  has_many :direct_reports, class_name: "Person", foreign_key: :manager_id, dependent: :nullify
+  has_one :tenant_user, dependent: :nullify
+  has_one :user, through: :tenant_user
 end
 ```
+
+Additional fields planned for V1 integrations (e.g. `external_id`, `current_role_id`, `current_level_id`, `status`, `sync_metadata`) are not yet implemented.
 
 ### 3.5 Framework (Event-sourced via RES)
 
@@ -743,7 +821,7 @@ This creates `event_store_events` and `event_store_events_in_streams` tables. Op
 ```ruby
 # config/routes.rb
 Rails.application.routes.draw do
-  authenticate :user, ->(u) { u.tenant_admin? } do
+  authenticate :user, ->(u) { u.global_admin? } do
     mount RailsEventStore::Browser => "/res"
   end
 end
