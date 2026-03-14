@@ -22,7 +22,7 @@ class Components::Kit::Navbar < Components::Base
   end
 
   def view_template
-    nav(class: "flex items-center justify-between h-16 px-4 bg-primary text-white shadow-sm shrink-0") do
+    nav(class: "flex items-center justify-between h-16 px-4 bg-nav-bg text-nav-fg shadow-sm shrink-0") do
       left_section
       right_section
     end
@@ -33,7 +33,7 @@ class Components::Kit::Navbar < Components::Base
   def left_section
     div(class: "flex items-center gap-3") do
       hamburger_button
-      span(class: "text-lg font-bold tracking-tight") { @app_name }
+      span(class: "text-lg font-bold tracking-tight") { "#{@current_tenant&.name} #{@app_name}" }
     end
   end
 

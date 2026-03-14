@@ -39,8 +39,8 @@ class Components::Kit::UserMenu < Components::Base
 
   def avatar_circle
     div(
-      class: "h-8 w-8 rounded-full bg-white/20 flex items-center justify-center " \
-             "text-sm font-medium text-white hover:bg-white/30 transition-colors cursor-pointer"
+      class: "h-8 w-8 rounded-full bg-nav-fg/20 flex items-center justify-center " \
+             "text-sm font-medium text-nav-fg hover:bg-nav-fg/30 transition-colors cursor-pointer"
     ) do
       plain user_initial
     end

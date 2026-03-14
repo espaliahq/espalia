@@ -24,11 +24,24 @@
     puts "Admin user #{admin_user_credentials.email} already exists"
   end
 
-  [ { slug: "meandu", name: "me&u" }, { slug: "testco", name: "Testco" } ].each do |tenant_attrs|
-    # Create the "me&u" tenant and assign the admin user
+  [
+    { slug: "meandu", name: "me&u", primary_color: "#00362F", secondary_color: "#001814",
+      nav_bg_color: "#DBFC45", nav_fg_color: "#001814", font_family: "Syne" },
+    { slug: "testco", name: "Testco", primary_color: "#6366f1", secondary_color: "#4f46e5",
+      nav_bg_color: "#1e1b4b", nav_fg_color: "#e0e7ff", font_family: "Poppins" }
+  ].each do |tenant_attrs|
+    theme_keys = %i[primary_color secondary_color nav_bg_color nav_fg_color font_family]
+
     tenant = Tenant.find_or_create_by!(slug: tenant_attrs[:slug]) do |t|
       t.name = tenant_attrs[:name]
+      theme_keys.each { |k| t.public_send(:"#{k}=", tenant_attrs[k]) }
       puts "Creating tenant: #{tenant_attrs[:name]}"
+    end
+
+    # Update theme on existing tenants
+    if theme_keys.any? { |k| tenant.public_send(k) != tenant_attrs[k] }
+      tenant.update!(tenant_attrs.slice(*theme_keys))
+      puts "Updated theme for #{tenant_attrs[:name]}"
     end
 
     ActsAsTenant.with_tenant(tenant) do
