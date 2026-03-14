@@ -202,11 +202,11 @@ module Frameworks
 end
 ```
 
-### ADR-4: Open-source core + optional hosted SaaS
+### ADR-4: Open-source core including SaaS control plane
 
-**Decision:** Modular monolith. Domain modules don't depend on SaaS infrastructure.
+**Decision:** Modular monolith. Domain modules don't depend on SaaS control plane infrastructure.
 
-**Implementation:** The SaaS control plane (tenant provisioning, billing, SSO routing) is a separate module, the core can work with or without it. 
+**Implementation:** The SaaS control plane (tenant provisioning, billing, SSO routing) is an open-source module within the same codebase. Domain modules have no dependency on it — the boundary is one-way.
 
 ### ADR-5: Event-sourced versioning (single stream, draft phase)
 
@@ -755,7 +755,7 @@ end
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                  SaaS Control Plane (optional, not OSS)       │
+│                    SaaS Control Plane (open-source)           │
 │  Tenant provisioning, billing, SSO routing, usage metrics     │
 └────────────────────────┬─────────────────────────────────────┘
                          │
