@@ -24,18 +24,20 @@
     puts "Admin user #{admin_user_credentials.email} already exists"
   end
 
-  # Create the "me&u" tenant and assign the admin user
-  tenant = Tenant.find_or_create_by!(slug: "meandu") do |t|
-    t.name = "me&u"
-    puts "Creating tenant: me&u"
-  end
+  [ { slug: "meandu", name: "me&u" }, { slug: "testco", name: "Testco" } ].each do |tenant_attrs|
+    # Create the "me&u" tenant and assign the admin user
+    tenant = Tenant.find_or_create_by!(slug: tenant_attrs[:slug]) do |t|
+      t.name = tenant_attrs[:name]
+      puts "Creating tenant: #{tenant_attrs[:name]}"
+    end
 
-  ActsAsTenant.with_tenant(tenant) do
-    unless TenantUser.exists?(user: admin_user)
-      TenantUser.create!(tenant: tenant, user: admin_user, role: :admin)
-      puts "Assigned #{admin_user.email} to tenant me&u as admin"
-    else
-      puts "#{admin_user.email} already assigned to tenant me&u"
+    ActsAsTenant.with_tenant(tenant) do
+      unless TenantUser.exists?(user: admin_user)
+        TenantUser.create!(tenant: tenant, user: admin_user, role: :admin)
+        puts "Assigned #{admin_user.email} to tenant #{tenant_attrs[:name]} as admin"
+      else
+        puts "#{admin_user.email} already assigned to tenant #{tenant_attrs[:name]}"
+      end
     end
   end
 end
