@@ -12,10 +12,10 @@ class Users::TenantSwitchesController < ApplicationController
 
   # POST /users/tenant_switch
   def create
-    tenant = current_user.tenants.find(params[:tenant_id])
+    tenant = ActsAsTenant.without_tenant { current_user.tenants.find(params[:tenant_id]) }
     session[:current_tenant_id] = tenant.id
     redirect_to root_path, status: :see_other
   rescue ActiveRecord::RecordNotFound
-    redirect_to new_users_tenant_switch_path, status: :see_other
+    redirect_to root_path, status: :see_other
   end
 end

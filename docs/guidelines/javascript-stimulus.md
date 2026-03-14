@@ -7,7 +7,7 @@
 - Define `static targets`, `static values`, `static classes` at the top of the class
 - Use `connect()` for initialization, `disconnect()` for cleanup
 - Prefer toggling CSS classes over direct DOM manipulation
-- Use `tailwindcss-stimulus-components` for common UI (Alert, Dropdown, Modal, Tabs, Popover, Toggle, Slideover)
+- Use `stimulus-use` composable behaviors for common interaction patterns (see below)
 - Keep controller actions focused on a single responsibility
 
 ## Server Requests (NON-NEGOTIABLE)
@@ -69,6 +69,39 @@ export default class extends Controller {
 
   cleanup() {
     // teardown logic
+  }
+}
+```
+
+## stimulus-use Composable Behaviors (NON-NEGOTIABLE)
+
+**Prefer `stimulus-use` behaviors over writing custom interaction logic.** Only write custom Stimulus code for app-specific behavior that `stimulus-use` doesn't cover.
+
+Common behaviors:
+- `useClickOutside` — close dropdowns/modals on outside click
+- `useTransition` — animated show/hide with CSS transition classes
+- `useDebounce` / `useThrottle` — rate-limit actions
+- `useIntersection` — lazy loading / infinite scroll
+- `useHover` — hover interactions
+
+```javascript
+import { Controller } from "@hotwired/stimulus"
+import { useClickOutside, useTransition } from "stimulus-use"
+
+export default class extends Controller {
+  static targets = ["menu"]
+
+  connect() {
+    useClickOutside(this)
+    useTransition(this, { element: this.menuTarget })
+  }
+
+  toggle() {
+    this.toggleTransition()
+  }
+
+  clickOutside() {
+    this.leave()
   }
 }
 ```

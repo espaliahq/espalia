@@ -10,12 +10,26 @@ class Views::Pages::IndexView < Views::Base
     { label: "Home", href: "/" }
   ].freeze
 
+  # @param user [User, nil] the currently signed-in user
+  # @param current_tenant [Tenant, nil] the active tenant
+  # @param tenants [Array<Tenant>] all tenants the user belongs to
+  def initialize(user: nil, current_tenant: nil, tenants: [])
+    @user = user
+    @current_tenant = current_tenant
+    @tenants = tenants
+  end
+
   def view_template
     div(
       class: "min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950",
       data: { controller: "sidebar" }
     ) do
-      render Components::Kit::Navbar.new(app_name: "GrowthOS")
+      render Components::Kit::Navbar.new(
+        app_name: "GrowthOS",
+        user: @user,
+        current_tenant: @current_tenant,
+        tenants: @tenants
+      )
 
       div(class: "flex flex-1") do
         render Components::Kit::Sidebar.new(links: NAV_LINKS)

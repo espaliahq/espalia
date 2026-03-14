@@ -27,10 +27,12 @@ class ApplicationController < ActionController::Base
     tenant = ActsAsTenant.without_tenant do
       if session[:current_tenant_id]
         current_user.tenants.find_by(id: session[:current_tenant_id])
-      elsif current_user.tenant_users.one?
+      else
         t = current_user.tenants.first
-        session[:current_tenant_id] = t.id
-        t
+        if t
+          session[:current_tenant_id] = t.id
+          t
+        end
       end
     end
 
@@ -39,19 +41,15 @@ class ApplicationController < ActionController::Base
 
   # Directs users to the right place after sign-in based on tenant membership.
   #
+  # Always auto-selects the first tenant. Multi-tenant users can switch
+  # tenants via the user menu dropdown in the navbar.
+  #
   # @param resource [User]
   # @return [String] redirect path
   def after_sign_in_path_for(resource)
     # Use without_tenant — no tenant is set yet at sign-in time.
-    memberships = ActsAsTenant.without_tenant { resource.tenant_users.to_a }
-
-    if memberships.one?
-      session[:current_tenant_id] = memberships.first.tenant_id
-      root_path
-    elsif memberships.many?
-      new_users_tenant_switch_path
-    else
-      root_path
-    end
+    first_membership = ActsAsTenant.without_tenant { resource.tenant_users.first }
+    session[:current_tenant_id] = first_membership.tenant_id if first_membership
+    root_path
   end
 end
