@@ -26,7 +26,7 @@ Rails.configuration.to_prepare do
   # ── Synchronous projections (same transaction) ──
   event_store.subscribe(
     Frameworks::Projections::PublishedState.new,
-    to: [ Frameworks::Events::FrameworkCreated ]
+    to: Frameworks::Projections::PublishedState.handled_events
   )
 
   # ── Async handlers (via SolidQueue) ──

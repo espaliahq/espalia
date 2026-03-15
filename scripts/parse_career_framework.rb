@@ -85,13 +85,13 @@ end
 # Extract name and description from a capability/category cell.
 # First bold segment = name, remaining bold + italic = description.
 def extract_name_and_description(html)
-  return [nil, nil] if html.nil? || html.to_s.strip.empty?
+  return [ nil, nil ] if html.nil? || html.to_s.strip.empty?
 
   bold_segments = extract_bold_segments(html)
 
   if bold_segments.empty?
     # No bold — use entire text as name
-    return [clean_text(html), nil]
+    return [ clean_text(html), nil ]
   end
 
   name = bold_segments.first
@@ -111,7 +111,7 @@ def extract_name_and_description(html)
   description = desc_parts.reject(&:empty?).join("\n")
   description = nil if description.empty?
 
-  [clean_name(name), description]
+  [ clean_name(name), description ]
 end
 
 # All known role code patterns across all sheets (for parsing illustrations)
@@ -139,13 +139,13 @@ SHEET_DEFAULT_ROLE_CODES = {
   "Financial Control" => %w[FC FCo],
   "Commercial Finance" => %w[CF],
   "Finance Operations" => %w[FO],
-  "Core 11 and Leadership Capabili" => :discard,  # Discard unprefixed illustrations (generic reference text)
+  "Core 11 and Leadership Capabili" => :discard  # Discard unprefixed illustrations (generic reference text)
 }.freeze
 
 # Fallback defaults for Data and Software Engineering sheets (all role codes in that family)
 SHEET_FALLBACK_ROLE_CODES = {
   "Data" => %w[AE DE DM],
-  "Software Engineering" => %w[E EM],
+  "Software Engineering" => %w[E EM]
 }.freeze
 
 def build_role_code_pattern(known_role_codes)
@@ -222,11 +222,11 @@ def assign_default_role_codes!(illustrations, sheet_name)
     else
       codes = if default.is_a?(Array) && default.any?
                 default
-              elsif fallback.is_a?(Array) && fallback.any?
+      elsif fallback.is_a?(Array) && fallback.any?
                 fallback
-              else
-                [nil] # Keep without role_code (shouldn't happen)
-              end
+      else
+                [ nil ] # Keep without role_code (shouldn't happen)
+      end
       codes.each do |code|
         new_ill = ill.dup
         new_ill["role_code"] = code if code
@@ -242,10 +242,10 @@ end
 # E.g. "Makes well-reasoned choices.\n\nE5: Frames ambiguous problems..."
 # Returns [canonical_text, [illustrations]]
 def split_canonical_and_role_illustrations(text, known_role_codes, sheet_name: nil)
-  return [text, []] if known_role_codes.empty?
+  return [ text, [] ] if known_role_codes.empty?
 
   code_pattern = build_role_code_pattern(known_role_codes)
-  return [text, []] unless code_pattern
+  return [ text, [] ] unless code_pattern
 
   parts = text.split(/\n+/)
   canonical_parts = []
@@ -266,18 +266,18 @@ def split_canonical_and_role_illustrations(text, known_role_codes, sheet_name: n
   end
 
   if canonical_parts.empty? && !illustration_text.empty?
-    canonical_parts = [illustration_text.shift]
+    canonical_parts = [ illustration_text.shift ]
   end
 
   canonical = canonical_parts.join(" ")
   illustrations = extract_role_illustrations(illustration_text.join("\n"), known_role_codes, sheet_name: sheet_name)
 
-  [canonical, illustrations]
+  [ canonical, illustrations ]
 end
 
 # Parse an expectation cell: extract canonical expectation (bold) and illustrations.
 def parse_expectation_cell(html, known_role_codes = [], sheet_name: nil)
-  return [nil, []] if html.nil? || html.to_s.strip.empty?
+  return [ nil, [] ] if html.nil? || html.to_s.strip.empty?
 
   bold_segments = extract_bold_segments(html)
   non_bold = extract_non_bold_text(html)
@@ -285,8 +285,8 @@ def parse_expectation_cell(html, known_role_codes = [], sheet_name: nil)
   # If no bold at all, entire text is the canonical expectation
   if bold_segments.empty?
     plain = clean_text(html)
-    return [plain, []] unless plain.empty?
-    return [nil, []]
+    return [ plain, [] ] unless plain.empty?
+    return [ nil, [] ]
   end
 
   illustrations = []
@@ -318,7 +318,7 @@ def parse_expectation_cell(html, known_role_codes = [], sheet_name: nil)
   # Final pass: assign default role codes to any remaining illustrations without one
   assign_default_role_codes!(illustrations, sheet_name) if sheet_name
 
-  [canonical, illustrations]
+  [ canonical, illustrations ]
 end
 
 # ---------------------------------------------------------------------------
@@ -387,11 +387,11 @@ def extract_role_code_and_title(text, _level)
   if cleaned.match(/\A([A-Z]{1,3}\d+)\s*(.+)/m)
     code = $1.strip
     title = $2.strip.split("\n").first&.strip
-    return [code, title]
+    return [ code, title ]
   end
 
   title = cleaned.split("\n").first&.strip
-  [nil, title]
+  [ nil, title ]
 end
 
 def find_first_data_row(xlsx)
@@ -552,7 +552,7 @@ def parse_sheet(xlsx, sheet_name, config)
       "role_binding" => role_binding,
       "sheet" => sheet_name,
       "group" => current_group,
-      "expectations" => expectations,
+      "expectations" => expectations
     }
   end
 
@@ -578,14 +578,14 @@ def build_role_families(all_roles_by_family, product_xlsx, finance_xlsx)
           {
             "ordinal" => t.level,
             "title" => t.title,
-            "code" => "#{prefix}#{t.level}",
+            "code" => "#{prefix}#{t.level}"
           }
         end
         roles << {
           "name" => info[:name],
           "code" => prefix,
           "track" => info[:track],
-          "levels" => levels,
+          "levels" => levels
         }
       else
         # Multiple role tracks (e.g. Financial Control with Accountant + Financial Controller)
@@ -603,7 +603,7 @@ def build_role_families(all_roles_by_family, product_xlsx, finance_xlsx)
             levels << {
               "ordinal" => level,
               "title" => title,
-              "code" => "#{prefix}#{level}",
+              "code" => "#{prefix}#{level}"
             }
           end
 
@@ -611,7 +611,7 @@ def build_role_families(all_roles_by_family, product_xlsx, finance_xlsx)
             "name" => info[:name],
             "code" => prefix,
             "track" => info[:track],
-            "levels" => levels,
+            "levels" => levels
           } unless levels.empty?
         end
       end
@@ -637,7 +637,7 @@ def build_role_families(all_roles_by_family, product_xlsx, finance_xlsx)
           "name" => info[:name],
           "code" => prefix,
           "track" => info[:track],
-          "levels" => levels,
+          "levels" => levels
         }
       end
     end
@@ -660,7 +660,7 @@ def build_capability_categories(core_caps, leadership_caps, role_specific_caps)
     categories[cat_name] ||= {
       "name" => cat_name,
       "description" => cat_desc,
-      "capabilities" => [],
+      "capabilities" => []
     }
     # Update description if we have one and existing is nil
     if cat_desc && !categories[cat_name]["description"]
@@ -675,7 +675,7 @@ def build_capability_categories(core_caps, leadership_caps, role_specific_caps)
       "name" => cap["name"],
       "description" => cap["description"],
       "scope" => cap["scope"] || "core",
-      "expectations" => cap["expectations"],
+      "expectations" => cap["expectations"]
     })
   end
 
@@ -685,7 +685,7 @@ def build_capability_categories(core_caps, leadership_caps, role_specific_caps)
       "name" => cap["name"],
       "description" => cap["description"],
       "scope" => cap["scope"] || "leadership",
-      "expectations" => cap["expectations"],
+      "expectations" => cap["expectations"]
     })
   end
 
@@ -697,7 +697,7 @@ def build_capability_categories(core_caps, leadership_caps, role_specific_caps)
       "description" => cap["description"],
       "scope" => scope,
       "sheet" => cap["sheet"],
-      "expectations" => cap["expectations"],
+      "expectations" => cap["expectations"]
     })
   end
 
@@ -732,80 +732,80 @@ end
 SHEET_CONFIGS = {
   "Data" => {
     file: :product,
-    header_rows: [2, 3, 4],
+    header_rows: [ 2, 3, 4 ],
     track_map: { 0 => "ic", 1 => "ic", 2 => "management" },
     role_family: "Data",
     role_code_prefixes: {
       "AE" => { name: "Analytics Engineer", track: "ic" },
       "DE" => { name: "Data Engineer", track: "ic" },
-      "DM" => { name: "Data Manager", track: "management" },
+      "DM" => { name: "Data Manager", track: "management" }
     }
   },
   "Software Engineering" => {
     file: :product,
-    header_rows: [2, 3],
+    header_rows: [ 2, 3 ],
     track_map: { 0 => "ic", 1 => "management" },
     role_family: "Software Engineering",
     role_code_prefixes: {
       "E" => { name: "Software Engineer", track: "ic" },
-      "EM" => { name: "Engineering Manager", track: "management" },
+      "EM" => { name: "Engineering Manager", track: "management" }
     }
   },
   "Product Design" => {
     file: :product,
-    header_rows: [2],
+    header_rows: [ 2 ],
     track_map: { 0 => "ic" },
     role_family: "Product Design",
     assign_codes: true,
     role_code_prefixes: {
-      "PD" => { name: "Product Designer", track: "ic" },
+      "PD" => { name: "Product Designer", track: "ic" }
     }
   },
   "Product Management" => {
     file: :product,
-    header_rows: [2],
+    header_rows: [ 2 ],
     track_map: { 0 => "ic" },
     role_family: "Product Management",
     role_code_prefixes: {
-      "PM" => { name: "Product Manager", track: "ic" },
+      "PM" => { name: "Product Manager", track: "ic" }
     }
   },
   "Core 11 and Leadership Capabili" => {
     file: :finance,
     header_rows: [],
-    role_family: nil,
+    role_family: nil
   },
   "Financial Control" => {
     file: :finance,
-    header_rows: [2, 3],
+    header_rows: [ 2, 3 ],
     track_map: { 0 => "ic", 1 => "ic" },
     role_family: "Financial Control",
     assign_codes: true,
     role_code_prefixes: {
       "FC" => { name: "Accountant", track: "ic" },
-      "FCo" => { name: "Financial Controller", track: "ic" },
+      "FCo" => { name: "Financial Controller", track: "ic" }
     }
   },
   "Commercial Finance" => {
     file: :finance,
-    header_rows: [2],
+    header_rows: [ 2 ],
     track_map: { 0 => "ic" },
     role_family: "Commercial Finance",
     assign_codes: true,
     role_code_prefixes: {
-      "CF" => { name: "Commercial Finance", track: "ic" },
+      "CF" => { name: "Commercial Finance", track: "ic" }
     }
   },
   "Finance Operations" => {
     file: :finance,
-    header_rows: [2],
+    header_rows: [ 2 ],
     track_map: { 0 => "ic" },
     role_family: "Finance Operations",
     assign_codes: true,
     role_code_prefixes: {
-      "FO" => { name: "Finance Operations", track: "ic" },
+      "FO" => { name: "Finance Operations", track: "ic" }
     }
-  },
+  }
 }.freeze
 
 # ---------------------------------------------------------------------------
@@ -833,7 +833,7 @@ SHEET_CONFIGS.each do |sheet_name, config|
   if config[:role_family] && !result[:roles].empty?
     all_roles_by_family[config[:role_family]] = {
       config: config,
-      tracks: result[:roles],
+      tracks: result[:roles]
     }
   end
 
@@ -888,7 +888,7 @@ framework = {
   "framework" => {
     "name" => "me&u 2025 Career Framework",
     "role_families" => role_families,
-    "capability_categories" => capability_categories,
+    "capability_categories" => capability_categories
   }
 }
 
