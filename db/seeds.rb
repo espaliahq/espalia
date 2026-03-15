@@ -59,3 +59,6 @@
     end
   end
 end
+
+# Seed framework data
+Rake::Task["frameworks:seed_meandu"].invoke
