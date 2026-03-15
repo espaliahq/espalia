@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_14_114604) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_14_212148) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -36,6 +36,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_14_114604) do
     t.index ["event_id"], name: "index_event_store_events_in_streams_on_event_id"
     t.index ["stream", "event_id"], name: "index_event_store_events_in_streams_on_stream_and_event_id", unique: true
     t.index ["stream", "position"], name: "index_event_store_events_in_streams_on_stream_and_position", unique: true
+  end
+
+  create_table "framework_states", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "current_published_version", default: 0, null: false
+    t.boolean "draft_in_progress", default: false, null: false
+    t.integer "draft_version"
+    t.uuid "framework_id", null: false
+    t.string "name", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "framework_id"], name: "index_framework_states_on_tenant_id_and_framework_id", unique: true
+    t.index ["tenant_id"], name: "index_framework_states_on_tenant_id"
   end
 
   create_table "people", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -92,6 +105,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_14_114604) do
   end
 
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
+  add_foreign_key "framework_states", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "tenant_users", "people"

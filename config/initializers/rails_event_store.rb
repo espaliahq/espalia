@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "aggregate_root"
+
 # Configures RailsEventStore with:
 # - ActiveRecord-backed PostgreSQL repository
 # - JSON serialization
@@ -18,16 +20,14 @@ Rails.configuration.to_prepare do
         ),
         RubyEventStore::Dispatcher.new
       )
-    )
+    ),
   )
 
   # ── Synchronous projections (same transaction) ──
-  # Subscriptions will be added here as aggregates are implemented.
-  # Example:
-  #   event_store.subscribe(
-  #     Frameworks::Projections::PublishedState.new,
-  #     to: Frameworks::Events.all_content_events
-  #   )
+  event_store.subscribe(
+    Frameworks::Projections::PublishedState.new,
+    to: [ Frameworks::Events::FrameworkCreated ]
+  )
 
   # ── Async handlers (via SolidQueue) ──
   # Subscriptions will be added here as integrations are implemented.
