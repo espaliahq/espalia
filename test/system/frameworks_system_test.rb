@@ -1,0 +1,86 @@
+# frozen_string_literal: true
+
+require "application_system_test_case"
+
+class FrameworksSystemTest < ApplicationSystemTestCase
+  setup do
+    @tenant = FactoryBot.create(:tenant)
+    @user = FactoryBot.create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) do
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @user)
+
+      # Create a minimal framework with structure via events
+      handler = Frameworks::CommandHandler.new
+      @framework_id = SecureRandom.uuid_v7
+      rfid = SecureRandom.uuid_v7
+      rid = SecureRandom.uuid_v7
+      cat_id = SecureRandom.uuid_v7
+      cap_id = SecureRandom.uuid_v7
+      eid = SecureRandom.uuid_v7
+
+      handler.create_framework(@framework_id, "Test Framework")
+      handler.add_role_family(@framework_id, rfid, "Engineering")
+      handler.add_role(@framework_id, rid, rfid, "Software Engineer", "E", "ic")
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "Engineer I", "E1", is_entry: true)
+      handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
+      handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
+      handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Asks clarifying questions")
+      handler.add_role_illustration(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance from tech lead")
+    end
+
+    visit new_user_session_path
+    fill_in "Email", with: @user.email
+    fill_in "Password", with: "password123"
+    click_button "Log in"
+    assert_current_path root_path
+  end
+
+  context "frameworks index" do
+    should "show the framework in the listing" do
+      visit frameworks_path
+
+      assert_text "Frameworks"
+      assert_text "Test Framework"
+    end
+
+    should "navigate to framework show page" do
+      visit frameworks_path
+
+      click_link "Test Framework"
+
+      assert_text "Strategic Thinking"
+      assert_text "Engineering"
+    end
+  end
+
+  context "framework show" do
+    should "display role families with roles and levels" do
+      visit framework_path(@framework_id)
+
+      assert_text "Roles & Levels"
+      assert_text "Engineering"
+      assert_text "Software Engineer"
+      assert_text "E1"
+    end
+
+    should "display capabilities with expectations and illustrations" do
+      visit framework_path(@framework_id)
+
+      assert_text "Capabilities"
+      assert_text "Thinking"
+      assert_text "Strategic Thinking"
+      assert_text "Asks clarifying questions"
+      assert_text "Seeks guidance from tech lead"
+    end
+  end
+
+  context "sidebar navigation" do
+    should "include frameworks link in sidebar" do
+      visit root_path
+
+      within "[data-sidebar-target='drawer']" do
+        assert_text "Frameworks"
+      end
+    end
+  end
+end

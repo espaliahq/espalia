@@ -112,11 +112,11 @@ Serialised aggregate state at a specific event version. `AggregateRoot::Snapshot
 ### Command
 Value object representing an intent. Passed to a command handler which loads the aggregate, calls methods, and stores resulting events. Commands carry `person_id` (from `current_person`), never `user_id`.
 
-### User vs Person
-**User** = Devise authentication identity. Credentials, sessions, `system_role` (tenant_admin, member). **Person** = domain entity. Org chart, role, level, manager. Linked via optional `User.person_id`. Events reference `person_id`. Controllers translate `current_user` → `current_person`.
+### User vs Person vs TenantUser
+**User** = global Devise authentication identity. Credentials, sessions, `global_admin` flag. NOT tenant-scoped — a single User can belong to multiple tenants. **TenantUser** = tenant-scoped join record linking User to Tenant. Carries role within that tenant (`member` | `admin`) and an optional link to Person via `person_id`. **Person** = domain entity. Org chart position, manager. Events reference `person_id`. Controllers translate `current_user` → `current_tenant_user` → `current_person`.
 
 ### acts_as_tenant
-Row-level multi-tenancy. All tenant-scoped ActiveRecord models have `tenant_id` and `acts_as_tenant :tenant`. Set per-request via `set_current_tenant_through_filter`. Event store isolation is via stream name prefixes, not `acts_as_tenant`.
+Row-level multi-tenancy. All tenant-scoped ActiveRecord models have `tenant_id` and `acts_as_tenant :tenant`. Set per-request via `set_current_tenant_through_filter`. **User is NOT tenant-scoped** — it is a global identity. TenantUser, Person, and all projection read models are tenant-scoped. Event store isolation is via stream name prefixes, not `acts_as_tenant`.
 
 ### EventStreamNaming
 Helper module that constructs tenant-namespaced stream names. All code uses this — never hand-builds stream names.

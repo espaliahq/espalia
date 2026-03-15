@@ -1,0 +1,92 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
+  setup do
+    @tenant = create(:tenant)
+    @framework_id = SecureRandom.uuid_v7
+    @event_store = Rails.configuration.event_store
+  end
+
+  context "#create_framework" do
+    should "publish FrameworkCreated event and create read model" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Engineering Growth")
+
+        # Verify event in stream
+        stream = EventStreamNaming.framework_stream(@framework_id)
+        events = @event_store.read.stream(stream).to_a
+        assert_equal 1, events.length
+        assert_kind_of Frameworks::Events::FrameworkCreated, events.first
+        assert_equal "Engineering Growth", events.first.data[:name]
+
+        # Verify read model created by projection
+        read_model = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert_not_nil read_model
+        assert_equal "Engineering Growth", read_model.name
+        assert_equal @tenant.id, read_model.tenant_id
+      end
+    end
+  end
+
+  context "full lifecycle integration" do
+    should "build a complete framework through commands and verify read models" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        lid = SecureRandom.uuid_v7
+        cat_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        stable_id = SecureRandom.uuid_v7
+        bid = SecureRandom.uuid_v7
+        eid = SecureRandom.uuid_v7
+        exp_stable_id = SecureRandom.uuid_v7
+        iid = SecureRandom.uuid_v7
+
+        handler.create_framework(@framework_id, "me&u 2025")
+        handler.add_role_family(@framework_id, rfid, "Data", description: "Data team roles")
+        handler.add_role(@framework_id, rid, rfid, "Data Engineer", "DE", "ic")
+        handler.add_level(@framework_id, lid, rid, 1, "Associate Data Engineer", "DE1", is_entry: true)
+        handler.add_capability_category(@framework_id, cat_id, "Thinking & Delivery", description: "How we think", ordinal: 1)
+        handler.add_capability(@framework_id, cap_id, stable_id, cat_id, "Strategic Thinking", description: "Long-term thinking")
+        handler.create_capability_role_binding(@framework_id, bid, cap_id, rid, weight: 1.0, requirement_type: "must_have")
+        handler.set_behavioural_expectation(@framework_id, eid, exp_stable_id, cap_id, 1, "Asks questions to understand problems.")
+        handler.add_role_illustration(@framework_id, iid, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance from a data lead")
+
+        # Verify event stream
+        stream = EventStreamNaming.framework_stream(@framework_id)
+        events = @event_store.read.stream(stream).to_a
+        assert_equal 9, events.length
+
+        # Verify all read models
+        assert_equal 1, FrameworkState::Framework.count
+        assert_equal 1, FrameworkState::RoleFamily.count
+        assert_equal 1, FrameworkState::Role.count
+        assert_equal 1, FrameworkState::Level.count
+        assert_equal 1, FrameworkState::CapabilityCategory.count
+        assert_equal 1, FrameworkState::Capability.count
+        assert_equal 1, FrameworkState::CapabilityRoleBinding.count
+        assert_equal 1, FrameworkState::BehaviouralExpectation.count
+        assert_equal 1, FrameworkState::RoleIllustration.count
+
+        # Verify associations work
+        framework = FrameworkState::Framework.find_by!(framework_id: @framework_id)
+        assert_equal "Data", framework.role_families.first.name
+        assert_equal "Data Engineer", framework.role_families.first.roles.first.name
+
+        capability = FrameworkState::Capability.find_by!(capability_id: cap_id)
+        expectation = capability.expectations.first
+        assert_equal "Asks questions to understand problems.", expectation.description
+        assert_equal "Seeks guidance from a data lead", expectation.illustrations.first.description
+
+        # Verify tenant metadata on events
+        events.each do |event|
+          assert_equal @tenant.id, event.metadata[:tenant_id]
+        end
+      end
+    end
+  end
+end

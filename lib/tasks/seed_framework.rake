@@ -1,0 +1,194 @@
+# frozen_string_literal: true
+
+namespace :frameworks do
+  desc "Seed the me&u career framework from YAML via RailsEventStore events"
+  task seed_meandu: :environment do
+    require "yaml"
+
+    yaml_path = Rails.root.join("db/seeds/meandu_career_framework.yml")
+    data = YAML.load_file(yaml_path)
+    framework_data = data["framework"]
+
+    tenant = Tenant.find_by!(slug: "meandu")
+    framework_id = SecureRandom.uuid_v7
+
+    ActsAsTenant.with_tenant(tenant) do
+      handler = Frameworks::CommandHandler.new
+
+      # Check if framework already seeded
+      if FrameworkState::Framework.count > 0
+        puts "Framework already seeded for me&u tenant. Skipping."
+        next
+      end
+
+      puts "Creating framework: #{framework_data['name']}"
+      handler.create_framework(framework_id, framework_data["name"])
+
+      # ── Role Families, Roles, Levels ──
+      role_code_to_id = {}   # "E" => uuid, "DE" => uuid
+      level_code_to_id = {}  # "E1" => uuid
+      all_role_ids = []
+      management_role_ids = []
+      finance_role_ids = []
+      finance_role_codes = %w[FC FCo CF FO]
+
+      framework_data["role_families"].select { |rf| rf["roles"] }.each do |rf_data|
+        rfid = SecureRandom.uuid_v7
+        puts "  Role family: #{rf_data['name']}"
+        handler.add_role_family(framework_id, rfid, rf_data["name"], description: rf_data["description"])
+
+        rf_data["roles"].each do |role_data|
+          rid = SecureRandom.uuid_v7
+          handler.add_role(framework_id, rid, rfid, role_data["name"], role_data["code"], role_data["track"])
+          role_code_to_id[role_data["code"]] = rid
+          all_role_ids << rid
+          management_role_ids << rid if role_data["track"] == "management"
+          finance_role_ids << rid if finance_role_codes.include?(role_data["code"])
+
+          role_data["levels"]&.each do |level_data|
+            lid = SecureRandom.uuid_v7
+            handler.add_level(framework_id, lid, rid,
+              level_data["ordinal"], level_data["title"], level_data["code"],
+              is_entry: level_data["ordinal"] == role_data["levels"].map { |l| l["ordinal"] }.min)
+            level_code_to_id[level_data["code"]] = lid
+          end
+        end
+      end
+
+      puts "  Loaded #{role_code_to_id.size} roles, #{level_code_to_id.size} levels"
+
+      # ── Capability Categories, Capabilities, Bindings, Expectations, Illustrations ──
+      cap_count = 0
+      exp_count = 0
+      ill_count = 0
+      binding_count = 0
+
+      framework_data["capability_categories"]&.each_with_index do |cat_data, cat_idx|
+        cat_id = SecureRandom.uuid_v7
+        puts "  Category: #{cat_data['name']}"
+        handler.add_capability_category(framework_id, cat_id, cat_data["name"],
+          description: cat_data["description"], ordinal: cat_idx + 1)
+
+        cat_data["capabilities"]&.each do |cap_data|
+          cap_id = SecureRandom.uuid_v7
+          stable_id = SecureRandom.uuid_v7
+          handler.add_capability(framework_id, cap_id, stable_id, cat_id,
+            cap_data["name"], description: cap_data["description"])
+          cap_count += 1
+
+          # Resolve scope to role IDs for bindings
+          target_role_ids = resolve_scope(cap_data["scope"], role_code_to_id,
+            all_role_ids, management_role_ids, finance_role_ids)
+
+          target_role_ids.each do |target_rid|
+            bid = SecureRandom.uuid_v7
+            handler.create_capability_role_binding(framework_id, bid, cap_id, target_rid)
+            binding_count += 1
+          end
+
+          # Expectations and illustrations
+          cap_data["expectations"]&.each do |exp_data|
+            eid = SecureRandom.uuid_v7
+            exp_stable_id = SecureRandom.uuid_v7
+            handler.set_behavioural_expectation(framework_id, eid, exp_stable_id,
+              cap_id, exp_data["level"], exp_data["description"])
+            exp_count += 1
+
+            exp_data["illustrations"]&.each_with_index do |ill_data, ill_idx|
+              role_code = resolve_role_code(ill_data["role_code"], role_code_to_id)
+              target_rid = role_code_to_id[role_code]
+
+              unless target_rid
+                puts "    WARNING: Unknown role_code '#{ill_data['role_code']}' — skipping illustration"
+                next
+              end
+
+              iid = SecureRandom.uuid_v7
+              ill_stable_id = SecureRandom.uuid_v7
+              handler.add_role_illustration(framework_id, iid, ill_stable_id,
+                eid, target_rid, ill_idx + 1, ill_data["description"])
+              ill_count += 1
+            end
+          end
+        end
+      end
+
+      puts "\nSeed complete!"
+      puts "  Framework: #{framework_data['name']}"
+      puts "  Role families: #{framework_data['role_families'].count { |rf| rf['roles'] }}"
+      puts "  Roles: #{role_code_to_id.size}"
+      puts "  Levels: #{level_code_to_id.size}"
+      puts "  Capabilities: #{cap_count}"
+      puts "  Bindings: #{binding_count}"
+      puts "  Expectations: #{exp_count}"
+      puts "  Illustrations: #{ill_count}"
+
+      stream = EventStreamNaming.framework_stream(framework_id)
+      total_events = Rails.configuration.event_store.read.stream(stream).count
+      puts "  Total events in stream: #{total_events}"
+    end
+  end
+end
+
+# Resolves a YAML scope value to an array of role UUIDs.
+#
+# @param scope [String, Array, nil] the scope value from YAML
+# @param role_code_to_id [Hash] mapping of role codes to UUIDs
+# @param all_role_ids [Array] all role UUIDs
+# @param management_role_ids [Array] management-track role UUIDs
+# @param finance_role_ids [Array] finance role UUIDs
+# @return [Array<String>] target role UUIDs
+def resolve_scope(scope, role_code_to_id, all_role_ids, management_role_ids, finance_role_ids)
+  case scope
+  when "core"
+    all_role_ids
+  when "leadership"
+    management_role_ids
+  when "stream_leadership"
+    # EM (Engineering Manager) — stream-level engineering leadership
+    [ role_code_to_id["EM"] ].compact
+  when "finance"
+    finance_role_ids
+  when "finance_leadership"
+    finance_role_ids
+  when String
+    # Specific role name — find by name in read model
+    find_role_by_name(scope, role_code_to_id)
+  when Array
+    scope.flat_map { |s| find_role_by_name(s, role_code_to_id) }
+  else
+    all_role_ids # default to all if no scope
+  end
+end
+
+# Finds a role UUID by role name. Since we only have code→id mapping,
+# we need to build a name→id mapping from the YAML. Instead, we use
+# a pragmatic approach: the scope string matches a role name, and
+# we loaded roles with names. We'll use ActiveRecord to find it.
+#
+# @param name [String] role name
+# @param role_code_to_id [Hash] code→id mapping (unused, kept for interface)
+# @return [Array<String>] matching role UUIDs
+def find_role_by_name(name, _role_code_to_id)
+  role = FrameworkState::Role.find_by(name: name)
+  role ? [ role.role_id ] : []
+end
+
+# Resolves a YAML role_code to just the role code portion.
+# Some codes include the level ordinal (e.g. "AE1" → "AE", "DE3" → "DE")
+# while others are just the role code (e.g. "PD", "FC").
+#
+# @param yaml_role_code [String] the role_code from YAML
+# @param role_code_to_id [Hash] mapping of role codes to UUIDs
+# @return [String] the role code
+def resolve_role_code(yaml_role_code, role_code_to_id)
+  # If it's an exact match, use it directly
+  return yaml_role_code if role_code_to_id.key?(yaml_role_code)
+
+  # Strip trailing digits to get the role code (e.g. "AE1" → "AE", "DM4" → "DM")
+  base_code = yaml_role_code.sub(/\d+$/, "")
+  return base_code if role_code_to_id.key?(base_code)
+
+  # Fallback: return as-is
+  yaml_role_code
+end

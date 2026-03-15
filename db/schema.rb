@@ -10,9 +10,158 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_13_042700) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_15_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "event_store_events", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.binary "data", null: false
+    t.uuid "event_id", null: false
+    t.string "event_type", null: false
+    t.binary "metadata"
+    t.datetime "valid_at"
+    t.index ["created_at"], name: "index_event_store_events_on_created_at"
+    t.index ["event_id"], name: "index_event_store_events_on_event_id", unique: true
+    t.index ["event_type"], name: "index_event_store_events_on_event_type"
+    t.index ["valid_at"], name: "index_event_store_events_on_valid_at"
+  end
+
+  create_table "event_store_events_in_streams", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "event_id", null: false
+    t.integer "position"
+    t.string "stream", null: false
+    t.index ["created_at"], name: "index_event_store_events_in_streams_on_created_at"
+    t.index ["event_id"], name: "index_event_store_events_in_streams_on_event_id"
+    t.index ["stream", "event_id"], name: "index_event_store_events_in_streams_on_stream_and_event_id", unique: true
+    t.index ["stream", "position"], name: "index_event_store_events_in_streams_on_stream_and_position", unique: true
+  end
+
+  create_table "framework_behavioural_expectations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "capability_id", null: false
+    t.datetime "created_at", null: false
+    t.text "description", null: false
+    t.uuid "expectation_id", null: false
+    t.integer "level_ordinal", null: false
+    t.uuid "stable_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "capability_id", "level_ordinal"], name: "idx_fw_behav_expectations_on_tenant_cap_level", unique: true
+    t.index ["tenant_id", "expectation_id"], name: "idx_fw_behav_expectations_on_tenant_and_expectation", unique: true
+    t.index ["tenant_id"], name: "index_framework_behavioural_expectations_on_tenant_id"
+  end
+
+  create_table "framework_capabilities", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "capability_id", null: false
+    t.uuid "category_id", null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.string "name", null: false
+    t.uuid "stable_id", null: false
+    t.string "status", default: "active", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "capability_id"], name: "index_framework_capabilities_on_tenant_id_and_capability_id", unique: true
+    t.index ["tenant_id", "stable_id"], name: "index_framework_capabilities_on_tenant_id_and_stable_id"
+    t.index ["tenant_id"], name: "index_framework_capabilities_on_tenant_id"
+  end
+
+  create_table "framework_capability_categories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "category_id", null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.uuid "framework_id", null: false
+    t.string "name", null: false
+    t.integer "ordinal"
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "category_id"], name: "idx_fw_cap_categories_on_tenant_and_category", unique: true
+    t.index ["tenant_id"], name: "index_framework_capability_categories_on_tenant_id"
+  end
+
+  create_table "framework_capability_role_bindings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "binding_id", null: false
+    t.uuid "capability_id", null: false
+    t.datetime "created_at", null: false
+    t.string "requirement_type", default: "must_have", null: false
+    t.uuid "role_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.decimal "weight", precision: 5, scale: 2, default: "1.0", null: false
+    t.index ["tenant_id", "binding_id"], name: "idx_fw_cap_role_bindings_on_tenant_and_binding", unique: true
+    t.index ["tenant_id", "capability_id", "role_id"], name: "idx_fw_cap_role_bindings_on_tenant_cap_role", unique: true
+    t.index ["tenant_id"], name: "index_framework_capability_role_bindings_on_tenant_id"
+  end
+
+  create_table "framework_levels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "code", null: false
+    t.datetime "created_at", null: false
+    t.boolean "is_entry", default: false, null: false
+    t.uuid "level_id", null: false
+    t.integer "ordinal", null: false
+    t.uuid "role_id", null: false
+    t.uuid "tenant_id", null: false
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "level_id"], name: "index_framework_levels_on_tenant_id_and_level_id", unique: true
+    t.index ["tenant_id", "role_id", "ordinal"], name: "index_framework_levels_on_tenant_id_and_role_id_and_ordinal", unique: true
+    t.index ["tenant_id"], name: "index_framework_levels_on_tenant_id"
+  end
+
+  create_table "framework_role_families", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.uuid "framework_id", null: false
+    t.string "name", null: false
+    t.uuid "role_family_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "framework_id"], name: "index_framework_role_families_on_tenant_id_and_framework_id"
+    t.index ["tenant_id", "role_family_id"], name: "index_framework_role_families_on_tenant_id_and_role_family_id", unique: true
+    t.index ["tenant_id"], name: "index_framework_role_families_on_tenant_id"
+  end
+
+  create_table "framework_role_illustrations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "description", null: false
+    t.uuid "expectation_id", null: false
+    t.uuid "illustration_id", null: false
+    t.integer "ordinal", null: false
+    t.uuid "role_id", null: false
+    t.uuid "stable_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "expectation_id", "role_id"], name: "idx_fw_role_illustrations_on_tenant_exp_role"
+    t.index ["tenant_id", "illustration_id"], name: "idx_fw_role_illustrations_on_tenant_and_illustration", unique: true
+    t.index ["tenant_id"], name: "index_framework_role_illustrations_on_tenant_id"
+  end
+
+  create_table "framework_roles", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "code", null: false
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.uuid "role_family_id", null: false
+    t.uuid "role_id", null: false
+    t.uuid "tenant_id", null: false
+    t.string "track", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "role_id"], name: "index_framework_roles_on_tenant_id_and_role_id", unique: true
+    t.index ["tenant_id"], name: "index_framework_roles_on_tenant_id"
+  end
+
+  create_table "framework_states", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "current_published_version", default: 0, null: false
+    t.boolean "draft_in_progress", default: false, null: false
+    t.integer "draft_version"
+    t.uuid "framework_id", null: false
+    t.string "name", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "framework_id"], name: "index_framework_states_on_tenant_id_and_framework_id", unique: true
+    t.index ["tenant_id"], name: "index_framework_states_on_tenant_id"
+  end
 
   create_table "people", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -67,6 +216,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_13_042700) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
+  add_foreign_key "framework_behavioural_expectations", "tenants"
+  add_foreign_key "framework_capabilities", "tenants"
+  add_foreign_key "framework_capability_categories", "tenants"
+  add_foreign_key "framework_capability_role_bindings", "tenants"
+  add_foreign_key "framework_levels", "tenants"
+  add_foreign_key "framework_role_families", "tenants"
+  add_foreign_key "framework_role_illustrations", "tenants"
+  add_foreign_key "framework_roles", "tenants"
+  add_foreign_key "framework_states", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "tenant_users", "people"
