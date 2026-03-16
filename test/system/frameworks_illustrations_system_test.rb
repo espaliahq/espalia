@@ -17,22 +17,22 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
       rfid = SecureRandom.uuid_v7
-      rid = SecureRandom.uuid_v7
+      @rid = SecureRandom.uuid_v7
       cat_id = SecureRandom.uuid_v7
       cap_id = SecureRandom.uuid_v7
-      eid = SecureRandom.uuid_v7
+      @eid = SecureRandom.uuid_v7
       @ill_id = SecureRandom.uuid_v7
 
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rfid, "Engineering")
-      handler.add_role(@framework_id, rid, rfid, "Software Engineer", "E", "ic")
-      handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "Engineer I", "E1", is_entry: true)
+      handler.add_role(@framework_id, @rid, rfid, "Software Engineer", "E", "ic")
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 1, "Engineer I", "E1", is_entry: true)
       handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
       handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
-      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
-      handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Asks clarifying questions")
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, @rid)
+      handler.set_behavioural_expectation(@framework_id, @eid, SecureRandom.uuid_v7, cap_id, 1, "Asks clarifying questions")
       handler.add_role_illustration(
-        @framework_id, @ill_id, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance from tech lead"
+        @framework_id, @ill_id, SecureRandom.uuid_v7, @eid, @rid, 1, "Seeks guidance from tech lead"
       )
     end
 
@@ -95,6 +95,71 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
       # Edit form hidden, display mode restored — original text visible
       assert_text "Seeks guidance from tech lead"
+    end
+  end
+
+  context "adding illustrations to a role with none yet" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        rfid2 = SecureRandom.uuid_v7
+        @rid2 = SecureRandom.uuid_v7
+        cap = FrameworkState::Capability.find_by(name: "Strategic Thinking")
+
+        handler.add_role_family(@framework_id, rfid2, "Product")
+        handler.add_role(@framework_id, @rid2, rfid2, "Product Manager", "PM", "ic")
+        handler.add_level(@framework_id, SecureRandom.uuid_v7, @rid2, 1, "PM I", "PM1")
+        handler.create_capability_role_binding(
+          @framework_id, SecureRandom.uuid_v7, cap.capability_id, @rid2
+        )
+      end
+    end
+
+    should "show Add illustration button when no illustrations exist for a role" do
+      visit framework_path(@framework_id)
+
+      find("tr[data-capability-id]", match: :first).click
+
+      assert_selector "button", text: "Add illustration"
+    end
+
+    should "allow adding a new illustration for a role that had none" do
+      visit framework_path(@framework_id)
+
+      find("tr[data-capability-id]", match: :first).click
+
+      add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
+        .find("div[data-controller='inline-editor']")
+      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", add_div)
+      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
+
+      textarea = add_div.find("textarea[name='illustration[description]']")
+      textarea.fill_in with: "Drives cross-functional alignment"
+
+      add_div.find("button[type='submit']").click
+
+      # Turbo Stream appended the new illustration; Add button is restored
+      assert_text "Drives cross-functional alignment"
+      assert_selector "button", text: "Add illustration"
+    end
+
+    should "cancel adding and restore the Add button without saving" do
+      visit framework_path(@framework_id)
+
+      find("tr[data-capability-id]", match: :first).click
+
+      add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
+        .find("div[data-controller='inline-editor']")
+      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", add_div)
+      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
+
+      textarea = add_div.find("textarea[name='illustration[description]']")
+      textarea.fill_in with: "Should not be saved"
+
+      add_div.find("button[data-action='inline-editor#cancel']").click
+
+      assert_no_text "Should not be saved"
+      assert_selector "button", text: "Add illustration"
     end
   end
 end
