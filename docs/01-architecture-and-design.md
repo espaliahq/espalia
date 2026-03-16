@@ -275,6 +275,16 @@ end
 
 **Decision:** Pluggable adapters. HRIS creates/updates Person records. Notifications via RES async handlers → Solid Queue → adapter. SSO via Devise + OmniAuth with tenant-level config.
 
+### ADR-13: Authorization enforced in the command handler, not in controllers
+
+**Decision:** Write-path authorization lives in the command handler (derived from aggregate state), not in Pundit policies in controllers. Controllers pass `author_id` and call the command handler; they never decide whether an action is permitted.
+
+**Why:** Framework collaborators are part of the Framework aggregate — stored as events and rebuilt into aggregate state. Enforcing authorization at the controller level would duplicate state the aggregate already owns, and would allow bypassing checks from background jobs, admin tooling, or any other non-HTTP entry point. The aggregate is the single source of truth for who can do what.
+
+**Auto-approval pattern:** When an authorized user (one where `framework.can_approve?(author_id)` returns true) submits an edit in `:editing` mode, the command handler immediately follows `EditSuggested` with `SuggestionApproved` and the resulting content-change event — three events, instant effect. Users without approval authority emit `EditSuggested` only; the suggestion stays pending until a reviewer acts. A future `mode: :suggesting` parameter lets authorized users explicitly create a pending suggestion for peer review regardless of their approval authority.
+
+**Stub until collaborators land:** `can_approve?` currently returns `true` for all users. When the collaborator model is implemented (via `CollaboratorAdded` events), it will query `@collaborators[user_id]&.[](:role)` against the tier-appropriate approval roles.
+
 ---
 
 ## 3. Domain Model
@@ -459,10 +469,12 @@ end
 # framework_behavioural_expectations: id, tenant_id, stable_id, capability_id, level_id, description
 # framework_role_illustrations: id, tenant_id, stable_id, expectation_id, role_id, ordinal, description
 # framework_collaborators: id, tenant_id, framework_id, person_id, role, scope_role_id
-# framework_suggested_edits: id, tenant_id, framework_id, author_id, target_entity_type,
-#                            target_entity_id, field, suggested_value, rationale,
-#                            requires_reassessment, reassessment_reason, status,
+# framework_suggested_edits: id, tenant_id, framework_id, suggestion_id (unique),
+#                            target_entity_type, target_entity_id, field,
+#                            current_value, suggested_value, author_id, rationale,
+#                            status (pending|approved|rejected|withdrawn),
 #                            reviewed_by, reviewed_at, reviewer_comment
+#                            (requires_reassessment / reassessment_reason deferred to Tier 3)
 
 module FrameworkState
   class Framework < ApplicationRecord
@@ -514,12 +526,16 @@ Content — illustrations (role-specific clarifying examples, NOT rated):
   RoleIllustrationReordered { expectation_id, role_id, new_ordering }
 
 Suggested edits (collaborative editing):
-  EditSuggested { id, target_entity_type, target_entity_id, field,
-                  suggested_value, author_id, rationale,
-                  requires_reassessment, reassessment_reason }
+  EditSuggested { suggestion_id, framework_id, target_entity_type, target_entity_id,
+                  field, suggested_value, author_id, rationale }
+  SuggestionAmended { suggestion_id, new_suggested_value, author_id, rationale }
+    → Author updates their own pending suggestion in-place (preserves suggestion_id
+       and any comment thread attached to it)
   SuggestionCommented { suggestion_id, author_id, content }
   SuggestionApproved { suggestion_id, reviewer_id, comment }
-    → Triggers actual content-change event (e.g. BehaviouralExpectationUpdated)
+    → Triggers actual content-change event (e.g. RoleIllustrationUpdated)
+    → Competing pending suggestions on the same (target_entity_id, field)
+       are automatically rejected with reason "Superseded by approved suggestion"
   SuggestionRejected { suggestion_id, reviewer_id, comment }
   SuggestionWithdrawn { suggestion_id }
 

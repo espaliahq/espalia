@@ -5,9 +5,13 @@ flowchart LR
     subgraph FrameworkStream["Framework Event Stream (RES)"]
         direction TB
         FVP[FrameworkVersionPublished]
+        ES[EditSuggested]
+        SAmend[SuggestionAmended]
         SA[SuggestionApproved]
-        BEU[BehaviouralExpectationUpdated]
-        SA --> BEU
+        RIU[RoleIllustrationUpdated / BehaviouralExpectationUpdated]
+        ES -->|author amends own pending| SAmend
+        ES -->|authorized user, editing mode| SA
+        SA --> RIU
     end
 
     subgraph PersonDevStream["Person Development Streams (RES)"]

@@ -128,11 +128,14 @@ classDiagram
 
     class SuggestedEdit {
         +uuid id
+        +uuid suggestion_id
         +uuid author_id
         +enum target_entity_type
+        +uuid target_entity_id
+        +string field
+        +text current_value
         +text suggested_value
-        +bool requires_reassessment
-        +enum status
+        +enum status [pending, approved, rejected, withdrawn]
     }
 
     class FrameworkMigration {
