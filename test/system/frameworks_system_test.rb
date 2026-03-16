@@ -24,6 +24,7 @@ class FrameworksSystemTest < ApplicationSystemTestCase
       handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "Engineer I", "E1", is_entry: true)
       handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
       handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
       handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Asks clarifying questions")
       handler.add_role_illustration(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance from tech lead")
     end
@@ -54,23 +55,26 @@ class FrameworksSystemTest < ApplicationSystemTestCase
   end
 
   context "framework show" do
-    should "display role families with roles and levels" do
+    should "display role tree and matrix" do
       visit framework_path(@framework_id)
 
-      assert_text "Roles & Levels"
+      # Role tree is visible on desktop
+      assert_text "Roles"
       assert_text "Engineering"
       assert_text "Software Engineer"
-      assert_text "E1"
+
+      # Matrix header (full title shown when few roles selected)
+      assert_text "Level 1"
+      assert_text "Engineer I"
     end
 
-    should "display capabilities with expectations and illustrations" do
+    should "display capabilities with expectations in matrix" do
       visit framework_path(@framework_id)
 
-      assert_text "Capabilities"
+      # Category and capability in matrix
       assert_text "Thinking"
       assert_text "Strategic Thinking"
       assert_text "Asks clarifying questions"
-      assert_text "Seeks guidance from tech lead"
     end
   end
 

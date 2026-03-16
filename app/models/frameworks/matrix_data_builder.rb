@@ -1,0 +1,170 @@
+# frozen_string_literal: true
+
+# Transforms eager-loaded framework read model data into a structured hash
+# for the capability × level matrix view.
+#
+# Operates entirely on in-memory associations — no additional queries.
+# The controller provides eager-loaded role_families (with roles + levels)
+# and categories (with capabilities, bindings, expectations, illustrations).
+#
+# @example
+#   data = Frameworks::MatrixDataBuilder.new(
+#     framework: framework,
+#     role_families: role_families,
+#     categories: categories,
+#     selected_role_ids: ["uuid1", "uuid2"],
+#     track_filter: "both"
+#   ).build
+#
+class Frameworks::MatrixDataBuilder
+  # @param framework [FrameworkState::Framework]
+  # @param role_families [Array<FrameworkState::RoleFamily>] eager-loaded with roles + levels
+  # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded with capabilities, bindings, expectations, illustrations
+  # @param selected_role_ids [Array<String>] UUIDs of selected roles
+  # @param track_filter [String] "ic", "management", or "both"
+  def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both")
+    @framework = framework
+    @role_families = role_families
+    @categories = categories
+    @selected_role_ids = selected_role_ids
+    @track_filter = track_filter
+  end
+
+  # Builds the matrix data structure.
+  #
+  # @return [Hash] with keys :selected_roles, :merged_levels, :categories
+  def build
+    selected_roles = resolve_selected_roles
+    merged_levels = build_merged_levels(selected_roles)
+    family_role_ids = build_family_role_ids(selected_roles)
+    selected_role_id_set = selected_roles.map(&:role_id).to_set
+
+    {
+      selected_roles: selected_roles,
+      merged_levels: merged_levels,
+      categories: build_categories(merged_levels, family_role_ids, selected_role_id_set)
+    }
+  end
+
+  private
+
+  # Filters roles by selected IDs and track filter from the eager-loaded role families.
+  #
+  # @return [Array<FrameworkState::Role>]
+  def resolve_selected_roles
+    all_roles = @role_families.flat_map(&:roles)
+
+    # Apply track filter
+    filtered = case @track_filter
+    when "ic" then all_roles.select { |r| r.track == "ic" }
+    when "management" then all_roles.select { |r| r.track == "management" }
+    else all_roles
+    end
+
+    # If no roles explicitly selected, default to all filtered roles
+    if @selected_role_ids.empty?
+      filtered
+    else
+      filtered.select { |r| @selected_role_ids.include?(r.role_id) }
+    end
+  end
+
+  # Merges level ordinals across all selected roles into a sorted set.
+  # Each merged level carries the role codes that map to that ordinal.
+  #
+  # @param selected_roles [Array<FrameworkState::Role>]
+  # @return [Array<Hash>] sorted by ordinal
+  def build_merged_levels(selected_roles)
+    levels_by_ordinal = {}
+
+    selected_roles.each do |role|
+      role.levels.each do |level|
+        levels_by_ordinal[level.ordinal] ||= { ordinal: level.ordinal, role_codes: [] }
+        levels_by_ordinal[level.ordinal][:role_codes] << {
+          role_id: role.role_id,
+          role_code: role.code,
+          level_code: level.code,
+          level_title: level.title
+        }
+      end
+    end
+
+    levels_by_ordinal.values.sort_by { |l| l[:ordinal] }
+  end
+
+  # Collects all role_ids belonging to the same role families as selected roles.
+  # Used for dimmed capability display (same-family but not directly selected).
+  #
+  # @param selected_roles [Array<FrameworkState::Role>]
+  # @return [Set<String>]
+  def build_family_role_ids(selected_roles)
+    selected_family_ids = selected_roles.map(&:role_family_id).to_set
+    @role_families
+      .select { |rf| selected_family_ids.include?(rf.role_family_id) }
+      .flat_map { |rf| rf.roles.map(&:role_id) }
+      .to_set
+  end
+
+  # Builds the category → capability → cell structure for the matrix.
+  #
+  # @param merged_levels [Array<Hash>]
+  # @param family_role_ids [Set<String>]
+  # @param selected_role_id_set [Set<String>]
+  # @return [Array<Hash>]
+  def build_categories(merged_levels, family_role_ids, selected_role_id_set)
+    ordinals = merged_levels.map { |l| l[:ordinal] }
+
+    @categories.filter_map do |category|
+      capabilities = build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
+      next if capabilities.empty?
+
+      { category: category, capabilities: capabilities }
+    end
+  end
+
+  # Builds capability data for a category, filtering by role family bindings.
+  #
+  # @return [Array<Hash>]
+  def build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
+    category.capabilities.select { |c| c.status == "active" }.filter_map do |capability|
+      binding_role_ids = capability.bindings.map(&:role_id).to_set
+
+      # Only include capabilities bound to roles in the same families
+      next unless binding_role_ids.intersect?(family_role_ids)
+
+      bound_to_selected = binding_role_ids.intersect?(selected_role_id_set)
+      cells = build_cells(capability, ordinals, selected_role_id_set)
+
+      {
+        capability: capability,
+        bound_to_selected: bound_to_selected,
+        cells: cells
+      }
+    end
+  end
+
+  # Builds the cell hash for a capability across all level ordinals.
+  #
+  # @return [Hash<Integer, Hash>] ordinal => cell data
+  def build_cells(capability, ordinals, selected_role_id_set)
+    expectations_by_ordinal = capability.expectations.index_by(&:level_ordinal)
+
+    ordinals.each_with_object({}) do |ordinal, cells|
+      expectation = expectations_by_ordinal[ordinal]
+      next unless expectation
+
+      illustrations = expectation.illustrations
+        .select { |ill| selected_role_id_set.include?(ill.role_id) }
+
+      illustrations_by_role = illustrations
+        .group_by(&:role_id)
+        .transform_values { |ills| ills.sort_by(&:ordinal) }
+
+      cells[ordinal] = {
+        expectation: expectation,
+        illustration_count: illustrations.size,
+        illustrations_by_role: illustrations_by_role
+      }
+    end
+  end
+end

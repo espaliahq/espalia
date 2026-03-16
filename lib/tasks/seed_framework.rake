@@ -37,6 +37,12 @@ namespace :frameworks do
         puts "  Role family: #{rf_data['name']}"
         handler.add_role_family(framework_id, rfid, rf_data["name"], description: rf_data["description"])
 
+        # Set department on the read model (display grouping, not event-sourced)
+        if rf_data["department"]
+          FrameworkState::RoleFamily.find_by(role_family_id: rfid)
+            &.update!(department: rf_data["department"])
+        end
+
         rf_data["roles"].each do |role_data|
           rid = SecureRandom.uuid_v7
           handler.add_role(framework_id, rid, rfid, role_data["name"], role_data["code"], role_data["track"])
