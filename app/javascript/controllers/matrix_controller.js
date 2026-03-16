@@ -1,7 +1,7 @@
-// Matrix controller for Turbo Frame updates and row/cell expansion.
+// Matrix controller for Turbo Frame updates and row/category expansion.
 //
 // Listens for tree:changed events to update the matrix Turbo Frame.
-// Manages row and cell expansion within the matrix.
+// Manages category collapse and row expansion within the matrix.
 //
 // <div data-controller="matrix"
 //      data-matrix-base-path-value="/frameworks/abc/matrix"
@@ -14,7 +14,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["frame", "row", "expandedRow", "cellDetail",
+  static targets = ["frame", "row", "expandedRow",
                      "categoryHeader", "rowChevron", "categoryChevron",
                      "scrollContainer"]
   static values = {
@@ -61,9 +61,6 @@ export default class extends Controller {
   // ── Row Expansion ──
 
   toggleRow(event) {
-    // Don't toggle if clicking a cell's expand button
-    if (event.target.closest("[data-action*='toggleCell']")) return
-
     const row = event.currentTarget
     const capId = row.dataset.capabilityId
     if (!capId) return
@@ -81,17 +78,6 @@ export default class extends Controller {
     if (chevron) {
       chevron.classList.toggle("rotate-90", isExpanding)
     }
-  }
-
-  // ── Cell Expansion ──
-
-  toggleCell(event) {
-    event.stopPropagation()
-    const cell = event.currentTarget
-    const detail = cell.querySelector("[data-matrix-target='cellDetail']")
-    if (!detail) return
-
-    detail.classList.toggle("hidden")
   }
 
   // ── Private ──
