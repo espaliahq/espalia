@@ -92,7 +92,7 @@ class Views::Frameworks::ShowView < Views::Base
 
   def explorer_layout
     div(
-      class: "flex -mx-6 -mb-6 h-[calc(100vh-13rem)] border-t border-gray-200 dark:border-gray-700",
+      class: "flex -mx-6 -mb-6 h-[calc(100vh-12rem)] border-t border-gray-200 dark:border-gray-700",
       data: {
         controller: "framework-explorer matrix",
         matrix_base_path_value: matrix_framework_path(@framework.framework_id),

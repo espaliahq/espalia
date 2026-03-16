@@ -78,11 +78,11 @@ class FrameworksSystemTest < ApplicationSystemTestCase
     end
   end
 
-  context "sidebar navigation" do
-    should "include frameworks link in sidebar" do
+  context "navbar navigation" do
+    should "include frameworks link in navbar" do
       visit root_path
 
-      within "[data-sidebar-target='drawer']" do
+      within "nav" do
         assert_text "Frameworks"
       end
     end

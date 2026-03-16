@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Shared page layout composing Navbar, Sidebar, and main content area.
+# Shared page layout composing Navbar and main content area.
 #
-# Provides the responsive shell used by all authenticated pages.
-# Yields the main content block.
+# On desktop: nav links are in the top Navbar, main content gets full width.
+# On mobile: hamburger opens a Sidebar drawer overlay.
 #
 # @example
 #   render Components::Kit::PageLayout.new(user: current_user, current_tenant: tenant, tenants: tenants) do
@@ -32,15 +32,16 @@ class Components::Kit::PageLayout < Components::Base
     ) do
       render Components::Kit::Navbar.new(
         app_name: "GrowthOS",
+        links: NAV_LINKS,
         user: @user,
         current_tenant: @current_tenant,
         tenants: @tenants
       )
 
-      div(class: "flex flex-1") do
-        render Components::Kit::Sidebar.new(links: NAV_LINKS)
-        main(class: "flex-1 p-6 overflow-auto", &block)
-      end
+      # Mobile-only sidebar drawer
+      render Components::Kit::Sidebar.new(links: NAV_LINKS)
+
+      main(class: "flex-1 p-6 overflow-auto", &block)
     end
   end
 end

@@ -39,15 +39,16 @@ class PagesSystemTest < ApplicationSystemTestCase
       assert_text "Goals"
     end
 
-    should "show sidebar on desktop" do
-      # Default screen size is 1400x1400 (desktop)
+    should "show nav links in navbar on desktop" do
       visit root_path
 
-      assert_selector "[data-sidebar-target='drawer']", visible: true
-      assert_selector "aside nav", visible: true
+      within "nav" do
+        assert_text "Home"
+        assert_text "Frameworks"
+      end
     end
 
-    should "hide sidebar by default on mobile and toggle it with hamburger" do
+    should "hide sidebar drawer by default on mobile and toggle it with hamburger" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit root_path
 
