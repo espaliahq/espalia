@@ -3,8 +3,7 @@
 // Manages the three-pane layout, including mobile role pane toggle.
 // On mobile (< lg), the role pane is hidden via Tailwind's max-lg:hidden.
 // The toggle button applies inline styles to override and show it as a
-// fixed overlay, since class-based toggling can't reliably override
-// responsive utility classes.
+// fixed overlay. Clicking outside the overlay closes it.
 //
 // <div data-controller="framework-explorer">
 //   <button data-action="framework-explorer#toggleRolePane">Roles</button>
@@ -25,30 +24,40 @@ export default class extends Controller {
   toggleRolePane() {
     if (!this.hasRolePaneTarget) return
 
-    this.rolePaneOpen = !this.rolePaneOpen
-
     if (this.rolePaneOpen) {
-      // Override max-lg:hidden with inline styles for the overlay
-      Object.assign(this.rolePaneTarget.style, {
-        display: "flex",
-        position: "fixed",
-        top: "0",
-        left: "0",
-        bottom: "0",
-        zIndex: "30",
-        width: "18rem"
-      })
+      this.#closeRolePane()
     } else {
-      // Remove inline styles to restore Tailwind responsive behaviour
-      this.rolePaneTarget.removeAttribute("style")
+      this.#openRolePane()
     }
   }
 
-  // Close role pane when clicking outside on mobile
-  closeRolePane(event) {
-    if (!this.rolePaneOpen || !this.hasRolePaneTarget) return
-    if (this.rolePaneTarget.contains(event.target)) return
+  // Called by useClickOutside when clicking outside the role pane
+  clickOutside(event) {
+    if (!this.rolePaneOpen) return
+    // Don't close if clicking the toggle button itself
+    if (event.target.closest("[data-action*='toggleRolePane']")) return
 
+    this.#closeRolePane()
+  }
+
+  // private
+
+  #openRolePane() {
+    this.rolePaneOpen = true
+    Object.assign(this.rolePaneTarget.style, {
+      display: "flex",
+      position: "fixed",
+      top: "0",
+      left: "0",
+      bottom: "0",
+      zIndex: "30",
+      width: "18rem"
+    })
+    // Activate click-outside detection on the role pane
+    useClickOutside(this, { element: this.rolePaneTarget })
+  }
+
+  #closeRolePane() {
     this.rolePaneOpen = false
     this.rolePaneTarget.removeAttribute("style")
   }

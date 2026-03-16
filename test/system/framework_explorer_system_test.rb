@@ -185,5 +185,20 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       assert_text "Product Design"
       assert_text "Software Engineering"
     end
+
+    should "close mobile role tree overlay when clicking outside" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit framework_path(@framework_id)
+
+      # Open the role pane
+      click_button "Roles"
+      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+
+      # Click outside the role pane (right side of viewport, past the 18rem overlay)
+      page.driver.browser.action.move_to_location(350, 400).click.perform
+
+      # Role pane should close
+      assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
+    end
   end
 end
