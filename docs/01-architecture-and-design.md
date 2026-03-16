@@ -524,19 +524,28 @@ Suggested edits (collaborative editing):
   SuggestionWithdrawn { suggestion_id }
 
 Collaborator management:
-  CollaboratorAdded { person_id, role, scope_role_id? }
-  CollaboratorRoleChanged { person_id, new_role }
-  CollaboratorRemoved { person_id }
+  CollaboratorAdded { person_id, collaborator_role, scope_type?, scope_id? }
+    collaborator_role: owner | editor | role_family_lead | role_lead |
+                       capability_category_lead | capability_lead | collaborator | viewer
+    scope_type: nil (framework-wide) | role_family | role | capability_category | capability
+    scope_id: UUID of the scoped entity (nil for framework-wide roles)
+  CollaboratorRoleChanged { person_id, old_role, new_role, scope_type?, scope_id? }
+  CollaboratorRemoved { person_id, collaborator_role, scope_type?, scope_id? }
+
+  A person can hold multiple collaborator roles on the same framework.
+  Permissions are the union of all held roles — never subtractive.
 
 Version lifecycle:
   DraftVersionStarted { target_version, started_by }
-    Opens draft phase. Structural events between this and
-    FrameworkVersionPublished only visible in draft projection.
+    Opens draft phase implicitly on first structural change.
+    Structural events between this and FrameworkVersionPublished
+    only visible in draft projection (not published).
   MigrationMappingDefined { from_stable_id, to_stable_id,
                             mapping_type, requires_reassessment, reason }
     mapping_type: same | evolved | split | archived | new
   FrameworkVersionPublished { version, published_by }
     Closes draft. Published projection advances.
+    Only Owner and Editor can publish.
 ```
 
 #### 3.5.4 Framework Projections
@@ -551,34 +560,51 @@ Version lifecycle:
 
 #### 3.5.5 Suggested Edit Review Tiers
 
-| Tier | Entity | Approvers | Reassessment default |
-|------|--------|-----------|---------------------|
-| 1 (light) | RoleIllustration | Editor or Role Lead (for their role) | false |
-| 2 (moderate) | Capability/Category description | Framework Owner | false |
-| 3 (high) | BehaviouralExpectation | Framework Owner | true (overridable) |
+| Tier | Entity | Who can approve | Reassessment default |
+|------|--------|----------------|---------------------|
+| 1 (light) | RoleIllustration | Role Lead, Role Family Lead, Capability Lead, Category Lead, Editor, Owner | false |
+| 2 (moderate) | Capability/Category description | Capability Lead, Category Lead, Editor, Owner | false |
+| 3 (high) | BehaviouralExpectation | Capability Lead (for their cap), Category Lead, Editor, Owner | true (overridable) |
 
 Structural changes (adding/removing capabilities, changing bindings) require a new version — NOT suggested edits.
 
 #### 3.5.6 FrameworkCollaborator Roles
 
-| Role | Can suggest | Can approve | Scope |
-|------|-----------|-------------|-------|
-| `owner` | Any tier | Any tier, manage collaborators | Framework-wide |
-| `editor` | Any tier | Tier 1 (illustrations) | Framework-wide |
-| `role_lead` | Illustrations for their role | Tier 1 for their role | Scoped to `scope_role_id` |
-| `viewer` | Cannot suggest | Cannot approve, can comment | Framework-wide |
+Eight roles with scoped permissions. A person can hold multiple roles; permissions are the union (additive, never subtractive).
+
+| Role | Scope | Structural changes | Content edits | Manage bindings | Manage collaborators | See drafts | Suggest edits | Comment |
+|------|-------|-------------------|-------------|----------------|---------------------|-----------|--------------|---------|
+| `owner` | Framework-wide | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `editor` | Framework-wide | Yes | Yes | Yes | No | Yes | Yes | Yes |
+| `role_family_lead` | Their family + exclusively-bound caps | Yes | Yes | For family's roles | Within family | Yes | Anywhere | Yes |
+| `role_lead` | Their role + exclusively-bound caps | Yes | Yes | For their role | Within role | Yes | Anywhere | Yes |
+| `capability_category_lead` | Their category | Yes | Yes | No | Within category | Yes | Anywhere | Yes |
+| `capability_lead` | Their capability | Yes | Yes | No | Within capability | Yes | Anywhere | Yes |
+| `collaborator` | Framework-wide (read + suggest) | No | No | No | No | Yes | Anywhere | Yes |
+| `viewer` | Published view only | No | No | No | No | No | No | No |
+
+**Exclusively-bound capability ownership:** If ALL `CapabilityRoleBinding` records for a capability point to roles within a single role family, the Role Family Lead automatically has Capability Lead-equivalent rights over that capability. Same for Role Lead if all bindings point to a single role. Cross-family capabilities require a Capability Lead, Category Lead, Editor, or Owner.
+
+**Binding management is role-side owned:** Role Family Leads and Role Leads decide which capabilities are bound to their roles. Capability Leads cannot force bindings onto roles they don't own.
+
+**Scoped collaborator management:** Scoped leads can add/remove collaborators within their scope (e.g., a Role Lead can add other collaborators for the same role).
+
+**Comments:** Any framework entity (role family, role, level, capability category, capability, expectation, illustration) can be commented on by anyone with `collaborator` role or above. `viewer` cannot comment.
 
 #### 3.5.7 Versioning and Migration
 
 **Structural changes** = new version. **Editorial changes** = suggested edits, no version.
 
+**Implicit draft lifecycle:** The first structural change by any permitted collaborator implicitly opens a draft (emits `DraftVersionStarted`). No explicit "start draft" ceremony needed. All collaborators (`collaborator` role and above) can see the draft state. Only `owner` and `editor` can publish.
+
 **Versioning workflow:**
-1. `DraftVersionStarted` → structural events accumulate, published projection unaffected
-2. System diffs published vs draft to derive migration mappings
-3. Admin reviews, emits `MigrationMappingDefined` events
-4. `FrameworkVersionPublished` → published projection advances
-5. Completed assessments: preserved via event replay to prior `FullAlignmentCompleted`
-6. In-progress assessments: `FrameworkVersionMigrated` in each affected person stream
+1. First structural change → `DraftVersionStarted` emitted automatically
+2. Structural events accumulate, published projection unaffected
+3. System diffs published vs draft to derive migration mappings
+4. Admin reviews, emits `MigrationMappingDefined` events
+5. `FrameworkVersionPublished` (by Owner or Editor) → published projection advances
+6. Completed assessments: preserved via event replay to prior `FullAlignmentCompleted`
+7. In-progress assessments: `FrameworkVersionMigrated` in each affected person stream
 
 **Migration mapping types:**
 
