@@ -79,11 +79,12 @@ class FrameworksSystemTest < ApplicationSystemTestCase
   end
 
   context "navbar navigation" do
-    should "include frameworks link in navbar" do
+    should "include framework link in navbar" do
       visit root_path
 
       within "nav" do
-        assert_text "Frameworks"
+        # Singular "Framework" when only one exists
+        assert_text "Framework"
       end
     end
   end
