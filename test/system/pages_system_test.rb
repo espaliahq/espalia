@@ -52,13 +52,17 @@ class PagesSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit root_path
 
-      # Use visible: :all because the drawer starts hidden on mobile
+      # Drawer starts hidden on mobile (has "hidden" class)
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
-      assert drawer[:class].include?("hidden"), "sidebar drawer should be hidden on mobile by default"
+      classes = drawer[:class].split
+      assert_includes classes, "hidden", "sidebar drawer should be hidden on mobile by default"
 
       find("[data-action='sidebar#toggle']").click
 
-      assert_not find("[data-sidebar-target='drawer']", visible: :all)[:class].include?("hidden"),
+      # After toggle, "hidden" class should be removed (md:hidden still present but doesn't apply on mobile)
+      drawer = find("[data-sidebar-target='drawer']", visible: :all)
+      classes = drawer[:class].split
+      assert_not_includes classes, "hidden",
         "sidebar drawer should be visible after hamburger click"
     end
 
