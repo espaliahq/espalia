@@ -396,4 +396,89 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       assert_equal iid, event.data[:illustration_id]
     end
   end
+
+  # ── Versioning ──
+
+  context "#start_draft" do
+    should "apply DraftVersionStarted event" do
+      @aggregate.start_draft(@framework_id, 1, "user-1")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::DraftVersionStarted, event
+      assert_equal @framework_id, event.data[:framework_id]
+      assert_equal 1, event.data[:target_version]
+      assert_equal "user-1", event.data[:started_by]
+    end
+
+    should "raise if draft already in progress" do
+      @aggregate.start_draft(@framework_id, 1, "user-1")
+
+      assert_raises(RuntimeError, /Draft already in progress/) do
+        @aggregate.start_draft(@framework_id, 2, "user-1")
+      end
+    end
+
+    should "raise if target version not greater than current" do
+      assert_raises(RuntimeError, /greater than current/) do
+        @aggregate.start_draft(@framework_id, 0, "user-1")
+      end
+    end
+  end
+
+  context "#publish_version" do
+    should "apply FrameworkVersionPublished event" do
+      @aggregate.start_draft(@framework_id, 1, "user-1")
+      @aggregate.publish_version(@framework_id, "user-1")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::FrameworkVersionPublished, event
+      assert_equal @framework_id, event.data[:framework_id]
+      assert_equal 1, event.data[:version]
+      assert_equal "user-1", event.data[:published_by]
+    end
+
+    should "raise if no draft in progress" do
+      assert_raises(RuntimeError, /No draft in progress/) do
+        @aggregate.publish_version(@framework_id, "user-1")
+      end
+    end
+
+    should "allow starting a new draft after publishing" do
+      @aggregate.start_draft(@framework_id, 1, "user-1")
+      @aggregate.publish_version(@framework_id, "user-1")
+      @aggregate.start_draft(@framework_id, 2, "user-1")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::DraftVersionStarted, event
+      assert_equal 2, event.data[:target_version]
+    end
+  end
+
+  context "#define_migration_mapping" do
+    should "apply MigrationMappingDefined event" do
+      @aggregate.start_draft(@framework_id, 1, "user-1")
+
+      mid = SecureRandom.uuid_v7
+      from_sid = SecureRandom.uuid_v7
+      to_sid = SecureRandom.uuid_v7
+      @aggregate.define_migration_mapping(@framework_id, mid, from_sid, to_sid, "evolved",
+                                          requires_reassessment: true, reason: "Scope broadened")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::MigrationMappingDefined, event
+      assert_equal mid, event.data[:mapping_id]
+      assert_equal from_sid, event.data[:from_stable_id]
+      assert_equal to_sid, event.data[:to_stable_id]
+      assert_equal "evolved", event.data[:mapping_type]
+      assert event.data[:requires_reassessment]
+      assert_equal "Scope broadened", event.data[:reason]
+    end
+
+    should "raise if no draft in progress" do
+      assert_raises(RuntimeError, /No draft in progress/) do
+        @aggregate.define_migration_mapping(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                            SecureRandom.uuid_v7, "same")
+      end
+    end
+  end
 end

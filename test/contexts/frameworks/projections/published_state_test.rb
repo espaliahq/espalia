@@ -319,6 +319,104 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  # ── Versioning ──
+
+  context "DraftVersionStarted" do
+    should "set draft_in_progress on framework" do
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Test")
+      emit(Frameworks::Events::DraftVersionStarted,
+        framework_id: @framework_id, target_version: 1, started_by: "user-1")
+
+      within_tenant do
+        fw = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert fw.draft_in_progress
+        assert_equal 1, fw.draft_version
+      end
+    end
+  end
+
+  context "structural events during draft" do
+    should "skip structural events when draft is in progress" do
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Test")
+      emit(Frameworks::Events::DraftVersionStarted,
+        framework_id: @framework_id, target_version: 1, started_by: "user-1")
+
+      rfid = SecureRandom.uuid_v7
+      emit(Frameworks::Events::RoleFamilyAdded,
+        framework_id: @framework_id, role_family_id: rfid, name: "New Family")
+
+      within_tenant do
+        assert_nil FrameworkState::RoleFamily.find_by(role_family_id: rfid),
+          "RoleFamily should NOT be created during draft"
+      end
+    end
+  end
+
+  context "FrameworkVersionPublished" do
+    should "rebuild projection with draft events included" do
+      # Use the full command handler so events go through the event store
+      # (the rebuild reads from the stream)
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Test Framework")
+
+        # Add a role family before draft
+        existing_rfid = SecureRandom.uuid_v7
+        handler.add_role_family(@framework_id, existing_rfid, "Engineering")
+
+        # Start draft
+        handler.start_draft(@framework_id, 1, "user-1")
+
+        # Add a role family during draft — should be skipped by published projection
+        draft_rfid = SecureRandom.uuid_v7
+        handler.add_role_family(@framework_id, draft_rfid, "Design")
+
+        assert_nil FrameworkState::RoleFamily.find_by(role_family_id: draft_rfid),
+          "Draft family should NOT exist before publish"
+
+        # Publish — triggers rebuild from event stream
+        handler.publish_version(@framework_id, "user-1")
+
+        fw = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert_equal 1, fw.current_published_version
+        assert_not fw.draft_in_progress
+        assert_nil fw.draft_version
+
+        # Both pre-draft and draft families should exist after rebuild
+        assert_not_nil FrameworkState::RoleFamily.find_by(role_family_id: existing_rfid)
+        assert_not_nil FrameworkState::RoleFamily.find_by(role_family_id: draft_rfid),
+          "Draft family should exist after publish rebuild"
+      end
+    end
+  end
+
+  context "MigrationMappingDefined" do
+    should "persist a migration mapping read model" do
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Test")
+      emit(Frameworks::Events::DraftVersionStarted,
+        framework_id: @framework_id, target_version: 1, started_by: "user-1")
+
+      mid = SecureRandom.uuid_v7
+      from_sid = SecureRandom.uuid_v7
+      to_sid = SecureRandom.uuid_v7
+      emit(Frameworks::Events::MigrationMappingDefined,
+        framework_id: @framework_id, mapping_id: mid,
+        from_stable_id: from_sid, to_stable_id: to_sid,
+        mapping_type: "evolved", requires_reassessment: true, reason: "Scope broadened")
+
+      within_tenant do
+        mapping = FrameworkState::MigrationMapping.find_by(mapping_id: mid)
+        assert_not_nil mapping
+        assert_equal from_sid, mapping.from_stable_id
+        assert_equal to_sid, mapping.to_stable_id
+        assert_equal "evolved", mapping.mapping_type
+        assert mapping.requires_reassessment
+        assert_equal "Scope broadened", mapping.reason
+        assert_equal 1, mapping.published_version
+      end
+    end
+  end
+
   private
 
   # Emits an event through the projection.

@@ -262,4 +262,44 @@ class Frameworks::CommandHandler
       framework.reorder_role_illustrations(framework_id, expectation_id, role_id, new_ordering)
     end
   end
+
+  # ── Versioning commands ──
+
+  # Starts a draft phase for a new framework version.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param target_version [Integer] the version number being drafted
+  # @param started_by [String] UUID of the user who started the draft
+  def start_draft(framework_id, target_version, started_by)
+    @repository.with_framework(framework_id) do |framework|
+      framework.start_draft(framework_id, target_version, started_by)
+    end
+  end
+
+  # Defines a migration mapping between versions.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param mapping_id [String] UUID for this mapping
+  # @param from_stable_id [String] stable_id in the current published version
+  # @param to_stable_id [String, nil] stable_id in the draft version
+  # @param mapping_type [String] one of: same, evolved, split, archived, new
+  # @param requires_reassessment [Boolean] whether existing ratings need review
+  # @param reason [String, nil] explanation of the mapping
+  def define_migration_mapping(framework_id, mapping_id, from_stable_id, to_stable_id, mapping_type,
+                               requires_reassessment: false, reason: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.define_migration_mapping(framework_id, mapping_id, from_stable_id, to_stable_id, mapping_type,
+                                         requires_reassessment: requires_reassessment, reason: reason)
+    end
+  end
+
+  # Publishes the current draft as a new framework version.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param published_by [String] UUID of the user who published
+  def publish_version(framework_id, published_by)
+    @repository.with_framework(framework_id) do |framework|
+      framework.publish_version(framework_id, published_by)
+    end
+  end
 end

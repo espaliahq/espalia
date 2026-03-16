@@ -6,6 +6,10 @@
 # FrameworkState read models. Runs in the same transaction
 # as the event publish.
 #
+# During a draft phase (between DraftVersionStarted and
+# FrameworkVersionPublished), structural events are skipped.
+# On publish, the entire projection is rebuilt from the event stream.
+#
 class Frameworks::Projections::PublishedState
   # All event classes this projection handles.
   #
@@ -31,7 +35,10 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::RoleIllustrationAdded,
       Frameworks::Events::RoleIllustrationUpdated,
       Frameworks::Events::RoleIllustrationRemoved,
-      Frameworks::Events::RoleIllustrationReordered
+      Frameworks::Events::RoleIllustrationReordered,
+      Frameworks::Events::DraftVersionStarted,
+      Frameworks::Events::FrameworkVersionPublished,
+      Frameworks::Events::MigrationMappingDefined
     ]
   end
 
@@ -47,7 +54,56 @@ class Frameworks::Projections::PublishedState
   # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
   def handle(event)
     case event
+    # Versioning events — always processed
     when Frameworks::Events::FrameworkCreated then handle_framework_created(event)
+    when Frameworks::Events::DraftVersionStarted then handle_draft_version_started(event)
+    when Frameworks::Events::FrameworkVersionPublished then handle_framework_version_published(event)
+    when Frameworks::Events::MigrationMappingDefined then handle_migration_mapping_defined(event)
+    # Structural events — skipped during draft
+    else
+      handle_structural_event(event)
+    end
+  end
+  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
+
+  # ── Versioning handlers ──
+
+  def handle_draft_version_started(event)
+    framework = find_framework(event)
+    framework.update!(
+      draft_in_progress: true,
+      draft_version: event.data[:target_version]
+    )
+  end
+
+  def handle_framework_version_published(event)
+    framework = find_framework(event)
+    rebuild_framework_projection(framework, event)
+  end
+
+  def handle_migration_mapping_defined(event) # rubocop:disable Metrics/MethodLength
+    # Find the framework to get the draft version
+    framework = find_framework(event)
+    FrameworkState::MigrationMapping.create!(
+      framework_id: event.data[:framework_id],
+      mapping_id: event.data[:mapping_id],
+      published_version: framework.draft_version || 0,
+      from_stable_id: event.data[:from_stable_id],
+      to_stable_id: event.data[:to_stable_id],
+      mapping_type: event.data[:mapping_type],
+      requires_reassessment: event.data[:requires_reassessment] || false,
+      reason: event.data[:reason]
+    )
+  end
+
+  # ── Structural event dispatch (draft-guarded) ──
+
+  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+  def handle_structural_event(event)
+    framework = find_framework(event)
+    return if framework&.draft_in_progress
+
+    case event
     when Frameworks::Events::RoleFamilyAdded then handle_role_family_added(event)
     when Frameworks::Events::RoleFamilyUpdated then handle_role_family_updated(event)
     when Frameworks::Events::RoleAdded then handle_role_added(event)
@@ -71,10 +127,120 @@ class Frameworks::Projections::PublishedState
   end
   # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
 
+  # ── Rebuild on publish ──
+
+  # Rebuilds the entire published projection for a framework from the event stream.
+  #
+  # Deletes all child read models and replays every event, treating the
+  # replay as a non-draft context (so all structural events apply).
+  #
+  # @param framework [FrameworkState::Framework]
+  # @param publish_event [RubyEventStore::Event] the FrameworkVersionPublished event
+  def rebuild_framework_projection(framework, publish_event) # rubocop:disable Metrics/MethodLength
+    framework_id = framework.framework_id
+
+    # Delete all child read models for this framework
+    destroy_framework_children(framework)
+
+    # Update framework version fields before replay
+    framework.update!(
+      current_published_version: publish_event.data[:version],
+      draft_in_progress: false,
+      draft_version: nil
+    )
+
+    # Replay all events in the stream (except versioning events)
+    stream = EventStreamNaming.framework_stream(framework_id)
+    event_store = Rails.configuration.event_store
+    event_store.read.stream(stream).each do |event|
+      # Skip versioning and framework-created events during replay
+      next if event.is_a?(Frameworks::Events::FrameworkCreated)
+      next if event.is_a?(Frameworks::Events::DraftVersionStarted)
+      next if event.is_a?(Frameworks::Events::FrameworkVersionPublished)
+      next if event.is_a?(Frameworks::Events::MigrationMappingDefined)
+
+      # Replay structural events directly (bypass draft guard)
+      replay_structural_event(event)
+    end
+  end
+
+  # Replays a structural event during rebuild (no draft guard).
+  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+  def replay_structural_event(event)
+    case event
+    when Frameworks::Events::RoleFamilyAdded then handle_role_family_added(event)
+    when Frameworks::Events::RoleFamilyUpdated then handle_role_family_updated(event)
+    when Frameworks::Events::RoleAdded then handle_role_added(event)
+    when Frameworks::Events::RoleUpdated then handle_role_updated(event)
+    when Frameworks::Events::LevelAdded then handle_level_added(event)
+    when Frameworks::Events::LevelUpdated then handle_level_updated(event)
+    when Frameworks::Events::CapabilityCategoryAdded then handle_capability_category_added(event)
+    when Frameworks::Events::CapabilityCategoryUpdated then handle_capability_category_updated(event)
+    when Frameworks::Events::CapabilityAdded then handle_capability_added(event)
+    when Frameworks::Events::CapabilityArchived then handle_capability_archived(event)
+    when Frameworks::Events::CapabilityRoleBindingCreated then handle_binding_created(event)
+    when Frameworks::Events::CapabilityRoleBindingUpdated then handle_binding_updated(event)
+    when Frameworks::Events::CapabilityRoleBindingRemoved then handle_binding_removed(event)
+    when Frameworks::Events::BehaviouralExpectationSet then handle_expectation_set(event)
+    when Frameworks::Events::BehaviouralExpectationUpdated then handle_expectation_updated(event)
+    when Frameworks::Events::RoleIllustrationAdded then handle_illustration_added(event)
+    when Frameworks::Events::RoleIllustrationUpdated then handle_illustration_updated(event)
+    when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
+    when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
+    end
+  end
+  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
+
+  # Destroys all child read model records for a framework.
+  def destroy_framework_children(framework) # rubocop:disable Metrics/MethodLength
+    framework_id = framework.framework_id
+    FrameworkState::RoleIllustration.joins(:expectation)
+      .where(framework_behavioural_expectations: {
+        capability_id: FrameworkState::Capability
+          .joins(:category)
+          .where(framework_capability_categories: { framework_id: framework_id })
+          .select(:capability_id)
+      }).delete_all
+    FrameworkState::BehaviouralExpectation.where(
+      capability_id: FrameworkState::Capability
+        .joins(:category)
+        .where(framework_capability_categories: { framework_id: framework_id })
+        .select(:capability_id)
+    ).delete_all
+    FrameworkState::CapabilityRoleBinding.where(
+      capability_id: FrameworkState::Capability
+        .joins(:category)
+        .where(framework_capability_categories: { framework_id: framework_id })
+        .select(:capability_id)
+    ).delete_all
+    FrameworkState::Capability.where(
+      category_id: FrameworkState::CapabilityCategory
+        .where(framework_id: framework_id)
+        .select(:category_id)
+    ).delete_all
+    FrameworkState::CapabilityCategory.where(framework_id: framework_id).delete_all
+    FrameworkState::Level.where(
+      role_id: FrameworkState::Role
+        .joins(:role_family)
+        .where(framework_role_families: { framework_id: framework_id })
+        .select(:role_id)
+    ).delete_all
+    FrameworkState::Role.where(
+      role_family_id: FrameworkState::RoleFamily
+        .where(framework_id: framework_id)
+        .select(:role_family_id)
+    ).delete_all
+    FrameworkState::RoleFamily.where(framework_id: framework_id).delete_all
+  end
+
+  # ── Individual structural handlers ──
+
   def handle_framework_created(event)
     FrameworkState::Framework.create!(
       framework_id: event.data[:framework_id],
-      name: event.data[:name]
+      name: event.data[:name],
+      current_published_version: 0,
+      draft_in_progress: false
     )
   end
 
@@ -218,6 +384,16 @@ class Frameworks::Projections::PublishedState
       record = FrameworkState::RoleIllustration.find_by(illustration_id: illustration_id)
       record&.update!(ordinal: index + 1)
     end
+  end
+
+  # ── Helpers ──
+
+  # Finds the framework read model from event data.
+  #
+  # @param event [RubyEventStore::Event]
+  # @return [FrameworkState::Framework, nil]
+  def find_framework(event)
+    FrameworkState::Framework.find_by(framework_id: event.data[:framework_id])
   end
 
   # Sets tenant context from event metadata for projection writes.

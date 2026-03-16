@@ -439,6 +439,74 @@ class Frameworks::Aggregate
     }))
   end
 
+  # ── Versioning commands ──
+
+  # Starts a draft phase for a new framework version.
+  #
+  # Structural events emitted after this will be invisible to the
+  # published projection until publish_version is called.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param target_version [Integer] the version number being drafted
+  # @param started_by [String] UUID of the user who started the draft
+  # @raise [RuntimeError] if a draft is already in progress
+  def start_draft(framework_id, target_version, started_by)
+    ensure_created!
+    raise "Draft already in progress" if @draft_in_progress
+    raise "Target version must be greater than current" unless target_version > @current_version
+
+    apply(Frameworks::Events::DraftVersionStarted.new(data: {
+      framework_id: framework_id,
+      target_version: target_version,
+      started_by: started_by
+    }))
+  end
+
+  # Defines a migration mapping for a capability between versions.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param mapping_id [String] UUID for this mapping
+  # @param from_stable_id [String] stable_id in the current published version
+  # @param to_stable_id [String, nil] stable_id in the draft version
+  # @param mapping_type [String] one of: same, evolved, split, archived, new
+  # @param requires_reassessment [Boolean] whether existing ratings need review
+  # @param reason [String, nil] explanation of the mapping
+  # @raise [RuntimeError] if no draft is in progress
+  def define_migration_mapping(framework_id, mapping_id, from_stable_id, to_stable_id, mapping_type,
+                               requires_reassessment: false, reason: nil)
+    ensure_created!
+    raise "No draft in progress" unless @draft_in_progress
+
+    apply(Frameworks::Events::MigrationMappingDefined.new(data: {
+      framework_id: framework_id,
+      mapping_id: mapping_id,
+      from_stable_id: from_stable_id,
+      to_stable_id: to_stable_id,
+      mapping_type: mapping_type,
+      requires_reassessment: requires_reassessment,
+      reason: reason
+    }))
+  end
+
+  # Publishes the current draft as a new framework version.
+  #
+  # The published projection will advance to include all structural
+  # events that accumulated during the draft phase.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param published_by [String] UUID of the user who published
+  # @raise [RuntimeError] if no draft is in progress
+  def publish_version(framework_id, published_by)
+    ensure_created!
+    raise "No draft in progress" unless @draft_in_progress
+
+    apply(Frameworks::Events::FrameworkVersionPublished.new(data: {
+      framework_id: framework_id,
+      version: @draft_version,
+      published_by: published_by
+    }))
+  end
+
   private
 
   # @raise [RuntimeError] if the framework has not been created
@@ -576,5 +644,22 @@ class Frameworks::Aggregate
     event.data[:new_ordering].each_with_index do |illustration_id, index|
       @illustrations[illustration_id][:ordinal] = index + 1 if @illustrations.key?(illustration_id)
     end
+  end
+
+  on Frameworks::Events::DraftVersionStarted do |event|
+    @draft_in_progress = true
+    @draft_version = event.data[:target_version]
+  end
+
+  on Frameworks::Events::FrameworkVersionPublished do |event|
+    @current_version = event.data[:version]
+    @draft_in_progress = false
+    @draft_version = nil
+    @migration_mappings = []
+  end
+
+  on Frameworks::Events::MigrationMappingDefined do |event|
+    @migration_mappings ||= []
+    @migration_mappings << event.data[:mapping_id]
   end
 end

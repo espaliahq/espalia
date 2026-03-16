@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_16_011126) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_16_073713) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -107,6 +107,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_011126) do
     t.index ["tenant_id", "level_id"], name: "index_framework_levels_on_tenant_id_and_level_id", unique: true
     t.index ["tenant_id", "role_id", "ordinal"], name: "index_framework_levels_on_tenant_id_and_role_id_and_ordinal", unique: true
     t.index ["tenant_id"], name: "index_framework_levels_on_tenant_id"
+  end
+
+  create_table "framework_migration_mappings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "from_stable_id"
+    t.uuid "mapping_id", null: false
+    t.string "mapping_type", null: false
+    t.integer "published_version", null: false
+    t.string "reason"
+    t.boolean "requires_reassessment", default: false, null: false
+    t.uuid "tenant_id", null: false
+    t.uuid "to_stable_id"
+    t.datetime "updated_at", null: false
+    t.index ["framework_id", "published_version"], name: "idx_on_framework_id_published_version_db5c09f0b2"
+    t.index ["mapping_id"], name: "index_framework_migration_mappings_on_mapping_id", unique: true
+    t.index ["tenant_id"], name: "index_framework_migration_mappings_on_tenant_id"
   end
 
   create_table "framework_role_families", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -223,6 +240,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_011126) do
   add_foreign_key "framework_capability_categories", "tenants"
   add_foreign_key "framework_capability_role_bindings", "tenants"
   add_foreign_key "framework_levels", "tenants"
+  add_foreign_key "framework_migration_mappings", "tenants"
   add_foreign_key "framework_role_families", "tenants"
   add_foreign_key "framework_role_illustrations", "tenants"
   add_foreign_key "framework_roles", "tenants"
