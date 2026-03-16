@@ -102,6 +102,37 @@ SCREENSHOTS=1 bin/rails test test/system/foo.rb
 # Screenshots saved to: tmp/screenshots/{TestClass}/{test_name}/{001_action.png}
 ```
 
+## Responsive Behaviour Testing (NON-NEGOTIABLE)
+
+**Every responsive behaviour must have a corresponding system test at both desktop and mobile viewports.** If a feature behaves differently at different breakpoints (hidden/shown, sidebar vs. overlay, collapsed vs. expanded), test both states.
+
+Use viewport constants and `resize_to` before visiting pages:
+
+```ruby
+DESKTOP_SIZE = [1400, 1400].freeze
+MOBILE_SIZE  = [375, 812].freeze
+
+should "show role tree inline on desktop" do
+  page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+  visit framework_path(@framework_id)
+  assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+end
+
+should "show role tree as overlay on mobile after toggle" do
+  page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+  visit framework_path(@framework_id)
+  assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
+  click_button "Roles"
+  assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+end
+```
+
+**Key principles:**
+- Reset viewport in `setup` (browser window persists across tests)
+- Test both the hidden-by-default state AND the toggle interaction
+- Use `visible: true` / `visible: :all` appropriately — `visible: true` checks CSS visibility, `:all` finds hidden DOM elements
+- Use `SCREENSHOTS=1` to visually verify responsive layouts at both sizes
+
 ## Rules
 
 - Use `subject { }` to define the object under test

@@ -31,8 +31,10 @@ class Views::Frameworks::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      framework_header
-      explorer_layout
+      div(data: { controller: "framework-explorer" }) do
+        framework_header
+        explorer_layout
+      end
     end
   end
 
@@ -94,7 +96,7 @@ class Views::Frameworks::ShowView < Views::Base
     div(
       class: "flex -mx-6 -mb-6 h-[calc(100vh-12rem)] border-t border-gray-200 dark:border-gray-700",
       data: {
-        controller: "framework-explorer matrix",
+        controller: "matrix",
         matrix_base_path_value: matrix_framework_path(@framework.framework_id),
         action: "tree:changed->matrix#updateSelection"
       }
@@ -108,7 +110,8 @@ class Views::Frameworks::ShowView < Views::Base
   def left_pane
     aside(
       class: "w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 max-lg:hidden flex flex-col overflow-hidden",
+             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden " \
+             "max-lg:hidden",
       data: {
         controller: "tree",
         framework_explorer_target: "rolePane"

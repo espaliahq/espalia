@@ -4,6 +4,7 @@ require "application_system_test_case"
 
 class FrameworkExplorerSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE  = [ 375, 812 ].freeze
 
   setup do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
@@ -154,6 +155,35 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
         assert_text "Software Engineering"
         assert_text "Financial Control"
       end
+    end
+  end
+
+  context "responsive behaviour" do
+    should "show role tree inline on desktop" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit framework_path(@framework_id)
+
+      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+      assert_no_selector "button", text: "Roles", visible: true
+    end
+
+    should "hide role tree on mobile and show it via toggle button" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit framework_path(@framework_id)
+
+      # Role pane should be hidden on mobile
+      assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
+
+      # Toggle button should be visible
+      assert_selector "button", text: "Roles", visible: true
+
+      # Click toggle to show role tree
+      click_button "Roles"
+
+      # Role tree should now be visible as overlay
+      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+      assert_text "Product Design"
+      assert_text "Software Engineering"
     end
   end
 end
