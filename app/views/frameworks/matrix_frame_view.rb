@@ -19,7 +19,8 @@ class Views::Frameworks::MatrixFrameView < Views::Base
     turbo_frame_tag("framework-matrix") do
       render Views::Frameworks::Explorer::Matrix.new(
         matrix_data: @matrix_data,
-        selected_role_ids: @selected_role_ids
+        selected_role_ids: @selected_role_ids,
+        framework_id: @framework.framework_id
       )
     end
   end

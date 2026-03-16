@@ -10,10 +10,12 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
-  def initialize(capability_data:, merged_levels:, selected_role_ids:)
+  # @param framework_id [String] UUID of the framework (for illustration PATCH URLs)
+  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
+    @framework_id = framework_id
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -104,9 +106,10 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           render Components::Kit::Badge.new(role.code, variant: :default)
           ul(class: "mt-1 space-y-1") do
             illustrations.each do |ill|
-              li(class: "text-xs text-gray-600 dark:text-gray-400 pl-2") do
-                ill.description
-              end
+              render Views::Frameworks::Explorer::IllustrationFrame.new(
+                illustration: ill,
+                framework_id: @framework_id
+              )
             end
           end
         end

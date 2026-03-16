@@ -263,6 +263,73 @@ class Frameworks::CommandHandler
     end
   end
 
+  # ── Suggested edit commands ──
+
+  # Suggests an edit to a framework entity field.
+  #
+  # Auto-approves if the author has approval authority AND mode is :editing
+  # (the default). This means the controller never decides whether to
+  # auto-approve — the decision derives from aggregate state.
+  #
+  # Event trail on auto-approve: EditSuggested + SuggestionApproved + content change (3 events)
+  # Event trail on pending:      EditSuggested (1 event)
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity (e.g. "role_illustration")
+  # @param target_entity_id [String] UUID of the entity
+  # @param field [String] field being edited (e.g. "description")
+  # @param suggested_value [String] the proposed new value
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] optional explanation
+  # @param mode [Symbol] :editing (auto-approve if authority) or :suggesting (always pending)
+  def suggest_edit(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                   field, suggested_value, author_id, rationale: nil, mode: :editing)
+    @repository.with_framework(framework_id) do |framework|
+      framework.suggest_edit(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                             field, suggested_value, author_id, rationale: rationale)
+
+      if mode == :editing && framework.can_approve?(author_id)
+        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+      end
+    end
+  end
+
+  # Amends the author's own pending suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param new_suggested_value [String] the revised proposed value
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] updated explanation
+  def amend_suggestion(framework_id, suggestion_id, new_suggested_value, author_id, rationale: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.amend_suggestion(suggestion_id, new_suggested_value, author_id, rationale: rationale)
+    end
+  end
+
+  # Rejects a pending suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param reviewer_id [String] UUID of the reviewer
+  # @param comment [String, nil] rejection reason
+  def reject_suggestion(framework_id, suggestion_id, reviewer_id, comment: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.reject_suggestion(suggestion_id, reviewer_id, comment: comment)
+    end
+  end
+
+  # Withdraws the author's own pending suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  def withdraw_suggestion(framework_id, suggestion_id)
+    @repository.with_framework(framework_id) do |framework|
+      framework.withdraw_suggestion(suggestion_id)
+    end
+  end
+
   # ── Versioning commands ──
 
   # Starts a draft phase for a new framework version.

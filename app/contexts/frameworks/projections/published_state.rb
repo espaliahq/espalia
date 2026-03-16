@@ -38,7 +38,13 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::RoleIllustrationReordered,
       Frameworks::Events::DraftVersionStarted,
       Frameworks::Events::FrameworkVersionPublished,
-      Frameworks::Events::MigrationMappingDefined
+      Frameworks::Events::MigrationMappingDefined,
+      Frameworks::Events::EditSuggested,
+      Frameworks::Events::SuggestionAmended,
+      Frameworks::Events::SuggestionApproved,
+      Frameworks::Events::SuggestionRejected,
+      Frameworks::Events::SuggestionWithdrawn,
+      Frameworks::Events::SuggestionCommented
     ]
   end
 
@@ -59,6 +65,13 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::DraftVersionStarted then handle_draft_version_started(event)
     when Frameworks::Events::FrameworkVersionPublished then handle_framework_version_published(event)
     when Frameworks::Events::MigrationMappingDefined then handle_migration_mapping_defined(event)
+    # Suggestion events — always processed, independent of draft state
+    when Frameworks::Events::EditSuggested then handle_edit_suggested(event)
+    when Frameworks::Events::SuggestionAmended then handle_suggestion_amended(event)
+    when Frameworks::Events::SuggestionApproved then handle_suggestion_approved(event)
+    when Frameworks::Events::SuggestionRejected then handle_suggestion_rejected(event)
+    when Frameworks::Events::SuggestionWithdrawn then handle_suggestion_withdrawn(event)
+    when Frameworks::Events::SuggestionCommented then nil # future: comments table
     # Structural events — skipped during draft
     else
       handle_structural_event(event)
@@ -383,6 +396,78 @@ class Frameworks::Projections::PublishedState
     event.data[:new_ordering].each_with_index do |illustration_id, index|
       record = FrameworkState::RoleIllustration.find_by(illustration_id: illustration_id)
       record&.update!(ordinal: index + 1)
+    end
+  end
+
+  # ── Suggestion handlers ──
+
+  def handle_edit_suggested(event)
+    FrameworkState::SuggestedEdit.create!(
+      build_suggested_edit_attrs(event)
+    )
+  end
+
+  def build_suggested_edit_attrs(event) # rubocop:disable Metrics/MethodLength
+    entity_id = event.data[:target_entity_id]
+    entity_type = event.data[:target_entity_type]
+    {
+      framework_id: event.data[:framework_id],
+      suggestion_id: event.data[:suggestion_id],
+      target_entity_type: entity_type,
+      target_entity_id: entity_id,
+      field: event.data[:field],
+      current_value: current_entity_value(entity_type, entity_id, event.data[:field]),
+      suggested_value: event.data[:suggested_value],
+      author_id: event.data[:author_id],
+      rationale: event.data[:rationale],
+      status: "pending"
+    }
+  end
+
+  def handle_suggestion_amended(event)
+    record = FrameworkState::SuggestedEdit.find_by!(suggestion_id: event.data[:suggestion_id])
+    record.update!(
+      suggested_value: event.data[:new_suggested_value],
+      rationale: event.data[:rationale] || record.rationale
+    )
+  end
+
+  def handle_suggestion_approved(event)
+    record = FrameworkState::SuggestedEdit.find_by!(suggestion_id: event.data[:suggestion_id])
+    record.update!(
+      status: "approved",
+      reviewed_by: event.data[:reviewer_id],
+      reviewed_at: event.metadata[:timestamp],
+      reviewer_comment: event.data[:comment]
+    )
+  end
+
+  def handle_suggestion_rejected(event)
+    record = FrameworkState::SuggestedEdit.find_by!(suggestion_id: event.data[:suggestion_id])
+    record.update!(
+      status: "rejected",
+      reviewed_by: event.data[:reviewer_id],
+      reviewed_at: event.metadata[:timestamp],
+      reviewer_comment: event.data[:comment]
+    )
+  end
+
+  def handle_suggestion_withdrawn(event)
+    record = FrameworkState::SuggestedEdit.find_by!(suggestion_id: event.data[:suggestion_id])
+    record.update!(status: "withdrawn")
+  end
+
+  # Returns the current value of a field on an entity for snapshot purposes.
+  #
+  # @param entity_type [String]
+  # @param entity_id [String]
+  # @param field [String]
+  # @return [String, nil]
+  def current_entity_value(entity_type, entity_id, field)
+    case entity_type
+    when "role_illustration"
+      record = FrameworkState::RoleIllustration.find_by(illustration_id: entity_id)
+      record&.public_send(field)
     end
   end
 

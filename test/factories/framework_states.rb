@@ -76,4 +76,17 @@ FactoryBot.define do
     ordinal { 1 }
     description { "Seeks guidance from a tech lead on requirements." }
   end
+
+  factory :framework_suggested_edit, class: "FrameworkState::SuggestedEdit" do
+    tenant
+    framework_id { SecureRandom.uuid_v7 }
+    suggestion_id { SecureRandom.uuid_v7 }
+    target_entity_type { "role_illustration" }
+    target_entity_id { SecureRandom.uuid_v7 }
+    field { "description" }
+    current_value { "Original text." }
+    suggested_value { "Improved text." }
+    author_id { SecureRandom.uuid_v7 }
+    status { "pending" }
+  end
 end

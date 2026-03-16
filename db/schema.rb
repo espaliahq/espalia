@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_16_081905) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -201,6 +201,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_081905) do
     t.index ["tenant_id"], name: "index_framework_states_on_tenant_id"
   end
 
+  create_table "framework_suggested_edits", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "author_id", null: false
+    t.datetime "created_at", null: false
+    t.text "current_value"
+    t.string "field", null: false
+    t.uuid "framework_id", null: false
+    t.text "rationale"
+    t.datetime "reviewed_at"
+    t.uuid "reviewed_by"
+    t.text "reviewer_comment"
+    t.string "status", default: "pending", null: false
+    t.text "suggested_value", null: false
+    t.uuid "suggestion_id", null: false
+    t.uuid "target_entity_id", null: false
+    t.string "target_entity_type", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["framework_id", "status"], name: "index_framework_suggested_edits_on_framework_id_and_status"
+    t.index ["suggestion_id"], name: "index_framework_suggested_edits_on_suggestion_id", unique: true
+    t.index ["target_entity_type", "target_entity_id", "field"], name: "index_fw_suggested_edits_on_target"
+    t.index ["tenant_id"], name: "index_framework_suggested_edits_on_tenant_id"
+  end
+
   create_table "people", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email", null: false
@@ -266,6 +289,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_081905) do
   add_foreign_key "framework_role_illustrations", "tenants"
   add_foreign_key "framework_roles", "tenants"
   add_foreign_key "framework_states", "tenants"
+  add_foreign_key "framework_suggested_edits", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "tenant_users", "people"

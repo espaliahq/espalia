@@ -439,6 +439,134 @@ class Frameworks::Aggregate
     }))
   end
 
+  # ── Suggested edit commands ──
+
+  # Returns whether a user has approval authority on this framework.
+  #
+  # For now all authenticated users are treated as Editors.
+  # When the collaborator model is implemented, this will query
+  # @collaborators[user_id]&.[](:role) against [:owner, :editor, ...].
+  #
+  # @param _user_id [String] UUID of the user
+  # @return [Boolean]
+  def can_approve?(_user_id)
+    true
+  end
+
+  # Suggests an edit to a framework entity field.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity (e.g. "role_illustration")
+  # @param target_entity_id [String] UUID of the entity
+  # @param field [String] the field being edited (e.g. "description")
+  # @param suggested_value [String] the proposed value
+  # @param author_id [String] UUID of the user
+  # @param rationale [String, nil] optional explanation
+  # @raise [RuntimeError] if framework not created, entity not found, or suggestion already exists
+  def suggest_edit(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                   field, suggested_value, author_id, rationale: nil)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
+    raise_unless_entity_exists!(target_entity_type, target_entity_id)
+
+    apply(Frameworks::Events::EditSuggested.new(data: {
+      framework_id: framework_id,
+      suggestion_id: suggestion_id,
+      target_entity_type: target_entity_type,
+      target_entity_id: target_entity_id,
+      field: field,
+      suggested_value: suggested_value,
+      author_id: author_id,
+      rationale: rationale
+    }.compact))
+  end
+
+  # Amends the author's own pending suggestion.
+  #
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param new_suggested_value [String] the revised proposed value
+  # @param author_id [String] UUID of the author (must match the original)
+  # @param rationale [String, nil] updated explanation
+  # @raise [RuntimeError] if suggestion not found or author mismatch
+  def amend_suggestion(suggestion_id, new_suggested_value, author_id, rationale: nil)
+    ensure_created!
+    suggestion = @pending_edits[suggestion_id]
+    raise "Suggestion #{suggestion_id} not found" unless suggestion
+    raise "Only the author can amend their suggestion" unless suggestion[:author_id] == author_id
+
+    apply(Frameworks::Events::SuggestionAmended.new(data: {
+      suggestion_id: suggestion_id,
+      new_suggested_value: new_suggested_value,
+      author_id: author_id,
+      rationale: rationale
+    }.compact))
+  end
+
+  # Approves a pending suggestion, applies the content change, and auto-rejects
+  # any competing pending suggestions on the same entity field.
+  #
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param reviewer_id [String] UUID of the reviewer
+  # @param comment [String, nil] optional reviewer comment
+  # @raise [RuntimeError] if suggestion not found
+  def approve_suggestion(suggestion_id, reviewer_id, comment: nil)
+    ensure_created!
+    suggestion = @pending_edits[suggestion_id]
+    raise "Suggestion #{suggestion_id} not found" unless suggestion
+
+    apply(Frameworks::Events::SuggestionApproved.new(data: {
+      suggestion_id: suggestion_id,
+      reviewer_id: reviewer_id,
+      comment: comment
+    }.compact))
+
+    apply_suggested_content_change(suggestion)
+
+    # Auto-reject competing pending suggestions on the same field
+    @pending_edits.each_value do |competing|
+      next if competing[:suggestion_id] == suggestion_id
+      next unless competing[:target_entity_id] == suggestion[:target_entity_id]
+      next unless competing[:field] == suggestion[:field]
+
+      apply(Frameworks::Events::SuggestionRejected.new(data: {
+        suggestion_id: competing[:suggestion_id],
+        reviewer_id: reviewer_id,
+        comment: "Superseded by approved suggestion"
+      }))
+    end
+  end
+
+  # Rejects a pending suggestion.
+  #
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param reviewer_id [String] UUID of the reviewer
+  # @param comment [String, nil] rejection reason
+  # @raise [RuntimeError] if suggestion not found
+  def reject_suggestion(suggestion_id, reviewer_id, comment: nil)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} not found" unless @pending_edits.key?(suggestion_id)
+
+    apply(Frameworks::Events::SuggestionRejected.new(data: {
+      suggestion_id: suggestion_id,
+      reviewer_id: reviewer_id,
+      comment: comment
+    }.compact))
+  end
+
+  # Withdraws the author's own pending suggestion.
+  #
+  # @param suggestion_id [String] UUID of the suggestion
+  # @raise [RuntimeError] if suggestion not found
+  def withdraw_suggestion(suggestion_id)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} not found" unless @pending_edits.key?(suggestion_id)
+
+    apply(Frameworks::Events::SuggestionWithdrawn.new(data: {
+      suggestion_id: suggestion_id
+    }))
+  end
+
   # ── Versioning commands ──
 
   # Starts a draft phase for a new framework version.
@@ -515,6 +643,7 @@ class Frameworks::Aggregate
   end
 
   on Frameworks::Events::FrameworkCreated do |event|
+    @framework_id = event.data[:framework_id]
     @name = event.data[:name]
     @status = :created
   end
@@ -661,5 +790,67 @@ class Frameworks::Aggregate
   on Frameworks::Events::MigrationMappingDefined do |event|
     @migration_mappings ||= []
     @migration_mappings << event.data[:mapping_id]
+  end
+
+  on Frameworks::Events::EditSuggested do |event|
+    @pending_edits[event.data[:suggestion_id]] = {
+      suggestion_id: event.data[:suggestion_id],
+      target_entity_type: event.data[:target_entity_type],
+      target_entity_id: event.data[:target_entity_id],
+      field: event.data[:field],
+      suggested_value: event.data[:suggested_value],
+      author_id: event.data[:author_id]
+    }
+  end
+
+  on Frameworks::Events::SuggestionAmended do |event|
+    suggestion = @pending_edits[event.data[:suggestion_id]]
+    suggestion[:suggested_value] = event.data[:new_suggested_value] if suggestion
+  end
+
+  on Frameworks::Events::SuggestionApproved do |event|
+    @pending_edits.delete(event.data[:suggestion_id])
+  end
+
+  on Frameworks::Events::SuggestionRejected do |event|
+    @pending_edits.delete(event.data[:suggestion_id])
+  end
+
+  on Frameworks::Events::SuggestionWithdrawn do |event|
+    @pending_edits.delete(event.data[:suggestion_id])
+  end
+
+  on Frameworks::Events::SuggestionCommented do |_event|
+    # Future: store in comments — no state change needed in aggregate
+  end
+
+  # Applies the actual content change event for an approved suggestion.
+  #
+  # @param suggestion [Hash] pending_edits entry
+  # @return [void]
+  def apply_suggested_content_change(suggestion)
+    case suggestion[:target_entity_type]
+    when "role_illustration"
+      apply(Frameworks::Events::RoleIllustrationUpdated.new(data: {
+        framework_id: @framework_id,
+        illustration_id: suggestion[:target_entity_id],
+        new_description: suggestion[:suggested_value],
+        rationale: "Applied via approved suggestion #{suggestion[:suggestion_id]}"
+      }))
+    end
+  end
+
+  # Raises unless the target entity exists in aggregate state.
+  #
+  # @param entity_type [String]
+  # @param entity_id [String]
+  # @raise [RuntimeError] if entity not found
+  def raise_unless_entity_exists!(entity_type, entity_id)
+    case entity_type
+    when "role_illustration"
+      raise "Illustration #{entity_id} not found" unless @illustrations.key?(entity_id)
+    else
+      raise "Unknown entity type: #{entity_type}"
+    end
   end
 end
