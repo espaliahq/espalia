@@ -1,0 +1,77 @@
+# frozen_string_literal: true
+
+# Handles commands for the PersonDevelopment aggregate.
+#
+# Loads the aggregate via the repository, executes the command,
+# and stores resulting events.
+#
+class PersonDevelopment::CommandHandler
+  # @param repository [PersonDevelopment::Repository]
+  def initialize(repository: PersonDevelopment::Repository.new)
+    @repository = repository
+  end
+
+  # Assigns a person to a framework with a role and level.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param role_id [String] UUID of the assigned role
+  # @param level_id [String] UUID of the assigned level
+  def assign_to_framework(person_id, framework_id, role_id, level_id)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.assign_to_framework(person_id, framework_id, role_id, level_id)
+    end
+  end
+
+  # Opens a new assessment cycle.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID for the new cycle
+  # @param cycle_name [String] display name
+  # @param cycle_type [String] one of: regular, performance_review, promotion_review
+  # @param framework_version [Integer] the framework version
+  def open_assessment_cycle(person_id, framework_id, cycle_id, cycle_name, cycle_type, framework_version)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.open_assessment_cycle(cycle_id, cycle_name, cycle_type, framework_version)
+    end
+  end
+
+  # Records a self-rating for a capability.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_id [String] UUID of the rated level
+  # @param comment [String, nil] optional rationale
+  def rate_self(person_id, framework_id, capability_stable_id, level_id, comment: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.rate_self(capability_stable_id, level_id, comment: comment)
+    end
+  end
+
+  # Revises a previous self-rating.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param new_level_id [String] UUID of the revised level
+  # @param rationale [String] reason for the change
+  # @param comment [String, nil] optional comment
+  def revise_self_rating(person_id, framework_id, capability_stable_id, new_level_id, rationale:, comment: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.revise_self_rating(capability_stable_id, new_level_id, rationale: rationale, comment: comment)
+    end
+  end
+
+  # Completes the current assessment cycle.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle to complete
+  def complete_assessment_cycle(person_id, framework_id, cycle_id)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.complete_assessment_cycle(cycle_id)
+    end
+  end
+end
