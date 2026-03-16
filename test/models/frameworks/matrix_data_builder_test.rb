@@ -1,0 +1,250 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
+  setup do
+    @tenant = create(:tenant)
+    ActsAsTenant.current_tenant = @tenant
+
+    framework_id = SecureRandom.uuid_v7
+
+    # Create framework
+    @framework = create(:framework_state, framework_id: framework_id)
+
+    # Role family: Engineering
+    @eng_family = create(:framework_role_family,
+      framework_id: framework_id, name: "Engineering")
+
+    # IC role with 3 levels
+    @ic_role = create(:framework_role,
+      role_family_id: @eng_family.role_family_id, name: "Software Engineer",
+      code: "E", track: "ic")
+    @ic_levels = (1..3).map do |i|
+      create(:framework_level,
+        role_id: @ic_role.role_id, ordinal: i,
+        title: "Engineer #{i}", code: "E#{i}")
+    end
+
+    # Management role with 2 levels (ordinals 3-4, overlapping IC at 3)
+    @mgmt_role = create(:framework_role,
+      role_family_id: @eng_family.role_family_id, name: "Engineering Manager",
+      code: "EM", track: "management")
+    @mgmt_levels = [ 3, 4 ].map do |i|
+      create(:framework_level,
+        role_id: @mgmt_role.role_id, ordinal: i,
+        title: "Manager #{i}", code: "EM#{i}")
+    end
+
+    # Second role family: Design
+    @design_family = create(:framework_role_family,
+      framework_id: framework_id, name: "Design")
+    @design_role = create(:framework_role,
+      role_family_id: @design_family.role_family_id, name: "Product Designer",
+      code: "PD", track: "ic")
+    create(:framework_level,
+      role_id: @design_role.role_id, ordinal: 1,
+      title: "Designer 1", code: "PD1")
+
+    # Capability category + capability bound to Engineering roles
+    @category = create(:framework_capability_category,
+      framework_id: framework_id, name: "Thinking", ordinal: 1)
+    @capability = create(:framework_capability,
+      category_id: @category.category_id, name: "Strategic Thinking")
+
+    # Bind to both engineering roles
+    create(:framework_capability_role_binding,
+      capability_id: @capability.capability_id, role_id: @ic_role.role_id)
+    create(:framework_capability_role_binding,
+      capability_id: @capability.capability_id, role_id: @mgmt_role.role_id)
+
+    # Expectations at ordinals 1, 2, 3
+    @expectations = (1..3).map do |i|
+      create(:framework_behavioural_expectation,
+        capability_id: @capability.capability_id, level_ordinal: i,
+        description: "Level #{i} expectation")
+    end
+
+    # Illustrations for IC role at ordinal 1
+    create(:framework_role_illustration,
+      expectation_id: @expectations[0].expectation_id,
+      role_id: @ic_role.role_id, ordinal: 1,
+      description: "IC illustration for level 1")
+
+    # Illustrations for mgmt role at ordinal 3
+    create(:framework_role_illustration,
+      expectation_id: @expectations[2].expectation_id,
+      role_id: @mgmt_role.role_id, ordinal: 1,
+      description: "Mgmt illustration for level 3")
+
+    # Design-only capability (bound to design role only)
+    @design_capability = create(:framework_capability,
+      category_id: @category.category_id, name: "Visual Design")
+    create(:framework_capability_role_binding,
+      capability_id: @design_capability.capability_id, role_id: @design_role.role_id)
+    create(:framework_behavioural_expectation,
+      capability_id: @design_capability.capability_id, level_ordinal: 1,
+      description: "Design expectation at level 1")
+
+    # Reload associations
+    @role_families = @framework.role_families.includes(roles: :levels).order(:name)
+    @categories = @framework.capability_categories
+      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
+      .order(:ordinal)
+  end
+
+  teardown do
+    ActsAsTenant.current_tenant = nil
+  end
+
+  context "#build" do
+    context "with all roles selected" do
+      should "merge levels across IC and management roles" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ])
+
+        ordinals = result[:merged_levels].map { |l| l[:ordinal] }
+        assert_equal [ 1, 2, 3, 4 ], ordinals
+      end
+
+      should "include role codes for shared ordinals" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ])
+
+        level_3 = result[:merged_levels].find { |l| l[:ordinal] == 3 }
+        role_codes = level_3[:role_codes].map { |rc| rc[:role_code] }.sort
+        assert_equal [ "E", "EM" ], role_codes
+      end
+
+      should "include capabilities bound to selected roles" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ])
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
+        assert_includes cap_names, "Strategic Thinking"
+      end
+
+      should "exclude capabilities from other role families" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
+        assert_not_includes cap_names, "Visual Design"
+      end
+    end
+
+    context "capability binding marking" do
+      should "mark capabilities bound to selected roles as bound_to_selected" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
+
+        strategic = find_capability(result, "Strategic Thinking")
+        assert strategic[:bound_to_selected], "Strategic Thinking should be bound to selected IC role"
+      end
+
+      should "mark unbound-but-same-family capabilities as not bound_to_selected" do
+        # Create a capability bound only to mgmt but not IC
+        mgmt_only_cap = create(:framework_capability,
+          category_id: @category.category_id, name: "Team Management")
+        create(:framework_capability_role_binding,
+          capability_id: mgmt_only_cap.capability_id, role_id: @mgmt_role.role_id)
+
+        # Reload categories
+        categories = @framework.capability_categories
+          .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
+          .order(:ordinal)
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], categories: categories)
+
+        team_mgmt = find_capability(result, "Team Management")
+        assert_not team_mgmt[:bound_to_selected],
+          "Team Management should not be bound to selected IC role"
+      end
+    end
+
+    context "cell building" do
+      should "build cells with expectations at matching ordinals" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
+
+        strategic = find_capability(result, "Strategic Thinking")
+        assert_equal 3, strategic[:cells].size
+        assert_equal "Level 1 expectation", strategic[:cells][1][:expectation].description
+      end
+
+      should "include illustrations filtered by selected roles" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
+
+        strategic = find_capability(result, "Strategic Thinking")
+        cell = strategic[:cells][1]
+        assert_equal 1, cell[:illustration_count]
+        assert_includes cell[:illustrations_by_role].keys, @ic_role.role_id
+      end
+
+      should "exclude illustrations for non-selected roles" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
+
+        strategic = find_capability(result, "Strategic Thinking")
+        cell = strategic[:cells][3]
+        # Mgmt illustration at ordinal 3 should be excluded since only IC selected
+        assert_equal 0, cell[:illustration_count]
+      end
+    end
+
+    context "track filter" do
+      should "filter to IC roles only" do
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ],
+          track_filter: "ic"
+        )
+
+        role_codes = result[:selected_roles].map(&:code)
+        assert_includes role_codes, "E"
+        assert_not_includes role_codes, "EM"
+      end
+
+      should "filter to management roles only" do
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ],
+          track_filter: "management"
+        )
+
+        role_codes = result[:selected_roles].map(&:code)
+        assert_not_includes role_codes, "E"
+        assert_includes role_codes, "EM"
+      end
+    end
+
+    context "empty selection" do
+      should "default to all roles when no roles selected" do
+        result = build_matrix(selected_role_ids: [])
+
+        # Should include all 3 roles (IC, Mgmt, Design)
+        assert_equal 3, result[:selected_roles].size
+      end
+    end
+
+    context "empty categories" do
+      should "skip categories with no matching capabilities" do
+        # Select only design role — Thinking category has "Strategic Thinking" bound to eng only
+        # But "Visual Design" IS bound to design, so category should still appear
+        result = build_matrix(selected_role_ids: [ @design_role.role_id ])
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
+        assert_includes cap_names, "Visual Design"
+        assert_not_includes cap_names, "Strategic Thinking"
+      end
+    end
+  end
+
+  private
+
+  def build_matrix(selected_role_ids:, track_filter: "both", categories: nil)
+    Frameworks::MatrixDataBuilder.new(
+      framework: @framework,
+      role_families: @role_families,
+      categories: categories || @categories,
+      selected_role_ids: selected_role_ids,
+      track_filter: track_filter
+    ).build
+  end
+
+  def find_capability(result, name)
+    result[:categories].flat_map { |c| c[:capabilities] }
+      .find { |cap| cap[:capability].name == name }
+  end
+end

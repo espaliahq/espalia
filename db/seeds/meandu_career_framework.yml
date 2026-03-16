@@ -3,6 +3,7 @@ framework:
   name: me&u 2025 Career Framework
   role_families:
   - name: Data
+    department: Product + Engineering
     roles:
     - name: Analytics Engineer
       code: AE
@@ -68,6 +69,7 @@ framework:
         title: VP Data
         code: DM8
   - name: Software Engineering
+    department: Product + Engineering
     roles:
     - name: Software Engineer
       code: E
@@ -117,6 +119,7 @@ framework:
         title: Senior Director of Engineering
         code: EM7
   - name: Product Design
+    department: Product + Engineering
     roles:
     - name: Product Designer
       code: PD
@@ -147,6 +150,7 @@ framework:
         title: VP of Design
         code: PD8
   - name: Product Management
+    department: Product + Engineering
     roles:
     - name: Product Manager
       code: PM
@@ -174,6 +178,7 @@ framework:
         title: VP
         code: PM8
   - name: Financial Control
+    department: Finance
     roles:
     - name: Accountant
       code: FC
@@ -217,6 +222,7 @@ framework:
         title: VP Financial Control
         code: FCo8
   - name: Commercial Finance
+    department: Finance
     roles:
     - name: Commercial Finance
       code: CF
@@ -247,6 +253,7 @@ framework:
         title: VP Commerical Finance
         code: CF8
   - name: Finance Operations
+    department: Finance
     roles:
     - name: Finance Operations
       code: FO

@@ -1,28 +1,34 @@
 # frozen_string_literal: true
 
-# Top navigation bar with brand name and mobile hamburger toggle.
+# Top navigation bar with brand, nav links, and user menu.
+#
+# On desktop (md+): nav links are inline in the navbar.
+# On mobile: hamburger button toggles the sidebar drawer.
 #
 # @example
 #   render Components::Kit::Navbar.new(
 #     app_name: "GrowthOS",
+#     links: [{ label: "Home", href: "/" }],
 #     user: current_user,
 #     current_tenant: ActsAsTenant.current_tenant,
 #     tenants: current_user.tenants
 #   )
 class Components::Kit::Navbar < Components::Base
   # @param app_name [String] The application name displayed in the navbar
+  # @param links [Array<Hash>] Navigation links with :label and :href
   # @param user [User, nil] The currently signed-in user
   # @param current_tenant [Tenant, nil] The active tenant
   # @param tenants [Array<Tenant>] All tenants the user belongs to
-  def initialize(app_name:, user: nil, current_tenant: nil, tenants: [])
+  def initialize(app_name:, links: [], user: nil, current_tenant: nil, tenants: [])
     @app_name = app_name
+    @links = links
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
   end
 
   def view_template
-    nav(class: "flex items-center justify-between h-16 px-4 bg-nav-bg text-nav-fg shadow-sm shrink-0") do
+    nav(class: "flex items-center justify-between h-12 px-4 bg-nav-bg text-nav-fg shadow-xs shrink-0") do
       left_section
       right_section
     end
@@ -31,9 +37,10 @@ class Components::Kit::Navbar < Components::Base
   private
 
   def left_section
-    div(class: "flex items-center gap-3") do
+    div(class: "flex items-center gap-4") do
       hamburger_button
-      span(class: "text-lg font-bold tracking-tight") { "#{@current_tenant&.name} #{@app_name}" }
+      span(class: "text-sm font-bold tracking-tight") { "#{@current_tenant&.name} #{@app_name}" }
+      desktop_nav_links
     end
   end
 
@@ -46,7 +53,7 @@ class Components::Kit::Navbar < Components::Base
     ) do
       svg(
         xmlns: "http://www.w3.org/2000/svg",
-        class: "h-6 w-6",
+        class: "h-5 w-5",
         fill: "none",
         viewBox: "0 0 24 24",
         stroke: "currentColor",
@@ -59,6 +66,25 @@ class Components::Kit::Navbar < Components::Base
           d: "M4 6h16M4 12h16M4 18h16"
         )
       end
+    end
+  end
+
+  # Nav links visible on md+ screens, hidden on mobile
+  def desktop_nav_links
+    return if @links.empty?
+
+    div(class: "hidden md:flex items-center gap-1 ml-2") do
+      @links.each { |link| nav_link(link) }
+    end
+  end
+
+  def nav_link(link)
+    a(
+      href: link[:href],
+      class: "px-3 py-1.5 rounded-md text-sm font-medium " \
+             "text-nav-fg/70 hover:text-nav-fg hover:bg-white/10 transition-colors"
+    ) do
+      plain link[:label]
     end
   end
 

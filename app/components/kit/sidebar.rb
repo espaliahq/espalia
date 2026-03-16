@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Responsive sidebar navigation drawer.
+# Mobile-only navigation drawer.
 #
-# Hidden on mobile by default — toggled by the sidebar Stimulus controller.
-# Always visible on md+ screens as a fixed-width column.
+# Hidden by default — toggled by the sidebar Stimulus controller's
+# hamburger button. On desktop, nav links are in the Navbar instead.
 #
 # @example
 #   render Components::Kit::Sidebar.new(links: [
@@ -18,10 +18,10 @@ class Components::Kit::Sidebar < Components::Base
 
   def view_template
     aside(
-      class: "hidden md:flex md:flex-col w-64 bg-gray-900 text-gray-100 shrink-0",
+      class: "hidden fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-gray-100 md:hidden",
       data: { sidebar_target: "drawer" }
     ) do
-      nav(class: "flex flex-col gap-1 p-4 flex-1", aria: { label: "Sidebar navigation" }) do
+      nav(class: "flex flex-col gap-1 p-4 pt-20 flex-1", aria: { label: "Mobile navigation" }) do
         @links.each { |link| nav_link(link) }
       end
     end

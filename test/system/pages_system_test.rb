@@ -39,26 +39,49 @@ class PagesSystemTest < ApplicationSystemTestCase
       assert_text "Goals"
     end
 
-    should "show sidebar on desktop" do
-      # Default screen size is 1400x1400 (desktop)
+    should "show nav links in navbar on desktop" do
       visit root_path
 
-      assert_selector "[data-sidebar-target='drawer']", visible: true
-      assert_selector "aside nav", visible: true
+      within "nav" do
+        assert_text "Home"
+        assert_text "Frameworks"
+      end
     end
 
-    should "hide sidebar by default on mobile and toggle it with hamburger" do
+    should "hide sidebar drawer by default on mobile and toggle it with hamburger" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit root_path
 
-      # Use visible: :all because the drawer starts hidden on mobile
+      # Drawer starts hidden on mobile (has "hidden" class)
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
-      assert drawer[:class].include?("hidden"), "sidebar drawer should be hidden on mobile by default"
+      classes = drawer[:class].split
+      assert_includes classes, "hidden", "sidebar drawer should be hidden on mobile by default"
 
       find("[data-action='sidebar#toggle']").click
 
-      assert_not find("[data-sidebar-target='drawer']", visible: :all)[:class].include?("hidden"),
+      # After toggle, "hidden" class should be removed (md:hidden still present but doesn't apply on mobile)
+      drawer = find("[data-sidebar-target='drawer']", visible: :all)
+      classes = drawer[:class].split
+      assert_not_includes classes, "hidden",
         "sidebar drawer should be visible after hamburger click"
+    end
+
+    should "close mobile menu when clicking outside" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit root_path
+
+      # Open the drawer
+      find("[data-action='sidebar#toggle']").click
+      drawer = find("[data-sidebar-target='drawer']", visible: :all)
+      assert_not_includes drawer[:class].split, "hidden"
+
+      # Click outside the drawer (right side of viewport, past the 16rem drawer)
+      page.driver.browser.action.move_to_location(350, 400).click.perform
+
+      # Drawer should close
+      drawer = find("[data-sidebar-target='drawer']", visible: :all)
+      assert_includes drawer[:class].split, "hidden",
+        "sidebar drawer should close when clicking outside"
     end
 
     should "hide hamburger button on desktop" do
