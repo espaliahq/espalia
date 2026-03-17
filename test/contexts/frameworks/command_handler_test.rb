@@ -52,7 +52,7 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
         handler.add_level(@framework_id, lid, rid, 1, "Associate Data Engineer", "DE1", is_entry: true)
         handler.add_capability_category(@framework_id, cat_id, "Thinking & Delivery", description: "How we think", ordinal: 1)
         handler.add_capability(@framework_id, cap_id, stable_id, cat_id, "Strategic Thinking", description: "Long-term thinking")
-        handler.create_capability_role_binding(@framework_id, bid, cap_id, rid, weight: 1.0, requirement_type: "must_have")
+        handler.create_capability_role_binding(@framework_id, bid, cap_id, rid, weight: 1.0)
         handler.set_behavioural_expectation(@framework_id, eid, exp_stable_id, cap_id, 1, "Asks questions to understand problems.")
         handler.add_role_illustration(@framework_id, iid, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance from a data lead")
 

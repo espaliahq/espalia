@@ -9,6 +9,8 @@
 #   @option data [String] :name name of the category
 #   @option data [String] :description optional description
 #   @option data [Integer] :ordinal display order
+#   @option data [BigDecimal, nil] :category_tolerance nil = uncapped,
+#     0 = group must balance, N = group absorbs up to N weighted points of deficit
 #
 class Frameworks::Events::CapabilityCategoryAdded < RubyEventStore::Event
 end

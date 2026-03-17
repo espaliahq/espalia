@@ -27,27 +27,27 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       cycle_id = SecureRandom.uuid_v7
       @handler.open_assessment_cycle(@person_id, @framework_id, cycle_id, "Q1 2026", "regular", 1)
 
-      # Self-rate a capability
+      # Self-rate a capability at level 3
       cap_sid = SecureRandom.uuid_v7
-      level_1 = SecureRandom.uuid_v7
-      @handler.rate_self(@person_id, @framework_id, cap_sid, level_1, comment: "I'm here")
+      @handler.rate_self(@person_id, @framework_id, cap_sid,
+        level_ordinal: 3, frequency: "consistent", comment: "I'm here")
 
-      # Verify assessment state projection
-      state = AssessmentState.find_by(
+      # Verify assessment level rating projection
+      rating = AssessmentLevelRating.find_by(
         person_id: @person_id,
         framework_id: @framework_id,
-        capability_stable_id: cap_sid
+        capability_stable_id: cap_sid,
+        level_ordinal: 3
       )
-      assert_not_nil state
-      assert_equal level_1, state.self_rated_level_id
+      assert_not_nil rating
+      assert_equal "consistent", rating.self_rated_frequency
 
       # Revise the rating
-      level_2 = SecureRandom.uuid_v7
-      @handler.revise_self_rating(@person_id, @framework_id, cap_sid, level_2,
-                                  rationale: "Grew since last review")
+      @handler.revise_self_rating(@person_id, @framework_id, cap_sid,
+        level_ordinal: 3, frequency: "occasional", rationale: "On reflection")
 
-      state.reload
-      assert_equal level_2, state.self_rated_level_id
+      rating.reload
+      assert_equal "occasional", rating.self_rated_frequency
 
       # Complete the cycle
       @handler.complete_assessment_cycle(@person_id, @framework_id, cycle_id)

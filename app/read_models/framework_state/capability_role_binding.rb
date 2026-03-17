@@ -2,16 +2,19 @@
 
 # Projection read model for capability-role bindings.
 #
-# Bindings tie a capability to a role with weight and requirement type.
-# This is the scoping mechanism — not category-level scope.
+# Bindings tie a capability to a role with a weight and optional individual
+# tolerance. The individual_tolerance caps how much this capability's deficit
+# can contribute to its category's tolerance pool:
+#
+#   nil  — governed by category_tolerance only
+#   0    — mandatory: no deficit allowed, no category compensation
+#   N    — deficit capped at N before entering the category pool
 #
 # Materialised from Framework aggregate events by
 # {Frameworks::Projections::PublishedState}.
 #
 class FrameworkState::CapabilityRoleBinding < ApplicationRecord
   self.table_name = "framework_capability_role_bindings"
-
-  REQUIREMENT_TYPES = %w[must_have flexible].freeze
 
   acts_as_tenant :tenant
 
@@ -27,5 +30,12 @@ class FrameworkState::CapabilityRoleBinding < ApplicationRecord
   validates :capability_id, presence: true
   validates :role_id, presence: true
   validates :weight, presence: true
-  validates :requirement_type, presence: true, inclusion: { in: REQUIREMENT_TYPES }
+  validates :individual_tolerance, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+
+  # Returns true if this capability has zero tolerance — no deficit allowed.
+  #
+  # @return [Boolean]
+  def mandatory?
+    individual_tolerance&.zero?
+  end
 end

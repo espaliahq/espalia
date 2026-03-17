@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Synchronous projection that materialises current assessment state.
+# Synchronous projection that materialises per-level capability assessment ratings.
 #
-# Subscribes to PersonDevelopment aggregate events and maintains
-# the AssessmentState read model. Runs in the same transaction
-# as the event publish.
+# Subscribes to PersonDevelopment aggregate events and upserts
+# AssessmentLevelRating rows — one per (person, framework, capability_stable_id,
+# level_ordinal). Runs in the same transaction as the event publish.
 #
 class PersonDevelopment::Projections::CurrentAssessment
   # All event classes this projection handles.
@@ -16,7 +16,9 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::AssessmentCycleOpened,
       PersonDevelopment::Events::AssessmentCycleCompleted,
       PersonDevelopment::Events::SelfRated,
-      PersonDevelopment::Events::SelfRatingRevised
+      PersonDevelopment::Events::SelfRatingRevised,
+      PersonDevelopment::Events::ManagerRated,
+      PersonDevelopment::Events::AssessmentAligned
     ]
   end
 
@@ -29,37 +31,58 @@ class PersonDevelopment::Projections::CurrentAssessment
 
   private
 
-  # Only SelfRated and SelfRatingRevised update the read model.
-  # PersonAssignedToFramework, AssessmentCycleOpened, AssessmentCycleCompleted
-  # are tracked in the aggregate state, not in the assessment read model.
   def handle(event)
     case event
     when PersonDevelopment::Events::SelfRated then handle_self_rated(event)
     when PersonDevelopment::Events::SelfRatingRevised then handle_self_rating_revised(event)
+    when PersonDevelopment::Events::ManagerRated then handle_manager_rated(event)
+    when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
     end
   end
 
   def handle_self_rated(event)
-    AssessmentState.find_or_initialize_by(
-      person_id: event.metadata[:person_id],
-      framework_id: event.metadata[:framework_id],
-      capability_stable_id: event.data[:capability_stable_id]
-    ).tap do |state|
-      state.self_rated_level_id = event.data[:level_id]
-      state.last_self_rated_at = event.metadata[:timestamp] || Time.current
-      state.save!
-    end
+    rating = find_or_init_rating(event)
+    rating.self_rated_frequency = event.data[:frequency]
+    rating.self_rated_comment = event.data[:comment]
+    rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
+    rating.save!
   end
 
   def handle_self_rating_revised(event)
-    state = AssessmentState.find_by!(
+    rating = find_or_init_rating(event)
+    rating.self_rated_frequency = event.data[:frequency]
+    rating.self_rated_comment = event.data[:comment]
+    rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
+    rating.save!
+  end
+
+  def handle_manager_rated(event)
+    rating = find_or_init_rating(event)
+    rating.manager_rated_frequency = event.data[:frequency]
+    rating.manager_rated_comment = event.data[:comment]
+    rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    rating.save!
+  end
+
+  def handle_assessment_aligned(event)
+    rating = find_or_init_rating(event)
+    rating.aligned_frequency = event.data[:aligned_frequency]
+    rating.aligned_comment = event.data[:comment]
+    rating.last_aligned_at = event.metadata[:timestamp] || Time.current
+    rating.save!
+  end
+
+  # Finds or initialises an AssessmentLevelRating for the (person, framework,
+  # capability_stable_id, level_ordinal) composite key.
+  #
+  # @param event [RubyEventStore::Event]
+  # @return [AssessmentLevelRating]
+  def find_or_init_rating(event)
+    AssessmentLevelRating.find_or_initialize_by(
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
-      capability_stable_id: event.data[:capability_stable_id]
-    )
-    state.update!(
-      self_rated_level_id: event.data[:new_level_id],
-      last_self_rated_at: event.metadata[:timestamp] || Time.current
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal]
     )
   end
 

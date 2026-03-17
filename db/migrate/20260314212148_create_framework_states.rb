@@ -9,6 +9,8 @@ class CreateFrameworkStates < ActiveRecord::Migration[8.1]
       t.integer :current_published_version, default: 0, null: false
       t.boolean :draft_in_progress, default: false, null: false
       t.integer :draft_version
+      t.decimal :mastery_threshold, precision: 5, scale: 2, null: true
+      t.decimal :promotion_score_threshold, precision: 5, scale: 2, null: true
       t.timestamps
     end
 

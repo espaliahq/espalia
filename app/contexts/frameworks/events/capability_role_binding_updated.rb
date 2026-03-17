@@ -7,7 +7,7 @@
 #   @option data [String] :framework_id UUID of the framework
 #   @option data [String] :binding_id UUID of the binding
 #   @option data [BigDecimal] :weight updated weight (optional)
-#   @option data [String] :requirement_type updated requirement type (optional)
+#   @option data [BigDecimal, nil] :individual_tolerance updated tolerance (optional)
 #
 class Frameworks::Events::CapabilityRoleBindingUpdated < RubyEventStore::Event
 end

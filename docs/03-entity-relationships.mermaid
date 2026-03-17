@@ -90,6 +90,7 @@ classDiagram
         +uuid id
         +string name
         +text description
+        +decimal category_tolerance [nil=uncapped, 0=must balance]
     }
 
     class Capability {
@@ -102,7 +103,8 @@ classDiagram
     class CapabilityRoleBinding {
         +uuid id
         +decimal weight
-        +enum requirement_type
+        +decimal individual_tolerance [nil=category-governed, 0=mandatory]
+        mandatory?() bool
     }
 
     class BehaviouralExpectation {
@@ -155,8 +157,15 @@ classDiagram
         RES stream per person+framework
     }
 
-    class AssessmentState {
-        Per capability: self/mgr/aligned
+    class AssessmentLevelRating {
+        +uuid person_id
+        +uuid framework_id
+        +uuid capability_stable_id
+        +int level_ordinal
+        +string self_rated_frequency
+        +string manager_rated_frequency
+        +string aligned_frequency
+        Composite key: person+framework+cap+level
         acts_as_tenant :tenant
     }
 
@@ -210,6 +219,6 @@ classDiagram
     Role "1" --> "*" RoleIllustration
 
     Person "1" --> "1" PersonDevelopmentStream
-    PersonDevelopmentStream --> AssessmentState
+    PersonDevelopmentStream --> AssessmentLevelRating
     PersonDevelopmentStream --> EvidenceItem
     PersonDevelopmentStream --> GrowthPlanState

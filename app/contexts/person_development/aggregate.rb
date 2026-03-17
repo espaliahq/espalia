@@ -6,11 +6,14 @@
 # tenant-{tenant_id}/PersonDev-{person_id}-{framework_id}.
 #
 # An "assessment" is a projection derived from this stream — not a separate entity.
+# Ratings are per (capability_stable_id, level_ordinal) pair, enabling independent
+# assessment of each level's behaviours.
 #
 class PersonDevelopment::Aggregate
   include AggregateRoot
 
   CYCLE_TYPES = %w[regular performance_review promotion_review].freeze
+  FREQUENCIES = %w[some occasional consistent].freeze
 
   def initialize
     @person_id = nil
@@ -20,7 +23,8 @@ class PersonDevelopment::Aggregate
     @assigned = false
     @current_cycle_id = nil
     @cycle_open = false
-    @self_ratings = {} # capability_stable_id => level_id
+    @self_ratings = {}   # [stable_id, level_ordinal] => frequency
+    @manager_ratings = {} # [stable_id, level_ordinal] => frequency
   end
 
   # ── Assignment ──
@@ -81,38 +85,91 @@ class PersonDevelopment::Aggregate
 
   # ── Self-Rating ──
 
-  # Records a self-rating for a capability.
+  # Records a self-rating for a capability at a specific level.
   #
   # @param capability_stable_id [String] stable UUID of the capability
-  # @param level_id [String] UUID of the level the person rates themselves at
+  # @param level_ordinal [Integer] the level being assessed
+  # @param frequency [String] "some", "occasional", or "consistent"
   # @param comment [String, nil] optional rationale
-  # @raise [RuntimeError] if no cycle open
-  def rate_self(capability_stable_id, level_id, comment: nil)
+  # @raise [RuntimeError] if no cycle open or invalid frequency
+  def rate_self(capability_stable_id, level_ordinal:, frequency:, comment: nil)
     ensure_cycle_open!
+    raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
     apply(PersonDevelopment::Events::SelfRated.new(data: {
       capability_stable_id: capability_stable_id,
-      level_id: level_id,
+      level_ordinal: level_ordinal,
+      frequency: frequency,
       comment: comment
     }))
   end
 
-  # Revises a previous self-rating.
+  # Revises a previous self-rating at a specific level.
   #
   # @param capability_stable_id [String] stable UUID of the capability
-  # @param new_level_id [String] UUID of the revised level
+  # @param level_ordinal [Integer] the level being revised
+  # @param frequency [String] revised frequency
   # @param rationale [String] reason for the change
   # @param comment [String, nil] optional comment
-  # @raise [RuntimeError] if no prior self-rating for this capability
-  def revise_self_rating(capability_stable_id, new_level_id, rationale:, comment: nil)
+  # @raise [RuntimeError] if no prior self-rating for this capability at this level
+  def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
     ensure_cycle_open!
-    raise "No self-rating exists for capability #{capability_stable_id}" unless @self_ratings.key?(capability_stable_id)
+    raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
+    raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
+      @self_ratings.key?([ capability_stable_id, level_ordinal ])
 
     apply(PersonDevelopment::Events::SelfRatingRevised.new(data: {
       capability_stable_id: capability_stable_id,
-      new_level_id: new_level_id,
+      level_ordinal: level_ordinal,
+      frequency: frequency,
       comment: comment,
       rationale: rationale
+    }))
+  end
+
+  # ── Manager Rating ──
+
+  # Records a manager's rating for a person's capability at a specific level.
+  #
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being assessed
+  # @param frequency [String] "some", "occasional", or "consistent"
+  # @param comment [String, nil] optional rationale
+  # @raise [RuntimeError] if no cycle open or invalid frequency
+  def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, comment: nil)
+    ensure_cycle_open!
+    raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
+
+    apply(PersonDevelopment::Events::ManagerRated.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      frequency: frequency,
+      comment: comment
+    }))
+  end
+
+  # ── Alignment ──
+
+  # Records an agreed assessment for a capability at a specific level.
+  #
+  # The aligned_frequency is the authoritative view used in scoring.
+  # Agreed level is derived as the highest level_ordinal where
+  # aligned_frequency == "consistent".
+  #
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being agreed upon
+  # @param aligned_frequency [String] agreed frequency
+  # @param comment [String, nil] optional comment
+  # @raise [RuntimeError] if no cycle open or invalid frequency
+  def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, comment: nil)
+    ensure_cycle_open!
+    raise "Invalid frequency: #{aligned_frequency}" unless FREQUENCIES.include?(aligned_frequency)
+
+    apply(PersonDevelopment::Events::AssessmentAligned.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      aligned_frequency: aligned_frequency,
+      comment: comment
     }))
   end
 
@@ -140,7 +197,8 @@ class PersonDevelopment::Aggregate
   on PersonDevelopment::Events::AssessmentCycleOpened do |event|
     @current_cycle_id = event.data[:cycle_id]
     @cycle_open = true
-    @self_ratings = {} # Reset ratings for new cycle
+    @self_ratings = {}   # Reset ratings for new cycle
+    @manager_ratings = {}
   end
 
   on PersonDevelopment::Events::AssessmentCycleCompleted do |_event|
@@ -149,10 +207,21 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::SelfRated do |event|
-    @self_ratings[event.data[:capability_stable_id]] = event.data[:level_id]
+    @self_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
+      event.data[:frequency]
   end
 
   on PersonDevelopment::Events::SelfRatingRevised do |event|
-    @self_ratings[event.data[:capability_stable_id]] = event.data[:new_level_id]
+    @self_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
+      event.data[:frequency]
+  end
+
+  on PersonDevelopment::Events::ManagerRated do |event|
+    @manager_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
+      event.data[:frequency]
+  end
+
+  on PersonDevelopment::Events::AssessmentAligned do |_event|
+    # Alignment is persisted via projection; no aggregate state needed
   end
 end

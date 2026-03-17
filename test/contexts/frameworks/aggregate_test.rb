@@ -239,13 +239,13 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
 
     should "apply CapabilityRoleBindingCreated event" do
       bid = SecureRandom.uuid_v7
-      @aggregate.create_capability_role_binding(@framework_id, bid, @cap_id, @rid, weight: 1.5, requirement_type: "flexible")
+      @aggregate.create_capability_role_binding(@framework_id, bid, @cap_id, @rid, weight: 1.5, individual_tolerance: 2.0)
 
       event = @aggregate.unpublished_events.to_a.last
       assert_kind_of Frameworks::Events::CapabilityRoleBindingCreated, event
       assert_equal bid, event.data[:binding_id]
       assert_equal 1.5, event.data[:weight]
-      assert_equal "flexible", event.data[:requirement_type]
+      assert_equal 2.0, event.data[:individual_tolerance]
     end
 
     should "raise if capability not found" do

@@ -44,7 +44,9 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::SuggestionApproved,
       Frameworks::Events::SuggestionRejected,
       Frameworks::Events::SuggestionWithdrawn,
-      Frameworks::Events::SuggestionCommented
+      Frameworks::Events::SuggestionCommented,
+      Frameworks::Events::CategoryToleranceSet,
+      Frameworks::Events::ScoringThresholdsConfigured
     ]
   end
 
@@ -72,6 +74,8 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::SuggestionRejected then handle_suggestion_rejected(event)
     when Frameworks::Events::SuggestionWithdrawn then handle_suggestion_withdrawn(event)
     when Frameworks::Events::SuggestionCommented then nil # future: comments table
+    when Frameworks::Events::CategoryToleranceSet then handle_category_tolerance_set(event)
+    when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
     # Structural events — skipped during draft
     else
       handle_structural_event(event)
@@ -200,6 +204,8 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::RoleIllustrationUpdated then handle_illustration_updated(event)
     when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
     when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
+    when Frameworks::Events::CategoryToleranceSet then handle_category_tolerance_set(event)
+    when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
     end
   end
   # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
@@ -311,7 +317,8 @@ class Frameworks::Projections::PublishedState
       category_id: event.data[:category_id],
       name: event.data[:name],
       description: event.data[:description],
-      ordinal: event.data[:ordinal]
+      ordinal: event.data[:ordinal],
+      category_tolerance: event.data[:category_tolerance]
     )
   end
 
@@ -343,14 +350,25 @@ class Frameworks::Projections::PublishedState
       capability_id: event.data[:capability_id],
       role_id: event.data[:role_id],
       weight: event.data[:weight],
-      requirement_type: event.data[:requirement_type]
+      individual_tolerance: event.data[:individual_tolerance]
     )
   end
 
   def handle_binding_updated(event)
     record = FrameworkState::CapabilityRoleBinding.find_by!(binding_id: event.data[:binding_id])
-    attrs = event.data.slice(:weight, :requirement_type).compact
+    attrs = event.data.slice(:weight, :individual_tolerance)
     record.update!(attrs) if attrs.any?
+  end
+
+  def handle_category_tolerance_set(event)
+    record = FrameworkState::CapabilityCategory.find_by!(category_id: event.data[:category_id])
+    record.update!(category_tolerance: event.data[:category_tolerance])
+  end
+
+  def handle_scoring_thresholds_configured(event)
+    framework = find_framework(event)
+    attrs = event.data.slice(:mastery_threshold, :promotion_score_threshold).compact
+    framework&.update!(attrs) if attrs.any?
   end
 
   def handle_binding_removed(event)

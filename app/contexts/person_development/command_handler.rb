@@ -37,16 +37,17 @@ class PersonDevelopment::CommandHandler
     end
   end
 
-  # Records a self-rating for a capability.
+  # Records a self-rating for a capability at a specific level.
   #
   # @param person_id [String] UUID of the person
   # @param framework_id [String] UUID of the framework
   # @param capability_stable_id [String] stable UUID of the capability
-  # @param level_id [String] UUID of the rated level
+  # @param level_ordinal [Integer] the level being assessed
+  # @param frequency [String] "some", "occasional", or "consistent"
   # @param comment [String, nil] optional rationale
-  def rate_self(person_id, framework_id, capability_stable_id, level_id, comment: nil)
+  def rate_self(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, comment: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.rate_self(capability_stable_id, level_id, comment: comment)
+      aggregate.rate_self(capability_stable_id, level_ordinal: level_ordinal, frequency: frequency, comment: comment)
     end
   end
 
@@ -55,12 +56,14 @@ class PersonDevelopment::CommandHandler
   # @param person_id [String] UUID of the person
   # @param framework_id [String] UUID of the framework
   # @param capability_stable_id [String] stable UUID of the capability
-  # @param new_level_id [String] UUID of the revised level
+  # @param level_ordinal [Integer] the level being revised
+  # @param frequency [String] revised frequency
   # @param rationale [String] reason for the change
   # @param comment [String, nil] optional comment
-  def revise_self_rating(person_id, framework_id, capability_stable_id, new_level_id, rationale:, comment: nil)
+  def revise_self_rating(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.revise_self_rating(capability_stable_id, new_level_id, rationale: rationale, comment: comment)
+      aggregate.revise_self_rating(capability_stable_id, level_ordinal: level_ordinal,
+        frequency: frequency, rationale: rationale, comment: comment)
     end
   end
 

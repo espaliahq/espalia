@@ -177,8 +177,10 @@ class Frameworks::Aggregate
   # @param name [String] display name
   # @param description [String, nil] optional description
   # @param ordinal [Integer, nil] display order
+  # @param category_tolerance [BigDecimal, nil] nil = uncapped, 0 = must balance,
+  #   N = absorbs up to N weighted points of deficit
   # @raise [RuntimeError] if category already exists
-  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil)
+  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil, category_tolerance: nil)
     ensure_created!
     raise "Category #{category_id} already exists" if @capability_categories.key?(category_id)
 
@@ -187,7 +189,26 @@ class Frameworks::Aggregate
       category_id: category_id,
       name: name,
       description: description,
-      ordinal: ordinal
+      ordinal: ordinal,
+      category_tolerance: category_tolerance
+    }))
+  end
+
+  # Sets the tolerance for a capability category.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param category_tolerance [BigDecimal, nil] nil = uncapped, 0 = must balance,
+  #   N = absorbs up to N weighted points of deficit
+  # @raise [RuntimeError] if category does not exist
+  def set_category_tolerance(framework_id, category_id, category_tolerance)
+    ensure_created!
+    raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
+
+    apply(Frameworks::Events::CategoryToleranceSet.new(data: {
+      framework_id: framework_id,
+      category_id: category_id,
+      category_tolerance: category_tolerance
     }))
   end
 
@@ -261,9 +282,10 @@ class Frameworks::Aggregate
   # @param capability_id [String] UUID of the capability
   # @param role_id [String] UUID of the role
   # @param weight [BigDecimal] relative weight (default 1.0)
-  # @param requirement_type [String] "must_have" or "flexible"
+  # @param individual_tolerance [BigDecimal, nil] nil = category-governed,
+  #   0 = mandatory, N = deficit capped at N before entering category pool
   # @raise [RuntimeError] if capability or role not found, or binding already exists
-  def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, requirement_type: "must_have")
+  def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, individual_tolerance: nil)
     ensure_created!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
@@ -275,7 +297,7 @@ class Frameworks::Aggregate
       capability_id: capability_id,
       role_id: role_id,
       weight: weight,
-      requirement_type: requirement_type
+      individual_tolerance: individual_tolerance
     }))
   end
 
@@ -284,9 +306,9 @@ class Frameworks::Aggregate
   # @param framework_id [String] UUID of the framework
   # @param binding_id [String] UUID of the binding
   # @param weight [BigDecimal, nil] updated weight
-  # @param requirement_type [String, nil] updated requirement type
+  # @param individual_tolerance [BigDecimal, nil] updated individual tolerance
   # @raise [RuntimeError] if binding does not exist
-  def update_capability_role_binding(framework_id, binding_id, weight: nil, requirement_type: nil)
+  def update_capability_role_binding(framework_id, binding_id, weight: nil, individual_tolerance: nil)
     ensure_created!
     raise "Binding #{binding_id} not found" unless @bindings.key?(binding_id)
 
@@ -294,7 +316,7 @@ class Frameworks::Aggregate
       framework_id: framework_id,
       binding_id: binding_id,
       weight: weight,
-      requirement_type: requirement_type
+      individual_tolerance: individual_tolerance
     }.compact))
   end
 
@@ -569,6 +591,23 @@ class Frameworks::Aggregate
 
   # ── Versioning commands ──
 
+  # Configures mastery and promotion readiness scoring thresholds.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param mastery_threshold [BigDecimal, nil] ratio above baseline for mastery
+  # @param promotion_score_threshold [BigDecimal, nil] ratio of next-level baseline
+  #   required for promotion readiness score gate
+  # @raise [RuntimeError] if framework not created
+  def configure_scoring_thresholds(framework_id, mastery_threshold: nil, promotion_score_threshold: nil)
+    ensure_created!
+
+    apply(Frameworks::Events::ScoringThresholdsConfigured.new(data: {
+      framework_id: framework_id,
+      mastery_threshold: mastery_threshold,
+      promotion_score_threshold: promotion_score_threshold
+    }.compact))
+  end
+
   # Starts a draft phase for a new framework version.
   #
   # Structural events emitted after this will be invisible to the
@@ -697,7 +736,8 @@ class Frameworks::Aggregate
     @capability_categories[event.data[:category_id]] = {
       name: event.data[:name],
       description: event.data[:description],
-      ordinal: event.data[:ordinal]
+      ordinal: event.data[:ordinal],
+      category_tolerance: event.data[:category_tolerance]
     }
   end
 
@@ -706,6 +746,11 @@ class Frameworks::Aggregate
     cat[:name] = event.data[:name] if event.data.key?(:name)
     cat[:description] = event.data[:description] if event.data.key?(:description)
     cat[:ordinal] = event.data[:ordinal] if event.data.key?(:ordinal)
+  end
+
+  on Frameworks::Events::CategoryToleranceSet do |event|
+    cat = @capability_categories[event.data[:category_id]]
+    cat[:category_tolerance] = event.data[:category_tolerance] if cat
   end
 
   on Frameworks::Events::CapabilityAdded do |event|
@@ -726,14 +771,18 @@ class Frameworks::Aggregate
       capability_id: event.data[:capability_id],
       role_id: event.data[:role_id],
       weight: event.data[:weight],
-      requirement_type: event.data[:requirement_type]
+      individual_tolerance: event.data[:individual_tolerance]
     }
   end
 
   on Frameworks::Events::CapabilityRoleBindingUpdated do |event|
     binding = @bindings[event.data[:binding_id]]
     binding[:weight] = event.data[:weight] if event.data.key?(:weight)
-    binding[:requirement_type] = event.data[:requirement_type] if event.data.key?(:requirement_type)
+    binding[:individual_tolerance] = event.data[:individual_tolerance] if event.data.key?(:individual_tolerance)
+  end
+
+  on Frameworks::Events::ScoringThresholdsConfigured do |_event|
+    # Thresholds are persisted via projection; no aggregate state needed
   end
 
   on Frameworks::Events::CapabilityRoleBindingRemoved do |event|
