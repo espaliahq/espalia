@@ -151,13 +151,13 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       rid = SecureRandom.uuid_v7
       emit(Frameworks::Events::CapabilityRoleBindingCreated,
         framework_id: @framework_id, binding_id: bid, capability_id: cap_id,
-        role_id: rid, weight: 1.5, requirement_type: "flexible")
+        role_id: rid, weight: 1.5, individual_tolerance: 2.0)
 
       within_tenant do
         rm = FrameworkState::CapabilityRoleBinding.find_by(binding_id: bid)
         assert_not_nil rm
         assert_equal 1.5, rm.weight.to_f
-        assert_equal "flexible", rm.requirement_type
+        assert_equal 2.0, rm.individual_tolerance.to_f
       end
     end
   end
@@ -167,7 +167,7 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       bid = SecureRandom.uuid_v7
       emit(Frameworks::Events::CapabilityRoleBindingCreated,
         framework_id: @framework_id, binding_id: bid, capability_id: SecureRandom.uuid_v7,
-        role_id: SecureRandom.uuid_v7, weight: 1.0, requirement_type: "must_have")
+        role_id: SecureRandom.uuid_v7, weight: 1.0, individual_tolerance: nil)
       emit(Frameworks::Events::CapabilityRoleBindingRemoved,
         framework_id: @framework_id, binding_id: bid)
 

@@ -55,7 +55,7 @@ FactoryBot.define do
     capability_id { SecureRandom.uuid_v7 }
     role_id { SecureRandom.uuid_v7 }
     weight { 1.0 }
-    requirement_type { "must_have" }
+    individual_tolerance { nil }
   end
 
   factory :framework_behavioural_expectation, class: "FrameworkState::BehaviouralExpectation" do

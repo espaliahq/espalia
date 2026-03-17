@@ -72,8 +72,10 @@ namespace :frameworks do
       framework_data["capability_categories"]&.each_with_index do |cat_data, cat_idx|
         cat_id = SecureRandom.uuid_v7
         puts "  Category: #{cat_data['name']}"
+        category_tolerance = cat_data.key?("category_tolerance") ? cat_data["category_tolerance"] : nil
         handler.add_capability_category(framework_id, cat_id, cat_data["name"],
-          description: cat_data["description"], ordinal: cat_idx + 1)
+          description: cat_data["description"], ordinal: cat_idx + 1,
+          category_tolerance: category_tolerance)
 
         cat_data["capabilities"]&.each do |cap_data|
           cap_id = SecureRandom.uuid_v7
@@ -86,9 +88,12 @@ namespace :frameworks do
           target_role_ids = resolve_scope(cap_data["scope"], role_code_to_id,
             all_role_ids, management_role_ids, finance_role_ids)
 
+          individual_tolerance = cap_data.key?("individual_tolerance") ? cap_data["individual_tolerance"] : nil
+
           target_role_ids.each do |target_rid|
             bid = SecureRandom.uuid_v7
-            handler.create_capability_role_binding(framework_id, bid, cap_id, target_rid)
+            handler.create_capability_role_binding(framework_id, bid, cap_id, target_rid,
+              individual_tolerance: individual_tolerance)
             binding_count += 1
           end
 

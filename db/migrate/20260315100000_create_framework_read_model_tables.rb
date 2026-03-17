@@ -47,6 +47,7 @@ class CreateFrameworkReadModelTables < ActiveRecord::Migration[8.0]
       t.string :name, null: false
       t.text :description
       t.integer :ordinal
+      t.decimal :category_tolerance, precision: 5, scale: 2, null: true
       t.timestamps
     end
 
@@ -73,7 +74,7 @@ class CreateFrameworkReadModelTables < ActiveRecord::Migration[8.0]
       t.uuid :capability_id, null: false
       t.uuid :role_id, null: false
       t.decimal :weight, precision: 5, scale: 2, default: 1.0, null: false
-      t.string :requirement_type, null: false, default: "must_have"
+      t.decimal :individual_tolerance, precision: 5, scale: 2, null: true
       t.timestamps
     end
 

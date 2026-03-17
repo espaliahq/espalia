@@ -14,24 +14,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  create_table "assessment_states", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "aligned_level_id"
+  create_table "assessment_level_ratings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.text "aligned_comment"
+    t.string "aligned_frequency"
     t.uuid "capability_stable_id", null: false
     t.datetime "created_at", null: false
     t.uuid "cycle_id"
     t.uuid "framework_id", null: false
     t.datetime "last_aligned_at"
+    t.datetime "last_manager_rated_at"
     t.datetime "last_self_rated_at"
-    t.uuid "manager_rated_level_id"
+    t.integer "level_ordinal", null: false
+    t.text "manager_rated_comment"
+    t.string "manager_rated_frequency"
     t.string "migration_status", default: "not_flagged", null: false
     t.uuid "person_id", null: false
     t.text "reassessment_reason"
-    t.uuid "self_rated_level_id"
+    t.text "self_rated_comment"
+    t.string "self_rated_frequency"
+    t.string "source", default: "human", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
-    t.index ["person_id", "framework_id", "capability_stable_id"], name: "idx_assessment_states_person_framework_capability", unique: true
-    t.index ["person_id", "framework_id"], name: "index_assessment_states_on_person_id_and_framework_id"
-    t.index ["tenant_id"], name: "index_assessment_states_on_tenant_id"
+    t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_assessment_ratings_person_cap_level", unique: true
+    t.index ["person_id", "framework_id"], name: "index_assessment_level_ratings_on_person_id_and_framework_id"
+    t.index ["tenant_id"], name: "index_assessment_level_ratings_on_tenant_id"
   end
 
   create_table "event_store_events", force: :cascade do |t|
@@ -89,6 +95,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
 
   create_table "framework_capability_categories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "category_id", null: false
+    t.decimal "category_tolerance", precision: 5, scale: 2
     t.datetime "created_at", null: false
     t.text "description"
     t.uuid "framework_id", null: false
@@ -104,7 +111,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
     t.uuid "binding_id", null: false
     t.uuid "capability_id", null: false
     t.datetime "created_at", null: false
-    t.string "requirement_type", default: "must_have", null: false
+    t.decimal "individual_tolerance", precision: 5, scale: 2
     t.uuid "role_id", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
@@ -194,7 +201,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
     t.boolean "draft_in_progress", default: false, null: false
     t.integer "draft_version"
     t.uuid "framework_id", null: false
+    t.decimal "mastery_threshold", precision: 5, scale: 2
     t.string "name", null: false
+    t.decimal "promotion_score_threshold", precision: 5, scale: 2
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "framework_id"], name: "index_framework_states_on_tenant_id_and_framework_id", unique: true
@@ -277,7 +286,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
-  add_foreign_key "assessment_states", "tenants"
+  add_foreign_key "assessment_level_ratings", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"

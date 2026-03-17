@@ -117,16 +117,22 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       @aggregate.open_assessment_cycle(@cycle_id, "Q1 2026", "regular", 1)
     end
 
-    should "apply SelfRated event" do
+    should "apply SelfRated event with level_ordinal and frequency" do
       cap_sid = SecureRandom.uuid_v7
-      level_id = SecureRandom.uuid_v7
-      @aggregate.rate_self(cap_sid, level_id, comment: "Good at this")
+      @aggregate.rate_self(cap_sid, level_ordinal: 3, frequency: "consistent", comment: "Strong")
 
       event = @aggregate.unpublished_events.to_a.last
       assert_kind_of PersonDevelopment::Events::SelfRated, event
       assert_equal cap_sid, event.data[:capability_stable_id]
-      assert_equal level_id, event.data[:level_id]
-      assert_equal "Good at this", event.data[:comment]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal "consistent", event.data[:frequency]
+      assert_equal "Strong", event.data[:comment]
+    end
+
+    should "raise for invalid frequency" do
+      assert_raises(RuntimeError, /Invalid frequency/) do
+        @aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "sometimes")
+      end
     end
 
     should "raise if no cycle open" do
@@ -134,7 +140,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
 
       assert_raises(RuntimeError, /No assessment cycle open/) do
-        aggregate.rate_self(SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+        aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "some")
       end
     end
   end
@@ -145,24 +151,91 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       @cycle_id = SecureRandom.uuid_v7
       @aggregate.open_assessment_cycle(@cycle_id, "Q1 2026", "regular", 1)
       @cap_sid = SecureRandom.uuid_v7
-      @aggregate.rate_self(@cap_sid, SecureRandom.uuid_v7)
+      @aggregate.rate_self(@cap_sid, level_ordinal: 3, frequency: "some")
     end
 
     should "apply SelfRatingRevised event" do
-      new_level = SecureRandom.uuid_v7
-      @aggregate.revise_self_rating(@cap_sid, new_level, rationale: "Reconsidered", comment: "Updated")
+      @aggregate.revise_self_rating(@cap_sid, level_ordinal: 3, frequency: "consistent",
+        rationale: "Reconsidered", comment: "Updated")
 
       event = @aggregate.unpublished_events.to_a.last
       assert_kind_of PersonDevelopment::Events::SelfRatingRevised, event
       assert_equal @cap_sid, event.data[:capability_stable_id]
-      assert_equal new_level, event.data[:new_level_id]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal "consistent", event.data[:frequency]
       assert_equal "Reconsidered", event.data[:rationale]
       assert_equal "Updated", event.data[:comment]
     end
 
-    should "raise if no prior self-rating for capability" do
+    should "raise if no prior self-rating for capability at that level" do
       assert_raises(RuntimeError, /No self-rating exists/) do
-        @aggregate.revise_self_rating(SecureRandom.uuid_v7, SecureRandom.uuid_v7, rationale: "test")
+        @aggregate.revise_self_rating(@cap_sid, level_ordinal: 4, frequency: "some", rationale: "test")
+      end
+    end
+  end
+
+  # ── Manager Rating ──
+
+  context "#rate_as_manager" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.open_assessment_cycle(@cycle_id, "Q1 2026", "regular", 1)
+    end
+
+    should "apply ManagerRated event" do
+      cap_sid = SecureRandom.uuid_v7
+      @aggregate.rate_as_manager(cap_sid, level_ordinal: 2, frequency: "occasional", comment: "Needs work")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::ManagerRated, event
+      assert_equal cap_sid, event.data[:capability_stable_id]
+      assert_equal 2, event.data[:level_ordinal]
+      assert_equal "occasional", event.data[:frequency]
+      assert_equal "Needs work", event.data[:comment]
+    end
+
+    should "raise for invalid frequency" do
+      assert_raises(RuntimeError, /Invalid frequency/) do
+        @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "never")
+      end
+    end
+  end
+
+  # ── Alignment ──
+
+  context "#align_assessment" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.open_assessment_cycle(@cycle_id, "Q1 2026", "regular", 1)
+    end
+
+    should "apply AssessmentAligned event" do
+      cap_sid = SecureRandom.uuid_v7
+      @aggregate.align_assessment(cap_sid, level_ordinal: 3, aligned_frequency: "consistent",
+        comment: "We agree")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::AssessmentAligned, event
+      assert_equal cap_sid, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal "consistent", event.data[:aligned_frequency]
+      assert_equal "We agree", event.data[:comment]
+    end
+
+    should "raise for invalid frequency" do
+      assert_raises(RuntimeError, /Invalid/) do
+        @aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1, aligned_frequency: "always")
+      end
+    end
+
+    should "raise if no cycle open" do
+      aggregate = PersonDevelopment::Aggregate.new
+      aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+
+      assert_raises(RuntimeError, /No assessment cycle open/) do
+        aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1, aligned_frequency: "some")
       end
     end
   end

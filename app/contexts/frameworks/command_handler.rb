@@ -107,9 +107,9 @@ class Frameworks::CommandHandler
   # @param name [String] display name
   # @param description [String, nil] optional description
   # @param ordinal [Integer, nil] display order
-  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil)
+  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil, category_tolerance: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.add_capability_category(framework_id, category_id, name, description: description, ordinal: ordinal)
+      framework.add_capability_category(framework_id, category_id, name, description: description, ordinal: ordinal, category_tolerance: category_tolerance)
     end
   end
 
@@ -159,9 +159,9 @@ class Frameworks::CommandHandler
   # @param role_id [String] UUID of the role
   # @param weight [BigDecimal] relative weight
   # @param requirement_type [String] "must_have" or "flexible"
-  def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, requirement_type: "must_have")
+  def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, individual_tolerance: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: weight, requirement_type: requirement_type)
+      framework.create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: weight, individual_tolerance: individual_tolerance)
     end
   end
 
@@ -170,10 +170,10 @@ class Frameworks::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param binding_id [String] UUID of the binding
   # @param weight [BigDecimal, nil] updated weight
-  # @param requirement_type [String, nil] updated requirement type
-  def update_capability_role_binding(framework_id, binding_id, weight: nil, requirement_type: nil)
+  # @param individual_tolerance [BigDecimal, nil] updated tolerance
+  def update_capability_role_binding(framework_id, binding_id, weight: nil, individual_tolerance: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.update_capability_role_binding(framework_id, binding_id, weight: weight, requirement_type: requirement_type)
+      framework.update_capability_role_binding(framework_id, binding_id, weight: weight, individual_tolerance: individual_tolerance)
     end
   end
 

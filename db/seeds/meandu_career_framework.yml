@@ -4094,258 +4094,12 @@ framework:
         description: Drives industry-leading innovation in data platform architecture
           and practice, creating a significant competitive advantage for the company.
           Represents the company as a technical authority in the broader data community.
-  - name: Role Specific
-    description:
+  - name: Technical Expertise
+    description: Domain-specific technical knowledge and skills required for the
+      engineering discipline. Strength in one technical area can compensate for a
+      gap in another, but the group must not go negative overall.
+    category_tolerance: 0
     capabilities:
-    - name: System Design & Architecture
-      description: Designs components and systems that are scalable, maintainable,
-        cost-effective, and aligned with long-term product direction, engineering
-        principles, and technical vision.
-      scope: Software Engineer
-      sheet: Software Engineering
-      expectations:
-      - level: 1
-        description: Builds within existing patterns and guidance. Understands how
-          components fit into the broader system.
-      - level: 2
-        description: |-
-          Contributes to solution design discussions. Can implement features with guidance and clear expectations.
-
-          E2: Provides feedback and comments on design documentation.
-      - level: 3
-        description: |-
-          Designs moderately complex features or systems. Considers performance, reusability, and long-term maintainability.
-
-          E3: Independently researches, proposes and writes design documentation and proactively seeking feedback, proactively looks for existing solutions to avoid reinventing the wheel
-      - level: 4
-        description: Owns the solution design for an initiative. Evaluates trade-offs
-          and aligns design with product and technical goals.
-        illustrations:
-        - role_code: E4
-          description: Proactively engages stakeholders (both technical and cross
-            functional) to validate ideas, evolve designs and make necessary trade
-            off decisions. Ensures they consult with custodianship leaders in their
-            decision when these impact the custodianship, consults with TVG when the
-            solution design has whole of platform implications.
-        - role_code: EM4
-          description: Proactively engages stakeholders (both technical and cross
-            functional) to validate ideas, evolve designs and make necessary trade
-            off decisions. Ensures they consult with custodianship leaders in their
-            decision when these impact the custodianship, consults with TVG when the
-            solution design has whole of platform implications.
-      - level: 5
-        description: Leads system-level design across multiple components or domains.
-          Champions alignment with engineering principles.
-        illustrations:
-        - role_code: E5
-          description: Leveraging knowledge and experience working across the product
-            to identify opportunities ............
-      - level: 6
-        description: Connects system architecture to business value. Guides teams
-          in designing scalable, future-fit systems.
-        illustrations:
-        - role_code: E6
-          description: Right-sizes the solution to the realistic scaling needs, based
-            on real business requirements
-        - role_code: EM6
-          description: Right-sizes the solution to the realistic scaling needs, based
-            on real business requirements
-      - level: 7
-        description: Shapes technical direction across platforms or domains. Solves
-          cross-cutting system design challenges.
-      - level: 8
-        description: Drives architectural strategy for the organisation. Ensures scalable,
-          coherent systems that enable product and business growth.
-    - name: Quality First Mindset
-      description: Writes clean, testable code and builds in ways that reduce risk
-        and improve reliability. Aligns to our testing pyramid and contributes to
-        knowledge quality through clear documentation and communicable code.
-      scope: Software Engineer
-      sheet: Software Engineering
-      expectations:
-      - level: 1
-        description: Follows team standards for testing and documentation. Seeks feedback
-          on quality.
-        illustrations:
-        - description: 'E1: Writes unit tests for any new code they are contributing
-            to a code base. Asks more experienced engineers to pair on new work.'
-          role_code: E
-        - description: 'E1: Writes unit tests for any new code they are contributing
-            to a code base. Asks more experienced engineers to pair on new work.'
-          role_code: EM
-      - level: 2
-        description: Writes well-structured, readable code and unit tests. Writes
-          code and docs others can build on.
-        illustrations:
-        - role_code: E2
-          description: Ensures that all new code paths have corresponding unit tests
-            that cover various scenarios, including edge cases. Updates outdated README
-            files or adds clear comments to complex code sections to aid future developers.
-            Provides constructive feedback on code readability, test coverage, and
-            potential performance issues during peer reviews.
-      - level: 3
-        description: Takes ownership of test coverage and failure recovery. Begins
-          contributing to shared testing patterns.
-        illustrations:
-        - role_code: E3
-          description: Proactively identifies and advocates for solutions to address
-            gaps in testing patterns. Sets up automated tests that validate the interaction
-            between multiple services or the entire user flow of a key feature. Guides
-            E1 and E2 engineers on writing effective tests, clean code, and understanding
-            the importance of documentation.
-      - level: 4
-        description: Improves reliability and testing discipline by actively identifing
-          and reducing risk areas.
-        illustrations:
-        - role_code: E4
-          description: Leads risk reduction initiatives within custodianship to resolution
-            with measurable impact on health metrics.
-      - level: 5
-        description: Leads on quality strategy across a stream. Aligns team on test
-          coverage expectations, rollout and rollback strategies.
-        illustrations:
-        - role_code: E5
-          description: Sets and maintains custodianship quality standards e.g PR requirements.
-      - level: 6
-        description: Shapes quality practices across engineering. Uplifts others in
-          writing resilient, maintainable code.
-        illustrations:
-        - role_code: E6
-          description: Evangelises testing patterns such as contract testing and drives
-            their adoption within engineering
-      - level: 7
-        description: Drives a quality culture across functions. Embeds continuous
-          improvement in how we build and release software.
-      - level: 8
-        description: Sets engineering-wide standards for code quality and test strategy.
-          Embeds long-term quality thinking into our delivery culture.
-    - name: DevSecOps (Development, Security & Operations) Mindset
-      description: Takes ownership of the operational health and security of the systems
-        they build. Supports delivery through tooling, observability, and automation.
-      scope: Software Engineer
-      sheet: Software Engineering
-      expectations:
-      - level: 1
-        description: Follows established operational and security practices. Flags
-          concerns or incidents promptly.
-        illustrations:
-        - role_code: E1
-          description: Uses provided authentication mechanisms to securely access
-            systems
-        - role_code: E1
-          description: Protects credentials, identifies when code or data may involve
-            Personal Data and follows established processes for secure handling. Never
-            commits secrets to Git and raises questions or concerns early when unsure.
-      - level: 2
-        description: Implements logging, tracing, and alerting based on team standards.
-          Begins contributing to infrastructure or pipelines.
-        illustrations:
-        - role_code: E2
-          description: Accurately capture events (e.g failure scenarios) with playbook
-            on how to diagnose and fix.
-        - role_code: E2
-          description: Independently implements basic safeguards for services handling
-            Personal Data or Secrets (e.g. auth tokens, keys). Sets up container image
-            scanning; implements structured logging and tracing and escalates potential
-            security or privacy risks.
-      - level: 3
-        description: Understands and applies secure coding practices. Supports basic
-          debugging, monitoring, and recovery efforts.
-        illustrations:
-        - role_code: E3
-          description: Proactively identify production incidents and reviews PR's
-            with a security (OWASP vulnerabilities), reliability, observability or
-            data-handling lens and recognises common security and privacy risks.
-        - role_code: E3
-          description: Designs Kubernetes security and AWS IAM policies.
-        - role_code: E3
-          description: Leads incident investigation or remediation using logs, alerts,
-            and monitoring data.
-      - level: 4
-        description: Owns operational readiness and playbook completeness for their
-          services. Contributes to CI/CD, on-call rotations, and system observability.
-        illustrations:
-        - role_code: E4
-          description: Ensures services are operationally and security ready  (DR,
-            Failover, Backups) addressing identified gaps before release and proactively
-            updating incident response playbooks.
-        - role_code: E4
-          description: Designs secure CI/CD and infrastructure (SAST, DAST, Secrets)
-            and owns EKS/IAM security.
-      - level: 5
-        description: Improves team velocity by leading operational improvements. Manages
-          system reliability and security for a product area, stream or custodianship
-        illustrations:
-        - description: 'E5: Prioritises operational and security improvements (e.g
-            automation and org-wide tools) alongside feature delivery, articulating
-            trade offs clearly and acts as a trusted escalation point for complex
-            incidents or risk decisions within their area.'
-          role_code: E
-        - description: 'E5: Prioritises operational and security improvements (e.g
-            automation and org-wide tools) alongside feature delivery, articulating
-            trade offs clearly and acts as a trusted escalation point for complex
-            incidents or risk decisions within their area.'
-          role_code: EM
-        - role_code: EM5
-          description: Ensures and enables (e.g removing blockers) teams to allocate
-            security to 20% tech debt time. Drives adoption of org-wide security standards
-            and works with architects to ensure security execution is visible across
-            engineering.
-      - level: 6
-        description: Leads by example to drive automation, incident response, and
-          tooling across streams. Champions operational maturity.
-        illustrations:
-        - description: 'E6: Conducts org-wide security audit to identify systemic
-            gaps across streams. Leads iniatives to address gaps, bulding shared solutions
-            to drive consistent approaches to incident response, automation, and secure
-            data handling across streams.'
-          role_code: E
-        - description: 'E6: Conducts org-wide security audit to identify systemic
-            gaps across streams. Leads iniatives to address gaps, bulding shared solutions
-            to drive consistent approaches to incident response, automation, and secure
-            data handling across streams.'
-          role_code: EM
-        - description: 'EM6: Ensures org-wide standards adopted; allocates 20% tech
-            debt time; embeds security into culture.'
-          role_code: E
-        - description: 'EM6: Ensures org-wide standards adopted; allocates 20% tech
-            debt time; embeds security into culture.'
-          role_code: EM
-      - level: 7
-        description: Sets standards for DevSecOps practices across the engineering
-          organisation. Embeds operational excellence into team culture and delivery
-          systems.
-        illustrations:
-        - description: 'E7: Is a though leader, setting multi-year technical strategy
-            and integrating compliance architecture.'
-          role_code: E
-        - description: 'E7: Is a though leader, setting multi-year technical strategy
-            and integrating compliance architecture.'
-          role_code: EM
-        - description: 'E7: Leverages incident and operational data to establish and
-            evolves onboarding, ways or working and engineering guidelines to positively
-            impact organisation wide DevSecOps standards.'
-          role_code: E
-        - description: 'E7: Leverages incident and operational data to establish and
-            evolves onboarding, ways or working and engineering guidelines to positively
-            impact organisation wide DevSecOps standards.'
-          role_code: EM
-        - description: 'EM7: Translates company strategy into organisational roadmap.'
-          role_code: E
-        - description: 'EM7: Translates company strategy into organisational roadmap.'
-          role_code: EM
-      - level: 8
-        description: Leads organisational strategy for secure, scalable, and automated
-          operations. Integrates delivery and ops for long-term business resilience.
-        illustrations:
-        - description: 'E8: Owns the long term organisational approach to secure,
-            resilient, and privacy conscious operations and anticipates future operational,
-            security or privacy risks and adapts strategy before issues emerge.'
-          role_code: E
-        - description: 'E8: Owns the long term organisational approach to secure,
-            resilient, and privacy conscious operations and anticipates future operational,
-            security or privacy risks and adapts strategy before issues emerge.'
-          role_code: EM
     - name: 'Technical Expertise: Cloud Architecture & Infrastructure'
       description: Designs, implements, and manages scalable, secure, and cost-effective
         cloud solutions that support continuous innovation and operational efficiency.
@@ -4609,6 +4363,258 @@ framework:
       - level: 8
         description: Leads front-end direction company-wide. Sets standards, future
           proofs the stack, and ensures design/engineering integration at scale.
+  - name: Role Specific
+    description:
+    capabilities:
+    - name: System Design & Architecture
+      description: Designs components and systems that are scalable, maintainable,
+        cost-effective, and aligned with long-term product direction, engineering
+        principles, and technical vision.
+      scope: Software Engineer
+      sheet: Software Engineering
+      expectations:
+      - level: 1
+        description: Builds within existing patterns and guidance. Understands how
+          components fit into the broader system.
+      - level: 2
+        description: |-
+          Contributes to solution design discussions. Can implement features with guidance and clear expectations.
+
+          E2: Provides feedback and comments on design documentation.
+      - level: 3
+        description: |-
+          Designs moderately complex features or systems. Considers performance, reusability, and long-term maintainability.
+
+          E3: Independently researches, proposes and writes design documentation and proactively seeking feedback, proactively looks for existing solutions to avoid reinventing the wheel
+      - level: 4
+        description: Owns the solution design for an initiative. Evaluates trade-offs
+          and aligns design with product and technical goals.
+        illustrations:
+        - role_code: E4
+          description: Proactively engages stakeholders (both technical and cross
+            functional) to validate ideas, evolve designs and make necessary trade
+            off decisions. Ensures they consult with custodianship leaders in their
+            decision when these impact the custodianship, consults with TVG when the
+            solution design has whole of platform implications.
+        - role_code: EM4
+          description: Proactively engages stakeholders (both technical and cross
+            functional) to validate ideas, evolve designs and make necessary trade
+            off decisions. Ensures they consult with custodianship leaders in their
+            decision when these impact the custodianship, consults with TVG when the
+            solution design has whole of platform implications.
+      - level: 5
+        description: Leads system-level design across multiple components or domains.
+          Champions alignment with engineering principles.
+        illustrations:
+        - role_code: E5
+          description: Leveraging knowledge and experience working across the product
+            to identify opportunities ............
+      - level: 6
+        description: Connects system architecture to business value. Guides teams
+          in designing scalable, future-fit systems.
+        illustrations:
+        - role_code: E6
+          description: Right-sizes the solution to the realistic scaling needs, based
+            on real business requirements
+        - role_code: EM6
+          description: Right-sizes the solution to the realistic scaling needs, based
+            on real business requirements
+      - level: 7
+        description: Shapes technical direction across platforms or domains. Solves
+          cross-cutting system design challenges.
+      - level: 8
+        description: Drives architectural strategy for the organisation. Ensures scalable,
+          coherent systems that enable product and business growth.
+    - name: Quality First Mindset
+      description: Writes clean, testable code and builds in ways that reduce risk
+        and improve reliability. Aligns to our testing pyramid and contributes to
+        knowledge quality through clear documentation and communicable code.
+      scope: Software Engineer
+      sheet: Software Engineering
+      expectations:
+      - level: 1
+        description: Follows team standards for testing and documentation. Seeks feedback
+          on quality.
+        illustrations:
+        - description: 'E1: Writes unit tests for any new code they are contributing
+            to a code base. Asks more experienced engineers to pair on new work.'
+          role_code: E
+        - description: 'E1: Writes unit tests for any new code they are contributing
+            to a code base. Asks more experienced engineers to pair on new work.'
+          role_code: EM
+      - level: 2
+        description: Writes well-structured, readable code and unit tests. Writes
+          code and docs others can build on.
+        illustrations:
+        - role_code: E2
+          description: Ensures that all new code paths have corresponding unit tests
+            that cover various scenarios, including edge cases. Updates outdated README
+            files or adds clear comments to complex code sections to aid future developers.
+            Provides constructive feedback on code readability, test coverage, and
+            potential performance issues during peer reviews.
+      - level: 3
+        description: Takes ownership of test coverage and failure recovery. Begins
+          contributing to shared testing patterns.
+        illustrations:
+        - role_code: E3
+          description: Proactively identifies and advocates for solutions to address
+            gaps in testing patterns. Sets up automated tests that validate the interaction
+            between multiple services or the entire user flow of a key feature. Guides
+            E1 and E2 engineers on writing effective tests, clean code, and understanding
+            the importance of documentation.
+      - level: 4
+        description: Improves reliability and testing discipline by actively identifing
+          and reducing risk areas.
+        illustrations:
+        - role_code: E4
+          description: Leads risk reduction initiatives within custodianship to resolution
+            with measurable impact on health metrics.
+      - level: 5
+        description: Leads on quality strategy across a stream. Aligns team on test
+          coverage expectations, rollout and rollback strategies.
+        illustrations:
+        - role_code: E5
+          description: Sets and maintains custodianship quality standards e.g PR requirements.
+      - level: 6
+        description: Shapes quality practices across engineering. Uplifts others in
+          writing resilient, maintainable code.
+        illustrations:
+        - role_code: E6
+          description: Evangelises testing patterns such as contract testing and drives
+            their adoption within engineering
+      - level: 7
+        description: Drives a quality culture across functions. Embeds continuous
+          improvement in how we build and release software.
+      - level: 8
+        description: Sets engineering-wide standards for code quality and test strategy.
+          Embeds long-term quality thinking into our delivery culture.
+    - name: DevSecOps (Development, Security & Operations) Mindset
+      description: Takes ownership of the operational health and security of the systems
+        they build. Supports delivery through tooling, observability, and automation.
+      scope: Software Engineer
+      sheet: Software Engineering
+      expectations:
+      - level: 1
+        description: Follows established operational and security practices. Flags
+          concerns or incidents promptly.
+        illustrations:
+        - role_code: E1
+          description: Uses provided authentication mechanisms to securely access
+            systems
+        - role_code: E1
+          description: Protects credentials, identifies when code or data may involve
+            Personal Data and follows established processes for secure handling. Never
+            commits secrets to Git and raises questions or concerns early when unsure.
+      - level: 2
+        description: Implements logging, tracing, and alerting based on team standards.
+          Begins contributing to infrastructure or pipelines.
+        illustrations:
+        - role_code: E2
+          description: Accurately capture events (e.g failure scenarios) with playbook
+            on how to diagnose and fix.
+        - role_code: E2
+          description: Independently implements basic safeguards for services handling
+            Personal Data or Secrets (e.g. auth tokens, keys). Sets up container image
+            scanning; implements structured logging and tracing and escalates potential
+            security or privacy risks.
+      - level: 3
+        description: Understands and applies secure coding practices. Supports basic
+          debugging, monitoring, and recovery efforts.
+        illustrations:
+        - role_code: E3
+          description: Proactively identify production incidents and reviews PR's
+            with a security (OWASP vulnerabilities), reliability, observability or
+            data-handling lens and recognises common security and privacy risks.
+        - role_code: E3
+          description: Designs Kubernetes security and AWS IAM policies.
+        - role_code: E3
+          description: Leads incident investigation or remediation using logs, alerts,
+            and monitoring data.
+      - level: 4
+        description: Owns operational readiness and playbook completeness for their
+          services. Contributes to CI/CD, on-call rotations, and system observability.
+        illustrations:
+        - role_code: E4
+          description: Ensures services are operationally and security ready  (DR,
+            Failover, Backups) addressing identified gaps before release and proactively
+            updating incident response playbooks.
+        - role_code: E4
+          description: Designs secure CI/CD and infrastructure (SAST, DAST, Secrets)
+            and owns EKS/IAM security.
+      - level: 5
+        description: Improves team velocity by leading operational improvements. Manages
+          system reliability and security for a product area, stream or custodianship
+        illustrations:
+        - description: 'E5: Prioritises operational and security improvements (e.g
+            automation and org-wide tools) alongside feature delivery, articulating
+            trade offs clearly and acts as a trusted escalation point for complex
+            incidents or risk decisions within their area.'
+          role_code: E
+        - description: 'E5: Prioritises operational and security improvements (e.g
+            automation and org-wide tools) alongside feature delivery, articulating
+            trade offs clearly and acts as a trusted escalation point for complex
+            incidents or risk decisions within their area.'
+          role_code: EM
+        - role_code: EM5
+          description: Ensures and enables (e.g removing blockers) teams to allocate
+            security to 20% tech debt time. Drives adoption of org-wide security standards
+            and works with architects to ensure security execution is visible across
+            engineering.
+      - level: 6
+        description: Leads by example to drive automation, incident response, and
+          tooling across streams. Champions operational maturity.
+        illustrations:
+        - description: 'E6: Conducts org-wide security audit to identify systemic
+            gaps across streams. Leads iniatives to address gaps, bulding shared solutions
+            to drive consistent approaches to incident response, automation, and secure
+            data handling across streams.'
+          role_code: E
+        - description: 'E6: Conducts org-wide security audit to identify systemic
+            gaps across streams. Leads iniatives to address gaps, bulding shared solutions
+            to drive consistent approaches to incident response, automation, and secure
+            data handling across streams.'
+          role_code: EM
+        - description: 'EM6: Ensures org-wide standards adopted; allocates 20% tech
+            debt time; embeds security into culture.'
+          role_code: E
+        - description: 'EM6: Ensures org-wide standards adopted; allocates 20% tech
+            debt time; embeds security into culture.'
+          role_code: EM
+      - level: 7
+        description: Sets standards for DevSecOps practices across the engineering
+          organisation. Embeds operational excellence into team culture and delivery
+          systems.
+        illustrations:
+        - description: 'E7: Is a though leader, setting multi-year technical strategy
+            and integrating compliance architecture.'
+          role_code: E
+        - description: 'E7: Is a though leader, setting multi-year technical strategy
+            and integrating compliance architecture.'
+          role_code: EM
+        - description: 'E7: Leverages incident and operational data to establish and
+            evolves onboarding, ways or working and engineering guidelines to positively
+            impact organisation wide DevSecOps standards.'
+          role_code: E
+        - description: 'E7: Leverages incident and operational data to establish and
+            evolves onboarding, ways or working and engineering guidelines to positively
+            impact organisation wide DevSecOps standards.'
+          role_code: EM
+        - description: 'EM7: Translates company strategy into organisational roadmap.'
+          role_code: E
+        - description: 'EM7: Translates company strategy into organisational roadmap.'
+          role_code: EM
+      - level: 8
+        description: Leads organisational strategy for secure, scalable, and automated
+          operations. Integrates delivery and ops for long-term business resilience.
+        illustrations:
+        - description: 'E8: Owns the long term organisational approach to secure,
+            resilient, and privacy conscious operations and anticipates future operational,
+            security or privacy risks and adapts strategy before issues emerge.'
+          role_code: E
+        - description: 'E8: Owns the long term organisational approach to secure,
+            resilient, and privacy conscious operations and anticipates future operational,
+            security or privacy risks and adapts strategy before issues emerge.'
+          role_code: EM
     - name: User Interface Design
       description: Designs purposeful, intuitive, and inclusive interfaces and interactions
         that enhance usability, provide feedback, and support delightful user experiences.
