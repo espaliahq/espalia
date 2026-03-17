@@ -159,12 +159,20 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
   end
 
   context "responsive behaviour" do
-    should "show role tree inline on desktop" do
+    should "show role tree inline on desktop and toggle it" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       visit framework_path(@framework_id)
 
       assert_selector "[data-framework-explorer-target='rolePane']", visible: true
-      assert_no_selector "button", text: "Roles", visible: true
+      assert_selector "button", text: "Roles", visible: true
+
+      # Click to hide
+      click_button "Roles"
+      assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
+
+      # Click to show again
+      click_button "Roles"
+      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
     end
 
     should "hide role tree on mobile and show it via toggle button" do

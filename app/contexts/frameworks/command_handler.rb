@@ -262,4 +262,111 @@ class Frameworks::CommandHandler
       framework.reorder_role_illustrations(framework_id, expectation_id, role_id, new_ordering)
     end
   end
+
+  # ── Suggested edit commands ──
+
+  # Suggests an edit to a framework entity field.
+  #
+  # Auto-approves if the author has approval authority AND mode is :editing
+  # (the default). This means the controller never decides whether to
+  # auto-approve — the decision derives from aggregate state.
+  #
+  # Event trail on auto-approve: EditSuggested + SuggestionApproved + content change (3 events)
+  # Event trail on pending:      EditSuggested (1 event)
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity (e.g. "role_illustration")
+  # @param target_entity_id [String] UUID of the entity
+  # @param field [String] field being edited (e.g. "description")
+  # @param suggested_value [String] the proposed new value
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] optional explanation
+  # @param mode [Symbol] :editing (auto-approve if authority) or :suggesting (always pending)
+  def suggest_edit(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                   field, suggested_value, author_id, rationale: nil, mode: :editing)
+    @repository.with_framework(framework_id) do |framework|
+      framework.suggest_edit(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                             field, suggested_value, author_id, rationale: rationale)
+
+      if mode == :editing && framework.can_approve?(author_id)
+        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+      end
+    end
+  end
+
+  # Amends the author's own pending suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param new_suggested_value [String] the revised proposed value
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] updated explanation
+  def amend_suggestion(framework_id, suggestion_id, new_suggested_value, author_id, rationale: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.amend_suggestion(suggestion_id, new_suggested_value, author_id, rationale: rationale)
+    end
+  end
+
+  # Rejects a pending suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param reviewer_id [String] UUID of the reviewer
+  # @param comment [String, nil] rejection reason
+  def reject_suggestion(framework_id, suggestion_id, reviewer_id, comment: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.reject_suggestion(suggestion_id, reviewer_id, comment: comment)
+    end
+  end
+
+  # Withdraws the author's own pending suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  def withdraw_suggestion(framework_id, suggestion_id)
+    @repository.with_framework(framework_id) do |framework|
+      framework.withdraw_suggestion(suggestion_id)
+    end
+  end
+
+  # ── Versioning commands ──
+
+  # Starts a draft phase for a new framework version.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param target_version [Integer] the version number being drafted
+  # @param started_by [String] UUID of the user who started the draft
+  def start_draft(framework_id, target_version, started_by)
+    @repository.with_framework(framework_id) do |framework|
+      framework.start_draft(framework_id, target_version, started_by)
+    end
+  end
+
+  # Defines a migration mapping between versions.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param mapping_id [String] UUID for this mapping
+  # @param from_stable_id [String] stable_id in the current published version
+  # @param to_stable_id [String, nil] stable_id in the draft version
+  # @param mapping_type [String] one of: same, evolved, split, archived, new
+  # @param requires_reassessment [Boolean] whether existing ratings need review
+  # @param reason [String, nil] explanation of the mapping
+  def define_migration_mapping(framework_id, mapping_id, from_stable_id, to_stable_id, mapping_type,
+                               requires_reassessment: false, reason: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.define_migration_mapping(framework_id, mapping_id, from_stable_id, to_stable_id, mapping_type,
+                                         requires_reassessment: requires_reassessment, reason: reason)
+    end
+  end
+
+  # Publishes the current draft as a new framework version.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param published_by [String] UUID of the user who published
+  def publish_version(framework_id, published_by)
+    @repository.with_framework(framework_id) do |framework|
+      framework.publish_version(framework_id, published_by)
+    end
+  end
 end

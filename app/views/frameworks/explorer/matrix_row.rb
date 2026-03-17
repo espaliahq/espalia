@@ -10,10 +10,12 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
-  def initialize(capability_data:, merged_levels:, selected_role_ids:)
+  # @param framework_id [String] UUID of the framework (for illustration PATCH URLs)
+  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
+    @framework_id = framework_id
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -85,30 +87,43 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     end
   end
 
-  def expanded_cell(ordinal)
+  def expanded_cell(ordinal) # rubocop:disable Metrics/MethodLength
     cell_data = @cells[ordinal]
 
-    if cell_data.nil? || cell_data[:illustrations_by_role].empty?
+    if cell_data.nil? || cell_data[:bound_selected_role_ids].blank?
       td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
                 "bg-blue-50/30 dark:bg-blue-900/10 align-top") { }
       return
     end
 
+    expectation = cell_data[:expectation]
+
     td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
               "bg-blue-50/30 dark:bg-blue-900/10 align-top") do
-      cell_data[:illustrations_by_role].each do |role_id, illustrations|
+      cell_data[:bound_selected_role_ids].each do |role_id|
         role = FrameworkState::Role.find_by(role_id: role_id)
         next unless role
 
+        illustrations = cell_data[:illustrations_by_role][role_id] || []
+
         div(class: "mb-2 last:mb-0") do
           render Components::Kit::Badge.new(role.code, variant: :default)
-          ul(class: "mt-1 space-y-1") do
+          ul(
+            id: "illustrations-#{expectation.expectation_id}-#{role_id}",
+            class: "mt-1 space-y-1"
+          ) do
             illustrations.each do |ill|
-              li(class: "text-xs text-gray-600 dark:text-gray-400 pl-2") do
-                ill.description
-              end
+              render Views::Frameworks::Explorer::IllustrationFrame.new(
+                illustration: ill,
+                framework_id: @framework_id
+              )
             end
           end
+          render Views::Frameworks::Explorer::NewIllustrationFrame.new(
+            expectation_id: expectation.expectation_id,
+            role_id: role_id,
+            framework_id: @framework_id
+          )
         end
       end
     end

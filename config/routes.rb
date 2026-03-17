@@ -25,6 +25,7 @@ Rails.application.routes.draw do
     member do
       get :matrix
     end
+    resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
   end
 
   # Defines the root path route ("/")

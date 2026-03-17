@@ -29,6 +29,11 @@ Rails.configuration.to_prepare do
     to: Frameworks::Projections::PublishedState.handled_events
   )
 
+  event_store.subscribe(
+    PersonDevelopment::Projections::CurrentAssessment.new,
+    to: PersonDevelopment::Projections::CurrentAssessment.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Subscriptions will be added here as integrations are implemented.
   # Example:

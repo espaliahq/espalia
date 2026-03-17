@@ -31,7 +31,10 @@ class Views::Frameworks::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: { controller: "framework-explorer" }) do
+      div(data: {
+        controller: "framework-explorer",
+        action: "tree:changed->framework-explorer#updateRoleCount"
+      }) do
         framework_header
         explorer_layout
       end
@@ -57,14 +60,6 @@ class Views::Frameworks::ShowView < Views::Base
             )
           end
         end
-
-        # Mobile: role tree toggle button (hidden on lg+)
-        button(
-          type: "button",
-          class: "lg:hidden px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-800 " \
-                 "text-sm font-medium text-gray-700 dark:text-gray-300",
-          data: { action: "framework-explorer#toggleRolePane" }
-        ) { "Roles" }
       end
 
       stats_bar
@@ -76,8 +71,32 @@ class Views::Frameworks::ShowView < Views::Base
     level_count = @matrix_data[:merged_levels].size
     cap_count = @matrix_data[:categories].sum { |c| c[:capabilities].size }
 
-    div(class: "mt-3 flex gap-6 text-sm text-gray-500 dark:text-gray-400") do
-      stat_item("Roles", role_count)
+    div(class: "mt-3 flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400") do
+      # Roles stat doubles as the toggle button for the role pane
+      button(
+        type: "button",
+        class: "flex items-center gap-1.5 px-2.5 py-1 -ml-2.5 rounded-md " \
+               "bg-gray-100 dark:bg-gray-800 " \
+               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+        data: {
+          action: "framework-explorer#toggleRolePane",
+          framework_explorer_target: "rolePaneToggle"
+        }
+      ) do
+        # Toggle chevron — rotates when pane is open/closed
+        svg(
+          class: "w-3.5 h-3.5 text-gray-400 transition-transform",
+          data: { framework_explorer_target: "toggleChevron" },
+          fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
+        ) do |s|
+          s.path(d: "M19 9l-7 7-7-7")
+        end
+        span(class: "font-semibold text-gray-900 dark:text-white",
+             data: { framework_explorer_target: "roleCount" }) { role_count.to_s }
+        span(data: { framework_explorer_target: "roleLabel" }) do
+          " #{'Role'.pluralize(role_count)}"
+        end
+      end
       stat_item("Levels", level_count)
       stat_item("Capabilities", cap_count)
     end
@@ -133,7 +152,8 @@ class Views::Frameworks::ShowView < Views::Base
       turbo_frame_tag("framework-matrix", data: { matrix_target: "frame" }) do
         render Views::Frameworks::Explorer::Matrix.new(
           matrix_data: @matrix_data,
-          selected_role_ids: @selected_role_ids
+          selected_role_ids: @selected_role_ids,
+          framework_id: @framework.framework_id
         )
       end
     end

@@ -9,11 +9,13 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # @param category_data [Hash] from MatrixDataBuilder: { category:, capabilities: [...] }
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
-  def initialize(category_data:, merged_levels:, selected_role_ids:)
+  # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
+  def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
+    @framework_id = framework_id
   end
 
   def view_template
@@ -64,7 +66,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
       render Views::Frameworks::Explorer::MatrixRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
-        selected_role_ids: @selected_role_ids
+        selected_role_ids: @selected_role_ids,
+        framework_id: @framework_id
       )
     end
   end

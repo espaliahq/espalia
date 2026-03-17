@@ -41,7 +41,7 @@ Clarifying example of how a BehaviouralExpectation manifests in a specific role.
 Atomic, inline edit suggestion on a framework entity. Rendered in context (Google Docs suggestion mode). Flows through tiered review. Part of the Framework event stream as `EditSuggested` / `SuggestionApproved` / `SuggestionRejected` events. Applied immediately on approval — continuous delivery.
 
 ### FrameworkCollaborator
-Permission level on a framework: `owner` (full control), `editor` (suggest any, approve Tier 1), `role_lead` (scoped to their role), `viewer` (read-only, can comment).
+Permission role on a framework. Eight roles: `owner` (full control + manage collaborators), `editor` (full structural/content but no collaborator management), `role_family_lead` / `role_lead` (scoped to their family/role + exclusively-bound capabilities), `capability_category_lead` / `capability_lead` (scoped to their category/capability), `collaborator` (can see drafts, suggest edits, and comment), `viewer` (published view only, no interaction). A person can hold multiple roles; permissions are the union. See architecture doc section 3.5.6 for full details.
 
 ---
 

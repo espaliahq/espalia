@@ -34,13 +34,13 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [Hash] with keys :selected_roles, :merged_levels, :categories
   def build
-    selected_roles = resolve_selected_roles
-    merged_levels = build_merged_levels(selected_roles)
-    family_role_ids = build_family_role_ids(selected_roles)
-    selected_role_id_set = selected_roles.map(&:role_id).to_set
+    @selected_roles = resolve_selected_roles
+    merged_levels = build_merged_levels(@selected_roles)
+    family_role_ids = build_family_role_ids(@selected_roles)
+    selected_role_id_set = @selected_roles.map(&:role_id).to_set
 
     {
-      selected_roles: selected_roles,
+      selected_roles: @selected_roles,
       merged_levels: merged_levels,
       categories: build_categories(merged_levels, family_role_ids, selected_role_id_set)
     }
@@ -145,9 +145,19 @@ class Frameworks::MatrixDataBuilder
 
   # Builds the cell hash for a capability across all level ordinals.
   #
+  # Each cell includes:
+  # - :expectation — the BehaviouralExpectation for this capability × ordinal
+  # - :illustrations_by_role — hash of role_id => sorted illustrations (selected roles only)
+  # - :bound_selected_role_ids — role_ids that are selected, bound to this capability,
+  #     and have a level at this ordinal (may have zero illustrations — should show add button)
+  #
   # @return [Hash<Integer, Hash>] ordinal => cell data
-  def build_cells(capability, ordinals, selected_role_id_set)
+  def build_cells(capability, ordinals, selected_role_id_set) # rubocop:disable Metrics/MethodLength
     expectations_by_ordinal = capability.expectations.index_by(&:level_ordinal)
+    binding_role_ids = capability.bindings.map(&:role_id).to_set
+    role_ordinals = @selected_roles.each_with_object({}) do |role, h|
+      h[role.role_id] = role.levels.map(&:ordinal).to_set
+    end
 
     ordinals.each_with_object({}) do |ordinal, cells|
       expectation = expectations_by_ordinal[ordinal]
@@ -160,10 +170,15 @@ class Frameworks::MatrixDataBuilder
         .group_by(&:role_id)
         .transform_values { |ills| ills.sort_by(&:ordinal) }
 
+      bound_selected_role_ids = @selected_roles
+        .map(&:role_id)
+        .select { |rid| binding_role_ids.include?(rid) && role_ordinals[rid]&.include?(ordinal) }
+
       cells[ordinal] = {
         expectation: expectation,
         illustration_count: illustrations.size,
-        illustrations_by_role: illustrations_by_role
+        illustrations_by_role: illustrations_by_role,
+        bound_selected_role_ids: bound_selected_role_ids
       }
     end
   end

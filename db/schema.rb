@@ -10,9 +10,29 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_16_011126) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "assessment_states", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "aligned_level_id"
+    t.uuid "capability_stable_id", null: false
+    t.datetime "created_at", null: false
+    t.uuid "cycle_id"
+    t.uuid "framework_id", null: false
+    t.datetime "last_aligned_at"
+    t.datetime "last_self_rated_at"
+    t.uuid "manager_rated_level_id"
+    t.string "migration_status", default: "not_flagged", null: false
+    t.uuid "person_id", null: false
+    t.text "reassessment_reason"
+    t.uuid "self_rated_level_id"
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id", "framework_id", "capability_stable_id"], name: "idx_assessment_states_person_framework_capability", unique: true
+    t.index ["person_id", "framework_id"], name: "index_assessment_states_on_person_id_and_framework_id"
+    t.index ["tenant_id"], name: "index_assessment_states_on_tenant_id"
+  end
 
   create_table "event_store_events", force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -109,6 +129,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_011126) do
     t.index ["tenant_id"], name: "index_framework_levels_on_tenant_id"
   end
 
+  create_table "framework_migration_mappings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "from_stable_id"
+    t.uuid "mapping_id", null: false
+    t.string "mapping_type", null: false
+    t.integer "published_version", null: false
+    t.string "reason"
+    t.boolean "requires_reassessment", default: false, null: false
+    t.uuid "tenant_id", null: false
+    t.uuid "to_stable_id"
+    t.datetime "updated_at", null: false
+    t.index ["framework_id", "published_version"], name: "idx_on_framework_id_published_version_db5c09f0b2"
+    t.index ["mapping_id"], name: "index_framework_migration_mappings_on_mapping_id", unique: true
+    t.index ["tenant_id"], name: "index_framework_migration_mappings_on_tenant_id"
+  end
+
   create_table "framework_role_families", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "department"
@@ -164,6 +201,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_011126) do
     t.index ["tenant_id"], name: "index_framework_states_on_tenant_id"
   end
 
+  create_table "framework_suggested_edits", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "author_id", null: false
+    t.datetime "created_at", null: false
+    t.text "current_value"
+    t.string "field", null: false
+    t.uuid "framework_id", null: false
+    t.text "rationale"
+    t.datetime "reviewed_at"
+    t.uuid "reviewed_by"
+    t.text "reviewer_comment"
+    t.string "status", default: "pending", null: false
+    t.text "suggested_value", null: false
+    t.uuid "suggestion_id", null: false
+    t.uuid "target_entity_id", null: false
+    t.string "target_entity_type", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["framework_id", "status"], name: "index_framework_suggested_edits_on_framework_id_and_status"
+    t.index ["suggestion_id"], name: "index_framework_suggested_edits_on_suggestion_id", unique: true
+    t.index ["target_entity_type", "target_entity_id", "field"], name: "index_fw_suggested_edits_on_target"
+    t.index ["tenant_id"], name: "index_framework_suggested_edits_on_tenant_id"
+  end
+
   create_table "people", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email", null: false
@@ -217,16 +277,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_011126) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "assessment_states", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"
   add_foreign_key "framework_capability_role_bindings", "tenants"
   add_foreign_key "framework_levels", "tenants"
+  add_foreign_key "framework_migration_mappings", "tenants"
   add_foreign_key "framework_role_families", "tenants"
   add_foreign_key "framework_role_illustrations", "tenants"
   add_foreign_key "framework_roles", "tenants"
   add_foreign_key "framework_states", "tenants"
+  add_foreign_key "framework_suggested_edits", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "tenant_users", "people"
