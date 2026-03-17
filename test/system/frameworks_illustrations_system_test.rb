@@ -123,7 +123,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       # Wait for the expanded row content to be visible before asserting the button.
       # This ensures Stimulus has processed the click and the row has expanded —
       # the same pattern used by the other tests in this context.
-      find("turbo-frame[id^='new-illustration-#{@eid}-']")
+      find("turbo-frame[id^='new-illustration-#{@eid}-']", match: :first)
 
       assert_selector "button", text: "Add illustration"
     end
