@@ -22,8 +22,10 @@ export default class extends Controller {
   }
 
   toggle() {
+    this._toggling = true
     this.toggleTransition()
     this.#updateAria()
+    requestAnimationFrame(() => { this._toggling = false })
   }
 
   close() {
@@ -32,6 +34,7 @@ export default class extends Controller {
   }
 
   clickOutside() {
+    if (this._toggling) return
     this.leave()
     this.#updateAria()
   }
