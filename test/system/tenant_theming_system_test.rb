@@ -35,6 +35,7 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
 
       # Open menu and find which tenant is NOT current, then switch to it
       find("[data-action='dropdown#toggle']").click
+      assert_selector "[role='menu']", visible: true
 
       # Click whichever tenant is a button (not the current one which is a div)
       within("[role='menu']") do
