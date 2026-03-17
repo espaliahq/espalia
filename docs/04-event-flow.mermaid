@@ -17,9 +17,9 @@ flowchart LR
     subgraph PersonDevStream["Person Development Streams (RES)"]
         direction TB
         ER[EvidenceRecorded]
-        SR[SelfRated]
+        SR[SelfRated / SelfRatingRevised]
         MR[ManagerRated]
-        CA[CapabilityAligned]
+        AA[AssessmentAligned]
         FAC[FullAlignmentCompleted]
         CIR[CheckInRecorded]
         GPA[GrowthPlanAgreed]
@@ -53,7 +53,7 @@ flowchart LR
 
     SR --> PCA
     MR --> PCA
-    CA --> PCA
+    AA --> PCA
     ER --> PEC
     GPA --> PGP
     CIR --> PGP
@@ -66,6 +66,8 @@ flowchart LR
     FAC --> GA
     FAC --> TR
     FAC --> PR
+    AA --> GA
+    AA --> TR
     CIR --> FR
 
     Sched -->|CheckInOverdue| Notif

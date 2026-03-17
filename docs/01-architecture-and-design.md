@@ -18,7 +18,7 @@ An open-source, multi-tenant platform that operationalises career growth framewo
 | 4 | Evidence/feedback collection from self, managers, and peers — re-linkable between capabilities |
 | 5 | Framework evolution over time without losing existing data |
 | 6 | Differential capability weighting per role |
-| 7 | Must-have vs flexible capabilities for performance and promotion |
+| 7 | Tolerance-based capability requirements — mandatory (zero-tolerance) through fully-flexible (nil) |
 | 8 | Growth plans with focus areas, regular check-ins, and freshness reporting |
 | 9 | Aggregate gap reporting across roles |
 
@@ -459,14 +459,19 @@ end
 # Projection tables (all have tenant_id, acts_as_tenant)
 
 # framework_states: id, tenant_id, framework_id, name, current_published_version,
-#                   draft_in_progress, draft_version
+#                   draft_in_progress, draft_version,
+#                   mastery_threshold (decimal, nil = no gate),
+#                   promotion_score_threshold (decimal, nil = no gate)
 # framework_role_families: id, tenant_id, framework_id, name, description
 # framework_roles: id, tenant_id, role_family_id, name, code, track
 # framework_levels: id, tenant_id, role_id, ordinal, title, code, is_entry
-# framework_capability_categories: id, tenant_id, framework_id, name, description
+# framework_capability_categories: id, tenant_id, framework_id, name, description,
+#                                   category_tolerance (decimal, nil = uncapped, 0 = must balance)
 # framework_capabilities: id, tenant_id, category_id, stable_id, name, description, status
-# framework_capability_role_bindings: id, tenant_id, capability_id, role_id, weight, requirement_type
-# framework_behavioural_expectations: id, tenant_id, stable_id, capability_id, level_id, description
+# framework_capability_role_bindings: id, tenant_id, capability_id, role_id, weight,
+#                                     individual_tolerance (decimal, nil = category-governed,
+#                                                          0 = mandatory, N = deficit cap)
+# framework_behavioural_expectations: id, tenant_id, stable_id, capability_id, level_ordinal, description
 # framework_role_illustrations: id, tenant_id, stable_id, expectation_id, role_id, ordinal, description
 # framework_collaborators: id, tenant_id, framework_id, person_id, role, scope_role_id
 # framework_suggested_edits: id, tenant_id, framework_id, suggestion_id (unique),
@@ -510,10 +515,12 @@ Structure — capabilities:
   CapabilityAdded { category_id, id, stable_id, name, description }
   CapabilityArchived { id, reason }
 
-Structure — bindings:
-  CapabilityRoleBindingCreated { id, capability_id, role_id, weight, requirement_type }
-  CapabilityRoleBindingUpdated { id, weight?, requirement_type? }
+Structure — bindings and scoring:
+  CapabilityRoleBindingCreated { id, capability_id, role_id, weight, individual_tolerance? }
+  CapabilityRoleBindingUpdated { id, weight?, individual_tolerance? }
   CapabilityRoleBindingRemoved { id }
+  CategoryToleranceSet { framework_id, category_id, category_tolerance }
+  ScoringThresholdsConfigured { framework_id, mastery_threshold?, promotion_score_threshold? }
 
 Content — expectations (canonical rated text):
   BehaviouralExpectationSet { id, stable_id, capability_id, level_id, description }
@@ -664,19 +671,21 @@ Assessment cycle:
   AssessmentCycleCompleted { cycle_id }
 
 Self-assessment:
-  SelfRated { capability_stable_id, level_id, comment }
-  SelfRatingRevised { capability_stable_id, new_level_id, comment, rationale }
+  SelfRated { capability_stable_id, level_ordinal, frequency, comment }
+    frequency: "some" (0.25×) | "occasional" (0.5×) | "consistent" (1.0×)
+  SelfRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale }
 
 Manager assessment:
-  ManagerRated { capability_stable_id, level_id, comment, rated_by }
-  ManagerRatingRevised { capability_stable_id, new_level_id, comment, rationale }
+  ManagerRated { capability_stable_id, level_ordinal, frequency, comment }
+  ManagerRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale }
 
 Alignment:
   AlignmentConversationStarted { cycle_id, mode, started_by }
     mode: async | live | record_only
   AlignmentCommentAdded { capability_stable_id, author_id, content }
-  CapabilityAligned { capability_stable_id, aligned_level_id, comment,
-                      agreed_by_person, agreed_by_manager }
+  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, comment }
+    ← Agreed frequency at a specific level. Agreed level is DERIVED (never stored):
+      max(level_ordinal where aligned_frequency == "consistent").
   FullAlignmentCompleted { cycle_id, summary_notes }
     ← SNAPSHOT POINT. All capabilities aligned for this cycle.
 
@@ -717,13 +726,23 @@ Framework migration:
 
 All projection read models have `tenant_id` and `acts_as_tenant :tenant`.
 
-**Current Assessment State** — Latest aligned/self/manager level per capability. Updated synchronously on rating events.
+**Current Assessment State** — Per-level frequency ratings per capability. One row per
+`(person, framework, capability_stable_id, level_ordinal)`. Updated synchronously on rating events.
 
 ```ruby
-# assessment_states table:
-#   id, tenant_id, person_id, framework_id, capability_stable_id,
-#   self_rated_level_id, manager_rated_level_id, aligned_level_id,
-#   last_self_rated_at, last_aligned_at, migration_status, reassessment_reason
+# assessment_level_ratings table:
+#   id, tenant_id, person_id, framework_id, capability_stable_id, level_ordinal,
+#   self_rated_frequency, manager_rated_frequency, aligned_frequency,
+#   self_rated_comment, manager_rated_comment, aligned_comment,
+#   last_self_rated_at, last_manager_rated_at, last_aligned_at,
+#   source (human | agent), migration_status, reassessment_reason
+#
+# Effective frequency fallback: aligned → manager → self → default
+#   default: 1.0 for level_ordinal <= person_level (assume consistent)
+#            0.0 for level_ordinal >  person_level (not expected)
+#
+# Agreed level: derived as max(level_ordinal where effective_frequency == "consistent")
+#               Never stored — computed on demand by PersonDevelopment::Scoring
 ```
 
 **Growth Plan State** — Current goal, focus areas, last check-in. Updated synchronously.
@@ -751,6 +770,59 @@ All projection read models have `tenant_id` and `acts_as_tenant :tenant`.
 **Freshness** — Derived from timestamps on above projections. Queryable for dashboards.
 
 **Point-in-Time Assessment** — Replay to `FullAlignmentCompleted` event. No separate projection needed — it's on-demand replay.
+
+#### 3.6.3 Scoring Model — `PersonDevelopment::Scoring`
+
+Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read models.
+
+```
+FREQUENCY = { "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
+
+effective_frequency(capability_stable_id, level_ordinal):
+  aligned_frequency  → manager_rated_frequency  → self_rated_frequency
+  → default: 1.0 if level_ordinal <= person_level (assume consistent)
+             0.0 if level_ordinal >  person_level (not expected, not assessed)
+
+contribution_at_level = (effective_frequency − expected_at_level) × weight
+  where expected_at_level = level_ordinal <= person_level ? 1.0 : 0.0
+
+raw_contribution(capability) = Σ contribution_at_level across ALL level ordinals
+
+baseline_score = Σ (count_levels_at_or_below_person_level × weight) per binding
+
+performance_ratio = (raw_score + baseline_score) / baseline_score
+  → 1.0 = exactly at expectations; > 1.0 = exceeding; < 1.0 = below
+
+mastering? = performance_ratio >= mastery_threshold  (nil threshold → nil)
+
+agreed_level = max(level_ordinal where effective_frequency == "consistent")  ← derived, never stored
+
+Category pass/fail (uses capped contributions):
+  capped = individual_tolerance ? max(raw_contribution, -individual_tolerance) : raw_contribution
+  category_pool += capped  per binding in category
+  pass if category_pool >= -(category_tolerance || ∞)
+
+Overall score uses raw (uncapped) contributions — individual_tolerance does not hide
+deficits from the total signal.
+
+Promotion readiness (structural + score):
+  1. All bindings with individual_tolerance == 0 at person_level + 1 must have
+     effective_frequency == "consistent"
+  2. (raw_score + next_level_baseline) / next_level_baseline >= promotion_score_threshold
+```
+
+**UI implications for the capability matrix:**
+
+| Signal | When | Display |
+|--------|------|---------|
+| Weight badge | `binding.weight != 1.0` | `"2×"` badge on capability row |
+| Shared vs per-role weight | All selected roles have same weight | Unified badge; otherwise per-role coloured dots |
+| Mandatory indicator | `individual_tolerance == 0` | Filled/solid weight badge + 3px amber left border on row |
+| Category tolerance | `category_tolerance == 0` | Lock icon on category section header |
+| Category tolerance | `category_tolerance > 0` | `"± N pts"` label on section header |
+| Category tolerance | `nil` | No indicator (uncapped) |
+| Frequency selector | Self/manager/align input | Three options: `some` · `occasional` · `consistent` (not a level picker) |
+| Agreed level | Derived | Show as `"Agreed: L3"` computed from aligned assessments; no direct input |
 
 ---
 
@@ -785,7 +857,8 @@ Time-series of aligned ratings per capability using `capability_stable_id` acros
 Per role: count below/at/above expected level per capability. Weighted by binding weights.
 
 ### 4.4 Promotion Readiness
-People where aligned ≥ expected for all `must_have` AND multiple capabilities show next-level.
+Structural check: all capabilities with `individual_tolerance: 0` (mandatory) at `person_level + 1`
+must have `effective_frequency == "consistent"`. Score check: `raw_score / next_level_baseline >= promotion_score_threshold`.
 
 ### 4.5 Growth Plan Freshness Dashboard
 Per manager: reports with last check-in, plan status. >30 days amber, >60 red.
@@ -915,7 +988,7 @@ end
 | 3 | Self-assessment + alignment with history | Person Development stream: `SelfRated` → `ManagerRated` → `CapabilityAligned` → `FullAlignmentCompleted`. Three alignment modes. Trend via `capability_stable_id`. |
 | 4 | Evidence from self/manager/peers, re-linkable | `EvidenceRecorded` / `EvidenceRelinked` events. Semi-freeform types + `ExternalReference`. |
 | 5 | Framework evolution | Event-sourced Framework with versioning. `stable_id` continuity. `requires_reassessment` flag. Nothing silently dropped. |
-| 6 | Weighted capabilities | `CapabilityRoleBinding.weight` — per-role weighting in reporting projections. |
-| 7 | Must-have vs flexible | `CapabilityRoleBinding.requirement_type` — `must_have` gates performance/promotion. |
+| 6 | Weighted capabilities | `CapabilityRoleBinding.weight` — per-role weighting. Contributes to scoring as `(effective_frequency − expected) × weight`. |
+| 7 | Tolerance-based requirements | `CapabilityRoleBinding.individual_tolerance` (nil = category-governed, 0 = mandatory, N = deficit cap). `CapabilityCategory.category_tolerance` (nil = uncapped, 0 = must balance, N = absorbs N pts). Mastery/promotion thresholds on `FrameworkState::Framework`. |
 | 8 | Growth plans + check-ins + freshness | Growth events in Person Development stream. `GrowthPlanState` projection. Freshness = `last_check_in_at` delta. |
-| 9 | Aggregate gap reporting | `Reporting::GapAnalysis` async projection. Aggregates `aligned_level_id` vs expected across people per role. |
+| 9 | Aggregate gap reporting | `Reporting::GapAnalysis` async projection. Aggregates `effective_frequency` vs expected across people per role, using `PersonDevelopment::Scoring`. |
