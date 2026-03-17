@@ -133,6 +133,31 @@ end
 - Use `visible: true` / `visible: :all` appropriately — `visible: true` checks CSS visibility, `:all` finds hidden DOM elements
 - Use `SCREENSHOTS=1` to visually verify responsive layouts at both sizes
 
+## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
+
+**Always assert visibility after triggering Stimulus actions before interacting with the resulting DOM.** Elements toggled by Stimulus controllers (dropdowns, modals, expanded rows) exist in the DOM as hidden elements. Capybara's `find` and `within` will locate hidden elements and fail — or worse, pass locally but fail on slower CI runners due to race conditions.
+
+```ruby
+# WRONG — within finds the hidden [role='menu'] before Stimulus opens it
+find("[data-action='dropdown#toggle']").click
+within("[role='menu']") do
+  click_on "Sign out"
+end
+
+# CORRECT — assert_selector waits for the element to become visible
+find("[data-action='dropdown#toggle']").click
+assert_selector "[role='menu']", visible: true
+within("[role='menu']") do
+  click_on "Sign out"
+end
+```
+
+**Key principles:**
+- After any click/action that triggers a Stimulus transition, add `assert_selector ..., visible: true` before interacting with the revealed element
+- Use `assert_selector` (not `find`) to wait — it retries until Capybara's wait timeout
+- This applies to dropdowns, modals, accordions, expanded table rows, and any element toggled via `useTransition` or class manipulation
+- `within` does NOT wait for visibility — always assert visibility first
+
 ## Rules
 
 - Use `subject { }` to define the object under test
