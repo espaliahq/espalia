@@ -42,15 +42,20 @@ class Components::Kit::PageLayout < Components::Base
 
   private
 
-  # Builds nav links, adjusting the Framework link based on count.
-  # When exactly one framework exists, links directly to it with singular label.
+  # Builds nav links, adjusting the Framework link based on count
+  # and conditionally adding an Assessment link for open cycles.
   #
   # @return [Array<Hash>]
   def nav_links
-    @nav_links ||= [
-      { label: "Home", href: "/" },
-      framework_nav_link
-    ]
+    @nav_links ||= begin
+      links = [
+        { label: "Home", href: "/" },
+        framework_nav_link
+      ]
+      assessment_link = assessment_nav_link
+      links << assessment_link if assessment_link
+      links
+    end
   end
 
   def framework_nav_link
@@ -60,5 +65,38 @@ class Components::Kit::PageLayout < Components::Base
     else
       { label: "Frameworks", href: "/frameworks" }
     end
+  end
+
+  # Returns an assessment nav link if the current user has an open assessment cycle.
+  # Links directly to the assessment when exactly one exists, otherwise to the index.
+  #
+  # @return [Hash, nil]
+  def assessment_nav_link
+    return unless @user
+
+    person = resolve_person
+    return unless person
+
+    assignments = PersonFrameworkAssignment.for_person(person.id).with_open_cycle
+    case assignments.size
+    when 0
+      nil
+    when 1
+      { label: "Assessment", href: "/assessments/#{assignments.first.framework_id}" }
+    else
+      { label: "Assessments", href: "/assessments" }
+    end
+  end
+
+  # Resolves the Person for the current user in the current tenant.
+  #
+  # @return [Person, nil]
+  def resolve_person
+    return unless @current_tenant
+
+    tenant_user = ActsAsTenant.without_tenant do
+      @user.tenant_users.find_by(tenant: @current_tenant)
+    end
+    tenant_user&.person
   end
 end
