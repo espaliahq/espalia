@@ -27,7 +27,13 @@ class Assessments::RatingsController < ApplicationController
       level_ordinal: level_ordinal
     )
 
-    if existing&.self_rated_frequency.present?
+    if existing&.self_rated_frequency == frequency
+      # Untoggle: clicking the already-selected frequency clears the rating
+      handler.clear_self_rating(
+        @person.id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal
+      )
+    elsif existing&.self_rated_frequency.present?
       handler.revise_self_rating(
         @person.id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, frequency: frequency,

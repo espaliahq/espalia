@@ -37,7 +37,7 @@
 class PersonDevelopment::Scoring
   FREQUENCY = { "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
   DEFAULT_MASTERY_THRESHOLD = 1.25
-  DEFAULT_PROMOTION_SCORE_THRESHOLD = 1.0
+  DEFAULT_PROMOTION_SCORE_THRESHOLD = 0.9
 
   # @param level_ratings [Array<#capability_stable_id, #level_ordinal,
   #   #aligned_frequency, #manager_rated_frequency, #self_rated_frequency>]
@@ -137,15 +137,25 @@ class PersonDevelopment::Scoring
     end
   end
 
-  # Raw (uncapped) total contribution for a single binding (summed across levels).
+  # Raw (uncapped) total contribution for a single binding at the person's current level.
   #
   # @param binding [#capability_id, #weight, #individual_tolerance, #capability]
   # @return [Float]
   def raw_contribution(binding)
+    raw_contribution_at_level(binding, @person_level)
+  end
+
+  # Raw (uncapped) total contribution for a single binding evaluated against
+  # a given reference level. Used by promotion to evaluate against next level.
+  #
+  # @param binding [#capability_id, #weight, #individual_tolerance, #capability]
+  # @param reference_level [Integer] the level ordinal to use for expectations
+  # @return [Float]
+  def raw_contribution_at_level(binding, reference_level)
     stable_id = binding.capability.stable_id
     @all_level_ordinals.sum do |ordinal|
       freq = effective_frequency(stable_id, ordinal)
-      expected = ordinal <= @person_level ? 1.0 : 0.0
+      expected = ordinal <= reference_level ? 1.0 : 0.0
       (freq - expected) * binding.weight.to_f
     end
   end
@@ -192,10 +202,14 @@ class PersonDevelopment::Scoring
       gaps << stable_id if freq < FREQUENCY["consistent"]
     end
 
+    # Recompute contributions as if person_level were next_level.
+    # At next_level, the expectation is "consistent" for all ordinals ≤ next_level,
+    # so contributions are relative to the next-level baseline, not current.
+    next_raw_score = @bindings.sum { |binding| raw_contribution_at_level(binding, next_level) }
     next_baseline = @bindings.sum do |binding|
       @all_level_ordinals.count { |o| o <= next_level } * binding.weight.to_f
     end
-    score_ratio = next_baseline.positive? ? (raw_score + next_baseline) / next_baseline : 0.0
+    score_ratio = next_baseline.positive? ? (next_raw_score + next_baseline) / next_baseline : 0.0
     meets_score = score_ratio >= @promotion_score_threshold
 
     {

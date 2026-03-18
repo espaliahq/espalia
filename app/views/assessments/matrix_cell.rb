@@ -65,25 +65,40 @@ class Views::Assessments::MatrixCell < Views::Base
 
   # Computes background color class based on rating vs level expectations.
   #
+  # At/below person_level:
+  #   Unrated → muted green (assumed consistent by default)
+  #   Consistent → solid green (explicitly rated)
+  #   Occasional → amber (partial gap)
+  #   Some → red (significant gap)
+  #
+  # Above person_level:
+  #   Unrated → neutral gray (not expected)
+  #   Consistent → green (exceeding)
+  #   Occasional/Some → blue (stretch attempt)
+  #
   # @return [String] Tailwind CSS classes
   def cell_background
     freq = @cell_data[:current_frequency]
     at_or_below = @ordinal <= @person_level
 
     if freq.nil?
-      # Unrated
-      at_or_below ? "bg-gray-50 dark:bg-gray-800/30" : "bg-gray-50/50 dark:bg-gray-800/20"
+      if at_or_below
+        # Unrated at/below level — default assumes consistent, show muted green
+        # Distinct from explicit green (which uses green-100/green-900)
+        "bg-green-100/50 dark:bg-green-800/25"
+      else
+        # Unrated above level — not expected, neutral
+        "bg-gray-50/50 dark:bg-gray-800/20"
+      end
     elsif at_or_below
-      # At or below person level — consistent is expected
       case freq
-      when "consistent" then "bg-green-50 dark:bg-green-900/15"
-      when "occasional" then "bg-amber-50 dark:bg-amber-900/15"
-      when "some"       then "bg-red-50 dark:bg-red-900/15"
+      when "consistent" then "bg-green-100 dark:bg-green-900/30"
+      when "occasional" then "bg-amber-100 dark:bg-amber-900/30"
+      when "some"       then "bg-red-100 dark:bg-red-900/30"
       else ""
       end
     else
-      # Above person level — any rating is stretch
-      freq == "consistent" ? "bg-green-50 dark:bg-green-900/15" : "bg-blue-50 dark:bg-blue-900/10"
+      freq == "consistent" ? "bg-green-100 dark:bg-green-900/30" : "bg-blue-100 dark:bg-blue-900/20"
     end
   end
 end
