@@ -94,12 +94,13 @@ class Assessments::RatingsController < ApplicationController
 
     render turbo_stream: [
       turbo_stream.replace(
-        "rating-#{capability_stable_id}-#{level_ordinal}",
+        "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
-          Views::Assessments::FrequencySelector.new(
+          Views::Assessments::MatrixCell.new(
+            cell_data: cell_data,
             capability_stable_id: capability_stable_id,
-            level_ordinal: level_ordinal,
-            current_frequency: cell_data&.dig(:current_frequency),
+            ordinal: level_ordinal,
+            person_level: matrix_data[:person_level],
             framework_id: @assignment.framework_id
           ),
           layout: false

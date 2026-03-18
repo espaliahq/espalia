@@ -40,8 +40,11 @@ class Views::Assessments::MatrixCell < Views::Base
   end
 
   def filled_cell
-    td(class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top " \
-              "min-w-[180px] #{cell_background}") do
+    td(
+      id: "cell-#{@capability_stable_id}-#{@ordinal}",
+      class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top " \
+             "min-w-[180px] #{cell_background}"
+    ) do
       expectation_text
       div(id: "rating-#{@capability_stable_id}-#{@ordinal}", class: "mt-2") do
         render Views::Assessments::FrequencySelector.new(
