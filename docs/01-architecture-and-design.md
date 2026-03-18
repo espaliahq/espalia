@@ -674,6 +674,9 @@ Self-assessment:
   SelfRated { capability_stable_id, level_ordinal, frequency, comment }
     frequency: "some" (0.25×) | "occasional" (0.5×) | "consistent" (1.0×)
   SelfRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale }
+  SelfRatingCleared { capability_stable_id, level_ordinal }
+    → Removes a self-rating (untoggle). Projection nils the frequency on the read model.
+      Scoring falls back to the default for that cell.
 
 Manager assessment:
   ManagerRated { capability_stable_id, level_ordinal, frequency, comment }
@@ -777,6 +780,8 @@ Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read m
 
 ```
 FREQUENCY = { "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
+DEFAULT_MASTERY_THRESHOLD = 1.25
+DEFAULT_PROMOTION_SCORE_THRESHOLD = 0.9
 
 effective_frequency(capability_stable_id, level_ordinal):
   aligned_frequency  → manager_rated_frequency  → self_rated_frequency
@@ -793,7 +798,12 @@ baseline_score = Σ (count_levels_at_or_below_person_level × weight) per bindin
 performance_ratio = (raw_score + baseline_score) / baseline_score
   → 1.0 = exactly at expectations; > 1.0 = exceeding; < 1.0 = below
 
-mastering? = performance_ratio >= mastery_threshold  (nil threshold → nil)
+Three-tier performance signal:
+  meeting_expectations? = performance_ratio >= 1.0
+    → At or above baseline. Below 1.0 signals a performance concern.
+  mastering? = performance_ratio >= mastery_threshold
+    → Defaults to 1.25 (25% above expectations). Always returns boolean.
+    → Frameworks can override via mastery_threshold on framework_states.
 
 agreed_level = max(level_ordinal where effective_frequency == "consistent")  ← derived, never stored
 
@@ -805,10 +815,17 @@ Category pass/fail (uses capped contributions):
 Overall score uses raw (uncapped) contributions — individual_tolerance does not hide
 deficits from the total signal.
 
-Promotion readiness (structural + score):
-  1. All bindings with individual_tolerance == 0 at person_level + 1 must have
-     effective_frequency == "consistent"
-  2. (raw_score + next_level_baseline) / next_level_baseline >= promotion_score_threshold
+Promotion readiness (structural + score, evaluated at NEXT level):
+  Contributions are recomputed as if person_level were next_level.
+  This means the next level's ordinal is expected (1.0), not bonus (0.0).
+  You must demonstrate capability at the next level to be promotion-ready.
+
+  1. Structural: all bindings with individual_tolerance == 0 at person_level + 1
+     must have effective_frequency == "consistent"
+  2. Score: (next_level_raw_score + next_level_baseline) / next_level_baseline
+     >= promotion_score_threshold (defaults to 0.9 — 90% of next-level expectations)
+
+  Frameworks can override via promotion_score_threshold on framework_states.
 ```
 
 **UI implications for the capability matrix:**
@@ -817,12 +834,31 @@ Promotion readiness (structural + score):
 |--------|------|---------|
 | Weight badge | `binding.weight != 1.0` | `"2×"` badge on capability row |
 | Shared vs per-role weight | All selected roles have same weight | Unified badge; otherwise per-role coloured dots |
-| Mandatory indicator | `individual_tolerance == 0` | Filled/solid weight badge + 3px amber left border on row |
+| Mandatory indicator | `individual_tolerance == 0` | Filled/solid amber weight badge + 3px amber left border on row |
 | Category tolerance | `category_tolerance == 0` | Lock icon on category section header |
 | Category tolerance | `category_tolerance > 0` | `"± N pts"` label on section header |
 | Category tolerance | `nil` | No indicator (uncapped) |
-| Frequency selector | Self/manager/align input | Three options: `some` · `occasional` · `consistent` (not a level picker) |
+| Frequency selector | Self/manager/align input | Three toggle buttons: `some` · `occasional` · `consistent`. Clicking the selected button clears the rating (untoggle). |
 | Agreed level | Derived | Show as `"Agreed: L3"` computed from aligned assessments; no direct input |
+
+**Assessment cell heatmap (background color fills):**
+
+Cells get background tints based on their rating relative to expectations at that level. Explicit ratings are more saturated than defaults.
+
+| Cell state | At/below person level | Above person level |
+|------------|----------------------|-------------------|
+| Unrated (default consistent) | Muted green tint | Neutral gray |
+| Rated "consistent" | Solid green | Solid green (exceeding) |
+| Rated "occasional" | Amber | Blue (stretch attempt) |
+| Rated "some" | Red | Blue (stretch attempt) |
+
+**Scoring panel — three-tier performance signal:**
+
+| Tier | Condition | Display |
+|------|-----------|---------|
+| Below expectations | `performance_ratio < 1.0` | Red warning — performance management signal |
+| Meeting expectations | `performance_ratio >= 1.0` | Green — at or above current level baseline |
+| Mastering | `performance_ratio >= 1.25` (default) | Purple — significantly exceeding expectations |
 
 ---
 
