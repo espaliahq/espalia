@@ -33,11 +33,43 @@ class PersonDevelopment::Projections::CurrentAssessment
 
   def handle(event)
     case event
+    when PersonDevelopment::Events::PersonAssignedToFramework then handle_assigned(event)
+    when PersonDevelopment::Events::AssessmentCycleOpened then handle_cycle_opened(event)
+    when PersonDevelopment::Events::AssessmentCycleCompleted then handle_cycle_completed(event)
     when PersonDevelopment::Events::SelfRated then handle_self_rated(event)
     when PersonDevelopment::Events::SelfRatingRevised then handle_self_rating_revised(event)
     when PersonDevelopment::Events::ManagerRated then handle_manager_rated(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
     end
+  end
+
+  def handle_assigned(event)
+    PersonFrameworkAssignment.find_or_initialize_by(
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id]
+    ).tap do |assignment|
+      assignment.role_id = event.data[:role_id]
+      assignment.level_id = event.data[:level_id]
+      assignment.save!
+    end
+  end
+
+  def handle_cycle_opened(event)
+    assignment = find_assignment(event)
+    return unless assignment
+
+    assignment.update!(
+      current_cycle_id: event.data[:cycle_id],
+      cycle_status: "open",
+      cycle_name: event.data[:cycle_name]
+    )
+  end
+
+  def handle_cycle_completed(event)
+    assignment = find_assignment(event)
+    return unless assignment
+
+    assignment.update!(cycle_status: "completed")
   end
 
   def handle_self_rated(event)
@@ -83,6 +115,17 @@ class PersonDevelopment::Projections::CurrentAssessment
       framework_id: event.metadata[:framework_id],
       capability_stable_id: event.data[:capability_stable_id],
       level_ordinal: event.data[:level_ordinal]
+    )
+  end
+
+  # Finds the PersonFrameworkAssignment for the event's person and framework.
+  #
+  # @param event [RubyEventStore::Event]
+  # @return [PersonFrameworkAssignment, nil]
+  def find_assignment(event)
+    PersonFrameworkAssignment.find_by(
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id]
     )
   end
 

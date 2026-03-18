@@ -10,6 +10,75 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     @framework_id = SecureRandom.uuid_v7
   end
 
+  context "PersonAssignedToFramework" do
+    should "create a PersonFrameworkAssignment row" do
+      role_id = SecureRandom.uuid_v7
+      level_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: role_id, level_id: level_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assignment = PersonFrameworkAssignment.find_by(
+          person_id: @person_id, framework_id: @framework_id
+        )
+        assert_not_nil assignment
+        assert_equal role_id, assignment.role_id
+        assert_equal level_id, assignment.level_id
+        assert_equal "none", assignment.cycle_status
+      end
+    end
+  end
+
+  context "AssessmentCycleOpened" do
+    should "update assignment cycle_status to open" do
+      role_id = SecureRandom.uuid_v7
+      level_id = SecureRandom.uuid_v7
+      cycle_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: role_id, level_id: level_id)
+      emit(PersonDevelopment::Events::AssessmentCycleOpened,
+        cycle_id: cycle_id, cycle_name: "Q1 2026", cycle_type: "regular",
+        framework_version: 1)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assignment = PersonFrameworkAssignment.find_by(
+          person_id: @person_id, framework_id: @framework_id
+        )
+        assert_equal "open", assignment.cycle_status
+        assert_equal cycle_id, assignment.current_cycle_id
+        assert_equal "Q1 2026", assignment.cycle_name
+      end
+    end
+  end
+
+  context "AssessmentCycleCompleted" do
+    should "update assignment cycle_status to completed" do
+      role_id = SecureRandom.uuid_v7
+      level_id = SecureRandom.uuid_v7
+      cycle_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: role_id, level_id: level_id)
+      emit(PersonDevelopment::Events::AssessmentCycleOpened,
+        cycle_id: cycle_id, cycle_name: "Q1 2026", cycle_type: "regular",
+        framework_version: 1)
+      emit(PersonDevelopment::Events::AssessmentCycleCompleted,
+        cycle_id: cycle_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assignment = PersonFrameworkAssignment.find_by(
+          person_id: @person_id, framework_id: @framework_id
+        )
+        assert_equal "completed", assignment.cycle_status
+      end
+    end
+  end
+
   context "SelfRated" do
     should "create an AssessmentLevelRating row" do
       cap_sid = SecureRandom.uuid_v7

@@ -36,6 +36,8 @@
 #
 class PersonDevelopment::Scoring
   FREQUENCY = { "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
+  DEFAULT_MASTERY_THRESHOLD = 1.25
+  DEFAULT_PROMOTION_SCORE_THRESHOLD = 1.0
 
   # @param level_ratings [Array<#capability_stable_id, #level_ordinal,
   #   #aligned_frequency, #manager_rated_frequency, #self_rated_frequency>]
@@ -55,8 +57,8 @@ class PersonDevelopment::Scoring
     @categories = categories.index_by(&:category_id)
     @person_level = person_level
     @all_level_ordinals = all_level_ordinals.sort
-    @mastery_threshold = thresholds[:mastery_threshold]
-    @promotion_score_threshold = thresholds[:promotion_score_threshold]
+    @mastery_threshold = thresholds[:mastery_threshold] || DEFAULT_MASTERY_THRESHOLD
+    @promotion_score_threshold = thresholds[:promotion_score_threshold] || DEFAULT_PROMOTION_SCORE_THRESHOLD
   end
 
   # Category pass/fail results using capped (individual_tolerance-limited) contributions.
@@ -79,13 +81,19 @@ class PersonDevelopment::Scoring
     @performance_ratio ||= baseline_score.positive? ? (raw_score + baseline_score) / baseline_score : 0.0
   end
 
-  # Whether the person is mastering their current level.
-  # Returns nil if no mastery_threshold is configured.
+  # Whether the person is meeting expectations at their current level.
+  # True when performance_ratio >= 1.0 (at or above baseline).
   #
-  # @return [Boolean, nil]
-  def mastering?
-    return nil if @mastery_threshold.nil?
+  # @return [Boolean]
+  def meeting_expectations?
+    performance_ratio >= 1.0
+  end
 
+  # Whether the person is mastering their current level (significantly exceeding).
+  # Defaults to 1.25 threshold when not explicitly configured.
+  #
+  # @return [Boolean]
+  def mastering?
     performance_ratio >= @mastery_threshold
   end
 
@@ -188,7 +196,7 @@ class PersonDevelopment::Scoring
       @all_level_ordinals.count { |o| o <= next_level } * binding.weight.to_f
     end
     score_ratio = next_baseline.positive? ? (raw_score + next_baseline) / next_baseline : 0.0
-    meets_score = @promotion_score_threshold.nil? || score_ratio >= @promotion_score_threshold
+    meets_score = score_ratio >= @promotion_score_threshold
 
     {
       eligible: gaps.empty? && meets_score,

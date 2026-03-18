@@ -62,3 +62,6 @@ end
 
 # Seed framework data
 Rake::Task["frameworks:seed_meandu"].invoke
+
+# Seed assessment data (person assignment + open cycle)
+Rake::Task["assessments:seed"].invoke

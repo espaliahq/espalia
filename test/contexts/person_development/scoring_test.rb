@@ -202,13 +202,29 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   # ── Mastery ──
 
-  context "#mastering?" do
-    should "return nil when no mastery_threshold configured" do
+  context "#meeting_expectations?" do
+    should "return true when performance_ratio >= 1.0" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ])
-      assert_nil scorer.mastering?
+      assert scorer.meeting_expectations?  # unrated → default 1.0 → ratio 1.0
     end
 
-    should "return true when performance_ratio meets threshold" do
+    should "return false when performance_ratio < 1.0" do
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+        aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
+      # ratio = 0.5 < 1.0
+      assert_not scorer.meeting_expectations?
+    end
+  end
+
+  context "#mastering?" do
+    should "default to 1.25 threshold when no mastery_threshold configured" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ])
+      # unrated → default 1.0 → ratio 1.0; 1.0 < 1.25 → not mastering
+      assert_not scorer.mastering?
+    end
+
+    should "return true when performance_ratio meets explicit threshold" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ],
         thresholds: { mastery_threshold: 0.8 })
       assert scorer.mastering?  # unrated → default 1.0 → ratio 1.0 >= 0.8
@@ -221,6 +237,16 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         thresholds: { mastery_threshold: 0.8 })
       # ratio = 0.25 < 0.8
       assert_not scorer.mastering?
+    end
+
+    should "return true when exceeding default 1.25 threshold" do
+      # Rate above person level to exceed expectations
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
+        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ r ])
+      # L1-3 default 1.0 (contribution 0), L4 1.0 vs expected 0.0 → +1.0
+      # baseline = 3 * 1.0 = 3.0; ratio = 4.0 / 3.0 = 1.33 >= 1.25
+      assert scorer.mastering?
     end
   end
 

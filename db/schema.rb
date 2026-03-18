@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_17_223836) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -251,6 +251,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
     t.index ["tenant_id"], name: "index_people_on_tenant_id"
   end
 
+  create_table "person_framework_assignments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "current_cycle_id"
+    t.string "cycle_name"
+    t.string "cycle_status", default: "none", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "level_id", null: false
+    t.uuid "person_id", null: false
+    t.uuid "role_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id", "framework_id"], name: "idx_on_person_id_framework_id_860f7ad292"
+    t.index ["tenant_id", "person_id", "framework_id"], name: "idx_person_framework_assignments_unique", unique: true
+    t.index ["tenant_id"], name: "index_person_framework_assignments_on_tenant_id"
+  end
+
   create_table "tenant_users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "person_id"
@@ -301,6 +317,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
   add_foreign_key "framework_suggested_edits", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
+  add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"
