@@ -18,7 +18,7 @@ An open-source, multi-tenant platform that operationalises career growth framewo
 | 4 | Evidence/feedback collection from self, managers, and peers — re-linkable between capabilities |
 | 5 | Framework evolution over time without losing existing data |
 | 6 | Differential capability weighting per role |
-| 7 | Tolerance-based capability requirements — mandatory (zero-tolerance) through fully-flexible (nil) |
+| 7 | Deficit threshold requirements — zero-tolerance (deficit_threshold=0) through fully-flexible (nil inherits framework default) |
 | 8 | Growth plans with focus areas, regular check-ins, and freshness reporting |
 | 9 | Aggregate gap reporting across roles |
 
@@ -461,16 +461,21 @@ end
 # framework_states: id, tenant_id, framework_id, name, current_published_version,
 #                   draft_in_progress, draft_version,
 #                   mastery_threshold (decimal, nil = no gate),
-#                   promotion_score_threshold (decimal, nil = no gate)
+#                   meeting_expectation_threshold (decimal, nil = default 0.9),
+#                   overperformance_cap (integer, default 1),
+#                   deficit_threshold (decimal, default 1.0)
 # framework_role_families: id, tenant_id, framework_id, name, description
 # framework_roles: id, tenant_id, role_family_id, name, code, track
 # framework_levels: id, tenant_id, role_id, ordinal, title, code, is_entry
 # framework_capability_categories: id, tenant_id, framework_id, name, description,
-#                                   category_tolerance (decimal, nil = uncapped, 0 = must balance)
+#                                   category_tolerance (decimal, nil = uncapped, 0 = must balance),
+#                                   overperformance_cap (integer, nil = inherit framework),
+#                                   deficit_threshold (decimal, nil = inherit framework)
 # framework_capabilities: id, tenant_id, category_id, stable_id, name, description, status
 # framework_capability_role_bindings: id, tenant_id, capability_id, role_id, weight,
-#                                     individual_tolerance (decimal, nil = category-governed,
-#                                                          0 = mandatory, N = deficit cap)
+#                                     deficit_threshold (decimal, nil = inherit category/framework,
+#                                                       0 = no deficit allowed, N = max acceptable deficit),
+#                                     overperformance_cap (integer, nil = inherit category/framework)
 # framework_behavioural_expectations: id, tenant_id, stable_id, capability_id, level_ordinal, description
 # framework_role_illustrations: id, tenant_id, stable_id, expectation_id, role_id, ordinal, description
 # framework_collaborators: id, tenant_id, framework_id, person_id, role, scope_role_id
@@ -521,6 +526,9 @@ Structure — bindings and scoring:
   CapabilityRoleBindingRemoved { id }
   CategoryToleranceSet { framework_id, category_id, category_tolerance }
   ScoringThresholdsConfigured { framework_id, mastery_threshold?, promotion_score_threshold? }
+  NOTE: Events retain legacy field names (individual_tolerance, promotion_score_threshold).
+  The projection maps these to the current read model columns (deficit_threshold,
+  meeting_expectation_threshold).
 
 Content — expectations (canonical rated text):
   BehaviouralExpectationSet { id, stable_id, capability_id, level_id, description }
@@ -798,34 +806,50 @@ baseline_score = Σ (count_levels_at_or_below_person_level × weight) per bindin
 performance_ratio = (raw_score + baseline_score) / baseline_score
   → 1.0 = exactly at expectations; > 1.0 = exceeding; < 1.0 = below
 
-Three-tier performance signal:
-  meeting_expectations? = performance_ratio >= 1.0
-    → At or above baseline. Below 1.0 signals a performance concern.
-  mastering? = performance_ratio >= mastery_threshold
+Over-performance cap (per capability):
+  Resolved: binding.overperformance_cap || category.overperformance_cap || framework.overperformance_cap (default 1)
+  Ordinals beyond reference_level + cap contribute 0 to the score.
+
+Deficit threshold (per capability):
+  Resolved: binding.deficit_threshold || category.deficit_threshold || framework.deficit_threshold (default 1.0)
+  deficit = max(0, 1.0 - effective_freq_at_reference_level) * weight
+  Two roles:
+    1. Category pool cap: capped_contribution = max(raw_contribution, -deficit_threshold)
+    2. Verdict gate: deficit > deficit_threshold → capability is :blocked
+
+Per-capability status at reference level:
+  :blocked    — deficit > effective_deficit_threshold (blocks meeting/mastery/promotion)
+  :above_cap  — consistent at ordinals beyond reference_level + overperformance_cap
+  :at_bar     — effective_freq at reference_level >= 1.0 (consistent)
+  :developing — below bar, not blocked
+
+Three symmetric verdicts (same structure, different reference level and threshold):
+  meeting_expectations? = performance_ratio >= meeting_expectation_threshold AND no :blocked capabilities
+    → meeting_expectation_threshold defaults to 0.9 (90% of expectations).
+    → Frameworks can override via meeting_expectation_threshold on framework_states.
+  mastering? = performance_ratio >= mastery_threshold AND no :blocked capabilities
     → Defaults to 1.25 (25% above expectations). Always returns boolean.
     → Frameworks can override via mastery_threshold on framework_states.
 
 agreed_level = max(level_ordinal where effective_frequency == "consistent")  ← derived, never stored
 
 Category pass/fail (uses capped contributions):
-  capped = individual_tolerance ? max(raw_contribution, -individual_tolerance) : raw_contribution
+  capped = max(raw_contribution, -deficit_threshold)
   category_pool += capped  per binding in category
   pass if category_pool >= -(category_tolerance || ∞)
 
-Overall score uses raw (uncapped) contributions — individual_tolerance does not hide
+Overall score uses raw (uncapped) contributions — deficit_threshold does not hide
 deficits from the total signal.
 
-Promotion readiness (structural + score, evaluated at NEXT level):
+Promotion readiness (evaluated at NEXT level, same logic as meeting expectations):
   Contributions are recomputed as if person_level were next_level.
   This means the next level's ordinal is expected (1.0), not bonus (0.0).
   You must demonstrate capability at the next level to be promotion-ready.
 
-  1. Structural: all bindings with individual_tolerance == 0 at person_level + 1
-     must have effective_frequency == "consistent"
-  2. Score: (next_level_raw_score + next_level_baseline) / next_level_baseline
-     >= promotion_score_threshold (defaults to 0.9 — 90% of next-level expectations)
+  1. Score: performance_ratio_at_level(next_level) >= meeting_expectation_threshold
+  2. No :blocked capabilities at next level (deficit > deficit_threshold blocks)
 
-  Frameworks can override via promotion_score_threshold on framework_states.
+  Frameworks can override via meeting_expectation_threshold on framework_states.
 ```
 
 **UI implications for the capability matrix:**
@@ -856,9 +880,9 @@ Cells get background tints based on their rating relative to expectations at tha
 
 | Tier | Condition | Display |
 |------|-----------|---------|
-| Below expectations | `performance_ratio < 1.0` | Red warning — performance management signal |
-| Meeting expectations | `performance_ratio >= 1.0` | Green — at or above current level baseline |
-| Mastering | `performance_ratio >= 1.25` (default) | Purple — significantly exceeding expectations |
+| Below expectations | `performance_ratio < meeting_expectation_threshold` (default 0.9) OR any :blocked capabilities | Red warning — performance concern |
+| Meeting expectations | `performance_ratio >= meeting_expectation_threshold` AND no :blocked capabilities | Green — at or above current level baseline |
+| Mastering | `performance_ratio >= mastery_threshold` (default 1.25) AND no :blocked capabilities | Purple — significantly exceeding expectations |
 
 ---
 
@@ -893,8 +917,8 @@ Time-series of aligned ratings per capability using `capability_stable_id` acros
 Per role: count below/at/above expected level per capability. Weighted by binding weights.
 
 ### 4.4 Promotion Readiness
-Structural check: all capabilities with `individual_tolerance: 0` (mandatory) at `person_level + 1`
-must have `effective_frequency == "consistent"`. Score check: `raw_score / next_level_baseline >= promotion_score_threshold`.
+Meeting expectations at the next level: `performance_ratio_at_level(person_level + 1) >= meeting_expectation_threshold`
+AND no capabilities with `deficit > deficit_threshold` (blocked) at `person_level + 1`.
 
 ### 4.5 Growth Plan Freshness Dashboard
 Per manager: reports with last check-in, plan status. >30 days amber, >60 red.
@@ -1025,6 +1049,6 @@ end
 | 4 | Evidence from self/manager/peers, re-linkable | `EvidenceRecorded` / `EvidenceRelinked` events. Semi-freeform types + `ExternalReference`. |
 | 5 | Framework evolution | Event-sourced Framework with versioning. `stable_id` continuity. `requires_reassessment` flag. Nothing silently dropped. |
 | 6 | Weighted capabilities | `CapabilityRoleBinding.weight` — per-role weighting. Contributes to scoring as `(effective_frequency − expected) × weight`. |
-| 7 | Tolerance-based requirements | `CapabilityRoleBinding.individual_tolerance` (nil = category-governed, 0 = mandatory, N = deficit cap). `CapabilityCategory.category_tolerance` (nil = uncapped, 0 = must balance, N = absorbs N pts). Mastery/promotion thresholds on `FrameworkState::Framework`. |
+| 7 | Deficit threshold requirements | `deficit_threshold` (resolved per capability: binding → category → framework, default 1.0). 0 = no deficit allowed, N = max acceptable deficit. `CapabilityCategory.category_tolerance` (nil = uncapped, 0 = must balance, N = absorbs N pts). `overperformance_cap` (resolved same hierarchy, default 1). `meeting_expectation_threshold` and `mastery_threshold` on `FrameworkState::Framework`. |
 | 8 | Growth plans + check-ins + freshness | Growth events in Person Development stream. `GrowthPlanState` projection. Freshness = `last_check_in_at` delta. |
 | 9 | Aggregate gap reporting | `Reporting::GapAnalysis` async projection. Aggregates `effective_frequency` vs expected across people per role, using `PersonDevelopment::Scoring`. |

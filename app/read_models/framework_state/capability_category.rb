@@ -29,4 +29,6 @@ class FrameworkState::CapabilityCategory < ApplicationRecord
   validates :category_id, presence: true
   validates :name, presence: true
   validates :category_tolerance, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :deficit_threshold, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :overperformance_cap, numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
 end

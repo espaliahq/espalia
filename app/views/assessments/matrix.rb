@@ -15,7 +15,9 @@ class Views::Assessments::Matrix < Views::Base
     table(class: "w-full border-collapse") do
       render Views::Assessments::MatrixHeader.new(
         merged_levels: @matrix_data[:merged_levels],
-        person_level: @matrix_data[:person_level]
+        person_level: @matrix_data[:person_level],
+        meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
+        mastery_threshold: @matrix_data[:mastery_threshold]
       )
       tbody do
         @matrix_data[:categories].each do |cat_data|

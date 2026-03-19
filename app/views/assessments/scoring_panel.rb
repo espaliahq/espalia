@@ -138,10 +138,10 @@ class Views::Assessments::ScoringPanel < Views::Base
                    "border border-gray-200 dark:border-gray-700") do
           span(class: "text-sm text-gray-600 dark:text-gray-400") { "Not yet eligible" }
 
-          gaps = readiness[:mandatory_next_level_gaps] || []
-          if gaps.any?
+          blocked = readiness[:blocked_at_next_level] || []
+          if blocked.any?
             p(class: "mt-1 text-xs text-gray-500 dark:text-gray-500") do
-              "#{gaps.size} mandatory #{'capability'.pluralize(gaps.size)} below consistent at L#{@person_level + 1}"
+              "#{blocked.size} blocked #{'capability'.pluralize(blocked.size)} at L#{@person_level + 1}"
             end
           end
 

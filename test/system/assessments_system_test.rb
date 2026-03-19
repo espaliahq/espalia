@@ -128,7 +128,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "show mandatory indicator for zero-tolerance capabilities" do
       visit assessment_path(@framework_id)
 
-      # Critical Thinking has individual_tolerance=0 and weight=2.0
+      # Critical Thinking has deficit_threshold=0 (via individual_tolerance mapping) and weight=2.0
       # Should show amber left border on the row (border-l-amber-400)
       assert_selector "tr.border-l-3"
     end

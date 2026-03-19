@@ -15,14 +15,11 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   CapStub = Struct.new(:stable_id, :category_id, keyword_init: true)
 
-  BindingStub = Struct.new(:capability_id, :weight, :individual_tolerance, :capability,
-    keyword_init: true) do
-    def mandatory?
-      individual_tolerance&.zero?
-    end
-  end
+  BindingStub = Struct.new(:capability_id, :weight, :deficit_threshold, :overperformance_cap,
+    :capability, keyword_init: true)
 
-  CategoryStub = Struct.new(:category_id, :category_tolerance, keyword_init: true)
+  CategoryStub = Struct.new(:category_id, :category_tolerance, :deficit_threshold,
+    :overperformance_cap, keyword_init: true)
 
   CAP_A = "cap-a"
   CAP_B = "cap-b"
@@ -35,15 +32,16 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   # @param all_levels [Array<Integer>]
   # @param ratings [Array<Rating>]
   # @param weight [Numeric]
-  # @param individual_tolerance [Numeric, nil]
+  # @param deficit_threshold [Numeric, nil]
   # @param category_tolerance [Numeric, nil]
   # @param thresholds [Hash]
   def build_scorer(person_level:, all_levels:, ratings: [], weight: 1.0,
-                   individual_tolerance: nil, category_tolerance: nil, thresholds: {})
+                   deficit_threshold: nil, category_tolerance: nil, thresholds: {})
     cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
     binding = BindingStub.new(capability_id: "bid", weight: weight,
-      individual_tolerance: individual_tolerance, capability: cap)
-    category = CategoryStub.new(category_id: CAT_1, category_tolerance: category_tolerance)
+      deficit_threshold: deficit_threshold, overperformance_cap: nil, capability: cap)
+    category = CategoryStub.new(category_id: CAT_1, category_tolerance: category_tolerance,
+      deficit_threshold: nil, overperformance_cap: nil)
 
     PersonDevelopment::Scoring.new(
       level_ratings: ratings,
@@ -125,8 +123,9 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     should "weight contributions by binding weight" do
       cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       binding = BindingStub.new(capability_id: "bid", weight: 2.0,
-        individual_tolerance: nil, capability: cap)
-      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil)
+        deficit_threshold: nil, overperformance_cap: nil, capability: cap)
+      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil,
+        deficit_threshold: nil, overperformance_cap: nil)
 
       r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 1,
         aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
@@ -176,13 +175,14 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert result[:pass]
     end
 
-    should "cap individual deficit at individual_tolerance before pooling" do
-      # Two capabilities: cap_a has individual_tolerance: 0.3, so its -0.75 deficit
+    should "cap individual deficit at deficit_threshold before pooling" do
+      # cap_a has deficit_threshold: 0.3, so its -0.75 raw contribution
       # is capped at -0.3. With category_tolerance: 0.5, pool = -0.3 → passes.
       cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       binding_a = BindingStub.new(capability_id: "bid-a", weight: 1.0,
-        individual_tolerance: 0.3, capability: cap_a)
-      category = CategoryStub.new(category_id: CAT_1, category_tolerance: 0.5)
+        deficit_threshold: 0.3, overperformance_cap: nil, capability: cap_a)
+      category = CategoryStub.new(category_id: CAT_1, category_tolerance: 0.5,
+        deficit_threshold: nil, overperformance_cap: nil)
 
       r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
         aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
@@ -276,11 +276,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   # ── Promotion readiness ──
 
   context "#promotion_readiness" do
-    should "be eligible when all mandatory next-level caps are consistent and score meets threshold" do
+    should "be eligible when deficit_threshold=0 cap is consistent at next level and score meets threshold" do
       cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        individual_tolerance: 0, capability: cap)  # mandatory
-      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil)
+        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)  # mandatory (no deficit)
+      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil,
+        deficit_threshold: nil, overperformance_cap: nil)
 
       r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
         aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
@@ -291,19 +292,20 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         categories: [ category ],
         person_level: 3,
         all_level_ordinals: [ 1, 2, 3, 4 ],
-        thresholds: { promotion_score_threshold: 0.7 }
+        thresholds: { meeting_expectation_threshold: 0.7 }
       )
       result = scorer.promotion_readiness
       assert result[:eligible]
       assert result[:meets_score_threshold]
-      assert_empty result[:mandatory_next_level_gaps]
+      assert_empty result[:blocked_at_next_level]
     end
 
-    should "not be eligible when mandatory cap at next level is not consistent" do
+    should "not be eligible when deficit_threshold=0 cap is not rated at next level" do
       cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        individual_tolerance: 0, capability: cap)  # mandatory
-      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil)
+        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)  # mandatory (no deficit)
+      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil,
+        deficit_threshold: nil, overperformance_cap: nil)
 
       scorer = PersonDevelopment::Scoring.new(
         level_ratings: [],
@@ -314,14 +316,18 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       )
       result = scorer.promotion_readiness
       assert_not result[:eligible]
-      assert_includes result[:mandatory_next_level_gaps], CAP_A
+      assert_includes result[:blocked_at_next_level], CAP_A
     end
 
-    should "skip non-mandatory caps in structural check" do
+    should "not block standard capabilities (deficit_threshold=nil) when unrated at next level" do
+      # With default threshold 1.0, unrated at next level gives deficit = 1.0.
+      # Using strict > comparison: 1.0 > 1.0 = false → not blocked.
+      # Score penalty still applies via performance_ratio_at_level.
       cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        individual_tolerance: nil, capability: cap)  # not mandatory
-      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil)
+        deficit_threshold: nil, overperformance_cap: nil, capability: cap)
+      category = CategoryStub.new(category_id: CAT_1, category_tolerance: nil,
+        deficit_threshold: nil, overperformance_cap: nil)
 
       scorer = PersonDevelopment::Scoring.new(
         level_ratings: [],
@@ -331,7 +337,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         all_level_ordinals: [ 1, 2, 3, 4 ]
       )
       result = scorer.promotion_readiness
-      assert_empty result[:mandatory_next_level_gaps]
+      assert_empty result[:blocked_at_next_level]
     end
   end
 end

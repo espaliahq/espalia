@@ -132,7 +132,19 @@ class Assessments::RatingsController < ApplicationController
           ),
           layout: false
         )
-      ) if category_id)
+      ) if category_id),
+      turbo_stream.replace(
+        "matrix-header",
+        render_to_string(
+          Views::Assessments::MatrixHeader.new(
+            merged_levels: matrix_data[:merged_levels],
+            person_level: matrix_data[:person_level],
+            meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
+            mastery_threshold: matrix_data[:mastery_threshold]
+          ),
+          layout: false
+        )
+      )
     ].compact
   end
 

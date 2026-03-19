@@ -15,42 +15,41 @@ class FrameworkState::CapabilityRoleBindingTest < ActiveSupport::TestCase
     should validate_presence_of(:role_id)
     should validate_presence_of(:weight)
 
-    should "accept nil individual_tolerance" do
-      subject.individual_tolerance = nil
+    should "accept nil deficit_threshold" do
+      subject.deficit_threshold = nil
       assert subject.valid?
     end
 
-    should "accept zero individual_tolerance (mandatory)" do
-      subject.individual_tolerance = 0
+    should "accept zero deficit_threshold (no deficit allowed)" do
+      subject.deficit_threshold = 0
       assert subject.valid?
     end
 
-    should "accept positive individual_tolerance" do
-      subject.individual_tolerance = 2.5
+    should "accept positive deficit_threshold" do
+      subject.deficit_threshold = 2.5
       assert subject.valid?
     end
 
-    should "reject negative individual_tolerance" do
-      subject.individual_tolerance = -1
+    should "reject negative deficit_threshold" do
+      subject.deficit_threshold = -1
       assert_not subject.valid?
-      assert_includes subject.errors[:individual_tolerance], "must be greater than or equal to 0"
-    end
-  end
-
-  context "#mandatory?" do
-    should "return true when individual_tolerance is zero" do
-      subject.individual_tolerance = 0
-      assert subject.mandatory?
+      assert_includes subject.errors[:deficit_threshold], "must be greater than or equal to 0"
     end
 
-    should "return false when individual_tolerance is nil" do
-      subject.individual_tolerance = nil
-      assert_not subject.mandatory?
+    should "accept nil overperformance_cap" do
+      subject.overperformance_cap = nil
+      assert subject.valid?
     end
 
-    should "return false when individual_tolerance is positive" do
-      subject.individual_tolerance = 1.5
-      assert_not subject.mandatory?
+    should "accept zero overperformance_cap" do
+      subject.overperformance_cap = 0
+      assert subject.valid?
+    end
+
+    should "reject negative overperformance_cap" do
+      subject.overperformance_cap = -1
+      assert_not subject.valid?
+      assert_includes subject.errors[:overperformance_cap], "must be greater than or equal to 0"
     end
   end
 end

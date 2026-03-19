@@ -350,13 +350,14 @@ class Frameworks::Projections::PublishedState
       capability_id: event.data[:capability_id],
       role_id: event.data[:role_id],
       weight: event.data[:weight],
-      individual_tolerance: event.data[:individual_tolerance]
+      deficit_threshold: event.data[:individual_tolerance]  # maps legacy field to unified threshold
     )
   end
 
   def handle_binding_updated(event)
     record = FrameworkState::CapabilityRoleBinding.find_by!(binding_id: event.data[:binding_id])
-    attrs = event.data.slice(:weight, :individual_tolerance)
+    attrs = event.data.slice(:weight)
+    attrs[:deficit_threshold] = event.data[:individual_tolerance] if event.data.key?(:individual_tolerance)
     record.update!(attrs) if attrs.any?
   end
 
@@ -367,7 +368,8 @@ class Frameworks::Projections::PublishedState
 
   def handle_scoring_thresholds_configured(event)
     framework = find_framework(event)
-    attrs = event.data.slice(:mastery_threshold, :promotion_score_threshold).compact
+    attrs = event.data.slice(:mastery_threshold).compact
+    attrs[:meeting_expectation_threshold] = event.data[:promotion_score_threshold] if event.data.key?(:promotion_score_threshold)
     framework&.update!(attrs) if attrs.any?
   end
 

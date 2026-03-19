@@ -40,6 +40,7 @@ class Assessments::MatrixDataBuilder
     ordinals = levels.map { |l| l[:ordinal] }
     categories = build_categories(ordinals)
     scoring_engine = build_scoring_engine(categories)
+    enrich_levels_with_performance_ratios(levels, scoring_engine)
     scoring = extract_scoring(scoring_engine)
 
     {
@@ -49,6 +50,10 @@ class Assessments::MatrixDataBuilder
       merged_levels: levels,
       categories: categories,
       scoring: scoring,
+      meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f ||
+        PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
+      mastery_threshold: @framework.mastery_threshold&.to_f ||
+        PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
       total_cells: count_total_cells(categories),
       rated_cells: count_rated_cells(categories)
     }
@@ -96,7 +101,6 @@ class Assessments::MatrixDataBuilder
         capability: capability,
         binding: binding,
         weight: binding.weight.to_f,
-        mandatory: binding.mandatory?,
         cells: cells
       }
     end
@@ -146,6 +150,21 @@ class Assessments::MatrixDataBuilder
       .index_by(&:capability_id)
   end
 
+  # Adds :performance_ratio to each level hash for ordinals up to person_level + 1.
+  # Mutates merged_levels in place. Levels beyond next level get nil.
+  #
+  # @param levels [Array<Hash>] from build_levels
+  # @param scoring [PersonDevelopment::Scoring]
+  def enrich_levels_with_performance_ratios(levels, scoring)
+    next_ordinal = @level.ordinal + 1
+    levels.each do |level|
+      level[:performance_ratio] =
+        if level[:ordinal] <= next_ordinal
+          scoring.performance_ratio_at_level(level[:ordinal])
+        end
+    end
+  end
+
   # Builds the PersonDevelopment::Scoring engine instance.
   #
   # @param categories_data [Array<Hash>] the built categories structure
@@ -163,7 +182,9 @@ class Assessments::MatrixDataBuilder
       all_level_ordinals: all_ordinals,
       thresholds: {
         mastery_threshold: @framework.mastery_threshold&.to_f,
-        promotion_score_threshold: @framework.promotion_score_threshold&.to_f
+        meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f,
+        overperformance_cap: @framework.overperformance_cap,
+        deficit_threshold: @framework.deficit_threshold&.to_f
       }
     )
   end
@@ -178,7 +199,8 @@ class Assessments::MatrixDataBuilder
       meeting_expectations: scoring.meeting_expectations?,
       mastering: scoring.mastering?,
       category_results: scoring.category_results,
-      promotion_readiness: scoring.promotion_readiness
+      promotion_readiness: scoring.promotion_readiness,
+      capability_statuses: scoring.capability_statuses
     }
   end
 

@@ -3,12 +3,12 @@
 # Displays capability weight and mandatory status indicators.
 #
 # - weight != 1.0 → shows "2×" (or formatted weight)
-# - mandatory (individual_tolerance == 0) → solid amber variant
+# - mandatory (deficit_threshold == 0) → solid amber variant
 # - weight == 1.0 and not mandatory → renders nothing
 #
 class Components::Kit::WeightBadge < Components::Base
   # @param weight [Float] the binding weight multiplier
-  # @param mandatory [Boolean] true when individual_tolerance == 0
+  # @param mandatory [Boolean] true when deficit_threshold == 0
   def initialize(weight:, mandatory:)
     @weight = weight
     @mandatory = mandatory

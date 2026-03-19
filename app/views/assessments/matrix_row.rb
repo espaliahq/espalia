@@ -13,7 +13,7 @@ class Views::Assessments::MatrixRow < Views::Base
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
     @weight = capability_data[:weight]
-    @mandatory = capability_data[:mandatory]
+    @mandatory = @binding.deficit_threshold&.to_f == 0.0
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
     @person_level = person_level
