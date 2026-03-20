@@ -468,9 +468,8 @@ end
 # framework_roles: id, tenant_id, role_family_id, name, code, track
 # framework_levels: id, tenant_id, role_id, ordinal, title, code, is_entry
 # framework_capability_categories: id, tenant_id, framework_id, name, description,
-#                                   category_tolerance (decimal, nil = uncapped, 0 = must balance),
-#                                   overperformance_cap (integer, nil = inherit framework),
-#                                   deficit_threshold (decimal, nil = inherit framework)
+#                                   deficit_threshold (decimal, nil = inherit framework, 0 = must balance),
+#                                   overperformance_cap (integer, nil = inherit framework)
 # framework_capabilities: id, tenant_id, category_id, stable_id, name, description, status
 # framework_capability_role_bindings: id, tenant_id, capability_id, role_id, weight,
 #                                     deficit_threshold (decimal, nil = inherit category/framework,
@@ -524,7 +523,6 @@ Structure — bindings and scoring:
   CapabilityRoleBindingCreated { id, capability_id, role_id, weight, individual_tolerance? }
   CapabilityRoleBindingUpdated { id, weight?, individual_tolerance? }
   CapabilityRoleBindingRemoved { id }
-  CategoryToleranceSet { framework_id, category_id, category_tolerance }
   ScoringThresholdsConfigured { framework_id, mastery_threshold?, promotion_score_threshold? }
   NOTE: Events retain legacy field names (individual_tolerance, promotion_score_threshold).
   The projection maps these to the current read model columns (deficit_threshold,
@@ -836,7 +834,8 @@ agreed_level = max(level_ordinal where effective_frequency == "consistent")  ←
 Category pass/fail (uses capped contributions):
   capped = max(raw_contribution, -deficit_threshold)
   category_pool += capped  per binding in category
-  pass if category_pool >= -(category_tolerance || ∞)
+  category_threshold = category.deficit_threshold || framework.deficit_threshold (default 1.0)
+  pass if category_pool >= -category_threshold
 
 Overall score uses raw (uncapped) contributions — deficit_threshold does not hide
 deficits from the total signal.
@@ -858,10 +857,10 @@ Promotion readiness (evaluated at NEXT level, same logic as meeting expectations
 |--------|------|---------|
 | Weight badge | `binding.weight != 1.0` | `"2×"` badge on capability row |
 | Shared vs per-role weight | All selected roles have same weight | Unified badge; otherwise per-role coloured dots |
-| Mandatory indicator | `individual_tolerance == 0` | Filled/solid amber weight badge + 3px amber left border on row |
-| Category tolerance | `category_tolerance == 0` | Lock icon on category section header |
-| Category tolerance | `category_tolerance > 0` | `"± N pts"` label on section header |
-| Category tolerance | `nil` | No indicator (uncapped) |
+| Mandatory indicator | `deficit_threshold == 0` on binding | Filled/solid amber weight badge + 3px amber left border on row |
+| Category threshold | `deficit_threshold == 0` on category | Lock icon on category section header |
+| Category threshold | `deficit_threshold > 0` on category | `"± N pts"` label on section header |
+| Category threshold | `nil` on category | No indicator (inherits framework default) |
 | Frequency selector | Self/manager/align input | Three toggle buttons: `some` · `occasional` · `consistent`. Clicking the selected button clears the rating (untoggle). |
 | Agreed level | Derived | Show as `"Agreed: L3"` computed from aligned assessments; no direct input |
 
@@ -1049,6 +1048,6 @@ end
 | 4 | Evidence from self/manager/peers, re-linkable | `EvidenceRecorded` / `EvidenceRelinked` events. Semi-freeform types + `ExternalReference`. |
 | 5 | Framework evolution | Event-sourced Framework with versioning. `stable_id` continuity. `requires_reassessment` flag. Nothing silently dropped. |
 | 6 | Weighted capabilities | `CapabilityRoleBinding.weight` — per-role weighting. Contributes to scoring as `(effective_frequency − expected) × weight`. |
-| 7 | Deficit threshold requirements | `deficit_threshold` (resolved per capability: binding → category → framework, default 1.0). 0 = no deficit allowed, N = max acceptable deficit. `CapabilityCategory.category_tolerance` (nil = uncapped, 0 = must balance, N = absorbs N pts). `overperformance_cap` (resolved same hierarchy, default 1). `meeting_expectation_threshold` and `mastery_threshold` on `FrameworkState::Framework`. |
+| 7 | Deficit threshold requirements | `deficit_threshold` (resolved per capability: binding → category → framework, default 1.0). Serves dual purpose at category level: per-capability fallback AND category pool tolerance (0 = must balance, N = max net deficit). `overperformance_cap` (resolved same hierarchy, default 1). `meeting_expectation_threshold` and `mastery_threshold` on `FrameworkState::Framework`. |
 | 8 | Growth plans + check-ins + freshness | Growth events in Person Development stream. `GrowthPlanState` projection. Freshness = `last_check_in_at` delta. |
 | 9 | Aggregate gap reporting | `Reporting::GapAnalysis` async projection. Aggregates `effective_frequency` vs expected across people per role, using `PersonDevelopment::Scoring`. |

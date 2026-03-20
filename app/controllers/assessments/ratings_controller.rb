@@ -140,7 +140,8 @@ class Assessments::RatingsController < ApplicationController
             merged_levels: matrix_data[:merged_levels],
             person_level: matrix_data[:person_level],
             meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
-            mastery_threshold: matrix_data[:mastery_threshold]
+            mastery_threshold: matrix_data[:mastery_threshold],
+            inferred_level: matrix_data[:inferred_level]
           ),
           layout: false
         )

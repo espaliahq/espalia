@@ -95,7 +95,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_19_060000) do
 
   create_table "framework_capability_categories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "category_id", null: false
-    t.decimal "category_tolerance", precision: 5, scale: 2
     t.datetime "created_at", null: false
     t.decimal "deficit_threshold", precision: 5, scale: 2
     t.text "description"

@@ -5,17 +5,21 @@
 # For levels up to and including person_level + 1, also shows a meeting
 # expectations chip (Mastering / Meeting / Below). For the three key levels
 # (person_level - 1, person_level, person_level + 1) the exact score % is shown.
+# The inferred level column gets a distinct chip.
 #
 class Views::Assessments::MatrixHeader < Views::Base
   # @param merged_levels [Array<Hash>] from MatrixDataBuilder
   # @param person_level [Integer] the person's assigned level ordinal
   # @param meeting_expectation_threshold [Float] ratio threshold for "Meeting"
   # @param mastery_threshold [Float] ratio threshold for "Mastering"
-  def initialize(merged_levels:, person_level:, meeting_expectation_threshold:, mastery_threshold:)
+  # @param inferred_level [Integer, nil] highest ordinal meeting expectations
+  def initialize(merged_levels:, person_level:, meeting_expectation_threshold:, mastery_threshold:,
+    inferred_level: nil)
     @merged_levels = merged_levels
     @person_level = person_level
     @meeting_expectation_threshold = meeting_expectation_threshold
     @mastery_threshold = mastery_threshold
+    @inferred_level = inferred_level
   end
 
   def view_template
@@ -31,6 +35,7 @@ class Views::Assessments::MatrixHeader < Views::Base
 
         @merged_levels.each do |level|
           current   = level[:ordinal] == @person_level
+          inferred  = @inferred_level && level[:ordinal] == @inferred_level
           ratio     = level[:performance_ratio]
           key_level = [ @person_level - 1, @person_level, @person_level + 1 ].include?(level[:ordinal])
 
@@ -43,6 +48,11 @@ class Views::Assessments::MatrixHeader < Views::Base
             if current
               span(class: "inline-block mt-1 text-[10px] bg-primary/10 text-primary " \
                           "rounded-full px-2 py-0.5") { "Your level" }
+            end
+            if inferred && !current
+              span(class: "inline-block mt-1 text-[10px] bg-cyan-100 text-cyan-700 " \
+                          "dark:bg-cyan-900/30 dark:text-cyan-300 " \
+                          "rounded-full px-2 py-0.5") { "Inferred level" }
             end
             if ratio
               div(class: "mt-1.5 space-y-0.5") do

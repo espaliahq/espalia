@@ -54,6 +54,7 @@ class Assessments::MatrixDataBuilder
         PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
       mastery_threshold: @framework.mastery_threshold&.to_f ||
         PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
+      inferred_level: scoring_engine.inferred_level,
       total_cells: count_total_cells(categories),
       rated_cells: count_rated_cells(categories)
     }
@@ -81,7 +82,7 @@ class Assessments::MatrixDataBuilder
 
       {
         category: category,
-        category_tolerance: category.category_tolerance,
+        deficit_threshold: category.deficit_threshold,
         capabilities: capabilities
       }
     end

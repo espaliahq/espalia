@@ -45,7 +45,6 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::SuggestionRejected,
       Frameworks::Events::SuggestionWithdrawn,
       Frameworks::Events::SuggestionCommented,
-      Frameworks::Events::CategoryToleranceSet,
       Frameworks::Events::ScoringThresholdsConfigured
     ]
   end
@@ -74,7 +73,6 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::SuggestionRejected then handle_suggestion_rejected(event)
     when Frameworks::Events::SuggestionWithdrawn then handle_suggestion_withdrawn(event)
     when Frameworks::Events::SuggestionCommented then nil # future: comments table
-    when Frameworks::Events::CategoryToleranceSet then handle_category_tolerance_set(event)
     when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
     # Structural events — skipped during draft
     else
@@ -204,7 +202,6 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::RoleIllustrationUpdated then handle_illustration_updated(event)
     when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
     when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
-    when Frameworks::Events::CategoryToleranceSet then handle_category_tolerance_set(event)
     when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
     end
   end
@@ -317,8 +314,7 @@ class Frameworks::Projections::PublishedState
       category_id: event.data[:category_id],
       name: event.data[:name],
       description: event.data[:description],
-      ordinal: event.data[:ordinal],
-      category_tolerance: event.data[:category_tolerance]
+      ordinal: event.data[:ordinal]
     )
   end
 
@@ -359,11 +355,6 @@ class Frameworks::Projections::PublishedState
     attrs = event.data.slice(:weight)
     attrs[:deficit_threshold] = event.data[:individual_tolerance] if event.data.key?(:individual_tolerance)
     record.update!(attrs) if attrs.any?
-  end
-
-  def handle_category_tolerance_set(event)
-    record = FrameworkState::CapabilityCategory.find_by!(category_id: event.data[:category_id])
-    record.update!(category_tolerance: event.data[:category_tolerance])
   end
 
   def handle_scoring_thresholds_configured(event)

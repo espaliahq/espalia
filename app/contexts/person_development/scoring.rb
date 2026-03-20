@@ -31,16 +31,16 @@
 #     category.deficit_threshold || framework.deficit_threshold (default 1.0)
 #
 #   deficit = max(0, 1.0 - effective_freq_at_reference_level) * weight
+#   Verdict gate: deficit > threshold → capability is :blocked
 #
-#   Two roles:
-#   1. Category pool cap: capped_contribution = max(raw, -threshold)
-#   2. Verdict gate: deficit >= threshold → capability is :blocked
+# == Category gate
 #
-# == Category pass/fail
+#   Categories are gates on the net contribution across their capabilities.
+#   Raw contributions flow through uncapped (overperformance_cap already
+#   limits the positive side at the ordinal level).
 #
-#   capped = max(total_contribution, -effective_deficit_threshold)
-#   category_pool += capped
-#   pass if category_pool >= -(category_tolerance || Infinity)
+#   category_threshold = category.deficit_threshold || framework.deficit_threshold
+#   pass if net_contribution >= -category_threshold
 #
 # == Overall score
 #
@@ -71,8 +71,8 @@ class PersonDevelopment::Scoring
   # @param bindings [Array<#capability_id, #weight, #deficit_threshold,
   #   #overperformance_cap, #capability (responds to #stable_id, #category_id)>]
   #   CapabilityRoleBinding records for the role, with capability preloaded
-  # @param categories [Array<#category_id, #category_tolerance,
-  #   #deficit_threshold, #overperformance_cap>]
+  # @param categories [Array<#category_id, #deficit_threshold,
+  #   #overperformance_cap>]
   #   CapabilityCategory records for the framework
   # @param person_level [Integer] person's assigned level ordinal
   # @param all_level_ordinals [Array<Integer>] all level ordinals in the framework
@@ -174,6 +174,16 @@ class PersonDevelopment::Scoring
     @promotion_readiness ||= compute_promotion_readiness
   end
 
+  # Highest level ordinal at which the person meets the expectation threshold.
+  # Uses the header-path scoring (explicit_frequency at reference level).
+  #
+  # @return [Integer, nil]
+  def inferred_level
+    @inferred_level ||= @all_level_ordinals.reverse.detect do |ordinal|
+      performance_ratio_at_level(ordinal) >= @meeting_expectation_threshold
+    end
+  end
+
   private
 
   # ── Core computation ──
@@ -219,10 +229,15 @@ class PersonDevelopment::Scoring
   end
 
   # Variant of raw_contribution_at_level for the column-header indicator.
-  # Unrated capabilities count as 1.0 (assumed consistent) only for ordinals
-  # strictly *below* reference_level — the same default as the main scorer.
-  # At exactly reference_level, unrated counts as 0.0 so that the indicator
-  # is not inflated by capabilities the person has not yet assessed.
+  #
+  # For ordinals below person_level: always uses effective_frequency (defaults
+  # unrated to 1.0). These levels are assumed consistent — rating them
+  # "consistent" explicitly should not change the score.
+  #
+  # For ordinals at or above person_level: uses effective_frequency only for
+  # ordinals strictly below reference_level; at reference_level and above,
+  # uses explicit_frequency (unrated = 0.0) so the indicator is not inflated
+  # by capabilities the person has not yet assessed.
   #
   # @param binding [#capability_id, #weight, #capability]
   # @param reference_level [Integer]
@@ -232,8 +247,10 @@ class PersonDevelopment::Scoring
 
     @all_level_ordinals.sum do |ordinal|
       freq =
-        if ordinal < reference_level
+        if ordinal < @person_level
           effective_frequency(stable_id, ordinal)  # default 1.0 for unrated past levels
+        elsif ordinal < reference_level
+          effective_frequency(stable_id, ordinal)  # rated or 0.0 (at/above person_level)
         else
           explicit_frequency(stable_id, ordinal)   # no default: unrated = 0.0
         end
@@ -242,28 +259,27 @@ class PersonDevelopment::Scoring
     end
   end
 
-  # Capped contribution for category pool: deficit_threshold limits the deficit.
+  # Contribution for the category gate. Raw contributions flow through
+  # uncapped — overperformance_cap already limits the positive side.
   #
   # @param binding [#capability_id, #weight, #capability]
   # @return [Float]
-  def capped_contribution(binding)
-    raw       = raw_contribution(binding)
-    threshold = deficit_threshold_for(binding)
-    [ raw, -threshold ].max
+  def category_contribution(binding)
+    raw_contribution(binding)
   end
 
   def compute_category_results
     pools = Hash.new(0.0)
     @bindings.each do |binding|
       cat_id = binding.capability.category_id
-      pools[cat_id] += capped_contribution(binding)
+      pools[cat_id] += category_contribution(binding)
     end
 
     @bindings.map { |b| b.capability.category_id }.uniq.to_h do |cat_id|
       cat       = @categories[cat_id]
       pool      = pools[cat_id]
-      tolerance = cat&.category_tolerance&.to_f
-      pass      = tolerance.nil? || pool >= -tolerance
+      threshold = (cat&.deficit_threshold || @default_deficit_threshold).to_f
+      pass      = pool >= -threshold
       [ cat_id, { pass: pass, pool: pool } ]
     end
   end
@@ -344,6 +360,9 @@ class PersonDevelopment::Scoring
   # Returns the effective frequency multiplier for a capability at a level.
   # Fallback: aligned → manager → self → default.
   #
+  # Default only applies for levels strictly below person_level — the current
+  # level must be explicitly assessed.
+  #
   # @param stable_id [String]
   # @param level_ordinal [Integer]
   # @return [Float]
@@ -356,10 +375,10 @@ class PersonDevelopment::Scoring
 
     if value
       FREQUENCY.fetch(value, 0.0)
-    elsif level_ordinal <= @person_level
+    elsif level_ordinal < @person_level
       1.0  # default: assume consistent for unassessed past levels
     else
-      0.0  # default: not expected, not assessed
+      0.0  # default: current level and above must be explicitly assessed
     end
   end
 

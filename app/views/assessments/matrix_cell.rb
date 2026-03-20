@@ -65,11 +65,17 @@ class Views::Assessments::MatrixCell < Views::Base
 
   # Computes background color class based on rating vs level expectations.
   #
-  # At/below person_level:
+  # Below person_level:
   #   Unrated → muted green (assumed consistent by default)
   #   Consistent → solid green (explicitly rated)
   #   Occasional → amber (partial gap)
   #   Some → red (significant gap)
+  #
+  # At person_level (must be explicitly assessed):
+  #   Unrated → neutral gray (no assumption)
+  #   Consistent → solid green
+  #   Occasional → amber
+  #   Some → red
   #
   # Above person_level:
   #   Unrated → neutral gray (not expected)
@@ -79,15 +85,15 @@ class Views::Assessments::MatrixCell < Views::Base
   # @return [String] Tailwind CSS classes
   def cell_background
     freq = @cell_data[:current_frequency]
+    below = @ordinal < @person_level
     at_or_below = @ordinal <= @person_level
 
     if freq.nil?
-      if at_or_below
-        # Unrated at/below level — default assumes consistent, show muted green
-        # Distinct from explicit green (which uses green-100/green-900)
+      if below
+        # Unrated below level — default assumes consistent, show muted green
         "bg-green-100/50 dark:bg-green-800/25"
       else
-        # Unrated above level — not expected, neutral
+        # Unrated at current level or above — no assumption, neutral
         "bg-gray-50/50 dark:bg-gray-800/20"
       end
     elsif at_or_below

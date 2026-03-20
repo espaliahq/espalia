@@ -1,30 +1,30 @@
 # frozen_string_literal: true
 
-# Displays category tolerance level in category headers.
+# Displays category deficit threshold level in category headers.
 #
-# - nil → renders nothing (uncapped)
+# - nil → renders nothing (inherits framework default)
 # - 0   → lock icon + "Must balance"
 # - > 0 → "± N pts" label
 #
 class Components::Kit::CategoryToleranceIndicator < Components::Base
-  # @param tolerance [Float, nil]
-  def initialize(tolerance:)
-    @tolerance = tolerance
+  # @param threshold [Float, nil] the category's deficit_threshold
+  def initialize(threshold:)
+    @threshold = threshold
   end
 
   def view_template
-    return if @tolerance.nil?
+    return if @threshold.nil?
 
-    if @tolerance.zero?
-      zero_tolerance
+    if @threshold.zero?
+      zero_threshold
     else
-      capped_tolerance
+      capped_threshold
     end
   end
 
   private
 
-  def zero_tolerance
+  def zero_threshold
     span(class: "inline-flex items-center gap-1 text-[10px] font-medium " \
                 "text-amber-700 dark:text-amber-400") do
       lock_icon
@@ -32,8 +32,8 @@ class Components::Kit::CategoryToleranceIndicator < Components::Base
     end
   end
 
-  def capped_tolerance
-    formatted = @tolerance == @tolerance.to_i ? @tolerance.to_i.to_s : @tolerance.to_s
+  def capped_threshold
+    formatted = @threshold == @threshold.to_i ? @threshold.to_i.to_s : @threshold.to_s
     span(class: "inline-flex items-center text-[10px] font-medium " \
                 "text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 " \
                 "rounded-full px-1.5 py-0.5") do

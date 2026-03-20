@@ -30,7 +30,7 @@ class Views::Assessments::MatrixCategoryGroup < Views::Base
           div(class: "flex items-center gap-2") do
             span(class: "text-sm font-semibold text-gray-900 dark:text-white") { @category.name }
             render Components::Kit::CategoryToleranceIndicator.new(
-              tolerance: @category_data[:category_tolerance]
+              threshold: @category_data[:deficit_threshold]
             )
           end
 

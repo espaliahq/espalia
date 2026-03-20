@@ -47,7 +47,6 @@ class CreateFrameworkReadModelTables < ActiveRecord::Migration[8.0]
       t.string :name, null: false
       t.text :description
       t.integer :ordinal
-      t.decimal :category_tolerance, precision: 5, scale: 2, null: true
       t.timestamps
     end
 
