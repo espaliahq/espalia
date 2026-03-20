@@ -14,6 +14,7 @@ class Views::Assessments::MatrixRow < Views::Base
     @binding = capability_data[:binding]
     @weight = capability_data[:weight]
     @mandatory = @binding.deficit_threshold&.to_f == 0.0
+    @contribution = capability_data[:contribution]
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
     @person_level = person_level
@@ -48,6 +49,7 @@ class Views::Assessments::MatrixRow < Views::Base
           div(class: "flex items-center gap-1.5") do
             span(class: "text-sm font-medium text-gray-900 dark:text-white") { @capability.name }
             render Components::Kit::WeightBadge.new(weight: @weight, mandatory: @mandatory)
+            contribution_label if @contribution
           end
           if @capability.description.present?
             p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2") do
@@ -57,5 +59,21 @@ class Views::Assessments::MatrixRow < Views::Base
         end
       end
     end
+  end
+
+  def contribution_label
+    score = @contribution.round(2)
+    label = score >= 0 ? "+#{score}" : score.to_s
+
+    color =
+      if score > 0
+        "text-green-600 dark:text-green-400"
+      elsif score < 0
+        "text-red-600 dark:text-red-400"
+      else
+        "text-gray-400 dark:text-gray-500"
+      end
+
+    span(class: "text-[10px] font-mono #{color}") { label }
   end
 end

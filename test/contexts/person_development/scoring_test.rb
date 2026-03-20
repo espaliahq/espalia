@@ -85,6 +85,17 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert_in_delta(0.25, scorer.performance_ratio, 0.01)
     end
 
+    should "treat 'none' as 0.0 frequency, overriding default for below-level" do
+      # Person at L3, L2 rated "none" → overrides default 1.0 assumption
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 2,
+        aligned_frequency: nil, manager_rated_frequency: nil, self_rated_frequency: "none")
+      scorer = build_scorer(person_level: 3, all_levels: [ 2, 3 ], ratings: [ r ])
+      # L2: none=0.0, expected=1.0 → contribution -1.0
+      # L3: unrated at current → 0.0, expected=1.0 → contribution -1.0
+      # baseline = 2 * 1.0 = 2.0; ratio = (-2.0 + 2.0) / 2.0 = 0.0
+      assert_in_delta(0.0, scorer.performance_ratio, 0.01)
+    end
+
     should "default to 1.0 for levels below person_level when unrated" do
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2 ], ratings: [])
       # Levels 1-2 (below person_level=3) default consistent → contribution 0

@@ -101,10 +101,15 @@ class Views::Assessments::MatrixCell < Views::Base
       when "consistent" then "bg-green-100 dark:bg-green-900/30"
       when "occasional" then "bg-amber-100 dark:bg-amber-900/30"
       when "some"       then "bg-red-100 dark:bg-red-900/30"
+      when "none"       then "bg-red-50 dark:bg-red-900/20"
       else ""
       end
     else
-      freq == "consistent" ? "bg-green-100 dark:bg-green-900/30" : "bg-blue-100 dark:bg-blue-900/20"
+      case freq
+      when "consistent" then "bg-green-100 dark:bg-green-900/30"
+      when "none"       then "bg-red-50 dark:bg-red-900/20"
+      else "bg-blue-100 dark:bg-blue-900/20"
+      end
     end
   end
 end

@@ -41,6 +41,7 @@ class Assessments::MatrixDataBuilder
     categories = build_categories(ordinals)
     scoring_engine = build_scoring_engine(categories)
     enrich_levels_with_performance_ratios(levels, scoring_engine)
+    enrich_capabilities_with_contributions(categories, scoring_engine)
     scoring = extract_scoring(scoring_engine)
 
     {
@@ -163,6 +164,18 @@ class Assessments::MatrixDataBuilder
         if level[:ordinal] <= next_ordinal
           scoring.performance_ratio_at_level(level[:ordinal])
         end
+    end
+  end
+
+  # Adds :contribution to each capability hash — the raw contribution score.
+  #
+  # @param categories_data [Array<Hash>]
+  # @param scoring [PersonDevelopment::Scoring]
+  def enrich_capabilities_with_contributions(categories_data, scoring)
+    categories_data.each do |cat_data|
+      cat_data[:capabilities].each do |cap_data|
+        cap_data[:contribution] = scoring.raw_contribution(cap_data[:binding])
+      end
     end
   end
 

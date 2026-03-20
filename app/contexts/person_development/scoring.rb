@@ -59,7 +59,7 @@
 #   Highest level_ordinal where effective_frequency == "consistent" (1.0).
 #
 class PersonDevelopment::Scoring
-  FREQUENCY = { "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
+  FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
   DEFAULT_MASTERY_THRESHOLD              = 1.25
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.9
   DEFAULT_OVERPERFORMANCE_CAP        = 1
@@ -184,6 +184,14 @@ class PersonDevelopment::Scoring
     end
   end
 
+  # Raw (uncapped) total contribution for a single binding at the person's current level.
+  #
+  # @param binding [#capability_id, #weight, #capability]
+  # @return [Float]
+  def raw_contribution(binding)
+    raw_contribution_at_level(binding, @person_level)
+  end
+
   private
 
   # ── Core computation ──
@@ -198,14 +206,6 @@ class PersonDevelopment::Scoring
     @baseline_score ||= @bindings.sum do |binding|
       @all_level_ordinals.count { |o| o <= @person_level } * binding.weight.to_f
     end
-  end
-
-  # Raw (uncapped) total contribution for a single binding at the person's current level.
-  #
-  # @param binding [#capability_id, #weight, #capability]
-  # @return [Float]
-  def raw_contribution(binding)
-    raw_contribution_at_level(binding, @person_level)
   end
 
   # Raw (uncapped) total contribution for a single binding evaluated against
