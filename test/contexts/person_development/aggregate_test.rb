@@ -129,6 +129,15 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal "Strong", event.data[:comment]
     end
 
+    should "accept 'none' as a valid frequency" do
+      cap_sid = SecureRandom.uuid_v7
+      @aggregate.rate_self(cap_sid, level_ordinal: 2, frequency: "none")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::SelfRated, event
+      assert_equal "none", event.data[:frequency]
+    end
+
     should "raise for invalid frequency" do
       assert_raises(RuntimeError, /Invalid frequency/) do
         @aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "sometimes")

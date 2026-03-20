@@ -13,7 +13,7 @@ class PersonDevelopment::Aggregate
   include AggregateRoot
 
   CYCLE_TYPES = %w[regular performance_review promotion_review].freeze
-  FREQUENCIES = %w[some occasional consistent].freeze
+  FREQUENCIES = %w[none some occasional consistent].freeze
 
   def initialize
     @person_id = nil
