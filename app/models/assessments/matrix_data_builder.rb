@@ -160,10 +160,10 @@ class Assessments::MatrixDataBuilder
   def enrich_levels_with_performance_ratios(levels, scoring)
     next_ordinal = @level.ordinal + 1
     levels.each do |level|
-      level[:performance_ratio] =
-        if level[:ordinal] <= next_ordinal
-          scoring.performance_ratio_at_level(level[:ordinal])
-        end
+      if level[:ordinal] <= next_ordinal
+        level[:performance_ratio] = scoring.performance_ratio_at_level(level[:ordinal])
+        level[:level_verdict] = scoring.level_verdict(level[:ordinal])
+      end
     end
   end
 

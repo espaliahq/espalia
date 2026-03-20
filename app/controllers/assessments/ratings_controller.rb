@@ -98,6 +98,9 @@ class Assessments::RatingsController < ApplicationController
     # Find updated cell data for this specific rating
     cell_data = find_cell_data(capability_stable_id, level_ordinal, matrix_data)
 
+    # Find updated contribution score for this capability
+    contribution = find_contribution(capability_stable_id, matrix_data)
+
     render turbo_stream: [
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
@@ -134,13 +137,21 @@ class Assessments::RatingsController < ApplicationController
         )
       ) if category_id),
       turbo_stream.replace(
+        "contribution-#{capability_stable_id}",
+        render_to_string(
+          Views::Assessments::ContributionLabel.new(
+            capability_stable_id: capability_stable_id,
+            contribution: contribution
+          ),
+          layout: false
+        )
+      ),
+      turbo_stream.replace(
         "matrix-header",
         render_to_string(
           Views::Assessments::MatrixHeader.new(
             merged_levels: matrix_data[:merged_levels],
             person_level: matrix_data[:person_level],
-            meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
-            mastery_threshold: matrix_data[:mastery_threshold],
             inferred_level: matrix_data[:inferred_level]
           ),
           layout: false
@@ -153,6 +164,15 @@ class Assessments::RatingsController < ApplicationController
     matrix_data[:categories].each do |cat_data|
       cat_data[:capabilities].each do |cap_data|
         return cat_data[:category].category_id if cap_data[:capability].stable_id == capability_stable_id
+      end
+    end
+    nil
+  end
+
+  def find_contribution(capability_stable_id, matrix_data)
+    matrix_data[:categories].each do |cat_data|
+      cat_data[:capabilities].each do |cap_data|
+        return cap_data[:contribution] if cap_data[:capability].stable_id == capability_stable_id
       end
     end
     nil

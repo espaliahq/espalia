@@ -342,6 +342,55 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
   end
 
+  # ── Level verdict (unified column header + promotion code path) ──
+
+  context "#level_verdict" do
+    should "return :meeting when ratio meets threshold and no blocked capabilities" do
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
+      assert_equal :meeting, scorer.level_verdict(3)
+    end
+
+    should "return :mastering when ratio meets mastery threshold and no blocked capabilities" do
+      ratings = [
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
+      # ratio = 4/3 = 1.33 >= 1.25 mastery threshold
+      assert_equal :mastering, scorer.level_verdict(3)
+    end
+
+    should "return :below when ratio meets threshold but a capability is blocked" do
+      # deficit_threshold=0 (mandatory) + unrated at reference level → blocked
+      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
+      # mandatory capability (deficit_threshold=0) — unrated will block
+      binding_a = BindingStub.new(capability_id: "bid-a", weight: 0.5,
+        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)
+      # non-mandatory capability rated consistent — lifts overall ratio
+      binding_b = BindingStub.new(capability_id: "bid-b", weight: 1.5,
+        deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
+      category = CategoryStub.new(category_id: CAT_1,
+        deficit_threshold: nil, overperformance_cap: nil)
+
+      ratings = [
+        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+      # cap_a unrated at L3: deficit = 1.0 * 0.5 = 0.5 > 0.0 threshold → blocked
+      # Overall ratio still high enough from cap_b → but verdict should be :below
+      scorer = PersonDevelopment::Scoring.new(
+        level_ratings: ratings, bindings: [ binding_a, binding_b ],
+        categories: [ category ], person_level: 3, all_level_ordinals: [ 3 ]
+      )
+      assert_equal :below, scorer.level_verdict(3)
+    end
+  end
+
   # ── Promotion readiness ──
 
   context "#promotion_readiness" do

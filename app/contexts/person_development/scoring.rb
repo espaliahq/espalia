@@ -164,6 +164,25 @@ class PersonDevelopment::Scoring
     baseline.positive? ? (raw + baseline) / baseline : 0.0
   end
 
+  # Unified verdict for a given reference level: combines ratio threshold
+  # AND capability blocking into a single status. Used by column headers,
+  # promotion readiness, and sidebar verdicts — one code path.
+  #
+  # @param reference_level [Integer] the level ordinal to evaluate
+  # @return [Symbol] :mastering, :meeting, or :below
+  def level_verdict(reference_level)
+    ratio = performance_ratio_at_level(reference_level)
+    has_blocked = capability_statuses(reference_level: reference_level).values.any? { |s| s == :blocked }
+
+    if ratio >= @mastery_threshold && !has_blocked
+      :mastering
+    elsif ratio >= @meeting_expectation_threshold && !has_blocked
+      :meeting
+    else
+      :below
+    end
+  end
+
   # Promotion readiness result.
   # Eligible when performance at next level meets meeting_expectation_threshold
   # AND no capabilities are blocked at the next level.
@@ -310,16 +329,15 @@ class PersonDevelopment::Scoring
   def compute_promotion_readiness
     next_level = @person_level + 1
 
+    verdict     = level_verdict(next_level)
     next_ratio  = performance_ratio_at_level(next_level)
     meets_score = next_ratio >= @meeting_expectation_threshold
-
-    statuses_at_next     = capability_statuses(reference_level: next_level)
-    blocked_at_next      = statuses_at_next.select { |_, s| s == :blocked }.keys
+    blocked     = capability_statuses(reference_level: next_level).select { |_, s| s == :blocked }.keys
 
     {
-      eligible:             meets_score && blocked_at_next.empty?,
+      eligible:              verdict != :below,
       meets_score_threshold: meets_score,
-      blocked_at_next_level: blocked_at_next
+      blocked_at_next_level: blocked
     }
   end
 

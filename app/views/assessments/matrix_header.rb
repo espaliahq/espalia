@@ -8,17 +8,12 @@
 # The inferred level column gets a distinct chip.
 #
 class Views::Assessments::MatrixHeader < Views::Base
-  # @param merged_levels [Array<Hash>] from MatrixDataBuilder
+  # @param merged_levels [Array<Hash>] from MatrixDataBuilder (includes :level_verdict)
   # @param person_level [Integer] the person's assigned level ordinal
-  # @param meeting_expectation_threshold [Float] ratio threshold for "Meeting"
-  # @param mastery_threshold [Float] ratio threshold for "Mastering"
   # @param inferred_level [Integer, nil] highest ordinal meeting expectations
-  def initialize(merged_levels:, person_level:, meeting_expectation_threshold:, mastery_threshold:,
-    inferred_level: nil)
+  def initialize(merged_levels:, person_level:, inferred_level: nil)
     @merged_levels = merged_levels
     @person_level = person_level
-    @meeting_expectation_threshold = meeting_expectation_threshold
-    @mastery_threshold = mastery_threshold
     @inferred_level = inferred_level
   end
 
@@ -37,6 +32,7 @@ class Views::Assessments::MatrixHeader < Views::Base
           current   = level[:ordinal] == @person_level
           inferred  = @inferred_level && level[:ordinal] == @inferred_level
           ratio     = level[:performance_ratio]
+          verdict   = level[:level_verdict]
           key_level = [ @person_level - 1, @person_level, @person_level + 1 ].include?(level[:ordinal])
 
           th(class: "sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 " \
@@ -54,10 +50,10 @@ class Views::Assessments::MatrixHeader < Views::Base
                           "dark:bg-cyan-900/30 dark:text-cyan-300 " \
                           "rounded-full px-2 py-0.5") { "Inferred level" }
             end
-            if ratio
+            if verdict
               div(class: "mt-1.5 space-y-0.5") do
-                level_expectations_chip(ratio)
-                level_score_label(ratio) if key_level
+                level_expectations_chip(verdict)
+                level_score_label(ratio) if key_level && ratio
               end
             end
           end
@@ -69,14 +65,17 @@ class Views::Assessments::MatrixHeader < Views::Base
   private
 
   # Status chip rendered in each column header for levels up to person_level + 1.
+  # Uses pre-computed verdict from Scoring#level_verdict (accounts for both
+  # ratio threshold AND capability blocking — same code path as promotion).
   #
-  # @param ratio [Float] performance_ratio_at_level result
+  # @param verdict [Symbol] :mastering, :meeting, or :below
   # @return [void]
-  def level_expectations_chip(ratio)
+  def level_expectations_chip(verdict)
     label, classes =
-      if ratio >= @mastery_threshold
+      case verdict
+      when :mastering
         [ "Mastering", "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" ]
-      elsif ratio >= @meeting_expectation_threshold
+      when :meeting
         [ "Meeting",   "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" ]
       else
         [ "Below",     "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" ]

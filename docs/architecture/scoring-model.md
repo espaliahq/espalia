@@ -9,7 +9,7 @@ Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read m
 ## Core Formulae
 
 ```
-FREQUENCY = { "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
+FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
 DEFAULT_MASTERY_THRESHOLD = 1.25
 DEFAULT_PROMOTION_SCORE_THRESHOLD = 0.9
 
@@ -66,14 +66,22 @@ Two roles:
 
 ## Three Symmetric Verdicts
 
+All verdicts combine a score ratio check with a blocking gate. The `level_verdict(reference_level)` method is the single code path used by column headers, promotion readiness, and the sidebar status — ensuring consistency across the UI.
+
 ```
-meeting_expectations?
-  = performance_ratio >= meeting_expectation_threshold AND no :blocked capabilities
+level_verdict(reference_level):
+  ratio = performance_ratio_at_level(reference_level)
+  has_blocked = any capability :blocked at reference_level
+
+  :mastering  if ratio >= mastery_threshold AND NOT has_blocked
+  :meeting    if ratio >= meeting_expectation_threshold AND NOT has_blocked
+  :below      otherwise
+
+meeting_expectations? = level_verdict(person_level) != :below
   → meeting_expectation_threshold defaults to 0.9 (90% of expectations)
   → Frameworks can override via meeting_expectation_threshold on framework_states
 
-mastering?
-  = performance_ratio >= mastery_threshold AND no :blocked capabilities
+mastering? = level_verdict(person_level) == :mastering
   → Defaults to 1.25 (25% above expectations). Always returns boolean.
   → Frameworks can override via mastery_threshold on framework_states
 
@@ -99,8 +107,9 @@ deficits from the total signal.
 
 ## Promotion Readiness
 
-Evaluated at NEXT level, same logic as meeting expectations. Contributions are recomputed as if `person_level` were `next_level`. This means the next level's ordinal is expected (1.0), not bonus (0.0). You must demonstrate capability at the next level to be promotion-ready.
+Evaluated at NEXT level using `level_verdict(next_level)` — same code path as column headers and sidebar verdicts. Contributions are recomputed as if `person_level` were `next_level`. This means the next level's ordinal is expected (1.0), not bonus (0.0). You must demonstrate capability at the next level to be promotion-ready.
 
+Eligible when `level_verdict(next_level) != :below`, which requires both:
 1. Score: `performance_ratio_at_level(next_level) >= meeting_expectation_threshold`
 2. No `:blocked` capabilities at next level (deficit > deficit_threshold blocks)
 
