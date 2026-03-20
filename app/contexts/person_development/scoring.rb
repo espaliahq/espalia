@@ -61,7 +61,7 @@
 class PersonDevelopment::Scoring
   FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
   DEFAULT_MASTERY_THRESHOLD              = 1.25
-  DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.9
+  DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
   DEFAULT_OVERPERFORMANCE_CAP        = 1
   DEFAULT_DEFICIT_THRESHOLD          = 1.0
 
