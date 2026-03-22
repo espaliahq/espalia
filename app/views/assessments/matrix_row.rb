@@ -62,5 +62,4 @@ class Views::Assessments::MatrixRow < Views::Base
       end
     end
   end
-
 end
