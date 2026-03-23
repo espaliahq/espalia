@@ -3,11 +3,7 @@
 require "application_system_test_case"
 
 class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
-  DESKTOP_SIZE = [ 1400, 1400 ].freeze
-
   setup do
-    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
 
