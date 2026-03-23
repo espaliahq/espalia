@@ -17,6 +17,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
 
+  # CI runners can be slow — the default 2s is too tight for Turbo round-trips.
+  Capybara.default_max_wait_time = 5
+
   include AutoScreenshots
 
   setup do

@@ -51,11 +51,13 @@ class AuthSystemTest < ApplicationSystemTestCase
       fill_in "Email", with: "wrong@example.com"
       fill_in "Password", with: "wrongpassword"
       click_button "Log in"
-      screenshot("invalid_credentials_error")
 
+      # Wait for the Turbo response to render the flash alert before asserting.
+      # The URL doesn't change (POST and GET share the same path), so
+      # assert_current_path would pass immediately without waiting.
+      assert_selector "[role='alert']", text: "Invalid email or password."
+      screenshot("invalid_credentials_error")
       assert_current_path new_user_session_path
-      assert_selector "[role='alert']"
-      assert_text "Invalid email or password."
     end
   end
 end
