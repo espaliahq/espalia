@@ -128,6 +128,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
 
       find("tr[data-capability-id]", match: :first).click
+      assert_selector "turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']", visible: true
 
       add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
         .find("div[data-controller='inline-editor']")
@@ -148,6 +149,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
 
       find("tr[data-capability-id]", match: :first).click
+      assert_selector "turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']", visible: true
 
       add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
         .find("div[data-controller='inline-editor']")
