@@ -128,7 +128,21 @@ app/
 
 ## Design Documents
 
-- `docs/01-architecture-and-design.md` — Full architecture, ADRs, aggregate definitions, event schemas, Rails implementation patterns
+Architecture docs are split into focused files — read on demand, not all at once:
+
+| File | Read when |
+|------|-----------|
+| [adrs.md](docs/architecture/adrs.md) | Making architectural decisions; understanding *why* things are built a certain way |
+| [domain-models.md](docs/architecture/domain-models.md) | Working on Tenant, User, TenantUser, or Person; auth or multi-tenancy logic |
+| [framework-aggregate.md](docs/architecture/framework-aggregate.md) | Framework features — roles, capabilities, expectations, illustrations, versioning, collaborators |
+| [person-development-aggregate.md](docs/architecture/person-development-aggregate.md) | Assessments, evidence, growth plans, alignment conversations, check-ins |
+| [scoring-model.md](docs/architecture/scoring-model.md) | Assessment scoring, capability matrix display, performance verdicts, promotion readiness |
+| [reporting.md](docs/architecture/reporting.md) | Gap analysis, trend analysis, promotion readiness dashboards, growth plan freshness |
+| [integrations.md](docs/architecture/integrations.md) | HRIS sync, notification adapters, SSO/SAML |
+| [event-store.md](docs/architecture/event-store.md) | Event subscriptions, new projections, snapshots, async handlers |
+
+Other reference docs:
+- `docs/01-architecture-and-design.md` — Index with product capabilities and module boundary diagram
 - `docs/02-glossary.md` — Domain and technical term definitions
 - `docs/03-entity-relationships.mermaid` — ERD across all aggregates
 - `docs/04-event-flow.mermaid` — Domain event flow between aggregates

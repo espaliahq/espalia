@@ -13,7 +13,7 @@ class PersonDevelopment::Aggregate
   include AggregateRoot
 
   CYCLE_TYPES = %w[regular performance_review promotion_review].freeze
-  FREQUENCIES = %w[some occasional consistent].freeze
+  FREQUENCIES = %w[none some occasional consistent].freeze
 
   def initialize
     @person_id = nil
@@ -127,6 +127,22 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Clears a previous self-rating at a specific level.
+  #
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being cleared
+  # @raise [RuntimeError] if no prior self-rating for this capability at this level
+  def clear_self_rating(capability_stable_id, level_ordinal:)
+    ensure_cycle_open!
+    raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
+      @self_ratings.key?([ capability_stable_id, level_ordinal ])
+
+    apply(PersonDevelopment::Events::SelfRatingCleared.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal
+    }))
+  end
+
   # ── Manager Rating ──
 
   # Records a manager's rating for a person's capability at a specific level.
@@ -214,6 +230,10 @@ class PersonDevelopment::Aggregate
   on PersonDevelopment::Events::SelfRatingRevised do |event|
     @self_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
       event.data[:frequency]
+  end
+
+  on PersonDevelopment::Events::SelfRatingCleared do |event|
+    @self_ratings.delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
   end
 
   on PersonDevelopment::Events::ManagerRated do |event|

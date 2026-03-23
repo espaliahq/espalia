@@ -67,6 +67,18 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Clears a previous self-rating.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being cleared
+  def clear_self_rating(person_id, framework_id, capability_stable_id, level_ordinal:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.clear_self_rating(capability_stable_id, level_ordinal: level_ordinal)
+    end
+  end
+
   # Completes the current assessment cycle.
   #
   # @param person_id [String] UUID of the person

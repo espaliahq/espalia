@@ -72,10 +72,14 @@ namespace :frameworks do
       framework_data["capability_categories"]&.each_with_index do |cat_data, cat_idx|
         cat_id = SecureRandom.uuid_v7
         puts "  Category: #{cat_data['name']}"
-        category_tolerance = cat_data.key?("category_tolerance") ? cat_data["category_tolerance"] : nil
         handler.add_capability_category(framework_id, cat_id, cat_data["name"],
-          description: cat_data["description"], ordinal: cat_idx + 1,
-          category_tolerance: category_tolerance)
+          description: cat_data["description"], ordinal: cat_idx + 1)
+
+        # Apply category-level deficit_threshold if specified in seed data
+        if cat_data.key?("deficit_threshold")
+          cat_record = FrameworkState::CapabilityCategory.find_by!(category_id: cat_id)
+          cat_record.update!(deficit_threshold: cat_data["deficit_threshold"])
+        end
 
         cat_data["capabilities"]&.each do |cap_data|
           cap_id = SecureRandom.uuid_v7

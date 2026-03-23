@@ -21,6 +21,13 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
+  resources :assessments, only: [ :index, :show ] do
+    member do
+      get :matrix
+    end
+    resources :ratings, only: [ :create ], controller: "assessments/ratings"
+  end
+
   resources :frameworks, only: [ :index, :show ] do
     member do
       get :matrix

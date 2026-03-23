@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_19_060000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -95,12 +95,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
 
   create_table "framework_capability_categories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "category_id", null: false
-    t.decimal "category_tolerance", precision: 5, scale: 2
     t.datetime "created_at", null: false
+    t.decimal "deficit_threshold", precision: 5, scale: 2
     t.text "description"
     t.uuid "framework_id", null: false
     t.string "name", null: false
     t.integer "ordinal"
+    t.integer "overperformance_cap"
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "category_id"], name: "idx_fw_cap_categories_on_tenant_and_category", unique: true
@@ -111,7 +112,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
     t.uuid "binding_id", null: false
     t.uuid "capability_id", null: false
     t.datetime "created_at", null: false
-    t.decimal "individual_tolerance", precision: 5, scale: 2
+    t.decimal "deficit_threshold", precision: 5, scale: 2
+    t.integer "overperformance_cap"
     t.uuid "role_id", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
@@ -198,12 +200,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
   create_table "framework_states", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "current_published_version", default: 0, null: false
+    t.decimal "deficit_threshold", precision: 5, scale: 2, default: "1.0", null: false
     t.boolean "draft_in_progress", default: false, null: false
     t.integer "draft_version"
     t.uuid "framework_id", null: false
     t.decimal "mastery_threshold", precision: 5, scale: 2
+    t.decimal "meeting_expectation_threshold", precision: 5, scale: 2
     t.string "name", null: false
-    t.decimal "promotion_score_threshold", precision: 5, scale: 2
+    t.integer "overperformance_cap", default: 1, null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "framework_id"], name: "index_framework_states_on_tenant_id_and_framework_id", unique: true
@@ -249,6 +253,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
     t.index ["tenant_id", "email"], name: "index_people_on_tenant_id_and_email", unique: true
     t.index ["tenant_id", "external_id"], name: "index_people_on_tenant_id_and_external_id", unique: true, where: "(external_id IS NOT NULL)"
     t.index ["tenant_id"], name: "index_people_on_tenant_id"
+  end
+
+  create_table "person_framework_assignments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "current_cycle_id"
+    t.string "cycle_name"
+    t.string "cycle_status", default: "none", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "level_id", null: false
+    t.uuid "person_id", null: false
+    t.uuid "role_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id", "framework_id"], name: "idx_on_person_id_framework_id_860f7ad292"
+    t.index ["tenant_id", "person_id", "framework_id"], name: "idx_person_framework_assignments_unique", unique: true
+    t.index ["tenant_id"], name: "index_person_framework_assignments_on_tenant_id"
   end
 
   create_table "tenant_users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -301,6 +321,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_090000) do
   add_foreign_key "framework_suggested_edits", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
+  add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"

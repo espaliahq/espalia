@@ -177,10 +177,8 @@ class Frameworks::Aggregate
   # @param name [String] display name
   # @param description [String, nil] optional description
   # @param ordinal [Integer, nil] display order
-  # @param category_tolerance [BigDecimal, nil] nil = uncapped, 0 = must balance,
-  #   N = absorbs up to N weighted points of deficit
   # @raise [RuntimeError] if category already exists
-  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil, category_tolerance: nil)
+  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil)
     ensure_created!
     raise "Category #{category_id} already exists" if @capability_categories.key?(category_id)
 
@@ -189,26 +187,7 @@ class Frameworks::Aggregate
       category_id: category_id,
       name: name,
       description: description,
-      ordinal: ordinal,
-      category_tolerance: category_tolerance
-    }))
-  end
-
-  # Sets the tolerance for a capability category.
-  #
-  # @param framework_id [String] UUID of the framework
-  # @param category_id [String] UUID of the category
-  # @param category_tolerance [BigDecimal, nil] nil = uncapped, 0 = must balance,
-  #   N = absorbs up to N weighted points of deficit
-  # @raise [RuntimeError] if category does not exist
-  def set_category_tolerance(framework_id, category_id, category_tolerance)
-    ensure_created!
-    raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
-
-    apply(Frameworks::Events::CategoryToleranceSet.new(data: {
-      framework_id: framework_id,
-      category_id: category_id,
-      category_tolerance: category_tolerance
+      ordinal: ordinal
     }))
   end
 
@@ -736,8 +715,7 @@ class Frameworks::Aggregate
     @capability_categories[event.data[:category_id]] = {
       name: event.data[:name],
       description: event.data[:description],
-      ordinal: event.data[:ordinal],
-      category_tolerance: event.data[:category_tolerance]
+      ordinal: event.data[:ordinal]
     }
   end
 
@@ -746,11 +724,6 @@ class Frameworks::Aggregate
     cat[:name] = event.data[:name] if event.data.key?(:name)
     cat[:description] = event.data[:description] if event.data.key?(:description)
     cat[:ordinal] = event.data[:ordinal] if event.data.key?(:ordinal)
-  end
-
-  on Frameworks::Events::CategoryToleranceSet do |event|
-    cat = @capability_categories[event.data[:category_id]]
-    cat[:category_tolerance] = event.data[:category_tolerance] if cat
   end
 
   on Frameworks::Events::CapabilityAdded do |event|

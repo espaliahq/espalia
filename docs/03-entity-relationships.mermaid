@@ -90,7 +90,8 @@ classDiagram
         +uuid id
         +string name
         +text description
-        +decimal category_tolerance [nil=uncapped, 0=must balance]
+        +decimal deficit_threshold [nil=inherit framework, 0=must balance]
+        +integer overperformance_cap [nil=inherit framework]
     }
 
     class Capability {
@@ -103,8 +104,8 @@ classDiagram
     class CapabilityRoleBinding {
         +uuid id
         +decimal weight
-        +decimal individual_tolerance [nil=category-governed, 0=mandatory]
-        mandatory?() bool
+        +decimal deficit_threshold [nil=inherit, 0=no deficit, N=max deficit]
+        +integer overperformance_cap [nil=inherit]
     }
 
     class BehaviouralExpectation {

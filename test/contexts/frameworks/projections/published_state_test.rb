@@ -157,7 +157,7 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
         rm = FrameworkState::CapabilityRoleBinding.find_by(binding_id: bid)
         assert_not_nil rm
         assert_equal 1.5, rm.weight.to_f
-        assert_equal 2.0, rm.individual_tolerance.to_f
+        assert_equal 2.0, rm.deficit_threshold.to_f
       end
     end
   end
@@ -167,7 +167,7 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       bid = SecureRandom.uuid_v7
       emit(Frameworks::Events::CapabilityRoleBindingCreated,
         framework_id: @framework_id, binding_id: bid, capability_id: SecureRandom.uuid_v7,
-        role_id: SecureRandom.uuid_v7, weight: 1.0, individual_tolerance: nil)
+        role_id: SecureRandom.uuid_v7, weight: 1.0)
       emit(Frameworks::Events::CapabilityRoleBindingRemoved,
         framework_id: @framework_id, binding_id: bid)
 

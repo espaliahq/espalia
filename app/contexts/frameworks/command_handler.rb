@@ -107,9 +107,9 @@ class Frameworks::CommandHandler
   # @param name [String] display name
   # @param description [String, nil] optional description
   # @param ordinal [Integer, nil] display order
-  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil, category_tolerance: nil)
+  def add_capability_category(framework_id, category_id, name, description: nil, ordinal: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.add_capability_category(framework_id, category_id, name, description: description, ordinal: ordinal, category_tolerance: category_tolerance)
+      framework.add_capability_category(framework_id, category_id, name, description: description, ordinal: ordinal)
     end
   end
 

@@ -4098,7 +4098,7 @@ framework:
     description: Domain-specific technical knowledge and skills required for the
       engineering discipline. Strength in one technical area can compensate for a
       gap in another, but the group must not go negative overall.
-    category_tolerance: 0
+    deficit_threshold: 0
     capabilities:
     - name: 'Technical Expertise: Cloud Architecture & Infrastructure'
       description: Designs, implements, and manages scalable, secure, and cost-effective

@@ -23,7 +23,7 @@
 # {PersonDevelopment::Projections::CurrentAssessment}.
 #
 class AssessmentLevelRating < ApplicationRecord
-  FREQUENCIES = %w[some occasional consistent].freeze
+  FREQUENCIES = %w[none some occasional consistent].freeze
   MIGRATION_STATUSES = %w[not_flagged flagged resolved].freeze
   SOURCES = %w[human agent].freeze
 

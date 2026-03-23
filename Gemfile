@@ -20,7 +20,7 @@ gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 
 gem "acts_as_tenant", "~> 0.6"
-gem "devise", "~> 5.0.2"
+gem "devise", "~> 5.0.3"
 gem "invisible_captcha", "~> 2.0"
 gem "noticed", "~> 3.0"
 gem "pagy", "~> 9.0"

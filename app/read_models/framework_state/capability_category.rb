@@ -2,12 +2,16 @@
 
 # Projection read model for capability categories within a published framework.
 #
-# category_tolerance controls how much total weighted deficit is acceptable
-# across all capabilities in this category for a given assessment:
+# deficit_threshold serves dual purpose at the category level:
 #
-#   nil  — uncapped: category is informational for scoring only, no pass/fail gate
-#   0    — group must balance: net weighted deficit must be >= 0
-#   N    — group absorbs up to N weighted points of deficit
+#   1. Per-capability fallback: capabilities without their own deficit_threshold
+#      inherit from the category (then framework if category is nil).
+#   2. Category pool tolerance: maximum acceptable net weighted deficit across
+#      all capabilities in this category.
+#
+#   nil  — inherits from framework (default 1.0)
+#   0    — group must balance: no net deficit allowed
+#   N    — group absorbs up to N weighted points of net deficit
 #
 # Materialised from Framework aggregate events by
 # {Frameworks::Projections::PublishedState}.
@@ -28,5 +32,6 @@ class FrameworkState::CapabilityCategory < ApplicationRecord
   validates :framework_id, presence: true
   validates :category_id, presence: true
   validates :name, presence: true
-  validates :category_tolerance, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :deficit_threshold, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :overperformance_cap, numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
 end

@@ -2,13 +2,23 @@
 
 # Projection read model for capability-role bindings.
 #
-# Bindings tie a capability to a role with a weight and optional individual
-# tolerance. The individual_tolerance caps how much this capability's deficit
-# can contribute to its category's tolerance pool:
+# Bindings tie a capability to a role with a weight and optional scoring overrides.
 #
-#   nil  — governed by category_tolerance only
-#   0    — mandatory: no deficit allowed, no category compensation
-#   N    — deficit capped at N before entering the category pool
+# == deficit_threshold
+# Maximum acceptable uncapped weighted deficit for this capability at the rated
+# level before it blocks mastery / promotion verdicts and caps the category pool:
+#
+#   nil  — governed by category or framework deficit_threshold
+#   0    — no deficit allowed (equivalent to former mandatory?: true)
+#   N    — deficit capped at N for pool; any deficit >= N blocks verdicts
+#
+# == overperformance_cap
+# Number of levels above the person's assigned level that still contribute to
+# the score. Ordinals beyond person_level + cap contribute 0.
+#
+#   nil  — governed by category or framework overperformance_cap
+#   1    — only the immediate next level earns positive credit (framework default)
+#   N    — up to N levels above current earn credit
 #
 # Materialised from Framework aggregate events by
 # {Frameworks::Projections::PublishedState}.
@@ -30,12 +40,6 @@ class FrameworkState::CapabilityRoleBinding < ApplicationRecord
   validates :capability_id, presence: true
   validates :role_id, presence: true
   validates :weight, presence: true
-  validates :individual_tolerance, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
-
-  # Returns true if this capability has zero tolerance — no deficit allowed.
-  #
-  # @return [Boolean]
-  def mandatory?
-    individual_tolerance&.zero?
-  end
+  validates :deficit_threshold, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :overperformance_cap, numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
 end

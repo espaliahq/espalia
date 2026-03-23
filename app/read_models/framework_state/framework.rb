@@ -21,4 +21,6 @@ class FrameworkState::Framework < ApplicationRecord
 
   validates :framework_id, presence: true
   validates :name, presence: true
+  validates :overperformance_cap, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
+  validates :deficit_threshold, numericality: { greater_than_or_equal_to: 0 }
 end
