@@ -14,5 +14,12 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
   end
 
+  DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE  = [ 375, 812 ].freeze
+
   include AutoScreenshots
+
+  setup do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+  end
 end
