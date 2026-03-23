@@ -20,7 +20,7 @@ begin
 
     desc "run bundler audit"
     task bundler_audit: [] do
-      status = system("bundle audit", exception: true)
+      status = system("bundle audit check --update", exception: true)
       raise "bundler audit checks failed" unless status
     end
 
