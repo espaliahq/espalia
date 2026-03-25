@@ -259,9 +259,9 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   end
 
   context "#mastering?" do
-    should "default to 1.25 threshold when no mastery_threshold configured" do
+    should "default to 1.15 threshold when no mastery_threshold configured" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ])
-      # unrated → default 1.0 → ratio 1.0; 1.0 < 1.25 → not mastering
+      # unrated → default 1.0 → ratio 1.0; 1.0 < 1.15 → not mastering
       assert_not scorer.mastering?
     end
 
@@ -282,7 +282,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert_not scorer.mastering?
     end
 
-    should "return true when exceeding default 1.25 threshold" do
+    should "return true when exceeding default 1.15 threshold" do
       # Rate consistent at current level and above to exceed expectations
       ratings = [
         Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
@@ -293,7 +293,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
       # L1-2 default 1.0 (contribution 0), L3 consistent (contribution 0),
       # L4 1.0 vs expected 0.0 → +1.0
-      # baseline = 3 * 1.0 = 3.0; ratio = 4.0 / 3.0 = 1.33 >= 1.25
+      # baseline = 3 * 1.0 = 3.0; ratio = 4.0 / 3.0 = 1.33 >= 1.15
       assert scorer.mastering?
     end
   end
@@ -360,7 +360,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
           aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
       ]
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
-      # ratio = 4/3 = 1.33 >= 1.25 mastery threshold
+      # ratio = 4/3 = 1.33 >= 1.15 mastery threshold
       assert_equal :mastering, scorer.level_verdict(3)
     end
 

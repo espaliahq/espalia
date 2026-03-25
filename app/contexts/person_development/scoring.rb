@@ -11,8 +11,8 @@
 #     aligned_frequency  if present, else
 #     manager_rated_frequency  if present, else
 #     self_rated_frequency  if present, else
-#     default: 1.0 for level_ordinal <= person_level (assume consistent)
-#              0.0 for level_ordinal >  person_level (not expected)
+#     default: 1.0 for level_ordinal <  person_level (assume consistent for past levels)
+#              0.0 for level_ordinal >= person_level (current level and above must be assessed)
 #
 #   expected_at_level = (level_ordinal <= person_level) ? 1.0 : 0.0
 #   contribution_at_level = (effective_frequency - expected_at_level) * weight
@@ -60,7 +60,7 @@
 #
 class PersonDevelopment::Scoring
   FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
-  DEFAULT_MASTERY_THRESHOLD              = 1.25
+  DEFAULT_MASTERY_THRESHOLD              = 1.15
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
   DEFAULT_OVERPERFORMANCE_CAP        = 1
   DEFAULT_DEFICIT_THRESHOLD          = 1.0

@@ -5,7 +5,7 @@
 # Three-tier performance signal:
 # 1. Below expectations (< 1.0) — performance concern
 # 2. Meeting expectations (≥ 1.0) — at baseline
-# 3. Mastering (≥ 1.25 default) — significantly exceeding
+# 3. Mastering (≥ mastery_threshold) — significantly exceeding
 #
 # Wrapped in a targetable div for Turbo Stream replacement.
 #
@@ -13,10 +13,12 @@ class Views::Assessments::ScoringPanel < Views::Base
   # @param scoring [Hash] from MatrixDataBuilder scoring output
   # @param categories [Array<Hash>] category data from MatrixDataBuilder
   # @param person_level [Integer]
-  def initialize(scoring:, categories:, person_level:)
+  # @param mastery_threshold [Float] ratio threshold for mastering tier
+  def initialize(scoring:, categories:, person_level:, mastery_threshold: PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD)
     @scoring = scoring
     @categories = categories
     @person_level = person_level
+    @mastery_threshold = mastery_threshold
   end
 
   def view_template
@@ -156,7 +158,7 @@ class Views::Assessments::ScoringPanel < Views::Base
   end
 
   def performance_color(ratio)
-    if ratio >= 1.25
+    if ratio >= @mastery_threshold
       "text-purple-600 dark:text-purple-400"
     elsif ratio >= 1.0
       "text-green-600 dark:text-green-400"
@@ -168,7 +170,7 @@ class Views::Assessments::ScoringPanel < Views::Base
   end
 
   def performance_bar_color(ratio)
-    if ratio >= 1.25
+    if ratio >= @mastery_threshold
       "bg-purple-500"
     elsif ratio >= 1.0
       "bg-green-500"
