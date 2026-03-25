@@ -54,12 +54,23 @@ class Views::Assessments::MatrixCell < Views::Base
           framework_id: @framework_id
         )
       end
+      illustration_indicator if @cell_data[:illustration_count]&.positive?
     end
   end
 
   def expectation_text
     p(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-3") do
       @cell_data[:expectation].description
+    end
+  end
+
+  def illustration_indicator
+    div(class: "mt-1.5 flex items-center gap-1") do
+      span(class: "w-1.5 h-1.5 rounded-full bg-primary") { }
+      span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+        count = @cell_data[:illustration_count]
+        "#{count} #{'example'.pluralize(count)}"
+      end
     end
   end
 

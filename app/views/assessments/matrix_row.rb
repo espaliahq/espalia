@@ -1,7 +1,12 @@
 # frozen_string_literal: true
 
 # Single capability row in the assessment matrix.
-# Shows capability name with weight/mandatory indicators + level cells with frequency selectors.
+#
+# Renders two <tr> elements:
+# 1. Compact row (always visible): capability name + expectation text per level cell
+# 2. Expanded row (hidden by default): read-only illustrations for each cell
+#
+# The expanded row only renders when at least one cell has illustrations.
 #
 class Views::Assessments::MatrixRow < Views::Base
   # @param capability_data [Hash] from MatrixDataBuilder
@@ -19,11 +24,27 @@ class Views::Assessments::MatrixRow < Views::Base
     @merged_levels = merged_levels
     @person_level = person_level
     @framework_id = framework_id
+    @has_illustrations = @cells.any? { |_, c| c[:illustration_count]&.positive? }
   end
 
   def view_template
-    tr(class: "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors " \
-              "#{@mandatory ? 'border-l-3 border-l-amber-400' : ''}") do
+    compact_row
+    expanded_row if @has_illustrations
+  end
+
+  private
+
+  def compact_row
+    tr(
+      class: "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors " \
+             "#{@mandatory ? 'border-l-3 border-l-amber-400' : ''} " \
+             "#{@has_illustrations ? 'group cursor-pointer' : ''}",
+      data: @has_illustrations ? {
+        action: "click->matrix#toggleRow",
+        matrix_target: "row",
+        capability_id: @capability.capability_id
+      } : {}
+    ) do
       capability_name_cell
       @merged_levels.each do |level|
         render Views::Assessments::MatrixCell.new(
@@ -37,7 +58,39 @@ class Views::Assessments::MatrixRow < Views::Base
     end
   end
 
-  private
+  def expanded_row
+    tr(
+      class: "hidden",
+      data: { matrix_target: "expandedRow", capability_id: @capability.capability_id }
+    ) do
+      # Empty sticky column
+      td(class: "sticky left-0 z-[2] bg-blue-50/30 dark:bg-blue-900/10 " \
+                "border-b border-r border-gray-100 dark:border-gray-800") { }
+
+      @merged_levels.each do |level|
+        expanded_cell(level[:ordinal])
+      end
+    end
+  end
+
+  def expanded_cell(ordinal)
+    cell_data = @cells[ordinal]
+    illustrations = cell_data&.dig(:illustrations) || []
+
+    td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
+              "bg-blue-50/30 dark:bg-blue-900/10 align-top") do
+      if illustrations.any?
+        ul(class: "space-y-1") do
+          illustrations.each do |ill|
+            li(class: "flex items-start gap-1.5 text-xs text-gray-600 dark:text-gray-400") do
+              span(class: "mt-1 w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500 shrink-0") { }
+              span { ill.description }
+            end
+          end
+        end
+      end
+    end
+  end
 
   def capability_name_cell
     td(class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 " \
@@ -45,6 +98,7 @@ class Views::Assessments::MatrixRow < Views::Base
               "min-w-[220px] align-top " \
               "hover:bg-gray-50 dark:hover:bg-gray-800/50") do
       div(class: "flex items-start gap-2") do
+        chevron_icon if @has_illustrations
         div do
           div(class: "flex items-center gap-1.5") do
             span(class: "text-sm font-medium text-gray-900 dark:text-white") { @capability.name }
@@ -60,6 +114,16 @@ class Views::Assessments::MatrixRow < Views::Base
           end
         end
       end
+    end
+  end
+
+  def chevron_icon
+    svg(
+      class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
+      data: { matrix_target: "rowChevron" },
+      fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
+    ) do |s|
+      s.path(d: "M9 5l7 7-7 7")
     end
   end
 end

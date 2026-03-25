@@ -12,7 +12,7 @@ class Views::Assessments::Matrix < Views::Base
   end
 
   def view_template
-    table(class: "w-full border-collapse") do
+    table(class: "w-full border-collapse", data: { controller: "matrix" }) do
       render Views::Assessments::MatrixHeader.new(
         merged_levels: @matrix_data[:merged_levels],
         person_level: @matrix_data[:person_level],

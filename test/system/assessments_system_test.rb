@@ -43,12 +43,28 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         @framework_id, SecureRandom.uuid_v7, @cap1_id, @role_id,
         weight: 2.0, individual_tolerance: 0
       )
-      eid1 = SecureRandom.uuid_v7
-      handler.set_behavioural_expectation(@framework_id, eid1, SecureRandom.uuid_v7, @cap1_id, 1,
+      @eid1 = SecureRandom.uuid_v7
+      handler.set_behavioural_expectation(@framework_id, @eid1, SecureRandom.uuid_v7, @cap1_id, 1,
         "Asks clarifying questions to understand problems")
-      eid2 = SecureRandom.uuid_v7
-      handler.set_behavioural_expectation(@framework_id, eid2, SecureRandom.uuid_v7, @cap1_id, 2,
+      @eid2 = SecureRandom.uuid_v7
+      handler.set_behavioural_expectation(@framework_id, @eid2, SecureRandom.uuid_v7, @cap1_id, 2,
         "Synthesises information from multiple sources")
+
+      # Illustrations for expectation 1 (Junior level, Critical Thinking)
+      handler.add_role_illustration(
+        @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+        @eid1, @role_id, 1, "Asks 'why' before jumping into implementation"
+      )
+      handler.add_role_illustration(
+        @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+        @eid1, @role_id, 2, "Rephrases the problem statement in their own words"
+      )
+
+      # Illustration for expectation 2 (Mid level, Critical Thinking)
+      handler.add_role_illustration(
+        @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+        @eid2, @role_id, 1, "Cross-references docs, code, and stakeholder input before proposing solutions"
+      )
 
       # Capability 2: default weight 1.0
       @cap2_id = SecureRandom.uuid_v7
@@ -131,6 +147,23 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # Critical Thinking has deficit_threshold=0 (via individual_tolerance mapping) and weight=2.0
       # Should show amber left border on the row (border-l-amber-400)
       assert_selector "tr.border-l-3"
+    end
+
+    should "show illustration count and expand to reveal illustrations" do
+      visit assessment_path(@framework_id)
+
+      # Illustration count indicators should be visible
+      assert_text "2 examples"
+      assert_text "1 example"
+
+      # Click the Critical Thinking row to expand illustrations
+      row = find("[data-matrix-target='row']", match: :first)
+      row.click
+
+      # Expanded row should appear with illustration text
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
+      assert_text "Rephrases the problem statement in their own words"
     end
   end
 
