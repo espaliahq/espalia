@@ -145,8 +145,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@framework_id)
 
       # Critical Thinking has deficit_threshold=0 (via individual_tolerance mapping) and weight=2.0
-      # Should show amber left border on the row (border-l-amber-400)
-      assert_selector "tr.border-l-3"
+      # Should show amber left border on the name cell (border-l-amber-400)
+      assert_selector "td.border-l-3"
     end
 
     should "show illustration count and expand to reveal illustrations" do

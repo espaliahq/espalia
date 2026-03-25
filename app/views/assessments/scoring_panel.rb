@@ -79,6 +79,7 @@ class Views::Assessments::ScoringPanel < Views::Base
           "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
           "text-red-800 dark:text-red-300"
         )
+        blocked_capabilities_detail
       end
     end
   end
@@ -151,6 +152,30 @@ class Views::Assessments::ScoringPanel < Views::Base
             p(class: "mt-1 text-xs text-gray-500 dark:text-gray-500") do
               "Score threshold not met"
             end
+          end
+        end
+      end
+    end
+  end
+
+  def blocked_capabilities_detail
+    statuses = @scoring[:capability_statuses] || {}
+    blocked_ids = statuses.select { |_, s| s == :blocked }.keys
+    return if blocked_ids.empty?
+
+    blocked_names = @categories.flat_map { |cat| cat[:capabilities] }
+                               .select { |cap| blocked_ids.include?(cap[:capability].stable_id) }
+                               .map { |cap| cap[:capability].name }
+
+    div(class: "mt-2 p-2 rounded-md bg-red-50/50 dark:bg-red-900/10") do
+      p(class: "text-xs font-medium text-red-700 dark:text-red-400 mb-1") do
+        "#{blocked_names.size} blocked #{'capability'.pluralize(blocked_names.size)}"
+      end
+      ul(class: "space-y-0.5") do
+        blocked_names.each do |name|
+          li(class: "text-xs text-red-600 dark:text-red-400 flex items-center gap-1") do
+            span(class: "w-1 h-1 rounded-full bg-red-400 shrink-0") {}
+            plain name
           end
         end
       end

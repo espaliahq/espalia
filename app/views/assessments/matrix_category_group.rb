@@ -44,11 +44,15 @@ class Views::Assessments::MatrixCategoryGroup < Views::Base
 
     # Capability rows
     @category_data[:capabilities].each do |cap_data|
+      stable_id = cap_data[:capability].stable_id
+      blocked = @scoring.dig(:capability_statuses, stable_id) == :blocked
+
       render Views::Assessments::MatrixRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
         person_level: @person_level,
-        framework_id: @framework_id
+        framework_id: @framework_id,
+        blocked: blocked
       )
     end
   end

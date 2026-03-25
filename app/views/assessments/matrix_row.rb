@@ -13,12 +13,14 @@ class Views::Assessments::MatrixRow < Views::Base
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
   # @param framework_id [String]
-  def initialize(capability_data:, merged_levels:, person_level:, framework_id:)
+  # @param blocked [Boolean] whether this capability is blocked at person_level
+  def initialize(capability_data:, merged_levels:, person_level:, framework_id:, blocked: false)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
     @weight = capability_data[:weight]
     @mandatory = @binding.deficit_threshold&.to_f == 0.0
+    @blocked = blocked
     @contribution = capability_data[:contribution]
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
@@ -37,7 +39,6 @@ class Views::Assessments::MatrixRow < Views::Base
   def compact_row
     tr(
       class: "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors " \
-             "#{@mandatory ? 'border-l-3 border-l-amber-400' : ''} " \
              "#{@has_illustrations ? 'group cursor-pointer' : ''}",
       data: @has_illustrations ? {
         action: "click->matrix#toggleRow",
@@ -93,37 +94,13 @@ class Views::Assessments::MatrixRow < Views::Base
   end
 
   def capability_name_cell
-    td(class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 " \
-              "px-4 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 " \
-              "min-w-[220px] align-top " \
-              "hover:bg-gray-50 dark:hover:bg-gray-800/50") do
-      div(class: "flex items-start gap-2") do
-        chevron_icon if @has_illustrations
-        div do
-          div(class: "flex items-center gap-1.5") do
-            span(class: "text-sm font-medium text-gray-900 dark:text-white") { @capability.name }
-            render Components::Kit::WeightBadge.new(weight: @weight, mandatory: @mandatory)
-            render Views::Assessments::ContributionLabel.new(
-              capability_stable_id: @capability.stable_id, contribution: @contribution
-            )
-          end
-          if @capability.description.present?
-            p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2") do
-              @capability.description
-            end
-          end
-        end
-      end
-    end
-  end
-
-  def chevron_icon
-    svg(
-      class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
-      data: { matrix_target: "rowChevron" },
-      fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
-    ) do |s|
-      s.path(d: "M9 5l7 7-7 7")
-    end
+    render Views::Assessments::CapabilityNameCell.new(
+      capability: @capability,
+      weight: @weight,
+      mandatory: @mandatory,
+      blocked: @blocked,
+      contribution: @contribution,
+      has_illustrations: @has_illustrations
+    )
   end
 end
