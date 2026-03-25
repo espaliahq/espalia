@@ -121,7 +121,8 @@ class Assessments::RatingsController < ApplicationController
           Views::Assessments::ScoringPanel.new(
             scoring: matrix_data[:scoring],
             categories: matrix_data[:categories],
-            person_level: matrix_data[:person_level]
+            person_level: matrix_data[:person_level],
+            mastery_threshold: matrix_data[:mastery_threshold]
           ),
           layout: false
         )

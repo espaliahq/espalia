@@ -10,13 +10,15 @@ Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read m
 
 ```
 FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
-DEFAULT_MASTERY_THRESHOLD = 1.25
-DEFAULT_PROMOTION_SCORE_THRESHOLD = 0.9
+DEFAULT_MASTERY_THRESHOLD = 1.15
+DEFAULT_MEETING_EXPECTATION_THRESHOLD = 0.95
+DEFAULT_OVERPERFORMANCE_CAP = 1
+DEFAULT_DEFICIT_THRESHOLD = 1.0
 
 effective_frequency(capability_stable_id, level_ordinal):
   aligned_frequency  → manager_rated_frequency  → self_rated_frequency
-  → default: 1.0 if level_ordinal <= person_level (assume consistent)
-             0.0 if level_ordinal >  person_level (not expected, not assessed)
+  → default: 1.0 if level_ordinal < person_level (assume consistent for past levels)
+             0.0 if level_ordinal >= person_level (current level and above must be explicitly assessed)
 
 contribution_at_level = (effective_frequency − expected_at_level) × weight
   where expected_at_level = level_ordinal <= person_level ? 1.0 : 0.0
@@ -46,9 +48,7 @@ Resolved per capability: `binding.deficit_threshold || category.deficit_threshol
 ```
 deficit = max(0, 1.0 - effective_freq_at_reference_level) * weight
 
-Two roles:
-  1. Category pool cap: capped_contribution = max(raw_contribution, -deficit_threshold)
-  2. Verdict gate: deficit > deficit_threshold → capability is :blocked
+Verdict gate: deficit > deficit_threshold → capability is :blocked
 ```
 
 ---
@@ -77,12 +77,16 @@ level_verdict(reference_level):
   :meeting    if ratio >= meeting_expectation_threshold AND NOT has_blocked
   :below      otherwise
 
-meeting_expectations? = level_verdict(person_level) != :below
-  → meeting_expectation_threshold defaults to 0.9 (90% of expectations)
+meeting_expectations? = performance_ratio >= meeting_expectation_threshold AND NOT has_blocked
+  → Uses performance_ratio (effective_frequency defaults unrated below person_level to 1.0)
+  → NOT the same as level_verdict — level_verdict uses performance_ratio_at_level which
+    treats unrated at/above person_level as 0.0 via explicit_frequency
+  → meeting_expectation_threshold defaults to 0.95 (95% of expectations)
   → Frameworks can override via meeting_expectation_threshold on framework_states
 
-mastering? = level_verdict(person_level) == :mastering
-  → Defaults to 1.25 (25% above expectations). Always returns boolean.
+mastering? = performance_ratio >= mastery_threshold AND NOT has_blocked
+  → Same scoring path as meeting_expectations?, different threshold
+  → Defaults to 1.15 (15% above expectations). Always returns boolean.
   → Frameworks can override via mastery_threshold on framework_states
 
 agreed_level = max(level_ordinal where effective_frequency == "consistent")
@@ -94,13 +98,14 @@ agreed_level = max(level_ordinal where effective_frequency == "consistent")
 ## Category Pass/Fail
 
 ```
-capped = max(raw_contribution, -deficit_threshold)
-category_pool += capped  per binding in category
+category_pool = Σ raw_contribution per binding in category
 category_threshold = category.deficit_threshold || framework.deficit_threshold (default 1.0)
 pass if category_pool >= -category_threshold
 
-Overall score uses raw (uncapped) contributions — deficit_threshold does not hide
-deficits from the total signal.
+Contributions are NOT individually capped — a single underperforming capability
+can drag the pool negative, but strong peers can offset it. The deficit_threshold
+gate only applies at two levels: per-capability (:blocked verdict) and per-category
+(pass/fail on the net pool).
 ```
 
 ---
@@ -122,7 +127,7 @@ Frameworks can override via `meeting_expectation_threshold` on framework_states.
 ### Capability Matrix Badges
 
 | Signal | When | Display |
-|--------|------|---------||
+|--------|------|---------|
 | Weight badge | `binding.weight != 1.0` | `"2×"` badge on capability row |
 | Shared vs per-role weight | All selected roles have same weight | Unified badge; otherwise per-role coloured dots |
 | Mandatory indicator | `deficit_threshold == 0` on binding | Filled/solid amber weight badge + 3px amber left border on row |
@@ -146,7 +151,7 @@ Cells get background tints based on their rating relative to expectations at tha
 ### Scoring Panel — Three-tier Performance Signal
 
 | Tier | Condition | Display |
-|------|-----------|---------||
-| Below expectations | `performance_ratio < meeting_expectation_threshold` (default 0.9) OR any :blocked capabilities | Red warning — performance concern |
+|------|-----------|---------|
+| Below expectations | `performance_ratio < meeting_expectation_threshold` (default 0.95) OR any :blocked capabilities | Red warning — performance concern |
 | Meeting expectations | `performance_ratio >= meeting_expectation_threshold` AND no :blocked capabilities | Green — at or above current level baseline |
-| Mastering | `performance_ratio >= mastery_threshold` (default 1.25) AND no :blocked capabilities | Purple — significantly exceeding expectations |
+| Mastering | `performance_ratio >= mastery_threshold` (default 1.15) AND no :blocked capabilities | Purple — significantly exceeding expectations |
