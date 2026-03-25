@@ -127,7 +127,7 @@ Frameworks can override via `meeting_expectation_threshold` on framework_states.
 ### Capability Matrix Badges
 
 | Signal | When | Display |
-|--------|------|---------||
+|--------|------|---------|
 | Weight badge | `binding.weight != 1.0` | `"2×"` badge on capability row |
 | Shared vs per-role weight | All selected roles have same weight | Unified badge; otherwise per-role coloured dots |
 | Mandatory indicator | `deficit_threshold == 0` on binding | Filled/solid amber weight badge + 3px amber left border on row |
@@ -151,7 +151,7 @@ Cells get background tints based on their rating relative to expectations at tha
 ### Scoring Panel — Three-tier Performance Signal
 
 | Tier | Condition | Display |
-|------|-----------|---------||
+|------|-----------|---------|
 | Below expectations | `performance_ratio < meeting_expectation_threshold` (default 0.95) OR any :blocked capabilities | Red warning — performance concern |
 | Meeting expectations | `performance_ratio >= meeting_expectation_threshold` AND no :blocked capabilities | Green — at or above current level baseline |
 | Mastering | `performance_ratio >= mastery_threshold` (default 1.15) AND no :blocked capabilities | Purple — significantly exceeding expectations |
