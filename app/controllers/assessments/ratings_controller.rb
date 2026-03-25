@@ -122,7 +122,8 @@ class Assessments::RatingsController < ApplicationController
             scoring: matrix_data[:scoring],
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
-            mastery_threshold: matrix_data[:mastery_threshold]
+            mastery_threshold: matrix_data[:mastery_threshold],
+            meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold]
           ),
           layout: false
         )

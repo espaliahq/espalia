@@ -294,11 +294,16 @@ class PersonDevelopment::Scoring
       pools[cat_id] += category_contribution(binding)
     end
 
+    statuses = capability_statuses(reference_level: @person_level)
+
     @bindings.map { |b| b.capability.category_id }.uniq.to_h do |cat_id|
       cat       = @categories[cat_id]
       pool      = pools[cat_id]
       threshold = (cat&.deficit_threshold || @default_deficit_threshold).to_f
-      pass      = pool >= -threshold
+      has_blocked = @bindings
+        .select { |b| b.capability.category_id == cat_id }
+        .any? { |b| statuses[b.capability.stable_id] == :blocked }
+      pass      = pool >= -threshold && !has_blocked
       [ cat_id, { pass: pass, pool: pool } ]
     end
   end

@@ -10,15 +10,21 @@
 # Wrapped in a targetable div for Turbo Stream replacement.
 #
 class Views::Assessments::ScoringPanel < Views::Base
+  AMBER_THRESHOLD = 0.8
+
   # @param scoring [Hash] from MatrixDataBuilder scoring output
   # @param categories [Array<Hash>] category data from MatrixDataBuilder
   # @param person_level [Integer]
   # @param mastery_threshold [Float] ratio threshold for mastering tier
-  def initialize(scoring:, categories:, person_level:, mastery_threshold: PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD)
+  # @param meeting_expectation_threshold [Float] ratio threshold for meeting tier
+  def initialize(scoring:, categories:, person_level:,
+                 mastery_threshold: PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
+                 meeting_expectation_threshold: PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD)
     @scoring = scoring
     @categories = categories
     @person_level = person_level
     @mastery_threshold = mastery_threshold
+    @meeting_expectation_threshold = meeting_expectation_threshold
   end
 
   def view_template
@@ -185,9 +191,9 @@ class Views::Assessments::ScoringPanel < Views::Base
   def performance_color(ratio)
     if ratio >= @mastery_threshold
       "text-purple-600 dark:text-purple-400"
-    elsif ratio >= 1.0
+    elsif ratio >= @meeting_expectation_threshold
       "text-green-600 dark:text-green-400"
-    elsif ratio >= 0.8
+    elsif ratio >= AMBER_THRESHOLD
       "text-amber-600 dark:text-amber-400"
     else
       "text-red-600 dark:text-red-400"
@@ -197,9 +203,9 @@ class Views::Assessments::ScoringPanel < Views::Base
   def performance_bar_color(ratio)
     if ratio >= @mastery_threshold
       "bg-purple-500"
-    elsif ratio >= 1.0
+    elsif ratio >= @meeting_expectation_threshold
       "bg-green-500"
-    elsif ratio >= 0.8
+    elsif ratio >= AMBER_THRESHOLD
       "bg-amber-500"
     else
       "bg-red-500"
