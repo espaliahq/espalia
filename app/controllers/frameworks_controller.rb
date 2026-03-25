@@ -38,7 +38,8 @@ class FrameworksController < ApplicationController
       matrix_data: matrix_data,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
-      tenants: tenants
+      tenants: tenants,
+      is_admin: framework_admin?
     )
   end
 
@@ -85,5 +86,16 @@ class FrameworksController < ApplicationController
     @framework.capability_categories
       .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
       .order(:ordinal)
+  end
+
+  # @return [Boolean] whether the current user has admin access to frameworks
+  def framework_admin?
+    return true if current_user.global_admin?
+
+    tenant = ActsAsTenant.current_tenant
+    tenant_user = ActsAsTenant.without_tenant do
+      TenantUser.find_by(user: current_user, tenant: tenant)
+    end
+    tenant_user&.admin? || false
   end
 end

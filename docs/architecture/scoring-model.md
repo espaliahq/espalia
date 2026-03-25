@@ -122,6 +122,16 @@ Frameworks can override via `meeting_expectation_threshold` on framework_states.
 
 ---
 
+## Configuration UI
+
+Framework-level scoring thresholds are configurable via the settings page at `GET /frameworks/:id/settings` (admin-only). Each setting can be customised or reverted to the system default. Changes flow through the event-sourced pipeline:
+
+`Frameworks::SettingsController#update` → `CommandHandler#configure_scoring_thresholds` → `ScoringThresholdsConfigured` event → `PublishedState` projection → `framework_states` table.
+
+Nil values in nullable columns (`mastery_threshold`, `meeting_expectation_threshold`) mean "use system default". NOT NULL columns (`overperformance_cap`, `deficit_threshold`) are reset to their constant defaults when reverted.
+
+---
+
 ## UI Implications
 
 ### Capability Matrix Badges

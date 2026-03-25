@@ -33,6 +33,7 @@ Rails.application.routes.draw do
       get :matrix
     end
     resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
+    resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
   end
 
   # Defines the root path route ("/")

@@ -360,6 +360,26 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Configures scoring thresholds for a framework.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param mastery_threshold [BigDecimal, nil] ratio above baseline for mastery
+  # @param promotion_score_threshold [BigDecimal, nil] ratio for promotion readiness
+  # @param overperformance_cap [Integer, nil] levels above assigned that count
+  # @param deficit_threshold [BigDecimal, nil] weighted deficit blocking threshold
+  def configure_scoring_thresholds(framework_id, mastery_threshold: nil, promotion_score_threshold: nil,
+                                   overperformance_cap: nil, deficit_threshold: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.configure_scoring_thresholds(
+        framework_id,
+        mastery_threshold: mastery_threshold,
+        promotion_score_threshold: promotion_score_threshold,
+        overperformance_cap: overperformance_cap,
+        deficit_threshold: deficit_threshold
+      )
+    end
+  end
+
   # Publishes the current draft as a new framework version.
   #
   # @param framework_id [String] UUID of the framework

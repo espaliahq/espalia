@@ -94,10 +94,13 @@ Structure — bindings and scoring:
   CapabilityRoleBindingCreated { id, capability_id, role_id, weight, individual_tolerance? }
   CapabilityRoleBindingUpdated { id, weight?, individual_tolerance? }
   CapabilityRoleBindingRemoved { id }
-  ScoringThresholdsConfigured { framework_id, mastery_threshold?, promotion_score_threshold? }
+  ScoringThresholdsConfigured { framework_id, mastery_threshold?, promotion_score_threshold?,
+                                overperformance_cap?, deficit_threshold? }
   NOTE: Events retain legacy field names (individual_tolerance, promotion_score_threshold).
   The projection maps these to the current read model columns (deficit_threshold,
   meeting_expectation_threshold).
+  All four scoring thresholds are configurable via the framework settings UI
+  (GET/PATCH /frameworks/:id/settings). Nil values revert to system defaults.
 
 Content — expectations (canonical rated text):
   BehaviouralExpectationSet { id, stable_id, capability_id, level_id, description }
