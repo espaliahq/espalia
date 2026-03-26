@@ -19,7 +19,7 @@ gem "turbo-rails"
 gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 
-gem "acts_as_tenant", "~> 0.6"
+gem "acts_as_tenant", "~> 1.0"
 gem "devise", "~> 5.0.3"
 gem "invisible_captcha", "~> 2.0"
 gem "noticed", "~> 3.0"
