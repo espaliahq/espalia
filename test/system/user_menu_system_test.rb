@@ -51,6 +51,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       visit root_path
 
       find("[data-action='dropdown#toggle']").click
+      assert_selector "[role='menu']", visible: true
       click_on "Sign out"
       screenshot("after_sign_out")
 
@@ -91,6 +92,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
       visit root_path
       find("[data-action='dropdown#toggle']").click
+      assert_selector "[role='menu']", visible: true
       screenshot("before_tenant_switch")
 
       # Click the switch button for Beta Inc
