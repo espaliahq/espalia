@@ -12,7 +12,7 @@ class PagesSystemTest < ApplicationSystemTestCase
     fill_in "Email", with: @user.email
     fill_in "Password", with: "password123"
     click_button "Log in"
-    assert_current_path root_path
+    assert_text "Welcome to GrowthOS"
   end
 
   context "index page" do
