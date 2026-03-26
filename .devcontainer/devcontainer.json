@@ -27,7 +27,8 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "anthropic.claude-code"
+        "anthropic.claude-code",
+        "coderabbitai.coderabbit-vscode"
       ]
     }
   },

@@ -100,12 +100,12 @@ agreed_level = max(level_ordinal where effective_frequency == "consistent")
 ```
 category_pool = Σ raw_contribution per binding in category
 category_threshold = category.deficit_threshold || framework.deficit_threshold (default 1.0)
-pass if category_pool >= -category_threshold
+has_blocked = any capability in category is :blocked at person_level
+pass if category_pool >= -category_threshold AND NOT has_blocked
 
 Contributions are NOT individually capped — a single underperforming capability
-can drag the pool negative, but strong peers can offset it. The deficit_threshold
-gate only applies at two levels: per-capability (:blocked verdict) and per-category
-(pass/fail on the net pool).
+can drag the pool negative, but strong peers can offset it. However, a blocked
+capability always fails the category regardless of pool balance.
 ```
 
 ---

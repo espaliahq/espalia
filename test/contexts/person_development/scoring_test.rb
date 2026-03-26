@@ -203,11 +203,11 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert result[:pass]
     end
 
-    should "pass when over-performance offsets under-performance in must-balance category" do
+    should "fail when pool passes but a capability is blocked" do
       # Two capabilities in same category, deficit_threshold=0 (must balance).
-      # cap_a rated "some" at L3 → raw = -0.75
-      # cap_b rated consistent at L3 AND L4 (next level) → raw = 0 + 1.0 = +1.0
-      # net = -0.75 + 1.0 = +0.25 >= 0 → passes
+      # cap_a rated "some" at L3 → raw = -0.75; deficit at L3 = 0.75 > 0 → :blocked
+      # cap_b rated consistent at L3 AND L4 → raw = 0 + 1.0 = +1.0
+      # net = -0.75 + 1.0 = +0.25 >= 0 → pool passes, but blocked cap fails category
       cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
       binding_a = BindingStub.new(capability_id: "bid-a", weight: 1.0,
@@ -234,8 +234,40 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         all_level_ordinals: [ 3, 4 ]
       )
       result = scorer.category_results[CAT_1]
-      assert result[:pass]
+      assert_not result[:pass]
       assert_in_delta(0.25, result[:pool], 0.01)
+    end
+
+    should "pass when pool passes and no capabilities are blocked" do
+      # Two capabilities in same category, deficit_threshold=0 (must balance).
+      # Both rated consistent at L3 → no deficit → no blocking
+      # net pool = 0.0 >= 0 → passes
+      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
+      binding_a = BindingStub.new(capability_id: "bid-a", weight: 1.0,
+        deficit_threshold: nil, overperformance_cap: nil, capability: cap_a)
+      binding_b = BindingStub.new(capability_id: "bid-b", weight: 1.0,
+        deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
+      category = CategoryStub.new(category_id: CAT_1,
+        deficit_threshold: 0, overperformance_cap: nil)
+
+      ratings = [
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
+        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+
+      scorer = PersonDevelopment::Scoring.new(
+        level_ratings: ratings,
+        bindings: [ binding_a, binding_b ],
+        categories: [ category ],
+        person_level: 3,
+        all_level_ordinals: [ 3 ]
+      )
+      result = scorer.category_results[CAT_1]
+      assert result[:pass]
+      assert_in_delta(0.0, result[:pool], 0.01)
     end
   end
 
