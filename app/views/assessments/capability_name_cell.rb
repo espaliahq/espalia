@@ -6,7 +6,7 @@
 # when a rating change updates blocked status.
 #
 class Views::Assessments::CapabilityNameCell < Views::Base
-  # @param capability [#stable_id, #name, #description] capability read model
+  # @param capability [#stable_id, #capability_id, #name, #description] capability read model
   # @param weight [Float] binding weight
   # @param mandatory [Boolean] whether deficit_threshold is 0
   # @param blocked [Boolean] whether this capability is blocked at person_level

@@ -133,6 +133,32 @@ end
 - Use `visible: true` / `visible: :all` appropriately — `visible: true` checks CSS visibility, `:all` finds hidden DOM elements
 - Use `SCREENSHOTS=1` to visually verify responsive layouts at both sizes
 
+## Waiting for Stimulus Controllers (NON-NEGOTIABLE)
+
+**Use `wait_for_stimulus` before interacting with Stimulus-controlled UI.** Stimulus controllers that extend `BaseController` set a `data-connected` attribute when connected. On slow CI runners, clicking before the controller connects means action handlers aren't attached yet — the click does nothing and the test flakes.
+
+```ruby
+# WRONG — clicks before the matrix controller may have connected
+visit assessment_path(@framework_id)
+find("[data-matrix-target='row']", match: :first).click
+# May silently do nothing on CI
+
+# CORRECT — waits for the controller to connect first
+visit assessment_path(@framework_id)
+wait_for_stimulus "matrix"
+find("[data-matrix-target='row']", match: :first).click
+assert_selector "[data-matrix-target='expandedRow']", visible: true
+```
+
+**When to use:**
+- After `visit` or any Turbo navigation, before clicking elements that rely on Stimulus actions
+- The argument is the controller name (e.g. `"matrix"`, `"dropdown"`, `"framework-explorer"`)
+- Optional `scope:` parameter narrows the search (e.g. `scope: "[data-framework-explorer-target='rolePaneToggle']"`)
+
+**When NOT needed:**
+- For simple links, forms, or elements that don't use Stimulus actions
+- When the next assertion already waits (e.g. `assert_text` on server-rendered content)
+
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
 **Always assert visibility after triggering Stimulus actions before interacting with the resulting DOM.** Elements toggled by Stimulus controllers (dropdowns, modals, expanded rows) exist in the DOM as hidden elements. Capybara's `find` and `within` will locate hidden elements and fail — or worse, pass locally but fail on slower CI runners due to race conditions.

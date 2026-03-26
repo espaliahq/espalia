@@ -73,9 +73,15 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       handler.create_capability_role_binding(
         @framework_id, SecureRandom.uuid_v7, @cap2_id, @role_id
       )
-      eid3 = SecureRandom.uuid_v7
-      handler.set_behavioural_expectation(@framework_id, eid3, SecureRandom.uuid_v7, @cap2_id, 1,
+      @eid3 = SecureRandom.uuid_v7
+      handler.set_behavioural_expectation(@framework_id, @eid3, SecureRandom.uuid_v7, @cap2_id, 1,
         "Breaks down tasks into manageable steps")
+
+      # Illustration for Problem Solving (needed for accordion tests)
+      handler.add_role_illustration(
+        @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+        @eid3, @role_id, 1, "Creates a checklist of sub-tasks before starting work"
+      )
 
       # Assign person and open cycle
       level = FrameworkState::Level.find_by!(level_id: @level2_id)
@@ -164,6 +170,85 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "[data-matrix-target='expandedRow']", visible: true
       assert_text "Asks 'why' before jumping into implementation"
       assert_text "Rephrases the problem statement in their own words"
+    end
+  end
+
+  context "row expansion accordion" do
+    should "expand a row when clicking it" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      row1 = find("[data-matrix-target='row']", match: :first)
+      row1.click
+
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
+    end
+
+    should "keep row expanded when clicking it again" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      row1 = find("[data-matrix-target='row']", match: :first)
+      row1.click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+      # Click the same row again — should stay expanded
+      row1.click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
+    end
+
+    should "collapse expanded row and expand new row when clicking a different row" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      rows = all("[data-matrix-target='row']")
+      row1 = rows[0]
+      row2 = rows[1]
+
+      # Expand first row
+      row1.click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
+
+      # Click second row — first should collapse, second should expand
+      row2.click
+      assert_text "Creates a checklist of sub-tasks before starting work"
+      assert_no_text "Asks 'why' before jumping into implementation"
+    end
+
+    should "collapse row when clicking its chevron" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      row1 = find("[data-matrix-target='row']", match: :first)
+      row1.click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+      # Click the chevron to collapse
+      chevron = row1.find("[data-matrix-target='rowChevron']")
+      chevron.click
+      assert_no_selector "[data-matrix-target='expandedRow']", visible: true
+    end
+
+    should "keep illustrations expanded when rating a capability in the same row" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # Expand the first row
+      row1 = find("[data-matrix-target='row']", match: :first)
+      row1.click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+      # Click a rating button inside the same row
+      within first("[id^='rating-']") do
+        click_button "Consistent"
+      end
+
+      # Illustrations should still be visible
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
     end
   end
 

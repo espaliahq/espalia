@@ -143,6 +143,16 @@ class Assessments::RatingsController < ApplicationController
           layout: false
         )
       ) if category_id),
+      (turbo_stream.replace(
+        "category-contribution-#{category_id}",
+        render_to_string(
+          Views::Assessments::CategoryContributionLabel.new(
+            category_id: category_id,
+            category_result: matrix_data[:scoring][:category_results][category_id]
+          ),
+          layout: false
+        )
+      ) if category_id),
       turbo_stream.replace(
         "capability-name-#{capability_stable_id}",
         render_to_string(

@@ -19,14 +19,17 @@ class Views::Assessments::MatrixCategoryGroup < Views::Base
   end
 
   def view_template
-    # Category header row
+    # Category header row — sticky left cell spans 2+ columns for breathing room
+    sticky_cols = [ @merged_levels.size, 1 ].min + 1
+    filler_cols = @merged_levels.size + 1 - sticky_cols
+
     tr(class: "sticky top-[41px] z-[5]") do
       td(
-        colspan: @merged_levels.size + 1,
-        class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b " \
-               "border-gray-200 dark:border-gray-700"
+        colspan: sticky_cols,
+        class: "sticky left-0 z-[6] px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-r " \
+               "border-gray-200 dark:border-gray-700 min-w-[220px]"
       ) do
-        div(class: "flex items-center justify-between") do
+        div(class: "flex items-center justify-between gap-2") do
           div(class: "flex items-center gap-2") do
             span(class: "text-sm font-semibold text-gray-900 dark:text-white") { @category.name }
             render Components::Kit::CategoryToleranceIndicator.new(
@@ -34,11 +37,24 @@ class Views::Assessments::MatrixCategoryGroup < Views::Base
             )
           end
 
-          render Views::Assessments::CategoryStatus.new(
-            category_id: @category.category_id,
-            category_result: @scoring[:category_results][@category.category_id]
-          )
+          div(class: "flex items-center gap-2 shrink-0") do
+            render Views::Assessments::CategoryContributionLabel.new(
+              category_id: @category.category_id,
+              category_result: @scoring[:category_results][@category.category_id]
+            )
+            render Views::Assessments::CategoryStatus.new(
+              category_id: @category.category_id,
+              category_result: @scoring[:category_results][@category.category_id]
+            )
+          end
         end
+      end
+
+      if filler_cols > 0
+        td(
+          colspan: filler_cols,
+          class: "bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+        )
       end
     end
 
