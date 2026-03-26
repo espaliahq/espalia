@@ -4104,6 +4104,7 @@ framework:
       description: Designs, implements, and manages scalable, secure, and cost-effective
         cloud solutions that support continuous innovation and operational efficiency.
       scope: Software Engineer
+      individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
       - level: 1
@@ -4165,6 +4166,7 @@ framework:
       description: Designs, queries, and maintains reliable, performant, and scalable
         data systems across SQL and NoSQL technologies.
       scope: Software Engineer
+      individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
       - level: 1
@@ -4221,6 +4223,7 @@ framework:
       description: Designs, builds, and maintains scalable, secure, and maintainable
         back-end systems with deep knowledge of NestJS and adjacent technologies.
       scope: Software Engineer
+      individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
       - level: 1
@@ -4289,6 +4292,7 @@ framework:
         React, Next.js, and Tailwind or equivalent Connect stack. Drives modern front-end
         standards and scalable architecture.
       scope: Software Engineer
+      individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
       - level: 1

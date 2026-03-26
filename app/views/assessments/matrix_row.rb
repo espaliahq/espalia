@@ -14,13 +14,15 @@ class Views::Assessments::MatrixRow < Views::Base
   # @param person_level [Integer]
   # @param framework_id [String]
   # @param blocked [Boolean] whether this capability is blocked at person_level
-  def initialize(capability_data:, merged_levels:, person_level:, framework_id:, blocked: false)
+  # @param block_reason [String, nil] human-readable explanation for why it's blocked
+  def initialize(capability_data:, merged_levels:, person_level:, framework_id:, blocked: false, block_reason: nil)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
     @weight = capability_data[:weight]
     @mandatory = @binding.deficit_threshold&.to_f == 0.0
     @blocked = blocked
+    @block_reason = block_reason
     @contribution = capability_data[:contribution]
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
@@ -99,6 +101,7 @@ class Views::Assessments::MatrixRow < Views::Base
       weight: @weight,
       mandatory: @mandatory,
       blocked: @blocked,
+      block_reason: @block_reason,
       contribution: @contribution,
       has_illustrations: @has_illustrations
     )
