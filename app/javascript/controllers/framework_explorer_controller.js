@@ -14,14 +14,15 @@
 //          class="max-lg:hidden ...">...</aside>
 // </div>
 
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 import { useClickOutside } from "stimulus-use"
 
-export default class extends Controller {
+export default class extends BaseController {
   static targets = ["rolePane", "contextPane", "rolePaneToggle", "toggleChevron",
                      "roleCount", "roleLabel"]
 
   connect() {
+    super.connect()
     this.isMobile = window.innerWidth < 1024
     // On desktop the pane starts visible; on mobile it starts hidden
     this.rolePaneOpen = !this.isMobile

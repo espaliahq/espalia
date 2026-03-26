@@ -25,6 +25,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   Capybara.default_max_wait_time = 5
 
   include AutoScreenshots
+  include StimulusHelpers
 
   setup do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)

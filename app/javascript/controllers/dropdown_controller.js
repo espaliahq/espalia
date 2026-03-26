@@ -10,13 +10,14 @@
 //   </div>
 // </div>
 
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 import { useClickOutside, useTransition } from "stimulus-use"
 
-export default class extends Controller {
+export default class extends BaseController {
   static targets = ["menu", "trigger"]
 
   connect() {
+    super.connect()
     useClickOutside(this)
     useTransition(this, { element: this.menuTarget })
   }

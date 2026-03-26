@@ -162,7 +162,8 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
 
       assert_selector "[data-framework-explorer-target='rolePane']", visible: true
-      assert_selector "button", text: "Roles", visible: true
+      # Wait for Stimulus to connect — connect() applies text-primary to the toggle button
+      wait_for_stimulus "framework-explorer"
 
       # Click to hide
       click_button "Roles"
@@ -176,6 +177,9 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
     should "hide role tree on mobile and show it via toggle button" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit framework_path(@framework_id)
+
+      # Wait for Stimulus to connect before interacting
+      assert_selector "[data-controller='framework-explorer'][data-connected]"
 
       # Role pane should be hidden on mobile
       assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
@@ -195,6 +199,9 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
     should "close mobile role tree overlay when clicking outside" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit framework_path(@framework_id)
+
+      # Wait for Stimulus to connect before interacting
+      assert_selector "[data-controller='framework-explorer'][data-connected]"
 
       # Open the role pane
       click_button "Roles"
