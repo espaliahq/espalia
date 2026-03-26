@@ -3,20 +3,28 @@
 # Scoring summary sidebar for the assessment view.
 #
 # Three-tier performance signal:
-# 1. Below expectations (< 1.0) — performance concern
-# 2. Meeting expectations (≥ 1.0) — at baseline
-# 3. Mastering (≥ 1.25 default) — significantly exceeding
+# 1. Below expectations (< meeting_expectation_threshold) — performance concern
+# 2. Meeting expectations (≥ meeting_expectation_threshold, default 0.95) — at baseline
+# 3. Mastering (≥ mastery_threshold) — significantly exceeding
 #
 # Wrapped in a targetable div for Turbo Stream replacement.
 #
 class Views::Assessments::ScoringPanel < Views::Base
+  AMBER_THRESHOLD = 0.8
+
   # @param scoring [Hash] from MatrixDataBuilder scoring output
   # @param categories [Array<Hash>] category data from MatrixDataBuilder
   # @param person_level [Integer]
-  def initialize(scoring:, categories:, person_level:)
+  # @param mastery_threshold [Float] ratio threshold for mastering tier
+  # @param meeting_expectation_threshold [Float] ratio threshold for meeting tier
+  def initialize(scoring:, categories:, person_level:,
+                 mastery_threshold: PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
+                 meeting_expectation_threshold: PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD)
     @scoring = scoring
     @categories = categories
     @person_level = person_level
+    @mastery_threshold = mastery_threshold
+    @meeting_expectation_threshold = meeting_expectation_threshold
   end
 
   def view_template
@@ -77,6 +85,7 @@ class Views::Assessments::ScoringPanel < Views::Base
           "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
           "text-red-800 dark:text-red-300"
         )
+        blocked_capabilities_detail
       end
     end
   end
@@ -155,12 +164,36 @@ class Views::Assessments::ScoringPanel < Views::Base
     end
   end
 
+  def blocked_capabilities_detail
+    statuses = @scoring[:capability_statuses] || {}
+    blocked_ids = statuses.select { |_, s| s == :blocked }.keys
+    return if blocked_ids.empty?
+
+    blocked_names = @categories.flat_map { |cat| cat[:capabilities] }
+                               .select { |cap| blocked_ids.include?(cap[:capability].stable_id) }
+                               .map { |cap| cap[:capability].name }
+
+    div(class: "mt-2 p-2 rounded-md bg-red-50/50 dark:bg-red-900/10") do
+      p(class: "text-xs font-medium text-red-700 dark:text-red-400 mb-1") do
+        "#{blocked_names.size} blocked #{'capability'.pluralize(blocked_names.size)}"
+      end
+      ul(class: "space-y-0.5") do
+        blocked_names.each do |name|
+          li(class: "text-xs text-red-600 dark:text-red-400 flex items-center gap-1") do
+            span(class: "w-1 h-1 rounded-full bg-red-400 shrink-0") { }
+            plain name
+          end
+        end
+      end
+    end
+  end
+
   def performance_color(ratio)
-    if ratio >= 1.25
+    if ratio >= @mastery_threshold
       "text-purple-600 dark:text-purple-400"
-    elsif ratio >= 1.0
+    elsif ratio >= @meeting_expectation_threshold
       "text-green-600 dark:text-green-400"
-    elsif ratio >= 0.8
+    elsif ratio >= AMBER_THRESHOLD
       "text-amber-600 dark:text-amber-400"
     else
       "text-red-600 dark:text-red-400"
@@ -168,11 +201,11 @@ class Views::Assessments::ScoringPanel < Views::Base
   end
 
   def performance_bar_color(ratio)
-    if ratio >= 1.25
+    if ratio >= @mastery_threshold
       "bg-purple-500"
-    elsif ratio >= 1.0
+    elsif ratio >= @meeting_expectation_threshold
       "bg-green-500"
-    elsif ratio >= 0.8
+    elsif ratio >= AMBER_THRESHOLD
       "bg-amber-500"
     else
       "bg-red-500"

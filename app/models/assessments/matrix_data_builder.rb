@@ -119,12 +119,17 @@ class Assessments::MatrixDataBuilder
       next unless expectation
 
       rating = @ratings_index[[ capability.stable_id, ordinal ]]
+      illustrations = expectation.illustrations
+        .select { |ill| ill.role_id == @role.role_id }
+        .sort_by(&:ordinal)
 
       cells[ordinal] = {
         expectation: expectation,
         current_frequency: rating&.self_rated_frequency,
         manager_frequency: rating&.manager_rated_frequency,
-        aligned_frequency: rating&.aligned_frequency
+        aligned_frequency: rating&.aligned_frequency,
+        illustrations: illustrations,
+        illustration_count: illustrations.size
       }
     end
   end

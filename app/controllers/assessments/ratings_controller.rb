@@ -95,11 +95,15 @@ class Assessments::RatingsController < ApplicationController
     # Find the capability's category for targeted category header update
     category_id = find_category_id(capability_stable_id, matrix_data)
 
-    # Find updated cell data for this specific rating
-    cell_data = find_cell_data(capability_stable_id, level_ordinal, matrix_data)
-
-    # Find updated contribution score for this capability
-    contribution = find_contribution(capability_stable_id, matrix_data)
+    # Find capability data (cell, contribution, binding, etc.) for targeted updates
+    cap_data = find_capability_data(capability_stable_id, matrix_data)
+    if cap_data.nil?
+      head :not_found
+      return
+    end
+    cell_data = cap_data[:cells][level_ordinal]
+    contribution = cap_data[:contribution]
+    blocked = matrix_data[:scoring].dig(:capability_statuses, capability_stable_id) == :blocked
 
     render turbo_stream: [
       turbo_stream.replace(
@@ -121,7 +125,9 @@ class Assessments::RatingsController < ApplicationController
           Views::Assessments::ScoringPanel.new(
             scoring: matrix_data[:scoring],
             categories: matrix_data[:categories],
-            person_level: matrix_data[:person_level]
+            person_level: matrix_data[:person_level],
+            mastery_threshold: matrix_data[:mastery_threshold],
+            meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold]
           ),
           layout: false
         )
@@ -137,11 +143,15 @@ class Assessments::RatingsController < ApplicationController
         )
       ) if category_id),
       turbo_stream.replace(
-        "contribution-#{capability_stable_id}",
+        "capability-name-#{capability_stable_id}",
         render_to_string(
-          Views::Assessments::ContributionLabel.new(
-            capability_stable_id: capability_stable_id,
-            contribution: contribution
+          Views::Assessments::CapabilityNameCell.new(
+            capability: cap_data[:capability],
+            weight: cap_data[:weight],
+            mandatory: cap_data[:binding].deficit_threshold&.to_f == 0.0,
+            blocked: blocked,
+            contribution: contribution,
+            has_illustrations: cap_data[:cells].any? { |_, c| c[:illustration_count]&.positive? }
           ),
           layout: false
         )
@@ -169,21 +179,10 @@ class Assessments::RatingsController < ApplicationController
     nil
   end
 
-  def find_contribution(capability_stable_id, matrix_data)
+  def find_capability_data(capability_stable_id, matrix_data)
     matrix_data[:categories].each do |cat_data|
       cat_data[:capabilities].each do |cap_data|
-        return cap_data[:contribution] if cap_data[:capability].stable_id == capability_stable_id
-      end
-    end
-    nil
-  end
-
-  def find_cell_data(capability_stable_id, level_ordinal, matrix_data)
-    matrix_data[:categories].each do |cat_data|
-      cat_data[:capabilities].each do |cap_data|
-        if cap_data[:capability].stable_id == capability_stable_id
-          return cap_data[:cells][level_ordinal]
-        end
+        return cap_data if cap_data[:capability].stable_id == capability_stable_id
       end
     end
     nil
