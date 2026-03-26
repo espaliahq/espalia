@@ -131,10 +131,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "rate a capability and see scoring update" do
       visit assessment_path(@framework_id)
 
-      # Find the first "Consistent" button and click it
-      within first("[id^='rating-']") do
-        click_button "Consistent"
-      end
+      # Click the first "Consistent" button using a precise selector
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
 
       # Scoring panel should update (performance ratio changes)
       assert_selector "#scoring-panel"
@@ -241,10 +239,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       row1.click
       assert_selector "[data-matrix-target='expandedRow']", visible: true
 
-      # Click a rating button inside the same row
-      within first("[id^='rating-']") do
-        click_button "Consistent"
-      end
+      # Click a rating button inside the expanded row's compact sibling.
+      # Use the capability stable_id to build a precise selector, avoiding
+      # stale element references from Turbo Stream replacements.
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
 
       # Illustrations should still be visible
       assert_selector "[data-matrix-target='expandedRow']", visible: true

@@ -184,6 +184,26 @@ end
 - This applies to dropdowns, modals, accordions, expanded table rows, and any element toggled via `useTransition` or class manipulation
 - `within` does NOT wait for visibility — always assert visibility first
 
+## Avoiding Stale Element References with Turbo Streams (NON-NEGOTIABLE)
+
+**Never use `within first(...)` or `within find(...)` to scope a click inside an element that Turbo Stream may replace.** The `within` block holds a cached reference to the DOM node. If a Turbo Stream response replaces that node between the `find` and the `click_button`, Selenium raises `StaleElementReferenceError`. This passes locally but flakes on slow CI runners.
+
+```ruby
+# WRONG — first() caches the element, Turbo Stream replaces it, click_button hits a stale ref
+within first("[id^='rating-']") do
+  click_button "Consistent"
+end
+
+# CORRECT — single find + click resolves the element at click time
+find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+```
+
+**Key principles:**
+- Use precise `#id`-based selectors rather than `first(...)` or pattern-matched selectors when the target may be replaced by Turbo Streams
+- Combine `find` and `.click` in a single expression — don't cache elements in variables across Turbo Stream boundaries
+- If you must use `within`, scope it to a container that is NOT replaced (e.g. the parent `tr` or a wrapper div that sits outside the Turbo Stream target)
+- This applies to any element inside a Turbo Stream replacement target: rating cells, scoring panels, category headers, contribution labels
+
 ## Rules
 
 - Use `subject { }` to define the object under test
