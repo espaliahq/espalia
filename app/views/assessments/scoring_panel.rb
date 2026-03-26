@@ -3,8 +3,8 @@
 # Scoring summary sidebar for the assessment view.
 #
 # Three-tier performance signal:
-# 1. Below expectations (< 1.0) — performance concern
-# 2. Meeting expectations (≥ 1.0) — at baseline
+# 1. Below expectations (< meeting_expectation_threshold) — performance concern
+# 2. Meeting expectations (≥ meeting_expectation_threshold, default 0.95) — at baseline
 # 3. Mastering (≥ mastery_threshold) — significantly exceeding
 #
 # Wrapped in a targetable div for Turbo Stream replacement.

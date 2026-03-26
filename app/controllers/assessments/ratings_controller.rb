@@ -97,6 +97,10 @@ class Assessments::RatingsController < ApplicationController
 
     # Find capability data (cell, contribution, binding, etc.) for targeted updates
     cap_data = find_capability_data(capability_stable_id, matrix_data)
+    if cap_data.nil?
+      head :not_found
+      return
+    end
     cell_data = cap_data[:cells][level_ordinal]
     contribution = cap_data[:contribution]
     blocked = matrix_data[:scoring].dig(:capability_statuses, capability_stable_id) == :blocked
