@@ -4,13 +4,15 @@
 #
 # Bindings tie a capability to a role with a weight and optional scoring overrides.
 #
-# == deficit_threshold
-# Maximum acceptable uncapped weighted deficit for this capability at the rated
-# level before it blocks mastery / promotion verdicts and caps the category pool:
+# == deficit_threshold (individual_tolerance in seed/event data)
+# Maximum acceptable contribution deficit for this capability before it blocks
+# mastery / promotion verdicts. Deficit is derived from the capability's capped
+# contribution: deficit = max(0, −contribution). The boundary is exclusive
+# (deficit > threshold), so a deficit exactly equal to the threshold does NOT block.
 #
 #   nil  — governed by category or framework deficit_threshold
 #   0    — no deficit allowed (equivalent to former mandatory?: true)
-#   N    — deficit capped at N for pool; any deficit >= N blocks verdicts
+#   N    — contribution deficit up to N is tolerated; deficit > N blocks verdicts
 #
 # == overperformance_cap
 # Number of levels above the person's assigned level that still contribute to

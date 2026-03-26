@@ -139,7 +139,7 @@ class PersonDevelopment::Scoring
 
   # Per-capability status at the given reference level.
   #
-  # :blocked     — deficit >= effective_deficit_threshold (blocks mastery/promotion)
+  # :blocked     — deficit > effective_deficit_threshold (blocks mastery/promotion)
   # :above_cap   — consistent at ordinals beyond reference_level + overperformance_cap
   # :at_bar      — effective_freq at reference_level >= 1.0 (consistent)
   # :developing  — below bar, not blocked
@@ -273,8 +273,10 @@ class PersonDevelopment::Scoring
   # @return [Float]
   def raw_contribution_at_level_for_header(binding, reference_level)
     stable_id = binding.capability.stable_id
+    cap       = overperformance_cap_for(binding)
 
     @all_level_ordinals.sum do |ordinal|
+      next 0.0 if ordinal > reference_level + cap
       freq =
         if ordinal < @person_level
           effective_frequency(stable_id, ordinal)  # default 1.0 for unrated past levels
