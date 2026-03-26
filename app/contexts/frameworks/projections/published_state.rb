@@ -359,8 +359,11 @@ class Frameworks::Projections::PublishedState
 
   def handle_scoring_thresholds_configured(event)
     framework = find_framework(event)
-    attrs = event.data.slice(:mastery_threshold).compact
+    attrs = {}
+    attrs[:mastery_threshold] = event.data[:mastery_threshold] if event.data.key?(:mastery_threshold)
     attrs[:meeting_expectation_threshold] = event.data[:promotion_score_threshold] if event.data.key?(:promotion_score_threshold)
+    attrs[:overperformance_cap] = event.data[:overperformance_cap] if event.data.key?(:overperformance_cap)
+    attrs[:deficit_threshold] = event.data[:deficit_threshold] if event.data.key?(:deficit_threshold)
     framework&.update!(attrs) if attrs.any?
   end
 

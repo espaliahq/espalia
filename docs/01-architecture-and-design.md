@@ -14,7 +14,7 @@
 | [domain-models.md](architecture/domain-models.md) | Working on Tenant, User, TenantUser, or Person; adding auth or multi-tenancy logic; writing migrations for these tables |
 | [framework-aggregate.md](architecture/framework-aggregate.md) | Working on framework features — roles, capabilities, expectations, illustrations, suggested edits, versioning, or collaborators |
 | [person-development-aggregate.md](architecture/person-development-aggregate.md) | Working on assessments, evidence, growth plans, alignment conversations, check-ins, or framework migration |
-| [scoring-model.md](architecture/scoring-model.md) | Working on assessment scoring, the capability matrix display, performance verdicts, promotion readiness, or the scoring panel UI |
+| [scoring-model.md](architecture/scoring-model.md) | Working on assessment scoring, the capability matrix display, performance verdicts, promotion readiness, the scoring panel UI, or framework scoring settings |
 | [reporting.md](architecture/reporting.md) | Working on reporting — gap analysis, trend analysis, promotion readiness dashboards, growth plan freshness, evidence density |
 | [integrations.md](architecture/integrations.md) | Working on HRIS sync, notification adapters, or SSO/SAML |
 | [event-store.md](architecture/event-store.md) | Configuring event subscriptions, adding new projections, working with snapshots, or adding async handlers |
