@@ -71,6 +71,22 @@ export default class extends BaseController {
     if (!expandedRow) return
 
     const isExpanding = expandedRow.classList.contains("hidden")
+
+    // Collapse any other expanded row first (accordion behavior)
+    if (isExpanding) {
+      this.expandedRowTargets.forEach(r => {
+        if (r !== expandedRow && !r.classList.contains("hidden")) {
+          r.classList.add("hidden")
+          const otherCapId = r.dataset.capabilityId
+          const otherRow = this.rowTargets.find(
+            rt => rt.dataset.capabilityId === otherCapId
+          )
+          const otherChevron = otherRow?.querySelector("[data-matrix-target='rowChevron']")
+          if (otherChevron) otherChevron.classList.remove("rotate-90")
+        }
+      })
+    }
+
     expandedRow.classList.toggle("hidden")
 
     // Rotate chevron
