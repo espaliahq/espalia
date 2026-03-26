@@ -46,6 +46,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       # Expand the capability row by clicking it
       find("tr[data-capability-id]", match: :first).click
 
+      # Wait for Stimulus to toggle the expanded row visible
+      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
+
       # Illustration is now visible in the expanded row
       assert_text "Seeks guidance from tech lead"
     end
@@ -55,6 +58,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
       # Expand the capability row
       find("tr[data-capability-id]", match: :first).click
+      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
       assert_text "Seeks guidance from tech lead"
 
       # The inline-editor controller is on each illustration li.
@@ -78,6 +82,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
 
       find("tr[data-capability-id]", match: :first).click
+      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
       assert_text "Seeks guidance from tech lead"
 
       ill_li = find("li[data-controller='inline-editor']", match: :first)
