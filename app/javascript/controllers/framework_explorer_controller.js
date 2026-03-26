@@ -21,18 +21,17 @@ export default class extends Controller {
   static targets = ["rolePane", "contextPane", "rolePaneToggle", "toggleChevron",
                      "roleCount", "roleLabel"]
 
-  #mql
-
   connect() {
-    // Use matchMedia to stay consistent with Tailwind's max-lg: breakpoint
-    this.#mql = window.matchMedia("(max-width: 1023px)")
+    this.isMobile = window.innerWidth < 1024
     // On desktop the pane starts visible; on mobile it starts hidden
-    this.rolePaneOpen = !this.#mql.matches
+    this.rolePaneOpen = !this.isMobile
     this.#updateToggleAffordance()
   }
 
   toggleRolePane() {
     if (!this.hasRolePaneTarget) return
+
+    this.isMobile = window.innerWidth < 1024
 
     if (this.rolePaneOpen) {
       this.#closeRolePane()
@@ -70,7 +69,7 @@ export default class extends Controller {
   #openRolePane() {
     this.rolePaneOpen = true
 
-    if (this.#mql.matches) {
+    if (this.isMobile) {
       Object.assign(this.rolePaneTarget.style, {
         display: "flex",
         position: "fixed",
@@ -88,7 +87,7 @@ export default class extends Controller {
 
   #closeRolePane() {
     this.rolePaneOpen = false
-    if (this.#mql.matches) {
+    if (this.isMobile) {
       this.rolePaneTarget.removeAttribute("style")
     } else {
       this.rolePaneTarget.style.display = "none"

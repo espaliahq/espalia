@@ -14,6 +14,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
   end
 
+  # CI runners (2 cores) can't sustain multiple Chrome processes — JavaScript
+  # event loops get starved, causing Stimulus actions to miss Capybara's wait window.
+  parallelize(workers: 1) if ENV["CI"]
+
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
 
