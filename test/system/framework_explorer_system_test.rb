@@ -94,6 +94,9 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Expand the capability row by clicking it
       find("[data-capability-id]", match: :first).click
 
+      # Wait for Stimulus to toggle the expanded row visible
+      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
+
       # Should see PD illustration
       assert_text "Runs user research sessions"
 
