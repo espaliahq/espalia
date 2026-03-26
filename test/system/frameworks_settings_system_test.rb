@@ -51,11 +51,15 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
 
       fill_in "settings[mastery_threshold]", with: "1.25"
       fill_in "settings[meeting_expectation_threshold]", with: "0.90"
+      fill_in "settings[overperformance_cap]", with: "2.50"
+      fill_in "settings[deficit_threshold]", with: "0.50"
       click_button "Save settings"
 
       assert_text "Scoring settings updated"
       assert_field "settings[mastery_threshold]", with: "1.25"
       assert_field "settings[meeting_expectation_threshold]", with: "0.9"
+      assert_field "settings[overperformance_cap]", with: "2.5"
+      assert_field "settings[deficit_threshold]", with: "0.5"
     end
 
     should "show settings link on framework show page for admins" do
