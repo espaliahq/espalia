@@ -180,7 +180,7 @@ class Views::Assessments::ScoringPanel < Views::Base
       ul(class: "space-y-0.5") do
         blocked_names.each do |name|
           li(class: "text-xs text-red-600 dark:text-red-400 flex items-center gap-1") do
-            span(class: "w-1 h-1 rounded-full bg-red-400 shrink-0") {}
+            span(class: "w-1 h-1 rounded-full bg-red-400 shrink-0") { }
             plain name
           end
         end
