@@ -128,7 +128,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
 
       find("tr[data-capability-id]", match: :first).click
-      assert_selector "turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']", visible: true
+      # Wait for the expanded row to become visible before looking for children.
+      # The turbo-frame lives inside a tr.hidden that Stimulus toggles on click.
+      find("turbo-frame[id^='new-illustration-#{@eid}-']", match: :first)
 
       add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
         .find("div[data-controller='inline-editor']")
@@ -149,7 +151,8 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
 
       find("tr[data-capability-id]", match: :first).click
-      assert_selector "turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']", visible: true
+      # Wait for the expanded row to become visible before looking for children.
+      find("turbo-frame[id^='new-illustration-#{@eid}-']", match: :first)
 
       add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
         .find("div[data-controller='inline-editor']")
