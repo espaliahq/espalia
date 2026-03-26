@@ -426,7 +426,10 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   # ── Promotion readiness ──
 
   context "#promotion_readiness" do
-    should "be eligible when deficit_threshold=0 cap is consistent at next level and score meets threshold" do
+    should "block at next level when consistent there but unrated at current level" do
+      # When evaluating promotion to L4: L3 is unrated (deficit -1.0), L4 is at
+      # expectations (0.0). Total contribution = -1.0, deficit > 0 → blocked.
+      # You must demonstrate at your current level to be promotable.
       cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       binding = BindingStub.new(capability_id: "bid", weight: 1.0,
         deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)  # mandatory (no deficit)
@@ -445,8 +448,34 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         thresholds: { meeting_expectation_threshold: 0.7 }
       )
       result = scorer.promotion_readiness
+      assert_not result[:eligible]
+      assert_includes result[:blocked_at_next_level], CAP_A
+    end
+
+    should "be eligible when consistent at both current and next level" do
+      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
+        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)
+      category = CategoryStub.new(category_id: CAT_1,
+        deficit_threshold: nil, overperformance_cap: nil)
+
+      ratings = [
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+
+      scorer = PersonDevelopment::Scoring.new(
+        level_ratings: ratings,
+        bindings: [ binding ],
+        categories: [ category ],
+        person_level: 3,
+        all_level_ordinals: [ 1, 2, 3, 4 ],
+        thresholds: { meeting_expectation_threshold: 0.7 }
+      )
+      result = scorer.promotion_readiness
       assert result[:eligible]
-      assert result[:meets_score_threshold]
       assert_empty result[:blocked_at_next_level]
     end
 
@@ -469,10 +498,9 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert_includes result[:blocked_at_next_level], CAP_A
     end
 
-    should "not block standard capabilities (deficit_threshold=nil) when unrated at next level" do
-      # With default threshold 1.0, unrated at next level gives deficit = 1.0.
-      # Using strict > comparison: 1.0 > 1.0 = false → not blocked.
-      # Score penalty still applies via performance_ratio_at_level.
+    should "block standard capabilities when contribution deficit exceeds threshold at next level" do
+      # Unrated at L3 and L4: contribution = -1.0 + -1.0 = -2.0.
+      # Default threshold = 1.0, deficit 2.0 > 1.0 → blocked.
       cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
       binding = BindingStub.new(capability_id: "bid", weight: 1.0,
         deficit_threshold: nil, overperformance_cap: nil, capability: cap)
@@ -487,7 +515,140 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         all_level_ordinals: [ 1, 2, 3, 4 ]
       )
       result = scorer.promotion_readiness
+      assert_includes result[:blocked_at_next_level], CAP_A
+    end
+
+    should "not block standard capabilities when contribution deficit is within threshold" do
+      # Rated occasional at L3 and L4: freq=0.5 each
+      # L3 contribution = (0.5 - 1.0) * 1.0 = -0.5
+      # L4 contribution = (0.5 - 1.0) * 1.0 = -0.5
+      # Total = -1.0, deficit = 1.0, threshold = 1.0 → 1.0 > 1.0 = false → not blocked
+      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
+        deficit_threshold: nil, overperformance_cap: nil, capability: cap)
+      category = CategoryStub.new(category_id: CAT_1,
+        deficit_threshold: nil, overperformance_cap: nil)
+
+      ratings = [
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+          aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil),
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
+          aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+
+      scorer = PersonDevelopment::Scoring.new(
+        level_ratings: ratings,
+        bindings: [ binding ],
+        categories: [ category ],
+        person_level: 3,
+        all_level_ordinals: [ 1, 2, 3, 4 ]
+      )
+      result = scorer.promotion_readiness
       assert_empty result[:blocked_at_next_level]
+    end
+  end
+
+  # ── Block reasons ──
+
+  context "block_reasons" do
+    should "return empty hash when no capabilities are blocked" do
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
+      assert_empty scorer.block_reasons
+    end
+
+    should "return reason for a blocked capability" do
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
+      # some=0.25, contribution = (0.25 - 1.0) * 1.0 = -0.75, deficit=0.75, threshold=0
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+        deficit_threshold: 0)
+      reasons = scorer.block_reasons
+      assert_includes reasons.keys, CAP_A
+      assert_includes reasons[CAP_A], "Below expectations by 0.8 points"
+      assert_includes reasons[CAP_A], "no deficit allowed"
+    end
+
+    should "return reason with max allowed when threshold is non-zero" do
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+        aligned_frequency: "none", manager_rated_frequency: nil, self_rated_frequency: nil)
+      # none=0.0, weight=2.0, contribution = (0.0 - 1.0) * 2.0 = -2.0, deficit=2.0, threshold=1.0
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+        weight: 2.0, deficit_threshold: 1.0)
+      reasons = scorer.block_reasons
+      assert_includes reasons[CAP_A], "Below expectations by 2.0 points"
+      assert_includes reasons[CAP_A], "max allowed: 1.0"
+    end
+
+    should "not block when over-performance at higher level offsets gap" do
+      # Unrated at L3 (person level) → contribution at L3 = (0.0 - 1.0) * 1.0 = -1.0
+      # Consistent at L4 → contribution at L4 = (1.0 - 0.0) * 1.0 = +1.0
+      # Total contribution = 0.0, deficit = 0.0, threshold=0 → NOT blocked
+      ratings = [
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], ratings: ratings,
+        deficit_threshold: 0)
+      assert_empty scorer.block_reasons
+      assert_not_equal :blocked, scorer.capability_statuses[CAP_A]
+    end
+
+    should "not include non-blocked capabilities" do
+      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
+      binding_a = BindingStub.new(capability_id: "bid-a", weight: 1.0,
+        deficit_threshold: 0, overperformance_cap: nil, capability: cap_a)
+      binding_b = BindingStub.new(capability_id: "bid-b", weight: 1.0,
+        deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
+      category = CategoryStub.new(category_id: CAT_1,
+        deficit_threshold: nil, overperformance_cap: nil)
+
+      ratings = [
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+          aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil),
+        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+
+      scorer = PersonDevelopment::Scoring.new(
+        level_ratings: ratings,
+        bindings: [ binding_a, binding_b ],
+        categories: [ category ],
+        person_level: 3,
+        all_level_ordinals: [ 3 ]
+      )
+      reasons = scorer.block_reasons
+      assert_includes reasons.keys, CAP_A
+      assert_not_includes reasons.keys, CAP_B
+    end
+
+    should "block when over-performance is capped and gap remains" do
+      # Unrated at L3 (person level) → contribution at L3 = -1.0
+      # Consistent at L4 → within cap (default 1), contributes +1.0 → total = 0.0
+      # Consistent at L5 → beyond cap, contributes 0 → still total = 0.0
+      # But if overperformance_cap=0, L4 is beyond cap → total = -1.0 → blocked
+      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
+        deficit_threshold: 0, overperformance_cap: 0, capability: cap_a)
+      category = CategoryStub.new(category_id: CAT_1,
+        deficit_threshold: nil, overperformance_cap: nil)
+
+      ratings = [
+        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
+          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      ]
+
+      scorer = PersonDevelopment::Scoring.new(
+        level_ratings: ratings,
+        bindings: [ binding ],
+        categories: [ category ],
+        person_level: 3,
+        all_level_ordinals: [ 3, 4 ]
+      )
+      assert_equal :blocked, scorer.capability_statuses[CAP_A]
+      assert_includes scorer.block_reasons.keys, CAP_A
     end
   end
 end

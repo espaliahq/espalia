@@ -30,7 +30,8 @@
 #   Resolved per capability: binding.deficit_threshold ||
 #     category.deficit_threshold || framework.deficit_threshold (default 1.0)
 #
-#   deficit = max(0, 1.0 - effective_freq_at_reference_level) * weight
+#   contribution = Σ (effective_freq − expected) × weight across capped ordinals
+#   deficit = max(0, −contribution)
 #   Verdict gate: deficit > threshold → capability is :blocked
 #
 # == Category gate
@@ -183,6 +184,15 @@ class PersonDevelopment::Scoring
     end
   end
 
+  # Human-readable explanations for blocked capabilities.
+  #
+  # @param reference_level [Integer] defaults to person's assigned level
+  # @return [Hash{String => String}] stable_id => reason string (only blocked capabilities)
+  def block_reasons(reference_level: @person_level)
+    @block_reasons ||= {}
+    @block_reasons[reference_level] ||= compute_block_reasons(reference_level)
+  end
+
   # Promotion readiness result.
   # Eligible when performance at next level meets meeting_expectation_threshold
   # AND no capabilities are blocked at the next level.
@@ -310,11 +320,12 @@ class PersonDevelopment::Scoring
 
   def compute_capability_statuses(reference_level)
     @bindings.to_h do |binding|
-      stable_id = binding.capability.stable_id
-      freq      = effective_frequency(stable_id, reference_level)
-      deficit   = [ 0.0, (1.0 - freq) * binding.weight.to_f ].max
-      threshold = deficit_threshold_for(binding)
-      cap       = overperformance_cap_for(binding)
+      stable_id    = binding.capability.stable_id
+      contribution = raw_contribution_at_level(binding, reference_level)
+      deficit      = [ 0.0, -contribution ].max
+      threshold    = deficit_threshold_for(binding)
+      cap          = overperformance_cap_for(binding)
+      freq         = effective_frequency(stable_id, reference_level)
 
       status =
         if deficit > threshold
@@ -344,6 +355,35 @@ class PersonDevelopment::Scoring
       meets_score_threshold: meets_score,
       blocked_at_next_level: blocked
     }
+  end
+
+  # ── Block reason helpers ──
+
+  def compute_block_reasons(reference_level)
+    @bindings.each_with_object({}) do |binding, reasons|
+      stable_id    = binding.capability.stable_id
+      contribution = raw_contribution_at_level(binding, reference_level)
+      deficit      = [ 0.0, -contribution ].max
+      threshold    = deficit_threshold_for(binding)
+
+      next unless deficit > threshold
+
+      reasons[stable_id] = format_block_reason(stable_id, reference_level, contribution, threshold)
+    end
+  end
+
+  def format_block_reason(stable_id, reference_level, contribution, threshold)
+    deficit = [ 0.0, -contribution ].max
+
+    if threshold.zero?
+      "Below expectations by #{'%.1f' % deficit} points — no deficit allowed"
+    else
+      "Below expectations by #{'%.1f' % deficit} points (max allowed: #{'%.1f' % threshold})"
+    end
+  end
+
+  def frequency_label(freq_value)
+    FREQUENCY.key(freq_value)&.capitalize || "Unknown"
   end
 
   # ── Resolution helpers ──
