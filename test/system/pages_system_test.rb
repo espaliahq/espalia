@@ -45,6 +45,9 @@ class PagesSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit root_path
 
+      # Wait for sidebar controller to be ready (find its target element)
+      assert_selector "[data-sidebar-target='drawer']", visible: :all
+
       # Drawer starts hidden on mobile (has "hidden" class)
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
       classes = drawer[:class].split
@@ -62,6 +65,9 @@ class PagesSystemTest < ApplicationSystemTestCase
     should "close mobile menu when clicking outside" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit root_path
+
+      # Wait for sidebar controller to be ready (find its target element)
+      assert_selector "[data-sidebar-target='drawer']", visible: :all
 
       # Open the drawer
       find("[data-action='sidebar#toggle']").click

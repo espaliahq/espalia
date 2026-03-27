@@ -155,6 +155,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "show illustration count and expand to reveal illustrations" do
       visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       # Illustration count indicators should be visible
       assert_text "2 examples"
