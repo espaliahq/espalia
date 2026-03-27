@@ -161,9 +161,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "2 examples"
       assert_text "1 example"
 
-      # Click the Critical Thinking row to expand illustrations
-      row = find("[data-matrix-target='row']", match: :first)
-      row.click
+      # Click the Critical Thinking capability name to expand illustrations
+      find("#capability-name-#{@cap1_stable}").click
 
       # Expanded row should appear with illustration text
       assert_selector "[data-matrix-target='expandedRow']", visible: true
@@ -177,8 +176,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      row1 = find("[data-matrix-target='row']", match: :first)
-      row1.click
+      # Click the capability name cell — avoids hitting rating form buttons
+      find("#capability-name-#{@cap1_stable}").click
 
       assert_selector "[data-matrix-target='expandedRow']", visible: true
       assert_text "Asks 'why' before jumping into implementation"
@@ -188,12 +187,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      row1 = find("[data-matrix-target='row']", match: :first)
-      row1.click
+      find("#capability-name-#{@cap1_stable}").click
       assert_selector "[data-matrix-target='expandedRow']", visible: true
 
-      # Click the same row again — should stay expanded
-      row1.click
+      # Click the same capability name again — should stay expanded
+      find("#capability-name-#{@cap1_stable}").click
       assert_selector "[data-matrix-target='expandedRow']", visible: true
       assert_text "Asks 'why' before jumping into implementation"
     end
@@ -202,17 +200,13 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      rows = all("[data-matrix-target='row']")
-      row1 = rows[0]
-      row2 = rows[1]
-
       # Expand first row
-      row1.click
+      find("#capability-name-#{@cap1_stable}").click
       assert_selector "[data-matrix-target='expandedRow']", visible: true
       assert_text "Asks 'why' before jumping into implementation"
 
       # Click second row — first should collapse, second should expand
-      row2.click
+      find("#capability-name-#{@cap2_stable}").click
       assert_text "Creates a checklist of sub-tasks before starting work"
       assert_no_text "Asks 'why' before jumping into implementation"
     end
@@ -221,11 +215,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      row1 = find("[data-matrix-target='row']", match: :first)
-      row1.click
+      find("#capability-name-#{@cap1_stable}").click
       assert_selector "[data-matrix-target='expandedRow']", visible: true
 
       # Click the chevron to collapse
+      row1 = find("[data-matrix-target='row']", match: :first)
       chevron = row1.find("[data-matrix-target='rowChevron']")
       chevron.click
       assert_no_selector "[data-matrix-target='expandedRow']", visible: true
@@ -235,12 +229,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      # Expand the first row
-      row1 = find("[data-matrix-target='row']", match: :first)
-      row1.click
+      # Expand the first row via capability name
+      find("#capability-name-#{@cap1_stable}").click
       assert_selector "[data-matrix-target='expandedRow']", visible: true
 
-      # Click a rating button inside the expanded row's compact sibling.
+      # Click a rating button inside the same row.
       # Use the capability stable_id to build a precise selector, avoiding
       # stale element references from Turbo Stream replacements.
       find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
