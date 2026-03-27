@@ -166,22 +166,28 @@ class Views::Assessments::ScoringPanel < Views::Base
 
   def blocked_capabilities_detail
     statuses = @scoring[:capability_statuses] || {}
+    reasons  = @scoring[:block_reasons] || {}
     blocked_ids = statuses.select { |_, s| s == :blocked }.keys
     return if blocked_ids.empty?
 
-    blocked_names = @categories.flat_map { |cat| cat[:capabilities] }
-                               .select { |cap| blocked_ids.include?(cap[:capability].stable_id) }
-                               .map { |cap| cap[:capability].name }
+    blocked_caps = @categories.flat_map { |cat| cat[:capabilities] }
+                              .select { |cap| blocked_ids.include?(cap[:capability].stable_id) }
 
     div(class: "mt-2 p-2 rounded-md bg-red-50/50 dark:bg-red-900/10") do
       p(class: "text-xs font-medium text-red-700 dark:text-red-400 mb-1") do
-        "#{blocked_names.size} blocked #{'capability'.pluralize(blocked_names.size)}"
+        "#{blocked_caps.size} blocked #{'capability'.pluralize(blocked_caps.size)}"
       end
-      ul(class: "space-y-0.5") do
-        blocked_names.each do |name|
-          li(class: "text-xs text-red-600 dark:text-red-400 flex items-center gap-1") do
-            span(class: "w-1 h-1 rounded-full bg-red-400 shrink-0") { }
-            plain name
+      ul(class: "space-y-1") do
+        blocked_caps.each do |cap|
+          stable_id = cap[:capability].stable_id
+          li(class: "text-xs text-red-600 dark:text-red-400") do
+            div(class: "flex items-center gap-1") do
+              span(class: "w-1 h-1 rounded-full bg-red-400 shrink-0") { }
+              plain cap[:capability].name
+            end
+            if reasons[stable_id]
+              p(class: "text-[10px] text-red-500 dark:text-red-500 ml-2.5") { reasons[stable_id] }
+            end
           end
         end
       end

@@ -73,9 +73,15 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       handler.create_capability_role_binding(
         @framework_id, SecureRandom.uuid_v7, @cap2_id, @role_id
       )
-      eid3 = SecureRandom.uuid_v7
-      handler.set_behavioural_expectation(@framework_id, eid3, SecureRandom.uuid_v7, @cap2_id, 1,
+      @eid3 = SecureRandom.uuid_v7
+      handler.set_behavioural_expectation(@framework_id, @eid3, SecureRandom.uuid_v7, @cap2_id, 1,
         "Breaks down tasks into manageable steps")
+
+      # Illustration for Problem Solving (needed for accordion tests)
+      handler.add_role_illustration(
+        @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+        @eid3, @role_id, 1, "Creates a checklist of sub-tasks before starting work"
+      )
 
       # Assign person and open cycle
       level = FrameworkState::Level.find_by!(level_id: @level2_id)
@@ -125,10 +131,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "rate a capability and see scoring update" do
       visit assessment_path(@framework_id)
 
-      # Find the first "Consistent" button and click it
-      within first("[id^='rating-']") do
-        click_button "Consistent"
-      end
+      # Click the first "Consistent" button using a precise selector
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
 
       # Scoring panel should update (performance ratio changes)
       assert_selector "#scoring-panel"
@@ -151,19 +155,92 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "show illustration count and expand to reveal illustrations" do
       visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       # Illustration count indicators should be visible
       assert_text "2 examples"
       assert_text "1 example"
 
-      # Click the Critical Thinking row to expand illustrations
-      row = find("[data-matrix-target='row']", match: :first)
-      row.click
+      # Click the Critical Thinking capability name to expand illustrations
+      find("#capability-name-#{@cap1_stable}").click
 
       # Expanded row should appear with illustration text
       assert_selector "[data-matrix-target='expandedRow']", visible: true
       assert_text "Asks 'why' before jumping into implementation"
       assert_text "Rephrases the problem statement in their own words"
+    end
+  end
+
+  context "row expansion accordion" do
+    should "expand a row when clicking it" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # Click the capability name cell — avoids hitting rating form buttons
+      find("#capability-name-#{@cap1_stable}").click
+
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
+    end
+
+    should "keep row expanded when clicking it again" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      find("#capability-name-#{@cap1_stable}").click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+      # Click the same capability name again — should stay expanded
+      find("#capability-name-#{@cap1_stable}").click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
+    end
+
+    should "collapse expanded row and expand new row when clicking a different row" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # Expand first row
+      find("#capability-name-#{@cap1_stable}").click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
+
+      # Click second row — first should collapse, second should expand
+      find("#capability-name-#{@cap2_stable}").click
+      assert_text "Creates a checklist of sub-tasks before starting work"
+      assert_no_text "Asks 'why' before jumping into implementation"
+    end
+
+    should "collapse row when clicking its chevron" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      find("#capability-name-#{@cap1_stable}").click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+      # Click the chevron to collapse
+      row1 = find("[data-matrix-target='row']", match: :first)
+      chevron = row1.find("[data-matrix-target='rowChevron']")
+      chevron.click
+      assert_no_selector "[data-matrix-target='expandedRow']", visible: true
+    end
+
+    should "keep illustrations expanded when rating a capability in the same row" do
+      visit assessment_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # Expand the first row via capability name
+      find("#capability-name-#{@cap1_stable}").click
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+      # Click a rating button inside the same row.
+      # Use the capability stable_id to build a precise selector, avoiding
+      # stale element references from Turbo Stream replacements.
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+
+      # Illustrations should still be visible
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_text "Asks 'why' before jumping into implementation"
     end
   end
 

@@ -219,7 +219,8 @@ class Assessments::MatrixDataBuilder
       mastering: scoring.mastering?,
       category_results: scoring.category_results,
       promotion_readiness: scoring.promotion_readiness,
-      capability_statuses: scoring.capability_statuses
+      capability_statuses: scoring.capability_statuses,
+      block_reasons: scoring.block_reasons
     }
   end
 

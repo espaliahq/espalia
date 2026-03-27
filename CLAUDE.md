@@ -278,3 +278,8 @@ test/
 | Stimulus fetch | `@rails/request.js` (never raw `fetch`) |
 | Pagination | `pagy` |
 | Nil assertions | `assert_nil value` (not `assert_equal nil, value`) |
+
+## Learnings
+
+> **CRITICAL**: Any important learnings, add them here.
+
