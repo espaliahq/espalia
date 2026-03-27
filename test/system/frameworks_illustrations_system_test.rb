@@ -42,6 +42,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
   context "inline illustration editing" do
     should "expand row and show illustration text" do
       visit framework_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       # Expand the capability row by clicking it
       find("tr[data-capability-id]", match: :first).click
@@ -55,6 +56,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "allow saving updated illustration text inline" do
       visit framework_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       # Expand the capability row
       find("tr[data-capability-id]", match: :first).click
@@ -80,6 +82,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "cancel editing and restore original text" do
       visit framework_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       find("tr[data-capability-id]", match: :first).click
       assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
@@ -118,6 +121,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "show Add illustration button when no illustrations exist for a role" do
       visit framework_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       find("tr[data-capability-id]", match: :first).click
 
@@ -131,6 +135,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "allow adding a new illustration for a role that had none" do
       visit framework_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       find("tr[data-capability-id]", match: :first).click
       # Wait for the expanded row to become visible before looking for children.
@@ -154,6 +159,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "cancel adding and restore the Add button without saving" do
       visit framework_path(@framework_id)
+      wait_for_stimulus "matrix"
 
       find("tr[data-capability-id]", match: :first).click
       # Wait for the expanded row to become visible before looking for children.
