@@ -90,6 +90,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
     should "only show selected role illustrations in expanded cells" do
       # Visit with only Product Designer selected
       visit framework_path(@framework_id, roles: [ @pd_role_id ])
+      wait_for_stimulus "matrix"
 
       # Expand the capability row by clicking it
       find("[data-capability-id]", match: :first).click

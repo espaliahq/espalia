@@ -26,6 +26,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "open dropdown with email and sign out" do
       visit root_path
+      wait_for_stimulus "dropdown"
 
       find("[data-action='dropdown#toggle']").click
       screenshot("dropdown_open")
@@ -37,6 +38,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "close dropdown when clicking outside" do
       visit root_path
+      wait_for_stimulus "dropdown"
 
       find("[data-action='dropdown#toggle']").click
       assert_selector "[role='menu']", visible: true
@@ -49,6 +51,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "sign out via dropdown" do
       visit root_path
+      wait_for_stimulus "dropdown"
 
       find("[data-action='dropdown#toggle']").click
       assert_selector "[role='menu']", visible: true
@@ -62,6 +65,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
   context "tenant switcher" do
     should "not show tenant switcher for single-tenant user" do
       visit root_path
+      wait_for_stimulus "dropdown"
 
       find("[data-action='dropdown#toggle']").click
       screenshot("single_tenant_no_switcher")
@@ -76,6 +80,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       end
 
       visit root_path
+      wait_for_stimulus "dropdown"
       find("[data-action='dropdown#toggle']").click
       screenshot("multi_tenant_switcher")
 
@@ -91,6 +96,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       end
 
       visit root_path
+      wait_for_stimulus "dropdown"
       find("[data-action='dropdown#toggle']").click
       assert_selector "[role='menu']", visible: true
       screenshot("before_tenant_switch")
