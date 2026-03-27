@@ -6,17 +6,19 @@
 # when a rating change updates blocked status.
 #
 class Views::Assessments::CapabilityNameCell < Views::Base
-  # @param capability [#stable_id, #name, #description] capability read model
+  # @param capability [#stable_id, #capability_id, #name, #description] capability read model
   # @param weight [Float] binding weight
   # @param mandatory [Boolean] whether deficit_threshold is 0
   # @param blocked [Boolean] whether this capability is blocked at person_level
+  # @param block_reason [String, nil] human-readable explanation for why it's blocked
   # @param contribution [Float, nil] raw contribution score
   # @param has_illustrations [Boolean] whether expandable illustrations exist
-  def initialize(capability:, weight:, mandatory:, blocked:, contribution:, has_illustrations:)
+  def initialize(capability:, weight:, mandatory:, blocked:, contribution:, has_illustrations:, block_reason: nil)
     @capability = capability
     @weight = weight
     @mandatory = mandatory
     @blocked = blocked
+    @block_reason = block_reason
     @contribution = contribution
     @has_illustrations = has_illustrations
   end
@@ -44,6 +46,9 @@ class Views::Assessments::CapabilityNameCell < Views::Base
               @capability.description
             end
           end
+          if @block_reason
+            p(class: "text-[10px] text-red-600 dark:text-red-400 mt-0.5") { @block_reason }
+          end
         end
       end
     end
@@ -63,7 +68,8 @@ class Views::Assessments::CapabilityNameCell < Views::Base
 
   def blocked_badge
     span(class: "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold " \
-                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300") do
+                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+         title: @block_reason) do
       "Blocked"
     end
   end

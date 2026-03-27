@@ -46,10 +46,14 @@ Ordinals beyond `reference_level + cap` contribute 0 to the score.
 Resolved per capability: `binding.deficit_threshold || category.deficit_threshold || framework.deficit_threshold` (default 1.0).
 
 ```
-deficit = max(0, 1.0 - effective_freq_at_reference_level) * weight
+contribution = Σ (effective_frequency − expected_at_level) × weight
+               across all ordinals ≤ reference_level + overperformance_cap
+deficit = max(0, −contribution)
 
 Verdict gate: deficit > deficit_threshold → capability is :blocked
 ```
+
+Over-performance at higher levels can offset gaps at the reference level, subject to `overperformance_cap`. With the default cap of 1, a person rated "consistent" one level above their assigned level contributes positively and reduces the deficit. Setting `overperformance_cap` to 0 disables any above-level offset — only ordinals at or below the reference level count.
 
 ---
 

@@ -104,6 +104,7 @@ class Assessments::RatingsController < ApplicationController
     cell_data = cap_data[:cells][level_ordinal]
     contribution = cap_data[:contribution]
     blocked = matrix_data[:scoring].dig(:capability_statuses, capability_stable_id) == :blocked
+    block_reason = matrix_data[:scoring].dig(:block_reasons, capability_stable_id)
 
     render turbo_stream: [
       turbo_stream.replace(
@@ -142,6 +143,16 @@ class Assessments::RatingsController < ApplicationController
           layout: false
         )
       ) if category_id),
+      (turbo_stream.replace(
+        "category-contribution-#{category_id}",
+        render_to_string(
+          Views::Assessments::CategoryContributionLabel.new(
+            category_id: category_id,
+            category_result: matrix_data[:scoring][:category_results][category_id]
+          ),
+          layout: false
+        )
+      ) if category_id),
       turbo_stream.replace(
         "capability-name-#{capability_stable_id}",
         render_to_string(
@@ -150,6 +161,7 @@ class Assessments::RatingsController < ApplicationController
             weight: cap_data[:weight],
             mandatory: cap_data[:binding].deficit_threshold&.to_f == 0.0,
             blocked: blocked,
+            block_reason: block_reason,
             contribution: contribution,
             has_illustrations: cap_data[:cells].any? { |_, c| c[:illustration_count]&.positive? }
           ),
