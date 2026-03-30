@@ -102,12 +102,15 @@ Policy tests build an `AuthorizationContext` and assert permit/deny per role:
 
 ```ruby
 class FrameworkPolicyTest < ActiveSupport::TestCase
+  setup do
+    @tenant = create(:tenant)
+    @framework = create(:framework_state_framework, tenant: @tenant)
+  end
+
   context "as tenant member" do
     setup do
-      @tenant = create(:tenant)
       @user = create(:user)
       @tenant_user = create(:tenant_user, user: @user, tenant: @tenant, role: :member)
-      @framework = create(:framework_state_framework, tenant: @tenant)
       @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
     end
 
@@ -122,7 +125,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
 
   context "as tenant admin" do
     setup do
-      @tenant_user = create(:tenant_user, role: :admin)
+      @tenant_user = create(:tenant_user, tenant: @tenant, role: :admin)
       @context = AuthorizationContext.new(
         user: @tenant_user.user, tenant_user: @tenant_user, person: nil
       )

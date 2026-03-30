@@ -187,7 +187,7 @@ def view_template
   end
 end
 
-# Good — receive permission flag from controller
+# Good — controllers compute permissions via policy() and pass boolean flags to views
 def initialize(framework:, is_admin:)
   @framework = framework
   @is_admin = is_admin
