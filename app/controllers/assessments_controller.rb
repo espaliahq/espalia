@@ -7,12 +7,13 @@
 # separate entity.
 #
 class AssessmentsController < ApplicationController
-  before_action :set_person
+  before_action :require_person
   before_action :set_assignment, only: [ :show, :matrix ]
 
   # GET /assessments
   def index
-    @assignments = PersonFrameworkAssignment.for_person(@person.id)
+    authorize PersonFrameworkAssignment, :index?
+    @assignments = PersonFrameworkAssignment.for_person(current_person.id)
       .includes(:framework, :role, :level)
     render Views::Assessments::IndexView.new(
       assignments: @assignments,
@@ -24,6 +25,7 @@ class AssessmentsController < ApplicationController
 
   # GET /assessments/:id
   def show
+    authorize @assignment
     load_assessment_data
     render Views::Assessments::ShowView.new(
       assignment: @assignment,
@@ -37,6 +39,7 @@ class AssessmentsController < ApplicationController
 
   # GET /assessments/:id/matrix
   def matrix
+    authorize @assignment, :matrix?
     load_assessment_data
     render Views::Assessments::MatrixFrameView.new(
       assignment: @assignment,
@@ -47,20 +50,16 @@ class AssessmentsController < ApplicationController
 
   private
 
-  def set_person
-    tenant = ActsAsTenant.current_tenant
-    tenant_user = ActsAsTenant.without_tenant do
-      current_user.tenant_users.find_by(tenant: tenant)
-    end
-    @person = tenant_user&.person
-
-    unless @person
+  def require_person
+    unless current_person
       redirect_to root_path, alert: "No person profile linked to your account."
     end
   end
 
   def set_assignment
-    @assignment = PersonFrameworkAssignment.for_person(@person.id)
+    return unless current_person
+
+    @assignment = PersonFrameworkAssignment.for_person(current_person.id)
       .find_by!(framework_id: params.expect(:id))
     @framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
   rescue ActiveRecord::RecordNotFound
@@ -78,7 +77,7 @@ class AssessmentsController < ApplicationController
       framework: @framework,
       role: role,
       level: FrameworkState::Level.find_by!(level_id: @assignment.level_id),
-      person_id: @person.id,
+      person_id: current_person.id,
       categories: categories
     ).build
   end

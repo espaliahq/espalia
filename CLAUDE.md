@@ -20,6 +20,7 @@ This project uses a layered guidance system. Standards are loaded contextually �
 | `app/components/` | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
 | `app/javascript/` | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
+| `app/policies/` | [authorization.md](docs/guidelines/authorization.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
 
 Each directory above has a `CLAUDE.md` that imports the relevant guideline. Root `CLAUDE.md` covers architecture and commands only.
@@ -35,9 +36,10 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Views / components / UI | @docs/guidelines/phlex-views.md, @docs/guidelines/tailwindcss.md |
 | JavaScript / Stimulus | @docs/guidelines/javascript-stimulus.md |
 | Service objects | @docs/guidelines/service-objects.md |
+| Authorization / permissions | @docs/guidelines/authorization.md |
 | Tests | @docs/guidelines/testing.md |
 
-Most features touch controllers + models + views + tests — read all four.
+Most features touch controllers + models + views + tests + authorization — read all five.
 
 ## Architecture
 
@@ -179,6 +181,7 @@ SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per actio
 bin/rails development:precommit  # ALWAYS run before completing development work
                                  # Runs: erblint, rubocop, brakeman, bundler audit,
                                  # importmap audit, tests, and system tests
+                                 # ALWAYS fix issues, even if you think they are unrelated to our changes
 
 bin/rubocop                  # Run RuboCop linter
 bin/rubocop -a               # Auto-fix RuboCop issues
@@ -270,7 +273,7 @@ test/
 | Business logic | Model methods or concerns (not services) |
 | Async work | Background job in `app/jobs/` |
 | New test | Shoulda + FactoryBot |
-| Authorization | Pundit policy in `app/policies/` |
+| Authorization | Pundit policy in `app/policies/`, every action calls `authorize` |
 | Translatable text | `jsonb :attr_translations` + `translates :attr` |
 | Complex JSON | `store_model` with type-safe models |
 | Simple JSON | `store_accessor` for flat key-value |

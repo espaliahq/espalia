@@ -41,11 +41,12 @@ class Frameworks::SettingsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Scoring Thresholds"
     end
 
-    should "redirect non-admin members to framework page" do
+    should "redirect non-admin members to root" do
       sign_in @member_user
       get framework_settings_path(framework_id: @framework_id)
 
-      assert_redirected_to framework_path(@framework_id)
+      assert_redirected_to root_path
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
 
     should "redirect unauthenticated users to sign in" do
@@ -127,13 +128,14 @@ class Frameworks::SettingsControllerTest < ActionDispatch::IntegrationTest
       assert_instance_of Frameworks::Events::ScoringThresholdsConfigured, new_events.first
     end
 
-    should "redirect non-admin members" do
+    should "redirect non-admin members to root" do
       sign_in @member_user
       patch framework_settings_path(framework_id: @framework_id),
             params: { settings: { mastery_threshold: "1.25", meeting_expectation_threshold: "0.90",
                                   overperformance_cap: "1", deficit_threshold: "1.0" } }
 
-      assert_redirected_to framework_path(@framework_id)
+      assert_redirected_to root_path
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
 
     should "redirect unauthenticated users to sign in" do

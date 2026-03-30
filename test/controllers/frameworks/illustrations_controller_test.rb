@@ -8,7 +8,7 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
     @user = create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      create(:tenant_user, tenant: @tenant, user: @user)
+      create(:tenant_user, tenant: @tenant, user: @user, role: :admin)
 
       # Build a framework with an illustration via events
       handler = Frameworks::CommandHandler.new
@@ -75,6 +75,21 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
            params: { illustration: { expectation_id: @eid, role_id: @rid, description: "X" } }
 
       assert_redirected_to new_user_session_path
+    end
+
+    should "deny non-admin members without collaborator role" do
+      member_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: member_user, role: :member)
+      end
+
+      sign_in member_user
+      post framework_illustrations_path(framework_id: @framework_id),
+           params: { illustration: { expectation_id: @eid, role_id: @rid, description: "Unauthorized" } }
+
+      assert_response :redirect
+      follow_redirect!
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
   end
 

@@ -440,18 +440,115 @@ class Frameworks::Aggregate
     }))
   end
 
+  # ── Collaborator commands ──
+
+  # Adds a collaborator to the framework.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param person_id [String] UUID of the person
+  # @param collaborator_role [String] one of the 8 collaborator roles
+  # @param scope_type [String, nil] nil for framework-wide, or entity type
+  # @param scope_id [String, nil] UUID of the scoped entity
+  # @param added_by [String] person_id of who added the collaborator
+  # @raise [RuntimeError] if collaborator already has this role
+  def add_collaborator(framework_id, person_id, collaborator_role, scope_type: nil, scope_id: nil, added_by:)
+    ensure_created!
+    key = collaborator_key(person_id, collaborator_role, scope_type, scope_id)
+    raise "Collaborator already has this role" if @collaborators.key?(key)
+
+    apply(Frameworks::Events::CollaboratorAdded.new(data: {
+      framework_id: framework_id,
+      person_id: person_id,
+      collaborator_role: collaborator_role,
+      scope_type: scope_type,
+      scope_id: scope_id,
+      added_by: added_by
+    }))
+  end
+
+  # Changes a collaborator's role on the framework.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param person_id [String] UUID of the collaborator
+  # @param old_role [String] the current role being replaced
+  # @param new_role [String] the new role
+  # @param scope_type [String, nil] nil for framework-wide, or entity type
+  # @param scope_id [String, nil] UUID of the scoped entity
+  # @param changed_by [String] person_id of who made the change
+  # @raise [RuntimeError] if collaborator does not have the old role
+  def change_collaborator_role(framework_id, person_id, old_role, new_role, scope_type: nil, scope_id: nil, changed_by:)
+    ensure_created!
+    old_key = collaborator_key(person_id, old_role, scope_type, scope_id)
+    raise "Collaborator does not have this role" unless @collaborators.key?(old_key)
+
+    apply(Frameworks::Events::CollaboratorRoleChanged.new(data: {
+      framework_id: framework_id,
+      person_id: person_id,
+      old_role: old_role,
+      new_role: new_role,
+      scope_type: scope_type,
+      scope_id: scope_id,
+      changed_by: changed_by
+    }))
+  end
+
+  # Removes a collaborator from the framework.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param person_id [String] UUID of the collaborator
+  # @param collaborator_role [String] the role being removed
+  # @param scope_type [String, nil] nil for framework-wide, or entity type
+  # @param scope_id [String, nil] UUID of the scoped entity
+  # @param removed_by [String] person_id of who removed the collaborator
+  # @raise [RuntimeError] if collaborator does not have this role
+  def remove_collaborator(framework_id, person_id, collaborator_role, scope_type: nil, scope_id: nil, removed_by:)
+    ensure_created!
+    key = collaborator_key(person_id, collaborator_role, scope_type, scope_id)
+    raise "Collaborator does not have this role" unless @collaborators.key?(key)
+
+    apply(Frameworks::Events::CollaboratorRemoved.new(data: {
+      framework_id: framework_id,
+      person_id: person_id,
+      collaborator_role: collaborator_role,
+      scope_type: scope_type,
+      scope_id: scope_id,
+      removed_by: removed_by
+    }))
+  end
+
   # ── Suggested edit commands ──
 
-  # Returns whether a user has approval authority on this framework.
+  # Returns whether a person has approval authority for a given entity type.
   #
-  # For now all authenticated users are treated as Editors.
-  # When the collaborator model is implemented, this will query
-  # @collaborators[user_id]&.[](:role) against [:owner, :editor, ...].
+  # Uses the three-tier review model:
+  # - Tier 1 (RoleIllustration): any lead, editor, or owner
+  # - Tier 2 (Capability/Category description): cap lead, cat lead, editor, owner
+  # - Tier 3 (BehaviouralExpectation): cap lead (scoped), cat lead, editor, owner
   #
-  # @param _user_id [String] UUID of the user
+  # Falls back to true when no collaborators exist (bootstrapping).
+  #
+  # @param person_id [String] UUID of the person
+  # @param target_entity_type [String, nil] type of entity being reviewed
   # @return [Boolean]
-  def can_approve?(_user_id)
-    true
+  def can_approve?(person_id, target_entity_type: nil)
+    return true if @collaborators.empty?
+
+    roles = roles_for_person(person_id)
+    return false if roles.empty?
+
+    tier = review_tier(target_entity_type)
+    role_names = roles.map { |r| r[:role] }
+
+    case tier
+    when 1
+      role_names.any? { |r| r.in?(%w[owner editor role_family_lead role_lead capability_category_lead capability_lead]) }
+    when 2
+      role_names.any? { |r| r.in?(%w[owner editor capability_category_lead capability_lead]) }
+    when 3
+      role_names.any? { |r| r.in?(%w[owner editor capability_category_lead capability_lead]) }
+    else
+      false
+    end
   end
 
   # Suggests an edit to a framework entity field.
@@ -847,8 +944,71 @@ class Frameworks::Aggregate
     @pending_edits.delete(event.data[:suggestion_id])
   end
 
+  on Frameworks::Events::CollaboratorAdded do |event|
+    key = collaborator_key(event.data[:person_id], event.data[:collaborator_role],
+                           event.data[:scope_type], event.data[:scope_id])
+    @collaborators[key] = {
+      role: event.data[:collaborator_role],
+      person_id: event.data[:person_id],
+      scope_type: event.data[:scope_type],
+      scope_id: event.data[:scope_id]
+    }
+  end
+
+  on Frameworks::Events::CollaboratorRoleChanged do |event|
+    old_key = collaborator_key(event.data[:person_id], event.data[:old_role],
+                               event.data[:scope_type], event.data[:scope_id])
+    new_key = collaborator_key(event.data[:person_id], event.data[:new_role],
+                               event.data[:scope_type], event.data[:scope_id])
+    @collaborators.delete(old_key)
+    @collaborators[new_key] = {
+      role: event.data[:new_role],
+      person_id: event.data[:person_id],
+      scope_type: event.data[:scope_type],
+      scope_id: event.data[:scope_id]
+    }
+  end
+
+  on Frameworks::Events::CollaboratorRemoved do |event|
+    key = collaborator_key(event.data[:person_id], event.data[:collaborator_role],
+                           event.data[:scope_type], event.data[:scope_id])
+    @collaborators.delete(key)
+  end
+
   on Frameworks::Events::SuggestionCommented do |_event|
     # Future: store in comments — no state change needed in aggregate
+  end
+
+  # Builds a composite key for the collaborators hash.
+  #
+  # @param person_id [String]
+  # @param role [String]
+  # @param scope_type [String, nil]
+  # @param scope_id [String, nil]
+  # @return [String]
+  def collaborator_key(person_id, role, scope_type, scope_id)
+    "#{person_id}:#{role}:#{scope_type}:#{scope_id}"
+  end
+
+  # Returns all collaborator entries for a person.
+  #
+  # @param person_id [String]
+  # @return [Array<Hash>]
+  def roles_for_person(person_id)
+    @collaborators.select { |_key, v| v[:person_id] == person_id }.values
+  end
+
+  # Determines the review tier for a target entity type.
+  #
+  # @param entity_type [String, nil]
+  # @return [Integer] 1, 2, or 3
+  def review_tier(entity_type)
+    case entity_type
+    when "RoleIllustration", "role_illustration" then 1
+    when "Capability", "CapabilityCategory" then 2
+    when "BehaviouralExpectation" then 3
+    else 1
+    end
   end
 
   # Applies the actual content change event for an approved suggestion.

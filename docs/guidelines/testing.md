@@ -13,6 +13,7 @@
 |------|----------|------------|
 | Models | `test/models/` | `ActiveSupport::TestCase` |
 | Controllers | `test/controllers/` | `ActionDispatch::IntegrationTest` |
+| Policies | `test/policies/` | `ActiveSupport::TestCase` |
 | System | `test/system/` | `ApplicationSystemTestCase` |
 | Components | `test/components/` | `ComponentTestCase` |
 
@@ -90,6 +91,86 @@ class OrderTest < ActiveSupport::TestCase
       assert_not order.valid?
     end
   end
+end
+```
+
+## Policy Testing (NON-NEGOTIABLE)
+
+**Every Pundit policy MUST have corresponding tests.** New controller actions require both a policy test (unit) and a controller test for the denied-access path.
+
+Policy tests build an `AuthorizationContext` and assert permit/deny per role:
+
+```ruby
+class FrameworkPolicyTest < ActiveSupport::TestCase
+  setup do
+    @tenant = create(:tenant)
+    @framework = create(:framework_state_framework, tenant: @tenant)
+  end
+
+  context "as tenant member" do
+    setup do
+      @user = create(:user)
+      @tenant_user = create(:tenant_user, user: @user, tenant: @tenant, role: :member)
+      @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
+    end
+
+    should "permit show" do
+      assert FrameworkPolicy.new(@context, @framework).show?
+    end
+
+    should "deny settings" do
+      assert_not FrameworkPolicy.new(@context, @framework).settings?
+    end
+  end
+
+  context "as tenant admin" do
+    setup do
+      @tenant_user = create(:tenant_user, tenant: @tenant, role: :admin)
+      @context = AuthorizationContext.new(
+        user: @tenant_user.user, tenant_user: @tenant_user, person: nil
+      )
+    end
+
+    should "permit settings" do
+      assert FrameworkPolicy.new(@context, @framework).settings?
+    end
+  end
+end
+```
+
+### What to test per policy
+
+- **Non-member** (no TenantUser) → denied everything
+- **Tenant member** → can view, cannot admin
+- **Tenant admin** → full access
+- **Person (self)** → can self-rate, view own assessment
+- **Manager** → can view/rate direct report's assessment, cannot self-rate for them
+- **Framework collaborator roles** → edit rights per role, publish rights for owner/editor only
+
+### Controller denied-access tests
+
+Every controller test file must include at least one denied-access scenario:
+
+```ruby
+context "as non-admin member" do
+  should "redirect from settings" do
+    sign_in @member_user
+    get framework_settings_path(@framework)
+    assert_redirected_to root_path
+    assert_equal "You are not authorized to perform this action.", flash[:alert]
+  end
+end
+```
+
+### System tests for auth-gated UI
+
+Test that restricted UI elements (buttons, links, admin panels) do not appear for unauthorized roles:
+
+```ruby
+should "not show settings link for non-admin" do
+  sign_in_as(@member_user)
+  visit framework_path(@framework)
+  assert_no_selector "a", text: "Settings"
 end
 ```
 

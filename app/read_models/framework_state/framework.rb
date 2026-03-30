@@ -8,6 +8,11 @@
 class FrameworkState::Framework < ApplicationRecord
   self.table_name = "framework_states"
 
+  # Pundit policy lookup: use FrameworkPolicy (not FrameworkState::FrameworkPolicy)
+  def self.policy_class
+    FrameworkPolicy
+  end
+
   acts_as_tenant :tenant
   has_prefix_id :frm
 

@@ -45,7 +45,10 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::SuggestionRejected,
       Frameworks::Events::SuggestionWithdrawn,
       Frameworks::Events::SuggestionCommented,
-      Frameworks::Events::ScoringThresholdsConfigured
+      Frameworks::Events::ScoringThresholdsConfigured,
+      Frameworks::Events::CollaboratorAdded,
+      Frameworks::Events::CollaboratorRoleChanged,
+      Frameworks::Events::CollaboratorRemoved
     ]
   end
 
@@ -74,6 +77,10 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::SuggestionWithdrawn then handle_suggestion_withdrawn(event)
     when Frameworks::Events::SuggestionCommented then nil # future: comments table
     when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
+    # Collaborator events — always processed, independent of draft state
+    when Frameworks::Events::CollaboratorAdded then handle_collaborator_added(event)
+    when Frameworks::Events::CollaboratorRoleChanged then handle_collaborator_role_changed(event)
+    when Frameworks::Events::CollaboratorRemoved then handle_collaborator_removed(event)
     # Structural events — skipped during draft
     else
       handle_structural_event(event)
@@ -151,7 +158,7 @@ class Frameworks::Projections::PublishedState
   #
   # @param framework [FrameworkState::Framework]
   # @param publish_event [RubyEventStore::Event] the FrameworkVersionPublished event
-  def rebuild_framework_projection(framework, publish_event) # rubocop:disable Metrics/MethodLength
+  def rebuild_framework_projection(framework, publish_event) # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity
     framework_id = framework.framework_id
 
     # Delete all child read models for this framework
@@ -175,7 +182,14 @@ class Frameworks::Projections::PublishedState
       next if event.is_a?(Frameworks::Events::MigrationMappingDefined)
 
       # Replay structural events directly (bypass draft guard)
-      replay_structural_event(event)
+      # Also replay collaborator events (not structural, but need to be rebuilt)
+      case event
+      when Frameworks::Events::CollaboratorAdded then handle_collaborator_added(event)
+      when Frameworks::Events::CollaboratorRoleChanged then handle_collaborator_role_changed(event)
+      when Frameworks::Events::CollaboratorRemoved then handle_collaborator_removed(event)
+      else
+        replay_structural_event(event)
+      end
     end
   end
 
@@ -247,6 +261,7 @@ class Frameworks::Projections::PublishedState
         .select(:role_family_id)
     ).delete_all
     FrameworkState::RoleFamily.where(framework_id: framework_id).delete_all
+    FrameworkState::Collaborator.where(framework_id: framework_id).delete_all
   end
 
   # ── Individual structural handlers ──
@@ -483,6 +498,39 @@ class Frameworks::Projections::PublishedState
       record = FrameworkState::RoleIllustration.find_by(illustration_id: entity_id)
       record&.public_send(field)
     end
+  end
+
+  # ── Collaborator handlers ──
+
+  def handle_collaborator_added(event)
+    FrameworkState::Collaborator.create!(
+      framework_id: event.data[:framework_id],
+      person_id: event.data[:person_id],
+      role: event.data[:collaborator_role],
+      scope_type: event.data[:scope_type],
+      scope_id: event.data[:scope_id]
+    )
+  end
+
+  def handle_collaborator_role_changed(event)
+    record = FrameworkState::Collaborator.find_by!(
+      framework_id: event.data[:framework_id],
+      person_id: event.data[:person_id],
+      role: event.data[:old_role],
+      scope_type: event.data[:scope_type],
+      scope_id: event.data[:scope_id]
+    )
+    record.update!(role: event.data[:new_role])
+  end
+
+  def handle_collaborator_removed(event)
+    FrameworkState::Collaborator.find_by!(
+      framework_id: event.data[:framework_id],
+      person_id: event.data[:person_id],
+      role: event.data[:collaborator_role],
+      scope_type: event.data[:scope_type],
+      scope_id: event.data[:scope_id]
+    ).destroy!
   end
 
   # ── Helpers ──

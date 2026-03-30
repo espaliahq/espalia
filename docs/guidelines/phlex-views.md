@@ -107,6 +107,54 @@ class DashboardController < ApplicationController
 end
 ```
 
+## Conditional Rendering by Permission (NON-NEGOTIABLE)
+
+**Never query policies or check roles directly in views.** Controllers resolve permissions and pass boolean flags.
+
+```ruby
+# Controller — resolves permission, passes flag
+def show
+  authorize @framework
+  render Views::Frameworks::ShowView.new(
+    framework: @framework,
+    is_admin: policy(@framework).admin?
+  )
+end
+
+# View — receives flag, renders conditionally
+class Views::Frameworks::ShowView < ApplicationView
+  def initialize(framework:, is_admin:)
+    @framework = framework
+    @is_admin = is_admin
+  end
+
+  def view_template
+    # Admin-only UI gated by the flag
+    if @is_admin
+      Button("Settings", href: framework_settings_path(@framework))
+    end
+  end
+end
+```
+
+**Anti-pattern:**
+
+```ruby
+# Bad — querying policy in view
+def view_template
+  if FrameworkPolicy.new(auth_context, @framework).admin?
+    render_admin_ui
+  end
+end
+
+# Bad — checking role directly
+def view_template
+  if @current_user.global_admin?
+    render_admin_ui
+  end
+end
+```
+
 ## ERB Bridge (Legacy Views Only)
 
 When making minor updates to existing ERB views, use Kit helpers:

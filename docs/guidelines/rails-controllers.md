@@ -57,6 +57,63 @@ class CategoriesController < ApplicationController
 end
 ```
 
+## Authorization (NON-NEGOTIABLE)
+
+**Every controller action MUST call `authorize`.** No exceptions — even read-only actions need explicit authorization to prevent accidental exposure when roles change.
+
+Pundit receives an `AuthorizationContext` (not a raw User) via `pundit_user`, providing access to the full identity chain: User → TenantUser → Person. See `docs/guidelines/authorization.md` for the full permission model.
+
+### Patterns
+
+```ruby
+# Collection action — authorize on the model class
+def index
+  authorize FrameworkState::Framework, :index?
+  @frameworks = FrameworkState::Framework.all
+end
+
+# Instance action — authorize on the record
+def show
+  authorize @framework
+end
+
+# Custom action name — use domain-specific names, not generic CRUD
+def create
+  authorize @framework, :create_illustration?
+end
+
+# Pass permission flags to views — don't expose policy objects
+def show
+  authorize @framework
+  render Views::Frameworks::ShowView.new(
+    framework: @framework,
+    is_admin: policy(@framework).admin?
+  )
+end
+```
+
+### Denial handling
+
+`ApplicationController` rescues `Pundit::NotAuthorizedError` with a redirect-back and flash alert. No per-controller handling needed.
+
+### Authorization anti-patterns
+
+```ruby
+# Bad — manual before_action instead of Pundit
+before_action :authorize_admin!
+def authorize_admin!
+  redirect_to root_path unless current_user.global_admin?
+end
+
+# Bad — "authorization is enforced in the command handler"
+# Command handlers do NOT check permissions — controllers must
+
+# Bad — inline role check instead of policy
+def create
+  return head(:forbidden) unless current_tenant_user&.admin?
+end
+```
+
 ## Anti-patterns
 
 ```ruby

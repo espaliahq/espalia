@@ -2,15 +2,13 @@
 
 # Handles inline illustration create and edit submissions.
 #
-# Authorization is enforced in the command handler (not here) —
-# can_approve? derives from aggregate state.
-#
 class Frameworks::IllustrationsController < ApplicationController
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
 
   # POST /frameworks/:framework_id/illustrations
   def create
+    authorize @framework, :create_illustration?
     ill_params = params.expect(illustration: [ :expectation_id, :role_id, :description ])
     expectation_id = ill_params[:expectation_id]
     role_id = ill_params[:role_id]
@@ -65,6 +63,7 @@ class Frameworks::IllustrationsController < ApplicationController
 
   # PATCH /frameworks/:framework_id/illustrations/:id
   def update
+    authorize @framework, :suggest_edit?
     suggestion_id = SecureRandom.uuid_v7
     new_description = params.expect(illustration: [ :description ])[:description]
 
