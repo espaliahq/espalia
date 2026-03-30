@@ -181,6 +181,7 @@ SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per actio
 bin/rails development:precommit  # ALWAYS run before completing development work
                                  # Runs: erblint, rubocop, brakeman, bundler audit,
                                  # importmap audit, tests, and system tests
+                                 # ALWAYS fix issues, even if you think they are unrelated to our changes
 
 bin/rubocop                  # Run RuboCop linter
 bin/rubocop -a               # Auto-fix RuboCop issues
