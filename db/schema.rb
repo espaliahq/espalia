@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_28_122852) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_30_225553) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -132,10 +132,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_122852) do
     t.string "scope_type"
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
-    t.index ["framework_id", "person_id", "role", "scope_type", "scope_id"], name: "idx_framework_collaborators_unique", unique: true
+    t.index ["framework_id", "person_id", "role", "scope_type", "scope_id"], name: "idx_framework_collaborators_scoped_unique", unique: true, where: "((scope_type IS NOT NULL) AND (scope_id IS NOT NULL))"
+    t.index ["framework_id", "person_id", "role"], name: "idx_framework_collaborators_unscoped_unique", unique: true, where: "((scope_type IS NULL) AND (scope_id IS NULL))"
     t.index ["framework_id", "person_id"], name: "index_framework_collaborators_on_framework_id_and_person_id"
     t.index ["person_id"], name: "index_framework_collaborators_on_person_id"
     t.index ["tenant_id"], name: "index_framework_collaborators_on_tenant_id"
+    t.check_constraint "(scope_type IS NULL) = (scope_id IS NULL)", name: "chk_framework_collaborators_scope_consistency"
   end
 
   create_table "framework_levels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
