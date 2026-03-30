@@ -12,7 +12,51 @@ class ApplicationController < ActionController::Base
   before_action :authenticate_user!
   before_action :set_tenant
 
+  rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
+
   private
+
+  # Resolves the current user's TenantUser membership for the active tenant.
+  # Cached per request. Returns nil if no membership exists.
+  #
+  # @return [TenantUser, nil]
+  def current_tenant_user
+    return @current_tenant_user if defined?(@current_tenant_user)
+    tenant = ActsAsTenant.current_tenant
+    @current_tenant_user = ActsAsTenant.without_tenant do
+      current_user&.tenant_users&.find_by(tenant: tenant)
+    end
+  end
+
+  # Resolves the Person domain entity for the current user in the active tenant.
+  # Cached per request. Returns nil if no linked Person exists.
+  #
+  # @return [Person, nil]
+  def current_person
+    return @current_person if defined?(@current_person)
+    @current_person = current_tenant_user&.person
+  end
+
+  helper_method :current_tenant_user, :current_person
+
+  # Builds the Pundit authorization context carrying the full identity chain.
+  #
+  # @return [AuthorizationContext]
+  def pundit_user
+    AuthorizationContext.new(
+      user: current_user,
+      tenant_user: current_tenant_user,
+      person: current_person
+    )
+  end
+
+  # Handles Pundit authorization failures with a redirect and flash alert.
+  #
+  # @param _exception [Pundit::NotAuthorizedError]
+  # @return [void]
+  def user_not_authorized(_exception = nil)
+    redirect_back fallback_location: root_path, alert: "You are not authorized to perform this action."
+  end
 
   # Resolves the current tenant for the request.
   #

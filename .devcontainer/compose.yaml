@@ -26,6 +26,17 @@ services:
     image: selenium/standalone-chromium:latest
     platform: linux/amd64
     restart: unless-stopped
+    shm_size: 3g
+    deploy:
+      resources:
+        reservations:
+          cpus: "2"
+          memory: 2g
+    environment:
+      SE_NODE_MAX_SESSIONS: 2
+      SE_SESSION_REQUEST_TIMEOUT: 120
+      SE_NODE_SESSION_TIMEOUT: 120
+      JAVA_OPTS: "-Xmx512m"
 
   postgres:
     image: postgres:16

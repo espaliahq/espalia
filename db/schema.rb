@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_19_060000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_28_122852) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -121,6 +121,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_19_060000) do
     t.index ["tenant_id", "binding_id"], name: "idx_fw_cap_role_bindings_on_tenant_and_binding", unique: true
     t.index ["tenant_id", "capability_id", "role_id"], name: "idx_fw_cap_role_bindings_on_tenant_cap_role", unique: true
     t.index ["tenant_id"], name: "index_framework_capability_role_bindings_on_tenant_id"
+  end
+
+  create_table "framework_collaborators", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "person_id", null: false
+    t.string "role", null: false
+    t.uuid "scope_id"
+    t.string "scope_type"
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["framework_id", "person_id", "role", "scope_type", "scope_id"], name: "idx_framework_collaborators_unique", unique: true
+    t.index ["framework_id", "person_id"], name: "index_framework_collaborators_on_framework_id_and_person_id"
+    t.index ["person_id"], name: "index_framework_collaborators_on_person_id"
+    t.index ["tenant_id"], name: "index_framework_collaborators_on_tenant_id"
   end
 
   create_table "framework_levels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -312,6 +327,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_19_060000) do
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"
   add_foreign_key "framework_capability_role_bindings", "tenants"
+  add_foreign_key "framework_collaborators", "tenants"
   add_foreign_key "framework_levels", "tenants"
   add_foreign_key "framework_migration_mappings", "tenants"
   add_foreign_key "framework_role_families", "tenants"

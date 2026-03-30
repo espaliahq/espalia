@@ -5,6 +5,7 @@ class FrameworksController < ApplicationController
 
   # GET /frameworks
   def index
+    authorize FrameworkState::Framework, :index?
     @frameworks = FrameworkState::Framework.all
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
 
@@ -18,6 +19,7 @@ class FrameworksController < ApplicationController
 
   # GET /frameworks/:id
   def show
+    authorize @framework
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
     role_families = load_role_families
     categories = load_categories
@@ -39,12 +41,13 @@ class FrameworksController < ApplicationController
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants,
-      is_admin: framework_admin?
+      is_admin: policy(@framework).admin?
     )
   end
 
   # GET /frameworks/:id/matrix
   def matrix
+    authorize @framework, :matrix?
     role_families = load_role_families
     categories = load_categories
     selected_role_ids = parse_role_ids
@@ -86,16 +89,5 @@ class FrameworksController < ApplicationController
     @framework.capability_categories
       .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
       .order(:ordinal)
-  end
-
-  # @return [Boolean] whether the current user has admin access to frameworks
-  def framework_admin?
-    return true if current_user.global_admin?
-
-    tenant = ActsAsTenant.current_tenant
-    tenant_user = ActsAsTenant.without_tenant do
-      TenantUser.find_by(user: current_user, tenant: tenant)
-    end
-    tenant_user&.admin? || false
   end
 end

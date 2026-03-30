@@ -8,7 +8,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
     @user = FactoryBot.create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      FactoryBot.create(:tenant_user, tenant: @tenant, user: @user)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @user, role: :admin)
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7

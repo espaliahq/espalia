@@ -8,7 +8,7 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
     @user = create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      create(:tenant_user, tenant: @tenant, user: @user)
+      create(:tenant_user, tenant: @tenant, user: @user, role: :admin)
 
       # Build a framework with an illustration via events
       handler = Frameworks::CommandHandler.new

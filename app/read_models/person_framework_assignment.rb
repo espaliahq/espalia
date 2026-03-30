@@ -11,6 +11,11 @@
 class PersonFrameworkAssignment < ApplicationRecord
   CYCLE_STATUSES = %w[none open completed].freeze
 
+  # Pundit policy lookup: use AssessmentPolicy
+  def self.policy_class
+    AssessmentPolicy
+  end
+
   acts_as_tenant :tenant
 
   belongs_to :tenant

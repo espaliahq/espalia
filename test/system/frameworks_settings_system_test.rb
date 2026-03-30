@@ -76,11 +76,12 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       assert_no_link "Settings"
     end
 
-    should "redirect non-admin members to framework page" do
+    should "redirect non-admin members away from settings" do
       sign_in @member_user
       visit framework_settings_path(framework_id: @framework_id)
 
-      assert_current_path framework_path(@framework_id)
+      assert_current_path root_path
+      assert_text "You are not authorized to perform this action"
     end
   end
 

@@ -9,10 +9,10 @@
 #
 class Frameworks::SettingsController < ApplicationController
   before_action :set_framework
-  before_action :authorize_admin!
 
   # GET /frameworks/:framework_id/settings
   def show
+    authorize @framework, :settings?
     render Views::Frameworks::SettingsView.new(
       framework: @framework,
       scoring_defaults: scoring_defaults,
@@ -24,6 +24,7 @@ class Frameworks::SettingsController < ApplicationController
 
   # PATCH /frameworks/:framework_id/settings
   def update
+    authorize @framework, :update_settings?
     settings = settings_params
 
     Frameworks::CommandHandler.new.configure_scoring_thresholds(
@@ -47,19 +48,6 @@ class Frameworks::SettingsController < ApplicationController
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:framework_id))
   rescue ActiveRecord::RecordNotFound
     redirect_to frameworks_path
-  end
-
-  # @return [void]
-  def authorize_admin!
-    return if current_user.global_admin?
-
-    tenant = ActsAsTenant.current_tenant
-    tenant_user = ActsAsTenant.without_tenant do
-      TenantUser.find_by(user: current_user, tenant: tenant)
-    end
-    return if tenant_user&.admin?
-
-    redirect_to framework_path(@framework.framework_id), alert: "Not authorized."
   end
 
   # @return [ActionController::Parameters]

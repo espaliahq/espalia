@@ -45,7 +45,7 @@ class Frameworks::SettingsControllerTest < ActionDispatch::IntegrationTest
       sign_in @member_user
       get framework_settings_path(framework_id: @framework_id)
 
-      assert_redirected_to framework_path(@framework_id)
+      assert_response :redirect
     end
 
     should "redirect unauthenticated users to sign in" do
@@ -133,7 +133,7 @@ class Frameworks::SettingsControllerTest < ActionDispatch::IntegrationTest
             params: { settings: { mastery_threshold: "1.25", meeting_expectation_threshold: "0.90",
                                   overperformance_cap: "1", deficit_threshold: "1.0" } }
 
-      assert_redirected_to framework_path(@framework_id)
+      assert_response :redirect
     end
 
     should "redirect unauthenticated users to sign in" do

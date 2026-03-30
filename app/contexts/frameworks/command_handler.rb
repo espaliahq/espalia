@@ -13,11 +13,19 @@ class Frameworks::CommandHandler
 
   # Creates a new framework.
   #
+  # When `created_by` is provided, the creator is automatically assigned
+  # as the framework owner collaborator.
+  #
   # @param framework_id [String] UUID for the new framework
   # @param name [String] display name
-  def create_framework(framework_id, name)
+  # @param created_by [String, nil] person_id of the creator (auto-assigned as owner)
+  def create_framework(framework_id, name, created_by: nil)
     @repository.with_framework(framework_id) do |framework|
       framework.create(framework_id, name)
+      if created_by
+        framework.add_collaborator(framework_id, created_by, "owner",
+                                   scope_type: nil, scope_id: nil, added_by: created_by)
+      end
     end
   end
 
@@ -263,6 +271,54 @@ class Frameworks::CommandHandler
     end
   end
 
+  # ── Collaborator commands ──
+
+  # Adds a collaborator to a framework.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param person_id [String] UUID of the person
+  # @param collaborator_role [String] one of the 8 collaborator roles
+  # @param scope_type [String, nil] nil for framework-wide, or entity type
+  # @param scope_id [String, nil] UUID of the scoped entity
+  # @param added_by [String] person_id of who added the collaborator
+  def add_collaborator(framework_id, person_id, collaborator_role, scope_type: nil, scope_id: nil, added_by:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.add_collaborator(framework_id, person_id, collaborator_role,
+                                 scope_type: scope_type, scope_id: scope_id, added_by: added_by)
+    end
+  end
+
+  # Changes a collaborator's role on a framework.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param person_id [String] UUID of the collaborator
+  # @param old_role [String] the current role being replaced
+  # @param new_role [String] the new role
+  # @param scope_type [String, nil] nil for framework-wide, or entity type
+  # @param scope_id [String, nil] UUID of the scoped entity
+  # @param changed_by [String] person_id of who made the change
+  def change_collaborator_role(framework_id, person_id, old_role, new_role, scope_type: nil, scope_id: nil, changed_by:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.change_collaborator_role(framework_id, person_id, old_role, new_role,
+                                         scope_type: scope_type, scope_id: scope_id, changed_by: changed_by)
+    end
+  end
+
+  # Removes a collaborator from a framework.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param person_id [String] UUID of the collaborator
+  # @param collaborator_role [String] the role being removed
+  # @param scope_type [String, nil] nil for framework-wide, or entity type
+  # @param scope_id [String, nil] UUID of the scoped entity
+  # @param removed_by [String] person_id of who removed the collaborator
+  def remove_collaborator(framework_id, person_id, collaborator_role, scope_type: nil, scope_id: nil, removed_by:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.remove_collaborator(framework_id, person_id, collaborator_role,
+                                    scope_type: scope_type, scope_id: scope_id, removed_by: removed_by)
+    end
+  end
+
   # ── Suggested edit commands ──
 
   # Suggests an edit to a framework entity field.
@@ -289,7 +345,7 @@ class Frameworks::CommandHandler
       framework.suggest_edit(framework_id, suggestion_id, target_entity_type, target_entity_id,
                              field, suggested_value, author_id, rationale: rationale)
 
-      if mode == :editing && framework.can_approve?(author_id)
+      if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
         framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
       end
     end
