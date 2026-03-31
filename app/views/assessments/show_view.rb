@@ -68,42 +68,29 @@ class Views::Assessments::ShowView < Views::Base
           score_percentage
         end
       end
-
-      stats_bar
-    end
-  end
-
-  def stats_bar
-    total = @matrix_data[:total_cells]
-    rated = @matrix_data[:rated_cells]
-
-    div(class: "mt-3 flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400") do
-      span do
-        span(class: "font-semibold text-gray-900 dark:text-white") { "#{rated}/#{total}" }
-        plain " Rated"
-      end
-      span do
-        span(class: "font-semibold text-gray-900 dark:text-white") do
-          "#{format_ratio(@matrix_data[:scoring][:performance_ratio])}%"
-        end
-        plain " Performance"
-      end
     end
   end
 
   def score_percentage
-    ratio = @matrix_data[:scoring][:performance_ratio]
+    scoring = @matrix_data[:self_scoring] || @matrix_data[:scoring]
+    ratio = scoring[:performance_ratio]
     pct = format_ratio(ratio)
     color = ratio >= 1.0 ? "text-green-600 dark:text-green-400" :
             ratio >= 0.8 ? "text-amber-600 dark:text-amber-400" :
             "text-red-600 dark:text-red-400"
-    span(class: "ml-1 font-semibold #{color}") { "#{pct}%" }
+    span(id: "score-percentage-badge", class: "ml-1 font-semibold #{color}") { "#{pct}%" }
   end
 
   # ── Layout ──
 
   def assessment_layout
-    div(class: "flex -mx-6 -mb-6 h-[calc(100vh-14rem)] border-t border-gray-200 dark:border-gray-700") do
+    div(
+      class: "flex -mx-6 -mb-6 h-[calc(100vh-14rem)] border-t border-gray-200 dark:border-gray-700",
+      data: { controller: "assessment-sync" }
+    ) do
+      turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
+      div(id: "assessment-sync-signal", class: "hidden",
+          data: { assessment_sync_target: "signal" }) { }
       main_pane
       scoring_sidebar
     end
@@ -111,10 +98,15 @@ class Views::Assessments::ShowView < Views::Base
 
   def main_pane
     div(class: "flex-1 overflow-auto bg-white dark:bg-gray-900") do
-      turbo_frame_tag("assessment-matrix") do
-        render Views::Assessments::Matrix.new(
+      turbo_frame_tag(
+        "assessment-matrix",
+        src: matrix_assessment_path(@assignment),
+        data: { assessment_sync_target: "frame" }
+      ) do
+        render Views::Assessments::AssessmentMatrix.new(
           matrix_data: @matrix_data,
-          framework_id: @framework.framework_id
+          assessment_id: @assignment.id,
+          context: :self
         )
       end
     end
@@ -128,13 +120,23 @@ class Views::Assessments::ShowView < Views::Base
              "max-lg:w-80 max-lg:shadow-xl",
       data: { panel_target: "panel" }
     ) do
-      render Views::Assessments::ScoringPanel.new(
-        scoring: @matrix_data[:scoring],
-        categories: @matrix_data[:categories],
-        person_level: @matrix_data[:person_level],
-        mastery_threshold: @matrix_data[:mastery_threshold],
-        meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold]
-      )
+      turbo_frame_tag(
+        "assessment-scoring",
+        src: scoring_assessment_path(@assignment),
+        data: { assessment_sync_target: "scoringFrame" }
+      ) do
+        render Views::Assessments::ScoringPanel.new(
+          scoring: @matrix_data[:scoring],
+          self_scoring: @matrix_data[:self_scoring],
+          manager_scoring: @matrix_data[:manager_scoring],
+          aligned_scoring: @matrix_data[:aligned_scoring],
+          categories: @matrix_data[:categories],
+          person_level: @matrix_data[:person_level],
+          mastery_threshold: @matrix_data[:mastery_threshold],
+          meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
+          context: :self
+        )
+      end
     end
   end
 

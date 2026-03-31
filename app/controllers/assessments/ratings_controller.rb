@@ -16,7 +16,11 @@ class Assessments::RatingsController < ApplicationController
 
     rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment ])
     capability_stable_id = rating_params[:capability_stable_id]
-    level_ordinal = rating_params[:level_ordinal].to_i
+    level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
+    unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
+      head :unprocessable_content
+      return
+    end
     frequency = rating_params[:frequency]
     comment = rating_params[:comment]
 
@@ -68,10 +72,13 @@ class Assessments::RatingsController < ApplicationController
   def set_assignment
     return unless current_person
 
-    @assignment = PersonFrameworkAssignment.for_person(current_person.id)
-      .find_by!(framework_id: params.expect(:assessment_id))
+    @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
+  end
+
+  def user_not_authorized(_exception = nil)
+    head :forbidden
   end
 
   def respond_with_turbo_stream(capability_stable_id, level_ordinal)
@@ -107,12 +114,13 @@ class Assessments::RatingsController < ApplicationController
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
-          Views::Assessments::MatrixCell.new(
+          Views::Assessments::AssessmentCell.new(
             cell_data: cell_data,
             capability_stable_id: capability_stable_id,
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
-            framework_id: @assignment.framework_id
+            assessment_id: @assignment.id,
+            context: :self
           ),
           layout: false
         )
@@ -122,6 +130,9 @@ class Assessments::RatingsController < ApplicationController
         render_to_string(
           Views::Assessments::ScoringPanel.new(
             scoring: matrix_data[:scoring],
+            self_scoring: matrix_data[:self_scoring],
+            manager_scoring: matrix_data[:manager_scoring],
+            aligned_scoring: matrix_data[:aligned_scoring],
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
             mastery_threshold: matrix_data[:mastery_threshold],

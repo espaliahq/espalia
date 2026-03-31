@@ -169,3 +169,56 @@ Cells get background tints based on their rating relative to expectations at tha
 | Below expectations | `performance_ratio < meeting_expectation_threshold` (default 0.95) OR any :blocked capabilities | Red warning — performance concern |
 | Meeting expectations | `performance_ratio >= meeting_expectation_threshold` AND no :blocked capabilities | Green — at or above current level baseline |
 | Mastering | `performance_ratio >= mastery_threshold` (default 1.15) AND no :blocked capabilities | Purple — significantly exceeding expectations |
+
+---
+
+## Multi-Perspective Scoring
+
+### Perspective Parameter
+
+The scoring engine accepts a `perspective:` parameter that controls which frequency field is used:
+
+| Perspective | Frequency used | Purpose |
+|-------------|---------------|---------|
+| `:effective` (default) | Fallback chain: aligned → manager → self | Official composite score |
+| `:self_only` | `self_rated_frequency` only | What the person's self-ratings alone produce |
+| `:manager_only` | `manager_rated_frequency` only | What the manager's ratings alone produce |
+| `:aligned_only` | `aligned_frequency` only | What the agreed ratings alone produce |
+
+All other scoring logic (contribution, deficit, blocking, verdicts) is identical across perspectives — only the frequency source changes. This means perspective-specific scores are directly comparable.
+
+`MatrixDataBuilder` computes four scoring hashes in parallel: `scoring` (effective), `self_scoring`, `manager_scoring`, and `aligned_scoring`. Perspective-specific hashes are nil when no ratings exist for that perspective (e.g. `manager_scoring` is nil until the manager rates at least one cell).
+
+### Assessment Context and Primary/Secondary Display
+
+The UI has three assessment contexts (`:self`, `:manager`, `:alignment`) that determine which perspective is primary. This mirrors the `AssessmentCell` pattern where `context:` determines which frequency is interactive.
+
+| Context | Primary scoring | Secondary bars | Context label |
+|---------|----------------|----------------|---------------|
+| `:self` | `self_scoring` | Mgr, Agreed (if present) | "Self Assessment" |
+| `:manager` | `manager_scoring` | Self, Agreed (if present) | "Manager Assessment" |
+| `:alignment` | `aligned_scoring` | Self, Mgr | "Agreed Assessment" |
+
+The primary scoring drives all panel sections: performance %, status tier, category results, and promotion readiness. Secondary perspectives appear as compact bars (matching `FrequencyBar` visual language) and divergence annotations.
+
+### Divergence Display
+
+Divergence between perspectives is surfaced at every level of the scoring panel:
+
+| Section | Divergence indicator | Detail shown |
+|---------|---------------------|--------------|
+| Performance % | Compact bar per secondary perspective + amber dot when ≥5% apart | Exact percentage |
+| Status tier | Amber dot + text annotation below primary badge | Alternate tier label ("Mgr: Meeting expectations") |
+| Category results | Amber dot on row + inline text below | Alternate pass/fail ("Self: Below") |
+| Promotion | Amber dot + text annotation | Alternate eligibility ("Self: Eligible") |
+
+**Design rationale:** Divergence is shown explicitly (with alternate result text, not just a dot) because disagreements are conversation opportunities. In the alignment context, both original positions (self + manager) are shown to make the starting points visible alongside the agreed result.
+
+### Visual Language Consistency
+
+The scoring panel's secondary display mirrors the cell-level `FrequencyBar` pattern:
+- Compact horizontal bar with label, colored strip, and value
+- Amber divergence dot (1.5px) when perspectives disagree
+- Same color tiers (purple/green/amber/red) across cells and panel
+
+This ensures a user scanning from the matrix cells to the scoring sidebar sees a consistent visual language at every granularity.

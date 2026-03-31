@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Three-button segmented control for self-rating frequency.
+# Four-button segmented control for rating frequency.
+# Context-aware: posts to the correct endpoint based on assessment context.
 # Each button submits a form via Turbo Stream.
 #
 class Views::Assessments::FrequencySelector < Views::Base
@@ -18,12 +19,14 @@ class Views::Assessments::FrequencySelector < Views::Base
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
   # @param current_frequency [String, nil]
-  # @param framework_id [String]
-  def initialize(capability_stable_id:, level_ordinal:, current_frequency:, framework_id:)
+  # @param assessment_id [String]
+  # @param context [Symbol] :self, :manager, or :alignment
+  def initialize(capability_stable_id:, level_ordinal:, current_frequency:, assessment_id:, context: :self)
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
     @current_frequency = current_frequency
-    @framework_id = framework_id
+    @assessment_id = assessment_id
+    @context = context
   end
 
   def view_template
@@ -41,7 +44,7 @@ class Views::Assessments::FrequencySelector < Views::Base
     selected = @current_frequency == freq[:value]
 
     form(
-      action: assessment_ratings_path(@framework_id),
+      action: form_action,
       method: "post",
       data: { turbo_stream: "true" },
       class: "contents"
@@ -58,6 +61,18 @@ class Views::Assessments::FrequencySelector < Views::Base
           action: "frequency-selector#select"
         }
       ) { freq[:label] }
+    end
+  end
+
+  # Returns the form action path based on assessment context.
+  #
+  # @return [String]
+  def form_action
+    case @context
+    when :manager
+      assessment_manager_ratings_path(@assessment_id)
+    else
+      assessment_ratings_path(@assessment_id)
     end
   end
 

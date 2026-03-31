@@ -17,6 +17,9 @@ class AssessmentPolicy < ApplicationPolicy
   def matrix? = show?
 
   # @return [Boolean]
+  def scoring? = show?
+
+  # @return [Boolean]
   def create_self_rating? = owns_assessment?
 
   # @return [Boolean]

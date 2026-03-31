@@ -67,8 +67,10 @@ class Components::Kit::PageLayout < Components::Base
     end
   end
 
-  # Returns an assessment nav link if the current user has an open assessment cycle.
-  # Links directly to the assessment when exactly one exists, otherwise to the index.
+  # Returns an assessment nav link if the current user has an open assessment cycle
+  # or has direct reports with framework assignments (manager view).
+  # Links directly to the assessment when exactly one own cycle exists and no
+  # report assignments, otherwise to the index.
   #
   # @return [Hash, nil]
   def assessment_nav_link
@@ -78,12 +80,13 @@ class Components::Kit::PageLayout < Components::Base
     return unless person
 
     assignments = PersonFrameworkAssignment.for_person(person.id).with_open_cycle
-    case assignments.size
-    when 0
-      nil
-    when 1
+    has_report_assignments = person.direct_reports
+      .where(id: PersonFrameworkAssignment.select(:person_id))
+      .exists?
+
+    if assignments.size == 1 && !has_report_assignments
       { label: "Assessment", href: "/assessments/#{assignments.first.framework_id}" }
-    else
+    elsif assignments.any? || has_report_assignments
       { label: "Assessments", href: "/assessments" }
     end
   end

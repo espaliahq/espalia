@@ -90,6 +90,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         @person.id, @framework_id,
         SecureRandom.uuid_v7, "Q1 2026 Review", "regular", 1
       )
+
+      @assignment = PersonFrameworkAssignment.for_person(@person.id).first
     end
 
     # Sign in
@@ -111,7 +113,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
   context "self-assessment flow" do
     should "display assessment matrix with frequency selectors" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
 
       assert_text "Engineering Growth"
       assert_text "Software Engineer"
@@ -129,7 +131,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "rate a capability and see scoring update" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
 
       # Click the first "Consistent" button using a precise selector
       find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
@@ -139,14 +141,14 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "show weight badge for weighted capabilities" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
 
       # Critical Thinking has weight 2.0 — should show "2×" badge
       assert_text "2×"
     end
 
     should "show mandatory indicator for zero-tolerance capabilities" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
 
       # Critical Thinking has deficit_threshold=0 (via individual_tolerance mapping) and weight=2.0
       # Should show amber left border on the name cell (border-l-amber-400)
@@ -154,7 +156,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "show illustration count and expand to reveal illustrations" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       # Illustration count indicators should be visible
@@ -173,7 +175,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
   context "row expansion accordion" do
     should "expand a row when clicking it" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       # Click the capability name cell — avoids hitting rating form buttons
@@ -184,7 +186,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "keep row expanded when clicking it again" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       find("#capability-name-#{@cap1_stable}").click
@@ -197,7 +199,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "collapse expanded row and expand new row when clicking a different row" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       # Expand first row
@@ -212,7 +214,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "collapse row when clicking its chevron" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       find("#capability-name-#{@cap1_stable}").click
@@ -226,7 +228,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "keep illustrations expanded when rating a capability in the same row" do
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       # Expand the first row via capability name
@@ -247,7 +249,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   context "responsive behaviour" do
     should "show scoring panel as sidebar on desktop" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
 
       # Scoring panel should be visible on desktop
       assert_selector "#scoring-panel", visible: true
@@ -255,7 +257,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "show scoring toggle button on mobile" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit assessment_path(@framework_id)
+      visit assessment_path(@assignment)
 
       # Scoring toggle button should be visible
       assert_button "Scoring"

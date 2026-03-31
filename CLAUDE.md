@@ -175,6 +175,9 @@ bin/rails db:seed            # Seed database
 
 bin/rails test               # Run test suite (Minitest) - DO NOT pipe output
 bin/rails test:system        # Run system tests (Capybara + Selenium)
+
+# The above test tasks run as part of precommit so if you are done just run precommit, not individual test tasks
+
 SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per action -> saves to tmp/screenshots/{TestClass}/{test_name}/{001_action.png} -> use /screenshot-test skill to run + visually examine results
 
 # Validation (NON-NEGOTIABLE)

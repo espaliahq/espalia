@@ -60,7 +60,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
   context "GET /assessments/:id" do
     should "render assessment matrix for assigned framework" do
       sign_in @user
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
 
       assert_response :success
       assert_includes response.body, "Engineering Growth"
@@ -71,7 +71,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
     should "show frequency selectors" do
       sign_in @user
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
 
       assert_response :success
       assert_includes response.body, "Some"
@@ -87,15 +87,59 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "redirect unauthenticated users to sign in" do
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
       assert_redirected_to new_user_session_path
+    end
+  end
+
+  context "as manager" do
+    setup do
+      @manager_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant, email: @manager_user.email, name: "Manager")
+        create(:tenant_user, tenant: @tenant, user: @manager_user, person: @manager)
+        @person.update!(manager: @manager)
+      end
+    end
+
+    should "render manager assessment view for direct report" do
+      sign_in @manager_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Manager Review"
+      assert_includes response.body, @person.name
+      assert_includes response.body, "assessment-matrix"
+    end
+
+    should "show team assessments section on index" do
+      sign_in @manager_user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Team Assessments"
+      assert_includes response.body, @person.name
+    end
+
+    should "redirect if not manager and not assignee" do
+      other_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        other = create(:person, tenant: @tenant, email: other_user.email, name: "Other")
+        create(:tenant_user, tenant: @tenant, user: other_user, person: other)
+      end
+
+      sign_in other_user
+      get assessment_path(@assignment)
+
+      assert_response :redirect
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
   end
 
   context "GET /assessments/:id/matrix" do
     should "render Turbo Frame without layout" do
       sign_in @user
-      get matrix_assessment_path(@framework.framework_id)
+      get matrix_assessment_path(@assignment)
 
       assert_response :success
       assert_includes response.body, "assessment-matrix"

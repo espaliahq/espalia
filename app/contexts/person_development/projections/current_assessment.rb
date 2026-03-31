@@ -19,6 +19,8 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::SelfRatingRevised,
       PersonDevelopment::Events::SelfRatingCleared,
       PersonDevelopment::Events::ManagerRated,
+      PersonDevelopment::Events::ManagerRatingRevised,
+      PersonDevelopment::Events::ManagerRatingCleared,
       PersonDevelopment::Events::AssessmentAligned
     ]
   end
@@ -41,6 +43,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::SelfRatingRevised then handle_self_rating_revised(event)
     when PersonDevelopment::Events::SelfRatingCleared then handle_self_rating_cleared(event)
     when PersonDevelopment::Events::ManagerRated then handle_manager_rated(event)
+    when PersonDevelopment::Events::ManagerRatingRevised then handle_manager_rating_revised(event)
+    when PersonDevelopment::Events::ManagerRatingCleared then handle_manager_rating_cleared(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
     end
   end
@@ -80,6 +84,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    broadcast_assessment_sync(event)
   end
 
   def handle_self_rating_revised(event)
@@ -88,6 +93,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    broadcast_assessment_sync(event)
   end
 
   def handle_self_rating_cleared(event)
@@ -95,6 +101,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_frequency = nil
     rating.self_rated_comment = nil
     rating.save!
+    broadcast_assessment_sync(event)
   end
 
   def handle_manager_rated(event)
@@ -103,6 +110,24 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_comment = event.data[:comment]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    broadcast_assessment_sync(event)
+  end
+
+  def handle_manager_rating_revised(event)
+    rating = find_or_init_rating(event)
+    rating.manager_rated_frequency = event.data[:frequency]
+    rating.manager_rated_comment = event.data[:comment]
+    rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    rating.save!
+    broadcast_assessment_sync(event)
+  end
+
+  def handle_manager_rating_cleared(event)
+    rating = find_or_init_rating(event)
+    rating.manager_rated_frequency = nil
+    rating.manager_rated_comment = nil
+    rating.save!
+    broadcast_assessment_sync(event)
   end
 
   def handle_assessment_aligned(event)
@@ -111,6 +136,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.aligned_comment = event.data[:comment]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    broadcast_assessment_sync(event)
   end
 
   # Finds or initialises an AssessmentLevelRating for the (person, framework,
@@ -136,6 +162,21 @@ class PersonDevelopment::Projections::CurrentAssessment
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id]
     )
+  end
+
+  # Broadcasts a sync signal to all viewers of this assessment.
+  # The signal triggers a matrix frame reload via the matrix Stimulus controller.
+  #
+  # @param event [RubyEventStore::Event]
+  def broadcast_assessment_sync(event)
+    Turbo::StreamsChannel.broadcast_replace_to(
+      "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
+      target: "assessment-sync-signal",
+      html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+    )
+  rescue => e
+    # Don't let broadcast failures break the projection
+    Rails.logger.warn("[CurrentAssessment] Broadcast failed: #{e.message}")
   end
 
   # Sets tenant context from event metadata for projection writes.

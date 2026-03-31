@@ -173,6 +173,89 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "ManagerRatingRevised" do
+    should "update manager_rated_frequency on existing row" do
+      cap_sid = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::ManagerRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: "Initial")
+      emit(PersonDevelopment::Events::ManagerRatingRevised,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
+        comment: "Reconsidered", rationale: "Saw improvement")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+        )
+        assert_equal "consistent", rating.manager_rated_frequency
+        assert_equal "Reconsidered", rating.manager_rated_comment
+        assert_not_nil rating.last_manager_rated_at
+        # Only one row — revised, not duplicated
+        assert_equal 1, AssessmentLevelRating.where(
+          person_id: @person_id, capability_stable_id: cap_sid
+        ).count
+      end
+    end
+
+    should "not overwrite self_rated_frequency" do
+      cap_sid = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: nil)
+      emit(PersonDevelopment::Events::ManagerRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional", comment: nil)
+      emit(PersonDevelopment::Events::ManagerRatingRevised,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
+        comment: nil, rationale: "Updated")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+        )
+        assert_equal "some", rating.self_rated_frequency
+        assert_equal "consistent", rating.manager_rated_frequency
+      end
+    end
+  end
+
+  context "ManagerRatingCleared" do
+    should "clear manager_rated_frequency on the row" do
+      cap_sid = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::ManagerRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional", comment: "Initial")
+      emit(PersonDevelopment::Events::ManagerRatingCleared,
+        capability_stable_id: cap_sid, level_ordinal: 3)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+        )
+        assert_nil rating.manager_rated_frequency
+        assert_nil rating.manager_rated_comment
+      end
+    end
+
+    should "not affect self_rated_frequency" do
+      cap_sid = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent", comment: nil)
+      emit(PersonDevelopment::Events::ManagerRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: nil)
+      emit(PersonDevelopment::Events::ManagerRatingCleared,
+        capability_stable_id: cap_sid, level_ordinal: 3)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+        )
+        assert_equal "consistent", rating.self_rated_frequency
+        assert_nil rating.manager_rated_frequency
+      end
+    end
+  end
+
   context "AssessmentAligned" do
     should "set aligned_frequency on the row" do
       cap_sid = SecureRandom.uuid_v7

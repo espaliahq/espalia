@@ -24,8 +24,10 @@ Rails.application.routes.draw do
   resources :assessments, only: [ :index, :show ] do
     member do
       get :matrix
+      get :scoring
     end
     resources :ratings, only: [ :create ], controller: "assessments/ratings"
+    resources :manager_ratings, only: [ :create ], controller: "assessments/manager_ratings"
   end
 
   resources :frameworks, only: [ :index, :show ] do

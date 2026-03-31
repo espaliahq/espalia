@@ -63,4 +63,52 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_kind_of PersonDevelopment::Events::AssessmentCycleCompleted, events[4]
     end
   end
+
+  context "manager rating flow" do
+    should "support rate_as_manager, revise_manager_rating, and align_assessment" do
+      @handler.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+
+      cycle_id = SecureRandom.uuid_v7
+      @handler.open_assessment_cycle(@person_id, @framework_id, cycle_id, "Q1 2026", "regular", 1)
+
+      cap_sid = SecureRandom.uuid_v7
+
+      # Manager rates
+      @handler.rate_as_manager(@person_id, @framework_id, cap_sid,
+        level_ordinal: 3, frequency: "some", comment: "Room to grow")
+
+      rating = AssessmentLevelRating.find_by(
+        person_id: @person_id,
+        framework_id: @framework_id,
+        capability_stable_id: cap_sid,
+        level_ordinal: 3
+      )
+      assert_not_nil rating
+      assert_equal "some", rating.manager_rated_frequency
+      assert_equal "Room to grow", rating.manager_rated_comment
+
+      # Manager revises
+      @handler.revise_manager_rating(@person_id, @framework_id, cap_sid,
+        level_ordinal: 3, frequency: "occasional", rationale: "Saw improvement")
+
+      rating.reload
+      assert_equal "occasional", rating.manager_rated_frequency
+
+      # Alignment
+      @handler.align_assessment(@person_id, @framework_id, cap_sid,
+        level_ordinal: 3, aligned_frequency: "occasional", comment: "Agreed on occasional")
+
+      rating.reload
+      assert_equal "occasional", rating.aligned_frequency
+      assert_equal "Agreed on occasional", rating.aligned_comment
+
+      # Verify stream
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      events = Rails.configuration.event_store.read.stream(stream).to_a
+      assert_equal 5, events.length
+      assert_kind_of PersonDevelopment::Events::ManagerRated, events[2]
+      assert_kind_of PersonDevelopment::Events::ManagerRatingRevised, events[3]
+      assert_kind_of PersonDevelopment::Events::AssessmentAligned, events[4]
+    end
+  end
 end

@@ -79,6 +79,63 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Records a manager's rating for a person's capability at a specific level.
+  #
+  # @param person_id [String] UUID of the person being rated
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being assessed
+  # @param frequency [String] "some", "occasional", or "consistent"
+  # @param comment [String, nil] optional rationale
+  def rate_as_manager(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, comment: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.rate_as_manager(capability_stable_id, level_ordinal: level_ordinal, frequency: frequency, comment: comment)
+    end
+  end
+
+  # Revises a previous manager rating.
+  #
+  # @param person_id [String] UUID of the person being rated
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being revised
+  # @param frequency [String] revised frequency
+  # @param rationale [String] reason for the change
+  # @param comment [String, nil] optional comment
+  def revise_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.revise_manager_rating(capability_stable_id, level_ordinal: level_ordinal,
+        frequency: frequency, rationale: rationale, comment: comment)
+    end
+  end
+
+  # Clears a previous manager rating.
+  #
+  # @param person_id [String] UUID of the person being rated
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being cleared
+  def clear_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.clear_manager_rating(capability_stable_id, level_ordinal: level_ordinal)
+    end
+  end
+
+  # Records an agreed assessment for a capability at a specific level.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being agreed upon
+  # @param aligned_frequency [String] agreed frequency
+  # @param comment [String, nil] optional comment
+  def align_assessment(person_id, framework_id, capability_stable_id, level_ordinal:, aligned_frequency:, comment: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.align_assessment(capability_stable_id, level_ordinal: level_ordinal,
+        aligned_frequency: aligned_frequency, comment: comment)
+    end
+  end
+
   # Completes the current assessment cycle.
   #
   # @param person_id [String] UUID of the person

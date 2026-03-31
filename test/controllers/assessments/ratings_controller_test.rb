@@ -31,13 +31,15 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
         @person.id, framework_id,
         SecureRandom.uuid_v7, "Q1 2026", "regular", 1
       )
+
+      @assignment = PersonFrameworkAssignment.for_person(@person.id).first
     end
   end
 
   context "POST /assessments/:assessment_id/ratings" do
     should "create a new self-rating and return turbo stream" do
       sign_in @user
-      post assessment_ratings_path(@framework.framework_id), params: {
+      post assessment_ratings_path(@assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -64,7 +66,7 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
     should "revise an existing self-rating" do
       # Create initial rating
       sign_in @user
-      post assessment_ratings_path(@framework.framework_id), params: {
+      post assessment_ratings_path(@assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -74,7 +76,7 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
 
       # Revise
-      post assessment_ratings_path(@framework.framework_id), params: {
+      post assessment_ratings_path(@assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -95,7 +97,7 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
 
     should "include scoring panel in turbo stream response" do
       sign_in @user
-      post assessment_ratings_path(@framework.framework_id), params: {
+      post assessment_ratings_path(@assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,

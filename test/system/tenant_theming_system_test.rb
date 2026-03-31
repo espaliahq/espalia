@@ -34,6 +34,7 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
       screenshot("before_switch")
 
       # Open menu and find which tenant is NOT current, then switch to it
+      wait_for_stimulus "dropdown"
       find("[data-action='dropdown#toggle']").click
       assert_selector "[role='menu']", visible: true
 

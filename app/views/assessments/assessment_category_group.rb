@@ -1,25 +1,26 @@
 # frozen_string_literal: true
 
-# Category header + child capability rows in the assessment matrix.
-# Shows category tolerance indicator and pass/fail status from scoring.
+# Unified category header + child capability rows in the assessment matrix.
+# Passes context through to AssessmentRow children.
 #
-class Views::Assessments::MatrixCategoryGroup < Views::Base
+class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param category_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
   # @param scoring [Hash] scoring output
-  # @param framework_id [String]
-  def initialize(category_data:, merged_levels:, person_level:, scoring:, framework_id:)
+  # @param assessment_id [String]
+  # @param context [Symbol] :self, :manager, or :alignment
+  def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
     @person_level = person_level
     @scoring = scoring
-    @framework_id = framework_id
+    @assessment_id = assessment_id
+    @context = context
   end
 
   def view_template
-    # Category header row — sticky left cell spans 2+ columns for breathing room
     sticky_cols = [ @merged_levels.size, 1 ].min + 1
     filler_cols = @merged_levels.size + 1 - sticky_cols
 
@@ -58,17 +59,17 @@ class Views::Assessments::MatrixCategoryGroup < Views::Base
       end
     end
 
-    # Capability rows
     @category_data[:capabilities].each do |cap_data|
       stable_id = cap_data[:capability].stable_id
       blocked = @scoring.dig(:capability_statuses, stable_id) == :blocked
       block_reason = @scoring.dig(:block_reasons, stable_id)
 
-      render Views::Assessments::MatrixRow.new(
+      render Views::Assessments::AssessmentRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
         person_level: @person_level,
-        framework_id: @framework_id,
+        assessment_id: @assessment_id,
+        context: @context,
         blocked: blocked,
         block_reason: block_reason
       )
