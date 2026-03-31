@@ -21,17 +21,17 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       pd_handler = PersonDevelopment::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
 
-      handler.create_framework(@framework_id, "Engineering Growth")
+      handler.create_framework(@framework_id, "me&u 2025 Career Framework")
 
       rf_id = SecureRandom.uuid_v7
       @role_id = SecureRandom.uuid_v7
-      handler.add_role_family(@framework_id, rf_id, "Engineering")
+      handler.add_role_family(@framework_id, rf_id, "Product & Engineering")
       handler.add_role(@framework_id, @role_id, rf_id, "Software Engineer", "E", "ic")
 
       @level1_id = SecureRandom.uuid_v7
       @level2_id = SecureRandom.uuid_v7
       handler.add_level(@framework_id, @level1_id, @role_id, 1, "Junior", "E1", is_entry: true)
-      handler.add_level(@framework_id, @level2_id, @role_id, 2, "Mid", "E2")
+      handler.add_level(@framework_id, @level2_id, @role_id, 2, "Senior Software Engineer", "E2")
 
       cat_id = SecureRandom.uuid_v7
       handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
@@ -144,6 +144,37 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       within("#rating-#{@cap_stable}-2") do
         assert_no_selector "button.ring-1"
       end
+    end
+  end
+
+  context "responsive behaviour" do
+    should "show manager assessment index on mobile with team assessments visible" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessments_path
+
+      assert_text "Team Assessments"
+      assert_text "Report Alex"
+      assert_link "Review Assessment"
+    end
+
+    should "show manager review matrix on mobile with scoring toggle visible" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessments_path
+      click_link "Review Assessment"
+
+      # Header elements should be visible — long names must not push scoring off-screen
+      assert_text "Report Alex"
+      assert_text "Manager Review"
+      assert_text "me&u 2025 Career Framework"
+      assert_text "Software Engineer"
+      assert_text "Senior Software Engineer"
+
+      # Matrix content should be visible
+      assert_text "Critical Thinking"
+
+      # Scoring toggle must remain visible on-screen despite long header text
+      scoring_button = find_button("Scoring")
+      assert scoring_button.obscured? == false, "Scoring button is off-screen or obscured"
     end
   end
 

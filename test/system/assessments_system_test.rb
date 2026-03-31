@@ -19,17 +19,17 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       pd_handler = PersonDevelopment::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
 
-      handler.create_framework(@framework_id, "Engineering Growth")
+      handler.create_framework(@framework_id, "me&u 2025 Career Framework")
 
-      # Role family + role + levels
+      # Role family + role + levels (long names to test mobile header wrapping)
       rf_id = SecureRandom.uuid_v7
       @role_id = SecureRandom.uuid_v7
-      handler.add_role_family(@framework_id, rf_id, "Engineering")
+      handler.add_role_family(@framework_id, rf_id, "Product & Engineering")
       handler.add_role(@framework_id, @role_id, rf_id, "Software Engineer", "E", "ic")
       @level1_id = SecureRandom.uuid_v7
       @level2_id = SecureRandom.uuid_v7
       handler.add_level(@framework_id, @level1_id, @role_id, 1, "Junior", "E1", is_entry: true)
-      handler.add_level(@framework_id, @level2_id, @role_id, 2, "Mid", "E2")
+      handler.add_level(@framework_id, @level2_id, @role_id, 2, "Senior Software Engineer", "E2")
 
       # Category with tolerance
       @cat_id = SecureRandom.uuid_v7
@@ -106,7 +106,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "show framework assignment card" do
       visit assessments_path
       assert_text "My Assessments"
-      assert_text "Engineering Growth"
+      assert_text "me&u 2025 Career Framework"
       assert_text "In Progress"
     end
   end
@@ -115,7 +115,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "display assessment matrix with frequency selectors" do
       visit assessment_path(@assignment)
 
-      assert_text "Engineering Growth"
+      assert_text "me&u 2025 Career Framework"
       assert_text "Software Engineer"
       assert_text "Critical Thinking"
       assert_text "Problem Solving"
@@ -241,12 +241,18 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#scoring-panel", visible: true
     end
 
-    should "show scoring toggle button on mobile" do
+    should "show scoring toggle button on mobile with long names" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@assignment)
 
-      # Scoring toggle button should be visible
-      assert_button "Scoring"
+      # Header badges with long names must wrap without pushing scoring off-screen
+      assert_text "me&u 2025 Career Framework"
+      assert_text "Software Engineer"
+      assert_text "Senior Software Engineer"
+
+      # Scoring toggle must remain visible on-screen
+      scoring_button = find_button("Scoring")
+      assert scoring_button.obscured? == false, "Scoring button is off-screen or obscured"
     end
   end
 end
