@@ -1,21 +1,23 @@
 # frozen_string_literal: true
 
-# Category header + child capability rows in the manager assessment matrix.
-# Same as {MatrixCategoryGroup} but renders {ManagerMatrixRow} children.
+# Unified category header + child capability rows in the assessment matrix.
+# Passes context through to AssessmentRow children.
 #
-class Views::Assessments::ManagerMatrixCategoryGroup < Views::Base
+class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param category_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
   # @param scoring [Hash] scoring output
   # @param framework_id [String]
-  def initialize(category_data:, merged_levels:, person_level:, scoring:, framework_id:)
+  # @param context [Symbol] :self, :manager, or :alignment
+  def initialize(category_data:, merged_levels:, person_level:, scoring:, framework_id:, context: :self)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
     @person_level = person_level
     @scoring = scoring
     @framework_id = framework_id
+    @context = context
   end
 
   def view_template
@@ -62,11 +64,12 @@ class Views::Assessments::ManagerMatrixCategoryGroup < Views::Base
       blocked = @scoring.dig(:capability_statuses, stable_id) == :blocked
       block_reason = @scoring.dig(:block_reasons, stable_id)
 
-      render Views::Assessments::ManagerMatrixRow.new(
+      render Views::Assessments::AssessmentRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
         person_level: @person_level,
         framework_id: @framework_id,
+        context: @context,
         blocked: blocked,
         block_reason: block_reason
       )

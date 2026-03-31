@@ -58,17 +58,11 @@ class AssessmentsController < ApplicationController
   def matrix
     authorize @assignment, :matrix?
     load_assessment_data
-    if manager_viewing?
-      render Views::Assessments::ManagerMatrixFrameView.new(
-        framework: @framework,
-        matrix_data: @matrix_data
-      ), layout: false
-    else
-      render Views::Assessments::MatrixFrameView.new(
-        framework: @framework,
-        matrix_data: @matrix_data
-      ), layout: false
-    end
+    render Views::Assessments::AssessmentMatrixFrameView.new(
+      framework: @framework,
+      matrix_data: @matrix_data,
+      context: assessment_context
+    ), layout: false
   end
 
   private
@@ -107,6 +101,13 @@ class AssessmentsController < ApplicationController
   # @return [Boolean]
   def manager_viewing?
     @assignment.person_id != current_person.id
+  end
+
+  # Returns the assessment context based on the viewer's relationship.
+  #
+  # @return [Symbol] :self, :manager, or :alignment
+  def assessment_context
+    manager_viewing? ? :manager : :self
   end
 
   def load_assessment_data

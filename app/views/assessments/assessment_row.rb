@@ -1,21 +1,20 @@
 # frozen_string_literal: true
 
-# Single capability row in the assessment matrix.
+# Unified capability row in the assessment matrix.
 #
 # Renders two <tr> elements:
-# 1. Compact row (always visible): capability name + expectation text per level cell
+# 1. Compact row (always visible): capability name + one AssessmentCell per level
 # 2. Expanded row (hidden by default): read-only illustrations for each cell
 #
-# The expanded row only renders when at least one cell has illustrations.
-#
-class Views::Assessments::MatrixRow < Views::Base
+class Views::Assessments::AssessmentRow < Views::Base
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
   # @param framework_id [String]
-  # @param blocked [Boolean] whether this capability is blocked at person_level
-  # @param block_reason [String, nil] human-readable explanation for why it's blocked
-  def initialize(capability_data:, merged_levels:, person_level:, framework_id:, blocked: false, block_reason: nil)
+  # @param context [Symbol] :self, :manager, or :alignment
+  # @param blocked [Boolean]
+  # @param block_reason [String, nil]
+  def initialize(capability_data:, merged_levels:, person_level:, framework_id:, context: :self, blocked: false, block_reason: nil)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -28,6 +27,7 @@ class Views::Assessments::MatrixRow < Views::Base
     @merged_levels = merged_levels
     @person_level = person_level
     @framework_id = framework_id
+    @context = context
     @has_illustrations = @cells.any? { |_, c| c[:illustration_count]&.positive? }
   end
 
@@ -50,12 +50,13 @@ class Views::Assessments::MatrixRow < Views::Base
     ) do
       capability_name_cell
       @merged_levels.each do |level|
-        render Views::Assessments::MatrixCell.new(
+        render Views::Assessments::AssessmentCell.new(
           cell_data: @cells[level[:ordinal]],
           capability_stable_id: @capability.stable_id,
           ordinal: level[:ordinal],
           person_level: @person_level,
-          framework_id: @framework_id
+          framework_id: @framework_id,
+          context: @context
         )
       end
     end
@@ -66,7 +67,6 @@ class Views::Assessments::MatrixRow < Views::Base
       class: "hidden",
       data: { matrix_target: "expandedRow", capability_id: @capability.capability_id }
     ) do
-      # Empty sticky column
       td(class: "sticky left-0 z-[2] bg-blue-50/30 dark:bg-blue-900/10 " \
                 "border-b border-r border-gray-100 dark:border-gray-800") { }
 

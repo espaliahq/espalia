@@ -1,14 +1,16 @@
 # frozen_string_literal: true
 
-# Assessment capability matrix table.
-# Single-role variant — no role tree, capabilities filtered to assigned role.
+# Unified assessment capability matrix table.
+# Passes context through to AssessmentCategoryGroup children.
 #
-class Views::Assessments::Matrix < Views::Base
+class Views::Assessments::AssessmentMatrix < Views::Base
   # @param matrix_data [Hash] from Assessments::MatrixDataBuilder
   # @param framework_id [String] UUID
-  def initialize(matrix_data:, framework_id:)
+  # @param context [Symbol] :self, :manager, or :alignment
+  def initialize(matrix_data:, framework_id:, context: :self)
     @matrix_data = matrix_data
     @framework_id = framework_id
+    @context = context
   end
 
   def view_template
@@ -20,12 +22,13 @@ class Views::Assessments::Matrix < Views::Base
       )
       tbody do
         @matrix_data[:categories].each do |cat_data|
-          render Views::Assessments::MatrixCategoryGroup.new(
+          render Views::Assessments::AssessmentCategoryGroup.new(
             category_data: cat_data,
             merged_levels: @matrix_data[:merged_levels],
             person_level: @matrix_data[:person_level],
             scoring: @matrix_data[:scoring],
-            framework_id: @framework_id
+            framework_id: @framework_id,
+            context: @context
           )
         end
       end

@@ -113,12 +113,13 @@ class Assessments::ManagerRatingsController < ApplicationController
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
-          Views::Assessments::ManagerMatrixCell.new(
+          Views::Assessments::AssessmentCell.new(
             cell_data: cell_data,
             capability_stable_id: capability_stable_id,
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
-            framework_id: @assignment.framework_id
+            framework_id: @assignment.framework_id,
+            context: :manager
           ),
           layout: false
         )

@@ -122,9 +122,10 @@ class Views::Assessments::ShowView < Views::Base
         src: matrix_assessment_path(@assignment.framework_id),
         data: { assessment_sync_target: "frame" }
       ) do
-        render Views::Assessments::Matrix.new(
+        render Views::Assessments::AssessmentMatrix.new(
           matrix_data: @matrix_data,
-          framework_id: @framework.framework_id
+          framework_id: @framework.framework_id,
+          context: :self
         )
       end
     end
