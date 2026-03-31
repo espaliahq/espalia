@@ -151,6 +151,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     should "update manager view when report submits a new self-rating" do
       # Manager opens the report's assessment
       click_link "Assessments"
+      assert_text "Team Assessments"
       click_link "Review Assessment"
       assert_text "Manager Review"
       wait_for_stimulus "matrix"
