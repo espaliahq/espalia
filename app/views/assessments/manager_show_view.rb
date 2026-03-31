@@ -44,15 +44,15 @@ class Views::Assessments::ManagerShowView < Views::Base
         plain "\u2190 Assessments"
       end
 
-      div(class: "flex items-center justify-between") do
-        div do
-          div(class: "flex items-center gap-3") do
+      div(class: "flex flex-wrap items-start justify-between gap-2") do
+        div(class: "min-w-0") do
+          div(class: "flex flex-wrap items-center gap-2") do
             h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
               @assessee.name
             end
             render Components::Kit::Badge.new("Manager Review", variant: :info)
           end
-          div(class: "mt-1 flex items-center gap-2") do
+          div(class: "mt-1 flex flex-wrap items-center gap-2") do
             render Components::Kit::Badge.new(@framework.name, variant: :default)
             render Components::Kit::Badge.new(@matrix_data[:role].name, variant: :info)
             render Components::Kit::Badge.new(@matrix_data[:level].title, variant: :default)
@@ -65,7 +65,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         # Mobile scoring toggle
         button(
           type: "button",
-          class: "lg:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-md " \
+          class: "lg:hidden shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md " \
                  "bg-gray-100 dark:bg-gray-800 text-sm font-medium " \
                  "text-gray-700 dark:text-gray-300 hover:bg-gray-200 " \
                  "dark:hover:bg-gray-700 transition-colors",
