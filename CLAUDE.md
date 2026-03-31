@@ -174,7 +174,7 @@ bin/rails db:migrate         # Run migrations
 bin/rails db:seed            # Seed database
 
 bin/rails test               # Run test suite (Minitest) - DO NOT pipe output
-bin/rails test:system        # Run system tests (Capybara + Selenium), 
+bin/rails test:system        # Run system tests (Capybara + Selenium)
 
 # The above test tasks run as part of precommit so if you are done just run precommit, not individual test tasks
 

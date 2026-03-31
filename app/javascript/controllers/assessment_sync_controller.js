@@ -46,11 +46,17 @@ export default class extends BaseController {
   }
 
   #listenForFrameLoad() {
-    if (!this.hasFrameTarget) return
+    if (this.hasFrameTarget) {
+      this.frameTarget.addEventListener("turbo:frame-load", () => {
+        this.#restoreToggleState()
+      })
+    }
 
-    this.frameTarget.addEventListener("turbo:frame-load", () => {
-      this.#restoreToggleState()
-    })
+    if (this.hasScoringFrameTarget) {
+      this.scoringFrameTarget.addEventListener("turbo:frame-load", () => {
+        this.#updateScoreBadge()
+      })
+    }
   }
 
   #reloadFrame() {
@@ -73,6 +79,21 @@ export default class extends BaseController {
         this.scoringFrameTarget.src = src
       }
     }
+  }
+
+  #updateScoreBadge() {
+    const panel = this.scoringFrameTarget.querySelector("#scoring-panel")
+    const badge = document.getElementById("score-percentage-badge")
+    if (!panel || !badge) return
+
+    const pct = panel.dataset.performancePct
+    const ratio = parseInt(pct, 10) / 100.0
+    const color = ratio >= 1.0 ? "text-green-600 dark:text-green-400" :
+                  ratio >= 0.8 ? "text-amber-600 dark:text-amber-400" :
+                  "text-red-600 dark:text-red-400"
+
+    badge.textContent = `${pct}%`
+    badge.className = `ml-1 font-semibold ${color}`
   }
 
   #saveToggleState() {

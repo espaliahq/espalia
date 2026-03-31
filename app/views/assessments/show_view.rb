@@ -72,12 +72,13 @@ class Views::Assessments::ShowView < Views::Base
   end
 
   def score_percentage
-    ratio = @matrix_data[:scoring][:performance_ratio]
+    scoring = @matrix_data[:self_scoring] || @matrix_data[:scoring]
+    ratio = scoring[:performance_ratio]
     pct = format_ratio(ratio)
     color = ratio >= 1.0 ? "text-green-600 dark:text-green-400" :
             ratio >= 0.8 ? "text-amber-600 dark:text-amber-400" :
             "text-red-600 dark:text-red-400"
-    span(class: "ml-1 font-semibold #{color}") { "#{pct}%" }
+    span(id: "score-percentage-badge", class: "ml-1 font-semibold #{color}") { "#{pct}%" }
   end
 
   # ── Layout ──

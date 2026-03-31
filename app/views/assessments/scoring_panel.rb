@@ -48,7 +48,9 @@ class Views::Assessments::ScoringPanel < Views::Base
   end
 
   def view_template
-    div(id: "scoring-panel", class: "p-5 space-y-6") do
+    ratio = primary_scoring[:performance_ratio] || 0.0
+    div(id: "scoring-panel", class: "p-5 space-y-6",
+        data: { performance_pct: (ratio * 100).round(0) }) do
       context_label
       performance_section
       status_tier_section
