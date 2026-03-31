@@ -16,7 +16,11 @@ class Assessments::RatingsController < ApplicationController
 
     rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment ])
     capability_stable_id = rating_params[:capability_stable_id]
-    level_ordinal = rating_params[:level_ordinal].to_i
+    level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
+    unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
+      head :unprocessable_content
+      return
+    end
     frequency = rating_params[:frequency]
     comment = rating_params[:comment]
 
