@@ -109,6 +109,18 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Clears a previous manager rating.
+  #
+  # @param person_id [String] UUID of the person being rated
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being cleared
+  def clear_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.clear_manager_rating(capability_stable_id, level_ordinal: level_ordinal)
+    end
+  end
+
   # Records an agreed assessment for a capability at a specific level.
   #
   # @param person_id [String] UUID of the person

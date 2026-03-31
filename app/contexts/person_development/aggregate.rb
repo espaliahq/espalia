@@ -187,6 +187,22 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Clears a previous manager rating at a specific level.
+  #
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being cleared
+  # @raise [RuntimeError] if no prior manager rating for this capability at this level
+  def clear_manager_rating(capability_stable_id, level_ordinal:)
+    ensure_cycle_open!
+    raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
+      @manager_ratings.key?([ capability_stable_id, level_ordinal ])
+
+    apply(PersonDevelopment::Events::ManagerRatingCleared.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal
+    }))
+  end
+
   # ── Alignment ──
 
   # Records an agreed assessment for a capability at a specific level.
@@ -267,6 +283,10 @@ class PersonDevelopment::Aggregate
   on PersonDevelopment::Events::ManagerRatingRevised do |event|
     @manager_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
       event.data[:frequency]
+  end
+
+  on PersonDevelopment::Events::ManagerRatingCleared do |event|
+    @manager_ratings.delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
   end
 
   on PersonDevelopment::Events::AssessmentAligned do |_event|

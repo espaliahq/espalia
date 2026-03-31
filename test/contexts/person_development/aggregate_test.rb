@@ -246,6 +246,31 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#clear_manager_rating" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.open_assessment_cycle(@cycle_id, "Q1 2026", "regular", 1)
+      @cap_sid = SecureRandom.uuid_v7
+      @aggregate.rate_as_manager(@cap_sid, level_ordinal: 3, frequency: "some")
+    end
+
+    should "apply ManagerRatingCleared event" do
+      @aggregate.clear_manager_rating(@cap_sid, level_ordinal: 3)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::ManagerRatingCleared, event
+      assert_equal @cap_sid, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+    end
+
+    should "raise if no prior manager rating for capability at that level" do
+      assert_raises(RuntimeError, /No manager rating exists/) do
+        @aggregate.clear_manager_rating(@cap_sid, level_ordinal: 4)
+      end
+    end
+  end
+
   # ── Alignment ──
 
   context "#align_assessment" do
