@@ -69,6 +69,11 @@ class Views::Assessments::ScoringPanel < Views::Base
       span(class: "text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide") do
         label
       end
+      if using_fallback?
+        span(class: "text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded") do
+          "No ratings yet"
+        end
+      end
     end
   end
 
@@ -377,6 +382,19 @@ class Views::Assessments::ScoringPanel < Views::Base
       when :alignment then @aligned_scoring || @scoring
       else @scoring
       end
+  end
+
+  # Returns true when the primary perspective has no ratings and the panel
+  # is showing the effective (blended) scoring as a fallback.
+  #
+  # @return [Boolean]
+  def using_fallback?
+    case @context
+    when :self      then @self_scoring.nil?
+    when :manager   then @manager_scoring.nil?
+    when :alignment then @aligned_scoring.nil?
+    else false
+    end
   end
 
   # Returns an array of [label, scoring] pairs for secondary perspectives.
