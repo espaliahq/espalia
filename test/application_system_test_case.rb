@@ -18,7 +18,11 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   # CI runners (2 cores) can't sustain multiple Chrome processes — JavaScript
   # event loops get starved, causing Stimulus actions to miss Capybara's wait window.
-  parallelize(workers: 1)
+  if ENV["CI"]
+    parallelize(workers: 1)
+  else
+    parallelize(workers: 2)
+  end
 
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze

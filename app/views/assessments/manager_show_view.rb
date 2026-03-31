@@ -117,8 +117,18 @@ class Views::Assessments::ManagerShowView < Views::Base
   end
 
   def main_pane
-    div(class: "flex-1 overflow-auto bg-white dark:bg-gray-900") do
-      turbo_frame_tag("assessment-matrix") do
+    div(
+      class: "flex-1 overflow-auto bg-white dark:bg-gray-900",
+      data: { controller: "assessment-sync" }
+    ) do
+      turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
+      div(id: "assessment-sync-signal", class: "hidden",
+          data: { assessment_sync_target: "signal" }) { }
+      turbo_frame_tag(
+        "assessment-matrix",
+        src: matrix_assessment_path(@assignment.framework_id),
+        data: { assessment_sync_target: "frame" }
+      ) do
         render Views::Assessments::ManagerMatrix.new(
           matrix_data: @matrix_data,
           framework_id: @framework.framework_id

@@ -142,4 +142,41 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
   end
+
+  context "cross-session sync" do
+    should "update manager view when report submits a new self-rating" do
+      # Manager opens the report's assessment
+      click_link "Assessments"
+      click_link "Review Assessment"
+      assert_text "Manager Review"
+      wait_for_stimulus "matrix"
+
+      # Verify WebSocket subscription and sync controller are ready
+      assert_selector "turbo-cable-stream-source", visible: :all
+      wait_for_stimulus "assessment-sync"
+
+      # Level 1 has no self-rating yet — no "Self:" pill for that cell
+      within("#cell-#{@cap_stable}-1") do
+        assert_no_text "Self:"
+      end
+
+      # Simulate the report submitting a self-rating from another session
+      # (server-side, as if from another browser)
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "consistent", comment: "From other session"
+        )
+      end
+
+      # The broadcast should trigger a matrix refresh in the manager's browser.
+      # Wait for the sync signal to be replaced (broadcast delivery + frame reload)
+      assert_selector "#assessment-sync-signal[data-updated-at]", visible: :all, wait: 10
+
+      # After frame reload, the self-rating pill should appear in the cell.
+      within("#cell-#{@cap_stable}-1") do
+        assert_text "Self:", wait: 10
+      end
+    end
+  end
 end

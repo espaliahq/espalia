@@ -30,7 +30,7 @@ services:
     deploy:
       resources:
         reservations:
-          cpus: "2"
+          cpus: "4"
           memory: 2g
     environment:
       SE_NODE_MAX_SESSIONS: 2
