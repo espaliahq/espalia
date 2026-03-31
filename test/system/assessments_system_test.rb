@@ -164,10 +164,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "1 example"
 
       # Click the Critical Thinking capability name to expand illustrations
-      find("#capability-name-#{@cap1_stable}").click
-
-      # Expanded row should appear with illustration text
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
       assert_text "Asks 'why' before jumping into implementation"
       assert_text "Rephrases the problem statement in their own words"
     end
@@ -176,21 +173,16 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   context "row expansion accordion" do
     should "expand a row when clicking it" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
 
       # Click the capability name cell — avoids hitting rating form buttons
-      find("#capability-name-#{@cap1_stable}").click
-
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
       assert_text "Asks 'why' before jumping into implementation"
     end
 
     should "keep row expanded when clicking it again" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
 
-      find("#capability-name-#{@cap1_stable}").click
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
 
       # Click the same capability name again — should stay expanded
       find("#capability-name-#{@cap1_stable}").click
@@ -200,11 +192,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "collapse expanded row and expand new row when clicking a different row" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
 
       # Expand first row
-      find("#capability-name-#{@cap1_stable}").click
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
       assert_text "Asks 'why' before jumping into implementation"
 
       # Click second row — first should collapse, second should expand
@@ -215,10 +205,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "collapse row when clicking its chevron" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
 
-      find("#capability-name-#{@cap1_stable}").click
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
 
       # Click the chevron to collapse
       row1 = find("[data-matrix-target='row']", match: :first)
@@ -229,11 +217,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "keep illustrations expanded when rating a capability in the same row" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
 
       # Expand the first row via capability name
-      find("#capability-name-#{@cap1_stable}").click
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
 
       # Click a rating button inside the same row.
       # Use the capability stable_id to build a precise selector, avoiding

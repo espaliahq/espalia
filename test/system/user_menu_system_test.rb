@@ -26,22 +26,16 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "open dropdown with email and sign out" do
       visit root_path
-      wait_for_stimulus "dropdown"
-
-      find("[data-action='dropdown#toggle']").click
+      open_dropdown
       screenshot("dropdown_open")
 
-      assert_selector "[role='menu']", visible: true
       assert_text @user.email
       assert_text "Sign out"
     end
 
     should "close dropdown when clicking outside" do
       visit root_path
-      wait_for_stimulus "dropdown"
-
-      find("[data-action='dropdown#toggle']").click
-      assert_selector "[role='menu']", visible: true
+      open_dropdown
 
       find("main").click
       screenshot("dropdown_closed_after_outside_click")
@@ -51,10 +45,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "sign out via dropdown" do
       visit root_path
-      wait_for_stimulus "dropdown"
-
-      find("[data-action='dropdown#toggle']").click
-      assert_selector "[role='menu']", visible: true
+      open_dropdown
       click_on "Sign out"
       screenshot("after_sign_out")
 
@@ -65,9 +56,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
   context "tenant switcher" do
     should "not show tenant switcher for single-tenant user" do
       visit root_path
-      wait_for_stimulus "dropdown"
-
-      find("[data-action='dropdown#toggle']").click
+      open_dropdown
       screenshot("single_tenant_no_switcher")
 
       assert_no_text "switch workspace"
@@ -80,8 +69,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       end
 
       visit root_path
-      wait_for_stimulus "dropdown"
-      find("[data-action='dropdown#toggle']").click
+      open_dropdown
       screenshot("multi_tenant_switcher")
 
       assert_text "SWITCH WORKSPACE"
@@ -96,9 +84,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       end
 
       visit root_path
-      wait_for_stimulus "dropdown"
-      find("[data-action='dropdown#toggle']").click
-      assert_selector "[role='menu']", visible: true
+      open_dropdown
       screenshot("before_tenant_switch")
 
       # Click the switch button for Beta Inc

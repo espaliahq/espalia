@@ -171,8 +171,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
 
       # Click to show again
-      click_button "Roles"
-      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+      toggle_role_pane
     end
 
     should "hide role tree on mobile and show it via toggle button" do
@@ -189,10 +188,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       assert_selector "button", text: "Roles", visible: true
 
       # Click toggle to show role tree
-      click_button "Roles"
-
-      # Role tree should now be visible as overlay
-      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+      toggle_role_pane
       assert_text "Product Design"
       assert_text "Software Engineering"
     end
@@ -205,8 +201,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       assert_selector "[data-controller='framework-explorer'][data-connected]"
 
       # Open the role pane
-      click_button "Roles"
-      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+      toggle_role_pane
 
       # Click outside the role pane (right side of viewport, past the 18rem overlay)
       page.driver.browser.action.move_to_location(350, 400).click.perform

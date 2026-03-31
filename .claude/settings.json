@@ -1,3 +1,6 @@
 {
-  "effortLevel": "high"
+  "effortLevel": "high",
+  "enabledPlugins": {
+    "codex@openai-codex": true
+  }
 }

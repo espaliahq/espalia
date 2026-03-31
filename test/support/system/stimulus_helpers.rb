@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Helpers for waiting on Stimulus controller readiness in system tests.
+# Helpers for waiting on Stimulus controller readiness and performing
+# CI-resilient toggle interactions in system tests.
 #
 # Stimulus controllers that extend BaseController set a `data-connected`
 # attribute on their element when connected. These helpers wait for that
@@ -8,9 +9,20 @@
 # tests on slow CI runners where action handlers aren't attached yet
 # when Capybara clicks.
 #
+# == Toggle helpers
+#
+# On CI runners where Chrome's JS event loop is starved, a Selenium click
+# can be silently lost. The toggle helpers click, verify the expected state
+# change, retry once if the click was lost, and assert the final visible
+# state. Each public helper encodes a specific controller's toggle contract.
+#
 # Usage:
 #   wait_for_stimulus "framework-explorer"
-#   click_button "Roles"
+#   open_dropdown
+#   toggle_sidebar
+#   toggle_role_pane
+#   toggle_panel
+#   expand_matrix_row("#capability-name-#{stable_id}")
 module StimulusHelpers
   # Waits until the named Stimulus controller has connected.
   #
@@ -24,26 +36,114 @@ module StimulusHelpers
     assert_selector selector, visible: :all
   end
 
-  # Opens a dropdown menu by clicking the toggle and waiting for the
-  # menu to become visible. On CI runners where Chrome's event loop
-  # is starved, a Selenium click can be silently lost. This helper
-  # checks `aria-expanded` (set synchronously by the dropdown
-  # controller) and retries the click once if it didn't take effect.
+  # Opens a dropdown menu.
   #
   # @param scope [String, nil] optional CSS selector to scope the toggle
   def open_dropdown(scope: nil)
     wait_for_stimulus "dropdown", scope: scope
-    toggle_selector = "[data-action='dropdown#toggle']"
+    stimulus_toggle(
+      "[data-action='dropdown#toggle']",
+      visible_selector: "[role='menu']",
+      verify_selector: "[data-action='dropdown#toggle'][aria-expanded='true']",
+      scope: scope
+    )
+  end
+
+  # Opens the mobile sidebar drawer.
+  #
+  # @param scope [String, nil] optional CSS selector to scope the toggle
+  def toggle_sidebar(scope: nil)
+    # Sidebar doesn't extend BaseController. Wait for target registration
+    # as a readiness signal.
+    drawer_selector = "[data-sidebar-target='drawer']"
+    drawer_selector = "#{scope} #{drawer_selector}" if scope
+    assert_selector drawer_selector, visible: :all
+
+    stimulus_toggle(
+      "[data-action='sidebar#toggle']",
+      visible_selector: "[data-sidebar-target='drawer']",
+      scope: scope
+    )
+  end
+
+  # Opens the framework explorer role pane.
+  #
+  # @param scope [String, nil] optional CSS selector to scope the toggle
+  def toggle_role_pane(scope: nil)
+    wait_for_stimulus "framework-explorer", scope: scope
+    stimulus_toggle(
+      "[data-action='framework-explorer#toggleRolePane']",
+      visible_selector: "[data-framework-explorer-target='rolePane']",
+      scope: scope
+    )
+  end
+
+  # Opens a panel (e.g. scoring panel).
+  #
+  # @param scope [String, nil] optional CSS selector to scope the toggle
+  def toggle_panel(scope: nil)
+    # Panel doesn't extend BaseController. Wait for target registration
+    # as a readiness signal.
+    panel_selector = "[data-panel-target='panel']"
+    panel_selector = "#{scope} #{panel_selector}" if scope
+    assert_selector panel_selector, visible: :all
+
+    stimulus_toggle(
+      "[data-action='panel#toggle']",
+      visible_selector: "[data-panel-target='panel']",
+      scope: scope
+    )
+  end
+
+  # Expands a matrix row by clicking the given capability selector.
+  #
+  # @param capability_selector [String] CSS selector for the capability
+  #   element to click (e.g. "#capability-name-{stable_id}")
+  # @param scope [String, nil] optional CSS selector to scope the toggle
+  def expand_matrix_row(capability_selector, scope: nil)
+    wait_for_stimulus "matrix", scope: scope
+    stimulus_toggle(
+      capability_selector,
+      visible_selector: "[data-matrix-target='expandedRow']",
+      scope: scope
+    )
+  end
+
+  private
+
+  # Clicks a toggle element and retries once if the action was lost.
+  #
+  # On slow CI runners, Selenium clicks can be silently dropped when
+  # Chrome's JS event loop is starved. This method clicks, checks a
+  # verification condition, retries once if the click didn't take
+  # effect, and asserts the final visible state.
+  #
+  # @param toggle_selector [String] CSS selector for the element to click
+  # @param visible_selector [String] CSS selector that should become
+  #   visible after a successful toggle (used for the final assertion)
+  # @param verify_selector [String, nil] fast synchronous check selector
+  #   (e.g. aria-expanded attribute). Checked with `visible: :all` since
+  #   the attribute may be on a non-visible element. Falls back to
+  #   +visible_selector+ with `visible: true` when nil.
+  # @param scope [String, nil] optional CSS scope prefix
+  def stimulus_toggle(toggle_selector, visible_selector:, verify_selector: nil, scope: nil)
     toggle_selector = "#{scope} #{toggle_selector}" if scope
+    scoped_visible = scope ? "#{scope} #{visible_selector}" : visible_selector
 
     find(toggle_selector).click
 
-    # aria-expanded is updated synchronously by the controller.
-    # If it's still "false" after a brief wait, the click was lost — retry.
-    unless page.has_css?("#{toggle_selector}[aria-expanded='true']", wait: 1)
-      find(toggle_selector).click
+    # Check whether the click took effect. If not, retry once.
+    if verify_selector
+      scoped_verify = scope ? "#{scope} #{verify_selector}" : verify_selector
+      unless page.has_css?(scoped_verify, visible: :all, wait: 1)
+        find(toggle_selector).click
+      end
+    else
+      unless page.has_css?(scoped_visible, visible: true, wait: 1)
+        find(toggle_selector).click
+      end
     end
 
-    assert_selector "[role='menu']", visible: true
+    assert_selector scoped_visible, visible: true
   end
 end

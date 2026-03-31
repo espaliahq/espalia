@@ -240,6 +240,44 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 - For simple links, forms, or elements that don't use Stimulus actions
 - When the next assertion already waits (e.g. `assert_text` on server-rendered content)
 
+## Stimulus Toggle Helpers (NON-NEGOTIABLE)
+
+**Use purpose-specific toggle helpers instead of bare `find(...).click` for Stimulus-driven toggles.** On slow CI runners, Selenium clicks can be silently lost when Chrome's JS event loop is starved. These helpers click, verify the expected state change, retry once if the click was lost, and assert the target is visible.
+
+Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
+
+| Helper | Controller | Usage |
+|--------|-----------|-------|
+| `open_dropdown(scope:)` | dropdown | Opens a dropdown menu |
+| `toggle_sidebar(scope:)` | sidebar | Opens the mobile sidebar drawer |
+| `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane |
+| `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
+| `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector |
+
+```ruby
+# WRONG — bare click can be silently lost on CI
+wait_for_stimulus "dropdown"
+find("[data-action='dropdown#toggle']").click
+assert_selector "[role='menu']", visible: true
+
+# CORRECT — helper waits, clicks, verifies, retries if needed
+open_dropdown
+
+# WRONG — matrix expansion without retry protection
+wait_for_stimulus "matrix"
+find("#capability-name-#{@cap_stable}").click
+assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+# CORRECT — helper handles the full sequence
+expand_matrix_row("#capability-name-#{@cap_stable}")
+```
+
+**When to use:** Any time you need to open/expand a Stimulus-controlled toggle in a system test. The helpers handle controller readiness, click retries, and visibility assertions.
+
+**When NOT needed:** When testing the *close* path (clicking to hide/collapse), since the helper asserts the element becomes visible.
+
+**Adding new helpers:** If a new controller with toggle behavior is added, create a thin wrapper that calls the private `stimulus_toggle` primitive with the controller's specific selectors.
+
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
 **Always assert visibility after triggering Stimulus actions before interacting with the resulting DOM.** Elements toggled by Stimulus controllers (dropdowns, modals, expanded rows) exist in the DOM as hidden elements. Capybara's `find` and `within` will locate hidden elements and fail — or worse, pass locally but fail on slower CI runners due to race conditions.
@@ -251,9 +289,8 @@ within("[role='menu']") do
   click_on "Sign out"
 end
 
-# CORRECT — assert_selector waits for the element to become visible
-find("[data-action='dropdown#toggle']").click
-assert_selector "[role='menu']", visible: true
+# CORRECT — use the toggle helper, then interact with the revealed element
+open_dropdown
 within("[role='menu']") do
   click_on "Sign out"
 end

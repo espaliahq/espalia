@@ -45,15 +45,13 @@ class PagesSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit root_path
 
-      # Wait for sidebar controller to be ready (find its target element)
-      assert_selector "[data-sidebar-target='drawer']", visible: :all
-
       # Drawer starts hidden on mobile (has "hidden" class)
+      assert_selector "[data-sidebar-target='drawer']", visible: :all
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
       classes = drawer[:class].split
       assert_includes classes, "hidden", "sidebar drawer should be hidden on mobile by default"
 
-      find("[data-action='sidebar#toggle']").click
+      toggle_sidebar
 
       # After toggle, "hidden" class should be removed (md:hidden still present but doesn't apply on mobile)
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
@@ -66,13 +64,8 @@ class PagesSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit root_path
 
-      # Wait for sidebar controller to be ready (find its target element)
-      assert_selector "[data-sidebar-target='drawer']", visible: :all
-
       # Open the drawer
-      find("[data-action='sidebar#toggle']").click
-      drawer = find("[data-sidebar-target='drawer']", visible: :all)
-      assert_not_includes drawer[:class].split, "hidden"
+      toggle_sidebar
 
       # Click outside the drawer (right side of viewport, past the 16rem drawer)
       page.driver.browser.action.move_to_location(350, 400).click.perform
