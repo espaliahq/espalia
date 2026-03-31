@@ -121,8 +121,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # Click a frequency button to rate
       find("#rating-#{@cap_stable}-2 button", text: "Consistent").click
 
-      # Verify the scoring panel updates
-      assert_selector "#scoring-panel"
+      # Verify the Turbo Stream response re-rendered the cell with the button selected
+      within("#rating-#{@cap_stable}-2") do
+        assert_selector "button.ring-1", text: "Consistent"
+      end
     end
 
     should "allow manager to untoggle a rating by clicking the same frequency" do
