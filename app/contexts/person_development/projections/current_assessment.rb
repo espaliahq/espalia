@@ -172,7 +172,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     Turbo::StreamsChannel.broadcast_replace_to(
       "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
       target: "assessment-sync-signal",
-      html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+      html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
     )
   rescue => e
     # Don't let broadcast failures break the projection

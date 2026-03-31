@@ -10,11 +10,11 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
-  # @param framework_id [String]
+  # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
   # @param blocked [Boolean]
   # @param block_reason [String, nil]
-  def initialize(capability_data:, merged_levels:, person_level:, framework_id:, context: :self, blocked: false, block_reason: nil)
+  def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self, blocked: false, block_reason: nil)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -26,7 +26,7 @@ class Views::Assessments::AssessmentRow < Views::Base
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
     @person_level = person_level
-    @framework_id = framework_id
+    @assessment_id = assessment_id
     @context = context
     @has_illustrations = @cells.any? { |_, c| c[:illustration_count]&.positive? }
   end
@@ -55,7 +55,7 @@ class Views::Assessments::AssessmentRow < Views::Base
           capability_stable_id: @capability.stable_id,
           ordinal: level[:ordinal],
           person_level: @person_level,
-          framework_id: @framework_id,
+          assessment_id: @assessment_id,
           context: @context
         )
       end

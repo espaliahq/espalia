@@ -61,6 +61,7 @@ class AssessmentsController < ApplicationController
     render Views::Assessments::AssessmentMatrixFrameView.new(
       framework: @framework,
       matrix_data: @matrix_data,
+      assignment: @assignment,
       context: assessment_context
     ), layout: false
   end
@@ -86,20 +87,7 @@ class AssessmentsController < ApplicationController
   def set_assignment
     return unless current_person
 
-    # First try own assignment
-    @assignment = PersonFrameworkAssignment.for_person(current_person.id)
-      .find_by(framework_id: params.expect(:id))
-
-    unless @assignment
-      # Try direct report's assignment (manager view)
-      @assignment = find_report_assignment(params.expect(:id))
-    end
-
-    unless @assignment
-      redirect_to assessments_path, alert: "Assessment not found."
-      return
-    end
-
+    @assignment = PersonFrameworkAssignment.find(params.expect(:id))
     @framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
     @assessee = Person.find_by(id: @assignment.person_id) if manager_viewing?
   rescue ActiveRecord::RecordNotFound
@@ -145,17 +133,6 @@ class AssessmentsController < ApplicationController
 
     PersonFrameworkAssignment.where(person_id: report_ids)
       .includes(:framework, :role, :level)
-  end
-
-  # Finds a direct report's assignment for the given framework.
-  #
-  # @param framework_id [String]
-  # @return [PersonFrameworkAssignment, nil]
-  def find_report_assignment(framework_id)
-    report_ids = current_person.direct_reports.pluck(:id)
-    return nil if report_ids.empty?
-
-    PersonFrameworkAssignment.where(person_id: report_ids, framework_id: framework_id).first
   end
 
   def current_user_tenants

@@ -68,10 +68,13 @@ class Assessments::RatingsController < ApplicationController
   def set_assignment
     return unless current_person
 
-    @assignment = PersonFrameworkAssignment.for_person(current_person.id)
-      .find_by!(framework_id: params.expect(:assessment_id))
+    @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
+  end
+
+  def user_not_authorized(_exception = nil)
+    head :forbidden
   end
 
   def respond_with_turbo_stream(capability_stable_id, level_ordinal)
@@ -112,7 +115,7 @@ class Assessments::RatingsController < ApplicationController
             capability_stable_id: capability_stable_id,
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
-            framework_id: @assignment.framework_id,
+            assessment_id: @assignment.id,
             context: :self
           ),
           layout: false

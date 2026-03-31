@@ -72,15 +72,13 @@ class Assessments::ManagerRatingsController < ApplicationController
   def set_assignment
     return unless current_person
 
-    # The assessment_id is the framework_id. We need to find the assessee's
-    # assignment — the person whose manager is current_person.
-    @assignment = PersonFrameworkAssignment
-      .where(framework_id: params.expect(:assessment_id))
-      .joins("INNER JOIN people ON people.id = person_framework_assignments.person_id")
-      .where(people: { manager_id: current_person.id })
-      .first!
+    @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
+  end
+
+  def user_not_authorized(_exception = nil)
+    head :forbidden
   end
 
   def respond_with_turbo_stream(capability_stable_id, level_ordinal)
@@ -118,7 +116,7 @@ class Assessments::ManagerRatingsController < ApplicationController
             capability_stable_id: capability_stable_id,
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
-            framework_id: @assignment.framework_id,
+            assessment_id: @assignment.id,
             context: :manager
           ),
           layout: false

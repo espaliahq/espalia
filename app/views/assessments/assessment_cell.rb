@@ -11,7 +11,7 @@
 # @example Self-assessment context
 #   render Views::Assessments::AssessmentCell.new(
 #     cell_data: cell, capability_stable_id: sid, ordinal: 2,
-#     person_level: 3, framework_id: fid, context: :self
+#     person_level: 3, assessment_id: fid, context: :self
 #   )
 #
 class Views::Assessments::AssessmentCell < Views::Base
@@ -19,14 +19,14 @@ class Views::Assessments::AssessmentCell < Views::Base
   # @param capability_stable_id [String]
   # @param ordinal [Integer] the level ordinal for this column
   # @param person_level [Integer] the person's assigned level ordinal
-  # @param framework_id [String]
+  # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, framework_id:, context: :self)
+  def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self)
     @cell_data = cell_data
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
     @person_level = person_level
-    @framework_id = framework_id
+    @assessment_id = assessment_id
     @context = context
   end
 
@@ -73,7 +73,7 @@ class Views::Assessments::AssessmentCell < Views::Base
         capability_stable_id: @capability_stable_id,
         level_ordinal: @ordinal,
         current_frequency: primary_frequency,
-        framework_id: @framework_id,
+        assessment_id: @assessment_id,
         context: @context
       )
     end

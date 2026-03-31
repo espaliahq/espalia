@@ -106,12 +106,12 @@ class Views::Assessments::ManagerShowView < Views::Base
     div(class: "flex-1 overflow-auto bg-white dark:bg-gray-900") do
       turbo_frame_tag(
         "assessment-matrix",
-        src: matrix_assessment_path(@assignment.framework_id),
+        src: matrix_assessment_path(@assignment),
         data: { assessment_sync_target: "frame" }
       ) do
         render Views::Assessments::AssessmentMatrix.new(
           matrix_data: @matrix_data,
-          framework_id: @framework.framework_id,
+          assessment_id: @assignment.id,
           context: :manager
         )
       end
@@ -128,7 +128,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     ) do
       turbo_frame_tag(
         "assessment-scoring",
-        src: scoring_assessment_path(@assignment.framework_id),
+        src: scoring_assessment_path(@assignment),
         data: { assessment_sync_target: "scoringFrame" }
       ) do
         render Views::Assessments::ScoringPanel.new(

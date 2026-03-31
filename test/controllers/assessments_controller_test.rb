@@ -60,7 +60,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
   context "GET /assessments/:id" do
     should "render assessment matrix for assigned framework" do
       sign_in @user
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
 
       assert_response :success
       assert_includes response.body, "Engineering Growth"
@@ -71,7 +71,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
     should "show frequency selectors" do
       sign_in @user
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
 
       assert_response :success
       assert_includes response.body, "Some"
@@ -87,7 +87,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "redirect unauthenticated users to sign in" do
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
       assert_redirected_to new_user_session_path
     end
   end
@@ -104,7 +104,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
     should "render manager assessment view for direct report" do
       sign_in @manager_user
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
 
       assert_response :success
       assert_includes response.body, "Manager Review"
@@ -129,16 +129,17 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       end
 
       sign_in other_user
-      get assessment_path(@framework.framework_id)
+      get assessment_path(@assignment)
 
-      assert_redirected_to assessments_path
+      assert_response :redirect
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
   end
 
   context "GET /assessments/:id/matrix" do
     should "render Turbo Frame without layout" do
       sign_in @user
-      get matrix_assessment_path(@framework.framework_id)
+      get matrix_assessment_path(@assignment)
 
       assert_response :success
       assert_includes response.body, "assessment-matrix"

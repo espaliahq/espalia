@@ -8,15 +8,15 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
   # @param scoring [Hash] scoring output
-  # @param framework_id [String]
+  # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(category_data:, merged_levels:, person_level:, scoring:, framework_id:, context: :self)
+  def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
     @person_level = person_level
     @scoring = scoring
-    @framework_id = framework_id
+    @assessment_id = assessment_id
     @context = context
   end
 
@@ -68,7 +68,7 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         capability_data: cap_data,
         merged_levels: @merged_levels,
         person_level: @person_level,
-        framework_id: @framework_id,
+        assessment_id: @assessment_id,
         context: @context,
         blocked: blocked,
         block_reason: block_reason

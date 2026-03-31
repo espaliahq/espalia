@@ -57,6 +57,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
         SecureRandom.uuid_v7, "Q1 2026 Review", "regular", 1
       )
 
+      @report_assignment = PersonFrameworkAssignment.for_person(@report.id).first
+
       # Pre-rate a capability as the report (self-rating)
       pd_handler.rate_self(
         @report.id, @framework_id, @cap_stable,

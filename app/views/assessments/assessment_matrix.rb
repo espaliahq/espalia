@@ -5,11 +5,11 @@
 #
 class Views::Assessments::AssessmentMatrix < Views::Base
   # @param matrix_data [Hash] from Assessments::MatrixDataBuilder
-  # @param framework_id [String] UUID
+  # @param assessment_id [String] UUID
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(matrix_data:, framework_id:, context: :self)
+  def initialize(matrix_data:, assessment_id:, context: :self)
     @matrix_data = matrix_data
-    @framework_id = framework_id
+    @assessment_id = assessment_id
     @context = context
   end
 
@@ -27,7 +27,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
             merged_levels: @matrix_data[:merged_levels],
             person_level: @matrix_data[:person_level],
             scoring: @matrix_data[:scoring],
-            framework_id: @framework_id,
+            assessment_id: @assessment_id,
             context: @context
           )
         end

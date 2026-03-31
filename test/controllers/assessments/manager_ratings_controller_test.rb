@@ -35,13 +35,15 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
         @report.id, framework_id,
         SecureRandom.uuid_v7, "Q1 2026", "regular", 1
       )
+
+      @report_assignment = PersonFrameworkAssignment.for_person(@report.id).first
     end
   end
 
   context "POST /assessments/:assessment_id/manager_ratings" do
     should "create a new manager rating and return turbo stream" do
       sign_in @manager_user
-      post assessment_manager_ratings_path(@framework.framework_id), params: {
+      post assessment_manager_ratings_path(@report_assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -66,7 +68,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
 
     should "revise an existing manager rating" do
       sign_in @manager_user
-      post assessment_manager_ratings_path(@framework.framework_id), params: {
+      post assessment_manager_ratings_path(@report_assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -76,7 +78,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
       assert_response :success
 
       # Revise
-      post assessment_manager_ratings_path(@framework.framework_id), params: {
+      post assessment_manager_ratings_path(@report_assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -97,7 +99,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
 
     should "include scoring panel in turbo stream response" do
       sign_in @manager_user
-      post assessment_manager_ratings_path(@framework.framework_id), params: {
+      post assessment_manager_ratings_path(@report_assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -111,7 +113,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
 
     should "deny access for the report themselves" do
       sign_in @report_user
-      post assessment_manager_ratings_path(@framework.framework_id), params: {
+      post assessment_manager_ratings_path(@report_assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -119,8 +121,8 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
         }
       }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
-      # Report is not manager — should get not found (no matching assignment)
-      assert_response :not_found
+      # Report is not manager — Pundit denies manager rating
+      assert_response :forbidden
     end
 
     should "deny access for unrelated users" do
@@ -131,7 +133,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
       end
 
       sign_in other_user
-      post assessment_manager_ratings_path(@framework.framework_id), params: {
+      post assessment_manager_ratings_path(@report_assignment), params: {
         rating: {
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
@@ -139,7 +141,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
         }
       }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
-      assert_response :not_found
+      assert_response :forbidden
     end
   end
 

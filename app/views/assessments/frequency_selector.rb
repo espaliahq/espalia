@@ -19,13 +19,13 @@ class Views::Assessments::FrequencySelector < Views::Base
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
   # @param current_frequency [String, nil]
-  # @param framework_id [String]
+  # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(capability_stable_id:, level_ordinal:, current_frequency:, framework_id:, context: :self)
+  def initialize(capability_stable_id:, level_ordinal:, current_frequency:, assessment_id:, context: :self)
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
     @current_frequency = current_frequency
-    @framework_id = framework_id
+    @assessment_id = assessment_id
     @context = context
   end
 
@@ -70,9 +70,9 @@ class Views::Assessments::FrequencySelector < Views::Base
   def form_action
     case @context
     when :manager
-      assessment_manager_ratings_path(@framework_id)
+      assessment_manager_ratings_path(@assessment_id)
     else
-      assessment_ratings_path(@framework_id)
+      assessment_ratings_path(@assessment_id)
     end
   end
 

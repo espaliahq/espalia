@@ -93,7 +93,7 @@ class Views::Assessments::IndexView < Views::Base
 
       div(class: "mt-4") do
         a(
-          href: assessment_path(assignment.framework_id),
+          href: assessment_path(assignment),
           class: "inline-flex items-center gap-1.5 rounded-md border border-gray-300 " \
                  "dark:border-gray-600 px-3 py-1.5 text-sm font-medium " \
                  "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 " \
@@ -130,13 +130,13 @@ class Views::Assessments::IndexView < Views::Base
       div(class: "mt-4") do
         if assignment.cycle_open?
           a(
-            href: assessment_path(assignment.framework_id),
+            href: assessment_path(assignment),
             class: "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 " \
                    "text-sm font-medium text-white hover:bg-primary/90 transition-colors"
           ) { "Continue Assessment" }
         else
           a(
-            href: assessment_path(assignment.framework_id),
+            href: assessment_path(assignment),
             class: "inline-flex items-center gap-1.5 rounded-md border border-gray-300 " \
                    "dark:border-gray-600 px-3 py-1.5 text-sm font-medium " \
                    "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 " \
