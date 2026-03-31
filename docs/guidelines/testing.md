@@ -285,6 +285,55 @@ find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
 - If you must use `within`, scope it to a container that is NOT replaced (e.g. the parent `tr` or a wrapper div that sits outside the Turbo Stream target)
 - This applies to any element inside a Turbo Stream replacement target: rating cells, scoring panels, category headers, contribution labels
 
+## Shared Setup Across Contexts
+
+**When multiple contexts need the same setup (e.g. a manager identity), use a single parent context instead of duplicating the setup block.** Duplicated setup drifts apart over time, makes tests harder to maintain, and inflates the test file.
+
+```ruby
+# WRONG — duplicated setup in sibling contexts
+context "GET /resources/:id as manager" do
+  setup do
+    @manager_user = create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) do
+      @manager = create(:person, tenant: @tenant, email: @manager_user.email)
+      create(:tenant_user, tenant: @tenant, user: @manager_user, person: @manager)
+      @person.update!(manager: @manager)
+    end
+  end
+
+  should "render manager view" do ... end
+end
+
+context "GET /resources as manager" do
+  setup do
+    # exact same block copied again
+  end
+
+  should "show team section" do ... end
+end
+
+# CORRECT — single parent context with shared setup
+context "as manager" do
+  setup do
+    @manager_user = create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) do
+      @manager = create(:person, tenant: @tenant, email: @manager_user.email)
+      create(:tenant_user, tenant: @tenant, user: @manager_user, person: @manager)
+      @person.update!(manager: @manager)
+    end
+  end
+
+  should "render manager view for show" do ... end
+  should "show team section on index" do ... end
+  should "deny access to unrelated users" do ... end
+end
+```
+
+**Key principles:**
+- Group tests by identity/role (`"as manager"`, `"as tenant admin"`, `"as unrelated user"`) not by HTTP endpoint
+- If two contexts share >50% of their setup, merge them
+- Nested contexts inherit parent setup — use this to layer additional state
+
 ## Rules
 
 - Use `subject { }` to define the object under test

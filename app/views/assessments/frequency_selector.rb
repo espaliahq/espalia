@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Three-button segmented control for self-rating frequency.
+# Four-button segmented control for self-rating frequency.
 # Each button submits a form via Turbo Stream.
 #
 class Views::Assessments::FrequencySelector < Views::Base

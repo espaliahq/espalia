@@ -4,8 +4,7 @@
 # Rendered by AssessmentsController#matrix for frame-only refreshes.
 #
 class Views::Assessments::MatrixFrameView < Views::Base
-  def initialize(assignment:, framework:, matrix_data:)
-    @assignment = assignment
+  def initialize(framework:, matrix_data:)
     @framework = framework
     @matrix_data = matrix_data
   end

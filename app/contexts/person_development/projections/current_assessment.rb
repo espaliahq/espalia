@@ -19,6 +19,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::SelfRatingRevised,
       PersonDevelopment::Events::SelfRatingCleared,
       PersonDevelopment::Events::ManagerRated,
+      PersonDevelopment::Events::ManagerRatingRevised,
       PersonDevelopment::Events::AssessmentAligned
     ]
   end
@@ -41,6 +42,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::SelfRatingRevised then handle_self_rating_revised(event)
     when PersonDevelopment::Events::SelfRatingCleared then handle_self_rating_cleared(event)
     when PersonDevelopment::Events::ManagerRated then handle_manager_rated(event)
+    when PersonDevelopment::Events::ManagerRatingRevised then handle_manager_rating_revised(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
     end
   end
@@ -98,6 +100,14 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   def handle_manager_rated(event)
+    rating = find_or_init_rating(event)
+    rating.manager_rated_frequency = event.data[:frequency]
+    rating.manager_rated_comment = event.data[:comment]
+    rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    rating.save!
+  end
+
+  def handle_manager_rating_revised(event)
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]

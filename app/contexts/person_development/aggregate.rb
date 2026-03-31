@@ -164,6 +164,29 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Revises a previous manager rating at a specific level.
+  #
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being revised
+  # @param frequency [String] revised frequency
+  # @param rationale [String] reason for the change
+  # @param comment [String, nil] optional comment
+  # @raise [RuntimeError] if no prior manager rating for this capability at this level
+  def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
+    ensure_cycle_open!
+    raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
+    raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
+      @manager_ratings.key?([ capability_stable_id, level_ordinal ])
+
+    apply(PersonDevelopment::Events::ManagerRatingRevised.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      frequency: frequency,
+      comment: comment,
+      rationale: rationale
+    }))
+  end
+
   # ── Alignment ──
 
   # Records an agreed assessment for a capability at a specific level.
@@ -237,6 +260,11 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::ManagerRated do |event|
+    @manager_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
+      event.data[:frequency]
+  end
+
+  on PersonDevelopment::Events::ManagerRatingRevised do |event|
     @manager_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
       event.data[:frequency]
   end
