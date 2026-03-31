@@ -13,6 +13,7 @@
     "ghcr.io/devcontainers/features/node:1": {}
   },
   "containerEnv": {
+    "CLAUDE_CODE_EFFORT_LEVEL": "high"
   },
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   "forwardPorts": [
