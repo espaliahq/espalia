@@ -70,7 +70,8 @@ class AssessmentsController < ApplicationController
     authorize @assignment, :scoring?
     load_assessment_data
     render Views::Assessments::ScoringPanelFrameView.new(
-      matrix_data: @matrix_data
+      matrix_data: @matrix_data,
+      context: assessment_context
     ), layout: false
   end
 

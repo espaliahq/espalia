@@ -51,6 +51,9 @@ class Assessments::MatrixDataBuilder
       merged_levels: levels,
       categories: categories,
       scoring: scoring,
+      self_scoring: build_perspective_scoring(categories, :self_only),
+      manager_scoring: build_perspective_scoring(categories, :manager_only),
+      aligned_scoring: build_perspective_scoring(categories, :aligned_only),
       meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f ||
         PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
       mastery_threshold: @framework.mastery_threshold&.to_f ||
@@ -187,8 +190,9 @@ class Assessments::MatrixDataBuilder
   # Builds the PersonDevelopment::Scoring engine instance.
   #
   # @param categories_data [Array<Hash>] the built categories structure
+  # @param perspective [Symbol] frequency perspective for scoring
   # @return [PersonDevelopment::Scoring]
-  def build_scoring_engine(categories_data)
+  def build_scoring_engine(categories_data, perspective: :effective)
     bindings = categories_data.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
     category_records = categories_data.map { |c| c[:category] }
     all_ordinals = build_levels.map { |l| l[:ordinal] }
@@ -199,6 +203,7 @@ class Assessments::MatrixDataBuilder
       categories: category_records,
       person_level: @level.ordinal,
       all_level_ordinals: all_ordinals,
+      perspective: perspective,
       thresholds: {
         mastery_threshold: @framework.mastery_threshold&.to_f,
         meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f,
@@ -222,6 +227,35 @@ class Assessments::MatrixDataBuilder
       capability_statuses: scoring.capability_statuses,
       block_reasons: scoring.block_reasons
     }
+  end
+
+  # Builds scoring output for a single perspective. Returns nil when no
+  # ratings exist for that perspective (e.g. no manager has rated yet).
+  #
+  # @param categories_data [Array<Hash>]
+  # @param perspective [Symbol] :self_only, :manager_only, or :aligned_only
+  # @return [Hash, nil]
+  def build_perspective_scoring(categories_data, perspective)
+    return nil unless has_ratings_for_perspective?(perspective)
+
+    engine = build_scoring_engine(categories_data, perspective: perspective)
+    extract_scoring(engine)
+  end
+
+  # Whether any rating records have a value for the given perspective.
+  #
+  # @param perspective [Symbol]
+  # @return [Boolean]
+  def has_ratings_for_perspective?(perspective)
+    field =
+      case perspective
+      when :self_only    then :self_rated_frequency
+      when :manager_only then :manager_rated_frequency
+      when :aligned_only then :aligned_frequency
+      else return true
+      end
+
+    @ratings_index.values.any? { |r| r.public_send(field).present? }
   end
 
   def count_total_cells(categories)

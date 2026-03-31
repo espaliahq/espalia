@@ -133,10 +133,14 @@ class Views::Assessments::ManagerShowView < Views::Base
       ) do
         render Views::Assessments::ScoringPanel.new(
           scoring: @matrix_data[:scoring],
+          self_scoring: @matrix_data[:self_scoring],
+          manager_scoring: @matrix_data[:manager_scoring],
+          aligned_scoring: @matrix_data[:aligned_scoring],
           categories: @matrix_data[:categories],
           person_level: @matrix_data[:person_level],
           mastery_threshold: @matrix_data[:mastery_threshold],
-          meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold]
+          meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
+          context: :manager
         )
       end
     end

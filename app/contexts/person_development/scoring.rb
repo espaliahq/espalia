@@ -66,6 +66,14 @@ class PersonDevelopment::Scoring
   DEFAULT_OVERPERFORMANCE_CAP        = 1
   DEFAULT_DEFICIT_THRESHOLD          = 1.0
 
+  # Perspective controls which frequency field is used for scoring.
+  #
+  # :effective    — fallback chain: aligned → manager → self (default, official score)
+  # :self_only    — only self_rated_frequency
+  # :manager_only — only manager_rated_frequency
+  # :aligned_only — only aligned_frequency
+  PERSPECTIVES = %i[effective self_only manager_only aligned_only].freeze
+
   # @param level_ratings [Array<#capability_stable_id, #level_ordinal,
   #   #aligned_frequency, #manager_rated_frequency, #self_rated_frequency>]
   #   AssessmentLevelRating records (or duck-typed objects) for the person
@@ -79,12 +87,15 @@ class PersonDevelopment::Scoring
   # @param all_level_ordinals [Array<Integer>] all level ordinals in the framework
   # @param thresholds [Hash] optional overrides: mastery_threshold:,
   #   meeting_expectation_threshold:, overperformance_cap:, deficit_threshold:
-  def initialize(level_ratings:, bindings:, categories:, person_level:, all_level_ordinals:, thresholds: {})
+  # @param perspective [Symbol] which frequency field to use (:effective, :self_only,
+  #   :manager_only, :aligned_only)
+  def initialize(level_ratings:, bindings:, categories:, person_level:, all_level_ordinals:, thresholds: {}, perspective: :effective)
     @level_ratings = index_ratings(level_ratings)
     @bindings = bindings
     @categories = categories.index_by(&:category_id)
     @person_level = person_level
     @all_level_ordinals = all_level_ordinals.sort
+    @perspective = perspective
     @mastery_threshold              = thresholds[:mastery_threshold]              || DEFAULT_MASTERY_THRESHOLD
     @meeting_expectation_threshold  = thresholds[:meeting_expectation_threshold]  || DEFAULT_MEETING_EXPECTATION_THRESHOLD
     @default_overperformance_cap  = thresholds[:overperformance_cap]    || DEFAULT_OVERPERFORMANCE_CAP
@@ -423,7 +434,7 @@ class PersonDevelopment::Scoring
   end
 
   # Returns the effective frequency multiplier for a capability at a level.
-  # Fallback: aligned → manager → self → default.
+  # Respects the configured perspective to select the appropriate frequency field.
   #
   # Default only applies for levels strictly below person_level — the current
   # level must be explicitly assessed.
@@ -433,10 +444,7 @@ class PersonDevelopment::Scoring
   # @return [Float]
   def effective_frequency(stable_id, level_ordinal)
     rating = @level_ratings[[ stable_id, level_ordinal ]]
-
-    value = rating&.aligned_frequency ||
-            rating&.manager_rated_frequency ||
-            rating&.self_rated_frequency
+    value = frequency_value_for_perspective(rating)
 
     if value
       FREQUENCY.fetch(value, 0.0)
@@ -455,9 +463,28 @@ class PersonDevelopment::Scoring
   # @return [Float]
   def explicit_frequency(stable_id, level_ordinal)
     rating = @level_ratings[[ stable_id, level_ordinal ]]
-    value  = rating&.aligned_frequency ||
-             rating&.manager_rated_frequency ||
-             rating&.self_rated_frequency
+    value = frequency_value_for_perspective(rating)
     value ? FREQUENCY.fetch(value, 0.0) : 0.0
+  end
+
+  # Selects the frequency value from the rating based on the configured perspective.
+  #
+  # @param rating [#aligned_frequency, #manager_rated_frequency, #self_rated_frequency, nil]
+  # @return [String, nil]
+  def frequency_value_for_perspective(rating)
+    return nil unless rating
+
+    case @perspective
+    when :self_only
+      rating.self_rated_frequency
+    when :manager_only
+      rating.manager_rated_frequency
+    when :aligned_only
+      rating.aligned_frequency
+    else # :effective — fallback chain: aligned → manager → self
+      rating.aligned_frequency ||
+        rating.manager_rated_frequency ||
+        rating.self_rated_frequency
+    end
   end
 end
