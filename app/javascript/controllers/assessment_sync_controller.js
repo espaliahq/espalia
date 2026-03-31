@@ -16,7 +16,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["signal", "frame"]
+  static targets = ["signal", "frame", "scoringFrame"]
 
   connect() {
     super.connect()
@@ -54,15 +54,24 @@ export default class extends BaseController {
   }
 
   #reloadFrame() {
-    if (!this.hasFrameTarget) return
-
     this.#saveToggleState()
 
-    const src = this.frameTarget.getAttribute("src")
-    if (src) {
-      // Force Turbo to re-fetch by clearing and re-setting src
-      this.frameTarget.src = ""
-      this.frameTarget.src = src
+    // Reload matrix frame
+    if (this.hasFrameTarget) {
+      const src = this.frameTarget.getAttribute("src")
+      if (src) {
+        this.frameTarget.src = ""
+        this.frameTarget.src = src
+      }
+    }
+
+    // Reload scoring panel frame
+    if (this.hasScoringFrameTarget) {
+      const src = this.scoringFrameTarget.getAttribute("src")
+      if (src) {
+        this.scoringFrameTarget.src = ""
+        this.scoringFrameTarget.src = src
+      }
     }
   }
 

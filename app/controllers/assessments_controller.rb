@@ -9,7 +9,7 @@
 #
 class AssessmentsController < ApplicationController
   before_action :require_person
-  before_action :set_assignment, only: [ :show, :matrix ]
+  before_action :set_assignment, only: [ :show, :matrix, :scoring ]
 
   # GET /assessments
   def index
@@ -62,6 +62,15 @@ class AssessmentsController < ApplicationController
       framework: @framework,
       matrix_data: @matrix_data,
       context: assessment_context
+    ), layout: false
+  end
+
+  # GET /assessments/:id/scoring
+  def scoring
+    authorize @assignment, :scoring?
+    load_assessment_data
+    render Views::Assessments::ScoringPanelFrameView.new(
+      matrix_data: @matrix_data
     ), layout: false
   end
 
