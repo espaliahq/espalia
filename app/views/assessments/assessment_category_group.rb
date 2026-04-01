@@ -1,21 +1,32 @@
 # frozen_string_literal: true
 
 # Unified category header + child capability rows in the assessment matrix.
-# Passes context through to AssessmentRow children.
+#
+# Perspective-aware: uses the primary scoring perspective (based on context)
+# for category contribution labels, pass/fail status, and capability
+# blocked/contribution indicators. Shows divergence when secondary
+# perspectives disagree on category pass/fail.
 #
 class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param category_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
-  # @param scoring [Hash] scoring output
+  # @param scoring [Hash] effective scoring output
+  # @param self_scoring [Hash, nil] self-only perspective scoring
+  # @param manager_scoring [Hash, nil] manager-only perspective scoring
+  # @param aligned_scoring [Hash, nil] aligned-only perspective scoring
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self)
+  def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self,
+                 self_scoring: nil, manager_scoring: nil, aligned_scoring: nil)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
     @person_level = person_level
     @scoring = scoring
+    @self_scoring = self_scoring
+    @manager_scoring = manager_scoring
+    @aligned_scoring = aligned_scoring
     @assessment_id = assessment_id
     @context = context
   end
@@ -30,25 +41,7 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         class: "sticky left-0 z-[6] px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-r " \
                "border-gray-200 dark:border-gray-700 min-w-[220px]"
       ) do
-        div(class: "flex items-center justify-between gap-2") do
-          div(class: "flex items-center gap-2") do
-            span(class: "text-sm font-semibold text-gray-900 dark:text-white") { @category.name }
-            render Components::Kit::CategoryToleranceIndicator.new(
-              threshold: @category_data[:deficit_threshold]
-            )
-          end
-
-          div(class: "flex items-center gap-2 shrink-0") do
-            render Views::Assessments::CategoryContributionLabel.new(
-              category_id: @category.category_id,
-              category_result: @scoring[:category_results][@category.category_id]
-            )
-            render Views::Assessments::CategoryStatus.new(
-              category_id: @category.category_id,
-              category_result: @scoring[:category_results][@category.category_id]
-            )
-          end
-        end
+        category_header
       end
 
       if filler_cols > 0
@@ -61,8 +54,9 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
 
     @category_data[:capabilities].each do |cap_data|
       stable_id = cap_data[:capability].stable_id
-      blocked = @scoring.dig(:capability_statuses, stable_id) == :blocked
-      block_reason = @scoring.dig(:block_reasons, stable_id)
+      blocked = primary_scoring.dig(:capability_statuses, stable_id) == :blocked
+      block_reason = primary_scoring.dig(:block_reasons, stable_id)
+      contribution = primary_scoring.dig(:capability_contributions, stable_id) || cap_data[:contribution]
 
       render Views::Assessments::AssessmentRow.new(
         capability_data: cap_data,
@@ -71,8 +65,94 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         assessment_id: @assessment_id,
         context: @context,
         blocked: blocked,
-        block_reason: block_reason
+        block_reason: block_reason,
+        contribution: contribution,
+        secondary_contributions: secondary_capability_contributions(stable_id)
       )
+    end
+  end
+
+  private
+
+  def category_header
+    cat_id = @category.category_id
+    primary_result = primary_scoring[:category_results]&.dig(cat_id)
+
+    div(class: "flex items-center justify-between gap-2") do
+      div(class: "flex items-center gap-2") do
+        span(class: "text-sm font-semibold text-gray-900 dark:text-white") { @category.name }
+        render Components::Kit::CategoryToleranceIndicator.new(
+          threshold: @category_data[:deficit_threshold]
+        )
+      end
+
+      render Views::Assessments::CategoryIndicators.new(
+        category_id: cat_id,
+        category_result: primary_result,
+        secondary_results: secondary_category_results(cat_id)
+      )
+    end
+  end
+
+  # Returns the primary scoring hash based on the current context.
+  # Falls back to effective scoring if the perspective-specific scoring is nil.
+  #
+  # @return [Hash]
+  def primary_scoring
+    @primary_scoring ||=
+      case @context
+      when :self      then @self_scoring || @scoring
+      when :manager   then @manager_scoring || @scoring
+      when :alignment then @aligned_scoring || @scoring
+      else @scoring
+      end
+  end
+
+  # Returns an array of [label, scoring] pairs for secondary perspectives.
+  # Excludes nil scorings and the primary perspective.
+  #
+  # @return [Array<Array(String, Hash)>]
+  def secondary_scorings
+    @secondary_scorings ||= begin
+      all = []
+      case @context
+      when :self
+        all << [ "Mgr", @manager_scoring ] if @manager_scoring
+        all << [ "Agreed", @aligned_scoring ] if @aligned_scoring
+      when :manager
+        all << [ "Self", @self_scoring ] if @self_scoring
+        all << [ "Agreed", @aligned_scoring ] if @aligned_scoring
+      when :alignment
+        all << [ "Self", @self_scoring ] if @self_scoring
+        all << [ "Mgr", @manager_scoring ] if @manager_scoring
+      end
+      all
+    end
+  end
+
+  # Returns secondary category results for divergence display.
+  #
+  # @param category_id [String]
+  # @return [Array<Array(String, Hash)>] [["Mgr", { pass:, pool: }], ...]
+  def secondary_category_results(category_id)
+    secondary_scorings.filter_map do |label, scoring|
+      result = scoring[:category_results]&.dig(category_id)
+      next unless result
+
+      [ label, result ]
+    end
+  end
+
+  # Returns secondary capability contributions for divergence display.
+  #
+  # @param stable_id [String]
+  # @return [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
+  def secondary_capability_contributions(stable_id)
+    secondary_scorings.filter_map do |label, scoring|
+      contribution = scoring.dig(:capability_contributions, stable_id)
+      next unless contribution
+
+      [ label, contribution ]
     end
   end
 end

@@ -1,6 +1,8 @@
 # Framework Explorer — UX Design & Architecture
 
-This document captures the design decisions, interaction patterns, and hard-won lessons from building the Framework Explorer. Consult this before modifying the explorer or building features that extend it (self-assessment, alignment review, collaborative editing).
+This document captures the design decisions, interaction patterns, and hard-won lessons from building the Framework Explorer. Consult this before modifying the explorer or building features that extend it.
+
+> **See also:** [assessments.md](assessments.md) for the assessment extension of the matrix pattern.
 
 ## Overview
 
@@ -170,6 +172,7 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 - **Category collapse** (sibling row walking)
 - **Row expansion** (toggle hidden expanded row by capability ID)
 - **URL sync** (pushState for shareability)
+- **Shared** between explorer and assessment views — same collapse/expand logic applies
 
 ## Hard-Won Lessons
 
@@ -203,17 +206,8 @@ Finding all rows belonging to a category requires walking DOM siblings from the 
 
 ## Future Extension Points
 
-### Self-Assessment Overlay
-The matrix cell is the natural location for rating inputs. The `MatrixCell` component can accept a `mode` parameter (`:explorer`, `:self_assessment`, `:review`) that controls what's rendered in each cell. The `MatrixDataBuilder` would additionally load the person's ratings and evidence for the selected framework.
-
-### Manager Alignment Review
-Same matrix, but each cell shows both self-rating and manager-rating side by side, with visual indicators for alignment/disagreement. The expanded row would show evidence and conversation history.
-
 ### Collaborative Editing (Suggested Edits)
 The right pane placeholder is reserved for a contextual feed showing suggested edits, comments, and activity. Selection focus hierarchy: cell → row → category → framework. The `MatrixCell` could show edit indicators (small icons for pending suggestions).
-
-### Evidence Collection
-Cell expansion (the third level of progressive disclosure) would show an evidence attachment UI, letting users link evidence to a specific capability × level intersection.
 
 ## File Reference
 
@@ -230,7 +224,19 @@ Cell expansion (the third level of progressive disclosure) would show an evidenc
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities) |
 | `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
-| `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion |
+| `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion (shared with assessment) |
 | `app/controllers/frameworks_controller.rb` | show + matrix actions |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests |
+
+## Keeping This Document Current
+
+This document must be updated whenever changes are made to the framework explorer's architecture, interaction patterns, component hierarchy, or Stimulus controllers. Specifically:
+
+- **New design decisions** — add to the Key Design Decisions section with rationale
+- **Bug fixes revealing non-obvious behaviour** — add to Hard-Won Lessons
+- **New or modified components** — update the Component Hierarchy and File Reference
+- **New Stimulus controllers or changed responsibilities** — update the Stimulus Controller Responsibilities section
+- **New future extension points** — add to Future Extension Points
+
+If a lesson or decision is superseded, update or remove the old entry rather than appending a contradiction.

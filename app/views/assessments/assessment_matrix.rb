@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Unified assessment capability matrix table.
-# Passes context through to AssessmentCategoryGroup children.
+# Passes context and all scoring perspectives through to AssessmentCategoryGroup children.
 #
 class Views::Assessments::AssessmentMatrix < Views::Base
   # @param matrix_data [Hash] from Assessments::MatrixDataBuilder
@@ -27,6 +27,9 @@ class Views::Assessments::AssessmentMatrix < Views::Base
             merged_levels: @matrix_data[:merged_levels],
             person_level: @matrix_data[:person_level],
             scoring: @matrix_data[:scoring],
+            self_scoring: @matrix_data[:self_scoring],
+            manager_scoring: @matrix_data[:manager_scoring],
+            aligned_scoring: @matrix_data[:aligned_scoring],
             assessment_id: @assessment_id,
             context: @context
           )

@@ -106,9 +106,10 @@ class Assessments::RatingsController < ApplicationController
       return
     end
     cell_data = cap_data[:cells][level_ordinal]
-    contribution = cap_data[:contribution]
-    blocked = matrix_data[:scoring].dig(:capability_statuses, capability_stable_id) == :blocked
-    block_reason = matrix_data[:scoring].dig(:block_reasons, capability_stable_id)
+    primary = primary_scoring(matrix_data, :self)
+    contribution = primary.dig(:capability_contributions, capability_stable_id) || cap_data[:contribution]
+    blocked = primary.dig(:capability_statuses, capability_stable_id) == :blocked
+    block_reason = primary.dig(:block_reasons, capability_stable_id)
 
     render turbo_stream: [
       turbo_stream.replace(
@@ -142,21 +143,12 @@ class Assessments::RatingsController < ApplicationController
         )
       ),
       (turbo_stream.replace(
-        "category-status-#{category_id}",
+        "category-indicators-#{category_id}",
         render_to_string(
-          Views::Assessments::CategoryStatus.new(
+          Views::Assessments::CategoryIndicators.new(
             category_id: category_id,
-            category_result: matrix_data[:scoring][:category_results][category_id]
-          ),
-          layout: false
-        )
-      ) if category_id),
-      (turbo_stream.replace(
-        "category-contribution-#{category_id}",
-        render_to_string(
-          Views::Assessments::CategoryContributionLabel.new(
-            category_id: category_id,
-            category_result: matrix_data[:scoring][:category_results][category_id]
+            category_result: primary[:category_results]&.dig(category_id),
+            secondary_results: secondary_category_results(category_id, matrix_data, :self)
           ),
           layout: false
         )
@@ -171,6 +163,7 @@ class Assessments::RatingsController < ApplicationController
             blocked: blocked,
             block_reason: block_reason,
             contribution: contribution,
+            secondary_contributions: secondary_capability_contributions(capability_stable_id, matrix_data, :self),
             has_illustrations: cap_data[:cells].any? { |_, c| c[:illustration_count]&.positive? }
           ),
           layout: false
@@ -206,5 +199,49 @@ class Assessments::RatingsController < ApplicationController
       end
     end
     nil
+  end
+
+  # Selects the primary scoring perspective, falling back to effective.
+  #
+  # @param matrix_data [Hash]
+  # @param context [Symbol] :self, :manager, or :alignment
+  # @return [Hash]
+  def primary_scoring(matrix_data, context)
+    case context
+    when :self      then matrix_data[:self_scoring] || matrix_data[:scoring]
+    when :manager   then matrix_data[:manager_scoring] || matrix_data[:scoring]
+    when :alignment then matrix_data[:aligned_scoring] || matrix_data[:scoring]
+    else matrix_data[:scoring]
+    end
+  end
+
+  def secondary_scorings(matrix_data, context)
+    case context
+    when :self
+      [ [ "Mgr", matrix_data[:manager_scoring] ], [ "Agreed", matrix_data[:aligned_scoring] ] ]
+    when :manager
+      [ [ "Self", matrix_data[:self_scoring] ], [ "Agreed", matrix_data[:aligned_scoring] ] ]
+    when :alignment
+      [ [ "Self", matrix_data[:self_scoring] ], [ "Mgr", matrix_data[:manager_scoring] ] ]
+    else []
+    end.select { |_, s| s }
+  end
+
+  def secondary_category_results(category_id, matrix_data, context)
+    secondary_scorings(matrix_data, context).filter_map do |label, scoring|
+      result = scoring[:category_results]&.dig(category_id)
+      next unless result
+
+      [ label, result ]
+    end
+  end
+
+  def secondary_capability_contributions(stable_id, matrix_data, context)
+    secondary_scorings(matrix_data, context).filter_map do |label, scoring|
+      contribution = scoring.dig(:capability_contributions, stable_id)
+      next unless contribution
+
+      [ label, contribution ]
+    end
   end
 end

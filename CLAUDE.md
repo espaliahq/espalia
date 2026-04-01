@@ -22,6 +22,10 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
 | `app/policies/` | [authorization.md](docs/guidelines/authorization.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
+| `app/controllers/frameworks/` | [framework-explorer.md](docs/guidelines/framework-explorer.md) |
+| `app/views/frameworks/` | [framework-explorer.md](docs/guidelines/framework-explorer.md) |
+| `app/controllers/assessments/` | [assessments.md](docs/guidelines/assessments.md) |
+| `app/views/assessments/` | [assessments.md](docs/guidelines/assessments.md) |
 
 Each directory above has a `CLAUDE.md` that imports the relevant guideline. Root `CLAUDE.md` covers architecture and commands only.
 
@@ -38,6 +42,8 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Service objects | @docs/guidelines/service-objects.md |
 | Authorization / permissions | @docs/guidelines/authorization.md |
 | Tests | @docs/guidelines/testing.md |
+| Framework Explorer UX | @docs/guidelines/framework-explorer.md |
+| Assessment UX | @docs/guidelines/assessments.md |
 
 Most features touch controllers + models + views + tests + authorization â€” read all five.
 

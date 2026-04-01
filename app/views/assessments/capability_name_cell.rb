@@ -12,14 +12,17 @@ class Views::Assessments::CapabilityNameCell < Views::Base
   # @param blocked [Boolean] whether this capability is blocked at person_level
   # @param block_reason [String, nil] human-readable explanation for why it's blocked
   # @param contribution [Float, nil] raw contribution score
+  # @param secondary_contributions [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
   # @param has_illustrations [Boolean] whether expandable illustrations exist
-  def initialize(capability:, weight:, mandatory:, blocked:, contribution:, has_illustrations:, block_reason: nil)
+  def initialize(capability:, weight:, mandatory:, blocked:, contribution:, has_illustrations:,
+                 block_reason: nil, secondary_contributions: [])
     @capability = capability
     @weight = weight
     @mandatory = mandatory
     @blocked = blocked
     @block_reason = block_reason
     @contribution = contribution
+    @secondary_contributions = secondary_contributions
     @has_illustrations = has_illustrations
   end
 
@@ -38,7 +41,9 @@ class Views::Assessments::CapabilityNameCell < Views::Base
             render Components::Kit::WeightBadge.new(weight: @weight, mandatory: @mandatory)
             blocked_badge if @blocked
             render Views::Assessments::ContributionLabel.new(
-              capability_stable_id: @capability.stable_id, contribution: @contribution
+              capability_stable_id: @capability.stable_id,
+              contribution: @contribution,
+              secondary_contributions: @secondary_contributions
             )
           end
           if @capability.description.present?

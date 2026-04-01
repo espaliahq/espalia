@@ -14,7 +14,10 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param blocked [Boolean]
   # @param block_reason [String, nil]
-  def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self, blocked: false, block_reason: nil)
+  # @param contribution [Float, nil] perspective-specific contribution (falls back to effective from capability_data)
+  # @param secondary_contributions [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
+  def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self,
+                 blocked: false, block_reason: nil, contribution: nil, secondary_contributions: [])
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -22,7 +25,8 @@ class Views::Assessments::AssessmentRow < Views::Base
     @mandatory = @binding.deficit_threshold&.to_f == 0.0
     @blocked = blocked
     @block_reason = block_reason
-    @contribution = capability_data[:contribution]
+    @contribution = contribution || capability_data[:contribution]
+    @secondary_contributions = secondary_contributions
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
     @person_level = person_level
@@ -103,6 +107,7 @@ class Views::Assessments::AssessmentRow < Views::Base
       blocked: @blocked,
       block_reason: @block_reason,
       contribution: @contribution,
+      secondary_contributions: @secondary_contributions,
       has_illustrations: @has_illustrations
     )
   end
