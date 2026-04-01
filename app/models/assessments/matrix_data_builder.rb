@@ -40,9 +40,10 @@ class Assessments::MatrixDataBuilder
     ordinals = levels.map { |l| l[:ordinal] }
     categories = build_categories(ordinals)
     scoring_engine = build_scoring_engine(categories)
+    all_bindings = categories.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
     enrich_levels_with_performance_ratios(levels, scoring_engine)
     enrich_capabilities_with_contributions(categories, scoring_engine)
-    scoring = extract_scoring(scoring_engine)
+    scoring = extract_scoring(scoring_engine, bindings: all_bindings)
 
     {
       role: @role,
@@ -216,9 +217,10 @@ class Assessments::MatrixDataBuilder
   # Extracts scoring results from the engine.
   #
   # @param scoring [PersonDevelopment::Scoring]
+  # @param bindings [Array<CapabilityRoleBinding>, nil] when provided, includes per-capability contributions
   # @return [Hash]
-  def extract_scoring(scoring)
-    {
+  def extract_scoring(scoring, bindings: nil)
+    result = {
       performance_ratio: scoring.performance_ratio,
       meeting_expectations: scoring.meeting_expectations?,
       mastering: scoring.mastering?,
@@ -227,6 +229,12 @@ class Assessments::MatrixDataBuilder
       capability_statuses: scoring.capability_statuses,
       block_reasons: scoring.block_reasons
     }
+    if bindings
+      result[:capability_contributions] = bindings.to_h do |b|
+        [ b.capability.stable_id, scoring.raw_contribution(b) ]
+      end
+    end
+    result
   end
 
   # Builds scoring output for a single perspective. Returns nil when no
@@ -239,7 +247,8 @@ class Assessments::MatrixDataBuilder
     return nil unless has_ratings_for_perspective?(perspective)
 
     engine = build_scoring_engine(categories_data, perspective: perspective)
-    extract_scoring(engine)
+    bindings = categories_data.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
+    extract_scoring(engine, bindings: bindings)
   end
 
   # Whether any rating records have a value for the given perspective.

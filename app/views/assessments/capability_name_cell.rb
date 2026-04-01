@@ -12,15 +12,20 @@ class Views::Assessments::CapabilityNameCell < Views::Base
   # @param blocked [Boolean] whether this capability is blocked at person_level
   # @param block_reason [String, nil] human-readable explanation for why it's blocked
   # @param contribution [Float, nil] raw contribution score
+  # @param secondary_contributions [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
   # @param has_illustrations [Boolean] whether expandable illustrations exist
-  def initialize(capability:, weight:, mandatory:, blocked:, contribution:, has_illustrations:, block_reason: nil)
+  # @param expanded [Boolean] whether the row is pre-expanded (chevron should be rotated)
+  def initialize(capability:, weight:, mandatory:, blocked:, contribution:, has_illustrations:,
+                 block_reason: nil, secondary_contributions: [], expanded: false)
     @capability = capability
     @weight = weight
     @mandatory = mandatory
     @blocked = blocked
     @block_reason = block_reason
     @contribution = contribution
+    @secondary_contributions = secondary_contributions
     @has_illustrations = has_illustrations
+    @expanded = expanded
   end
 
   def view_template
@@ -38,7 +43,9 @@ class Views::Assessments::CapabilityNameCell < Views::Base
             render Components::Kit::WeightBadge.new(weight: @weight, mandatory: @mandatory)
             blocked_badge if @blocked
             render Views::Assessments::ContributionLabel.new(
-              capability_stable_id: @capability.stable_id, contribution: @contribution
+              capability_stable_id: @capability.stable_id,
+              contribution: @contribution,
+              secondary_contributions: @secondary_contributions
             )
           end
           if @capability.description.present?
@@ -76,7 +83,7 @@ class Views::Assessments::CapabilityNameCell < Views::Base
 
   def chevron_icon
     svg(
-      class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
+      class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0 #{@expanded ? 'rotate-90' : ''}",
       data: { matrix_target: "rowChevron" },
       fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
     ) do |s|

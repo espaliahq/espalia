@@ -15,8 +15,12 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | When working in | Auto-loaded guideline |
 |---|---|
 | `app/controllers/` | [rails-controllers.md](docs/guidelines/rails-controllers.md) |
+| `app/controllers/frameworks/` | [framework-explorer.md](docs/guidelines/framework-explorer.md) |
+| `app/controllers/assessments/` | [assessments.md](docs/guidelines/assessments.md) |
 | `app/models/` | [rails-models.md](docs/guidelines/rails-models.md) |
 | `app/views/` | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
+| `app/views/frameworks/` | [framework-explorer.md](docs/guidelines/framework-explorer.md) |
+| `app/views/assessments/` | [assessments.md](docs/guidelines/assessments.md) |
 | `app/components/` | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
 | `app/javascript/` | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
@@ -38,6 +42,8 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Service objects | @docs/guidelines/service-objects.md |
 | Authorization / permissions | @docs/guidelines/authorization.md |
 | Tests | @docs/guidelines/testing.md |
+| Framework Explorer UX | @docs/guidelines/framework-explorer.md |
+| Assessment UX | @docs/guidelines/assessments.md |
 
 Most features touch controllers + models + views + tests + authorization â€” read all five.
 

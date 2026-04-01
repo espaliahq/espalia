@@ -232,6 +232,110 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "category tabs" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+
+        # Add a second category + capability for tab switching
+        @cat2_id = SecureRandom.uuid_v7
+        handler.add_capability_category(@framework_id, @cat2_id, "Delivering", ordinal: 2)
+        @cap3_id = SecureRandom.uuid_v7
+        @cap3_stable = SecureRandom.uuid_v7
+        handler.add_capability(@framework_id, @cap3_id, @cap3_stable, @cat2_id, "Execution")
+        handler.create_capability_role_binding(
+          @framework_id, SecureRandom.uuid_v7, @cap3_id, @role_id
+        )
+        handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+          @cap3_id, 1, "Ships features reliably")
+        handler.add_role_illustration(
+          @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+          FrameworkState::BehaviouralExpectation.find_by!(capability_id: @cap3_id, level_ordinal: 1).expectation_id,
+          @role_id, 1, "Delivers on commitments without reminders"
+        )
+      end
+    end
+
+    should "display category tabs and default to first category" do
+      visit assessment_path(@assignment)
+
+      # Both tabs should be visible
+      assert_selector "#category-tabs"
+      assert_text "Thinking"
+      assert_text "Delivering"
+
+      # First category content should be visible
+      assert_text "Critical Thinking"
+      assert_text "Problem Solving"
+
+      # Second category content should NOT be visible (only one category rendered)
+      assert_no_text "Execution"
+    end
+
+    should "switch categories when clicking a tab" do
+      visit assessment_path(@assignment)
+
+      # Click the second tab
+      within "#category-tabs" do
+        click_on "Delivering"
+      end
+
+      # Should show second category content
+      assert_text "Execution"
+      assert_text "Ships features reliably"
+
+      # First category capabilities should not be in the matrix rows
+      assert_no_selector "#capability-name-#{@cap1_stable}"
+    end
+
+    should "show progress counts on tabs" do
+      visit assessment_path(@assignment)
+
+      # Tabs should show rated/total counts (0 rated initially)
+      within "#category-tabs" do
+        assert_text "0/"
+      end
+    end
+
+    should "update tab progress after rating" do
+      visit assessment_path(@assignment)
+
+      # Rate a capability in the first tab
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+
+      # Tab progress should update
+      within "#category-tabs" do
+        assert_text "1/"
+      end
+    end
+
+    should "switch tab when clicking category in scoring panel" do
+      visit assessment_path(@assignment)
+
+      # Click the Delivering category name in the scoring panel
+      within "#scoring-panel" do
+        click_on "Delivering"
+      end
+
+      # Matrix should now show Delivering category content
+      assert_text "Execution"
+      assert_no_selector "#capability-name-#{@cap1_stable}"
+    end
+
+    should "preserve expanded row focus with sibling dimming" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # Expand a row
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      # Sibling rows should be dimmed
+      rows = all("[data-matrix-target='row']")
+      dimmed = rows.select { |r| r[:class]&.include?("opacity-40") }
+      assert dimmed.any?, "Expected sibling rows to be dimmed when a row is expanded"
+    end
+  end
+
   context "responsive behaviour" do
     should "show scoring panel as sidebar on desktop" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)

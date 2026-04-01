@@ -18,7 +18,7 @@ class Assessments::ManagerRatingsController < ApplicationController
   def create
     authorize @assignment, :create_manager_rating?
 
-    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment ])
+    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
     unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
@@ -56,7 +56,7 @@ class Assessments::ManagerRatingsController < ApplicationController
       )
     end
 
-    respond_with_turbo_stream(capability_stable_id, level_ordinal)
+    respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id])
   rescue RuntimeError => e
     render turbo_stream: turbo_stream.replace(
       "rating-#{capability_stable_id}-#{level_ordinal}",
@@ -85,7 +85,7 @@ class Assessments::ManagerRatingsController < ApplicationController
     head :forbidden
   end
 
-  def respond_with_turbo_stream(capability_stable_id, level_ordinal)
+  def respond_with_turbo_stream(capability_stable_id, level_ordinal, active_category_id = nil)
     framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
     role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
     level = FrameworkState::Level.find_by!(level_id: @assignment.level_id)
@@ -107,9 +107,10 @@ class Assessments::ManagerRatingsController < ApplicationController
     end
 
     cell_data = cap_data[:cells][level_ordinal]
-    blocked = matrix_data[:scoring].dig(:capability_statuses, capability_stable_id) == :blocked
-    block_reason = matrix_data[:scoring].dig(:block_reasons, capability_stable_id)
-    contribution = cap_data[:contribution]
+    primary = primary_scoring(matrix_data, :manager)
+    blocked = primary.dig(:capability_statuses, capability_stable_id) == :blocked
+    block_reason = primary.dig(:block_reasons, capability_stable_id)
+    contribution = primary.dig(:capability_contributions, capability_stable_id) || cap_data[:contribution]
 
     render turbo_stream: [
       turbo_stream.replace(
@@ -121,7 +122,8 @@ class Assessments::ManagerRatingsController < ApplicationController
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
             assessment_id: @assignment.id,
-            context: :manager
+            context: :manager,
+            category_id: active_category_id || category_id
           ),
           layout: false
         )
@@ -138,27 +140,20 @@ class Assessments::ManagerRatingsController < ApplicationController
             person_level: matrix_data[:person_level],
             mastery_threshold: matrix_data[:mastery_threshold],
             meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
+            active_category_id: active_category_id || category_id,
+            assessment_id: @assignment.id,
             context: :manager
           ),
           layout: false
         )
       ),
       (turbo_stream.replace(
-        "category-status-#{category_id}",
+        "category-indicators-#{category_id}",
         render_to_string(
-          Views::Assessments::CategoryStatus.new(
+          Views::Assessments::CategoryIndicators.new(
             category_id: category_id,
-            category_result: matrix_data[:scoring][:category_results][category_id]
-          ),
-          layout: false
-        )
-      ) if category_id),
-      (turbo_stream.replace(
-        "category-contribution-#{category_id}",
-        render_to_string(
-          Views::Assessments::CategoryContributionLabel.new(
-            category_id: category_id,
-            category_result: matrix_data[:scoring][:category_results][category_id]
+            category_result: primary[:category_results]&.dig(category_id),
+            secondary_results: secondary_category_results(category_id, matrix_data, :manager)
           ),
           layout: false
         )
@@ -173,6 +168,7 @@ class Assessments::ManagerRatingsController < ApplicationController
             blocked: blocked,
             block_reason: block_reason,
             contribution: contribution,
+            secondary_contributions: secondary_capability_contributions(capability_stable_id, matrix_data, :manager),
             has_illustrations: cap_data[:cells].any? { |_, c| c[:illustration_count]&.positive? }
           ),
           layout: false
@@ -188,7 +184,23 @@ class Assessments::ManagerRatingsController < ApplicationController
           ),
           layout: false
         )
-      )
+      ),
+      (turbo_stream.replace(
+        "category-tabs",
+        render_to_string(
+          Views::Assessments::CategoryTabs.new(
+            categories: matrix_data[:categories],
+            scoring: primary,
+            self_scoring: matrix_data[:self_scoring],
+            manager_scoring: matrix_data[:manager_scoring],
+            aligned_scoring: matrix_data[:aligned_scoring],
+            active_category_id: active_category_id || category_id,
+            assessment_id: @assignment.id,
+            context: :manager
+          ),
+          layout: false
+        )
+      ) if active_category_id || category_id)
     ].compact
   end
 
@@ -208,5 +220,49 @@ class Assessments::ManagerRatingsController < ApplicationController
       end
     end
     nil
+  end
+
+  # Selects the primary scoring perspective, falling back to effective.
+  #
+  # @param matrix_data [Hash]
+  # @param context [Symbol] :self, :manager, or :alignment
+  # @return [Hash]
+  def primary_scoring(matrix_data, context)
+    case context
+    when :self      then matrix_data[:self_scoring] || matrix_data[:scoring]
+    when :manager   then matrix_data[:manager_scoring] || matrix_data[:scoring]
+    when :alignment then matrix_data[:aligned_scoring] || matrix_data[:scoring]
+    else matrix_data[:scoring]
+    end
+  end
+
+  def secondary_scorings(matrix_data, context)
+    case context
+    when :self
+      [ [ "Mgr", matrix_data[:manager_scoring] ], [ "Agreed", matrix_data[:aligned_scoring] ] ]
+    when :manager
+      [ [ "Self", matrix_data[:self_scoring] ], [ "Agreed", matrix_data[:aligned_scoring] ] ]
+    when :alignment
+      [ [ "Self", matrix_data[:self_scoring] ], [ "Mgr", matrix_data[:manager_scoring] ] ]
+    else []
+    end.select { |_, s| s }
+  end
+
+  def secondary_category_results(category_id, matrix_data, context)
+    secondary_scorings(matrix_data, context).filter_map do |label, scoring|
+      result = scoring[:category_results]&.dig(category_id)
+      next unless result
+
+      [ label, result ]
+    end
+  end
+
+  def secondary_capability_contributions(stable_id, matrix_data, context)
+    secondary_scorings(matrix_data, context).filter_map do |label, scoring|
+      contribution = scoring.dig(:capability_contributions, stable_id)
+      next unless contribution
+
+      [ label, contribution ]
+    end
   end
 end

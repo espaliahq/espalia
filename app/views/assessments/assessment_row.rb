@@ -14,7 +14,13 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param blocked [Boolean]
   # @param block_reason [String, nil]
-  def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self, blocked: false, block_reason: nil)
+  # @param contribution [Float, nil] perspective-specific contribution (falls back to effective from capability_data)
+  # @param secondary_contributions [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
+  # @param expanded [Boolean] whether this row should be pre-expanded (URL-driven)
+  # @param category_id [String, nil] active category for tab preservation on rating
+  def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self,
+                 blocked: false, block_reason: nil, contribution: nil, secondary_contributions: [],
+                 expanded: false, category_id: nil)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -22,13 +28,16 @@ class Views::Assessments::AssessmentRow < Views::Base
     @mandatory = @binding.deficit_threshold&.to_f == 0.0
     @blocked = blocked
     @block_reason = block_reason
-    @contribution = capability_data[:contribution]
+    @contribution = contribution || capability_data[:contribution]
+    @secondary_contributions = secondary_contributions
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
     @person_level = person_level
     @assessment_id = assessment_id
     @context = context
     @has_illustrations = @cells.any? { |_, c| c[:illustration_count]&.positive? }
+    @expanded = expanded && @has_illustrations
+    @category_id = category_id
   end
 
   def view_template
@@ -56,7 +65,8 @@ class Views::Assessments::AssessmentRow < Views::Base
           ordinal: level[:ordinal],
           person_level: @person_level,
           assessment_id: @assessment_id,
-          context: @context
+          context: @context,
+          category_id: @category_id
         )
       end
     end
@@ -64,7 +74,7 @@ class Views::Assessments::AssessmentRow < Views::Base
 
   def expanded_row
     tr(
-      class: "hidden",
+      class: @expanded ? "" : "hidden",
       data: { matrix_target: "expandedRow", capability_id: @capability.capability_id }
     ) do
       td(class: "sticky left-0 z-[2] bg-blue-50/30 dark:bg-blue-900/10 " \
@@ -103,7 +113,9 @@ class Views::Assessments::AssessmentRow < Views::Base
       blocked: @blocked,
       block_reason: @block_reason,
       contribution: @contribution,
-      has_illustrations: @has_illustrations
+      secondary_contributions: @secondary_contributions,
+      has_illustrations: @has_illustrations,
+      expanded: @expanded
     )
   end
 end

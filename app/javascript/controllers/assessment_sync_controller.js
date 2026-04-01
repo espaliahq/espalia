@@ -49,6 +49,7 @@ export default class extends BaseController {
     if (this.hasFrameTarget) {
       this.frameTarget.addEventListener("turbo:frame-load", () => {
         this.#restoreToggleState()
+        this.#syncScoringFrameCategory()
       })
     }
 
@@ -71,12 +72,18 @@ export default class extends BaseController {
       }
     }
 
-    // Reload scoring panel frame
+    // Reload scoring panel frame, syncing category from the matrix frame
     if (this.hasScoringFrameTarget) {
       const src = this.scoringFrameTarget.getAttribute("src")
       if (src) {
+        const scoringUrl = new URL(src, window.location.origin)
+        const matrixCategory = this.#activeCategory()
+        if (matrixCategory) {
+          scoringUrl.searchParams.set("category", matrixCategory)
+        }
+        const updatedSrc = scoringUrl.toString()
         this.scoringFrameTarget.src = ""
-        this.scoringFrameTarget.src = src
+        this.scoringFrameTarget.src = updatedSrc
       }
     }
   }
@@ -160,6 +167,44 @@ export default class extends BaseController {
         }
       })
       this._collapsedCategories = null
+    }
+  }
+
+  // Reloads the scoring frame with the active category from the matrix frame.
+  // Called after every matrix frame load (tab switch, rating, etc.)
+  #syncScoringFrameCategory() {
+    if (!this.hasScoringFrameTarget) return
+
+    const matrixCategory = this.#activeCategory()
+    const currentSrc = this.scoringFrameTarget.getAttribute("src")
+    if (!currentSrc) return
+
+    try {
+      const scoringUrl = new URL(currentSrc, window.location.origin)
+      const currentCategory = scoringUrl.searchParams.get("category")
+
+      // Only reload if the category actually changed
+      if (matrixCategory && matrixCategory !== currentCategory) {
+        scoringUrl.searchParams.set("category", matrixCategory)
+        this.scoringFrameTarget.src = scoringUrl.toString()
+      }
+    } catch {
+      // ignore invalid URLs
+    }
+  }
+
+  // Extracts the active category from the matrix frame's src URL.
+  #activeCategory() {
+    if (!this.hasFrameTarget) return null
+
+    const src = this.frameTarget.getAttribute("src")
+    if (!src) return null
+
+    try {
+      const url = new URL(src, window.location.origin)
+      return url.searchParams.get("category")
+    } catch {
+      return null
     }
   }
 }

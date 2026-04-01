@@ -6,13 +6,18 @@ class Views::Assessments::ShowView < Views::Base
   # @param assignment [PersonFrameworkAssignment]
   # @param framework [FrameworkState::Framework]
   # @param matrix_data [Hash] output from Assessments::MatrixDataBuilder
+  # @param active_category_id [String, nil] active tab category ID
+  # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignment:, framework:, matrix_data:, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignment:, framework:, matrix_data:, active_category_id: nil,
+                 expanded_capability_id: nil, user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @framework = framework
     @matrix_data = matrix_data
+    @active_category_id = active_category_id
+    @expanded_capability_id = expanded_capability_id
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -22,7 +27,7 @@ class Views::Assessments::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: { controller: "panel" }) do
+      div(data: { controller: "panel", panel_side_value: "left" }) do
         assessment_header
         assessment_layout
       end
@@ -91,8 +96,8 @@ class Views::Assessments::ShowView < Views::Base
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
           data: { assessment_sync_target: "signal" }) { }
-      main_pane
       scoring_sidebar
+      main_pane
     end
   end
 
@@ -100,13 +105,15 @@ class Views::Assessments::ShowView < Views::Base
     div(class: "flex-1 overflow-auto bg-white dark:bg-gray-900") do
       turbo_frame_tag(
         "assessment-matrix",
-        src: matrix_assessment_path(@assignment),
+        src: matrix_assessment_path(@assignment, matrix_frame_params),
         data: { assessment_sync_target: "frame" }
       ) do
         render Views::Assessments::AssessmentMatrix.new(
           matrix_data: @matrix_data,
           assessment_id: @assignment.id,
-          context: :self
+          context: :self,
+          active_category_id: @active_category_id,
+          expanded_capability_id: @expanded_capability_id
         )
       end
     end
@@ -114,15 +121,15 @@ class Views::Assessments::ShowView < Views::Base
 
   def scoring_sidebar
     aside(
-      class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
+      class: "w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
              "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto " \
-             "max-lg:hidden max-lg:fixed max-lg:right-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-30 " \
-             "max-lg:w-80 max-lg:shadow-xl",
+             "max-lg:hidden max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-30 " \
+             "max-lg:w-72 max-lg:shadow-xl",
       data: { panel_target: "panel" }
     ) do
       turbo_frame_tag(
         "assessment-scoring",
-        src: scoring_assessment_path(@assignment),
+        src: scoring_assessment_path(@assignment, scoring_frame_params),
         data: { assessment_sync_target: "scoringFrame" }
       ) do
         render Views::Assessments::ScoringPanel.new(
@@ -134,10 +141,25 @@ class Views::Assessments::ShowView < Views::Base
           person_level: @matrix_data[:person_level],
           mastery_threshold: @matrix_data[:mastery_threshold],
           meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
+          active_category_id: @active_category_id,
+          assessment_id: @assignment.id,
           context: :self
         )
       end
     end
+  end
+
+  def matrix_frame_params
+    p = {}
+    p[:category] = @active_category_id if @active_category_id
+    p[:capability] = @expanded_capability_id if @expanded_capability_id
+    p
+  end
+
+  def scoring_frame_params
+    p = {}
+    p[:category] = @active_category_id if @active_category_id
+    p
   end
 
   def format_ratio(ratio)

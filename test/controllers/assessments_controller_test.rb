@@ -145,6 +145,67 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "assessment-matrix"
       assert_not_includes response.body, "<html"
     end
+
+    should "render category tabs" do
+      sign_in @user
+      get matrix_assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "category-tabs"
+      assert_includes response.body, "Thinking"
+    end
+
+    should "default to first category when no category param" do
+      sign_in @user
+      get matrix_assessment_path(@assignment)
+
+      assert_response :success
+      # Should show the capabilities from Thinking category
+      assert_includes response.body, "Critical Thinking"
+    end
+
+    should "fall back to first category for invalid category param" do
+      sign_in @user
+      get matrix_assessment_path(@assignment, category: "nonexistent")
+
+      assert_response :success
+      assert_includes response.body, "Critical Thinking"
+    end
+  end
+
+  context "GET /assessments/:id/matrix with multiple categories" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Add a second category
+        cat2 = create(:framework_capability_category,
+          framework_id: @framework.framework_id, name: "Delivering", ordinal: 2)
+        @cap2 = create(:framework_capability, category_id: cat2.category_id, name: "Execution")
+        create(:framework_capability_role_binding,
+          capability_id: @cap2.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation,
+          capability_id: @cap2.capability_id, level_ordinal: 1, description: "Ships features reliably")
+        @cat2_id = cat2.category_id
+      end
+    end
+
+    should "render only the selected category" do
+      sign_in @user
+      get matrix_assessment_path(@assignment, category: @cat2_id)
+
+      assert_response :success
+      # Should show Execution from Delivering category
+      assert_includes response.body, "Execution"
+      # Should NOT show capabilities from the other category in the table body
+      # (tabs will still mention both categories)
+    end
+
+    should "highlight active tab with aria-current" do
+      sign_in @user
+      get matrix_assessment_path(@assignment, category: @cat2_id)
+
+      assert_response :success
+      assert_includes response.body, 'aria-current="page"'
+    end
   end
 
   private

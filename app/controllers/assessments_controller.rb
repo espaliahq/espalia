@@ -32,12 +32,15 @@ class AssessmentsController < ApplicationController
   def show
     authorize @assignment
     load_assessment_data
+    active_category_id = resolve_active_category_id
     if manager_viewing?
       render Views::Assessments::ManagerShowView.new(
         assignment: @assignment,
         assessee: @assessee,
         framework: @framework,
         matrix_data: @matrix_data,
+        active_category_id: active_category_id,
+        expanded_capability_id: params[:capability],
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -47,6 +50,8 @@ class AssessmentsController < ApplicationController
         assignment: @assignment,
         framework: @framework,
         matrix_data: @matrix_data,
+        active_category_id: active_category_id,
+        expanded_capability_id: params[:capability],
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -62,7 +67,9 @@ class AssessmentsController < ApplicationController
       framework: @framework,
       matrix_data: @matrix_data,
       assignment: @assignment,
-      context: assessment_context
+      context: assessment_context,
+      active_category_id: resolve_active_category_id,
+      expanded_capability_id: params[:capability]
     ), layout: false
   end
 
@@ -72,7 +79,9 @@ class AssessmentsController < ApplicationController
     load_assessment_data
     render Views::Assessments::ScoringPanelFrameView.new(
       matrix_data: @matrix_data,
-      context: assessment_context
+      context: assessment_context,
+      active_category_id: resolve_active_category_id,
+      assessment_id: @assignment.id
     ), layout: false
   end
 
@@ -133,6 +142,16 @@ class AssessmentsController < ApplicationController
 
     PersonFrameworkAssignment.where(person_id: report_ids)
       .includes(:framework, :role, :level)
+  end
+
+  # Resolves the active category ID from params, defaulting to the first category.
+  #
+  # @return [String, nil]
+  def resolve_active_category_id
+    return params[:category] if params[:category].present? &&
+      @matrix_data[:categories].any? { |c| c[:category].category_id == params[:category] }
+
+    @matrix_data[:categories].first&.dig(:category)&.category_id
   end
 
   def current_user_tenants
