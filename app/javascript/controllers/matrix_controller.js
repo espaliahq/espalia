@@ -32,6 +32,15 @@ export default class extends BaseController {
     }
   }
 
+  disconnect() {
+    if (this._frame && this._frameLoadHandler) {
+      this._frame.removeEventListener("turbo:frame-load", this._frameLoadHandler)
+      this._frame = null
+      this._frameLoadHandler = null
+    }
+    super.disconnect()
+  }
+
   // ── Selection Update (Turbo Frame) ── (framework explorer)
 
   updateSelection(event) {
@@ -145,14 +154,15 @@ export default class extends BaseController {
   // ── Assessment URL Sync ──
 
   #listenForFrameLoad() {
-    const frame = this.element.closest("turbo-frame") ||
+    this._frame = this.element.closest("turbo-frame") ||
                   this.element.querySelector("turbo-frame")
-    if (!frame) return
+    if (!this._frame) return
 
-    frame.addEventListener("turbo:frame-load", () => {
+    this._frameLoadHandler = () => {
       this.#syncFrameUrlToBrowser()
       this.#restoreRowDimming()
-    })
+    }
+    this._frame.addEventListener("turbo:frame-load", this._frameLoadHandler)
   }
 
   // After a Turbo Frame load (tab switch), update the browser URL to match.

@@ -14,7 +14,7 @@ The matrix pattern uses a **parallel view hierarchy** in `app/views/assessments/
 
 The active category and expanded capability are encoded in query params for shareability:
 
-```
+```text
 Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>
 Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>
 Scoring frame:/assessments/:id/scoring?category=<category_id>
