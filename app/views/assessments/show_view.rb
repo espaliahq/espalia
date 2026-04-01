@@ -27,7 +27,7 @@ class Views::Assessments::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: { controller: "panel" }) do
+      div(data: { controller: "panel", panel_side_value: "left" }) do
         assessment_header
         assessment_layout
       end
@@ -96,8 +96,8 @@ class Views::Assessments::ShowView < Views::Base
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
           data: { assessment_sync_target: "signal" }) { }
-      main_pane
       scoring_sidebar
+      main_pane
     end
   end
 
@@ -121,10 +121,10 @@ class Views::Assessments::ShowView < Views::Base
 
   def scoring_sidebar
     aside(
-      class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
+      class: "w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
              "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto " \
-             "max-lg:hidden max-lg:fixed max-lg:right-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-30 " \
-             "max-lg:w-80 max-lg:shadow-xl",
+             "max-lg:hidden max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-30 " \
+             "max-lg:w-72 max-lg:shadow-xl",
       data: { panel_target: "panel" }
     ) do
       turbo_frame_tag(

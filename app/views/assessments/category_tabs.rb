@@ -6,6 +6,9 @@
 # Each tab is an <a> that targets the assessment-matrix Turbo Frame, causing a
 # server-side re-render of the matrix with the selected category.
 #
+# On mobile, tabs wrap their text and fill the viewport width so all category
+# names are fully visible without horizontal scrolling.
+#
 class Views::Assessments::CategoryTabs < Views::Base
   # @param categories [Array<Hash>] all category data from MatrixDataBuilder
   # @param scoring [Hash] primary scoring perspective output
@@ -23,7 +26,7 @@ class Views::Assessments::CategoryTabs < Views::Base
   def view_template
     nav(
       id: "category-tabs",
-      class: "flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-700 " \
+      class: "flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 px-3 py-1 sticky top-0 z-30",
       aria_label: "Category tabs"
     ) do
@@ -50,7 +53,7 @@ class Views::Assessments::CategoryTabs < Views::Base
     ) do
       div(class: "flex items-center gap-1.5") do
         status_dot(result)
-        span(class: "truncate max-w-[140px]") { category.name }
+        span { category.name }
       end
       span(class: "text-[10px] #{active ? 'text-gray-600 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}") do
         "#{progress[:rated]}/#{progress[:total]}"
@@ -60,7 +63,7 @@ class Views::Assessments::CategoryTabs < Views::Base
 
   def tab_classes(active)
     base = "flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium " \
-           "whitespace-nowrap rounded-t-md transition-colors shrink-0 "
+           "text-center rounded-t-md transition-colors "
     if active
       "#{base}text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 " \
         "border-b-2 border-primary"

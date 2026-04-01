@@ -243,44 +243,50 @@ class Views::Assessments::ScoringPanel < Views::Base
     alt_results = secondary_category_results(category.category_id)
     divergent = alt_results.any? { |_, alt| alt && result && alt[:pass] != result[:pass] }
     active = category.category_id == @active_category_id
+    row_classes = "block py-1.5 px-2 rounded-md transition-colors cursor-pointer " \
+                  "#{active ? 'bg-primary/5 ring-1 ring-primary/20 dark:bg-primary/10 dark:ring-primary/30' : 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800'}"
 
-    div(class: "py-1.5 px-2 rounded-md transition-colors #{active ? 'bg-primary/5 ring-1 ring-primary/20 dark:bg-primary/10 dark:ring-primary/30' : 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800'}") do
-      div(class: "flex items-center justify-between") do
-        if @assessment_id
-          a(
-            href: matrix_assessment_path(@assessment_id, category: category.category_id),
-            data: { turbo_frame: "assessment-matrix" },
-            class: "text-sm text-gray-700 dark:text-gray-300 truncate mr-2 hover:text-primary"
-          ) { category.name }
-        else
-          span(class: "text-sm text-gray-700 dark:text-gray-300 truncate mr-2") { category.name }
-        end
-
-        div(class: "flex items-center gap-1") do
-          if divergent
-            span(
-              class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0",
-              title: "Perspectives differ on this category"
-            ) { }
-          end
-          render Views::Assessments::CategoryStatus.new(
-            category_id: category.category_id,
-            category_result: result
-          )
-        end
+    if @assessment_id
+      a(
+        href: matrix_assessment_path(@assessment_id, category: category.category_id),
+        data: { turbo_frame: "assessment-matrix" },
+        class: row_classes
+      ) { category_result_content(category, result, divergent, alt_results) }
+    else
+      div(class: row_classes) do
+        category_result_content(category, result, divergent, alt_results)
       end
+    end
+  end
 
-      # Show divergent secondary results inline
-      alt_results.each do |label, alt_result|
-        next unless alt_result && result && alt_result[:pass] != result[:pass]
+  def category_result_content(category, result, divergent, alt_results)
+    div(class: "flex items-center justify-between") do
+      span(class: "text-sm text-gray-700 dark:text-gray-300 truncate mr-2") { category.name }
 
-        alt_text = alt_result[:pass] ? "Pass" : "Below"
-        alt_color = alt_result[:pass] ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
-
-        div(class: "flex items-center gap-1.5 mt-0.5 ml-0.5") do
-          span(class: "text-[10px] text-gray-400 dark:text-gray-500") { "#{label}:" }
-          span(class: "text-[10px] font-medium #{alt_color}") { alt_text }
+      div(class: "flex items-center gap-1") do
+        if divergent
+          span(
+            class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0",
+            title: "Perspectives differ on this category"
+          ) { }
         end
+        render Views::Assessments::CategoryStatus.new(
+          category_id: category.category_id,
+          category_result: result
+        )
+      end
+    end
+
+    # Show divergent secondary results inline
+    alt_results.each do |label, alt_result|
+      next unless alt_result && result && alt_result[:pass] != result[:pass]
+
+      alt_text = alt_result[:pass] ? "Pass" : "Below"
+      alt_color = alt_result[:pass] ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+
+      div(class: "flex items-center gap-1.5 mt-0.5 ml-0.5") do
+        span(class: "text-[10px] text-gray-400 dark:text-gray-500") { "#{label}:" }
+        span(class: "text-[10px] font-medium #{alt_color}") { alt_text }
       end
     end
   end

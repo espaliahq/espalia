@@ -4,6 +4,9 @@
 # Renders a category tab bar above the matrix table, showing one category at a time.
 # Passes context and all scoring perspectives through to AssessmentCategoryGroup children.
 #
+# The tab bar is rendered outside the horizontally-scrollable table wrapper so it
+# remains fixed at the top when the user scrolls the matrix left/right.
+#
 class Views::Assessments::AssessmentMatrix < Views::Base
   # @param matrix_data [Hash] from Assessments::MatrixDataBuilder
   # @param assessment_id [String] UUID
@@ -28,28 +31,30 @@ class Views::Assessments::AssessmentMatrix < Views::Base
         assessment_id: @assessment_id,
         context: @context
       )
-      table(class: "w-full border-collapse") do
-        render Views::Assessments::MatrixHeader.new(
-          merged_levels: @matrix_data[:merged_levels],
-          person_level: @matrix_data[:person_level],
-          inferred_level: @matrix_data[:inferred_level]
-        )
-        tbody do
-          active_category = find_active_category
-          if active_category
-            render Views::Assessments::AssessmentCategoryGroup.new(
-              category_data: active_category,
-              merged_levels: @matrix_data[:merged_levels],
-              person_level: @matrix_data[:person_level],
-              scoring: @matrix_data[:scoring],
-              self_scoring: @matrix_data[:self_scoring],
-              manager_scoring: @matrix_data[:manager_scoring],
-              aligned_scoring: @matrix_data[:aligned_scoring],
-              assessment_id: @assessment_id,
-              context: @context,
-              expanded_capability_id: @expanded_capability_id,
-              show_header: false
-            )
+      div(class: "overflow-x-auto") do
+        table(class: "w-full border-collapse") do
+          render Views::Assessments::MatrixHeader.new(
+            merged_levels: @matrix_data[:merged_levels],
+            person_level: @matrix_data[:person_level],
+            inferred_level: @matrix_data[:inferred_level]
+          )
+          tbody do
+            active_category = find_active_category
+            if active_category
+              render Views::Assessments::AssessmentCategoryGroup.new(
+                category_data: active_category,
+                merged_levels: @matrix_data[:merged_levels],
+                person_level: @matrix_data[:person_level],
+                scoring: @matrix_data[:scoring],
+                self_scoring: @matrix_data[:self_scoring],
+                manager_scoring: @matrix_data[:manager_scoring],
+                aligned_scoring: @matrix_data[:aligned_scoring],
+                assessment_id: @assessment_id,
+                context: @context,
+                expanded_capability_id: @expanded_capability_id,
+                show_header: false
+              )
+            end
           end
         end
       end
