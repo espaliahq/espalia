@@ -189,6 +189,9 @@ class Assessments::RatingsController < ApplicationController
           Views::Assessments::CategoryTabs.new(
             categories: matrix_data[:categories],
             scoring: primary,
+            self_scoring: matrix_data[:self_scoring],
+            manager_scoring: matrix_data[:manager_scoring],
+            aligned_scoring: matrix_data[:aligned_scoring],
             active_category_id: active_category_id || category_id,
             assessment_id: @assignment.id,
             context: :self

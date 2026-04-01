@@ -27,6 +27,9 @@ class Views::Assessments::AssessmentMatrix < Views::Base
       render Views::Assessments::CategoryTabs.new(
         categories: @matrix_data[:categories],
         scoring: primary_scoring,
+        self_scoring: @matrix_data[:self_scoring],
+        manager_scoring: @matrix_data[:manager_scoring],
+        aligned_scoring: @matrix_data[:aligned_scoring],
         active_category_id: @active_category_id,
         assessment_id: @assessment_id,
         context: @context
