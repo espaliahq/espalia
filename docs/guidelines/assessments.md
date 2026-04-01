@@ -6,7 +6,23 @@ This document captures the design decisions, interaction patterns, and hard-won 
 
 ## Overview
 
-The matrix pattern extends into self-assessment and manager assessment via a **parallel view hierarchy** in `app/views/assessments/`. Rather than adding a mode parameter to the explorer's `MatrixCell`, a separate set of assessment-specific components was built. This keeps the read-only explorer simple and gives assessment cells the interactive controls they need (frequency selectors, secondary rating bars, background coloring).
+The assessment UX uses a **tabbed, single-category-at-a-time** view. Rather than showing all categories in one matrix, a tab bar above the table lets users focus on one category at a time. Each tab shows the category name, a rated/total progress count, and a pass/fail status dot.
+
+The matrix pattern uses a **parallel view hierarchy** in `app/views/assessments/`. Rather than adding a mode parameter to the explorer's `MatrixCell`, a separate set of assessment-specific components was built. This keeps the read-only explorer simple and gives assessment cells the interactive controls they need (frequency selectors, secondary rating bars, background coloring).
+
+### URL-Driven State
+
+The active category and expanded capability are encoded in query params for shareability:
+
+```
+Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>
+Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>
+Scoring frame:/assessments/:id/scoring?category=<category_id>
+```
+
+- `category` absent → defaults to first category (ordinal 1)
+- `capability` absent → no row pre-expanded
+- Tab clicks update both the Turbo Frame src and the browser URL via `history.pushState()`
 
 ## Context-Driven Rendering
 
@@ -36,23 +52,26 @@ PageLayout
 └── div[data-controller="assessment-sync panel"]
     ├── assessment_header (back link, framework name, progress badge)
     └── assessment_layout
-        ├── main[data-controller="matrix"]
+        ├── main
         │   └── turbo-frame#assessment-matrix
-        │       └── AssessmentMatrix
-        │           ├── MatrixHeader (level columns, person_level highlighted)
-        │           └── AssessmentCategoryGroup (per category)
-        │               ├── category header (sticky, ContributionLabel)
-        │               └── AssessmentRow (per capability)
-        │                   ├── compact row (CapabilityNameCell + AssessmentCells)
-        │                   └── expanded row (illustrations, hidden)
-        │                       └── AssessmentCell (per level ordinal)
-        │                           ├── expectation text
-        │                           ├── secondary FrequencyBars (read-only)
-        │                           ├── primary FrequencySelector (interactive)
-        │                           └── illustration indicator
+        │       └── div[data-controller="matrix" data-matrix-url-sync-value="true"]
+        │           ├── CategoryTabs (horizontal scrollable tab bar)
+        │           │   └── tab links → /assessments/:id/matrix?category=<id>
+        │           └── table (single-category matrix)
+        │               ├── MatrixHeader (level columns, person_level highlighted)
+        │               └── AssessmentCategoryGroup (active category only, no header)
+        │                   └── AssessmentRow (per capability)
+        │                       ├── compact row (CapabilityNameCell + AssessmentCells)
+        │                       │   └── siblings dimmed when any row expanded
+        │                       └── expanded row (illustrations, URL-driven pre-expansion)
+        │                           └── AssessmentCell (per level ordinal)
+        │                               ├── expectation text
+        │                               ├── secondary FrequencyBars (read-only)
+        │                               ├── primary FrequencySelector (interactive, category_id hidden field)
+        │                               └── illustration indicator
         └── aside (scoring panel sidebar)
-            └── turbo-frame#scoring-panel
-                └── ScoringPanel (multi-perspective)
+            └── turbo-frame#assessment-scoring
+                └── ScoringPanel (multi-perspective, clickable category links)
 ```
 
 ## Data Flow
@@ -185,15 +204,43 @@ ActionCable broadcast → Turbo Stream replaces signal element
 - **Toggle state preservation** — saves expanded rows and collapsed categories before frame reload, restores after
 - **Scoring badge update** — reads `data-performance-pct` from the scoring panel and updates the header badge color/text
 - **Dual frame reload** — reloads both the matrix frame and the scoring panel frame on rating changes
+- **Category sync** — after every matrix frame load, copies the `?category=` param from the matrix frame's `src` to the scoring frame's `src` and reloads it, keeping the scoring panel's active category highlight in sync with the tab bar
 
 ### frequency_selector_controller.js
 - **Optimistic UI** — highlights the clicked frequency button immediately before the Turbo Stream response arrives
 - Lightweight controller; form action routing is handled server-side by `FrequencySelector` view component
 
 ### matrix_controller.js (shared with explorer)
-- **Category collapse** (sibling row walking)
+- **Category collapse** (sibling row walking) — not used in assessment view (single category)
 - **Row expansion** (toggle hidden expanded row by capability ID)
+- **URL sync** (assessment only, gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL via `pushState` after Turbo Frame loads and row toggles
+- **Sibling dimming** — dims non-expanded rows (`opacity-40`) when a row is expanded for visual focus
 - See [framework-explorer.md](framework-explorer.md) for full responsibilities
+
+## Key Design Decisions
+
+### Tabbed categories with server-side switching
+
+Instead of showing all categories at once, the assessment renders one category at a time via a tab bar. Each tab click fetches a Turbo Frame with `?category=<id>`. This was chosen over client-side show/hide because:
+
+1. **Payload reduction** — only one category's DOM is rendered, not all
+2. **Data freshness** — each tab switch gets the latest rating state from the server
+3. **Consistency** — matches the framework explorer pattern where role selection drives Turbo Frame fetches
+4. **No client-side tab state** — tabs live inside the Turbo Frame and re-render on every load, so active state is always correct
+
+The category header row is omitted when rendering a single category (the tab bar serves as the category identifier).
+
+### URL-driven focus state
+
+The active category and expanded capability are query params, enabling:
+- Bookmarking a specific category + capability view
+- Sharing deep links to a particular assessment focus
+- Browser back/forward navigation between category views
+- Server-side pre-expansion of rows from shared URLs
+
+### Scoring panel as navigation
+
+Category names in the scoring panel sidebar are clickable links that switch the active tab. When the matrix frame loads with a new category, the `assessment_sync_controller` syncs the scoring frame to update the active category highlight.
 
 ## Hard-Won Lessons
 
@@ -209,7 +256,11 @@ The `:self`/`:manager` context flows from controller detection (`manager_viewing
 
 When a rating changes, `assessment_sync_controller` reloads the matrix frame. Without saving/restoring expanded rows and collapsed categories, the user loses their scroll position and state. The controller uses a save/restore cycle around each reload via DOM queries before the fetch and re-application after `turbo:frame-load`.
 
-### 4. Perspective scoring returns nil, not empty
+### 4. Category data contains model objects, not plain hashes
+
+`matrix_data[:categories]` contains `{ category: CapabilityCategory, ... }` where `category` is an ActiveRecord model, not a hash. Use `.dig(:category)&.category_id` (two-step), not `.dig(:category, :category_id)` — the latter requires `#dig` on the model which doesn't exist.
+
+### 5. Perspective scoring returns nil, not empty
 
 `build_perspective_scoring` returns `nil` (not an empty hash) when no ratings exist for a perspective. `ScoringPanel` checks this via `using_fallback?` and falls back to effective scoring, showing a "No ratings yet" badge. Returning an empty hash would display misleading zero scores.
 
@@ -229,6 +280,7 @@ Events are defined (`GrowthGoalSet`, `FocusAreaAdded`, `CheckInRecorded`) but no
 | File | Purpose |
 |------|---------|
 | **Views** | |
+| `app/views/assessments/category_tabs.rb` | Horizontal tab bar for category switching (inside Turbo Frame) |
 | `app/views/assessments/show_view.rb` | Self-assessment two-pane layout (matrix + scoring sidebar) |
 | `app/views/assessments/manager_show_view.rb` | Manager assessment layout |
 | `app/views/assessments/index_view.rb` | Assessment list (own + direct reports) |

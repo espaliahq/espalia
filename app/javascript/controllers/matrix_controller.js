@@ -3,6 +3,9 @@
 // Listens for tree:changed events to update the matrix Turbo Frame.
 // Manages category collapse and row expansion within the matrix.
 //
+// When urlSync is enabled (assessment views), synchronises the browser URL
+// with category/capability selection so state is shareable via links.
+//
 // <div data-controller="matrix"
 //      data-matrix-base-path-value="/frameworks/abc/matrix"
 //      data-action="tree:changed@window->matrix#updateSelection">
@@ -18,10 +21,18 @@ export default class extends BaseController {
                      "categoryHeader", "rowChevron", "categoryChevron",
                      "scrollContainer"]
   static values = {
-    basePath: String
+    basePath: String,
+    urlSync: { type: Boolean, default: false }
   }
 
-  // ── Selection Update (Turbo Frame) ──
+  connect() {
+    super.connect()
+    if (this.urlSyncValue) {
+      this.#listenForFrameLoad()
+    }
+  }
+
+  // ── Selection Update (Turbo Frame) ── (framework explorer)
 
   updateSelection(event) {
     const { roleIds, track } = event.detail
@@ -97,6 +108,14 @@ export default class extends BaseController {
     if (chevron) {
       chevron.classList.toggle("rotate-90", isExpanding)
     }
+
+    // Dim sibling rows when a row is expanded (visual focus)
+    this.#updateRowDimming(isExpanding ? capId : null)
+
+    // Sync browser URL with expanded capability
+    if (this.urlSyncValue) {
+      this.#syncCapabilityToUrl(isExpanding ? capId : null)
+    }
   }
 
   // ── Private ──
@@ -121,5 +140,76 @@ export default class extends BaseController {
     roleIds.forEach(id => url.searchParams.append("roles[]", id))
     url.searchParams.set("track", track)
     window.history.pushState({}, "", url)
+  }
+
+  // ── Assessment URL Sync ──
+
+  #listenForFrameLoad() {
+    const frame = this.element.closest("turbo-frame") ||
+                  this.element.querySelector("turbo-frame")
+    if (!frame) return
+
+    frame.addEventListener("turbo:frame-load", () => {
+      this.#syncFrameUrlToBrowser()
+      this.#restoreRowDimming()
+    })
+  }
+
+  // After a Turbo Frame load (tab switch), update the browser URL to match.
+  #syncFrameUrlToBrowser() {
+    const frame = this.element.closest("turbo-frame") ||
+                  this.element.querySelector("turbo-frame")
+    if (!frame) return
+
+    const frameSrc = frame.getAttribute("src")
+    if (!frameSrc) return
+
+    const frameUrl = new URL(frameSrc, window.location.origin)
+    const browserUrl = new URL(window.location)
+
+    const category = frameUrl.searchParams.get("category")
+    const capability = frameUrl.searchParams.get("capability")
+
+    if (category) {
+      browserUrl.searchParams.set("category", category)
+    } else {
+      browserUrl.searchParams.delete("category")
+    }
+
+    if (capability) {
+      browserUrl.searchParams.set("capability", capability)
+    } else {
+      browserUrl.searchParams.delete("capability")
+    }
+
+    window.history.pushState({}, "", browserUrl)
+  }
+
+  // Update capability param in browser URL on row toggle.
+  #syncCapabilityToUrl(capId) {
+    const url = new URL(window.location)
+    if (capId) {
+      url.searchParams.set("capability", capId)
+    } else {
+      url.searchParams.delete("capability")
+    }
+    window.history.pushState({}, "", url)
+  }
+
+  // Dims sibling compact rows when a row is expanded for visual focus.
+  #updateRowDimming(expandedCapId) {
+    this.rowTargets.forEach(row => {
+      if (expandedCapId && row.dataset.capabilityId !== expandedCapId) {
+        row.classList.add("opacity-40")
+      } else {
+        row.classList.remove("opacity-40")
+      }
+    })
+  }
+
+  // Restores row dimming after a frame reload if a row is pre-expanded.
+  #restoreRowDimming() {
+    const expandedRow = this.expandedRowTargets.find(r => !r.classList.contains("hidden"))
+    this.#updateRowDimming(expandedRow?.dataset.capabilityId || null)
   }
 }

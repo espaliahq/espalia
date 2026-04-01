@@ -21,13 +21,16 @@ class Views::Assessments::AssessmentCell < Views::Base
   # @param person_level [Integer] the person's assigned level ordinal
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self)
+  # @param category_id [String, nil] active category for tab preservation on rating
+  def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self,
+                 category_id: nil)
     @cell_data = cell_data
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
     @person_level = person_level
     @assessment_id = assessment_id
     @context = context
+    @category_id = category_id
   end
 
   def view_template
@@ -74,7 +77,8 @@ class Views::Assessments::AssessmentCell < Views::Base
         level_ordinal: @ordinal,
         current_frequency: primary_frequency,
         assessment_id: @assessment_id,
-        context: @context
+        context: @context,
+        category_id: @category_id
       )
     end
   end

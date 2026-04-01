@@ -171,7 +171,8 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 - **Turbo Frame update** (builds URL from selection, sets frame src)
 - **Category collapse** (sibling row walking)
 - **Row expansion** (toggle hidden expanded row by capability ID)
-- **URL sync** (pushState for shareability)
+- **URL sync** (pushState for shareability — explorer uses role/track params)
+- **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
 
 ## Hard-Won Lessons

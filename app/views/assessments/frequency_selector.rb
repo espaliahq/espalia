@@ -21,12 +21,15 @@ class Views::Assessments::FrequencySelector < Views::Base
   # @param current_frequency [String, nil]
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(capability_stable_id:, level_ordinal:, current_frequency:, assessment_id:, context: :self)
+  # @param category_id [String, nil] active category for tab preservation on rating
+  def initialize(capability_stable_id:, level_ordinal:, current_frequency:, assessment_id:, context: :self,
+                 category_id: nil)
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
     @current_frequency = current_frequency
     @assessment_id = assessment_id
     @context = context
+    @category_id = category_id
   end
 
   def view_template
@@ -52,6 +55,7 @@ class Views::Assessments::FrequencySelector < Views::Base
       input(type: "hidden", name: "rating[capability_stable_id]", value: @capability_stable_id)
       input(type: "hidden", name: "rating[level_ordinal]", value: @level_ordinal)
       input(type: "hidden", name: "rating[frequency]", value: freq[:value])
+      input(type: "hidden", name: "rating[category_id]", value: @category_id) if @category_id
 
       button(
         type: "submit",

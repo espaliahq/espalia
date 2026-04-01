@@ -14,7 +14,7 @@ class Assessments::RatingsController < ApplicationController
   def create
     authorize @assignment, :create_self_rating?
 
-    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment ])
+    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
     unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
@@ -52,7 +52,7 @@ class Assessments::RatingsController < ApplicationController
       )
     end
 
-    respond_with_turbo_stream(capability_stable_id, level_ordinal)
+    respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id])
   rescue RuntimeError => e
     render turbo_stream: turbo_stream.replace(
       "rating-#{capability_stable_id}-#{level_ordinal}",
@@ -81,7 +81,7 @@ class Assessments::RatingsController < ApplicationController
     head :forbidden
   end
 
-  def respond_with_turbo_stream(capability_stable_id, level_ordinal)
+  def respond_with_turbo_stream(capability_stable_id, level_ordinal, active_category_id = nil)
     # Reload fresh data for the turbo stream response
     framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
     role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
@@ -121,7 +121,8 @@ class Assessments::RatingsController < ApplicationController
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
             assessment_id: @assignment.id,
-            context: :self
+            context: :self,
+            category_id: active_category_id || category_id
           ),
           layout: false
         )
@@ -137,7 +138,9 @@ class Assessments::RatingsController < ApplicationController
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
             mastery_threshold: matrix_data[:mastery_threshold],
-            meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold]
+            meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
+            active_category_id: active_category_id || category_id,
+            assessment_id: @assignment.id
           ),
           layout: false
         )
@@ -179,7 +182,20 @@ class Assessments::RatingsController < ApplicationController
           ),
           layout: false
         )
-      )
+      ),
+      (turbo_stream.replace(
+        "category-tabs",
+        render_to_string(
+          Views::Assessments::CategoryTabs.new(
+            categories: matrix_data[:categories],
+            scoring: primary,
+            active_category_id: active_category_id || category_id,
+            assessment_id: @assignment.id,
+            context: :self
+          ),
+          layout: false
+        )
+      ) if active_category_id || category_id)
     ].compact
   end
 

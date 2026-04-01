@@ -17,8 +17,11 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param aligned_scoring [Hash, nil] aligned-only perspective scoring
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param show_header [Boolean] whether to render the sticky category header row
   def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self,
-                 self_scoring: nil, manager_scoring: nil, aligned_scoring: nil)
+                 self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
+                 expanded_capability_id: nil, show_header: true)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -29,26 +32,30 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
     @aligned_scoring = aligned_scoring
     @assessment_id = assessment_id
     @context = context
+    @expanded_capability_id = expanded_capability_id
+    @show_header = show_header
   end
 
   def view_template
-    sticky_cols = [ @merged_levels.size, 1 ].min + 1
-    filler_cols = @merged_levels.size + 1 - sticky_cols
+    if @show_header
+      sticky_cols = [ @merged_levels.size, 1 ].min + 1
+      filler_cols = @merged_levels.size + 1 - sticky_cols
 
-    tr(class: "sticky top-[41px] z-[5]") do
-      td(
-        colspan: sticky_cols,
-        class: "sticky left-0 z-[6] px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-r " \
-               "border-gray-200 dark:border-gray-700 min-w-[220px]"
-      ) do
-        category_header
-      end
-
-      if filler_cols > 0
+      tr(class: "sticky top-[41px] z-[5]") do
         td(
-          colspan: filler_cols,
-          class: "bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
-        )
+          colspan: sticky_cols,
+          class: "sticky left-0 z-[6] px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-r " \
+                 "border-gray-200 dark:border-gray-700 min-w-[220px]"
+        ) do
+          category_header
+        end
+
+        if filler_cols > 0
+          td(
+            colspan: filler_cols,
+            class: "bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+          )
+        end
       end
     end
 
@@ -67,7 +74,9 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         blocked: blocked,
         block_reason: block_reason,
         contribution: contribution,
-        secondary_contributions: secondary_capability_contributions(stable_id)
+        secondary_contributions: secondary_capability_contributions(stable_id),
+        expanded: stable_id == @expanded_capability_id,
+        category_id: @category.category_id
       )
     end
   end

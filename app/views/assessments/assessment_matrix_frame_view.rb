@@ -8,11 +8,16 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
   # @param matrix_data [Hash]
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self, :manager, or :alignment
-  def initialize(framework:, matrix_data:, assignment:, context: :self)
+  # @param active_category_id [String, nil] active tab category ID
+  # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  def initialize(framework:, matrix_data:, assignment:, context: :self,
+                 active_category_id: nil, expanded_capability_id: nil)
     @framework = framework
     @matrix_data = matrix_data
     @assignment = assignment
     @context = context
+    @active_category_id = active_category_id
+    @expanded_capability_id = expanded_capability_id
   end
 
   def view_template
@@ -20,7 +25,9 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
       render Views::Assessments::AssessmentMatrix.new(
         matrix_data: @matrix_data,
         assessment_id: @assignment.id,
-        context: @context
+        context: @context,
+        active_category_id: @active_category_id,
+        expanded_capability_id: @expanded_capability_id
       )
     end
   end

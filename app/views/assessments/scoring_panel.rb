@@ -30,11 +30,14 @@ class Views::Assessments::ScoringPanel < Views::Base
   # @param person_level [Integer]
   # @param mastery_threshold [Float] ratio threshold for mastering tier
   # @param meeting_expectation_threshold [Float] ratio threshold for meeting tier
+  # @param active_category_id [String, nil] currently selected category tab for highlighting
+  # @param assessment_id [String, nil] UUID for building matrix URL links
   # @param context [Symbol] :self, :manager, or :alignment
   def initialize(scoring:, categories:, person_level:,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
                  mastery_threshold: PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
                  meeting_expectation_threshold: PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
+                 active_category_id: nil, assessment_id: nil,
                  context: :self)
     @scoring = scoring
     @self_scoring = self_scoring
@@ -44,6 +47,8 @@ class Views::Assessments::ScoringPanel < Views::Base
     @person_level = person_level
     @mastery_threshold = mastery_threshold
     @meeting_expectation_threshold = meeting_expectation_threshold
+    @active_category_id = active_category_id
+    @assessment_id = assessment_id
     @context = context
   end
 
@@ -237,10 +242,19 @@ class Views::Assessments::ScoringPanel < Views::Base
   def category_result_row(category, result)
     alt_results = secondary_category_results(category.category_id)
     divergent = alt_results.any? { |_, alt| alt && result && alt[:pass] != result[:pass] }
+    active = category.category_id == @active_category_id
 
-    div(class: "py-1.5 px-2 rounded-md bg-white dark:bg-gray-800/50") do
+    div(class: "py-1.5 px-2 rounded-md transition-colors #{active ? 'bg-primary/5 ring-1 ring-primary/20 dark:bg-primary/10 dark:ring-primary/30' : 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800'}") do
       div(class: "flex items-center justify-between") do
-        span(class: "text-sm text-gray-700 dark:text-gray-300 truncate mr-2") { category.name }
+        if @assessment_id
+          a(
+            href: matrix_assessment_path(@assessment_id, category: category.category_id),
+            data: { turbo_frame: "assessment-matrix" },
+            class: "text-sm text-gray-700 dark:text-gray-300 truncate mr-2 hover:text-primary"
+          ) { category.name }
+        else
+          span(class: "text-sm text-gray-700 dark:text-gray-300 truncate mr-2") { category.name }
+        end
 
         div(class: "flex items-center gap-1") do
           if divergent

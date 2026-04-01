@@ -14,8 +14,9 @@ class Views::Assessments::CapabilityNameCell < Views::Base
   # @param contribution [Float, nil] raw contribution score
   # @param secondary_contributions [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
   # @param has_illustrations [Boolean] whether expandable illustrations exist
+  # @param expanded [Boolean] whether the row is pre-expanded (chevron should be rotated)
   def initialize(capability:, weight:, mandatory:, blocked:, contribution:, has_illustrations:,
-                 block_reason: nil, secondary_contributions: [])
+                 block_reason: nil, secondary_contributions: [], expanded: false)
     @capability = capability
     @weight = weight
     @mandatory = mandatory
@@ -24,6 +25,7 @@ class Views::Assessments::CapabilityNameCell < Views::Base
     @contribution = contribution
     @secondary_contributions = secondary_contributions
     @has_illustrations = has_illustrations
+    @expanded = expanded
   end
 
   def view_template
@@ -81,7 +83,7 @@ class Views::Assessments::CapabilityNameCell < Views::Base
 
   def chevron_icon
     svg(
-      class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
+      class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0 #{@expanded ? 'rotate-90' : ''}",
       data: { matrix_target: "rowChevron" },
       fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
     ) do |s|
