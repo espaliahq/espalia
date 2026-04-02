@@ -1,0 +1,20 @@
+{
+  "employees": [
+    {
+      "id": "bob-004",
+      "email": "diana@example.com",
+      "firstName": "Diana",
+      "surname": "Prince",
+      "displayName": "Diana Prince",
+      "isActive": true,
+      "work": {
+        "title": "Product Manager",
+        "department": "Product",
+        "reportsTo": null,
+        "site": "Melbourne",
+        "startDate": "2022-09-01",
+        "isManager": false
+      }
+    }
+  ]
+}

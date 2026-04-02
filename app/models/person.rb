@@ -23,6 +23,11 @@ class Person < ApplicationRecord
   has_one :tenant_user, dependent: :nullify
   has_one :user, through: :tenant_user
 
+  scope :active, -> { where(status: "active") }
+  scope :inactive, -> { where(status: "inactive") }
+  scope :hris_managed, -> { where.not(hris_source: nil) }
+
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
+  validates :status, inclusion: { in: %w[active inactive] }
 end

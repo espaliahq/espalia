@@ -60,6 +60,25 @@
   end
 end
 
+# Seed HRIS config for me&u tenant
+meandu = Tenant.find_by(slug: "meandu")
+if meandu && Rails.application.credentials.dig(:hris, :hibob, :meandu)
+  hibob_creds = Rails.application.credentials.dig(:hris, :hibob, :meandu)
+  meandu.update!(
+    hris_config: HrisConfig.new(
+      provider: "hibob",
+      sync_enabled: true
+    ),
+    hris_credentials: {
+      "service_user_id" => hibob_creds.service_user_id,
+      "api_token" => hibob_creds.api_token
+    }
+  )
+  puts "Configured HiBob HRIS integration for me&u"
+else
+  puts "Skipping HiBob HRIS config (no credentials in Rails credentials file)"
+end
+
 # Seed framework data
 Rake::Task["frameworks:seed_meandu"].invoke
 

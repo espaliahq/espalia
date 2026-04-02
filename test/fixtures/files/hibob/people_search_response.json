@@ -1,0 +1,64 @@
+{
+  "employees": [
+    {
+      "id": "bob-001",
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "surname": "Smith",
+      "displayName": "Alice Smith",
+      "isActive": true,
+      "work": {
+        "title": "Senior Engineer",
+        "department": "Engineering",
+        "reportsTo": {
+          "id": "bob-002",
+          "email": "bob@example.com",
+          "displayName": "Bob Jones",
+          "firstName": "Bob",
+          "surname": "Jones"
+        },
+        "site": "Melbourne",
+        "startDate": "2023-01-15",
+        "isManager": false
+      }
+    },
+    {
+      "id": "bob-002",
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "surname": "Jones",
+      "displayName": "Bob Jones",
+      "isActive": true,
+      "work": {
+        "title": "Engineering Manager",
+        "department": "Engineering",
+        "reportsTo": null,
+        "site": "Melbourne",
+        "startDate": "2021-06-01",
+        "isManager": true
+      }
+    },
+    {
+      "id": "bob-003",
+      "email": "charlie@example.com",
+      "firstName": "Charlie",
+      "surname": "Brown",
+      "displayName": "Charlie Brown",
+      "isActive": false,
+      "work": {
+        "title": "Junior Designer",
+        "department": "Design",
+        "reportsTo": {
+          "id": "bob-002",
+          "email": "bob@example.com",
+          "displayName": "Bob Jones",
+          "firstName": "Bob",
+          "surname": "Jones"
+        },
+        "site": "Sydney",
+        "startDate": "2024-03-01",
+        "isManager": false
+      }
+    }
+  ]
+}

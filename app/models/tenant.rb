@@ -15,6 +15,10 @@ class Tenant < ApplicationRecord
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
 
+  attribute :hris_config, HrisConfig.to_type, default: -> { HrisConfig.new }
+  encrypts :hris_credentials
+  serialize :hris_credentials, coder: JSON
+
   store_accessor :settings,
     :primary_color, :primary_color_dark,
     :secondary_color, :secondary_color_dark,
@@ -33,6 +37,7 @@ class Tenant < ApplicationRecord
     :nav_fg_color, :nav_fg_color_dark,
     format: { with: HEX_COLOR_FORMAT }, allow_blank: true
   validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
+  validates :hris_config, store_model: true
 
   # Returns CSS variable overrides for light mode.
   #
