@@ -98,11 +98,16 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # Upserts a single Person from mapped attributes.
   #
+  # Matches by external_id first, then falls back to email. This handles
+  # people who were manually created before HRIS sync was configured.
+  #
   # @param attrs [Hash] Person-compatible attributes
   # @param result [Hash] running tally of sync results
   # @return [Person, nil] the created or updated person, nil on validation failure
   def upsert_person(attrs, result)
-    person = Person.find_or_initialize_by(external_id: attrs[:external_id])
+    person = Person.find_by(external_id: attrs[:external_id]) ||
+             Person.find_by(email: attrs[:email]) ||
+             Person.new
     is_new = person.new_record?
 
     person.assign_attributes(attrs.except(:hris_raw_data))

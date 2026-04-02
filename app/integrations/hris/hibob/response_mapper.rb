@@ -36,8 +36,8 @@ class Hris::Hibob::ResponseMapper
       external_id: employee["id"],
       email: employee["email"]&.downcase&.strip,
       name: build_name,
-      job_title: dig_work("title"),
-      department: dig_work("department"),
+      job_title: dig_human_readable_work("title") || dig_work("title"),
+      department: dig_human_readable_work("department") || dig_work("department"),
       hris_source: "hibob",
       status: employee["isActive"] == false ? "inactive" : "active",
       hris_raw_data: employee
@@ -70,5 +70,13 @@ class Hris::Hibob::ResponseMapper
   # @return [Object, nil]
   def dig_work(field)
     employee.dig("work", field)
+  end
+
+  # Reads a human-readable work field from the APPEND response.
+  #
+  # @param field [String]
+  # @return [String, nil]
+  def dig_human_readable_work(field)
+    employee.dig("humanReadable", "work", field)
   end
 end

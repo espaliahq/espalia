@@ -44,6 +44,27 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal "Senior Engineer", person.job_title
     end
 
+    should "adopt pre-existing Person records matched by email" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:person, tenant: @tenant, external_id: nil, hris_source: nil,
+               email: "alice@example.com", name: "Old Alice")
+      end
+
+      adapter = build_adapter(@fixture["employees"])
+      result = adapter.sync_people
+
+      assert_equal 2, result[:created]
+      assert_equal 1, result[:updated]
+
+      ActsAsTenant.with_tenant(@tenant) do
+        person = Person.find_by(email: "alice@example.com")
+        assert_equal "Alice Smith", person.name
+        assert_equal "bob-001", person.external_id
+        assert_equal "hibob", person.hris_source
+        assert_equal 1, Person.where(email: "alice@example.com").count
+      end
+    end
+
     should "resolve manager relationships" do
       adapter = build_adapter(@fixture["employees"])
       adapter.sync_people

@@ -6,7 +6,7 @@ class CreatePeople < ActiveRecord::Migration[8.1]
       t.references :tenant, type: :uuid, null: false, foreign_key: true
       t.references :manager, type: :uuid, null: true, foreign_key: { to_table: :people }
 
-      t.jsonb :name_translations, null: false, default: {}
+      t.string :name, null: false
       t.string :email, null: false
       t.string :job_title
       t.string :role_id

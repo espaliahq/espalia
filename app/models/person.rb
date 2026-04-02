@@ -15,8 +15,6 @@ class Person < ApplicationRecord
 
   has_prefix_id :per
 
-  translates :name
-
   belongs_to :tenant
   belongs_to :manager, class_name: "Person", optional: true
   has_many :direct_reports, class_name: "Person", foreign_key: :manager_id, dependent: :nullify, inverse_of: :manager

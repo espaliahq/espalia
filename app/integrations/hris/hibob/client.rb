@@ -44,7 +44,7 @@ class Hris::Hibob::Client
       body = {
         fields: fields,
         showInactive: show_inactive,
-        humanReadable: "REPLACE"
+        humanReadable: "APPEND"
       }
       body[:cursor] = cursor if cursor
 
