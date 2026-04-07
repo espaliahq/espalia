@@ -25,7 +25,11 @@ class ApplicationController < ActionController::Base
     tenant = ActsAsTenant.current_tenant
     @current_tenant_user = ActsAsTenant.without_tenant do
       tu = current_user&.tenant_users&.find_by(tenant: tenant)
-      auto_link_person(tu) if tu&.person_id.nil?
+      begin
+        auto_link_person(tu) if tu&.person_id.nil?
+      rescue StandardError => e
+        Rails.logger.warn("auto_link_person failed for TenantUser #{tu&.id}: #{e.class}: #{e.message}")
+      end
       tu
     end
   end
@@ -64,6 +68,8 @@ class ApplicationController < ActionController::Base
   #
   # Called lazily on sign-in when a TenantUser has no linked Person.
   # Uses the unique [tenant_id, email] index for fast lookup.
+  # Best-effort: failures are logged but never raised, since this runs on
+  # every authenticated request and must not break page loads.
   #
   # @param tenant_user [TenantUser, nil]
   # @return [void]
@@ -72,7 +78,14 @@ class ApplicationController < ActionController::Base
 
     ActsAsTenant.with_tenant(tenant_user.tenant) do
       person = Person.find_by(email: tenant_user.user.email)
-      tenant_user.update!(person: person) if person
+      next unless person
+
+      unless tenant_user.update(person: person)
+        Rails.logger.warn(
+          "auto_link_person could not link TenantUser #{tenant_user.id} to Person #{person.id}: " \
+          "#{tenant_user.errors.full_messages.join(', ')}"
+        )
+      end
     end
   end
 
