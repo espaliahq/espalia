@@ -89,12 +89,13 @@ class IntegrationsController < ApplicationController
 
     title_to_mapping = build_title_to_mapping
     roles_by_code = framework_roles_by_code
+    levels_by_role_and_ordinal = framework_levels_by_role_and_ordinal
     assignments_by_person_id = preload_assignments(people, current_tenant.hris_config.role_mappings.any?)
 
     people.map do |person|
       mapping = resolve_mapping(person, title_to_mapping)
       role = mapping ? roles_by_code[mapping.framework_role_code] : nil
-      level = role ? lookup_level(role, mapping, person) : nil
+      level = role ? lookup_level(role, mapping, person, levels_by_role_and_ordinal) : nil
 
       Integrations::HrisPersonRow.new(
         person: person,
@@ -120,6 +121,11 @@ class IntegrationsController < ApplicationController
     FrameworkState::Role.all.index_by(&:code)
   end
 
+  # @return [Hash{[String, Integer] => FrameworkState::Level}] keyed by [role_id, ordinal]
+  def framework_levels_by_role_and_ordinal
+    FrameworkState::Level.all.index_by { |level| [level.role_id, level.ordinal] }
+  end
+
   # @param people [Array<Person>]
   # @param has_mappings [Boolean]
   # @return [Hash{String => PersonFrameworkAssignment}]
@@ -138,11 +144,11 @@ class IntegrationsController < ApplicationController
     title_to_mapping[person.job_title.to_s.downcase.strip]
   end
 
-  def lookup_level(role, mapping, person)
+  def lookup_level(role, mapping, person, levels_by_role_and_ordinal)
     ordinal = mapping.level_ordinal || person.hris_level_ordinal
     return nil if ordinal.nil?
 
-    FrameworkState::Level.find_by(role_id: role.role_id, ordinal: ordinal)
+    levels_by_role_and_ordinal[[role.role_id, ordinal]]
   end
 
   # Each role mapping resolves once for the table on the HRIS show page —
