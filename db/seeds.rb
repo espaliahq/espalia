@@ -75,6 +75,14 @@ if meandu && Rails.application.credentials.dig(:hris, :hibob, :meandu)
     }
   )
   puts "Configured HiBob HRIS integration for me&u"
+
+  # Run an initial sync in development so the seeded tenant has real people data
+  if Rails.env.development?
+    puts "Running initial HiBob sync for me&u..."
+    result = Hris::Hibob::Adapter.new(meandu).sync_people
+    puts "  Sync complete: created=#{result[:created]} updated=#{result[:updated]} " \
+         "deactivated=#{result[:deactivated]} errors=#{result[:errors].size}"
+  end
 else
   puts "Skipping HiBob HRIS config (no credentials in Rails credentials file)"
 end
