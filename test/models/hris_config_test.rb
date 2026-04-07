@@ -72,4 +72,45 @@ class HrisConfigTest < ActiveSupport::TestCase
       assert_equal 1, config.field_mappings.size
     end
   end
+
+  context "role_mappings" do
+    should "default to empty array" do
+      config = HrisConfig.new
+      assert_equal [], config.role_mappings
+    end
+
+    should "accept valid role mappings with and without level_ordinal" do
+      config = HrisConfig.new(
+        role_mappings: [
+          HrisRoleMapping.new(hris_titles: [ "Senior SWE" ], framework_role_code: "E", level_ordinal: 5),
+          HrisRoleMapping.new(hris_titles: [ "Engineering Manager" ], framework_role_code: "EM")
+        ]
+      )
+      assert_equal 2, config.role_mappings.size
+      assert config.valid?
+    end
+
+    should "reject mappings when the same title appears twice" do
+      config = HrisConfig.new(
+        role_mappings: [
+          HrisRoleMapping.new(hris_titles: [ "Senior SWE" ], framework_role_code: "E", level_ordinal: 5),
+          HrisRoleMapping.new(hris_titles: [ "senior swe" ], framework_role_code: "EM", level_ordinal: 3)
+        ]
+      )
+      assert_not config.valid?
+      assert_not_empty config.errors[:role_mappings]
+    end
+  end
+
+  context "level_field_id" do
+    should "default to nil" do
+      config = HrisConfig.new
+      assert_nil config.level_field_id
+    end
+
+    should "accept a custom column id" do
+      config = HrisConfig.new(level_field_id: "column_0000000000000")
+      assert_equal "column_0000000000000", config.level_field_id
+    end
+  end
 end

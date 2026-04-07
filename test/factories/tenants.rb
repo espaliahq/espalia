@@ -7,7 +7,12 @@ FactoryBot.define do
       hris_config do
         HrisConfig.new(
           provider: "hibob",
-          sync_enabled: true
+          sync_enabled: true,
+          level_field_id: "column_test_id",
+          role_mappings: [
+            HrisRoleMapping.new(hris_titles: [ "Software Engineer" ], framework_role_code: "E"),
+            HrisRoleMapping.new(hris_titles: [ "Engineering Manager" ], framework_role_code: "EM")
+          ]
         )
       end
       hris_credentials do

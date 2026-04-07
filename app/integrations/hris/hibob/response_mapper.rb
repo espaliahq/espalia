@@ -18,16 +18,19 @@ class Hris::Hibob::ResponseMapper
   #
   # @param employee [Hash] raw employee data from HiBob API
   # @param field_mappings [Array<HrisFieldMapping>] optional custom field mappings
+  # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
   # @return [Hash] attributes compatible with Person.new
-  def self.call(employee, field_mappings: [])
-    new(employee, field_mappings: field_mappings).call
+  def self.call(employee, field_mappings: [], level_field_id: nil)
+    new(employee, field_mappings: field_mappings, level_field_id: level_field_id).call
   end
 
   # @param employee [Hash] raw employee data from HiBob API
   # @param field_mappings [Array<HrisFieldMapping>] optional custom field mappings
-  def initialize(employee, field_mappings: [])
+  # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
+  def initialize(employee, field_mappings: [], level_field_id: nil)
     @employee = employee
     @field_mappings = field_mappings
+    @level_field_id = level_field_id
   end
 
   # @return [Hash] mapped Person attributes
@@ -40,6 +43,7 @@ class Hris::Hibob::ResponseMapper
       department: dig_human_readable_work("department") || dig_work("department"),
       hris_source: "hibob",
       status: employee["isActive"] == false ? "inactive" : "active",
+      hris_level_ordinal: extract_level_ordinal,
       hris_raw_data: employee
     }.compact
   end
@@ -56,7 +60,23 @@ class Hris::Hibob::ResponseMapper
 
   private
 
-  attr_reader :employee, :field_mappings
+  attr_reader :employee, :field_mappings, :level_field_id
+
+  # Extracts the level ordinal from the HiBob custom column.
+  #
+  # Reads from humanReadable.work.customColumns.<level_field_id>, which
+  # (with humanReadable=APPEND) contains the display value of the list item.
+  # me&u's level list uses the ordinal number as the display value.
+  #
+  # @return [Integer, nil]
+  def extract_level_ordinal
+    return nil if level_field_id.blank?
+
+    raw = employee.dig("humanReadable", "work", "customColumns", level_field_id)
+    return nil if raw.blank?
+
+    Integer(raw.to_s, exception: false)
+  end
 
   # @return [String, nil]
   def build_name

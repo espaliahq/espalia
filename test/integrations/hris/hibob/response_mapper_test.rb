@@ -17,7 +17,7 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_equal "bob-001", result[:external_id]
       assert_equal "alice@example.com", result[:email]
       assert_equal "Alice Smith", result[:name]
-      assert_equal "Senior Engineer", result[:job_title]
+      assert_equal "Software Engineer", result[:job_title]
       assert_equal "Engineering", result[:department]
       assert_equal "hibob", result[:hris_source]
       assert_equal "active", result[:status]
@@ -65,6 +65,37 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       result = Hris::Hibob::ResponseMapper.call(employee)
 
       assert_equal "active", result[:status]
+    end
+
+    should "extract hris_level_ordinal from humanReadable custom column when configured" do
+      employee = @fixture["employees"][0]
+      result = Hris::Hibob::ResponseMapper.call(employee, level_field_id: "column_test_id")
+
+      assert_equal 5, result[:hris_level_ordinal]
+    end
+
+    should "skip hris_level_ordinal when level_field_id is nil" do
+      employee = @fixture["employees"][0]
+      result = Hris::Hibob::ResponseMapper.call(employee)
+
+      assert_nil result[:hris_level_ordinal]
+    end
+
+    should "return nil ordinal when custom column value is missing" do
+      employee = { "id" => "1", "email" => "a@b.com", "firstName" => "A", "surname" => "B", "isActive" => true }
+      result = Hris::Hibob::ResponseMapper.call(employee, level_field_id: "column_missing")
+
+      assert_nil result[:hris_level_ordinal]
+    end
+
+    should "return nil ordinal when value is not a valid integer string" do
+      employee = {
+        "id" => "1", "email" => "a@b.com", "firstName" => "A", "surname" => "B", "isActive" => true,
+        "humanReadable" => { "work" => { "customColumns" => { "column_test_id" => "-" } } }
+      }
+      result = Hris::Hibob::ResponseMapper.call(employee, level_field_id: "column_test_id")
+
+      assert_nil result[:hris_level_ordinal]
     end
   end
 

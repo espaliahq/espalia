@@ -17,7 +17,7 @@ class Hris::Hibob::Client
   MAX_RETRIES = 3
   RETRY_BASE_DELAY = 2
 
-  DEFAULT_FIELDS = %w[
+  BASE_FIELDS = %w[
     root.id root.email root.firstName root.surname root.displayName
     root.isActive
     work.title work.department work.reportsTo work.site work.startDate
@@ -26,9 +26,22 @@ class Hris::Hibob::Client
 
   # @param service_user_id [String] HiBob service user ID
   # @param api_token [String] HiBob API token
-  def initialize(service_user_id:, api_token:)
+  # @param level_field_id [String, nil] optional HiBob custom column ID
+  #   holding the level ordinal (e.g. "column_0000000000000"). When set, the
+  #   client requests `work.customColumns.<level_field_id>` on every search.
+  def initialize(service_user_id:, api_token:, level_field_id: nil)
     @service_user_id = service_user_id
     @api_token = api_token
+    @level_field_id = level_field_id
+  end
+
+  # Computes the default field set, including the level custom column when configured.
+  #
+  # @return [Array<String>]
+  def default_fields
+    fields = BASE_FIELDS.dup
+    fields << "work.customColumns.#{@level_field_id}" if @level_field_id.present?
+    fields
   end
 
   # Fetches all employees via POST /people/search with cursor-based pagination.
@@ -36,7 +49,7 @@ class Hris::Hibob::Client
   # @param fields [Array<String>] fields to include in the response
   # @param show_inactive [Boolean] whether to include inactive employees
   # @return [Array<Hash>] all employees across all pages
-  def search_people(fields: DEFAULT_FIELDS, show_inactive: true)
+  def search_people(fields: default_fields, show_inactive: true)
     all_employees = []
     cursor = nil
 

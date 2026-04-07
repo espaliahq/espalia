@@ -259,6 +259,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_02_032349) do
     t.string "department"
     t.string "email", null: false
     t.string "external_id"
+    t.integer "hris_level_ordinal"
     t.jsonb "hris_raw_data"
     t.string "hris_source"
     t.string "job_title"

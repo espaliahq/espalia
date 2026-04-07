@@ -84,6 +84,23 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
     end
   end
 
+  context "#default_fields" do
+    should "not include custom level column when level_field_id is nil" do
+      client = Hris::Hibob::Client.new(service_user_id: "u", api_token: "t")
+      assert_not_includes client.default_fields, "work.customColumns.any"
+      assert_includes client.default_fields, "work.title"
+    end
+
+    should "include the custom level column when level_field_id is set" do
+      client = Hris::Hibob::Client.new(
+        service_user_id: "u",
+        api_token: "t",
+        level_field_id: "column_test_id"
+      )
+      assert_includes client.default_fields, "work.customColumns.column_test_id"
+    end
+  end
+
   context "#get_fields" do
     should "fetch field metadata" do
       expected = [ { "id" => "work.title", "name" => "Title" } ]

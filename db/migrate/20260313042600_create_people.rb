@@ -13,6 +13,7 @@ class CreatePeople < ActiveRecord::Migration[8.1]
       t.string :level_id
       t.string :external_id
       t.string :hris_source
+      t.integer :hris_level_ordinal
 
       t.timestamps
     end

@@ -35,6 +35,73 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  # ── Role Change ──
+
+  context "#change_role" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @new_role_id = SecureRandom.uuid_v7
+      @new_level_id = SecureRandom.uuid_v7
+    end
+
+    should "apply PersonRoleChanged event with previous and new ids" do
+      @aggregate.change_role(@new_role_id, @new_level_id, reason: "hris_sync")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::PersonRoleChanged, event
+      assert_equal @role_id, event.data[:previous_role_id]
+      assert_equal @new_role_id, event.data[:new_role_id]
+      assert_equal @level_id, event.data[:previous_level_id]
+      assert_equal @new_level_id, event.data[:new_level_id]
+      assert_equal "hris_sync", event.data[:reason]
+    end
+
+    should "raise if not assigned" do
+      aggregate = PersonDevelopment::Aggregate.new
+      assert_raises(RuntimeError, /not yet assigned/) do
+        aggregate.change_role(@new_role_id, @new_level_id)
+      end
+    end
+
+    should "raise if role is unchanged" do
+      assert_raises(RuntimeError, /unchanged/) do
+        @aggregate.change_role(@role_id, @new_level_id)
+      end
+    end
+  end
+
+  # ── Level Change ──
+
+  context "#change_level" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @new_level_id = SecureRandom.uuid_v7
+    end
+
+    should "apply PersonLevelChanged event with previous and new ids" do
+      @aggregate.change_level(@new_level_id, reason: "hris_sync")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::PersonLevelChanged, event
+      assert_equal @level_id, event.data[:previous_level_id]
+      assert_equal @new_level_id, event.data[:new_level_id]
+      assert_equal "hris_sync", event.data[:reason]
+    end
+
+    should "raise if not assigned" do
+      aggregate = PersonDevelopment::Aggregate.new
+      assert_raises(RuntimeError, /not yet assigned/) do
+        aggregate.change_level(@new_level_id)
+      end
+    end
+
+    should "raise if level is unchanged" do
+      assert_raises(RuntimeError, /unchanged/) do
+        @aggregate.change_level(@level_id)
+      end
+    end
+  end
+
   # ── Assessment Cycles ──
 
   context "#open_assessment_cycle" do
