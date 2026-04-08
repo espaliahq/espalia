@@ -58,14 +58,16 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "issue a bounded number of cycle queries regardless of assignment count" do
-      # Seed multiple direct reports and enroll them all in the existing
-      # framework cycle so the index renders several assignment cards,
-      # each with an open cycle. Without batch loading this would trigger
-      # one cycle lookup per card (N+1).
+      # Seed multiple direct reports assigned to the framework. Because an
+      # open cycle already exists (from setup), the
+      # AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments handler
+      # auto-enrolls each new assignment — no explicit cycle_handler.enroll
+      # call is needed. The index should then render several assignment
+      # cards, each with an open cycle. Without batch loading this would
+      # trigger one cycle lookup per card (N+1).
       ActsAsTenant.with_tenant(@tenant) do
         manager = @person
         handler = PersonDevelopment::CommandHandler.new
-        cycle_handler = AssessmentCycles::CommandHandler.new
 
         3.times do |i|
           report_user = create(:user, password: "password123")
@@ -75,7 +77,6 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
           handler.assign_to_framework(
             report.id, @framework.framework_id, @role.role_id, @level.level_id
           )
-          cycle_handler.enroll(@cycle_id, report.id)
         end
       end
 

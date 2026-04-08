@@ -24,6 +24,18 @@ namespace :frameworks do
       puts "Creating framework: #{framework_data['name']}"
       handler.create_framework(framework_id, framework_data["name"])
 
+      # Begin v1 draft — structural events from here until publish_version
+      # will be held back from the published projection. The rebuild on
+      # publish replays them in bulk.
+      puts "Starting v1 draft"
+      handler.start_draft(framework_id, 1, "seed")
+
+      # Collect post-publish read-model mutations (department, deficit_threshold)
+      # because the published projection won't have the rows yet while we're
+      # still inside the draft phase.
+      pending_department_updates = []         # [[role_family_id, department], ...]
+      pending_category_threshold_updates = [] # [[category_id, deficit_threshold], ...]
+
       # ── Role Families, Roles, Levels ──
       role_code_to_id = {}   # "E" => uuid, "DE" => uuid
       level_code_to_id = {}  # "E1" => uuid
@@ -37,11 +49,9 @@ namespace :frameworks do
         puts "  Role family: #{rf_data['name']}"
         handler.add_role_family(framework_id, rfid, rf_data["name"], description: rf_data["description"])
 
-        # Set department on the read model (display grouping, not event-sourced)
-        if rf_data["department"]
-          FrameworkState::RoleFamily.find_by(role_family_id: rfid)
-            &.update!(department: rf_data["department"])
-        end
+        # Defer: department lives on the read model only (not event-sourced).
+        # Cannot set it here — the read-model row doesn't exist yet during the draft.
+        pending_department_updates << [ rfid, rf_data["department"] ] if rf_data["department"]
 
         rf_data["roles"].each do |role_data|
           rid = SecureRandom.uuid_v7
@@ -75,10 +85,10 @@ namespace :frameworks do
         handler.add_capability_category(framework_id, cat_id, cat_data["name"],
           description: cat_data["description"], ordinal: cat_idx + 1)
 
-        # Apply category-level deficit_threshold if specified in seed data
+        # Defer: deficit_threshold lives on the read model only and the row
+        # doesn't exist yet during the draft phase.
         if cat_data.key?("deficit_threshold")
-          cat_record = FrameworkState::CapabilityCategory.find_by!(category_id: cat_id)
-          cat_record.update!(deficit_threshold: cat_data["deficit_threshold"])
+          pending_category_threshold_updates << [ cat_id, cat_data["deficit_threshold"] ]
         end
 
         cat_data["capabilities"]&.each do |cap_data|
@@ -126,6 +136,24 @@ namespace :frameworks do
             end
           end
         end
+      end
+
+      # Publish the v1 draft — triggers rebuild_framework_projection which
+      # replays all structural events and materialises the read models. On a
+      # full seed (~1600 events) this takes a noticeable beat.
+      puts "Publishing v1"
+      handler.publish_version(framework_id, "seed")
+
+      # Apply deferred read-model mutations now that the rebuild has created
+      # the rows. find_by!/find_by raise/return nil if the rebuild didn't
+      # materialise something expected — that's a desired loud failure.
+      pending_department_updates.each do |rfid, dept|
+        FrameworkState::RoleFamily.find_by(role_family_id: rfid)
+          &.update!(department: dept)
+      end
+      pending_category_threshold_updates.each do |cat_id, threshold|
+        FrameworkState::CapabilityCategory.find_by!(category_id: cat_id)
+          .update!(deficit_threshold: threshold)
       end
 
       puts "\nSeed complete!"

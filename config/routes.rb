@@ -38,6 +38,14 @@ Rails.application.routes.draw do
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
   end
 
+  resources :assessment_cycles, only: [ :index, :show, :new, :create ] do
+    member do
+      post :close
+    end
+    resources :enrollments, only: [ :create, :destroy ],
+                            controller: "assessment_cycles/enrollments"
+  end
+
   resources :integrations, only: [ :index, :show ] do
     member do
       post :sync

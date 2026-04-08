@@ -48,6 +48,14 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::SyncHandlers::PersonEnrollmentSync.handled_events
   )
 
+  # AutoEnrollNewAssignments dispatches the AssessmentCycles enroll command
+  # (which then cascades via PersonEnrollmentSync to PersonDev). Same
+  # projection-rebuild hazard as above — MUST NOT be registered as a projection.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments.new,
+    to: AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Subscriptions will be added here as integrations are implemented.
   # Example:
