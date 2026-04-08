@@ -34,7 +34,7 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
       )
     end
     redirect_to assessment_cycle_path(@cycle), notice: "Person enrolled."
-  rescue RuntimeError => e
+  rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
     redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: e.message
   end
 
@@ -58,7 +58,7 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
         )
       end
       enrolled += 1
-    rescue RuntimeError
+    rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
       skipped += 1
     end
 
@@ -77,7 +77,7 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
   def destroy
     authorize @cycle, :unenroll?
 
-    participant = AssessmentCycleParticipant.find(params.expect(:id))
+    participant = @cycle.participants.find(params.expect(:id))
     reason = params[:reason].presence || "manual"
 
     ActiveRecord::Base.transaction do
@@ -89,7 +89,7 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
       )
     end
     redirect_to assessment_cycle_path(@cycle), status: :see_other, notice: "Person unenrolled."
-  rescue RuntimeError => e
+  rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
     redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: e.message
   end
 

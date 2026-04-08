@@ -77,6 +77,35 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         follow_redirect!
         assert_match(/not yet assigned|Person not yet assigned/i, flash[:alert].to_s)
       end
+
+      should "allow re-enrolling a person after unenroll" do
+        # Enroll then unenroll via the domain layer, then exercise the POST
+        # path that was previously 500ing on the unique index violation.
+        ActsAsTenant.with_tenant(@tenant) do
+          AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @assigned_person.id)
+          AssessmentCycles::CommandHandler.new.unenroll(@cycle_id, @assigned_person.id, "manual")
+        end
+
+        sign_in @admin_user
+        post assessment_cycle_enrollments_path(@cycle), params: {
+          enrollment: { person_id: @assigned_person.id }
+        }
+
+        assert_redirected_to assessment_cycle_path(@cycle)
+        follow_redirect!
+        assert_match(/Person enrolled/, flash[:notice].to_s)
+
+        ActsAsTenant.with_tenant(@tenant) do
+          rows = AssessmentCycleParticipant.where(
+            cycle_id: @cycle_id, person_id: @assigned_person.id
+          )
+          assert_equal 1, rows.count
+          participant = rows.first
+          assert_equal "enrolled", participant.status
+          assert_nil participant.withdrawn_at
+          assert_nil participant.withdrawal_reason
+        end
+      end
     end
 
     context "POST enrollments/bulk" do

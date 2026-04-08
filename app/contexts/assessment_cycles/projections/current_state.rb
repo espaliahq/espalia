@@ -50,13 +50,31 @@ class AssessmentCycles::Projections::CurrentState
     )
   end
 
+  # Upserts the participant row rather than unconditionally creating one.
+  #
+  # The `assessment_cycle_participants` table has a unique index on
+  # `(cycle_id, person_id)`, and `handle_person_unenrolled` preserves
+  # withdrawn rows by flipping `status` rather than deleting. Without the
+  # upsert below, re-enrolling a previously-withdrawn participant collides
+  # with the stale row via `idx_assessment_cycle_participants_unique`.
+  #
+  # All lifecycle columns are reset because a re-enrolled person starts
+  # the cycle fresh — displaying their previous started_at/aligned_at
+  # would misrepresent progress on the current enrollment.
   def handle_person_enrolled(event)
-    AssessmentCycleParticipant.create!(
+    participant = AssessmentCycleParticipant.find_or_initialize_by(
       cycle_id: event.data[:cycle_id],
-      person_id: event.data[:person_id],
-      status: "enrolled",
-      enrolled_at: event.metadata[:timestamp] || Time.current
+      person_id: event.data[:person_id]
     )
+    participant.assign_attributes(
+      status: "enrolled",
+      enrolled_at: event.metadata[:timestamp] || Time.current,
+      started_at: nil,
+      aligned_at: nil,
+      withdrawn_at: nil,
+      withdrawal_reason: nil
+    )
+    participant.save!
   end
 
   def handle_person_unenrolled(event)

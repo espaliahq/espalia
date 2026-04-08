@@ -148,8 +148,8 @@ namespace :frameworks do
       # the rows. find_by!/find_by raise/return nil if the rebuild didn't
       # materialise something expected — that's a desired loud failure.
       pending_department_updates.each do |rfid, dept|
-        FrameworkState::RoleFamily.find_by(role_family_id: rfid)
-          &.update!(department: dept)
+        FrameworkState::RoleFamily.find_by!(role_family_id: rfid)
+          .update!(department: dept)
       end
       pending_category_threshold_updates.each do |cat_id, threshold|
         FrameworkState::CapabilityCategory.find_by!(category_id: cat_id)

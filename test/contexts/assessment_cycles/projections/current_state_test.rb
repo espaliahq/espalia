@@ -78,6 +78,42 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "re-enrollment after unenroll" do
+    setup do
+      emit(AssessmentCycles::Events::CycleDefined,
+        cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1,
+        name: "Q1", cycle_type: "regular", defined_by: nil)
+      @person_id = SecureRandom.uuid_v7
+      emit(AssessmentCycles::Events::PersonEnrolled,
+        cycle_id: @cycle_id, person_id: @person_id, framework_id: @framework_id,
+        framework_version: 1, enrolled_by: nil)
+      emit(AssessmentCycles::Events::PersonUnenrolled,
+        cycle_id: @cycle_id, person_id: @person_id, framework_id: @framework_id,
+        reason: "accidental", unenrolled_by: nil)
+    end
+
+    should "reset the existing participant row to enrolled state on re-enroll" do
+      assert_nothing_raised do
+        emit(AssessmentCycles::Events::PersonEnrolled,
+          cycle_id: @cycle_id, person_id: @person_id, framework_id: @framework_id,
+          framework_version: 1, enrolled_by: nil)
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rows = AssessmentCycleParticipant.where(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal 1, rows.count, "expected a single current-state row, not a duplicate"
+
+        participant = rows.first
+        assert_equal "enrolled", participant.status
+        assert_nil participant.withdrawn_at
+        assert_nil participant.withdrawal_reason
+        assert_nil participant.started_at
+        assert_nil participant.aligned_at
+        assert_not_nil participant.enrolled_at
+      end
+    end
+  end
+
   context "CycleClosed" do
     setup do
       emit(AssessmentCycles::Events::CycleDefined,

@@ -16,28 +16,19 @@ class SeedFrameworkTaskTest < ActiveSupport::TestCase
     Tenant.where(slug: "meandu").destroy_all
   end
 
-  should "publish the framework to version 1" do
+  should "publish v1 and apply deferred read-model updates" do
     Rake::Task["frameworks:seed_meandu"].invoke
 
     framework = FrameworkState::Framework.first
     assert_not_nil framework
     assert_equal 1, framework.current_published_version
     assert_not framework.draft_in_progress
-  end
 
-  should "apply deferred department updates after publish" do
-    Rake::Task["frameworks:seed_meandu"].invoke
-
-    # Proof that the deferred update ran post-publish — the read-model row
-    # exists (rebuild replayed the RoleFamilyAdded events) AND the inline
-    # department mutation from the rake task found it.
+    # Proof that deferred updates ran post-publish — the read-model rows
+    # exist (rebuild replayed the structural events) AND the inline
+    # department / deficit_threshold mutations from the rake task found
+    # them. At least one seeded category (Finance Core) has a deficit_threshold.
     assert FrameworkState::RoleFamily.where.not(department: nil).exists?
-  end
-
-  should "apply deferred capability category deficit_threshold updates after publish" do
-    Rake::Task["frameworks:seed_meandu"].invoke
-
-    # At least one seeded category (Finance Core) has a deficit_threshold.
     assert FrameworkState::CapabilityCategory.where.not(deficit_threshold: nil).exists?
   end
 end

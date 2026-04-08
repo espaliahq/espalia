@@ -96,7 +96,7 @@ class AssessmentCyclesController < ApplicationController
   rescue ActiveRecord::RecordNotUnique
     redirect_to new_assessment_cycle_path, status: :see_other,
                 alert: "An open cycle already exists for this framework. Close it first."
-  rescue RuntimeError => e
+  rescue RuntimeError, ActiveRecord::RecordInvalid => e
     redirect_to new_assessment_cycle_path, status: :see_other, alert: e.message
   end
 
@@ -114,7 +114,7 @@ class AssessmentCyclesController < ApplicationController
       )
     end
     redirect_to assessment_cycle_path(@cycle), status: :see_other, notice: "Cycle closed."
-  rescue RuntimeError => e
+  rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
     redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: e.message
   end
 
