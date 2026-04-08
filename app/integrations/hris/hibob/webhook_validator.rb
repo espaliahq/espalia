@@ -19,7 +19,7 @@ class Hris::Hibob::WebhookValidator
   def self.valid?(payload:, signature:, secret:)
     return false if payload.blank? || signature.blank? || secret.blank?
 
-    expected = OpenSSL::HMAC.hexdigest("SHA512", secret, payload)
+    expected = Base64.strict_encode64(OpenSSL::HMAC.digest("SHA512", secret, payload))
     ActiveSupport::SecurityUtils.secure_compare(expected, signature)
   end
 end
