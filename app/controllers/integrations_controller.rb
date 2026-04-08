@@ -123,7 +123,7 @@ class IntegrationsController < ApplicationController
 
   # @return [Hash{[String, Integer] => FrameworkState::Level}] keyed by [role_id, ordinal]
   def framework_levels_by_role_and_ordinal
-    FrameworkState::Level.all.index_by { |level| [level.role_id, level.ordinal] }
+    FrameworkState::Level.all.index_by { |level| [ level.role_id, level.ordinal ] }
   end
 
   # @param people [Array<Person>]
@@ -148,7 +148,7 @@ class IntegrationsController < ApplicationController
     ordinal = mapping.level_ordinal || person.hris_level_ordinal
     return nil if ordinal.nil?
 
-    levels_by_role_and_ordinal[[role.role_id, ordinal]]
+    levels_by_role_and_ordinal[[ role.role_id, ordinal ]]
   end
 
   # Each role mapping resolves once for the table on the HRIS show page —
