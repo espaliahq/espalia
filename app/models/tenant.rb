@@ -16,8 +16,8 @@ class Tenant < ApplicationRecord
   has_many :people, dependent: :destroy
 
   attribute :hris_config, HrisConfig.to_type, default: -> { HrisConfig.new }
-  encrypts :hris_credentials
   serialize :hris_credentials, coder: JSON
+  encrypts :hris_credentials
 
   store_accessor :settings,
     :primary_color, :primary_color_dark,

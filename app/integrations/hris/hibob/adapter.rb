@@ -43,7 +43,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       employees.each do |raw_employee|
         mapper = Hris::Hibob::ResponseMapper.new(
           raw_employee,
-          field_mappings: config.field_mappings,
           level_field_id: config.level_field_id
         )
         attrs = mapper.call

@@ -17,19 +17,16 @@ class Hris::Hibob::ResponseMapper
   # Maps a single HiBob employee hash to Person attributes.
   #
   # @param employee [Hash] raw employee data from HiBob API
-  # @param field_mappings [Array<HrisFieldMapping>] optional custom field mappings
   # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
   # @return [Hash] attributes compatible with Person.new
-  def self.call(employee, field_mappings: [], level_field_id: nil)
-    new(employee, field_mappings: field_mappings, level_field_id: level_field_id).call
+  def self.call(employee, level_field_id: nil)
+    new(employee, level_field_id: level_field_id).call
   end
 
   # @param employee [Hash] raw employee data from HiBob API
-  # @param field_mappings [Array<HrisFieldMapping>] optional custom field mappings
   # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
-  def initialize(employee, field_mappings: [], level_field_id: nil)
+  def initialize(employee, level_field_id: nil)
     @employee = employee
-    @field_mappings = field_mappings
     @level_field_id = level_field_id
   end
 
@@ -60,7 +57,7 @@ class Hris::Hibob::ResponseMapper
 
   private
 
-  attr_reader :employee, :field_mappings, :level_field_id
+  attr_reader :employee, :level_field_id
 
   # Extracts the level ordinal from the HiBob custom column.
   #
