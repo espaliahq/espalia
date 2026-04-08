@@ -25,6 +25,7 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | `app/javascript/` | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
 | `app/policies/` | [authorization.md](docs/guidelines/authorization.md) |
+| `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
 
 Each directory above has a `CLAUDE.md` that imports the relevant guideline. Root `CLAUDE.md` covers architecture and commands only.
@@ -44,6 +45,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Tests | @docs/guidelines/testing.md |
 | Framework Explorer UX | @docs/guidelines/framework-explorer.md |
 | Assessment UX | @docs/guidelines/assessments.md |
+| HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
 
 Most features touch controllers + models + views + tests + authorization â€” read all five.
 

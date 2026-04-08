@@ -38,6 +38,12 @@ Rails.application.routes.draw do
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
   end
 
+  resources :integrations, only: [ :index, :show ] do
+    member do
+      post :sync
+    end
+  end
+
   # Defines the root path route ("/")
   root "pages#index"
 end

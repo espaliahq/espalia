@@ -60,8 +60,110 @@
   end
 end
 
-# Seed framework data
+# Seed framework data (must run BEFORE HRIS sync so Pass 5 has a framework to assign to)
 Rake::Task["frameworks:seed_meandu"].invoke
+
+# Seed HRIS config for me&u tenant
+meandu = Tenant.find_by(slug: "meandu")
+if meandu && Rails.application.credentials.dig(:hris, :hibob, :meandu)
+  hibob_creds = Rails.application.credentials.dig(:hris, :hibob, :meandu)
+
+  meandu_role_mappings = [
+    HrisRoleMapping.new(
+      framework_role_code: "E",
+      hris_titles: [
+        "Software Engineer II",
+        "Senior Software Engineer",
+        "Staff Software Engineer",
+        "Staff Engineer",
+        "Senior Staff Engineer",
+        "Principal Engineer",
+        "Site Reliability Engineer",
+        "Example Principal Engineer Title"
+      ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "EM",
+      hris_titles: [
+        "Engineering Manager",
+        "Senior Engineering Manager",
+        "Example Engineering Director Title"
+      ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "PD",
+      hris_titles: [ "Product Designer", "Senior Product Designer" ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "PM",
+      hris_titles: [
+        "Product Manager",
+        "Senior Product Manager",
+        "Group Product Manager",
+        "Example Product Director Title"
+      ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "AE",
+      hris_titles: [ "Analytics Engineer" ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "DE",
+      hris_titles: [ "Staff Data Engineer" ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "FC",
+      hris_titles: [
+        "Accountant",
+        "Senior Accountant",
+        "Senior Management Accountant",
+        "Accounting Manager"
+      ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "CF",
+      hris_titles: [ "Senior Commercial Finance Manager" ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "FO",
+      hris_titles: [ "Example Finance Operations Title", "Example Finance Manager Title" ]
+    ),
+    HrisRoleMapping.new(
+      framework_role_code: "FCo",
+      hris_titles: [ "Financial Controller" ]
+    )
+  ]
+
+  meandu.update!(
+    hris_config: HrisConfig.new(
+      provider: "hibob",
+      sync_enabled: true,
+      level_field_id: "column_0000000000000",
+      role_mappings: meandu_role_mappings
+    ),
+    hris_credentials: {
+      "service_user_id" => hibob_creds.service_user_id,
+      "api_token" => hibob_creds.api_token
+    }
+  )
+  puts "Configured HiBob HRIS integration for me&u"
+
+  # Run an initial sync in development so the seeded tenant has real people data
+  if Rails.env.development?
+    puts "Running initial HiBob sync for me&u..."
+    result = Hris::Hibob::Adapter.new(meandu).sync_people
+    puts "  Sync complete: created=#{result[:created]} updated=#{result[:updated]} " \
+         "deactivated=#{result[:deactivated]} errors=#{result[:errors].size}"
+    puts "  Framework assignments: assigned=#{result[:assigned]} " \
+         "role_changed=#{result[:role_changed]} level_changed=#{result[:level_changed]} " \
+         "unchanged=#{result[:unchanged]}"
+    puts "  Unmapped titles: #{result[:unmapped_titles].to_a.sort.join(', ')}" if result[:unmapped_titles].any?
+    puts "  Missing levels: #{result[:missing_levels].to_a.inspect}" if result[:missing_levels].any?
+    puts "  Missing ordinals: #{result[:missing_ordinals].size} people" if result[:missing_ordinals].any?
+  end
+else
+  puts "Skipping HiBob HRIS config (no credentials in Rails credentials file)"
+end
 
 # Seed assessment data (person assignment + open cycle)
 Rake::Task["assessments:seed"].invoke

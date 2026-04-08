@@ -43,7 +43,8 @@ class Components::Kit::PageLayout < Components::Base
   private
 
   # Builds nav links, adjusting the Framework link based on count
-  # and conditionally adding an Assessment link for open cycles.
+  # and conditionally adding Assessment / Integrations links based on
+  # the current user's role and assignments.
   #
   # @return [Array<Hash>]
   def nav_links
@@ -54,7 +55,31 @@ class Components::Kit::PageLayout < Components::Base
       ]
       assessment_link = assessment_nav_link
       links << assessment_link if assessment_link
+      links << { label: "Integrations", href: "/integrations" } if show_integrations_link?
       links
+    end
+  end
+
+  # Whether the current viewer can manage tenant integrations.
+  # Visible to global admins and tenant admins only.
+  #
+  # @return [Boolean]
+  def show_integrations_link?
+    return false unless @user && @current_tenant
+    return true if @user.global_admin?
+
+    resolve_tenant_user&.admin?
+  end
+
+  # Resolves the TenantUser membership for the current user/tenant pair.
+  # Cached so the navbar doesn't re-query for every link helper.
+  #
+  # @return [TenantUser, nil]
+  def resolve_tenant_user
+    return @resolved_tenant_user if defined?(@resolved_tenant_user)
+
+    @resolved_tenant_user = ActsAsTenant.without_tenant do
+      @user.tenant_users.find_by(tenant: @current_tenant)
     end
   end
 
@@ -95,11 +120,6 @@ class Components::Kit::PageLayout < Components::Base
   #
   # @return [Person, nil]
   def resolve_person
-    return unless @current_tenant
-
-    tenant_user = ActsAsTenant.without_tenant do
-      @user.tenant_users.find_by(tenant: @current_tenant)
-    end
-    tenant_user&.person
+    resolve_tenant_user&.person
   end
 end

@@ -123,15 +123,14 @@ TenantUser carries the user's role within a tenant and optionally links to a Per
 
 ```ruby
 # Schema: people
-#   id (uuid), tenant_id, email,
-#   name_translations (jsonb, json_translate),
+#   id (uuid), tenant_id, name (string), email,
+#   job_title, department, role_id, level_id,
+#   external_id, hris_source, status, hris_raw_data (jsonb),
 #   manager_id (uuid, nullable, self-referencing)
 
 class Person < ApplicationRecord
   acts_as_tenant :tenant
   has_prefix_id :per
-
-  translates :name
 
   belongs_to :manager, class_name: "Person", optional: true
   has_many :direct_reports, class_name: "Person", foreign_key: :manager_id, dependent: :nullify
@@ -139,8 +138,6 @@ class Person < ApplicationRecord
   has_one :user, through: :tenant_user
 end
 ```
-
-Additional fields planned for V1 integrations (e.g. `external_id`, `current_role_id`, `current_level_id`, `status`, `sync_metadata`) are not yet implemented.
 
 ---
 

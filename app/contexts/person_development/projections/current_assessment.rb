@@ -13,6 +13,8 @@ class PersonDevelopment::Projections::CurrentAssessment
   def self.handled_events
     [
       PersonDevelopment::Events::PersonAssignedToFramework,
+      PersonDevelopment::Events::PersonRoleChanged,
+      PersonDevelopment::Events::PersonLevelChanged,
       PersonDevelopment::Events::AssessmentCycleOpened,
       PersonDevelopment::Events::AssessmentCycleCompleted,
       PersonDevelopment::Events::SelfRated,
@@ -37,6 +39,8 @@ class PersonDevelopment::Projections::CurrentAssessment
   def handle(event)
     case event
     when PersonDevelopment::Events::PersonAssignedToFramework then handle_assigned(event)
+    when PersonDevelopment::Events::PersonRoleChanged then handle_role_changed(event)
+    when PersonDevelopment::Events::PersonLevelChanged then handle_level_changed(event)
     when PersonDevelopment::Events::AssessmentCycleOpened then handle_cycle_opened(event)
     when PersonDevelopment::Events::AssessmentCycleCompleted then handle_cycle_completed(event)
     when PersonDevelopment::Events::SelfRated then handle_self_rated(event)
@@ -58,6 +62,23 @@ class PersonDevelopment::Projections::CurrentAssessment
       assignment.level_id = event.data[:level_id]
       assignment.save!
     end
+  end
+
+  def handle_role_changed(event)
+    assignment = find_assignment(event)
+    return unless assignment
+
+    assignment.update!(
+      role_id: event.data[:new_role_id],
+      level_id: event.data[:new_level_id]
+    )
+  end
+
+  def handle_level_changed(event)
+    assignment = find_assignment(event)
+    return unless assignment
+
+    assignment.update!(level_id: event.data[:new_level_id])
   end
 
   def handle_cycle_opened(event)

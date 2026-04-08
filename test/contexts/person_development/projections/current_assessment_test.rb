@@ -31,6 +31,56 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "PersonRoleChanged" do
+    should "update both role_id and level_id on the assignment" do
+      original_role = SecureRandom.uuid_v7
+      original_level = SecureRandom.uuid_v7
+      new_role = SecureRandom.uuid_v7
+      new_level = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: original_role, level_id: original_level)
+
+      emit(PersonDevelopment::Events::PersonRoleChanged,
+        previous_role_id: original_role, new_role_id: new_role,
+        previous_level_id: original_level, new_level_id: new_level,
+        reason: "hris_sync")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assignment = PersonFrameworkAssignment.find_by(
+          person_id: @person_id, framework_id: @framework_id
+        )
+        assert_equal new_role, assignment.role_id
+        assert_equal new_level, assignment.level_id
+      end
+    end
+  end
+
+  context "PersonLevelChanged" do
+    should "update only level_id on the assignment" do
+      role = SecureRandom.uuid_v7
+      original_level = SecureRandom.uuid_v7
+      new_level = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: role, level_id: original_level)
+
+      emit(PersonDevelopment::Events::PersonLevelChanged,
+        previous_level_id: original_level, new_level_id: new_level,
+        reason: "hris_sync")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assignment = PersonFrameworkAssignment.find_by(
+          person_id: @person_id, framework_id: @framework_id
+        )
+        assert_equal role, assignment.role_id
+        assert_equal new_level, assignment.level_id
+      end
+    end
+  end
+
   context "AssessmentCycleOpened" do
     should "update assignment cycle_status to open" do
       role_id = SecureRandom.uuid_v7

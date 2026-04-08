@@ -23,6 +23,31 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Changes a person's role (and level) within their current framework.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param new_role_id [String] UUID of the new role
+  # @param new_level_id [String] UUID of the new level
+  # @param reason [String] why the change occurred
+  def change_person_role(person_id, framework_id, new_role_id, new_level_id, reason: "hris_sync")
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.change_role(new_role_id, new_level_id, reason: reason)
+    end
+  end
+
+  # Changes a person's level within the same role (promotion).
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param new_level_id [String] UUID of the new level
+  # @param reason [String] why the change occurred
+  def change_person_level(person_id, framework_id, new_level_id, reason: "hris_sync")
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.change_level(new_level_id, reason: reason)
+    end
+  end
+
   # Opens a new assessment cycle.
   #
   # @param person_id [String] UUID of the person

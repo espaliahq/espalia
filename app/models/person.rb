@@ -15,14 +15,17 @@ class Person < ApplicationRecord
 
   has_prefix_id :per
 
-  translates :name
-
   belongs_to :tenant
   belongs_to :manager, class_name: "Person", optional: true
   has_many :direct_reports, class_name: "Person", foreign_key: :manager_id, dependent: :nullify, inverse_of: :manager
   has_one :tenant_user, dependent: :nullify
   has_one :user, through: :tenant_user
 
+  scope :active, -> { where(status: "active") }
+  scope :inactive, -> { where(status: "inactive") }
+  scope :hris_managed, -> { where.not(hris_source: nil) }
+
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
+  validates :status, inclusion: { in: %w[active inactive] }
 end

@@ -47,6 +47,44 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Changes a person's role (and level) within their current framework.
+  #
+  # Used for transfers — any role change implies a new level because
+  # level_ids are scoped to roles.
+  #
+  # @param new_role_id [String] UUID of the new role
+  # @param new_level_id [String] UUID of the new level (must belong to new role)
+  # @param reason [String] why the change occurred (e.g. "hris_sync", "manual")
+  # @raise [RuntimeError] if not yet assigned, or if role is unchanged
+  def change_role(new_role_id, new_level_id, reason: "hris_sync")
+    ensure_assigned!
+    raise "Role unchanged" if @role_id == new_role_id
+
+    apply(PersonDevelopment::Events::PersonRoleChanged.new(data: {
+      previous_role_id: @role_id,
+      new_role_id: new_role_id,
+      previous_level_id: @level_id,
+      new_level_id: new_level_id,
+      reason: reason
+    }))
+  end
+
+  # Changes a person's level within the same role (promotion).
+  #
+  # @param new_level_id [String] UUID of the new level (must belong to current role)
+  # @param reason [String] why the change occurred (e.g. "hris_sync", "manual")
+  # @raise [RuntimeError] if not yet assigned, or if level is unchanged
+  def change_level(new_level_id, reason: "hris_sync")
+    ensure_assigned!
+    raise "Level unchanged" if @level_id == new_level_id
+
+    apply(PersonDevelopment::Events::PersonLevelChanged.new(data: {
+      previous_level_id: @level_id,
+      new_level_id: new_level_id,
+      reason: reason
+    }))
+  end
+
   # ── Assessment Cycles ──
 
   # Opens a new assessment cycle.
@@ -247,6 +285,15 @@ class PersonDevelopment::Aggregate
     @role_id = event.data[:role_id]
     @level_id = event.data[:level_id]
     @assigned = true
+  end
+
+  on PersonDevelopment::Events::PersonRoleChanged do |event|
+    @role_id = event.data[:new_role_id]
+    @level_id = event.data[:new_level_id]
+  end
+
+  on PersonDevelopment::Events::PersonLevelChanged do |event|
+    @level_id = event.data[:new_level_id]
   end
 
   on PersonDevelopment::Events::AssessmentCycleOpened do |event|

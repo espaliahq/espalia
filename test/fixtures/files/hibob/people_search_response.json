@@ -1,0 +1,100 @@
+{
+  "employees": [
+    {
+      "id": "bob-001",
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "surname": "Smith",
+      "displayName": "Alice Smith",
+      "isActive": true,
+      "work": {
+        "title": "Software Engineer",
+        "department": "Engineering",
+        "reportsTo": {
+          "id": "bob-002",
+          "email": "bob@example.com",
+          "displayName": "Bob Jones",
+          "firstName": "Bob",
+          "surname": "Jones"
+        },
+        "site": "Melbourne",
+        "startDate": "2023-01-15",
+        "isManager": false,
+        "customColumns": {
+          "column_test_id": "261985129"
+        }
+      },
+      "humanReadable": {
+        "work": {
+          "title": "Software Engineer",
+          "department": "Engineering",
+          "customColumns": {
+            "column_test_id": "5"
+          }
+        }
+      }
+    },
+    {
+      "id": "bob-002",
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "surname": "Jones",
+      "displayName": "Bob Jones",
+      "isActive": true,
+      "work": {
+        "title": "Engineering Manager",
+        "department": "Engineering",
+        "reportsTo": null,
+        "site": "Melbourne",
+        "startDate": "2021-06-01",
+        "isManager": true,
+        "customColumns": {
+          "column_test_id": "261985125"
+        }
+      },
+      "humanReadable": {
+        "work": {
+          "title": "Engineering Manager",
+          "department": "Engineering",
+          "customColumns": {
+            "column_test_id": "6"
+          }
+        }
+      }
+    },
+    {
+      "id": "bob-003",
+      "email": "charlie@example.com",
+      "firstName": "Charlie",
+      "surname": "Brown",
+      "displayName": "Charlie Brown",
+      "isActive": false,
+      "work": {
+        "title": "Junior Designer",
+        "department": "Design",
+        "reportsTo": {
+          "id": "bob-002",
+          "email": "bob@example.com",
+          "displayName": "Bob Jones",
+          "firstName": "Bob",
+          "surname": "Jones"
+        },
+        "site": "Sydney",
+        "startDate": "2024-03-01",
+        "isManager": false,
+        "customColumns": {
+          "column_test_id": "261985130"
+        }
+      },
+      "humanReadable": {
+        "work": {
+          "title": "Junior Designer",
+          "department": "Design",
+          "customColumns": {
+            "column_test_id": "1"
+          }
+        }
+      }
+    }
+  ]
+}
