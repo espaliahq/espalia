@@ -64,6 +64,7 @@ class Views::Assessments::IndexView < Views::Base
 
   def report_assignment_card(assignment)
     person = @report_people[assignment.person_id]
+    cycle = assignment.current_open_cycle
 
     div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 p-5 shadow-xs") do
@@ -84,11 +85,11 @@ class Views::Assessments::IndexView < Views::Base
             end
           end
         end
-        cycle_status_badge(assignment)
+        cycle_status_badge(cycle)
       end
 
-      if assignment.cycle_name.present?
-        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { assignment.cycle_name }
+      if cycle&.name.present?
+        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { cycle.name }
       end
 
       div(class: "mt-4") do
@@ -104,6 +105,8 @@ class Views::Assessments::IndexView < Views::Base
   end
 
   def assignment_card(assignment)
+    cycle = assignment.current_open_cycle
+
     div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 p-5 shadow-xs") do
       div(class: "flex items-start justify-between") do
@@ -120,15 +123,15 @@ class Views::Assessments::IndexView < Views::Base
             end
           end
         end
-        cycle_status_badge(assignment)
+        cycle_status_badge(cycle)
       end
 
-      if assignment.cycle_name.present?
-        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { assignment.cycle_name }
+      if cycle&.name.present?
+        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { cycle.name }
       end
 
       div(class: "mt-4") do
-        if assignment.cycle_open?
+        if cycle
           a(
             href: assessment_path(assignment),
             class: "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 " \
@@ -147,12 +150,9 @@ class Views::Assessments::IndexView < Views::Base
     end
   end
 
-  def cycle_status_badge(assignment)
-    case assignment.cycle_status
-    when "open"
+  def cycle_status_badge(cycle)
+    if cycle
       render Components::Kit::Badge.new("In Progress", variant: :warning)
-    when "completed"
-      render Components::Kit::Badge.new("Completed", variant: :success)
     else
       render Components::Kit::Badge.new("Not Started", variant: :default)
     end

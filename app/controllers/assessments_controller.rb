@@ -129,6 +129,7 @@ class AssessmentsController < ApplicationController
       role: role,
       level: FrameworkState::Level.find_by!(level_id: @assignment.level_id),
       person_id: @assignment.person_id,
+      cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories
     ).build
   end

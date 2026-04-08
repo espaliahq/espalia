@@ -7,18 +7,5 @@ FactoryBot.define do
     framework_id { SecureRandom.uuid_v7 }
     role_id { SecureRandom.uuid_v7 }
     level_id { SecureRandom.uuid_v7 }
-    cycle_status { "none" }
-
-    trait :with_open_cycle do
-      current_cycle_id { SecureRandom.uuid_v7 }
-      cycle_status { "open" }
-      cycle_name { "Q1 2026 Review" }
-    end
-
-    trait :completed do
-      current_cycle_id { SecureRandom.uuid_v7 }
-      cycle_status { "completed" }
-      cycle_name { "Q1 2026 Review" }
-    end
   end
 end

@@ -2,15 +2,17 @@
 
 # Projection read model tracking a person's assignment to a framework.
 #
-# One row per (person, framework). Stores the assigned role, level, and
-# current assessment cycle status. Materialised from PersonDevelopment
-# aggregate events by {PersonDevelopment::Projections::CurrentAssessment}.
+# One row per (person, framework). Stores the assigned role and level.
+# Materialised from PersonDevelopment aggregate events by
+# {PersonDevelopment::Projections::CurrentAssessment}.
+#
+# Cycle participation is NOT stored here — it lives on
+# {AssessmentCycleParticipant} rows, queryable via {#current_open_cycle}.
 #
 # @see PersonDevelopment::Projections::CurrentAssessment
+# @see AssessmentCycleParticipant
 #
 class PersonFrameworkAssignment < ApplicationRecord
-  CYCLE_STATUSES = %w[none open completed].freeze
-
   # Pundit policy lookup: use AssessmentPolicy
   def self.policy_class
     AssessmentPolicy
@@ -33,15 +35,22 @@ class PersonFrameworkAssignment < ApplicationRecord
   validates :framework_id, presence: true
   validates :role_id, presence: true
   validates :level_id, presence: true
-  validates :cycle_status, presence: true, inclusion: { in: CYCLE_STATUSES }
 
   scope :for_person, ->(person_id) { where(person_id: person_id) }
-  scope :with_open_cycle, -> { where(cycle_status: "open") }
 
-  # Whether the person currently has an open assessment cycle.
+  # The currently open cycle for this (framework, person), if any.
   #
-  # @return [Boolean]
-  def cycle_open?
-    cycle_status == "open"
+  # Resolved by joining through the person's active participant row to
+  # an open cycle for the same framework. Returns the {AssessmentCycle}
+  # or nil.
+  #
+  # @return [AssessmentCycle, nil]
+  def current_open_cycle
+    AssessmentCycle
+      .joins(:participants)
+      .where(framework_id: framework_id, status: "open",
+             assessment_cycle_participants: { person_id: person_id })
+      .where.not(assessment_cycle_participants: { status: "withdrawn" })
+      .first
   end
 end

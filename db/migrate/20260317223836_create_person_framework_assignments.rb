@@ -8,9 +8,6 @@ class CreatePersonFrameworkAssignments < ActiveRecord::Migration[8.1]
       t.uuid :framework_id,   null: false
       t.uuid :role_id,        null: false
       t.uuid :level_id,       null: false
-      t.uuid :current_cycle_id
-      t.string :cycle_status,  default: "none", null: false  # none | open | completed
-      t.string :cycle_name
       t.timestamps
     end
 

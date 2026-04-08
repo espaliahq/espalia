@@ -10,8 +10,6 @@ class PersonFrameworkAssignmentTest < ActiveSupport::TestCase
     should validate_presence_of(:framework_id)
     should validate_presence_of(:role_id)
     should validate_presence_of(:level_id)
-    should validate_presence_of(:cycle_status)
-    should validate_inclusion_of(:cycle_status).in_array(PersonFrameworkAssignment::CYCLE_STATUSES)
   end
 
   context "scopes" do
@@ -25,27 +23,58 @@ class PersonFrameworkAssignmentTest < ActiveSupport::TestCase
         assert_equal 1, PersonFrameworkAssignment.for_person(person_id).count
       end
     end
-
-    should "filter to open cycles" do
-      tenant = create(:tenant)
-      ActsAsTenant.with_tenant(tenant) do
-        create(:person_framework_assignment, :with_open_cycle, tenant: tenant)
-        create(:person_framework_assignment, tenant: tenant)
-
-        assert_equal 1, PersonFrameworkAssignment.with_open_cycle.count
-      end
-    end
   end
 
-  context "#cycle_open?" do
-    should "return true when cycle_status is open" do
-      assignment = build(:person_framework_assignment, :with_open_cycle)
-      assert assignment.cycle_open?
+  context "#current_open_cycle" do
+    setup do
+      @tenant = create(:tenant)
+      ActsAsTenant.current_tenant = @tenant
+      @person_id = SecureRandom.uuid_v7
+      @framework_id = SecureRandom.uuid_v7
+      @assignment = create(:person_framework_assignment,
+        tenant: @tenant, person_id: @person_id, framework_id: @framework_id)
     end
 
-    should "return false when cycle_status is none" do
-      assignment = build(:person_framework_assignment)
-      assert_not assignment.cycle_open?
+    teardown do
+      ActsAsTenant.current_tenant = nil
+    end
+
+    should "return nil when the person is not enrolled in any cycle" do
+      assert_nil @assignment.current_open_cycle
+    end
+
+    should "return the cycle when the person is enrolled in an open cycle for this framework" do
+      cycle = create(:assessment_cycle,
+        tenant: @tenant, framework_id: @framework_id)
+      create(:assessment_cycle_participant,
+        tenant: @tenant, cycle: cycle, person_id: @person_id)
+
+      assert_equal cycle.id, @assignment.current_open_cycle.id
+    end
+
+    should "return nil when the cycle is closed" do
+      cycle = create(:assessment_cycle, :closed,
+        tenant: @tenant, framework_id: @framework_id)
+      create(:assessment_cycle_participant,
+        tenant: @tenant, cycle: cycle, person_id: @person_id)
+
+      assert_nil @assignment.current_open_cycle
+    end
+
+    should "return nil when the participant is withdrawn" do
+      cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id)
+      create(:assessment_cycle_participant, :withdrawn,
+        tenant: @tenant, cycle: cycle, person_id: @person_id)
+
+      assert_nil @assignment.current_open_cycle
+    end
+
+    should "return nil when the open cycle is for a different framework" do
+      other_framework = SecureRandom.uuid_v7
+      cycle = create(:assessment_cycle, tenant: @tenant, framework_id: other_framework)
+      create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle, person_id: @person_id)
+
+      assert_nil @assignment.current_open_cycle
     end
   end
 end

@@ -8,7 +8,7 @@ class CreateAssessmentStates < ActiveRecord::Migration[8.1]
       t.uuid :framework_id,         null: false
       t.uuid :capability_stable_id, null: false
       t.integer :level_ordinal,     null: false
-      t.uuid :cycle_id
+      t.uuid :cycle_id,             null: false
 
       t.string :self_rated_frequency       # nil | "some" | "occasional" | "consistent"
       t.string :manager_rated_frequency    # nil | "some" | "occasional" | "consistent"
@@ -29,8 +29,10 @@ class CreateAssessmentStates < ActiveRecord::Migration[8.1]
     end
 
     add_index :assessment_level_ratings,
-              [ :person_id, :framework_id, :capability_stable_id, :level_ordinal ],
-              unique: true, name: "idx_assessment_ratings_person_cap_level"
+              [ :cycle_id, :person_id, :framework_id, :capability_stable_id, :level_ordinal ],
+              unique: true, name: "idx_assessment_ratings_cycle_person_cap_level"
     add_index :assessment_level_ratings, [ :person_id, :framework_id ]
+    add_index :assessment_level_ratings, [ :cycle_id, :person_id ],
+              name: "idx_assessment_ratings_cycle_person"
   end
 end

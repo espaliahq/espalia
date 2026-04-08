@@ -30,11 +30,12 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
         capability_id: @cap.capability_id, level_ordinal: 2, description: "Synthesises information")
 
       handler = PersonDevelopment::CommandHandler.new
+      cycle_handler = AssessmentCycles::CommandHandler.new
       handler.assign_to_framework(@report.id, framework_id, @role.role_id, @level.level_id)
-      handler.open_assessment_cycle(
-        @report.id, framework_id,
-        SecureRandom.uuid_v7, "Q1 2026", "regular", 1
-      )
+
+      @cycle_id = SecureRandom.uuid_v7
+      cycle_handler.define_cycle(@cycle_id, framework_id, "Q1 2026", "regular", 1, defined_by: @manager.id)
+      cycle_handler.enroll(@cycle_id, @report.id, enrolled_by: @manager.id)
 
       @report_assignment = PersonFrameworkAssignment.for_person(@report.id).first
     end
@@ -57,6 +58,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id,
           person_id: @report.id,
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2
@@ -89,6 +91,7 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id,
           person_id: @report.id,
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2

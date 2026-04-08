@@ -34,6 +34,20 @@ Rails.configuration.to_prepare do
     to: PersonDevelopment::Projections::CurrentAssessment.handled_events
   )
 
+  event_store.subscribe(
+    AssessmentCycles::Projections::CurrentState.new,
+    to: AssessmentCycles::Projections::CurrentState.handled_events
+  )
+
+  # ── Synchronous cross-stream sync handlers ──
+  # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
+  # so it MUST NOT be registered as a projection — running it twice
+  # would raise "already in a cycle" from the PersonDev aggregate.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::PersonEnrollmentSync.new,
+    to: AssessmentCycles::SyncHandlers::PersonEnrollmentSync.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Subscriptions will be added here as integrations are implemented.
   # Example:

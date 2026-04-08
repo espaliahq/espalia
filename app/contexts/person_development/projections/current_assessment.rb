@@ -3,8 +3,18 @@
 # Synchronous projection that materialises per-level capability assessment ratings.
 #
 # Subscribes to PersonDevelopment aggregate events and upserts
-# AssessmentLevelRating rows — one per (person, framework, capability_stable_id,
-# level_ordinal). Runs in the same transaction as the event publish.
+# AssessmentLevelRating rows — one per (cycle_id, person, framework,
+# capability_stable_id, level_ordinal). Runs in the same transaction
+# as the event publish.
+#
+# Because rating rows are scoped by cycle, historical ratings across
+# cycles are preserved rather than overwritten. This lets both
+# "latest rating" and "rating in cycle X" queries be answered from
+# the read model.
+#
+# Also mirrors per-person progress into {AssessmentCycleParticipant}:
+# - First rating of any kind → `started_at`
+# - Alignment event → `aligned_at` + `status = "aligned"`
 #
 class PersonDevelopment::Projections::CurrentAssessment
   # All event classes this projection handles.
@@ -15,8 +25,8 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::PersonAssignedToFramework,
       PersonDevelopment::Events::PersonRoleChanged,
       PersonDevelopment::Events::PersonLevelChanged,
-      PersonDevelopment::Events::AssessmentCycleOpened,
-      PersonDevelopment::Events::AssessmentCycleCompleted,
+      PersonDevelopment::Events::JoinedAssessmentCycle,
+      PersonDevelopment::Events::LeftAssessmentCycle,
       PersonDevelopment::Events::SelfRated,
       PersonDevelopment::Events::SelfRatingRevised,
       PersonDevelopment::Events::SelfRatingCleared,
@@ -41,8 +51,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::PersonAssignedToFramework then handle_assigned(event)
     when PersonDevelopment::Events::PersonRoleChanged then handle_role_changed(event)
     when PersonDevelopment::Events::PersonLevelChanged then handle_level_changed(event)
-    when PersonDevelopment::Events::AssessmentCycleOpened then handle_cycle_opened(event)
-    when PersonDevelopment::Events::AssessmentCycleCompleted then handle_cycle_completed(event)
+    when PersonDevelopment::Events::JoinedAssessmentCycle then handle_joined_cycle(event)
+    when PersonDevelopment::Events::LeftAssessmentCycle then handle_left_cycle(event)
     when PersonDevelopment::Events::SelfRated then handle_self_rated(event)
     when PersonDevelopment::Events::SelfRatingRevised then handle_self_rating_revised(event)
     when PersonDevelopment::Events::SelfRatingCleared then handle_self_rating_cleared(event)
@@ -81,22 +91,17 @@ class PersonDevelopment::Projections::CurrentAssessment
     assignment.update!(level_id: event.data[:new_level_id])
   end
 
-  def handle_cycle_opened(event)
-    assignment = find_assignment(event)
-    return unless assignment
-
-    assignment.update!(
-      current_cycle_id: event.data[:cycle_id],
-      cycle_status: "open",
-      cycle_name: event.data[:cycle_name]
-    )
+  # Join/leave events are informational on the PersonDev stream — the
+  # authoritative participant row is maintained by
+  # {AssessmentCycles::Projections::CurrentState} via its own event
+  # subscriptions. These handlers intentionally do not write to any
+  # read model.
+  def handle_joined_cycle(_event)
+    # no-op
   end
 
-  def handle_cycle_completed(event)
-    assignment = find_assignment(event)
-    return unless assignment
-
-    assignment.update!(cycle_status: "completed")
+  def handle_left_cycle(_event)
+    # no-op
   end
 
   def handle_self_rated(event)
@@ -105,6 +110,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    touch_participant_started(event)
     broadcast_assessment_sync(event)
   end
 
@@ -114,6 +120,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    touch_participant_started(event)
     broadcast_assessment_sync(event)
   end
 
@@ -131,6 +138,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_comment = event.data[:comment]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    touch_participant_started(event)
     broadcast_assessment_sync(event)
   end
 
@@ -140,6 +148,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_comment = event.data[:comment]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    touch_participant_started(event)
     broadcast_assessment_sync(event)
   end
 
@@ -157,16 +166,18 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.aligned_comment = event.data[:comment]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    mark_participant_aligned(event)
     broadcast_assessment_sync(event)
   end
 
-  # Finds or initialises an AssessmentLevelRating for the (person, framework,
-  # capability_stable_id, level_ordinal) composite key.
+  # Finds or initialises an AssessmentLevelRating for the (cycle, person,
+  # framework, capability_stable_id, level_ordinal) composite key.
   #
   # @param event [RubyEventStore::Event]
   # @return [AssessmentLevelRating]
   def find_or_init_rating(event)
     AssessmentLevelRating.find_or_initialize_by(
+      cycle_id: event.data[:cycle_id],
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
       capability_stable_id: event.data[:capability_stable_id],
@@ -182,6 +193,43 @@ class PersonDevelopment::Projections::CurrentAssessment
     PersonFrameworkAssignment.find_by(
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id]
+    )
+  end
+
+  # Sets the participant's started_at if not already set.
+  #
+  # @param event [RubyEventStore::Event] a rating event carrying cycle_id
+  def touch_participant_started(event)
+    participant = AssessmentCycleParticipant.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    )
+    return unless participant
+    return if participant.started_at.present?
+
+    now = event.metadata[:timestamp] || Time.current
+    participant.update_columns(
+      started_at: now,
+      status: "started",
+      updated_at: now
+    )
+  end
+
+  # Marks the participant as aligned.
+  #
+  # @param event [RubyEventStore::Event]
+  def mark_participant_aligned(event)
+    participant = AssessmentCycleParticipant.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    )
+    return unless participant
+
+    now = event.metadata[:timestamp] || Time.current
+    participant.update!(
+      status: "aligned",
+      aligned_at: now,
+      started_at: participant.started_at || now
     )
   end
 

@@ -13,6 +13,9 @@
 #   EventStreamNaming.person_development_stream("person-uuid", "fw-uuid")
 #   # => "tenant-<tenant-uuid>/PersonDev-person-uuid-fw-uuid"
 #
+#   EventStreamNaming.assessment_cycle_stream("cycle-uuid")
+#   # => "tenant-<tenant-uuid>/AssessmentCycle-cycle-uuid"
+#
 module EventStreamNaming
   # Returns the stream name for a Framework aggregate.
   #
@@ -33,6 +36,16 @@ module EventStreamNaming
   # @raise [ArgumentError] if no tenant context is available
   def self.person_development_stream(person_id, framework_id, tenant: ActsAsTenant.current_tenant)
     "#{tenant_prefix(tenant)}/PersonDev-#{person_id}-#{framework_id}"
+  end
+
+  # Returns the stream name for an AssessmentCycle aggregate.
+  #
+  # @param cycle_id [String] the cycle's UUID
+  # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
+  # @return [String] the tenant-namespaced stream name
+  # @raise [ArgumentError] if no tenant context is available
+  def self.assessment_cycle_stream(cycle_id, tenant: ActsAsTenant.current_tenant)
+    "#{tenant_prefix(tenant)}/AssessmentCycle-#{cycle_id}"
   end
 
   # Extracts the tenant ID from a stream name.

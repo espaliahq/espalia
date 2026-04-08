@@ -49,20 +49,21 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, 2,
         "Synthesises information from multiple sources")
 
-      # Assign the report to the framework and open a cycle
+      # Assign the report to the framework and enrol them in a cycle
       level = FrameworkState::Level.find_by!(level_id: @level2_id)
       pd_handler.assign_to_framework(@report.id, @framework_id, @role_id, level.level_id)
-      pd_handler.open_assessment_cycle(
-        @report.id, @framework_id,
-        SecureRandom.uuid_v7, "Q1 2026 Review", "regular", 1
-      )
+
+      cycle_handler = AssessmentCycles::CommandHandler.new
+      @cycle_id = SecureRandom.uuid_v7
+      cycle_handler.define_cycle(@cycle_id, @framework_id, "Q1 2026 Review", "regular", 1, defined_by: @manager.id)
+      cycle_handler.enroll(@cycle_id, @report.id, enrolled_by: @manager.id)
 
       @report_assignment = PersonFrameworkAssignment.for_person(@report.id).first
 
       # Pre-rate a capability as the report (self-rating)
       pd_handler.rate_self(
         @report.id, @framework_id, @cap_stable,
-        level_ordinal: 2, frequency: "occasional", comment: "Self-rated"
+        level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id, comment: "Self-rated"
       )
     end
 
@@ -201,7 +202,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.rate_self(
           @report.id, @framework_id, @cap_stable,
-          level_ordinal: 1, frequency: "consistent", comment: "From other session"
+          level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id, comment: "From other session"
         )
       end
 
