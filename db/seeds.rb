@@ -63,6 +63,9 @@ end
 # Seed framework data (must run BEFORE HRIS sync so Pass 5 has a framework to assign to)
 Rake::Task["frameworks:seed_meandu"].invoke
 
+# Seed assessment data (person assignment + open cycle)
+Rake::Task["assessments:seed"].invoke
+
 # Seed HRIS config for me&u tenant
 meandu = Tenant.find_by(slug: "meandu")
 if meandu && Rails.application.credentials.dig(:hris, :hibob, :meandu)
@@ -164,6 +167,3 @@ if meandu && Rails.application.credentials.dig(:hris, :hibob, :meandu)
 else
   puts "Skipping HiBob HRIS config (no credentials in Rails credentials file)"
 end
-
-# Seed assessment data (person assignment + open cycle)
-Rake::Task["assessments:seed"].invoke
