@@ -7,13 +7,15 @@ class Views::Assessments::IndexView < Views::Base
   # @param assignments [Array<PersonFrameworkAssignment>] own assignments
   # @param report_assignments [Array<PersonFrameworkAssignment>] direct reports
   # @param report_people [Hash{String => Person}] preloaded person records by ID
+  # @param open_cycles [Hash{Array(String, String) => AssessmentCycle}] preloaded open cycles keyed by [framework_id, person_id]
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignments:, report_assignments: [], report_people: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignments:, report_assignments: [], report_people: {}, open_cycles: {}, user: nil, current_tenant: nil, tenants: [])
     @assignments = assignments
     @report_assignments = report_assignments
     @report_people = report_people
+    @open_cycles = open_cycles
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -64,7 +66,7 @@ class Views::Assessments::IndexView < Views::Base
 
   def report_assignment_card(assignment)
     person = @report_people[assignment.person_id]
-    cycle = assignment.current_open_cycle
+    cycle = @open_cycles[[ assignment.framework_id, assignment.person_id ]]
 
     div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 p-5 shadow-xs") do
@@ -105,7 +107,7 @@ class Views::Assessments::IndexView < Views::Base
   end
 
   def assignment_card(assignment)
-    cycle = assignment.current_open_cycle
+    cycle = @open_cycles[[ assignment.framework_id, assignment.person_id ]]
 
     div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 p-5 shadow-xs") do

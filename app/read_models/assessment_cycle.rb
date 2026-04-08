@@ -42,6 +42,33 @@ class AssessmentCycle < ApplicationRecord
   scope :closed_cycles, -> { where(status: "closed") }
   scope :for_framework, ->(framework_id) { where(framework_id: framework_id) }
 
+  # Returns a map of [framework_id, person_id] => open AssessmentCycle for the
+  # given assignment pairs. Used to batch-load cycles for the assessments index
+  # view rather than calling PersonFrameworkAssignment#current_open_cycle per row
+  # (N+1 avoidance).
+  #
+  # Pivots through AssessmentCycleParticipant so we can reuse its `.active`
+  # scope and eager-load the cycle in a single query.
+  #
+  # @param assignment_pairs [Array<Array(String, String)>] [framework_id, person_id] pairs
+  # @return [Hash{Array(String, String) => AssessmentCycle}]
+  def self.open_cycles_for(assignment_pairs)
+    return {} if assignment_pairs.empty?
+
+    framework_ids = assignment_pairs.map(&:first).uniq
+    person_ids = assignment_pairs.map(&:last).uniq
+
+    AssessmentCycleParticipant
+      .active
+      .where(person_id: person_ids)
+      .eager_load(:cycle)
+      .where(assessment_cycles: { framework_id: framework_ids, status: "open" })
+      .each_with_object({}) do |participant, map|
+        cycle = participant.cycle
+        map[[ cycle.framework_id, participant.person_id ]] = cycle
+      end
+  end
+
   # Whether this cycle is currently open.
   #
   # @return [Boolean]

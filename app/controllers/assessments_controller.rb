@@ -18,10 +18,16 @@ class AssessmentsController < ApplicationController
       .includes(:framework, :role, :level)
     @report_assignments = load_report_assignments
     @report_people = Person.where(id: @report_assignments.map(&:person_id)).index_by(&:id)
+
+    all_assignments = @own_assignments.to_a + @report_assignments.to_a
+    cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
+    @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
+
     render Views::Assessments::IndexView.new(
       assignments: @own_assignments,
       report_assignments: @report_assignments,
       report_people: @report_people,
+      open_cycles: @open_cycles,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants

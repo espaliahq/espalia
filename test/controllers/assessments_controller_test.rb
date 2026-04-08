@@ -56,6 +56,51 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       get assessments_path
       assert_redirected_to new_user_session_path
     end
+
+    should "issue a bounded number of cycle queries regardless of assignment count" do
+      # Seed multiple direct reports and enroll them all in the existing
+      # framework cycle so the index renders several assignment cards,
+      # each with an open cycle. Without batch loading this would trigger
+      # one cycle lookup per card (N+1).
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = @person
+        handler = PersonDevelopment::CommandHandler.new
+        cycle_handler = AssessmentCycles::CommandHandler.new
+
+        3.times do |i|
+          report_user = create(:user, password: "password123")
+          report = create(:person,
+            tenant: @tenant, email: report_user.email, name: "Report #{i}", manager: manager)
+          create(:tenant_user, tenant: @tenant, user: report_user, person: report)
+          handler.assign_to_framework(
+            report.id, @framework.framework_id, @role.role_id, @level.level_id
+          )
+          cycle_handler.enroll(@cycle_id, report.id)
+        end
+      end
+
+      sign_in @user
+
+      queries = []
+      callback = ->(_n, _s, _f, _i, payload) do
+        queries << payload[:sql] unless payload[:name] == "SCHEMA" || payload[:sql] =~ /SAVEPOINT/
+      end
+
+      ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+        get assessments_path
+      end
+      assert_response :success
+
+      # The old N+1 pattern issued one `SELECT ... FROM "assessment_cycles" ...`
+      # per rendered assignment card (via PersonFrameworkAssignment#current_open_cycle).
+      # The batch preload uses `FROM "assessment_cycle_participants" LEFT OUTER JOIN
+      # "assessment_cycles"`, so queries with `FROM "assessment_cycles"` as the primary
+      # table should be zero. Policy scalar queries join THROUGH assessment_cycles but
+      # SELECT FROM person_framework_assignments, so they don't match either.
+      primary_cycle_queries = queries.select { |q| q =~ /FROM "assessment_cycles"/ }
+      assert_equal 0, primary_cycle_queries.size,
+        "expected 0 per-assignment cycle queries, got #{primary_cycle_queries.size}: #{primary_cycle_queries.inspect}"
+    end
   end
 
   context "GET /assessments/:id" do
