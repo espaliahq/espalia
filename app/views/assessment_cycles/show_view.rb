@@ -107,8 +107,20 @@ class Views::AssessmentCycles::ShowView < Views::Base
           meta_row("Framework", framework_label)
           meta_row("Framework version", "v#{@cycle.framework_version}")
           meta_row("Cycle type", CYCLE_TYPE_LABELS.fetch(@cycle.cycle_type, @cycle.cycle_type))
-          meta_row("Opened at", @cycle.opened_at.to_fs(:long))
-          meta_row("Closed at", @cycle.closed_at.to_fs(:long)) if @cycle.closed_at
+          div do
+            dt(class: "text-gray-500 dark:text-gray-400") { "Opened at" }
+            dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
+              local_time(@cycle.opened_at)
+            end
+          end
+          if @cycle.closed_at
+            div do
+              dt(class: "text-gray-500 dark:text-gray-400") { "Closed at" }
+              dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
+                local_time(@cycle.closed_at)
+              end
+            end
+          end
         end
       end
     end
@@ -176,10 +188,18 @@ class Views::AssessmentCycles::ShowView < Views::Base
         )
       end
       td(class: "py-2 text-gray-500 dark:text-gray-400") do
-        plain participant.enrolled_at&.to_fs(:short) || "—"
+        if participant.enrolled_at
+          local_time(participant.enrolled_at)
+        else
+          plain "—"
+        end
       end
       td(class: "py-2 text-gray-500 dark:text-gray-400") do
-        plain participant.aligned_at&.to_fs(:short) || "—"
+        if participant.aligned_at
+          local_time(participant.aligned_at)
+        else
+          plain "—"
+        end
       end
       if @is_admin && @cycle.open? && participant.status != "withdrawn"
         td(class: "py-2 text-right") { unenroll_button(participant) }
@@ -207,10 +227,13 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def enroll_card
     div(class: "mt-6") do
-      render Components::Kit::Card.new(title: "Enroll a person") do |card|
+      render Components::Kit::Card.new(title: "Enroll participants") do |card|
         card.body do
           if @eligible_people.any?
-            enroll_form
+            div(class: "space-y-4") do
+              enroll_form
+              bulk_enroll_form
+            end
           else
             p(class: "text-sm text-gray-500 dark:text-gray-400") do
               "No eligible people — everyone assigned to this framework is already enrolled."
@@ -218,6 +241,25 @@ class Views::AssessmentCycles::ShowView < Views::Base
           end
         end
       end
+    end
+  end
+
+  def bulk_enroll_form
+    form(
+      action: bulk_assessment_cycle_enrollments_path(@cycle),
+      method: "post",
+      class: "flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700",
+      data: { turbo_confirm: "Enroll all #{@eligible_people.size} eligible #{'person'.pluralize(@eligible_people.size)}?" }
+    ) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      p(class: "text-sm text-gray-500 dark:text-gray-400") do
+        "Enroll everyone assigned to this framework in one go."
+      end
+      button(
+        type: "submit",
+        class: "inline-flex items-center rounded-md bg-gray-800 hover:bg-gray-900 " \
+               "px-3 py-2 text-sm font-semibold text-white shadow-xs transition-colors"
+      ) { "Enroll all #{@eligible_people.size}" }
     end
   end
 

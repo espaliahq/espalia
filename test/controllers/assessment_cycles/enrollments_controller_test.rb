@@ -25,10 +25,17 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
       @level = create(:framework_level, role_id: @role.role_id, ordinal: 2, title: "Mid", code: "E2")
 
       @assigned_person = create(:person, tenant: @tenant, name: "Assigned", email: "assigned@example.com")
+      @other_assigned = create(:person, tenant: @tenant, name: "Other", email: "other@example.com")
       @unassigned_person = create(:person, tenant: @tenant, name: "Unassigned", email: "unassigned@example.com")
 
+      # Both assignments must happen BEFORE the cycle is defined, otherwise
+      # AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments would fire
+      # and auto-enroll them — leaving zero eligible people for bulk tests.
       PersonDevelopment::CommandHandler.new.assign_to_framework(
         @assigned_person.id, @framework_id, @role.role_id, @level.level_id
+      )
+      PersonDevelopment::CommandHandler.new.assign_to_framework(
+        @other_assigned.id, @framework_id, @role.role_id, @level.level_id
       )
 
       @cycle_id = SecureRandom.uuid_v7
@@ -72,6 +79,50 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
       end
     end
 
+    context "POST enrollments/bulk" do
+      should "enroll every eligible person and report the count" do
+        sign_in @admin_user
+        assert_difference -> { AssessmentCycleParticipant.where(cycle_id: @cycle_id).count }, 2 do
+          post bulk_assessment_cycle_enrollments_path(@cycle)
+        end
+        assert_redirected_to assessment_cycle_path(@cycle)
+        follow_redirect!
+        assert_match(/Enrolled 2 people/, flash[:notice].to_s)
+
+        ActsAsTenant.with_tenant(@tenant) do
+          assert AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @assigned_person.id)
+          assert AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @other_assigned.id)
+        end
+      end
+
+      should "skip already-enrolled people without erroring" do
+        ActsAsTenant.with_tenant(@tenant) do
+          AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @assigned_person.id)
+        end
+
+        sign_in @admin_user
+        assert_difference -> { AssessmentCycleParticipant.where(cycle_id: @cycle_id).count }, 1 do
+          post bulk_assessment_cycle_enrollments_path(@cycle)
+        end
+        follow_redirect!
+        assert_match(/Enrolled 1 person/, flash[:notice].to_s)
+      end
+
+      should "report no eligible people when everyone is enrolled" do
+        ActsAsTenant.with_tenant(@tenant) do
+          AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @assigned_person.id)
+          AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @other_assigned.id)
+        end
+
+        sign_in @admin_user
+        assert_no_difference -> { AssessmentCycleParticipant.where(cycle_id: @cycle_id).count } do
+          post bulk_assessment_cycle_enrollments_path(@cycle)
+        end
+        follow_redirect!
+        assert_match(/No eligible people/, flash[:alert].to_s)
+      end
+    end
+
     context "DELETE enrollments/:id" do
       setup do
         ActsAsTenant.with_tenant(@tenant) do
@@ -102,6 +153,13 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         enrollment: { person_id: @assigned_person.id }
       }
       assert_redirected_to root_path
+    end
+
+    should "deny POST enrollments/bulk" do
+      sign_in @member_user
+      post bulk_assessment_cycle_enrollments_path(@cycle)
+      assert_redirected_to root_path
+      assert_equal 0, AssessmentCycleParticipant.where(cycle_id: @cycle_id).count
     end
 
     should "deny DELETE enrollments" do

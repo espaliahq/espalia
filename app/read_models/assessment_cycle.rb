@@ -82,4 +82,20 @@ class AssessmentCycle < ApplicationRecord
   def closed?
     status == "closed"
   end
+
+  # People who can be enrolled in this cycle: anyone assigned to the
+  # framework who is not already an active participant. Ordered by name
+  # for stable display in the admin UI.
+  #
+  # @return [ActiveRecord::Relation<Person>]
+  def eligible_people
+    return Person.none if framework_id.blank?
+
+    assigned_ids = PersonFrameworkAssignment
+      .where(framework_id: framework_id)
+      .pluck(:person_id)
+    active_participant_ids = participants.active.pluck(:person_id)
+
+    Person.where(id: assigned_ids - active_participant_ids).order(:name)
+  end
 end

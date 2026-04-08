@@ -126,7 +126,8 @@ class Views::AssessmentCycles::IndexView < Views::Base
           end
 
           div(class: "mt-3 text-xs text-gray-500 dark:text-gray-400") do
-            plain "Opened #{cycle.opened_at.to_fs(:long)}"
+            plain "Opened "
+            local_time(cycle.opened_at)
           end
         end
       end

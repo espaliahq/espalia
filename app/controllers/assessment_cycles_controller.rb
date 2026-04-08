@@ -42,12 +42,11 @@ class AssessmentCyclesController < ApplicationController
 
     @cycle.participants.includes(:person).load
     framework = FrameworkState::Framework.find_by(framework_id: @cycle.framework_id)
-    eligible_people = eligible_people_for_enrollment(framework)
 
     render Views::AssessmentCycles::ShowView.new(
       cycle: @cycle,
       framework: framework,
-      eligible_people: eligible_people,
+      eligible_people: @cycle.eligible_people.to_a,
       is_admin: policy(@cycle).enroll?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -137,23 +136,6 @@ class AssessmentCyclesController < ApplicationController
     FrameworkState::Framework
       .where.not(framework_id: open_ids)
       .order(:name)
-  end
-
-  # People who can be enrolled in this cycle: assigned to the framework and
-  # not yet an active participant.
-  #
-  # @param framework [FrameworkState::Framework, nil]
-  # @return [Array<Person>]
-  def eligible_people_for_enrollment(framework)
-    return [] unless framework&.framework_id
-
-    assigned_ids = PersonFrameworkAssignment
-      .where(framework_id: framework.framework_id)
-      .pluck(:person_id)
-
-    active_participant_ids = @cycle.participants.active.pluck(:person_id)
-
-    Person.where(id: assigned_ids - active_participant_ids).order(:name).to_a
   end
 
   def current_user_tenants

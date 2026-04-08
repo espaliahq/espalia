@@ -38,6 +38,41 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
     redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: e.message
   end
 
+  # POST /assessment_cycles/:assessment_cycle_id/enrollments/bulk
+  #
+  # Enrolls every person currently eligible for this cycle (assigned to the
+  # framework and not yet an active participant). Each enrollment runs in
+  # its own transaction so a domain failure on one person — e.g. a race
+  # with another admin enrolling the same person — does not block the rest.
+  def bulk
+    authorize @cycle, :enroll?
+
+    enrolled = 0
+    skipped = 0
+    command_handler = AssessmentCycles::CommandHandler.new
+
+    @cycle.eligible_people.find_each do |person|
+      ActiveRecord::Base.transaction do
+        command_handler.enroll(
+          @cycle.cycle_id, person.id, enrolled_by: current_person&.id
+        )
+      end
+      enrolled += 1
+    rescue RuntimeError
+      skipped += 1
+    end
+
+    if enrolled.zero? && skipped.zero?
+      flash[:alert] = "No eligible people to enroll."
+    else
+      message = "Enrolled #{enrolled} #{'person'.pluralize(enrolled)}."
+      message += " Skipped #{skipped}." if skipped.positive?
+      flash[enrolled.positive? ? :notice : :alert] = message
+    end
+
+    redirect_to assessment_cycle_path(@cycle)
+  end
+
   # DELETE /assessment_cycles/:assessment_cycle_id/enrollments/:id
   def destroy
     authorize @cycle, :unenroll?

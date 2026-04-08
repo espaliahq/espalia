@@ -43,7 +43,11 @@ Rails.application.routes.draw do
       post :close
     end
     resources :enrollments, only: [ :create, :destroy ],
-                            controller: "assessment_cycles/enrollments"
+                            controller: "assessment_cycles/enrollments" do
+      collection do
+        post :bulk
+      end
+    end
   end
 
   resources :integrations, only: [ :index, :show ] do
