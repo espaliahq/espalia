@@ -90,13 +90,12 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
     should "only show selected role illustrations in expanded cells" do
       # Visit with only Product Designer selected
       visit framework_path(@framework_id, roles: [ @pd_role_id ])
-      wait_for_stimulus "matrix"
 
-      # Expand the capability row by clicking it
-      find("[data-capability-id]", match: :first).click
-
-      # Wait for Stimulus to toggle the expanded row visible
-      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
+      # Expand the single capability row via the CI-resilient toggle helper.
+      # A bare find(...).click was silently dropped on slow CI runners when
+      # Chrome's JS event loop was starved; the helper retries once if the
+      # click was lost and asserts the expanded row becomes visible.
+      expand_matrix_row("tr[data-matrix-target='row']")
 
       # Should see PD illustration
       assert_text "Runs user research sessions"
