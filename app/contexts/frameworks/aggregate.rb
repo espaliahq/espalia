@@ -645,6 +645,74 @@ class Frameworks::Aggregate
     }.compact))
   end
 
+  # Suggests creating a new framework entity. The target entity does not yet
+  # exist; proposed_attributes carries the data needed to construct it on
+  # approval. parent_id identifies the entity the new one would nest under
+  # (e.g. expectation_id for an illustration, category_id for a capability).
+  #
+  # On approval, dispatches the matching add_* command on the aggregate. For
+  # shape-changing entities (capability, level, behavioural_expectation), that
+  # command's draft guard fires if no draft is in progress.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity to create (e.g. "capability")
+  # @param proposed_attributes [Hash] attributes for the new entity
+  # @param parent_id [String, nil] UUID of the parent entity, nil for framework-level entities
+  # @param author_id [String] UUID of the user
+  # @param rationale [String, nil] optional explanation
+  # @raise [RuntimeError] if framework not created, parent not found, suggestion exists,
+  #   entity type unknown, or proposed_attributes missing required keys
+  def suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
+                     parent_id:, author_id:, rationale: nil)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
+    raise_unless_parent_exists!(target_entity_type, parent_id)
+    validate_proposed_attributes!(target_entity_type, proposed_attributes)
+
+    apply(Frameworks::Events::EntityCreationSuggested.new(data: {
+      framework_id: framework_id,
+      suggestion_id: suggestion_id,
+      target_entity_type: target_entity_type,
+      proposed_attributes: proposed_attributes,
+      parent_id: parent_id,
+      author_id: author_id,
+      rationale: rationale
+    }.compact))
+  end
+
+  # Suggests deleting (or archiving) an existing framework entity.
+  #
+  # On approval, dispatches the matching destructive command on the aggregate
+  # (archive_capability for "capability", remove_role_illustration for
+  # "role_illustration"). Only entity types with available delete commands are
+  # accepted — proposing the deletion of a role/level/role_family raises here.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity (e.g. "capability")
+  # @param target_entity_id [String] UUID of the entity to delete
+  # @param author_id [String] UUID of the user
+  # @param rationale [String, nil] optional explanation
+  # @raise [RuntimeError] if framework not created, entity not found, suggestion exists,
+  #   or no delete command exists for this entity type
+  def suggest_delete(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                     author_id:, rationale: nil)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
+    raise_unless_entity_exists!(target_entity_type, target_entity_id)
+    raise_unless_deletable!(target_entity_type)
+
+    apply(Frameworks::Events::EntityDeletionSuggested.new(data: {
+      framework_id: framework_id,
+      suggestion_id: suggestion_id,
+      target_entity_type: target_entity_type,
+      target_entity_id: target_entity_id,
+      author_id: author_id,
+      rationale: rationale
+    }.compact))
+  end
+
   # Amends the author's own pending suggestion.
   #
   # @param suggestion_id [String] UUID of the suggestion
@@ -684,20 +752,13 @@ class Frameworks::Aggregate
       comment: comment
     }.compact))
 
-    apply_suggested_content_change(suggestion)
-
-    # Auto-reject competing pending suggestions on the same field
-    @pending_edits.each_value do |competing|
-      next if competing[:suggestion_id] == suggestion_id
-      next unless competing[:target_entity_id] == suggestion[:target_entity_id]
-      next unless competing[:field] == suggestion[:field]
-
-      apply(Frameworks::Events::SuggestionRejected.new(data: {
-        suggestion_id: competing[:suggestion_id],
-        reviewer_id: reviewer_id,
-        comment: "Superseded by approved suggestion"
-      }))
+    case suggestion[:kind]
+    when :create then apply_suggested_creation(suggestion)
+    when :delete then apply_suggested_deletion(suggestion)
+    else              apply_suggested_content_change(suggestion)
     end
+
+    auto_reject_competing_suggestions(suggestion, reviewer_id)
   end
 
   # Rejects a pending suggestion.
@@ -1030,11 +1091,33 @@ class Frameworks::Aggregate
 
   on Frameworks::Events::EditSuggested do |event|
     @pending_edits[event.data[:suggestion_id]] = {
+      kind: :edit,
       suggestion_id: event.data[:suggestion_id],
       target_entity_type: event.data[:target_entity_type],
       target_entity_id: event.data[:target_entity_id],
       field: event.data[:field],
       suggested_value: event.data[:suggested_value],
+      author_id: event.data[:author_id]
+    }
+  end
+
+  on Frameworks::Events::EntityCreationSuggested do |event|
+    @pending_edits[event.data[:suggestion_id]] = {
+      kind: :create,
+      suggestion_id: event.data[:suggestion_id],
+      target_entity_type: event.data[:target_entity_type],
+      proposed_attributes: event.data[:proposed_attributes],
+      parent_id: event.data[:parent_id],
+      author_id: event.data[:author_id]
+    }
+  end
+
+  on Frameworks::Events::EntityDeletionSuggested do |event|
+    @pending_edits[event.data[:suggestion_id]] = {
+      kind: :delete,
+      suggestion_id: event.data[:suggestion_id],
+      target_entity_type: event.data[:target_entity_type],
+      target_entity_id: event.data[:target_entity_id],
       author_id: event.data[:author_id]
     }
   end
@@ -1203,6 +1286,197 @@ class Frameworks::Aggregate
       raise "Level #{entity_id} not found" unless @levels.key?(entity_id)
     else
       raise "Unknown entity type: #{entity_type}"
+    end
+  end
+
+  # Raises unless the parent entity for a creation suggestion exists.
+  #
+  # Framework-level entities (role_family, capability_category) have no
+  # parent — parent_id is allowed to be nil for those.
+  #
+  # @param entity_type [String]
+  # @param parent_id [String, nil]
+  # @raise [RuntimeError] if parent not found or entity type unknown
+  def raise_unless_parent_exists!(entity_type, parent_id) # rubocop:disable Metrics/CyclomaticComplexity
+    case entity_type
+    when "role_illustration"
+      raise "Expectation #{parent_id} not found" unless @expectations.key?(parent_id)
+    when "behavioural_expectation"
+      raise "Capability #{parent_id} not found" unless @capabilities.key?(parent_id)
+    when "capability"
+      raise "Category #{parent_id} not found" unless @capability_categories.key?(parent_id)
+    when "role"
+      raise "Role family #{parent_id} not found" unless @role_families.key?(parent_id)
+    when "level"
+      raise "Role #{parent_id} not found" unless @roles.key?(parent_id)
+    when "capability_category", "role_family"
+      # Framework-level entities — no parent required.
+      nil
+    else
+      raise "Unknown entity type: #{entity_type}"
+    end
+  end
+
+  REQUIRED_CREATION_KEYS = {
+    "role_illustration" => %i[role_id description],
+    "behavioural_expectation" => %i[level_ordinal description],
+    "capability" => %i[name],
+    "capability_category" => %i[name],
+    "role" => %i[name code track],
+    "role_family" => %i[name],
+    "level" => %i[ordinal title code]
+  }.freeze
+
+  # Validates the proposed_attributes hash for a creation suggestion has the
+  # keys required to dispatch the matching add_* command on approval.
+  #
+  # Does NOT pre-validate semantics (uniqueness, allowed values) — that runs
+  # when the command actually executes after approval.
+  #
+  # @param entity_type [String]
+  # @param attrs [Hash]
+  # @raise [RuntimeError] if entity type unknown or required keys missing
+  def validate_proposed_attributes!(entity_type, attrs)
+    required = REQUIRED_CREATION_KEYS[entity_type]
+    raise "Unknown entity type: #{entity_type}" if required.nil?
+
+    attrs ||= {}
+    missing = required - attrs.keys.map(&:to_sym)
+    return if missing.empty?
+
+    raise "Missing proposed_attributes for #{entity_type}: #{missing.join(', ')}"
+  end
+
+  DELETABLE_ENTITY_TYPES = %w[role_illustration capability].freeze
+
+  # Raises unless the entity type has a destructive command available.
+  #
+  # @param entity_type [String]
+  # @raise [RuntimeError] if no delete command exists for this type
+  def raise_unless_deletable!(entity_type)
+    return if DELETABLE_ENTITY_TYPES.include?(entity_type)
+
+    raise "Cannot suggest deletion for #{entity_type} — no delete command available"
+  end
+
+  # Dispatches the matching add_* command for an approved creation suggestion.
+  #
+  # New entity ids (and stable_ids where required) are generated here, since
+  # the suggestion deliberately does not pre-allocate them.
+  #
+  # @param suggestion [Hash] pending_edits entry with kind: :create
+  # @raise [RuntimeError] if the entity type is not supported
+  def apply_suggested_creation(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+    type = suggestion[:target_entity_type]
+    attrs = (suggestion[:proposed_attributes] || {}).transform_keys(&:to_sym)
+    parent_id = suggestion[:parent_id]
+
+    case type
+    when "role_illustration"
+      add_role_illustration(@framework_id,
+                            SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                            parent_id, attrs[:role_id],
+                            attrs[:ordinal] || next_illustration_ordinal(parent_id, attrs[:role_id]),
+                            attrs[:description])
+    when "behavioural_expectation"
+      set_behavioural_expectation(@framework_id,
+                                  SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                  parent_id, attrs[:level_ordinal], attrs[:description])
+    when "capability"
+      add_capability(@framework_id,
+                     SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                     parent_id, attrs[:name], description: attrs[:description])
+    when "capability_category"
+      add_capability_category(@framework_id, SecureRandom.uuid_v7,
+                              attrs[:name], description: attrs[:description], ordinal: attrs[:ordinal])
+    when "role"
+      add_role(@framework_id, SecureRandom.uuid_v7, parent_id,
+               attrs[:name], attrs[:code], attrs[:track])
+    when "role_family"
+      add_role_family(@framework_id, SecureRandom.uuid_v7,
+                      attrs[:name], description: attrs[:description])
+    when "level"
+      add_level(@framework_id, SecureRandom.uuid_v7, parent_id,
+                attrs[:ordinal], attrs[:title], attrs[:code], is_entry: attrs.fetch(:is_entry, false))
+    else
+      raise "Unsupported creation target: #{type}"
+    end
+  end
+
+  # Dispatches the matching destructive command for an approved deletion suggestion.
+  #
+  # @param suggestion [Hash] pending_edits entry with kind: :delete
+  # @raise [RuntimeError] if the entity type is not supported
+  def apply_suggested_deletion(suggestion)
+    type = suggestion[:target_entity_type]
+    entity_id = suggestion[:target_entity_id]
+    rationale_tag = "Applied via approved suggestion #{suggestion[:suggestion_id]}"
+
+    case type
+    when "role_illustration"
+      remove_role_illustration(@framework_id, entity_id, reason: rationale_tag)
+    when "capability"
+      archive_capability(@framework_id, entity_id, reason: rationale_tag)
+    else
+      raise "Unsupported deletion target: #{type}"
+    end
+  end
+
+  # Returns the next ordinal for a new illustration on the given expectation
+  # and role. Used by suggest_create when ordinal isn't specified in
+  # proposed_attributes.
+  #
+  # @param expectation_id [String]
+  # @param role_id [String]
+  # @return [Integer]
+  def next_illustration_ordinal(expectation_id, role_id)
+    siblings = @illustrations.values.select do |i|
+      i[:expectation_id] == expectation_id && i[:role_id] == role_id
+    end
+    (siblings.map { |i| i[:ordinal] || 0 }.max || 0) + 1
+  end
+
+  # Auto-rejects pending suggestions superseded by an approved one.
+  #
+  # - approving an :edit rejects edits on the same entity_id + same field
+  # - approving a :delete rejects all edits and deletes on the same entity
+  #   (the entity is going away — pending edits are moot)
+  # - approving a :create does not auto-reject anything (different entities)
+  #
+  # @param approved [Hash] the just-approved pending_edits entry
+  # @param reviewer_id [String]
+  def auto_reject_competing_suggestions(approved, reviewer_id)
+    return if approved[:kind] == :create
+
+    @pending_edits.each_value do |competing|
+      next if competing[:suggestion_id] == approved[:suggestion_id]
+      next unless competing_supersedes?(approved, competing)
+
+      apply(Frameworks::Events::SuggestionRejected.new(data: {
+        suggestion_id: competing[:suggestion_id],
+        reviewer_id: reviewer_id,
+        comment: "Superseded by approved suggestion"
+      }))
+    end
+  end
+
+  # Determines whether the approved suggestion supersedes a competing one.
+  #
+  # @param approved [Hash]
+  # @param competing [Hash]
+  # @return [Boolean]
+  def competing_supersedes?(approved, competing)
+    case approved[:kind]
+    when :edit
+      competing[:kind] == :edit &&
+        competing[:target_entity_id] == approved[:target_entity_id] &&
+        competing[:field] == approved[:field]
+    when :delete
+      competing[:kind] != :create &&
+        competing[:target_entity_type] == approved[:target_entity_type] &&
+        competing[:target_entity_id] == approved[:target_entity_id]
+    else
+      false
     end
   end
 end

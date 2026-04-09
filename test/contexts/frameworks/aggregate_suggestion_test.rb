@@ -29,8 +29,10 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
     @author_id = SecureRandom.uuid_v7
     @suggestion_id = SecureRandom.uuid_v7
 
-    # Clear unpublished events accumulated during setup so tests only see new events
-    @aggregate.unpublished_events.to_a
+    # Clear unpublished events accumulated during setup so tests only see new events.
+    # Setting version= is the documented way to drain @unpublished_events on
+    # AggregateRoot — calling .to_a alone does NOT drain the buffer.
+    @aggregate.version = @aggregate.version
   end
 
   # ── suggest_edit ──
@@ -442,6 +444,538 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
 
     should "return tier 3 for behavioural_expectation" do
       assert_equal 3, @aggregate.send(:review_tier, "behavioural_expectation")
+    end
+  end
+
+  # ── suggest_create ──
+
+  context "#suggest_create" do
+    should "emit EntityCreationSuggested for role_illustration" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role_illustration",
+        { role_id: @rid, description: "Mentors others" },
+        parent_id: @eid, author_id: @author_id, rationale: "Worth adding"
+      )
+
+      event = last_event
+      assert_kind_of Frameworks::Events::EntityCreationSuggested, event
+      assert_equal @suggestion_id, event.data[:suggestion_id]
+      assert_equal "role_illustration", event.data[:target_entity_type]
+      assert_equal @eid, event.data[:parent_id]
+      assert_equal @author_id, event.data[:author_id]
+      assert_equal "Worth adding", event.data[:rationale]
+      assert_equal "Mentors others", event.data[:proposed_attributes][:description]
+    end
+
+    should "emit EntityCreationSuggested for behavioural_expectation" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "behavioural_expectation",
+        { level_ordinal: 2, description: "New L2 expectation" },
+        parent_id: @cap_id, author_id: @author_id
+      )
+
+      assert_kind_of Frameworks::Events::EntityCreationSuggested, last_event
+    end
+
+    should "emit EntityCreationSuggested for capability" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "capability",
+        { name: "New Capability" },
+        parent_id: @cat_id, author_id: @author_id
+      )
+
+      assert_kind_of Frameworks::Events::EntityCreationSuggested, last_event
+    end
+
+    should "emit EntityCreationSuggested for capability_category (no parent)" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "capability_category",
+        { name: "Delivery" },
+        parent_id: nil, author_id: @author_id
+      )
+
+      assert_kind_of Frameworks::Events::EntityCreationSuggested, last_event
+    end
+
+    should "emit EntityCreationSuggested for role" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role",
+        { name: "Engineering Manager", code: "EM", track: "management" },
+        parent_id: @rfid, author_id: @author_id
+      )
+
+      assert_kind_of Frameworks::Events::EntityCreationSuggested, last_event
+    end
+
+    should "emit EntityCreationSuggested for role_family (no parent)" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role_family",
+        { name: "Design" },
+        parent_id: nil, author_id: @author_id
+      )
+
+      assert_kind_of Frameworks::Events::EntityCreationSuggested, last_event
+    end
+
+    should "emit EntityCreationSuggested for level" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "level",
+        { ordinal: 2, title: "Mid", code: "E2" },
+        parent_id: @rid, author_id: @author_id
+      )
+
+      assert_kind_of Frameworks::Events::EntityCreationSuggested, last_event
+    end
+
+    should "raise if suggestion_id already exists" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "capability_category",
+        { name: "First" },
+        parent_id: nil, author_id: @author_id
+      )
+
+      assert_raises(RuntimeError, /already exists/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "capability_category",
+          { name: "Second" },
+          parent_id: nil, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if parent expectation does not exist (illustration)" do
+      assert_raises(RuntimeError, /Expectation .* not found/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "role_illustration",
+          { role_id: @rid, description: "x" },
+          parent_id: SecureRandom.uuid_v7, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if parent capability does not exist (expectation)" do
+      assert_raises(RuntimeError, /Capability .* not found/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "behavioural_expectation",
+          { level_ordinal: 1, description: "x" },
+          parent_id: SecureRandom.uuid_v7, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if parent category does not exist (capability)" do
+      assert_raises(RuntimeError, /Category .* not found/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "capability",
+          { name: "x" },
+          parent_id: SecureRandom.uuid_v7, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if parent role family does not exist (role)" do
+      assert_raises(RuntimeError, /Role family .* not found/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "role",
+          { name: "x", code: "X", track: "ic" },
+          parent_id: SecureRandom.uuid_v7, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if parent role does not exist (level)" do
+      assert_raises(RuntimeError, /Role .* not found/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "level",
+          { ordinal: 5, title: "x", code: "X5" },
+          parent_id: SecureRandom.uuid_v7, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise for unknown entity type" do
+      assert_raises(RuntimeError, /Unknown entity type/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "unknown_type",
+          { name: "x" },
+          parent_id: nil, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if proposed_attributes missing required keys for capability" do
+      assert_raises(RuntimeError, /Missing proposed_attributes for capability: name/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "capability",
+          { description: "no name" },
+          parent_id: @cat_id, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if proposed_attributes missing required keys for role" do
+      assert_raises(RuntimeError, /Missing proposed_attributes for role/) do
+        @aggregate.suggest_create(
+          @framework_id, @suggestion_id,
+          "role",
+          { name: "Manager" },
+          parent_id: @rfid, author_id: @author_id
+        )
+      end
+    end
+  end
+
+  # ── suggest_delete ──
+
+  context "#suggest_delete" do
+    should "emit EntityDeletionSuggested for role_illustration" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "role_illustration", @ill_id,
+        author_id: @author_id, rationale: "Outdated"
+      )
+
+      event = last_event
+      assert_kind_of Frameworks::Events::EntityDeletionSuggested, event
+      assert_equal "role_illustration", event.data[:target_entity_type]
+      assert_equal @ill_id, event.data[:target_entity_id]
+      assert_equal "Outdated", event.data[:rationale]
+    end
+
+    should "emit EntityDeletionSuggested for capability" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "capability", @cap_id,
+        author_id: @author_id
+      )
+
+      assert_kind_of Frameworks::Events::EntityDeletionSuggested, last_event
+    end
+
+    should "raise if suggestion_id already exists" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "role_illustration", @ill_id, author_id: @author_id
+      )
+
+      assert_raises(RuntimeError, /already exists/) do
+        @aggregate.suggest_delete(
+          @framework_id, @suggestion_id,
+          "role_illustration", @ill_id, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise if entity not found" do
+      assert_raises(RuntimeError, /Illustration .* not found/) do
+        @aggregate.suggest_delete(
+          @framework_id, @suggestion_id,
+          "role_illustration", SecureRandom.uuid_v7, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise for entity type without delete command (role)" do
+      assert_raises(RuntimeError, /no delete command available/) do
+        @aggregate.suggest_delete(
+          @framework_id, @suggestion_id,
+          "role", @rid, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise for entity type without delete command (capability_category)" do
+      assert_raises(RuntimeError, /no delete command available/) do
+        @aggregate.suggest_delete(
+          @framework_id, @suggestion_id,
+          "capability_category", @cat_id, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise for entity type without delete command (level)" do
+      assert_raises(RuntimeError, /no delete command available/) do
+        @aggregate.suggest_delete(
+          @framework_id, @suggestion_id,
+          "level", @lid, author_id: @author_id
+        )
+      end
+    end
+
+    should "raise for entity type without delete command (behavioural_expectation)" do
+      assert_raises(RuntimeError, /no delete command available/) do
+        @aggregate.suggest_delete(
+          @framework_id, @suggestion_id,
+          "behavioural_expectation", @eid, author_id: @author_id
+        )
+      end
+    end
+  end
+
+  # ── approve_suggestion for create ──
+
+  context "#approve_suggestion for create" do
+    setup do
+      @reviewer_id = SecureRandom.uuid_v7
+    end
+
+    should "emit RoleIllustrationAdded with new ids on illustration approval" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role_illustration",
+        { role_id: @rid, description: "Mentors juniors" },
+        parent_id: @eid, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::RoleIllustrationAdded) }
+      assert_not_nil added
+      assert_equal @eid, added.data[:expectation_id]
+      assert_equal @rid, added.data[:role_id]
+      assert_equal "Mentors juniors", added.data[:description]
+      # Aggregate generates a fresh illustration_id and stable_id.
+      assert_not_equal @ill_id, added.data[:illustration_id]
+    end
+
+    should "default ordinal to next-available when not provided" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role_illustration",
+        { role_id: @rid, description: "Another example" },
+        parent_id: @eid, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::RoleIllustrationAdded) }
+      # The setup adds one illustration with ordinal 1, so this one should be 2.
+      assert_equal 2, added.data[:ordinal]
+    end
+
+    should "emit RoleFamilyAdded for role_family creation" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role_family", { name: "Design" },
+        parent_id: nil, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::RoleFamilyAdded) }
+      assert_not_nil added
+      assert_equal "Design", added.data[:name]
+    end
+
+    should "emit RoleAdded for role creation" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role",
+        { name: "EM", code: "EM", track: "management" },
+        parent_id: @rfid, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::RoleAdded) }
+      assert_not_nil added
+      assert_equal @rfid, added.data[:role_family_id]
+      assert_equal "EM", added.data[:code]
+    end
+
+    should "emit CapabilityCategoryAdded for capability_category creation" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "capability_category", { name: "Delivery", description: "Ships things" },
+        parent_id: nil, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::CapabilityCategoryAdded) }
+      assert_not_nil added
+      assert_equal "Delivery", added.data[:name]
+    end
+
+    should "emit CapabilityAdded for capability creation (draft is open)" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "capability", { name: "Resilience" },
+        parent_id: @cat_id, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::CapabilityAdded) }
+      assert_not_nil added
+      assert_equal @cat_id, added.data[:category_id]
+      assert_equal "Resilience", added.data[:name]
+    end
+
+    should "emit LevelAdded for level creation (draft is open)" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "level", { ordinal: 2, title: "Mid", code: "E2" },
+        parent_id: @rid, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::LevelAdded) }
+      assert_not_nil added
+      assert_equal 2, added.data[:ordinal]
+    end
+
+    should "emit BehaviouralExpectationSet for expectation creation (draft is open)" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "behavioural_expectation", { level_ordinal: 2, description: "New L2 thing" },
+        parent_id: @cap_id, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::BehaviouralExpectationSet) }
+      assert_not_nil added
+      assert_equal @cap_id, added.data[:capability_id]
+      assert_equal 2, added.data[:level_ordinal]
+    end
+
+    should "raise on capability creation approval when no draft in progress" do
+      # Close the bootstrap v1 draft so shape-changing commands need a new one.
+      @aggregate.publish_version(@framework_id, SecureRandom.uuid_v7)
+
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "capability", { name: "Late" },
+        parent_id: @cat_id, author_id: @author_id
+      )
+
+      assert_raises(RuntimeError, /No draft in progress/) do
+        @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+      end
+    end
+
+    should "not auto-reject competing creates" do
+      other_sid = SecureRandom.uuid_v7
+
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role_illustration",
+        { role_id: @rid, description: "First proposal" },
+        parent_id: @eid, author_id: @author_id
+      )
+      @aggregate.suggest_create(
+        @framework_id, other_sid,
+        "role_illustration",
+        { role_id: @rid, description: "Second proposal" },
+        parent_id: @eid, author_id: SecureRandom.uuid_v7
+      )
+
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      rejections = new_events.select { |e| e.is_a?(Frameworks::Events::SuggestionRejected) }
+      assert_empty rejections, "approving a create should not auto-reject other creates"
+    end
+  end
+
+  # ── approve_suggestion for delete ──
+
+  context "#approve_suggestion for delete" do
+    setup do
+      @reviewer_id = SecureRandom.uuid_v7
+    end
+
+    should "emit RoleIllustrationRemoved for illustration delete" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "role_illustration", @ill_id,
+        author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      removed = new_events.find { |e| e.is_a?(Frameworks::Events::RoleIllustrationRemoved) }
+      assert_not_nil removed
+      assert_equal @ill_id, removed.data[:illustration_id]
+      assert_match(/Applied via approved suggestion/, removed.data[:reason])
+    end
+
+    should "emit CapabilityArchived for capability delete (draft is open)" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "capability", @cap_id,
+        author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      archived = new_events.find { |e| e.is_a?(Frameworks::Events::CapabilityArchived) }
+      assert_not_nil archived
+      assert_equal @cap_id, archived.data[:capability_id]
+    end
+
+    should "raise on capability delete approval when no draft in progress" do
+      @aggregate.publish_version(@framework_id, SecureRandom.uuid_v7)
+
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "capability", @cap_id, author_id: @author_id
+      )
+
+      assert_raises(RuntimeError, /No draft in progress/) do
+        @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+      end
+    end
+
+    should "auto-reject pending edits on the same entity" do
+      edit_sid = SecureRandom.uuid_v7
+      delete_sid = @suggestion_id
+
+      @aggregate.suggest_edit(
+        @framework_id, edit_sid,
+        "role_illustration", @ill_id,
+        "description", "Better wording", SecureRandom.uuid_v7
+      )
+      @aggregate.suggest_delete(
+        @framework_id, delete_sid,
+        "role_illustration", @ill_id,
+        author_id: @author_id
+      )
+
+      @aggregate.approve_suggestion(delete_sid, @reviewer_id)
+
+      rejections = new_events.select { |e| e.is_a?(Frameworks::Events::SuggestionRejected) }
+      rejected_ids = rejections.map { |e| e.data[:suggestion_id] }
+      assert_includes rejected_ids, edit_sid, "edit on deleted entity should be auto-rejected"
+    end
+
+    should "auto-reject competing pending deletes on the same entity" do
+      first_sid = @suggestion_id
+      competing_sid = SecureRandom.uuid_v7
+
+      @aggregate.suggest_delete(
+        @framework_id, first_sid,
+        "role_illustration", @ill_id,
+        author_id: @author_id
+      )
+      @aggregate.suggest_delete(
+        @framework_id, competing_sid,
+        "role_illustration", @ill_id,
+        author_id: SecureRandom.uuid_v7
+      )
+
+      @aggregate.approve_suggestion(first_sid, @reviewer_id)
+
+      rejections = new_events.select { |e| e.is_a?(Frameworks::Events::SuggestionRejected) }
+      rejected_ids = rejections.map { |e| e.data[:suggestion_id] }
+      assert_includes rejected_ids, competing_sid
     end
   end
 

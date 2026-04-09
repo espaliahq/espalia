@@ -36,7 +36,7 @@ Rails.application.routes.draw do
     end
     resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
-    resources :suggestions, only: [ :index, :show, :destroy ], controller: "frameworks/suggestions" do
+    resources :suggestions, only: [ :index, :show, :create, :destroy ], controller: "frameworks/suggestions" do
       member do
         post :approve
         post :reject

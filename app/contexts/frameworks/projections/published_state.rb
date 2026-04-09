@@ -52,6 +52,8 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::FrameworkVersionPublished,
       Frameworks::Events::MigrationMappingDefined,
       Frameworks::Events::EditSuggested,
+      Frameworks::Events::EntityCreationSuggested,
+      Frameworks::Events::EntityDeletionSuggested,
       Frameworks::Events::SuggestionAmended,
       Frameworks::Events::SuggestionApproved,
       Frameworks::Events::SuggestionRejected,
@@ -84,6 +86,8 @@ class Frameworks::Projections::PublishedState
 
     # ── Suggestions — always live ──
     when Frameworks::Events::EditSuggested then handle_edit_suggested(event)
+    when Frameworks::Events::EntityCreationSuggested then handle_entity_creation_suggested(event)
+    when Frameworks::Events::EntityDeletionSuggested then handle_entity_deletion_suggested(event)
     when Frameworks::Events::SuggestionAmended then handle_suggestion_amended(event)
     when Frameworks::Events::SuggestionApproved then handle_suggestion_approved(event)
     when Frameworks::Events::SuggestionRejected then handle_suggestion_rejected(event)
@@ -470,6 +474,7 @@ class Frameworks::Projections::PublishedState
     {
       framework_id: event.data[:framework_id],
       suggestion_id: event.data[:suggestion_id],
+      kind: "edit",
       target_entity_type: entity_type,
       target_entity_id: entity_id,
       field: event.data[:field],
@@ -479,6 +484,36 @@ class Frameworks::Projections::PublishedState
       rationale: event.data[:rationale],
       status: "pending"
     }
+  end
+
+  def handle_entity_creation_suggested(event) # rubocop:disable Metrics/MethodLength
+    FrameworkState::SuggestedEdit.create!(
+      framework_id: event.data[:framework_id],
+      suggestion_id: event.data[:suggestion_id],
+      kind: "create",
+      target_entity_type: event.data[:target_entity_type],
+      proposed_attributes: event.data[:proposed_attributes] || {},
+      parent_id: event.data[:parent_id],
+      author_id: event.data[:author_id],
+      rationale: event.data[:rationale],
+      status: "pending"
+    )
+  end
+
+  def handle_entity_deletion_suggested(event) # rubocop:disable Metrics/MethodLength
+    entity_type = event.data[:target_entity_type]
+    entity_id = event.data[:target_entity_id]
+    FrameworkState::SuggestedEdit.create!(
+      framework_id: event.data[:framework_id],
+      suggestion_id: event.data[:suggestion_id],
+      kind: "delete",
+      target_entity_type: entity_type,
+      target_entity_id: entity_id,
+      current_value: snapshot_entity_summary(entity_type, entity_id),
+      author_id: event.data[:author_id],
+      rationale: event.data[:rationale],
+      status: "pending"
+    )
   end
 
   def handle_suggestion_amended(event)
@@ -520,25 +555,52 @@ class Frameworks::Projections::PublishedState
   # @param entity_id [String]
   # @param field [String]
   # @return [String, nil]
-  def current_entity_value(entity_type, entity_id, field) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
-    record =
-      case entity_type
-      when "role_illustration"
-        FrameworkState::RoleIllustration.find_by(illustration_id: entity_id)
-      when "behavioural_expectation"
-        FrameworkState::BehaviouralExpectation.find_by(expectation_id: entity_id)
-      when "capability"
-        FrameworkState::Capability.find_by(capability_id: entity_id)
-      when "capability_category"
-        FrameworkState::CapabilityCategory.find_by(category_id: entity_id)
-      when "role"
-        FrameworkState::Role.find_by(role_id: entity_id)
-      when "role_family"
-        FrameworkState::RoleFamily.find_by(role_family_id: entity_id)
-      when "level"
-        FrameworkState::Level.find_by(level_id: entity_id)
-      end
+  def current_entity_value(entity_type, entity_id, field)
+    record = lookup_entity(entity_type, entity_id)
     record&.public_send(field)
+  end
+
+  # Returns a brief human-readable summary of an entity for delete-suggestion
+  # snapshots. The review UI uses this to show "what's about to be deleted"
+  # without having to re-resolve the entity.
+  #
+  # @param entity_type [String]
+  # @param entity_id [String]
+  # @return [String, nil]
+  def snapshot_entity_summary(entity_type, entity_id)
+    record = lookup_entity(entity_type, entity_id)
+    return nil unless record
+
+    case entity_type
+    when "role_illustration", "behavioural_expectation"
+      record.description
+    else
+      record.respond_to?(:name) ? record.name : record.try(:title)
+    end
+  end
+
+  # Resolves an entity read-model record by type + id.
+  #
+  # @param entity_type [String]
+  # @param entity_id [String]
+  # @return [ApplicationRecord, nil]
+  def lookup_entity(entity_type, entity_id) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+    case entity_type
+    when "role_illustration"
+      FrameworkState::RoleIllustration.find_by(illustration_id: entity_id)
+    when "behavioural_expectation"
+      FrameworkState::BehaviouralExpectation.find_by(expectation_id: entity_id)
+    when "capability"
+      FrameworkState::Capability.find_by(capability_id: entity_id)
+    when "capability_category"
+      FrameworkState::CapabilityCategory.find_by(category_id: entity_id)
+    when "role"
+      FrameworkState::Role.find_by(role_id: entity_id)
+    when "role_family"
+      FrameworkState::RoleFamily.find_by(role_family_id: entity_id)
+    when "level"
+      FrameworkState::Level.find_by(level_id: entity_id)
+    end
   end
 
   # ── Collaborator handlers ──

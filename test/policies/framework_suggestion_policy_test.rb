@@ -20,6 +20,7 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
     should "deny everything" do
       assert_not policy.index?
       assert_not policy.show?
+      assert_not policy.create?
       assert_not policy.approve?
       assert_not policy.reject?
       assert_not policy.amend?
@@ -40,6 +41,10 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
     should "allow viewing" do
       assert policy.index?
       assert policy.show?
+    end
+
+    should "allow submitting suggestions" do
+      assert policy.create?
     end
 
     should "deny approving" do

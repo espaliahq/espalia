@@ -55,6 +55,55 @@ class Frameworks::SuggestionsController < ApplicationController
     )
   end
 
+  # POST /frameworks/:framework_id/suggestions
+  #
+  # Submits a create- or delete-kind suggestion as a pending proposal. The
+  # suggestion always lands in pending state — even if the author has approval
+  # authority — because this controller is the "propose a change" endpoint,
+  # not the "make a change" endpoint. Approvers use the existing approve action
+  # to apply the change. Edit-kind suggestions are submitted by per-entity
+  # controllers (e.g. IllustrationsController) which call
+  # Frameworks::CommandHandler#suggest_edit directly.
+  def create
+    authorize @framework, :submit_suggestion?
+
+    attrs = suggestion_create_params
+    suggestion_id = SecureRandom.uuid_v7
+    handler = Frameworks::CommandHandler.new
+
+    case attrs[:kind]
+    when "create"
+      handler.suggest_create(
+        @framework.framework_id, suggestion_id,
+        attrs[:target_entity_type],
+        (attrs[:proposed_attributes] || {}).to_h.symbolize_keys,
+        parent_id: attrs[:parent_id].presence,
+        author_id: current_user.id.to_s,
+        rationale: attrs[:rationale].presence,
+        mode: :suggesting
+      )
+    when "delete"
+      handler.suggest_delete(
+        @framework.framework_id, suggestion_id,
+        attrs[:target_entity_type], attrs[:target_entity_id],
+        author_id: current_user.id.to_s,
+        rationale: attrs[:rationale].presence,
+        mode: :suggesting
+      )
+    else
+      return redirect_to framework_suggestions_path(@framework.framework_id),
+                         status: :see_other,
+                         alert: "Unknown suggestion kind: #{attrs[:kind]}"
+    end
+
+    redirect_to framework_suggestion_path(@framework.framework_id, suggestion_id),
+                notice: "Suggestion submitted."
+  rescue RuntimeError => e
+    redirect_to framework_suggestions_path(@framework.framework_id),
+                status: :see_other,
+                alert: e.message
+  end
+
   # POST /frameworks/:framework_id/suggestions/:id/approve
   def approve
     authorize @suggestion, :approve?
@@ -130,6 +179,14 @@ class Frameworks::SuggestionsController < ApplicationController
   end
 
   private
+
+  def suggestion_create_params
+    params.expect(suggestion: [
+      :kind, :target_entity_type, :target_entity_id,
+      :parent_id, :rationale,
+      { proposed_attributes: {} }
+    ])
+  end
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:framework_id))

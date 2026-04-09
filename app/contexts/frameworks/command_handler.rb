@@ -378,6 +378,60 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Suggests creating a new framework entity. The target entity does not yet
+  # exist; proposed_attributes carries the data needed to construct it on
+  # approval.
+  #
+  # Auto-approves if the author has approval authority AND mode is :editing
+  # (the default), mirroring the suggest_edit pattern.
+  #
+  # Event trail on auto-approve: EntityCreationSuggested + SuggestionApproved + add_* event(s)
+  # Event trail on pending:      EntityCreationSuggested
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity to create (e.g. "capability")
+  # @param proposed_attributes [Hash] attributes for the new entity
+  # @param parent_id [String, nil] UUID of the parent entity, nil for framework-level entities
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] optional explanation
+  # @param mode [Symbol] :editing (auto-approve if authority) or :suggesting (always pending)
+  def suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
+                     parent_id:, author_id:, rationale: nil, mode: :editing)
+    @repository.with_framework(framework_id) do |framework|
+      framework.suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
+                               parent_id: parent_id, author_id: author_id, rationale: rationale)
+
+      if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
+        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+      end
+    end
+  end
+
+  # Suggests deleting (or archiving) an existing framework entity.
+  #
+  # Auto-approves if the author has approval authority AND mode is :editing
+  # (the default).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity (e.g. "capability")
+  # @param target_entity_id [String] UUID of the entity to delete
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] optional explanation
+  # @param mode [Symbol] :editing (auto-approve if authority) or :suggesting (always pending)
+  def suggest_delete(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                     author_id:, rationale: nil, mode: :editing)
+    @repository.with_framework(framework_id) do |framework|
+      framework.suggest_delete(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                               author_id: author_id, rationale: rationale)
+
+      if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
+        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+      end
+    end
+  end
+
   # Amends the author's own pending suggestion.
   #
   # @param framework_id [String] UUID of the framework

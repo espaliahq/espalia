@@ -19,6 +19,12 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   # @return [Boolean]
   def show? = tenant_member?
 
+  # Any tenant member can submit a suggestion (any kind). Approval gating
+  # happens at #approve?.
+  #
+  # @return [Boolean]
+  def create? = tenant_member?
+
   # @return [Boolean]
   def approve?
     return true if tenant_admin?

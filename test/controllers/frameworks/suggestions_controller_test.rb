@@ -16,24 +16,24 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
-      rfid = SecureRandom.uuid_v7
-      rid = SecureRandom.uuid_v7
-      cat_id = SecureRandom.uuid_v7
-      cap_id = SecureRandom.uuid_v7
+      @rfid = SecureRandom.uuid_v7
+      @rid = SecureRandom.uuid_v7
+      @cat_id = SecureRandom.uuid_v7
+      @cap_id = SecureRandom.uuid_v7
       @eid = SecureRandom.uuid_v7
       @ill_id = SecureRandom.uuid_v7
 
       handler.create_framework(@framework_id, "Test Framework")
-      handler.add_role_family(@framework_id, rfid, "Engineering")
-      handler.add_role(@framework_id, rid, rfid, "Software Engineer", "E", "ic")
-      handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "E1", "E1")
-      handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
-      handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
-      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
-      handler.set_behavioural_expectation(@framework_id, @eid, SecureRandom.uuid_v7, cap_id,
+      handler.add_role_family(@framework_id, @rfid, "Engineering")
+      handler.add_role(@framework_id, @rid, @rfid, "Software Engineer", "E", "ic")
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 1, "E1", "E1")
+      handler.add_capability_category(@framework_id, @cat_id, "Thinking", ordinal: 1)
+      handler.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, @cat_id, "Strategic Thinking")
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid)
+      handler.set_behavioural_expectation(@framework_id, @eid, SecureRandom.uuid_v7, @cap_id,
                                           1, "Asks questions")
       handler.add_role_illustration(
-        @framework_id, @ill_id, SecureRandom.uuid_v7, @eid, rid, 1, "Seeks guidance"
+        @framework_id, @ill_id, SecureRandom.uuid_v7, @eid, @rid, 1, "Seeks guidance"
       )
       handler.publish_version(@framework_id, "test")
 
@@ -245,6 +245,113 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       follow_redirect!
       assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+  end
+
+  context "POST /frameworks/:framework_id/suggestions (kind=create)" do
+    should "create a pending illustration creation suggestion as a tenant member" do
+      sign_in @member_user
+      post framework_suggestions_path(framework_id: @framework_id), params: {
+        suggestion: {
+          kind: "create",
+          target_entity_type: "role_illustration",
+          parent_id: @eid,
+          rationale: "Worth illustrating",
+          proposed_attributes: { role_id: @rid, description: "Mentors juniors" }
+        }
+      }
+
+      assert_response :redirect
+      ActsAsTenant.with_tenant(@tenant) do
+        rec = FrameworkState::SuggestedEdit.creates.last
+        assert_not_nil rec
+        assert_equal "create", rec.kind
+        assert_equal "role_illustration", rec.target_entity_type
+        assert_equal @eid, rec.parent_id
+        assert_equal "pending", rec.status
+        assert_equal "Mentors juniors", rec.proposed_attributes["description"]
+      end
+    end
+
+    should "land in pending status even when the author is a tenant admin" do
+      sign_in @admin_user
+      post framework_suggestions_path(framework_id: @framework_id), params: {
+        suggestion: {
+          kind: "create",
+          target_entity_type: "role_illustration",
+          parent_id: @eid,
+          proposed_attributes: { role_id: @rid, description: "From admin" }
+        }
+      }
+
+      assert_response :redirect
+      ActsAsTenant.with_tenant(@tenant) do
+        rec = FrameworkState::SuggestedEdit.creates.last
+        assert_equal "pending", rec.status,
+                     "controller is propose-only — admin still uses the approve action"
+        assert_not FrameworkState::RoleIllustration.where(description: "From admin").exists?,
+                   "no illustration row should be created until the suggestion is approved"
+      end
+    end
+
+    should "create a pending capability deletion suggestion as a tenant member" do
+      sign_in @member_user
+      post framework_suggestions_path(framework_id: @framework_id), params: {
+        suggestion: {
+          kind: "delete",
+          target_entity_type: "capability",
+          target_entity_id: @cap_id,
+          rationale: "Obsolete"
+        }
+      }
+
+      assert_response :redirect
+      ActsAsTenant.with_tenant(@tenant) do
+        rec = FrameworkState::SuggestedEdit.deletes.last
+        assert_not_nil rec
+        assert_equal "delete", rec.kind
+        assert_equal "capability", rec.target_entity_type
+        assert_equal @cap_id, rec.target_entity_id
+        assert_equal "pending", rec.status
+        assert_equal "Strategic Thinking", rec.current_value, "snapshot should capture entity name"
+      end
+    end
+
+    should "flash error and not persist when the target entity does not exist" do
+      sign_in @member_user
+      post framework_suggestions_path(framework_id: @framework_id), params: {
+        suggestion: {
+          kind: "delete",
+          target_entity_type: "role_illustration",
+          target_entity_id: SecureRandom.uuid_v7
+        }
+      }
+
+      assert_response :redirect
+      follow_redirect!
+      assert_match(/Illustration .* not found/, flash[:alert])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal 0, FrameworkState::SuggestedEdit.deletes.count
+      end
+    end
+
+    should "flash error for unknown kind" do
+      sign_in @member_user
+      post framework_suggestions_path(framework_id: @framework_id), params: {
+        suggestion: { kind: "explode", target_entity_type: "role_illustration" }
+      }
+
+      assert_response :redirect
+      follow_redirect!
+      assert_equal "Unknown suggestion kind: explode", flash[:alert]
+    end
+
+    should "redirect unauthenticated users to sign in" do
+      post framework_suggestions_path(framework_id: @framework_id), params: {
+        suggestion: { kind: "create", target_entity_type: "role_family", proposed_attributes: { name: "X" } }
+      }
+      assert_redirected_to new_user_session_path
     end
   end
 
