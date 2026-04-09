@@ -1,4 +1,4 @@
-# Add `update_capability` Command
+# Add `update_capability` Command - Done
 
 ## Context
 

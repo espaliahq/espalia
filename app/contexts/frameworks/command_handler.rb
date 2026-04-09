@@ -391,6 +391,19 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Approves a pending suggestion, applies the content change, and auto-rejects
+  # any competing pending suggestions on the same entity field.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param reviewer_id [String] UUID of the reviewer
+  # @param comment [String, nil] optional reviewer comment
+  def approve_suggestion(framework_id, suggestion_id, reviewer_id, comment: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.approve_suggestion(suggestion_id, reviewer_id, comment: comment)
+    end
+  end
+
   # Rejects a pending suggestion.
   #
   # @param framework_id [String] UUID of the framework

@@ -19,14 +19,16 @@ import { useClickOutside } from "stimulus-use"
 
 export default class extends BaseController {
   static targets = ["rolePane", "contextPane", "rolePaneToggle", "toggleChevron",
-                     "roleCount", "roleLabel"]
+                     "roleCount", "roleLabel", "contextPaneToggle"]
 
   connect() {
     super.connect()
     this.isMobile = window.innerWidth < 1024
     // On desktop the pane starts visible; on mobile it starts hidden
     this.rolePaneOpen = !this.isMobile
+    this.contextPaneOpen = false
     this.#updateToggleAffordance()
+    this.#updateContextToggleAffordance()
   }
 
   toggleRolePane() {
@@ -41,6 +43,21 @@ export default class extends BaseController {
     }
 
     this.#updateToggleAffordance()
+  }
+
+  toggleContextPane() {
+    if (!this.hasContextPaneTarget) return
+
+    this.contextPaneOpen = !this.contextPaneOpen
+    if (this.contextPaneOpen) {
+      this.contextPaneTarget.classList.remove("hidden")
+      this.contextPaneTarget.classList.add("flex")
+    } else {
+      this.contextPaneTarget.classList.add("hidden")
+      this.contextPaneTarget.classList.remove("flex")
+    }
+
+    this.#updateContextToggleAffordance()
   }
 
   // Update the role count display when selection changes
@@ -108,5 +125,14 @@ export default class extends BaseController {
       this.rolePaneToggleTarget.classList.toggle("bg-gray-100", !this.rolePaneOpen)
       this.rolePaneToggleTarget.classList.toggle("dark:bg-gray-800", !this.rolePaneOpen)
     }
+  }
+
+  #updateContextToggleAffordance() {
+    if (!this.hasContextPaneToggleTarget) return
+
+    this.contextPaneToggleTarget.classList.toggle("bg-primary/10", this.contextPaneOpen)
+    this.contextPaneToggleTarget.classList.toggle("text-primary", this.contextPaneOpen)
+    this.contextPaneToggleTarget.classList.toggle("bg-gray-100", !this.contextPaneOpen)
+    this.contextPaneToggleTarget.classList.toggle("dark:bg-gray-800", !this.contextPaneOpen)
   }
 }

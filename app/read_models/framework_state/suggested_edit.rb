@@ -16,6 +16,12 @@ class FrameworkState::SuggestedEdit < ApplicationRecord
 
   STATUSES = %w[pending approved rejected withdrawn].freeze
 
+  # Pundit policy lookup: use FrameworkSuggestionPolicy
+  # (not FrameworkState::SuggestedEditPolicy)
+  def self.policy_class
+    FrameworkSuggestionPolicy
+  end
+
   acts_as_tenant :tenant
 
   belongs_to :tenant

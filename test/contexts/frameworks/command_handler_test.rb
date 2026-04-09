@@ -109,4 +109,72 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "#approve_suggestion" do
+    setup do
+      @ill_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        cat_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        eid = SecureRandom.uuid_v7
+
+        handler.create_framework(@framework_id, "Test")
+        handler.add_role_family(@framework_id, rfid, "Engineering")
+        handler.add_role(@framework_id, rid, rfid, "Software Engineer", "E", "ic")
+        handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "E1", "E1")
+        handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
+        handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
+        handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
+        handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Asks questions")
+        handler.add_role_illustration(
+          @framework_id, @ill_id, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance"
+        )
+        handler.publish_version(@framework_id, "v1")
+
+        @suggestion_id = SecureRandom.uuid_v7
+        handler.suggest_edit(
+          @framework_id, @suggestion_id, "role_illustration", @ill_id, "description",
+          "Proactively seeks clarification", SecureRandom.uuid_v7,
+          mode: :suggesting
+        )
+      end
+    end
+
+    should "publish SuggestionApproved + RoleIllustrationUpdated and apply the change" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        stream = EventStreamNaming.framework_stream(@framework_id)
+        events_before = @event_store.read.stream(stream).to_a.size
+
+        handler.approve_suggestion(@framework_id, @suggestion_id, SecureRandom.uuid_v7,
+                                   comment: "Approved by reviewer")
+
+        events_after = @event_store.read.stream(stream).to_a
+        new_events = events_after.last(events_after.size - events_before)
+        assert_equal 2, new_events.size
+        assert_kind_of Frameworks::Events::SuggestionApproved, new_events[0]
+        assert_kind_of Frameworks::Events::RoleIllustrationUpdated, new_events[1]
+
+        suggestion = FrameworkState::SuggestedEdit.find_by(suggestion_id: @suggestion_id)
+        assert_equal "approved", suggestion.status
+        assert_equal "Approved by reviewer", suggestion.reviewer_comment
+
+        illustration = FrameworkState::RoleIllustration.find_by(illustration_id: @ill_id)
+        assert_equal "Proactively seeks clarification", illustration.description
+      end
+    end
+
+    should "raise when the suggestion does not exist" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        assert_raises(RuntimeError) do
+          handler.approve_suggestion(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+        end
+      end
+    end
+  end
 end

@@ -33,6 +33,9 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def suggest_edit? = tenant_member?
 
+  # @return [Boolean]
+  def view_suggestions? = tenant_member?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]
