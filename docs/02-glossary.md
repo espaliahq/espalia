@@ -7,7 +7,16 @@
 ## Domain Concepts
 
 ### Framework
-The configurable career path blueprint. Event-sourced via RES as a single stream per framework (`tenant-{id}/Framework-{id}`). Versions are points in the stream marked by `FrameworkVersionPublished` events. Structural changes accumulate in a draft phase. Editorial changes apply immediately via suggested edits.
+The configurable career path blueprint. Event-sourced via RES as a single stream per framework (`tenant-{id}/Framework-{id}`). Versions are points in the stream marked by `FrameworkVersionPublished` events. **Shape-changing events** (see below) accumulate in a draft phase and become visible on publish. **Editorial / shape-preserving events** apply immediately regardless of draft state.
+
+### Shape-changing event
+A framework event that alters the `(capability_stable_id, level_ordinal)` rating grid that in-flight assessment cycles depend on. Deferred in the published projection while `draft_in_progress` is true; replayed when `FrameworkVersionPublished` triggers a rebuild. Aggregate-enforced to only fire inside a draft phase via `ensure_draft_in_progress!`. Examples: `CapabilityAdded`, `CapabilityArchived`, `LevelAdded`, `LevelOrdinalChanged`, `CapabilityRoleBindingCreated`/`Removed`, `BehaviouralExpectationSet`.
+
+### Editorial event
+A framework event that rewrites or adds content without changing the rating grid. Applies immediately to the published view regardless of draft state. No draft required, no version bump. Examples: `RoleFamilyUpdated`, `CapabilityCategoryAdded`, `BehaviouralExpectationUpdated`, `CapabilityRoleBindingUpdated` (weight), all `RoleIllustration*` events.
+
+### Bootstrap draft
+The implicit v1 draft opened by `FrameworkCreated`. The aggregate emits `FrameworkCreated` followed by `DraftVersionStarted(target_version: 1, started_by: "system")` in a single `create` command. The caller populates the framework with shape-changing content and calls `publish_version` to produce v1. See ADR-5.
 
 ### Role Family
 Grouping of related roles. Example: "Engineering" contains "Software Engineer" and "Engineering Manager". Enables career mobility visibility.

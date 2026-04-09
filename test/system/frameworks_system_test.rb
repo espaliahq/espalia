@@ -27,6 +27,9 @@ class FrameworksSystemTest < ApplicationSystemTestCase
       handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
       handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Asks clarifying questions")
       handler.add_role_illustration(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance from tech lead")
+
+      # Publish v1 so shape-changing events land in the read model
+      handler.publish_version(@framework_id, "test")
     end
 
     visit new_user_session_path

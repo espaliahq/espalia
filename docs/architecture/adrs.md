@@ -83,9 +83,9 @@ Domain-facing code (commands, events, projections) references `person_id`, never
 
 ## ADR-5: Event-sourced versioning (single stream, draft phase)
 
-**Decision:** One event stream per framework. Versions are points in the stream. Draft phase bracketed by `DraftVersionStarted` / `FrameworkVersionPublished`. Published projection skips structural events during draft. Editorial changes flow independently.
+**Decision:** One event stream per framework. Versions are points in the stream. Draft phase bracketed by `DraftVersionStarted` / `FrameworkVersionPublished`. `FrameworkCreated` implicitly bootstraps a v1 draft; subsequent drafts are opened explicitly via `start_draft`. Published projection skips **shape-changing** events during a draft (see ADR-16). **Editorial / shape-preserving** events flow independently and apply live. The aggregate enforces draft-presence for shape-changing commands via `ensure_draft_in_progress!`.
 
-**Why:** No "clone and publish" — the event stream IS the history. Point-in-time reconstruction is replay, not snapshots. The `FrameworkVersionMigrated` event in person streams marks the version boundary.
+**Why:** No "clone and publish" — the event stream IS the history. Point-in-time reconstruction is replay, not snapshots. The `FrameworkVersionMigrated` event in person streams marks the version boundary. Moving the draft guard to the aggregate (rather than only the projection) closes a silent footgun where structural commands called outside a draft would mutate the published view directly, corrupting in-flight assessment cycles that froze a `framework_version` at define time.
 
 ---
 
@@ -148,3 +148,35 @@ Domain-facing code (commands, events, projections) references `person_id`, never
 **Auto-approval pattern:** When an authorized user (one where `framework.can_approve?(author_id)` returns true) submits an edit in `:editing` mode, the command handler immediately follows `EditSuggested` with `SuggestionApproved` and the resulting content-change event — three events, instant effect. Users without approval authority emit `EditSuggested` only; the suggestion stays pending until a reviewer acts. A future `mode: :suggesting` parameter lets authorized users explicitly create a pending suggestion for peer review regardless of their approval authority.
 
 **Stub until collaborators land:** `can_approve?` currently returns `true` for all users. When the collaborator model is implemented (via `CollaboratorAdded` events), it will query `@collaborators[user_id]&.[](:role)` against the tier-appropriate approval roles.
+
+---
+
+## ADR-16: Shape-changing vs editorial event classification
+
+**Decision:** Framework events are classified along a single axis — **shape stability** — that determines whether they are draft-gated or live:
+
+- **Shape-changing** events alter the `(capability_stable_id, level_ordinal)` rating grid that in-flight assessment cycles depend on. They are **draft-gated** at the aggregate (`ensure_draft_in_progress!`) and deferred in the published projection until `FrameworkVersionPublished` triggers a rebuild.
+  - `LevelAdded`, `LevelOrdinalChanged`, `CapabilityAdded`, `CapabilityArchived`, `CapabilityRoleBindingCreated`, `CapabilityRoleBindingRemoved`, `BehaviouralExpectationSet`
+- **Shape-preserving / editorial** events rewrite or add content without changing the grid. They apply **live** regardless of draft state — no draft required, no version bump.
+  - `RoleFamilyAdded`/`Updated`, `RoleAdded`/`Updated`, `LevelUpdated` (title/code/is_entry), `CapabilityCategoryAdded`/`Updated`, `CapabilityRoleBindingUpdated` (weight/tolerance), `BehaviouralExpectationUpdated`, all `RoleIllustration*` events
+- **Dependent-editorial** events are shape-preserving but reference a parent that may be shape-changing (e.g. illustrations depend on expectations; `LevelUpdated` depends on a `Level` created via `LevelAdded`). These handlers tolerate a missing parent by silently skipping; the publish-time rebuild replays them in stream order after the parent has landed.
+
+The `update_level` command is **split** into `update_level_details` (title/code/is_entry — editorial, live) and `change_level_ordinal` (ordinal — shape-changing, draft-gated) because one command cannot sit on both sides of the axis.
+
+**Why:** The previous design conflated "changes that happen during a version bump" with "structural changes that affect ratings". In practice, the common flurry of feedback on a freshly published framework — typos, rephrasings, illustration additions, role/category renames — is shape-preserving and should integrate immediately. Forcing every minor fix through the draft/publish cycle blocks users from integrating feedback whenever a draft is open for an unrelated shape-changing change.
+
+This classification unblocks the continuous-improvement workflow while preserving the strong guarantee that in-flight assessment cycles see a stable rating grid between published versions. It matches the continuous-suggested-edits principle of ADR-7 but applies it to the editorial path more broadly.
+
+**Trade-offs:** Binding weight updates (`CapabilityRoleBindingUpdated`) are classified as editorial (live) per the current decision to match `configure_scoring_thresholds` semantics. This means scoring outcomes for in-flight cycles can change silently when a weight is edited. A future ADR may tighten this by routing weight changes through a suggestion/review trail; see follow-up `todos/binding-weight-review-trail.md`.
+
+---
+
+## ADR-17: Migration mappings are mandatory at publish
+
+**Decision:** `publish_version` raises if any capability archived during the current draft (and that existed at the time `DraftVersionStarted` fired) lacks a corresponding `MigrationMappingDefined` entry for its `stable_id`. Any mapping type — `same`, `evolved`, `split`, `archived`, `new` — satisfies the requirement; the mapping's presence is the acknowledgement that the admin thought about what happens to orphaned ratings. Capabilities added AND archived within the same draft do not require a mapping (nothing from the previous version to migrate).
+
+**Why:** Before this change, publishing a draft that archived a capability silently orphaned all `AssessmentLevelRating` rows referencing that capability's `stable_id`. In-flight cycles, which freeze their `framework_version` at define time, would carry ratings that became meaningless after publish with no signal to anyone. Making mappings mandatory at the publish boundary turns silent corruption into a loud failure at exactly the point where the admin has the context to act.
+
+The aggregate tracks pending-mapping debt via `@archives_needing_mapping` (populated on `CapabilityArchived`, cleared on `MigrationMappingDefined`, reset on `DraftVersionStarted` / `FrameworkVersionPublished`). The check fires before the publish event is applied, so no state changes if the guard rejects.
+
+This does not yet rewrite ratings in person streams — that's the `FrameworkVersionMigrated` cross-stream work tracked as a separate follow-up. For now, the enforcement prevents accidental orphaning at publish time and creates the audit trail (`MigrationMappingDefined` events) that the later cross-stream migration will consume.

@@ -6,9 +6,19 @@
 # FrameworkState read models. Runs in the same transaction
 # as the event publish.
 #
-# During a draft phase (between DraftVersionStarted and
-# FrameworkVersionPublished), structural events are skipped.
-# On publish, the entire projection is rebuilt from the event stream.
+# Events are classified along two axes:
+#
+# 1. **Shape-changing** events alter the (capability_stable_id, level_ordinal)
+#    rating grid that in-flight assessment cycles depend on. They are
+#    deferred during a draft phase (between DraftVersionStarted and
+#    FrameworkVersionPublished). On publish, the projection is rebuilt
+#    from the event stream so they become visible.
+#
+# 2. **Editorial / shape-preserving** events (renames, rephrasings,
+#    illustrations, binding weight tweaks) apply immediately regardless
+#    of draft state. They do not affect ratings.
+#
+# See docs/architecture/framework-aggregate.md for the full classification.
 #
 class Frameworks::Projections::PublishedState
   # All event classes this projection handles.
@@ -23,6 +33,7 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::RoleUpdated,
       Frameworks::Events::LevelAdded,
       Frameworks::Events::LevelUpdated,
+      Frameworks::Events::LevelOrdinalChanged,
       Frameworks::Events::CapabilityCategoryAdded,
       Frameworks::Events::CapabilityCategoryUpdated,
       Frameworks::Events::CapabilityAdded,
@@ -64,26 +75,44 @@ class Frameworks::Projections::PublishedState
   # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
   def handle(event)
     case event
-    # Versioning events — always processed
+    # ── Meta / versioning — always live ──
     when Frameworks::Events::FrameworkCreated then handle_framework_created(event)
     when Frameworks::Events::DraftVersionStarted then handle_draft_version_started(event)
     when Frameworks::Events::FrameworkVersionPublished then handle_framework_version_published(event)
     when Frameworks::Events::MigrationMappingDefined then handle_migration_mapping_defined(event)
-    # Suggestion events — always processed, independent of draft state
+
+    # ── Suggestions — always live ──
     when Frameworks::Events::EditSuggested then handle_edit_suggested(event)
     when Frameworks::Events::SuggestionAmended then handle_suggestion_amended(event)
     when Frameworks::Events::SuggestionApproved then handle_suggestion_approved(event)
     when Frameworks::Events::SuggestionRejected then handle_suggestion_rejected(event)
     when Frameworks::Events::SuggestionWithdrawn then handle_suggestion_withdrawn(event)
     when Frameworks::Events::SuggestionCommented then nil # future: comments table
+
+    # ── Scoring & collaborators — always live ──
     when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
-    # Collaborator events — always processed, independent of draft state
     when Frameworks::Events::CollaboratorAdded then handle_collaborator_added(event)
     when Frameworks::Events::CollaboratorRoleChanged then handle_collaborator_role_changed(event)
     when Frameworks::Events::CollaboratorRemoved then handle_collaborator_removed(event)
-    # Structural events — skipped during draft
+
+    # ── Editorial (shape-preserving) — always live ──
+    when Frameworks::Events::RoleFamilyAdded then handle_role_family_added(event)
+    when Frameworks::Events::RoleFamilyUpdated then handle_role_family_updated(event)
+    when Frameworks::Events::RoleAdded then handle_role_added(event)
+    when Frameworks::Events::RoleUpdated then handle_role_updated(event)
+    when Frameworks::Events::LevelUpdated then handle_level_updated(event)
+    when Frameworks::Events::CapabilityCategoryAdded then handle_capability_category_added(event)
+    when Frameworks::Events::CapabilityCategoryUpdated then handle_capability_category_updated(event)
+    when Frameworks::Events::CapabilityRoleBindingUpdated then handle_binding_updated(event)
+    when Frameworks::Events::BehaviouralExpectationUpdated then handle_expectation_updated(event)
+    when Frameworks::Events::RoleIllustrationAdded then handle_illustration_added(event)
+    when Frameworks::Events::RoleIllustrationUpdated then handle_illustration_updated(event)
+    when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
+    when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
+
+    # ── Shape-changing — deferred while draft_in_progress, replayed on publish ──
     else
-      handle_structural_event(event)
+      handle_shape_changing_event(event)
     end
   end
   # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
@@ -118,108 +147,64 @@ class Frameworks::Projections::PublishedState
     )
   end
 
-  # ── Structural event dispatch (draft-guarded) ──
-
-  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
-  def handle_structural_event(event)
+  # ── Shape-changing event dispatch (deferred during draft) ──
+  #
+  # Shape-changing events are guaranteed by Frameworks::Aggregate's
+  # ensure_draft_in_progress! guard to be emitted only inside a draft.
+  # During draft we skip them in the published view; on FrameworkVersionPublished,
+  # rebuild_framework_projection replays every event (via handle) against a
+  # non-draft framework state, so these events become visible.
+  def handle_shape_changing_event(event) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
     framework = find_framework(event)
     return if framework&.draft_in_progress
 
     case event
-    when Frameworks::Events::RoleFamilyAdded then handle_role_family_added(event)
-    when Frameworks::Events::RoleFamilyUpdated then handle_role_family_updated(event)
-    when Frameworks::Events::RoleAdded then handle_role_added(event)
-    when Frameworks::Events::RoleUpdated then handle_role_updated(event)
     when Frameworks::Events::LevelAdded then handle_level_added(event)
-    when Frameworks::Events::LevelUpdated then handle_level_updated(event)
-    when Frameworks::Events::CapabilityCategoryAdded then handle_capability_category_added(event)
-    when Frameworks::Events::CapabilityCategoryUpdated then handle_capability_category_updated(event)
+    when Frameworks::Events::LevelOrdinalChanged then handle_level_ordinal_changed(event)
     when Frameworks::Events::CapabilityAdded then handle_capability_added(event)
     when Frameworks::Events::CapabilityArchived then handle_capability_archived(event)
     when Frameworks::Events::CapabilityRoleBindingCreated then handle_binding_created(event)
-    when Frameworks::Events::CapabilityRoleBindingUpdated then handle_binding_updated(event)
     when Frameworks::Events::CapabilityRoleBindingRemoved then handle_binding_removed(event)
     when Frameworks::Events::BehaviouralExpectationSet then handle_expectation_set(event)
-    when Frameworks::Events::BehaviouralExpectationUpdated then handle_expectation_updated(event)
-    when Frameworks::Events::RoleIllustrationAdded then handle_illustration_added(event)
-    when Frameworks::Events::RoleIllustrationUpdated then handle_illustration_updated(event)
-    when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
-    when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
     end
   end
-  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
 
   # ── Rebuild on publish ──
 
   # Rebuilds the entire published projection for a framework from the event stream.
   #
-  # Deletes all child read models and replays every event, treating the
-  # replay as a non-draft context (so all structural events apply).
+  # Deletes all child read models and replays every non-meta event via handle().
+  # Because draft_in_progress is set to false BEFORE replay starts, the
+  # shape-changing event dispatch applies all events (rather than deferring them).
   #
   # @param framework [FrameworkState::Framework]
   # @param publish_event [RubyEventStore::Event] the FrameworkVersionPublished event
-  def rebuild_framework_projection(framework, publish_event) # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity
+  def rebuild_framework_projection(framework, publish_event) # rubocop:disable Metrics/MethodLength
     framework_id = framework.framework_id
 
-    # Delete all child read models for this framework
     destroy_framework_children(framework)
 
-    # Update framework version fields before replay
     framework.update!(
       current_published_version: publish_event.data[:version],
       draft_in_progress: false,
       draft_version: nil
     )
 
-    # Replay all events in the stream (except versioning events)
     stream = EventStreamNaming.framework_stream(framework_id)
     event_store = Rails.configuration.event_store
     event_store.read.stream(stream).each do |event|
-      # Skip versioning and framework-created events during replay
-      next if event.is_a?(Frameworks::Events::FrameworkCreated)
-      next if event.is_a?(Frameworks::Events::DraftVersionStarted)
-      next if event.is_a?(Frameworks::Events::FrameworkVersionPublished)
-      next if event.is_a?(Frameworks::Events::MigrationMappingDefined)
+      next if skip_during_rebuild?(event)
 
-      # Replay structural events directly (bypass draft guard)
-      # Also replay collaborator events (not structural, but need to be rebuilt)
-      case event
-      when Frameworks::Events::CollaboratorAdded then handle_collaborator_added(event)
-      when Frameworks::Events::CollaboratorRoleChanged then handle_collaborator_role_changed(event)
-      when Frameworks::Events::CollaboratorRemoved then handle_collaborator_removed(event)
-      else
-        replay_structural_event(event)
-      end
+      handle(event)
     end
   end
 
-  # Replays a structural event during rebuild (no draft guard).
-  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
-  def replay_structural_event(event)
-    case event
-    when Frameworks::Events::RoleFamilyAdded then handle_role_family_added(event)
-    when Frameworks::Events::RoleFamilyUpdated then handle_role_family_updated(event)
-    when Frameworks::Events::RoleAdded then handle_role_added(event)
-    when Frameworks::Events::RoleUpdated then handle_role_updated(event)
-    when Frameworks::Events::LevelAdded then handle_level_added(event)
-    when Frameworks::Events::LevelUpdated then handle_level_updated(event)
-    when Frameworks::Events::CapabilityCategoryAdded then handle_capability_category_added(event)
-    when Frameworks::Events::CapabilityCategoryUpdated then handle_capability_category_updated(event)
-    when Frameworks::Events::CapabilityAdded then handle_capability_added(event)
-    when Frameworks::Events::CapabilityArchived then handle_capability_archived(event)
-    when Frameworks::Events::CapabilityRoleBindingCreated then handle_binding_created(event)
-    when Frameworks::Events::CapabilityRoleBindingUpdated then handle_binding_updated(event)
-    when Frameworks::Events::CapabilityRoleBindingRemoved then handle_binding_removed(event)
-    when Frameworks::Events::BehaviouralExpectationSet then handle_expectation_set(event)
-    when Frameworks::Events::BehaviouralExpectationUpdated then handle_expectation_updated(event)
-    when Frameworks::Events::RoleIllustrationAdded then handle_illustration_added(event)
-    when Frameworks::Events::RoleIllustrationUpdated then handle_illustration_updated(event)
-    when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
-    when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
-    when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
-    end
+  def skip_during_rebuild?(event)
+    event.is_a?(Frameworks::Events::FrameworkCreated) ||
+      event.is_a?(Frameworks::Events::DraftVersionStarted) ||
+      event.is_a?(Frameworks::Events::FrameworkVersionPublished) ||
+      event.is_a?(Frameworks::Events::MigrationMappingDefined)
   end
-  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
 
   # Destroys all child read model records for a framework.
   def destroy_framework_children(framework) # rubocop:disable Metrics/MethodLength
@@ -317,10 +302,21 @@ class Frameworks::Projections::PublishedState
     )
   end
 
+  # Dependent-editorial: parent Level is added via the shape-changing
+  # LevelAdded event, which may be draft-deferred. If the Level row isn't
+  # present yet, skip — the rebuild replay will re-apply this update after
+  # LevelAdded lands.
   def handle_level_updated(event)
-    record = FrameworkState::Level.find_by!(level_id: event.data[:level_id])
-    attrs = event.data.slice(:ordinal, :title, :code).compact
+    record = FrameworkState::Level.find_by(level_id: event.data[:level_id])
+    return unless record
+
+    attrs = event.data.slice(:title, :code, :is_entry).compact
     record.update!(attrs) if attrs.any?
+  end
+
+  def handle_level_ordinal_changed(event)
+    record = FrameworkState::Level.find_by!(level_id: event.data[:level_id])
+    record.update!(ordinal: event.data[:new_ordinal])
   end
 
   def handle_capability_category_added(event)
@@ -365,8 +361,12 @@ class Frameworks::Projections::PublishedState
     )
   end
 
+  # Dependent-editorial: parent binding is added via shape-changing
+  # CapabilityRoleBindingCreated, which may be draft-deferred. Skip if absent.
   def handle_binding_updated(event)
-    record = FrameworkState::CapabilityRoleBinding.find_by!(binding_id: event.data[:binding_id])
+    record = FrameworkState::CapabilityRoleBinding.find_by(binding_id: event.data[:binding_id])
+    return unless record
+
     attrs = event.data.slice(:weight)
     attrs[:deficit_threshold] = event.data[:individual_tolerance] if event.data.key?(:individual_tolerance)
     record.update!(attrs) if attrs.any?
@@ -396,12 +396,23 @@ class Frameworks::Projections::PublishedState
     )
   end
 
+  # Dependent-editorial: parent expectation is added via shape-changing
+  # BehaviouralExpectationSet, which may be draft-deferred. Skip if absent.
   def handle_expectation_updated(event)
-    record = FrameworkState::BehaviouralExpectation.find_by!(expectation_id: event.data[:expectation_id])
+    record = FrameworkState::BehaviouralExpectation.find_by(expectation_id: event.data[:expectation_id])
+    return unless record
+
     record.update!(description: event.data[:new_description])
   end
 
+  # Dependent-editorial: illustrations reference a BehaviouralExpectation
+  # (shape-changing) as their parent. If the expectation row is not yet in
+  # the read model (because BehaviouralExpectationSet is still draft-deferred),
+  # skip — the rebuild replay will re-apply this event in the correct order.
   def handle_illustration_added(event)
+    return unless FrameworkState::BehaviouralExpectation
+      .exists?(expectation_id: event.data[:expectation_id])
+
     FrameworkState::RoleIllustration.create!(
       illustration_id: event.data[:illustration_id],
       stable_id: event.data[:stable_id],
@@ -413,12 +424,15 @@ class Frameworks::Projections::PublishedState
   end
 
   def handle_illustration_updated(event)
-    record = FrameworkState::RoleIllustration.find_by!(illustration_id: event.data[:illustration_id])
+    record = FrameworkState::RoleIllustration.find_by(illustration_id: event.data[:illustration_id])
+    return unless record
+
     record.update!(description: event.data[:new_description])
   end
 
   def handle_illustration_removed(event)
-    FrameworkState::RoleIllustration.find_by!(illustration_id: event.data[:illustration_id]).destroy!
+    record = FrameworkState::RoleIllustration.find_by(illustration_id: event.data[:illustration_id])
+    record&.destroy!
   end
 
   def handle_illustration_reordered(event)

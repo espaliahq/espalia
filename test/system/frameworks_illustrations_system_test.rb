@@ -30,6 +30,8 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       handler.add_role_illustration(
         @framework_id, @ill_id, SecureRandom.uuid_v7, @eid, @rid, 1, "Seeks guidance from tech lead"
       )
+      # Publish v1 so shape-changing events land in the read model
+      handler.publish_version(@framework_id, "test")
     end
 
     visit new_user_session_path
@@ -104,12 +106,16 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
         @rid2 = SecureRandom.uuid_v7
         cap = FrameworkState::Capability.find_by(name: "Strategic Thinking")
 
+        # Shape-changing commands (add_level, create_capability_role_binding)
+        # require a draft. add_role_family and add_role are editorial/live.
         handler.add_role_family(@framework_id, rfid2, "Product")
         handler.add_role(@framework_id, @rid2, rfid2, "Product Manager", "PM", "ic")
+        handler.start_draft(@framework_id, 2, "test")
         handler.add_level(@framework_id, SecureRandom.uuid_v7, @rid2, 1, "PM I", "PM1")
         handler.create_capability_role_binding(
           @framework_id, SecureRandom.uuid_v7, cap.capability_id, @rid2
         )
+        handler.publish_version(@framework_id, "test")
       end
     end
 

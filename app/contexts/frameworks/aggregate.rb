@@ -24,9 +24,16 @@ class Frameworks::Aggregate
     @pending_edits = {}
     @current_version = 0
     @draft_in_progress = false
+    @draft_version = nil
+    @added_during_draft = Set.new
+    @archives_needing_mapping = Set.new
   end
 
-  # Creates a new framework.
+  # Creates a new framework and opens its bootstrap v1 draft.
+  #
+  # After create, the aggregate is in a draft for v1. Structural commands
+  # (add_capability, add_level, etc.) may be called to populate the initial
+  # framework content. Callers must invoke publish_version to produce v1.
   #
   # @param framework_id [String] UUID for the framework
   # @param name [String] display name
@@ -37,6 +44,13 @@ class Frameworks::Aggregate
     apply(Frameworks::Events::FrameworkCreated.new(data: {
       framework_id: framework_id,
       name: name
+    }))
+
+    # Bootstrap v1 draft so structural commands can populate initial content.
+    apply(Frameworks::Events::DraftVersionStarted.new(data: {
+      framework_id: framework_id,
+      target_version: 1,
+      started_by: "system"
     }))
   end
 
@@ -123,7 +137,7 @@ class Frameworks::Aggregate
     }.compact))
   end
 
-  # Adds a level to a role.
+  # Adds a level to a role. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param level_id [String] UUID for the new level
@@ -132,9 +146,9 @@ class Frameworks::Aggregate
   # @param title [String] display title
   # @param code [String] short code (e.g. "E3")
   # @param is_entry [Boolean] whether this is an entry-level position
-  # @raise [RuntimeError] if role not found or level already exists
+  # @raise [RuntimeError] if no draft in progress, role not found, or level already exists
   def add_level(framework_id, level_id, role_id, ordinal, title, code, is_entry: false)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
     raise "Level #{level_id} already exists" if @levels.key?(level_id)
 
@@ -149,25 +163,51 @@ class Frameworks::Aggregate
     }))
   end
 
-  # Updates a level.
+  # Updates a level's editorial details (title/code/is_entry). Shape-preserving
+  # — applies live regardless of draft state. For ordinal changes, use
+  # change_level_ordinal.
   #
   # @param framework_id [String] UUID of the framework
   # @param level_id [String] UUID of the level
-  # @param ordinal [Integer, nil] updated ordinal
   # @param title [String, nil] updated title
   # @param code [String, nil] updated code
+  # @param is_entry [Boolean, nil] updated entry-level flag
   # @raise [RuntimeError] if level does not exist
-  def update_level(framework_id, level_id, ordinal: nil, title: nil, code: nil)
+  def update_level_details(framework_id, level_id, title: nil, code: nil, is_entry: nil)
     ensure_created!
     raise "Level #{level_id} not found" unless @levels.key?(level_id)
 
     apply(Frameworks::Events::LevelUpdated.new(data: {
       framework_id: framework_id,
       level_id: level_id,
-      ordinal: ordinal,
       title: title,
-      code: code
+      code: code,
+      is_entry: is_entry
     }.compact))
+  end
+
+  # Changes a level's ordinal position. Shape-changing — requires a draft
+  # because it renumbers rating rows for any in-flight assessment cycle.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param level_id [String] UUID of the level
+  # @param new_ordinal [Integer] the new ordinal position
+  # @param reason [String] explanation for the change
+  # @raise [RuntimeError] if no draft in progress or level does not exist
+  def change_level_ordinal(framework_id, level_id, new_ordinal, reason:)
+    ensure_draft_in_progress!
+    raise "Level #{level_id} not found" unless @levels.key?(level_id)
+
+    previous_ordinal = @levels[level_id][:ordinal]
+    return if previous_ordinal == new_ordinal
+
+    apply(Frameworks::Events::LevelOrdinalChanged.new(data: {
+      framework_id: framework_id,
+      level_id: level_id,
+      new_ordinal: new_ordinal,
+      previous_ordinal: previous_ordinal,
+      reason: reason
+    }))
   end
 
   # Adds a capability category to the framework.
@@ -212,7 +252,7 @@ class Frameworks::Aggregate
     }.compact))
   end
 
-  # Adds a capability to a category.
+  # Adds a capability to a category. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param capability_id [String] UUID for the new capability
@@ -220,9 +260,9 @@ class Frameworks::Aggregate
   # @param category_id [String] UUID of the parent category
   # @param name [String] display name
   # @param description [String, nil] optional description
-  # @raise [RuntimeError] if category not found or capability already exists
+  # @raise [RuntimeError] if no draft in progress, category not found, or capability already exists
   def add_capability(framework_id, capability_id, stable_id, category_id, name, description: nil)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
     raise "Capability #{capability_id} already exists" if @capabilities.key?(capability_id)
 
@@ -236,14 +276,18 @@ class Frameworks::Aggregate
     }))
   end
 
-  # Archives a capability.
+  # Archives a capability. Shape-changing — requires a draft.
+  #
+  # Archived capabilities that existed at draft start must have a
+  # corresponding MigrationMappingDefined event before publish_version
+  # is called; otherwise publish will raise.
   #
   # @param framework_id [String] UUID of the framework
   # @param capability_id [String] UUID of the capability
   # @param reason [String] reason for archiving
-  # @raise [RuntimeError] if capability not found or already archived
+  # @raise [RuntimeError] if no draft in progress, capability not found, or already archived
   def archive_capability(framework_id, capability_id, reason:)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Capability #{capability_id} already archived" if @capabilities[capability_id][:status] == :archived
 
@@ -254,7 +298,7 @@ class Frameworks::Aggregate
     }))
   end
 
-  # Creates a capability-role binding.
+  # Creates a capability-role binding. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param binding_id [String] UUID for the new binding
@@ -263,9 +307,9 @@ class Frameworks::Aggregate
   # @param weight [BigDecimal] relative weight (default 1.0)
   # @param individual_tolerance [BigDecimal, nil] nil = category-governed,
   #   0 = mandatory, N = deficit capped at N before entering category pool
-  # @raise [RuntimeError] if capability or role not found, or binding already exists
+  # @raise [RuntimeError] if no draft in progress, capability or role not found, or binding already exists
   def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, individual_tolerance: nil)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
     raise "Binding #{binding_id} already exists" if @bindings.key?(binding_id)
@@ -299,13 +343,13 @@ class Frameworks::Aggregate
     }.compact))
   end
 
-  # Removes a capability-role binding.
+  # Removes a capability-role binding. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param binding_id [String] UUID of the binding
-  # @raise [RuntimeError] if binding does not exist
+  # @raise [RuntimeError] if no draft in progress or binding does not exist
   def remove_capability_role_binding(framework_id, binding_id)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Binding #{binding_id} not found" unless @bindings.key?(binding_id)
 
     apply(Frameworks::Events::CapabilityRoleBindingRemoved.new(data: {
@@ -315,6 +359,8 @@ class Frameworks::Aggregate
   end
 
   # Sets a behavioural expectation for a capability at a level ordinal.
+  # Shape-changing — requires a draft because it adds a new cell to the
+  # (capability_stable_id, level_ordinal) rating grid.
   #
   # @param framework_id [String] UUID of the framework
   # @param expectation_id [String] UUID for the expectation
@@ -322,9 +368,9 @@ class Frameworks::Aggregate
   # @param capability_id [String] UUID of the parent capability
   # @param level_ordinal [Integer] seniority level ordinal
   # @param description [String] the expectation description
-  # @raise [RuntimeError] if capability not found or expectation already exists
+  # @raise [RuntimeError] if no draft in progress, capability not found, or expectation already exists
   def set_behavioural_expectation(framework_id, expectation_id, stable_id, capability_id, level_ordinal, description)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Expectation #{expectation_id} already exists" if @expectations.key?(expectation_id)
 
@@ -738,15 +784,24 @@ class Frameworks::Aggregate
 
   # Publishes the current draft as a new framework version.
   #
-  # The published projection will advance to include all structural
-  # events that accumulated during the draft phase.
+  # The published projection will advance to include all shape-changing
+  # events that accumulated during the draft phase. Editorial events have
+  # already been applied live.
   #
   # @param framework_id [String] UUID of the framework
   # @param published_by [String] UUID of the user who published
-  # @raise [RuntimeError] if no draft is in progress
+  # @raise [RuntimeError] if no draft is in progress, or if any capability
+  #   archived during this draft lacks a MigrationMappingDefined entry
   def publish_version(framework_id, published_by)
     ensure_created!
     raise "No draft in progress" unless @draft_in_progress
+    if @archives_needing_mapping.any?
+      pending = @archives_needing_mapping.to_a.join(", ")
+      raise "Cannot publish: #{@archives_needing_mapping.size} archived " \
+            "capability/capabilities lack migration mappings (#{pending}). " \
+            "Call define_migration_mapping for each, with mapping_type of " \
+            "'archived', 'evolved', or 'split'."
+    end
 
     apply(Frameworks::Events::FrameworkVersionPublished.new(data: {
       framework_id: framework_id,
@@ -760,6 +815,16 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if the framework has not been created
   def ensure_created!
     raise "Framework not yet created" unless @status == :created
+  end
+
+  # Ensures the aggregate is inside a draft phase. Called by shape-changing
+  # commands (commands that alter the (capability_stable_id, level_ordinal)
+  # rating grid — see docs/architecture/framework-aggregate.md).
+  #
+  # @raise [RuntimeError] if no draft is in progress
+  def ensure_draft_in_progress!
+    ensure_created!
+    raise "No draft in progress — call start_draft first" unless @draft_in_progress
   end
 
   on Frameworks::Events::FrameworkCreated do |event|
@@ -808,9 +873,13 @@ class Frameworks::Aggregate
 
   on Frameworks::Events::LevelUpdated do |event|
     level = @levels[event.data[:level_id]]
-    level[:ordinal] = event.data[:ordinal] if event.data.key?(:ordinal)
     level[:title] = event.data[:title] if event.data.key?(:title)
     level[:code] = event.data[:code] if event.data.key?(:code)
+    level[:is_entry] = event.data[:is_entry] if event.data.key?(:is_entry)
+  end
+
+  on Frameworks::Events::LevelOrdinalChanged do |event|
+    @levels[event.data[:level_id]][:ordinal] = event.data[:new_ordinal]
   end
 
   on Frameworks::Events::CapabilityCategoryAdded do |event|
@@ -835,10 +904,21 @@ class Frameworks::Aggregate
       name: event.data[:name],
       status: :active
     }
+    # Track capabilities added inside the current draft so archiving them
+    # in the same draft doesn't require a migration mapping (nothing to migrate).
+    @added_during_draft << event.data[:stable_id] if @draft_in_progress
   end
 
   on Frameworks::Events::CapabilityArchived do |event|
-    @capabilities[event.data[:capability_id]][:status] = :archived
+    cap = @capabilities[event.data[:capability_id]]
+    cap[:status] = :archived
+    stable_id = cap[:stable_id]
+    # Require a migration mapping unless the capability was also added in
+    # this same draft (in which case there's nothing from the previous
+    # published version to migrate).
+    if @draft_in_progress && !@added_during_draft.include?(stable_id)
+      @archives_needing_mapping << stable_id
+    end
   end
 
   on Frameworks::Events::CapabilityRoleBindingCreated do |event|
@@ -902,6 +982,8 @@ class Frameworks::Aggregate
   on Frameworks::Events::DraftVersionStarted do |event|
     @draft_in_progress = true
     @draft_version = event.data[:target_version]
+    @added_during_draft = Set.new
+    @archives_needing_mapping = Set.new
   end
 
   on Frameworks::Events::FrameworkVersionPublished do |event|
@@ -909,11 +991,16 @@ class Frameworks::Aggregate
     @draft_in_progress = false
     @draft_version = nil
     @migration_mappings = []
+    @added_during_draft = Set.new
+    @archives_needing_mapping = Set.new
   end
 
   on Frameworks::Events::MigrationMappingDefined do |event|
     @migration_mappings ||= []
     @migration_mappings << event.data[:mapping_id]
+    # Clear the from_stable_id from the pending-mapping set — any mapping
+    # type satisfies the "thought about it" requirement.
+    @archives_needing_mapping.delete(event.data[:from_stable_id]) if event.data[:from_stable_id]
   end
 
   on Frameworks::Events::EditSuggested do |event|

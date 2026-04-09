@@ -24,6 +24,9 @@ module Frameworks
       @pending_edits = {}
       @current_version = 0
       @draft_in_progress = false
+      @draft_version = nil
+      @added_during_draft = Set.new       # stable_ids added in current draft
+      @archives_needing_mapping = Set.new # stable_ids awaiting a migration mapping
       @status = :new
     end
 
@@ -76,24 +79,44 @@ Lifecycle:
   FrameworkCreated { name, tenant_id }
   FrameworkForkedFromTemplate { template_id }
 
-Structure — roles and levels:
+Events are classified along two axes (see ADR-16):
+  • Shape-changing: alters the (capability_stable_id, level_ordinal) rating grid.
+    Deferred in published view during a draft, replayed on publish.
+  • Editorial / shape-preserving: does not alter the rating grid. Applies live
+    regardless of draft state. Editorial events whose target row depends on a
+    shape-changing parent skip silently if the parent isn't yet materialised,
+    and are re-applied by the publish-time rebuild.
+
+Shape-preserving — roles and levels (editorial / live):
   RoleFamilyAdded { id, name, description }
   RoleFamilyUpdated { id, name?, description? }
   RoleAdded { role_family_id, id, name, code, track }
   RoleUpdated { id, name?, code?, track? }
-  LevelAdded { role_id, id, ordinal, title, code, is_entry }
-  LevelUpdated { id, ordinal?, title?, code? }
+  LevelUpdated { id, title?, code?, is_entry? }     # ordinal not carried here
 
-Structure — capabilities:
+Shape-changing — roles and levels (draft-gated):
+  LevelAdded { role_id, id, ordinal, title, code, is_entry }
+  LevelOrdinalChanged { level_id, new_ordinal, previous_ordinal, reason }
+
+Shape-preserving — capabilities (editorial / live):
   CapabilityCategoryAdded { id, name, description }
   CapabilityCategoryUpdated { id, name?, description? }
+
+Shape-changing — capabilities (draft-gated):
   CapabilityAdded { category_id, id, stable_id, name, description }
   CapabilityArchived { id, reason }
+    Requires a matching MigrationMappingDefined for the archived
+    capability's stable_id before publish_version can succeed,
+    unless the capability was also added in the same draft.
 
-Structure — bindings and scoring:
+Shape-changing — bindings (draft-gated):
   CapabilityRoleBindingCreated { id, capability_id, role_id, weight, individual_tolerance? }
-  CapabilityRoleBindingUpdated { id, weight?, individual_tolerance? }
   CapabilityRoleBindingRemoved { id }
+
+Shape-preserving — binding tuning (editorial / live):
+  CapabilityRoleBindingUpdated { id, weight?, individual_tolerance? }
+    Live-apply: weight/tolerance changes take effect immediately for
+    in-flight cycles. Matches configure_scoring_thresholds semantics.
   ScoringThresholdsConfigured { framework_id, mastery_threshold?, promotion_score_threshold?,
                                 overperformance_cap?, deficit_threshold? }
   NOTE: Events retain legacy field names (individual_tolerance, promotion_score_threshold).
@@ -104,9 +127,18 @@ Structure — bindings and scoring:
 
 Content — expectations (canonical rated text):
   BehaviouralExpectationSet { id, stable_id, capability_id, level_id, description }
+    Shape-changing: adds a cell to the (capability_stable_id, level_ordinal)
+    grid. Draft-gated.
   BehaviouralExpectationUpdated { id, new_description, rationale }
+    Shape-preserving (editorial). Applies live. Rewording the canonical
+    expectation does not change which capability × level slot exists.
 
 Content — illustrations (role-specific clarifying examples, NOT rated):
+  All four illustration events are shape-preserving (editorial / live).
+  They have a hard dependency on their parent BehaviouralExpectation and
+  are dispatched via the "dependent-editorial" path — live-applied when
+  the parent exists, silently skipped and re-applied on rebuild otherwise.
+
   RoleIllustrationAdded { id, stable_id, expectation_id, role_id, ordinal, description }
   RoleIllustrationUpdated { id, new_description, rationale }
   RoleIllustrationRemoved { id, reason }
@@ -140,14 +172,21 @@ Collaborator management:
 
 Version lifecycle:
   DraftVersionStarted { target_version, started_by }
-    Opens draft phase implicitly on first structural change.
-    Structural events between this and FrameworkVersionPublished
-    only visible in draft projection (not published).
+    Emitted by: (a) FrameworkCreated bootstraps a v1 draft automatically
+    (started_by: "system"); (b) explicit start_draft command for v2+.
+    Shape-changing events between this and FrameworkVersionPublished are
+    only visible in the draft projection (not published). Editorial events
+    apply live to both projections regardless of draft state.
   MigrationMappingDefined { from_stable_id, to_stable_id,
                             mapping_type, requires_reassessment, reason }
     mapping_type: same | evolved | split | archived | new
+    Any mapping for an archived capability's stable_id satisfies the
+    publish-time enforcement (see ADR-17).
   FrameworkVersionPublished { version, published_by }
-    Closes draft. Published projection advances.
+    Closes draft. Published projection rebuilds by wiping child read models
+    and replaying the entire stream. Publish is rejected if any capability
+    archived in this draft (and that existed at draft start) lacks a
+    MigrationMappingDefined entry.
     Only Owner and Editor can publish.
 ```
 
@@ -155,7 +194,7 @@ Version lifecycle:
 
 ## Projections
 
-**Published Framework State** — Primary read model. Replays all events but **skips structural events between `DraftVersionStarted` and `FrameworkVersionPublished`**. Editorial changes apply immediately. What assessors, managers, and reporting see.
+**Published Framework State** — Primary read model. Routes events by shape classification: **shape-changing** events are skipped while `draft_in_progress` is true and replayed on `FrameworkVersionPublished`; **editorial** events apply immediately regardless of draft state. On publish, `destroy_framework_children` wipes child read models and `handle()` replays every event from the stream — this is the single replay path. What assessors, managers, and reporting see.
 
 **Draft / Editor View** — Replays ALL events to head. Includes pending structural changes and pending suggested edits inline. What framework editors see during draft phase.
 
@@ -173,7 +212,7 @@ Version lifecycle:
 | 2 (moderate) | Capability/Category description | Capability Lead, Category Lead, Editor, Owner | false |
 | 3 (high) | BehaviouralExpectation | Capability Lead (for their cap), Category Lead, Editor, Owner | true (overridable) |
 
-Structural changes (adding/removing capabilities, changing bindings) require a new version — NOT suggested edits.
+**Shape-changing** changes (adding/removing capabilities, changing level ordinals, creating/removing bindings, setting new expectations) require a new version — they accumulate in a draft and become visible on publish. **Shape-preserving** editorial changes (renames, rephrasings, illustrations, binding weight tweaks) apply immediately via either suggestion-approval or direct editorial commands, independent of draft state.
 
 ---
 
@@ -204,18 +243,21 @@ Eight roles with scoped permissions. A person can hold multiple roles; permissio
 
 ## Versioning and Migration
 
-**Structural changes** = new version. **Editorial changes** = suggested edits, no version.
+**Shape-changing** changes = new version. **Shape-preserving / editorial** changes = live, no version bump. See ADR-16 for the classification rationale.
 
-**Implicit draft lifecycle:** The first structural change by any permitted collaborator implicitly opens a draft (emits `DraftVersionStarted`). No explicit "start draft" ceremony needed. All collaborators (`collaborator` role and above) can see the draft state. Only `owner` and `editor` can publish.
+**Draft lifecycle:**
+- `FrameworkCreated` bootstraps a v1 draft automatically (emits `DraftVersionStarted(target_version: 1, started_by: "system")`). The caller populates the framework with structural content and calls `publish_version` to produce v1.
+- Subsequent drafts are opened explicitly via `start_draft(target_version, started_by)`. Only `owner` and `editor` can publish.
+- Shape-changing commands raise `"No draft in progress — call start_draft first"` if called outside a draft (enforced by `Frameworks::Aggregate#ensure_draft_in_progress!`).
+- Editorial commands work regardless of draft state.
 
-**Versioning workflow:**
-1. First structural change → `DraftVersionStarted` emitted automatically
-2. Structural events accumulate, published projection unaffected
-3. System diffs published vs draft to derive migration mappings
-4. Admin reviews, emits `MigrationMappingDefined` events
-5. `FrameworkVersionPublished` (by Owner or Editor) → published projection advances
-6. Completed assessments: preserved via event replay to prior `FullAlignmentCompleted`
-7. In-progress assessments: `FrameworkVersionMigrated` in each affected person stream
+**Versioning workflow (v2+):**
+1. Call `start_draft(target_version, started_by)` — emits `DraftVersionStarted`
+2. Issue shape-changing commands; they accumulate in the stream but are deferred in the published projection
+3. Issue any `define_migration_mapping(...)` calls for capabilities you're archiving
+4. Call `publish_version(published_by)` — raises if archived capabilities lack mappings (see ADR-17); otherwise emits `FrameworkVersionPublished` and triggers a published-projection rebuild that replays every event in stream order
+5. Completed assessments: preserved via event replay to prior `FullAlignmentCompleted`
+6. In-progress assessments: `FrameworkVersionMigrated` in each affected person stream (not yet implemented — see follow-up)
 
 **Migration mapping types:**
 

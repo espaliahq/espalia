@@ -95,16 +95,31 @@ class Frameworks::CommandHandler
     end
   end
 
-  # Updates a level.
+  # Updates a level's editorial details (title/code/is_entry). Shape-preserving
+  # — applies live regardless of draft state. For ordinal changes, use
+  # change_level_ordinal.
   #
   # @param framework_id [String] UUID of the framework
   # @param level_id [String] UUID of the level
-  # @param ordinal [Integer, nil] updated ordinal
   # @param title [String, nil] updated title
   # @param code [String, nil] updated code
-  def update_level(framework_id, level_id, ordinal: nil, title: nil, code: nil)
+  # @param is_entry [Boolean, nil] updated entry-level flag
+  def update_level_details(framework_id, level_id, title: nil, code: nil, is_entry: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.update_level(framework_id, level_id, ordinal: ordinal, title: title, code: code)
+      framework.update_level_details(framework_id, level_id, title: title, code: code, is_entry: is_entry)
+    end
+  end
+
+  # Changes a level's ordinal position. Shape-changing — requires a draft
+  # because it renumbers rating rows for any in-flight assessment cycle.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param level_id [String] UUID of the level
+  # @param new_ordinal [Integer] the new ordinal position
+  # @param reason [String] explanation for the change
+  def change_level_ordinal(framework_id, level_id, new_ordinal, reason:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.change_level_ordinal(framework_id, level_id, new_ordinal, reason: reason)
     end
   end
 
