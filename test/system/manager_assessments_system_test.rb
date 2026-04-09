@@ -117,6 +117,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       click_link "Assessments"
       click_link "Review Assessment"
 
+      # Synchronise with Turbo navigation before waiting on the matrix
+      # controller. Without this, slow CI can exhaust Capybara's wait window
+      # on navigation alone, leaving nothing for the controller-ready check.
+      assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
       # Click a frequency button to rate
@@ -132,6 +136,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       click_link "Assessments"
       click_link "Review Assessment"
 
+      # Synchronise with Turbo navigation before waiting on the matrix
+      # controller. Without this, slow CI can exhaust Capybara's wait window
+      # on navigation alone, leaving nothing for the controller-ready check.
+      assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
       # Rate as "Consistent"
