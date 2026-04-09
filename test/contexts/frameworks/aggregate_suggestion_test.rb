@@ -849,8 +849,8 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
       assert_equal 2, added.data[:level_ordinal]
     end
 
-    should "raise on capability creation approval when no draft in progress" do
-      # Close the bootstrap v1 draft so shape-changing commands need a new one.
+    should "auto-open an implicit draft when approving capability creation with no draft" do
+      # Close the bootstrap v1 draft so the next approval has to open one.
       @aggregate.publish_version(@framework_id, SecureRandom.uuid_v7)
 
       @aggregate.suggest_create(
@@ -858,10 +858,17 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
         "capability", { name: "Late" },
         parent_id: @cat_id, author_id: @author_id
       )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
 
-      assert_raises(RuntimeError, /No draft in progress/) do
-        @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
-      end
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_equal 1, drafts.size, "expected exactly one implicit DraftVersionStarted"
+      assert_equal 2, drafts.first.data[:target_version], "draft should target current_version + 1"
+      assert_equal @reviewer_id, drafts.first.data[:started_by]
+      assert_equal true, drafts.first.data[:auto_opened]
+
+      added = new_events.find { |e| e.is_a?(Frameworks::Events::CapabilityAdded) }
+      assert_not_nil added, "CapabilityAdded should have been applied inside the implicit draft"
+      assert_equal "Late", added.data[:name]
     end
 
     should "not auto-reject competing creates" do
@@ -921,17 +928,24 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
       assert_equal @cap_id, archived.data[:capability_id]
     end
 
-    should "raise on capability delete approval when no draft in progress" do
+    should "auto-open an implicit draft when approving capability delete with no draft" do
       @aggregate.publish_version(@framework_id, SecureRandom.uuid_v7)
 
       @aggregate.suggest_delete(
         @framework_id, @suggestion_id,
         "capability", @cap_id, author_id: @author_id
       )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
 
-      assert_raises(RuntimeError, /No draft in progress/) do
-        @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
-      end
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_equal 1, drafts.size
+      assert_equal 2, drafts.first.data[:target_version]
+      assert_equal @reviewer_id, drafts.first.data[:started_by]
+      assert_equal true, drafts.first.data[:auto_opened]
+
+      archived = new_events.find { |e| e.is_a?(Frameworks::Events::CapabilityArchived) }
+      assert_not_nil archived
+      assert_equal @cap_id, archived.data[:capability_id]
     end
 
     should "auto-reject pending edits on the same entity" do
@@ -976,6 +990,130 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
       rejections = new_events.select { |e| e.is_a?(Frameworks::Events::SuggestionRejected) }
       rejected_ids = rejections.map { |e| e.data[:suggestion_id] }
       assert_includes rejected_ids, competing_sid
+    end
+  end
+
+  # ── approve_suggestion auto-opens draft for shape-changing suggestions ──
+
+  context "#approve_suggestion auto-opens draft for shape-changing suggestions" do
+    setup do
+      @reviewer_id = SecureRandom.uuid_v7
+      # Close the bootstrap v1 draft so further shape-changing approvals
+      # need a fresh one. After this, @current_version == 1, no draft.
+      @aggregate.publish_version(@framework_id, SecureRandom.uuid_v7)
+    end
+
+    should "auto-open draft when approving a behavioural_expectation creation with no draft" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "behavioural_expectation", { level_ordinal: 2, description: "New L2 thing" },
+        parent_id: @cap_id, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_equal 1, drafts.size
+      assert_equal true, drafts.first.data[:auto_opened]
+      assert_not_nil new_events.find { |e| e.is_a?(Frameworks::Events::BehaviouralExpectationSet) }
+    end
+
+    should "auto-open draft when approving a level creation with no draft" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "level", { ordinal: 2, title: "Mid", code: "E2" },
+        parent_id: @rid, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_equal 1, drafts.size
+      assert_equal true, drafts.first.data[:auto_opened]
+      assert_not_nil new_events.find { |e| e.is_a?(Frameworks::Events::LevelAdded) }
+    end
+
+    should "join an existing implicit draft when approving a second shape-changing suggestion" do
+      first_sid = @suggestion_id
+      second_sid = SecureRandom.uuid_v7
+      second_reviewer = SecureRandom.uuid_v7
+
+      @aggregate.suggest_create(
+        @framework_id, first_sid,
+        "capability", { name: "First New Cap" },
+        parent_id: @cat_id, author_id: @author_id
+      )
+      @aggregate.suggest_create(
+        @framework_id, second_sid,
+        "capability", { name: "Second New Cap" },
+        parent_id: @cat_id, author_id: SecureRandom.uuid_v7
+      )
+
+      @aggregate.approve_suggestion(first_sid, @reviewer_id)
+      @aggregate.approve_suggestion(second_sid, second_reviewer)
+
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_equal 1, drafts.size, "second approval should join the draft, not open a new one"
+      assert_equal @reviewer_id, drafts.first.data[:started_by],
+                   "draft owner is the first approver"
+
+      added = new_events.select { |e| e.is_a?(Frameworks::Events::CapabilityAdded) }
+      assert_equal 2, added.size, "both capabilities should land in the same draft"
+    end
+
+    should "join an explicit draft when approving a shape-changing suggestion inside it" do
+      explicit_starter = SecureRandom.uuid_v7
+      @aggregate.start_draft(@framework_id, 2, explicit_starter)
+
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "capability", { name: "Joined" },
+        parent_id: @cat_id, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_equal 1, drafts.size, "should not open a second draft on top of the explicit one"
+      assert_equal explicit_starter, drafts.first.data[:started_by]
+      assert_nil drafts.first.data[:auto_opened],
+                 "explicit start_draft does not set auto_opened"
+      assert_not_nil new_events.find { |e| e.is_a?(Frameworks::Events::CapabilityAdded) }
+    end
+
+    should "not open a draft when approving a shape-preserving creation" do
+      @aggregate.suggest_create(
+        @framework_id, @suggestion_id,
+        "role_illustration",
+        { role_id: @rid, description: "Mentors juniors" },
+        parent_id: @eid, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_empty drafts, "shape-preserving suggestions must not auto-open a draft"
+      assert_not_nil new_events.find { |e| e.is_a?(Frameworks::Events::RoleIllustrationAdded) }
+    end
+
+    should "not open a draft when approving a shape-preserving deletion (illustration)" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "role_illustration", @ill_id, author_id: @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_empty drafts
+      assert_not_nil new_events.find { |e| e.is_a?(Frameworks::Events::RoleIllustrationRemoved) }
+    end
+
+    should "not open a draft when approving an :edit suggestion (always shape-preserving)" do
+      @aggregate.suggest_edit(
+        @framework_id, @suggestion_id,
+        "role_illustration", @ill_id,
+        "description", "Better wording", @author_id
+      )
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      drafts = new_events.select { |e| e.is_a?(Frameworks::Events::DraftVersionStarted) }
+      assert_empty drafts
     end
   end
 

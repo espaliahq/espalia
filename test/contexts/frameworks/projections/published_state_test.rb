@@ -531,6 +531,55 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       end
     end
 
+    should "auto-open implicit draft when approving a shape-changing suggestion after v1" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Test Framework")
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        cat_id = SecureRandom.uuid_v7
+        handler.add_role_family(@framework_id, rfid, "Engineering")
+        handler.add_role(@framework_id, rid, rfid, "E", "E", "ic")
+        handler.add_capability_category(@framework_id, cat_id, "Thinking")
+        handler.publish_version(@framework_id, "user-1")
+
+        # v1 is published, no draft active.
+        fw = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert_equal 1, fw.current_published_version
+        assert_not fw.draft_in_progress
+
+        # Author suggests a new capability; reviewer approves.
+        # mode: :suggesting prevents the open-framework auto-approval path so
+        # the test exercises an explicit reviewer approval.
+        sug_id = SecureRandom.uuid_v7
+        author_id = SecureRandom.uuid_v7
+        reviewer_id = SecureRandom.uuid_v7
+        handler.suggest_create(@framework_id, sug_id, "capability",
+          { name: "Resilience" }, parent_id: cat_id, author_id: author_id, mode: :suggesting)
+        handler.approve_suggestion(@framework_id, sug_id, reviewer_id)
+
+        # The implicit draft is now open in the projection.
+        fw.reload
+        assert fw.draft_in_progress, "approval should have auto-opened a draft"
+        assert_equal 2, fw.draft_version
+
+        # The new capability is shape-changing — deferred until publish.
+        assert_equal 0, FrameworkState::Capability
+          .joins(:category).where(framework_capability_categories: { framework_id: @framework_id }).count,
+          "Capability should NOT be visible while the auto-opened draft is in progress"
+
+        # Publishing the implicit draft makes it visible via rebuild.
+        handler.publish_version(@framework_id, "user-1")
+
+        fw.reload
+        assert_equal 2, fw.current_published_version
+        assert_not fw.draft_in_progress
+        assert_equal 1, FrameworkState::Capability
+          .joins(:category).where(framework_capability_categories: { framework_id: @framework_id }).count
+        assert_not_nil FrameworkState::Capability.find_by(name: "Resilience")
+      end
+    end
+
     should "preserve editorial changes made after v1 publish" do
       ActsAsTenant.with_tenant(@tenant) do
         handler = Frameworks::CommandHandler.new

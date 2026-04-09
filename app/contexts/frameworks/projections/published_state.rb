@@ -209,7 +209,30 @@ class Frameworks::Projections::PublishedState
     event.is_a?(Frameworks::Events::FrameworkCreated) ||
       event.is_a?(Frameworks::Events::DraftVersionStarted) ||
       event.is_a?(Frameworks::Events::FrameworkVersionPublished) ||
-      event.is_a?(Frameworks::Events::MigrationMappingDefined)
+      event.is_a?(Frameworks::Events::MigrationMappingDefined) ||
+      suggestion_event?(event)
+  end
+
+  # Suggestion events are an orthogonal concern from structural framework
+  # state and their read models (FrameworkState::SuggestedEdit) are not
+  # destroyed by destroy_framework_children. Replaying them on rebuild
+  # would either trip unique-constraint violations on the create-style
+  # events or be no-op idempotent updates on the state-transition events.
+  # Skipping the entire family keeps suggestion lifecycle independent of
+  # framework version rebuilds.
+  SUGGESTION_EVENT_CLASSES = [
+    Frameworks::Events::EditSuggested,
+    Frameworks::Events::EntityCreationSuggested,
+    Frameworks::Events::EntityDeletionSuggested,
+    Frameworks::Events::SuggestionAmended,
+    Frameworks::Events::SuggestionApproved,
+    Frameworks::Events::SuggestionRejected,
+    Frameworks::Events::SuggestionWithdrawn,
+    Frameworks::Events::SuggestionCommented
+  ].freeze
+
+  def suggestion_event?(event)
+    SUGGESTION_EVENT_CLASSES.any? { |klass| event.is_a?(klass) }
   end
 
   # Destroys all child read model records for a framework.

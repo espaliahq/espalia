@@ -9,6 +9,12 @@
 class Frameworks::Aggregate
   include AggregateRoot
 
+  # Suggestion target_entity_types whose approval requires a draft because
+  # the underlying add_*/archive_* command is shape-changing (alters the
+  # (capability_stable_id, level_ordinal) rating grid — see ADR-16).
+  SHAPE_CHANGING_CREATE_TYPES = %w[capability behavioural_expectation level].freeze
+  SHAPE_CHANGING_DELETE_TYPES = %w[capability].freeze
+
   def initialize
     @name = nil
     @status = :new
@@ -752,6 +758,8 @@ class Frameworks::Aggregate
       comment: comment
     }.compact))
 
+    maybe_auto_open_draft_for(suggestion, reviewer_id)
+
     case suggestion[:kind]
     when :create then apply_suggested_creation(suggestion)
     when :delete then apply_suggested_deletion(suggestion)
@@ -905,6 +913,38 @@ class Frameworks::Aggregate
   def ensure_draft_in_progress!
     ensure_created!
     raise "No draft in progress — call start_draft first" unless @draft_in_progress
+  end
+
+  # Auto-opens an implicit draft when approving a shape-changing suggestion
+  # without an active draft. The draft stays open until owner/editor publishes
+  # — letting bottom-up structural improvements accumulate without forcing
+  # admins to bracket every approval with start_draft / publish_version.
+  #
+  # No-op if a draft is already in progress (the structural change joins it)
+  # or if the suggestion is shape-preserving (which apply live).
+  #
+  # @param suggestion [Hash] pending_edits entry being approved
+  # @param reviewer_id [String] approver's UUID — recorded as the draft owner
+  def maybe_auto_open_draft_for(suggestion, reviewer_id)
+    return if @draft_in_progress
+    return unless shape_changing_suggestion?(suggestion)
+
+    apply(Frameworks::Events::DraftVersionStarted.new(data: {
+      framework_id: @framework_id,
+      target_version: @current_version + 1,
+      started_by: reviewer_id,
+      auto_opened: true
+    }))
+  end
+
+  # @param suggestion [Hash] pending_edits entry
+  # @return [Boolean] whether approving this suggestion will require a draft
+  def shape_changing_suggestion?(suggestion)
+    case suggestion[:kind]
+    when :create then SHAPE_CHANGING_CREATE_TYPES.include?(suggestion[:target_entity_type])
+    when :delete then SHAPE_CHANGING_DELETE_TYPES.include?(suggestion[:target_entity_type])
+    else              false
+    end
   end
 
   on Frameworks::Events::FrameworkCreated do |event|
