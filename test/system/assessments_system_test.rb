@@ -198,9 +198,13 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("#capability-name-#{@cap1_stable}")
       assert_text "Asks 'why' before jumping into implementation"
 
-      # Click second row — first should collapse, second should expand
-      find("#capability-name-#{@cap2_stable}").click
-      assert_text "Creates a checklist of sub-tasks before starting work"
+      # Click second row — first should collapse, second should expand. Wrapped
+      # in click_with_retry because expand_matrix_row's own retry can't help
+      # here: the expandedRow selector is still visible from row 1's expansion,
+      # so a dropped click on row 2 wouldn't be detected.
+      click_with_retry(expect_text: "Creates a checklist of sub-tasks before starting work") do
+        find("#capability-name-#{@cap2_stable}").click
+      end
       assert_no_text "Asks 'why' before jumping into implementation"
     end
 
@@ -276,13 +280,19 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "switch categories when clicking a tab" do
       visit assessment_path(@assignment)
 
-      # Click the second tab
-      within "#category-tabs" do
-        click_on "Delivering"
-      end
+      # Wait for the lazy-loaded matrix frame to finish its eager fetch.
+      # The category-tabs nav lives INSIDE the assessment-matrix turbo frame,
+      # so a click on a tab can race the eager-fetch replacement and be
+      # silently dropped on slow CI runners.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
-      # Should show second category content
-      assert_text "Execution"
+      # Click the second tab. Wrapped in click_with_retry because Turbo Frame
+      # link clicks can also be silently dropped under CI load.
+      click_with_retry(expect_text: "Execution") do
+        within "#category-tabs" do
+          click_on "Delivering"
+        end
+      end
       assert_text "Ships features reliably"
 
       # First category capabilities should not be in the matrix rows
