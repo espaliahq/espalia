@@ -102,6 +102,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "show self-rating indicator and manager frequency selectors" do
       click_link "Assessments"
+      # Wait for the index to fully render before clicking through. Without
+      # this synchronisation, the second click can land on a stale link
+      # and be silently dropped on slow CI runners.
+      assert_text "Team Assessments"
       click_link "Review Assessment"
 
       # The report's self-rating should appear as a read-only indicator
@@ -115,6 +119,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "allow manager to submit a rating" do
       click_link "Assessments"
+      # Wait for the index to fully render before clicking through. Without
+      # this synchronisation, the second click can land on a stale link
+      # and be silently dropped on slow CI runners.
+      assert_text "Team Assessments"
       click_link "Review Assessment"
 
       # Synchronise with Turbo navigation before waiting on the matrix
@@ -134,6 +142,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "allow manager to untoggle a rating by clicking the same frequency" do
       click_link "Assessments"
+      # Wait for the index to fully render before clicking through. Without
+      # this synchronisation, the second click can land on a stale link
+      # and be silently dropped on slow CI runners.
+      assert_text "Team Assessments"
       click_link "Review Assessment"
 
       # Synchronise with Turbo navigation before waiting on the matrix
