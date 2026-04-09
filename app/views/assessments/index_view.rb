@@ -7,13 +7,15 @@ class Views::Assessments::IndexView < Views::Base
   # @param assignments [Array<PersonFrameworkAssignment>] own assignments
   # @param report_assignments [Array<PersonFrameworkAssignment>] direct reports
   # @param report_people [Hash{String => Person}] preloaded person records by ID
+  # @param open_cycles [Hash{Array(String, String) => AssessmentCycle}] preloaded open cycles keyed by [framework_id, person_id]
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignments:, report_assignments: [], report_people: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignments:, report_assignments: [], report_people: {}, open_cycles: {}, user: nil, current_tenant: nil, tenants: [])
     @assignments = assignments
     @report_assignments = report_assignments
     @report_people = report_people
+    @open_cycles = open_cycles
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -64,6 +66,7 @@ class Views::Assessments::IndexView < Views::Base
 
   def report_assignment_card(assignment)
     person = @report_people[assignment.person_id]
+    cycle = @open_cycles[[ assignment.framework_id, assignment.person_id ]]
 
     div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 p-5 shadow-xs") do
@@ -84,11 +87,11 @@ class Views::Assessments::IndexView < Views::Base
             end
           end
         end
-        cycle_status_badge(assignment)
+        cycle_status_badge(cycle)
       end
 
-      if assignment.cycle_name.present?
-        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { assignment.cycle_name }
+      if cycle&.name.present?
+        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { cycle.name }
       end
 
       div(class: "mt-4") do
@@ -104,6 +107,8 @@ class Views::Assessments::IndexView < Views::Base
   end
 
   def assignment_card(assignment)
+    cycle = @open_cycles[[ assignment.framework_id, assignment.person_id ]]
+
     div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 p-5 shadow-xs") do
       div(class: "flex items-start justify-between") do
@@ -120,15 +125,15 @@ class Views::Assessments::IndexView < Views::Base
             end
           end
         end
-        cycle_status_badge(assignment)
+        cycle_status_badge(cycle)
       end
 
-      if assignment.cycle_name.present?
-        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { assignment.cycle_name }
+      if cycle&.name.present?
+        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { cycle.name }
       end
 
       div(class: "mt-4") do
-        if assignment.cycle_open?
+        if cycle
           a(
             href: assessment_path(assignment),
             class: "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 " \
@@ -147,12 +152,9 @@ class Views::Assessments::IndexView < Views::Base
     end
   end
 
-  def cycle_status_badge(assignment)
-    case assignment.cycle_status
-    when "open"
+  def cycle_status_badge(cycle)
+    if cycle
       render Components::Kit::Badge.new("In Progress", variant: :warning)
-    when "completed"
-      render Components::Kit::Badge.new("Completed", variant: :success)
     else
       render Components::Kit::Badge.new("Not Started", variant: :default)
     end

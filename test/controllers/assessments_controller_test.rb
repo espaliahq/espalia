@@ -29,13 +29,14 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       create(:framework_behavioural_expectation,
         capability_id: @cap.capability_id, level_ordinal: 2, description: "Synthesises information")
 
-      # Create assignment with open cycle via event projection
+      # Create assignment + define cycle + enroll via event projection
       handler = PersonDevelopment::CommandHandler.new
+      cycle_handler = AssessmentCycles::CommandHandler.new
       handler.assign_to_framework(@person.id, framework_id, @role.role_id, @level.level_id)
-      handler.open_assessment_cycle(
-        @person.id, framework_id,
-        SecureRandom.uuid_v7, "Q1 2026", "regular", 1
-      )
+
+      @cycle_id = SecureRandom.uuid_v7
+      cycle_handler.define_cycle(@cycle_id, framework_id, "Q1 2026", "regular", 1)
+      cycle_handler.enroll(@cycle_id, @person.id)
 
       @assignment = PersonFrameworkAssignment.for_person(@person.id).first
     end
@@ -54,6 +55,52 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     should "redirect unauthenticated users to sign in" do
       get assessments_path
       assert_redirected_to new_user_session_path
+    end
+
+    should "issue a bounded number of cycle queries regardless of assignment count" do
+      # Seed multiple direct reports assigned to the framework. Because an
+      # open cycle already exists (from setup), the
+      # AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments handler
+      # auto-enrolls each new assignment — no explicit cycle_handler.enroll
+      # call is needed. The index should then render several assignment
+      # cards, each with an open cycle. Without batch loading this would
+      # trigger one cycle lookup per card (N+1).
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = @person
+        handler = PersonDevelopment::CommandHandler.new
+
+        3.times do |i|
+          report_user = create(:user, password: "password123")
+          report = create(:person,
+            tenant: @tenant, email: report_user.email, name: "Report #{i}", manager: manager)
+          create(:tenant_user, tenant: @tenant, user: report_user, person: report)
+          handler.assign_to_framework(
+            report.id, @framework.framework_id, @role.role_id, @level.level_id
+          )
+        end
+      end
+
+      sign_in @user
+
+      queries = []
+      callback = ->(_n, _s, _f, _i, payload) do
+        queries << payload[:sql] unless payload[:name] == "SCHEMA" || payload[:sql] =~ /SAVEPOINT/
+      end
+
+      ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+        get assessments_path
+      end
+      assert_response :success
+
+      # The old N+1 pattern issued one `SELECT ... FROM "assessment_cycles" ...`
+      # per rendered assignment card (via PersonFrameworkAssignment#current_open_cycle).
+      # The batch preload uses `FROM "assessment_cycle_participants" LEFT OUTER JOIN
+      # "assessment_cycles"`, so queries with `FROM "assessment_cycles"` as the primary
+      # table should be zero. Policy scalar queries join THROUGH assessment_cycles but
+      # SELECT FROM person_framework_assignments, so they don't match either.
+      primary_cycle_queries = queries.select { |q| q =~ /FROM "assessment_cycles"/ }
+      assert_equal 0, primary_cycle_queries.size,
+        "expected 0 per-assignment cycle queries, got #{primary_cycle_queries.size}: #{primary_cycle_queries.inspect}"
     end
   end
 

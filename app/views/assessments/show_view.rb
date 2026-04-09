@@ -54,7 +54,7 @@ class Views::Assessments::ShowView < Views::Base
           div(class: "mt-1 flex flex-wrap items-center gap-2") do
             render Components::Kit::Badge.new(@matrix_data[:role].name, variant: :info)
             render Components::Kit::Badge.new(@matrix_data[:level].title, variant: :default)
-            if @assignment.cycle_open?
+            if @assignment.current_open_cycle
               render Components::Kit::Badge.new("In Progress", variant: :warning)
             end
           end

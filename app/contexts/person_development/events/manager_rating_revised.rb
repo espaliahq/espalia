@@ -7,6 +7,7 @@
 #   @option data [String] :capability_stable_id stable UUID of the capability
 #   @option data [Integer] :level_ordinal the level being revised
 #   @option data [String] :frequency revised frequency: "some", "occasional", or "consistent"
+#   @option data [String] :cycle_id UUID of the cycle this rating belongs to
 #   @option data [String] :comment optional comment on the revision
 #   @option data [String] :rationale reason for the change
 #

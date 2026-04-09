@@ -61,7 +61,7 @@ class Views::Assessments::ManagerShowView < Views::Base
             render Components::Kit::Badge.new(@framework.name, variant: :default)
             render Components::Kit::Badge.new(@matrix_data[:role].name, variant: :info)
             render Components::Kit::Badge.new(@matrix_data[:level].title, variant: :default)
-            if @assignment.cycle_open?
+            if @assignment.current_open_cycle
               render Components::Kit::Badge.new("In Progress", variant: :warning)
             end
           end

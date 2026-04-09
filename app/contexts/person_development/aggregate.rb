@@ -7,12 +7,18 @@
 #
 # An "assessment" is a projection derived from this stream — not a separate entity.
 # Ratings are per (capability_stable_id, level_ordinal) pair, enabling independent
-# assessment of each level's behaviours.
+# assessment of each level's behaviours. Each rating event is stamped with the
+# `cycle_id` of the cycle the person was in at the time, so replay tells the
+# full per-cycle story.
+#
+# Cycle membership is driven from the {AssessmentCycles::Aggregate} via a
+# cross-stream sync handler. `join_cycle` / `leave_cycle` are called ONLY by
+# that sync handler in response to PersonEnrolled / PersonUnenrolled events —
+# never by controllers.
 #
 class PersonDevelopment::Aggregate
   include AggregateRoot
 
-  CYCLE_TYPES = %w[regular performance_review promotion_review].freeze
   FREQUENCIES = %w[none some occasional consistent].freeze
 
   def initialize
@@ -22,7 +28,6 @@ class PersonDevelopment::Aggregate
     @level_id = nil
     @assigned = false
     @current_cycle_id = nil
-    @cycle_open = false
     @self_ratings = {}   # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
   end
@@ -85,39 +90,39 @@ class PersonDevelopment::Aggregate
     }))
   end
 
-  # ── Assessment Cycles ──
-
-  # Opens a new assessment cycle.
+  # ── Assessment Cycle Membership ──
   #
-  # @param cycle_id [String] UUID for the new cycle
-  # @param cycle_name [String] display name (e.g. "Q1 2026")
-  # @param cycle_type [String] one of: regular, performance_review, promotion_review
-  # @param framework_version [Integer] the framework version this cycle assesses against
-  # @raise [RuntimeError] if not assigned or cycle already open
-  def open_assessment_cycle(cycle_id, cycle_name, cycle_type, framework_version)
-    ensure_assigned!
-    raise "Assessment cycle already open" if @cycle_open
-    raise "Invalid cycle type: #{cycle_type}" unless CYCLE_TYPES.include?(cycle_type)
+  # These commands are invoked ONLY by
+  # {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}, never by user code.
 
-    apply(PersonDevelopment::Events::AssessmentCycleOpened.new(data: {
+  # Joins the given assessment cycle.
+  #
+  # @param cycle_id [String] UUID of the cycle to join
+  # @param framework_version [Integer] framework version the cycle assesses against
+  # @raise [RuntimeError] if not assigned or already in a cycle
+  def join_cycle(cycle_id, framework_version)
+    ensure_assigned!
+    raise "Already in a cycle" unless @current_cycle_id.nil?
+
+    apply(PersonDevelopment::Events::JoinedAssessmentCycle.new(data: {
       cycle_id: cycle_id,
-      cycle_name: cycle_name,
-      cycle_type: cycle_type,
       framework_version: framework_version
     }))
   end
 
-  # Completes the current assessment cycle.
+  # Leaves the given assessment cycle.
   #
-  # @param cycle_id [String] UUID of the cycle to complete
-  # @raise [RuntimeError] if no cycle open or wrong cycle ID
-  def complete_assessment_cycle(cycle_id)
+  # @param cycle_id [String] UUID of the cycle being left (must match current)
+  # @param reason [String] why the person is leaving
+  # @raise [RuntimeError] if not in a cycle or cycle_id doesn't match
+  def leave_cycle(cycle_id, reason)
     ensure_assigned!
-    raise "No assessment cycle open" unless @cycle_open
-    raise "Cycle ID does not match open cycle" unless @current_cycle_id == cycle_id
+    raise "Not currently in a cycle" if @current_cycle_id.nil?
+    raise "Cycle ID does not match current cycle" unless @current_cycle_id == cycle_id
 
-    apply(PersonDevelopment::Events::AssessmentCycleCompleted.new(data: {
-      cycle_id: cycle_id
+    apply(PersonDevelopment::Events::LeftAssessmentCycle.new(data: {
+      cycle_id: cycle_id,
+      reason: reason
     }))
   end
 
@@ -128,16 +133,18 @@ class PersonDevelopment::Aggregate
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being assessed
   # @param frequency [String] "some", "occasional", or "consistent"
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
-  # @raise [RuntimeError] if no cycle open or invalid frequency
-  def rate_self(capability_stable_id, level_ordinal:, frequency:, comment: nil)
-    ensure_cycle_open!
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
+  def rate_self(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
+    ensure_in_cycle!(cycle_id)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
     apply(PersonDevelopment::Events::SelfRated.new(data: {
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       frequency: frequency,
+      cycle_id: cycle_id,
       comment: comment
     }))
   end
@@ -148,10 +155,11 @@ class PersonDevelopment::Aggregate
   # @param level_ordinal [Integer] the level being revised
   # @param frequency [String] revised frequency
   # @param rationale [String] reason for the change
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
   # @raise [RuntimeError] if no prior self-rating for this capability at this level
-  def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
-    ensure_cycle_open!
+  def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+    ensure_in_cycle!(cycle_id)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
     raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @self_ratings.key?([ capability_stable_id, level_ordinal ])
@@ -160,6 +168,7 @@ class PersonDevelopment::Aggregate
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       frequency: frequency,
+      cycle_id: cycle_id,
       comment: comment,
       rationale: rationale
     }))
@@ -169,15 +178,17 @@ class PersonDevelopment::Aggregate
   #
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @raise [RuntimeError] if no prior self-rating for this capability at this level
-  def clear_self_rating(capability_stable_id, level_ordinal:)
-    ensure_cycle_open!
+  def clear_self_rating(capability_stable_id, level_ordinal:, cycle_id:)
+    ensure_in_cycle!(cycle_id)
     raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @self_ratings.key?([ capability_stable_id, level_ordinal ])
 
     apply(PersonDevelopment::Events::SelfRatingCleared.new(data: {
       capability_stable_id: capability_stable_id,
-      level_ordinal: level_ordinal
+      level_ordinal: level_ordinal,
+      cycle_id: cycle_id
     }))
   end
 
@@ -188,16 +199,18 @@ class PersonDevelopment::Aggregate
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being assessed
   # @param frequency [String] "some", "occasional", or "consistent"
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
-  # @raise [RuntimeError] if no cycle open or invalid frequency
-  def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, comment: nil)
-    ensure_cycle_open!
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
+  def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
+    ensure_in_cycle!(cycle_id)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
     apply(PersonDevelopment::Events::ManagerRated.new(data: {
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       frequency: frequency,
+      cycle_id: cycle_id,
       comment: comment
     }))
   end
@@ -208,10 +221,11 @@ class PersonDevelopment::Aggregate
   # @param level_ordinal [Integer] the level being revised
   # @param frequency [String] revised frequency
   # @param rationale [String] reason for the change
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
-  def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
-    ensure_cycle_open!
+  def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+    ensure_in_cycle!(cycle_id)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
@@ -220,6 +234,7 @@ class PersonDevelopment::Aggregate
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       frequency: frequency,
+      cycle_id: cycle_id,
       comment: comment,
       rationale: rationale
     }))
@@ -229,15 +244,17 @@ class PersonDevelopment::Aggregate
   #
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
-  def clear_manager_rating(capability_stable_id, level_ordinal:)
-    ensure_cycle_open!
+  def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:)
+    ensure_in_cycle!(cycle_id)
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
 
     apply(PersonDevelopment::Events::ManagerRatingCleared.new(data: {
       capability_stable_id: capability_stable_id,
-      level_ordinal: level_ordinal
+      level_ordinal: level_ordinal,
+      cycle_id: cycle_id
     }))
   end
 
@@ -252,16 +269,18 @@ class PersonDevelopment::Aggregate
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being agreed upon
   # @param aligned_frequency [String] agreed frequency
+  # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param comment [String, nil] optional comment
-  # @raise [RuntimeError] if no cycle open or invalid frequency
-  def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, comment: nil)
-    ensure_cycle_open!
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
+  def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, cycle_id:, comment: nil)
+    ensure_in_cycle!(cycle_id)
     raise "Invalid frequency: #{aligned_frequency}" unless FREQUENCIES.include?(aligned_frequency)
 
     apply(PersonDevelopment::Events::AssessmentAligned.new(data: {
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       aligned_frequency: aligned_frequency,
+      cycle_id: cycle_id,
       comment: comment
     }))
   end
@@ -272,9 +291,10 @@ class PersonDevelopment::Aggregate
     raise "Person not yet assigned to a framework" unless @assigned
   end
 
-  def ensure_cycle_open!
+  def ensure_in_cycle!(expected_cycle_id)
     ensure_assigned!
-    raise "No assessment cycle open" unless @cycle_open
+    raise "Not currently in an assessment cycle" if @current_cycle_id.nil?
+    raise "Cycle ID does not match current cycle" unless @current_cycle_id == expected_cycle_id
   end
 
   # ── Event handlers ──
@@ -296,16 +316,14 @@ class PersonDevelopment::Aggregate
     @level_id = event.data[:new_level_id]
   end
 
-  on PersonDevelopment::Events::AssessmentCycleOpened do |event|
+  on PersonDevelopment::Events::JoinedAssessmentCycle do |event|
     @current_cycle_id = event.data[:cycle_id]
-    @cycle_open = true
-    @self_ratings = {}   # Reset ratings for new cycle
+    @self_ratings = {}
     @manager_ratings = {}
   end
 
-  on PersonDevelopment::Events::AssessmentCycleCompleted do |_event|
+  on PersonDevelopment::Events::LeftAssessmentCycle do |_event|
     @current_cycle_id = nil
-    @cycle_open = false
   end
 
   on PersonDevelopment::Events::SelfRated do |event|

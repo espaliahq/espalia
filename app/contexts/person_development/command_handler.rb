@@ -48,17 +48,33 @@ class PersonDevelopment::CommandHandler
     end
   end
 
-  # Opens a new assessment cycle.
+  # Adds the person to an assessment cycle.
+  #
+  # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}
+  # in response to a PersonEnrolled event — never by controllers.
   #
   # @param person_id [String] UUID of the person
   # @param framework_id [String] UUID of the framework
-  # @param cycle_id [String] UUID for the new cycle
-  # @param cycle_name [String] display name
-  # @param cycle_type [String] one of: regular, performance_review, promotion_review
-  # @param framework_version [Integer] the framework version
-  def open_assessment_cycle(person_id, framework_id, cycle_id, cycle_name, cycle_type, framework_version)
+  # @param cycle_id [String] UUID of the cycle to join
+  # @param framework_version [Integer] framework version the cycle assesses against
+  def join_cycle(person_id, framework_id, cycle_id, framework_version)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.open_assessment_cycle(cycle_id, cycle_name, cycle_type, framework_version)
+      aggregate.join_cycle(cycle_id, framework_version)
+    end
+  end
+
+  # Removes the person from their current assessment cycle.
+  #
+  # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}
+  # in response to a PersonUnenrolled or CycleClosed event — never by controllers.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle being left (must match current)
+  # @param reason [String] why the person is leaving
+  def leave_cycle(person_id, framework_id, cycle_id, reason)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.leave_cycle(cycle_id, reason)
     end
   end
 
@@ -69,10 +85,12 @@ class PersonDevelopment::CommandHandler
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being assessed
   # @param frequency [String] "some", "occasional", or "consistent"
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
-  def rate_self(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, comment: nil)
+  def rate_self(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.rate_self(capability_stable_id, level_ordinal: level_ordinal, frequency: frequency, comment: comment)
+      aggregate.rate_self(capability_stable_id, level_ordinal: level_ordinal,
+        frequency: frequency, cycle_id: cycle_id, comment: comment)
     end
   end
 
@@ -84,11 +102,13 @@ class PersonDevelopment::CommandHandler
   # @param level_ordinal [Integer] the level being revised
   # @param frequency [String] revised frequency
   # @param rationale [String] reason for the change
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
-  def revise_self_rating(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
+  def revise_self_rating(person_id, framework_id, capability_stable_id,
+                         level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.revise_self_rating(capability_stable_id, level_ordinal: level_ordinal,
-        frequency: frequency, rationale: rationale, comment: comment)
+        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment)
     end
   end
 
@@ -98,9 +118,10 @@ class PersonDevelopment::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
-  def clear_self_rating(person_id, framework_id, capability_stable_id, level_ordinal:)
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
+  def clear_self_rating(person_id, framework_id, capability_stable_id, level_ordinal:, cycle_id:)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.clear_self_rating(capability_stable_id, level_ordinal: level_ordinal)
+      aggregate.clear_self_rating(capability_stable_id, level_ordinal: level_ordinal, cycle_id: cycle_id)
     end
   end
 
@@ -111,10 +132,13 @@ class PersonDevelopment::CommandHandler
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being assessed
   # @param frequency [String] "some", "occasional", or "consistent"
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
-  def rate_as_manager(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, comment: nil)
+  def rate_as_manager(person_id, framework_id, capability_stable_id,
+                      level_ordinal:, frequency:, cycle_id:, comment: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.rate_as_manager(capability_stable_id, level_ordinal: level_ordinal, frequency: frequency, comment: comment)
+      aggregate.rate_as_manager(capability_stable_id, level_ordinal: level_ordinal,
+        frequency: frequency, cycle_id: cycle_id, comment: comment)
     end
   end
 
@@ -126,11 +150,13 @@ class PersonDevelopment::CommandHandler
   # @param level_ordinal [Integer] the level being revised
   # @param frequency [String] revised frequency
   # @param rationale [String] reason for the change
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
-  def revise_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, rationale:, comment: nil)
+  def revise_manager_rating(person_id, framework_id, capability_stable_id,
+                            level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.revise_manager_rating(capability_stable_id, level_ordinal: level_ordinal,
-        frequency: frequency, rationale: rationale, comment: comment)
+        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment)
     end
   end
 
@@ -140,9 +166,10 @@ class PersonDevelopment::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
-  def clear_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:)
+  # @param cycle_id [String] UUID of the cycle this rating belongs to
+  def clear_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:, cycle_id:)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.clear_manager_rating(capability_stable_id, level_ordinal: level_ordinal)
+      aggregate.clear_manager_rating(capability_stable_id, level_ordinal: level_ordinal, cycle_id: cycle_id)
     end
   end
 
@@ -153,22 +180,13 @@ class PersonDevelopment::CommandHandler
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being agreed upon
   # @param aligned_frequency [String] agreed frequency
+  # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param comment [String, nil] optional comment
-  def align_assessment(person_id, framework_id, capability_stable_id, level_ordinal:, aligned_frequency:, comment: nil)
+  def align_assessment(person_id, framework_id, capability_stable_id,
+                       level_ordinal:, aligned_frequency:, cycle_id:, comment: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.align_assessment(capability_stable_id, level_ordinal: level_ordinal,
-        aligned_frequency: aligned_frequency, comment: comment)
-    end
-  end
-
-  # Completes the current assessment cycle.
-  #
-  # @param person_id [String] UUID of the person
-  # @param framework_id [String] UUID of the framework
-  # @param cycle_id [String] UUID of the cycle to complete
-  def complete_assessment_cycle(person_id, framework_id, cycle_id)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.complete_assessment_cycle(cycle_id)
+        aligned_frequency: aligned_frequency, cycle_id: cycle_id, comment: comment)
     end
   end
 end

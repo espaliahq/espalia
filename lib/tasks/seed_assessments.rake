@@ -66,6 +66,7 @@ namespace :assessments do
       mgr_level = FrameworkState::Level.where(role_id: mgr_role.role_id, ordinal: 5).first
 
       handler = PersonDevelopment::CommandHandler.new
+      cycle_handler = AssessmentCycles::CommandHandler.new
 
       # Assign the manager to the framework as Engineering Manager L5
       if mgr_role && mgr_level
@@ -89,16 +90,23 @@ namespace :assessments do
         report_assignment = PersonFrameworkAssignment.for_person(report_person.id).where(framework_id: framework.framework_id).first
       end
 
-      # Open assessment cycle for the report
-      if report_assignment&.cycle_open?
-        puts "Assessment cycle already open. Skipping."
+      # Define & enroll participants in an assessment cycle
+      existing_open_cycle = AssessmentCycle.for_framework(framework.framework_id).open_cycles.first
+      if existing_open_cycle
+        puts "Open assessment cycle already exists: #{existing_open_cycle.name}. Skipping."
+        cycle_id = existing_open_cycle.cycle_id
       else
         cycle_id = SecureRandom.uuid_v7
-        puts "Opening assessment cycle: Q1 2026 Review"
-        handler.open_assessment_cycle(
-          report_person.id, framework.framework_id,
-          cycle_id, "Q1 2026 Review", "regular", framework.current_published_version
+        puts "Defining assessment cycle: Q1 2026 Review"
+        cycle_handler.define_cycle(
+          cycle_id, framework.framework_id,
+          "Q1 2026 Review", "regular", framework.current_published_version,
+          defined_by: manager_person.id
         )
+        puts "  Enrolling manager: #{manager_person.name}"
+        cycle_handler.enroll(cycle_id, manager_person.id, enrolled_by: manager_person.id)
+        puts "  Enrolling report: #{report_person.name}"
+        cycle_handler.enroll(cycle_id, report_person.id, enrolled_by: manager_person.id)
       end
 
       # Pre-rate a few capabilities as self-ratings (from the report's perspective)
@@ -106,9 +114,9 @@ namespace :assessments do
         .includes(:capability).limit(3)
 
       existing_ratings = AssessmentLevelRating.for_person(report_person.id)
-        .for_framework(framework.framework_id).self_rated
+        .for_framework(framework.framework_id).for_cycle(cycle_id).self_rated
       if existing_ratings.exists?
-        puts "Self-ratings already exist. Skipping."
+        puts "Self-ratings already exist in cycle. Skipping."
       else
         bindings.each_with_index do |binding, i|
           cap = binding.capability
@@ -119,6 +127,7 @@ namespace :assessments do
             cap.stable_id,
             level_ordinal: level.ordinal,
             frequency: frequency,
+            cycle_id: cycle_id,
             comment: "Seeded self-rating"
           )
         end

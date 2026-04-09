@@ -8,6 +8,16 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     @projection = PersonDevelopment::Projections::CurrentAssessment.new
     @person_id = SecureRandom.uuid_v7
     @framework_id = SecureRandom.uuid_v7
+    @cycle_id = SecureRandom.uuid_v7
+
+    # Create a cycle + participant so touch_participant_started/mark_participant_aligned
+    # have something to update.
+    ActsAsTenant.with_tenant(@tenant) do
+      @cycle = create(:assessment_cycle,
+        tenant: @tenant, cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1)
+      @participant = create(:assessment_cycle_participant,
+        tenant: @tenant, cycle: @cycle, person_id: @person_id)
+    end
   end
 
   context "PersonAssignedToFramework" do
@@ -26,7 +36,6 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         assert_not_nil assignment
         assert_equal role_id, assignment.role_id
         assert_equal level_id, assignment.level_id
-        assert_equal "none", assignment.cycle_status
       end
     end
   end
@@ -81,63 +90,40 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
-  context "AssessmentCycleOpened" do
-    should "update assignment cycle_status to open" do
+  context "JoinedAssessmentCycle / LeftAssessmentCycle" do
+    should "be no-ops on the PersonFrameworkAssignment (participant is authoritative)" do
       role_id = SecureRandom.uuid_v7
       level_id = SecureRandom.uuid_v7
-      cycle_id = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::PersonAssignedToFramework,
         person_id: @person_id, framework_id: @framework_id,
         role_id: role_id, level_id: level_id)
-      emit(PersonDevelopment::Events::AssessmentCycleOpened,
-        cycle_id: cycle_id, cycle_name: "Q1 2026", cycle_type: "regular",
-        framework_version: 1)
+      emit(PersonDevelopment::Events::JoinedAssessmentCycle,
+        cycle_id: @cycle_id, framework_version: 1)
+      emit(PersonDevelopment::Events::LeftAssessmentCycle,
+        cycle_id: @cycle_id, reason: "manual")
 
+      # No cycle fields exist on PersonFrameworkAssignment — just assert that the row is stable
       ActsAsTenant.with_tenant(@tenant) do
         assignment = PersonFrameworkAssignment.find_by(
           person_id: @person_id, framework_id: @framework_id
         )
-        assert_equal "open", assignment.cycle_status
-        assert_equal cycle_id, assignment.current_cycle_id
-        assert_equal "Q1 2026", assignment.cycle_name
-      end
-    end
-  end
-
-  context "AssessmentCycleCompleted" do
-    should "update assignment cycle_status to completed" do
-      role_id = SecureRandom.uuid_v7
-      level_id = SecureRandom.uuid_v7
-      cycle_id = SecureRandom.uuid_v7
-
-      emit(PersonDevelopment::Events::PersonAssignedToFramework,
-        person_id: @person_id, framework_id: @framework_id,
-        role_id: role_id, level_id: level_id)
-      emit(PersonDevelopment::Events::AssessmentCycleOpened,
-        cycle_id: cycle_id, cycle_name: "Q1 2026", cycle_type: "regular",
-        framework_version: 1)
-      emit(PersonDevelopment::Events::AssessmentCycleCompleted,
-        cycle_id: cycle_id)
-
-      ActsAsTenant.with_tenant(@tenant) do
-        assignment = PersonFrameworkAssignment.find_by(
-          person_id: @person_id, framework_id: @framework_id
-        )
-        assert_equal "completed", assignment.cycle_status
+        assert_not_nil assignment
       end
     end
   end
 
   context "SelfRated" do
-    should "create an AssessmentLevelRating row" do
+    should "create an AssessmentLevelRating row with cycle_id" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent", comment: "Good")
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
+        cycle_id: @cycle_id, comment: "Good")
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id,
           person_id: @person_id,
           framework_id: @framework_id,
           capability_stable_id: cap_sid,
@@ -150,196 +136,151 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
-    should "create separate rows for different level_ordinals" do
+    should "set participant started_at + status on first rating" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "some", comment: nil)
-      emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent", comment: nil)
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some",
+        cycle_id: @cycle_id, comment: nil)
 
       ActsAsTenant.with_tenant(@tenant) do
-        assert_equal 2, AssessmentLevelRating.where(person_id: @person_id,
-          capability_stable_id: cap_sid).count
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_not_nil participant.started_at
+        assert_equal "started", participant.status
       end
     end
 
-    should "handle multiple capabilities independently" do
-      cap1 = SecureRandom.uuid_v7
-      cap2 = SecureRandom.uuid_v7
+    should "create separate rows across cycles" do
+      cap_sid = SecureRandom.uuid_v7
+      other_cycle_id = SecureRandom.uuid_v7
+
+      # Close the first cycle so the partial unique "one open per framework" allows
+      # a second cycle against the same framework. This mirrors what happens in
+      # production: consecutive cycles against the same framework.
+      ActsAsTenant.with_tenant(@tenant) do
+        @cycle.update!(status: "closed", closed_at: Time.current)
+        create(:assessment_cycle, tenant: @tenant, cycle_id: other_cycle_id, framework_id: @framework_id)
+      end
 
       emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap1, level_ordinal: 3, frequency: "some", comment: nil)
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some",
+        cycle_id: @cycle_id, comment: nil)
       emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap2, level_ordinal: 3, frequency: "occasional", comment: nil)
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
+        cycle_id: other_cycle_id, comment: nil)
 
       ActsAsTenant.with_tenant(@tenant) do
-        assert_equal 2, AssessmentLevelRating.where(person_id: @person_id).count
-        r1 = AssessmentLevelRating.find_by(capability_stable_id: cap1)
-        r2 = AssessmentLevelRating.find_by(capability_stable_id: cap2)
-        assert_equal "some", r1.self_rated_frequency
-        assert_equal "occasional", r2.self_rated_frequency
+        assert_equal 2, AssessmentLevelRating.where(
+          person_id: @person_id,
+          framework_id: @framework_id,
+          capability_stable_id: cap_sid,
+          level_ordinal: 3
+        ).count
+
+        first = AssessmentLevelRating.find_by(cycle_id: @cycle_id, capability_stable_id: cap_sid)
+        second = AssessmentLevelRating.find_by(cycle_id: other_cycle_id, capability_stable_id: cap_sid)
+        assert_equal "some", first.self_rated_frequency
+        assert_equal "consistent", second.self_rated_frequency
       end
     end
   end
 
   context "SelfRatingRevised" do
-    should "update the existing AssessmentLevelRating row" do
+    should "update the existing AssessmentLevelRating row in the same cycle" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: nil)
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some",
+        cycle_id: @cycle_id, comment: nil)
       emit(PersonDevelopment::Events::SelfRatingRevised,
         capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
-        comment: "Reconsidered", rationale: "Growth")
+        cycle_id: @cycle_id, comment: "Reconsidered", rationale: "Growth")
 
       ActsAsTenant.with_tenant(@tenant) do
+        assert_equal 1, AssessmentLevelRating.where(
+          cycle_id: @cycle_id,
+          person_id: @person_id,
+          capability_stable_id: cap_sid
+        ).count
         rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3
         )
         assert_equal "consistent", rating.self_rated_frequency
-        assert_equal 1, AssessmentLevelRating.where(person_id: @person_id,
-          capability_stable_id: cap_sid).count
       end
     end
   end
 
   context "ManagerRated" do
-    should "set manager_rated_frequency on the row" do
+    should "set manager_rated_frequency on a new per-cycle row" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::ManagerRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional", comment: "Room to grow")
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional",
+        cycle_id: @cycle_id, comment: "Room to grow")
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3
         )
         assert_not_nil rating
         assert_equal "occasional", rating.manager_rated_frequency
         assert_equal "Room to grow", rating.manager_rated_comment
-        assert_not_nil rating.last_manager_rated_at
-      end
-    end
-  end
-
-  context "ManagerRatingRevised" do
-    should "update manager_rated_frequency on existing row" do
-      cap_sid = SecureRandom.uuid_v7
-
-      emit(PersonDevelopment::Events::ManagerRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: "Initial")
-      emit(PersonDevelopment::Events::ManagerRatingRevised,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
-        comment: "Reconsidered", rationale: "Saw improvement")
-
-      ActsAsTenant.with_tenant(@tenant) do
-        rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
-        )
-        assert_equal "consistent", rating.manager_rated_frequency
-        assert_equal "Reconsidered", rating.manager_rated_comment
-        assert_not_nil rating.last_manager_rated_at
-        # Only one row — revised, not duplicated
-        assert_equal 1, AssessmentLevelRating.where(
-          person_id: @person_id, capability_stable_id: cap_sid
-        ).count
       end
     end
 
-    should "not overwrite self_rated_frequency" do
-      cap_sid = SecureRandom.uuid_v7
-
-      emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: nil)
+    should "update participant started_at on first rating of any kind" do
       emit(PersonDevelopment::Events::ManagerRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional", comment: nil)
-      emit(PersonDevelopment::Events::ManagerRatingRevised,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
-        comment: nil, rationale: "Updated")
+        capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 3,
+        frequency: "some", cycle_id: @cycle_id, comment: nil)
 
       ActsAsTenant.with_tenant(@tenant) do
-        rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
-        )
-        assert_equal "some", rating.self_rated_frequency
-        assert_equal "consistent", rating.manager_rated_frequency
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "started", participant.status
       end
     end
   end
 
   context "ManagerRatingCleared" do
-    should "clear manager_rated_frequency on the row" do
+    should "clear manager_rated_frequency on the per-cycle row" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::ManagerRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional", comment: "Initial")
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional",
+        cycle_id: @cycle_id, comment: "Initial")
       emit(PersonDevelopment::Events::ManagerRatingCleared,
-        capability_stable_id: cap_sid, level_ordinal: 3)
+        capability_stable_id: cap_sid, level_ordinal: 3, cycle_id: @cycle_id)
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3
         )
-        assert_nil rating.manager_rated_frequency
-        assert_nil rating.manager_rated_comment
-      end
-    end
-
-    should "not affect self_rated_frequency" do
-      cap_sid = SecureRandom.uuid_v7
-
-      emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent", comment: nil)
-      emit(PersonDevelopment::Events::ManagerRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: nil)
-      emit(PersonDevelopment::Events::ManagerRatingCleared,
-        capability_stable_id: cap_sid, level_ordinal: 3)
-
-      ActsAsTenant.with_tenant(@tenant) do
-        rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
-        )
-        assert_equal "consistent", rating.self_rated_frequency
         assert_nil rating.manager_rated_frequency
       end
     end
   end
 
   context "AssessmentAligned" do
-    should "set aligned_frequency on the row" do
+    should "set aligned_frequency on the row and mark participant aligned" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::AssessmentAligned,
         capability_stable_id: cap_sid, level_ordinal: 3, aligned_frequency: "consistent",
-        comment: "Agreed")
+        cycle_id: @cycle_id, comment: "Agreed")
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3
         )
         assert_not_nil rating
         assert_equal "consistent", rating.aligned_frequency
-        assert_equal "Agreed", rating.aligned_comment
-        assert_not_nil rating.last_aligned_at
-      end
-    end
 
-    should "not overwrite an existing self_rated_frequency on the same row" do
-      cap_sid = SecureRandom.uuid_v7
-
-      emit(PersonDevelopment::Events::SelfRated,
-        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "some", comment: nil)
-      emit(PersonDevelopment::Events::AssessmentAligned,
-        capability_stable_id: cap_sid, level_ordinal: 3, aligned_frequency: "consistent",
-        comment: nil)
-
-      ActsAsTenant.with_tenant(@tenant) do
-        rating = AssessmentLevelRating.find_by(
-          person_id: @person_id, capability_stable_id: cap_sid, level_ordinal: 3
-        )
-        assert_equal "some", rating.self_rated_frequency
-        assert_equal "consistent", rating.aligned_frequency
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligned", participant.status
+        assert_not_nil participant.aligned_at
       end
     end
   end

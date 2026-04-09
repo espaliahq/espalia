@@ -55,9 +55,21 @@ class Components::Kit::PageLayout < Components::Base
       ]
       assessment_link = assessment_nav_link
       links << assessment_link if assessment_link
+      links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
       links << { label: "Integrations", href: "/integrations" } if show_integrations_link?
       links
     end
+  end
+
+  # Whether the current viewer can manage assessment cycles.
+  # Visible to global admins and tenant admins only.
+  #
+  # @return [Boolean]
+  def show_cycles_link?
+    return false unless @user && @current_tenant
+    return true if @user.global_admin?
+
+    resolve_tenant_user&.admin?
   end
 
   # Whether the current viewer can manage tenant integrations.
@@ -104,13 +116,23 @@ class Components::Kit::PageLayout < Components::Base
     person = resolve_person
     return unless person
 
-    assignments = PersonFrameworkAssignment.for_person(person.id).with_open_cycle
+    # Assignments for the current person where an AssessmentCycle is open and
+    # this person is still an active participant.
+    assignments = PersonFrameworkAssignment
+      .for_person(person.id)
+      .joins("INNER JOIN assessment_cycles ON assessment_cycles.framework_id = " \
+             "person_framework_assignments.framework_id AND assessment_cycles.status = 'open'")
+      .joins("INNER JOIN assessment_cycle_participants " \
+             "ON assessment_cycle_participants.cycle_id = assessment_cycles.cycle_id " \
+             "AND assessment_cycle_participants.person_id = person_framework_assignments.person_id " \
+             "AND assessment_cycle_participants.status <> 'withdrawn'")
+      .distinct
     has_report_assignments = person.direct_reports
       .where(id: PersonFrameworkAssignment.select(:person_id))
       .exists?
 
     if assignments.size == 1 && !has_report_assignments
-      { label: "Assessment", href: "/assessments/#{assignments.first.framework_id}" }
+      { label: "Assessment", href: "/assessments/#{assignments.first.id}" }
     elsif assignments.any? || has_report_assignments
       { label: "Assessments", href: "/assessments" }
     end

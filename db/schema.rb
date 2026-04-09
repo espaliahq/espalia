@@ -10,16 +10,54 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_02_032349) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "assessment_cycle_participants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "aligned_at"
+    t.datetime "created_at", null: false
+    t.uuid "cycle_id", null: false
+    t.datetime "enrolled_at", null: false
+    t.datetime "manager_completed_at"
+    t.uuid "person_id", null: false
+    t.datetime "self_completed_at"
+    t.datetime "started_at"
+    t.string "status", default: "enrolled", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.string "withdrawal_reason"
+    t.datetime "withdrawn_at"
+    t.index ["cycle_id", "person_id"], name: "idx_assessment_cycle_participants_unique", unique: true
+    t.index ["tenant_id", "person_id", "status"], name: "idx_assessment_cycle_participants_by_person_status"
+    t.index ["tenant_id"], name: "index_assessment_cycle_participants_on_tenant_id"
+  end
+
+  create_table "assessment_cycles", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "closed_at"
+    t.datetime "created_at", null: false
+    t.uuid "cycle_id", null: false
+    t.string "cycle_type", null: false
+    t.uuid "defined_by"
+    t.uuid "framework_id", null: false
+    t.integer "framework_version", null: false
+    t.string "name", null: false
+    t.datetime "opened_at", null: false
+    t.string "status", default: "open", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "cycle_id"], name: "idx_assessment_cycles_unique_cycle_id", unique: true
+    t.index ["tenant_id", "framework_id"], name: "idx_assessment_cycles_by_framework"
+    t.index ["tenant_id", "framework_id"], name: "idx_assessment_cycles_one_open_per_framework", unique: true, where: "((status)::text = 'open'::text)"
+    t.index ["tenant_id"], name: "index_assessment_cycles_on_tenant_id"
+  end
 
   create_table "assessment_level_ratings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.text "aligned_comment"
     t.string "aligned_frequency"
     t.uuid "capability_stable_id", null: false
     t.datetime "created_at", null: false
-    t.uuid "cycle_id"
+    t.uuid "cycle_id", null: false
     t.uuid "framework_id", null: false
     t.datetime "last_aligned_at"
     t.datetime "last_manager_rated_at"
@@ -35,7 +73,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_02_032349) do
     t.string "source", default: "human", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
-    t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_assessment_ratings_person_cap_level", unique: true
+    t.index ["cycle_id", "person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_assessment_ratings_cycle_person_cap_level", unique: true
+    t.index ["cycle_id", "person_id"], name: "idx_assessment_ratings_cycle_person"
     t.index ["person_id", "framework_id"], name: "index_assessment_level_ratings_on_person_id_and_framework_id"
     t.index ["tenant_id"], name: "index_assessment_level_ratings_on_tenant_id"
   end
@@ -279,9 +318,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_02_032349) do
 
   create_table "person_framework_assignments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.uuid "current_cycle_id"
-    t.string "cycle_name"
-    t.string "cycle_status", default: "none", null: false
     t.uuid "framework_id", null: false
     t.uuid "level_id", null: false
     t.uuid "person_id", null: false
@@ -330,6 +366,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_02_032349) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "assessment_cycle_participants", "tenants"
+  add_foreign_key "assessment_cycles", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
   add_foreign_key "framework_behavioural_expectations", "tenants"

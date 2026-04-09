@@ -86,10 +86,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # Assign person and open cycle
       level = FrameworkState::Level.find_by!(level_id: @level2_id)
       pd_handler.assign_to_framework(@person.id, @framework_id, @role_id, level.level_id)
-      pd_handler.open_assessment_cycle(
-        @person.id, @framework_id,
-        SecureRandom.uuid_v7, "Q1 2026 Review", "regular", 1
-      )
+
+      cycle_handler = AssessmentCycles::CommandHandler.new
+      @cycle_id = SecureRandom.uuid_v7
+      cycle_handler.define_cycle(@cycle_id, @framework_id, "Q1 2026 Review", "regular", 1, defined_by: @person.id)
+      cycle_handler.enroll(@cycle_id, @person.id, enrolled_by: @person.id)
 
       @assignment = PersonFrameworkAssignment.for_person(@person.id).first
     end

@@ -24,9 +24,16 @@ class Assessments::RatingsController < ApplicationController
     frequency = rating_params[:frequency]
     comment = rating_params[:comment]
 
+    cycle = @assignment.current_open_cycle
+    unless cycle
+      render_rating_error(capability_stable_id, level_ordinal, "No open assessment cycle")
+      return
+    end
+
     handler = PersonDevelopment::CommandHandler.new
 
     existing = AssessmentLevelRating.find_by(
+      cycle_id: cycle.cycle_id,
       person_id: current_person.id,
       framework_id: @assignment.framework_id,
       capability_stable_id: capability_stable_id,
@@ -37,33 +44,38 @@ class Assessments::RatingsController < ApplicationController
       # Untoggle: clicking the already-selected frequency clears the rating
       handler.clear_self_rating(
         current_person.id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal
+        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
       )
     elsif existing&.self_rated_frequency.present?
       handler.revise_self_rating(
         current_person.id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Updated during self-assessment", comment: comment
+        rationale: "Updated during self-assessment", cycle_id: cycle.cycle_id, comment: comment
       )
     else
       handler.rate_self(
         current_person.id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, frequency: frequency, comment: comment
+        level_ordinal: level_ordinal, frequency: frequency,
+        cycle_id: cycle.cycle_id, comment: comment
       )
     end
 
     respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id])
   rescue RuntimeError => e
+    render_rating_error(capability_stable_id, level_ordinal, e.message)
+  end
+
+  private
+
+  def render_rating_error(capability_stable_id, level_ordinal, message)
     render turbo_stream: turbo_stream.replace(
       "rating-#{capability_stable_id}-#{level_ordinal}",
       render_to_string(
-        Views::Assessments::RatingError.new(message: e.message),
+        Views::Assessments::RatingError.new(message: message),
         layout: false
       )
     ), status: :unprocessable_content
   end
-
-  private
 
   def require_person
     head :forbidden unless current_person
@@ -93,7 +105,9 @@ class Assessments::RatingsController < ApplicationController
 
     matrix_data = Assessments::MatrixDataBuilder.new(
       framework: framework, role: role, level: level,
-      person_id: current_person.id, categories: categories
+      person_id: current_person.id,
+      cycle_id: @assignment.current_open_cycle&.cycle_id,
+      categories: categories
     ).build
 
     # Find the capability's category for targeted category header update

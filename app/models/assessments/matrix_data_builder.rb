@@ -13,7 +13,8 @@
 # @example
 #   data = Assessments::MatrixDataBuilder.new(
 #     framework: framework, role: role, level: level,
-#     person_id: person.id, categories: eager_loaded_categories
+#     person_id: person.id, cycle_id: open_cycle.cycle_id,
+#     categories: eager_loaded_categories
 #   ).build
 #
 class Assessments::MatrixDataBuilder
@@ -21,12 +22,15 @@ class Assessments::MatrixDataBuilder
   # @param role [FrameworkState::Role] the person's assigned role
   # @param level [FrameworkState::Level] the person's assigned level
   # @param person_id [String] UUID
+  # @param cycle_id [String, nil] UUID of the assessment cycle whose ratings
+  #   should be shown. When nil, the builder returns no ratings (empty matrix).
   # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded
-  def initialize(framework:, role:, level:, person_id:, categories:)
+  def initialize(framework:, role:, level:, person_id:, cycle_id:, categories:)
     @framework = framework
     @role = role
     @level = level
     @person_id = person_id
+    @cycle_id = cycle_id
     @categories = categories
   end
 
@@ -138,13 +142,19 @@ class Assessments::MatrixDataBuilder
     end
   end
 
-  # Loads and indexes all AssessmentLevelRatings for this person + framework.
+  # Loads and indexes all AssessmentLevelRatings for this person + framework + cycle.
+  #
+  # Returns an empty hash when cycle_id is nil — the person isn't
+  # currently in a cycle, so there are no ratings to show.
   #
   # @return [Hash{[String, Integer] => AssessmentLevelRating}]
   def load_ratings
+    return {} if @cycle_id.nil?
+
     AssessmentLevelRating
       .for_person(@person_id)
       .for_framework(@framework.framework_id)
+      .for_cycle(@cycle_id)
       .each_with_object({}) do |r, h|
         h[[ r.capability_stable_id, r.level_ordinal ]] = r
       end

@@ -2,10 +2,11 @@
 
 # Projection read model for per-level capability assessments.
 #
-# One row per (person, framework, capability_stable_id, level_ordinal).
+# One row per (cycle_id, person, framework, capability_stable_id, level_ordinal).
 # Stores independent frequency ratings at each level of a capability,
-# enabling multi-dimensional assessment: you may be assessed at L2, L3,
-# and L4 for the same capability independently.
+# scoped to a specific assessment cycle. This preserves history across
+# cycles and supports both "latest rating" and "rating in cycle X"
+# queries directly on the read model.
 #
 # Frequency values: "some" (0.25x), "occasional" (0.5x), "consistent" (1.0x)
 #
@@ -30,7 +31,11 @@ class AssessmentLevelRating < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
+  belongs_to :cycle, class_name: "AssessmentCycle",
+             primary_key: :cycle_id, foreign_key: :cycle_id,
+             inverse_of: false, optional: false
 
+  validates :cycle_id, presence: true
   validates :person_id, presence: true
   validates :framework_id, presence: true
   validates :capability_stable_id, presence: true
@@ -44,6 +49,7 @@ class AssessmentLevelRating < ApplicationRecord
   scope :for_person, ->(person_id) { where(person_id: person_id) }
   scope :for_framework, ->(framework_id) { where(framework_id: framework_id) }
   scope :for_capability, ->(stable_id) { where(capability_stable_id: stable_id) }
+  scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
   scope :self_rated, -> { where.not(self_rated_frequency: nil) }
   scope :aligned, -> { where.not(aligned_frequency: nil) }
 end
