@@ -313,13 +313,21 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "switch tab when clicking category in scoring panel" do
       visit assessment_path(@assignment)
 
-      # Click the Delivering category name in the scoring panel
-      within "#scoring-panel" do
-        click_on "Delivering"
+      # Wait for the lazy-loaded scoring frame to finish its eager fetch.
+      # Without this, clicking inside #scoring-panel can race the frame
+      # replacement and the click is silently dropped on slow CI runners.
+      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
+
+      # Click the Delivering category name in the scoring panel. Wrapped in
+      # click_with_retry because Turbo Frame link clicks can also be silently
+      # dropped under CI load.
+      click_with_retry(expect_text: "Execution") do
+        within "#scoring-panel" do
+          click_on "Delivering"
+        end
       end
 
-      # Matrix should now show Delivering category content
-      assert_text "Execution"
+      # First category capabilities should not be in the matrix rows
       assert_no_selector "#capability-name-#{@cap1_stable}"
     end
 

@@ -109,6 +109,41 @@ module StimulusHelpers
     )
   end
 
+  # Performs a click via the given block and retries it once if the expected
+  # text or selector does not appear within a short window. Use this for
+  # Turbo Drive navigation clicks and Turbo Frame link clicks that may be
+  # silently dropped when Chrome's event loop is starved on slow CI runners.
+  #
+  # @param expect_text [String, nil] text that should appear after the click
+  # @param expect_selector [String, nil] CSS selector that should appear
+  #   after the click (alternative to +expect_text+)
+  # @yield the block performing the click (e.g. `click_on "Save"` inside a `within`)
+  #
+  # @example Click a Turbo Frame link in a panel and retry if dropped
+  #   click_with_retry(expect_text: "Execution") do
+  #     within("#scoring-panel") { click_on "Delivering" }
+  #   end
+  def click_with_retry(expect_text: nil, expect_selector: nil)
+    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+
+    yield
+
+    landed =
+      if expect_text
+        page.has_text?(expect_text, wait: 2)
+      else
+        page.has_css?(expect_selector, wait: 2)
+      end
+
+    yield unless landed
+
+    if expect_text
+      assert_text expect_text
+    else
+      assert_selector expect_selector
+    end
+  end
+
   private
 
   # Clicks a toggle element and retries once if the action was lost.

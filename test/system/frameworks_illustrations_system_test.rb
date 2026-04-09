@@ -42,13 +42,10 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
   context "inline illustration editing" do
     should "expand row and show illustration text" do
       visit framework_path(@framework_id)
-      wait_for_stimulus "matrix"
 
-      # Expand the capability row by clicking it
-      find("tr[data-capability-id]", match: :first).click
-
-      # Wait for Stimulus to toggle the expanded row visible
-      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
+      # Expand the capability row using the matrix helper, which retries the
+      # click if it was silently dropped on slow CI runners.
+      expand_matrix_row("tr[data-capability-id]")
 
       # Illustration is now visible in the expanded row
       assert_text "Seeks guidance from tech lead"
@@ -56,11 +53,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "allow saving updated illustration text inline" do
       visit framework_path(@framework_id)
-      wait_for_stimulus "matrix"
 
-      # Expand the capability row
-      find("tr[data-capability-id]", match: :first).click
-      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
+      # Expand the capability row using the matrix helper (retries on dropped clicks)
+      expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
 
       # The inline-editor controller is on each illustration li.
@@ -82,10 +77,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "cancel editing and restore original text" do
       visit framework_path(@framework_id)
-      wait_for_stimulus "matrix"
 
-      find("tr[data-capability-id]", match: :first).click
-      assert_selector "tr[data-matrix-target='expandedRow']:not(.hidden)", visible: true
+      # Expand the capability row using the matrix helper (retries on dropped clicks)
+      expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
 
       ill_li = find("li[data-controller='inline-editor']", match: :first)
@@ -121,26 +115,20 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "show Add illustration button when no illustrations exist for a role" do
       visit framework_path(@framework_id)
-      wait_for_stimulus "matrix"
 
-      find("tr[data-capability-id]", match: :first).click
+      # Expand the capability row using the matrix helper (retries on dropped clicks)
+      expand_matrix_row("tr[data-capability-id]")
 
-      # Wait for the expanded row content to be visible before asserting the button.
-      # This ensures Stimulus has processed the click and the row has expanded —
-      # the same pattern used by the other tests in this context.
-      find("turbo-frame[id^='new-illustration-#{@eid}-']", match: :first)
-
+      assert_selector "turbo-frame[id^='new-illustration-#{@eid}-']", visible: true
       assert_selector "button", text: "Add illustration"
     end
 
     should "allow adding a new illustration for a role that had none" do
       visit framework_path(@framework_id)
-      wait_for_stimulus "matrix"
 
-      find("tr[data-capability-id]", match: :first).click
-      # Wait for the expanded row to become visible before looking for children.
-      # The turbo-frame lives inside a tr.hidden that Stimulus toggles on click.
-      find("turbo-frame[id^='new-illustration-#{@eid}-']", match: :first)
+      # Expand the capability row using the matrix helper (retries on dropped clicks)
+      expand_matrix_row("tr[data-capability-id]")
+      assert_selector "turbo-frame[id^='new-illustration-#{@eid}-']", visible: true
 
       add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
         .find("div[data-controller='inline-editor']")
@@ -159,11 +147,10 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
     should "cancel adding and restore the Add button without saving" do
       visit framework_path(@framework_id)
-      wait_for_stimulus "matrix"
 
-      find("tr[data-capability-id]", match: :first).click
-      # Wait for the expanded row to become visible before looking for children.
-      find("turbo-frame[id^='new-illustration-#{@eid}-']", match: :first)
+      # Expand the capability row using the matrix helper (retries on dropped clicks)
+      expand_matrix_row("tr[data-capability-id]")
+      assert_selector "turbo-frame[id^='new-illustration-#{@eid}-']", visible: true
 
       add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
         .find("div[data-controller='inline-editor']")

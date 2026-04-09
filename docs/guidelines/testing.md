@@ -314,6 +314,54 @@ expand_matrix_row("#capability-name-#{@cap_stable}")
 
 **Adding new helpers:** If a new controller with toggle behavior is added, create a thin wrapper that calls the private `stimulus_toggle` primitive with the controller's specific selectors.
 
+## Click-and-Retry for Turbo Navigation Links (NON-NEGOTIABLE)
+
+**Use `click_with_retry` for Turbo Drive and Turbo Frame navigation links that drive cross-frame updates.** The Stimulus toggle helpers above only protect Stimulus actions. Plain `<a>` links — including those with `data-turbo-frame=...` — are equally vulnerable to silently dropped clicks on slow CI, but the existing helpers don't cover them.
+
+```ruby
+# WRONG — bare click on a Turbo Frame link can be silently dropped
+within "#scoring-panel" do
+  click_on "Delivering"
+end
+assert_text "Execution"   # may fail: matrix never re-fetched
+
+# CORRECT — wrap the click in click_with_retry
+click_with_retry(expect_text: "Execution") do
+  within "#scoring-panel" do
+    click_on "Delivering"
+  end
+end
+```
+
+**When to use:** Any click that triggers a Turbo navigation (Turbo Drive page nav, Turbo Frame fetch, or Turbo Stream broadcast) where the destination content is the only signal the click was honoured.
+
+**When NOT needed:** When the click is on a Stimulus-controlled toggle (use the toggle helpers above) or when the click is a form submission already followed by an `assert_text` on the response (the form submit already round-trips).
+
+## Waiting for Lazy-Loaded Turbo Frames (NON-NEGOTIABLE)
+
+**When a page eager-loads Turbo Frames via `src:` and inner-content fallback, wait for those frames to finish their fetch before clicking inside them.** The fallback content is rendered immediately, but Turbo replaces it once the `src` fetch completes. A click between initial render and replacement can hit a stale link about to be removed from the DOM.
+
+Turbo Frames carry a `complete` attribute after their first successful load. Assert on it before interacting with content inside the frame:
+
+```ruby
+# WRONG — clicking inside a lazy-loaded frame before its eager fetch lands
+visit assessment_path(@assignment)
+within "#scoring-panel" do
+  click_on "Delivering"
+end
+
+# CORRECT — wait for the frame's first load to complete
+visit assessment_path(@assignment)
+assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
+within "#scoring-panel" do
+  click_on "Delivering"
+end
+```
+
+**When to use:** Any time the test interacts with content inside a `turbo_frame_tag(name, src: ..., data: ...) do ... end` block on a page where the frame's eager-loaded `src` will replace the inline fallback.
+
+**When NOT needed:** Frames without `src:` (eager-rendered only) or frames whose inner content is already verified by an earlier `assert_text` on something only the loaded version would render.
+
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
 **Always assert visibility after triggering Stimulus actions before interacting with the resulting DOM.** Elements toggled by Stimulus controllers (dropdowns, modals, expanded rows) exist in the DOM as hidden elements. Capybara's `find` and `within` will locate hidden elements and fail — or worse, pass locally but fail on slower CI runners due to race conditions.
