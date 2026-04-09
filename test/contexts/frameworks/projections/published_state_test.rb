@@ -128,6 +128,50 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "CapabilityUpdated" do
+    should "update the Capability read model" do
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap_id, stable_id: SecureRandom.uuid_v7,
+        category_id: SecureRandom.uuid_v7, name: "Original", description: "Original desc")
+      emit(Frameworks::Events::CapabilityUpdated,
+        framework_id: @framework_id, capability_id: cap_id,
+        name: "Renamed", description: "New desc")
+
+      within_tenant do
+        rm = FrameworkState::Capability.find_by(capability_id: cap_id)
+        assert_equal "Renamed", rm.name
+        assert_equal "New desc", rm.description
+      end
+    end
+
+    should "only update fields present in event data" do
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap_id, stable_id: SecureRandom.uuid_v7,
+        category_id: SecureRandom.uuid_v7, name: "Original", description: "Keep me")
+      emit(Frameworks::Events::CapabilityUpdated,
+        framework_id: @framework_id, capability_id: cap_id, name: "Renamed")
+
+      within_tenant do
+        rm = FrameworkState::Capability.find_by(capability_id: cap_id)
+        assert_equal "Renamed", rm.name
+        assert_equal "Keep me", rm.description
+      end
+    end
+
+    should "silently skip when parent capability is missing (draft-deferred)" do
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityUpdated,
+        framework_id: @framework_id, capability_id: cap_id, name: "Orphaned")
+
+      within_tenant do
+        assert_nil FrameworkState::Capability.find_by(capability_id: cap_id),
+          "Capability should not be created when parent is missing"
+      end
+    end
+  end
+
   context "CapabilityArchived" do
     should "set status to archived" do
       cap_id = SecureRandom.uuid_v7

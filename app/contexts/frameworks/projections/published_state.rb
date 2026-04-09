@@ -37,6 +37,7 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::CapabilityCategoryAdded,
       Frameworks::Events::CapabilityCategoryUpdated,
       Frameworks::Events::CapabilityAdded,
+      Frameworks::Events::CapabilityUpdated,
       Frameworks::Events::CapabilityArchived,
       Frameworks::Events::CapabilityRoleBindingCreated,
       Frameworks::Events::CapabilityRoleBindingUpdated,
@@ -103,6 +104,7 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::LevelUpdated then handle_level_updated(event)
     when Frameworks::Events::CapabilityCategoryAdded then handle_capability_category_added(event)
     when Frameworks::Events::CapabilityCategoryUpdated then handle_capability_category_updated(event)
+    when Frameworks::Events::CapabilityUpdated then handle_capability_updated(event)
     when Frameworks::Events::CapabilityRoleBindingUpdated then handle_binding_updated(event)
     when Frameworks::Events::BehaviouralExpectationUpdated then handle_expectation_updated(event)
     when Frameworks::Events::RoleIllustrationAdded then handle_illustration_added(event)
@@ -349,6 +351,18 @@ class Frameworks::Projections::PublishedState
   def handle_capability_archived(event)
     record = FrameworkState::Capability.find_by!(capability_id: event.data[:capability_id])
     record.update!(status: "archived")
+  end
+
+  # Dependent-editorial: parent Capability is added via the shape-changing
+  # CapabilityAdded event, which may be draft-deferred. If the Capability
+  # row isn't present yet, skip — the rebuild replay will re-apply this
+  # update after CapabilityAdded lands.
+  def handle_capability_updated(event)
+    record = FrameworkState::Capability.find_by(capability_id: event.data[:capability_id])
+    return unless record
+
+    attrs = event.data.slice(:name, :description).compact
+    record.update!(attrs) if attrs.any?
   end
 
   def handle_binding_created(event)

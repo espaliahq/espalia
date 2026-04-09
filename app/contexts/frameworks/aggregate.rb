@@ -252,6 +252,25 @@ class Frameworks::Aggregate
     }.compact))
   end
 
+  # Updates a capability's name or description. Shape-preserving — editorial (applies live).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param capability_id [String] UUID of the capability
+  # @param name [String, nil] updated name
+  # @param description [String, nil] updated description
+  # @raise [RuntimeError] if framework not created or capability not found
+  def update_capability(framework_id, capability_id, name: nil, description: nil)
+    ensure_created!
+    raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
+
+    apply(Frameworks::Events::CapabilityUpdated.new(data: {
+      framework_id: framework_id,
+      capability_id: capability_id,
+      name: name,
+      description: description
+    }.compact))
+  end
+
   # Adds a capability to a category. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
@@ -907,6 +926,12 @@ class Frameworks::Aggregate
     # Track capabilities added inside the current draft so archiving them
     # in the same draft doesn't require a migration mapping (nothing to migrate).
     @added_during_draft << event.data[:stable_id] if @draft_in_progress
+  end
+
+  on Frameworks::Events::CapabilityUpdated do |event|
+    cap = @capabilities[event.data[:capability_id]]
+    cap[:name] = event.data[:name] if event.data.key?(:name)
+    # description is not tracked in aggregate state (same as categories)
   end
 
   on Frameworks::Events::CapabilityArchived do |event|

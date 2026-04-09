@@ -200,6 +200,39 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#update_capability" do
+    setup do
+      @cat_id = SecureRandom.uuid_v7
+      @cap_id = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, @cat_id, "Thinking")
+      @aggregate.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, @cat_id, "Original Name")
+    end
+
+    should "apply CapabilityUpdated event" do
+      @aggregate.update_capability(@framework_id, @cap_id, name: "Renamed", description: "New desc")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityUpdated, event
+      assert_equal @cap_id, event.data[:capability_id]
+      assert_equal "Renamed", event.data[:name]
+      assert_equal "New desc", event.data[:description]
+    end
+
+    should "omit unspecified fields from event data" do
+      @aggregate.update_capability(@framework_id, @cap_id, name: "Renamed")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal "Renamed", event.data[:name]
+      assert_not event.data.key?(:description)
+    end
+
+    should "raise if capability not found" do
+      assert_raises(RuntimeError, /not found/) do
+        @aggregate.update_capability(@framework_id, "nonexistent", name: "X")
+      end
+    end
+  end
+
   context "#archive_capability" do
     setup do
       @cat_id = SecureRandom.uuid_v7
@@ -647,6 +680,12 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     should "update_capability_category succeeds" do
       assert_nothing_raised do
         @fresh.update_capability_category(@framework_id, @cat_id, name: "Updated")
+      end
+    end
+
+    should "update_capability succeeds" do
+      assert_nothing_raised do
+        @fresh.update_capability(@framework_id, @cap_id, name: "Updated", description: "New desc")
       end
     end
 

@@ -149,6 +149,18 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Updates a capability's name or description.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param capability_id [String] UUID of the capability
+  # @param name [String, nil] updated name
+  # @param description [String, nil] updated description
+  def update_capability(framework_id, capability_id, name: nil, description: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.update_capability(framework_id, capability_id, name: name, description: description)
+    end
+  end
+
   # Adds a capability to a category.
   #
   # @param framework_id [String] UUID of the framework
