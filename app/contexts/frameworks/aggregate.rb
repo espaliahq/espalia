@@ -1117,25 +1117,66 @@ class Frameworks::Aggregate
   def review_tier(entity_type)
     case entity_type
     when "RoleIllustration", "role_illustration" then 1
-    when "Capability", "CapabilityCategory" then 2
-    when "BehaviouralExpectation" then 3
+    when "Capability", "CapabilityCategory",
+         "capability", "capability_category",
+         "role", "role_family", "level" then 2
+    when "BehaviouralExpectation", "behavioural_expectation" then 3
     else 1
     end
   end
 
   # Applies the actual content change event for an approved suggestion.
   #
+  # Dispatches the matching editorial Updated event for the suggestion's
+  # (target_entity_type, field) pair. Mirrors the existing role_illustration
+  # pattern: emits the event directly with a rationale tag, rather than
+  # calling the editorial command.
+  #
   # @param suggestion [Hash] pending_edits entry
   # @return [void]
-  def apply_suggested_content_change(suggestion)
-    case suggestion[:target_entity_type]
-    when "role_illustration"
+  # @raise [RuntimeError] if the (entity_type, field) combination is not supported
+  def apply_suggested_content_change(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+    entity_id = suggestion[:target_entity_id]
+    field = suggestion[:field]
+    new_value = suggestion[:suggested_value]
+    rationale_tag = "Applied via approved suggestion #{suggestion[:suggestion_id]}"
+
+    case [ suggestion[:target_entity_type], field ]
+    when [ "role_illustration", "description" ]
       apply(Frameworks::Events::RoleIllustrationUpdated.new(data: {
-        framework_id: @framework_id,
-        illustration_id: suggestion[:target_entity_id],
-        new_description: suggestion[:suggested_value],
-        rationale: "Applied via approved suggestion #{suggestion[:suggestion_id]}"
+        framework_id: @framework_id, illustration_id: entity_id,
+        new_description: new_value, rationale: rationale_tag
       }))
+    when [ "behavioural_expectation", "description" ]
+      apply(Frameworks::Events::BehaviouralExpectationUpdated.new(data: {
+        framework_id: @framework_id, expectation_id: entity_id,
+        new_description: new_value, rationale: rationale_tag
+      }))
+    when [ "capability", "name" ], [ "capability", "description" ]
+      apply(Frameworks::Events::CapabilityUpdated.new(data: {
+        framework_id: @framework_id, capability_id: entity_id,
+        field.to_sym => new_value
+      }))
+    when [ "capability_category", "name" ], [ "capability_category", "description" ]
+      apply(Frameworks::Events::CapabilityCategoryUpdated.new(data: {
+        framework_id: @framework_id, category_id: entity_id,
+        field.to_sym => new_value
+      }))
+    when [ "role_family", "name" ], [ "role_family", "description" ]
+      apply(Frameworks::Events::RoleFamilyUpdated.new(data: {
+        framework_id: @framework_id, role_family_id: entity_id,
+        field.to_sym => new_value
+      }))
+    when [ "role", "name" ]
+      apply(Frameworks::Events::RoleUpdated.new(data: {
+        framework_id: @framework_id, role_id: entity_id, name: new_value
+      }))
+    when [ "level", "title" ]
+      apply(Frameworks::Events::LevelUpdated.new(data: {
+        framework_id: @framework_id, level_id: entity_id, title: new_value
+      }))
+    else
+      raise "Unsupported suggestion target: #{suggestion[:target_entity_type]}/#{field}"
     end
   end
 
@@ -1148,6 +1189,18 @@ class Frameworks::Aggregate
     case entity_type
     when "role_illustration"
       raise "Illustration #{entity_id} not found" unless @illustrations.key?(entity_id)
+    when "behavioural_expectation"
+      raise "Expectation #{entity_id} not found" unless @expectations.key?(entity_id)
+    when "capability"
+      raise "Capability #{entity_id} not found" unless @capabilities.key?(entity_id)
+    when "capability_category"
+      raise "Category #{entity_id} not found" unless @capability_categories.key?(entity_id)
+    when "role"
+      raise "Role #{entity_id} not found" unless @roles.key?(entity_id)
+    when "role_family"
+      raise "Role family #{entity_id} not found" unless @role_families.key?(entity_id)
+    when "level"
+      raise "Level #{entity_id} not found" unless @levels.key?(entity_id)
     else
       raise "Unknown entity type: #{entity_type}"
     end

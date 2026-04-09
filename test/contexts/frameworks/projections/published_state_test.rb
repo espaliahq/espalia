@@ -583,6 +583,141 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  # ── EditSuggested current_value snapshot per entity type ──
+
+  context "EditSuggested current_value snapshot" do
+    setup do
+      @sid = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+    end
+
+    should "snapshot current value for role_illustration" do
+      ill_id = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::RoleIllustration.create!(
+          illustration_id: ill_id, stable_id: SecureRandom.uuid_v7,
+          expectation_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
+          ordinal: 1, description: "Original wording"
+        )
+      end
+      emit_suggestion("role_illustration", ill_id, "description", "New wording")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Original wording", rec.current_value
+        assert_equal "New wording", rec.suggested_value
+      end
+    end
+
+    should "snapshot current value for behavioural_expectation" do
+      eid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::BehaviouralExpectation.create!(
+          expectation_id: eid, stable_id: SecureRandom.uuid_v7,
+          capability_id: SecureRandom.uuid_v7, level_ordinal: 1, description: "Original"
+        )
+      end
+      emit_suggestion("behavioural_expectation", eid, "description", "Sharper")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Original", rec.current_value
+      end
+    end
+
+    should "snapshot current value for capability name" do
+      cap_id = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::Capability.create!(
+          capability_id: cap_id, stable_id: SecureRandom.uuid_v7,
+          category_id: SecureRandom.uuid_v7, name: "Original Cap", status: "active"
+        )
+      end
+      emit_suggestion("capability", cap_id, "name", "Renamed Cap")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Original Cap", rec.current_value
+      end
+    end
+
+    should "snapshot current value for capability_category description" do
+      cat_id = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::CapabilityCategory.create!(
+          framework_id: @framework_id, category_id: cat_id,
+          name: "Thinking", description: "How we think", ordinal: 1
+        )
+      end
+      emit_suggestion("capability_category", cat_id, "description", "How we reason")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "How we think", rec.current_value
+      end
+    end
+
+    should "snapshot current value for role" do
+      rid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::Role.create!(
+          role_id: rid, role_family_id: SecureRandom.uuid_v7,
+          name: "Engineer", code: "E", track: "ic"
+        )
+      end
+      emit_suggestion("role", rid, "name", "Software Engineer")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Engineer", rec.current_value
+      end
+    end
+
+    should "snapshot current value for role_family" do
+      rfid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::RoleFamily.create!(
+          framework_id: @framework_id, role_family_id: rfid,
+          name: "Engineering", description: "Tech roles"
+        )
+      end
+      emit_suggestion("role_family", rfid, "description", "Builds product")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Tech roles", rec.current_value
+      end
+    end
+
+    should "snapshot current value for level" do
+      lid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::Level.create!(
+          level_id: lid, role_id: SecureRandom.uuid_v7,
+          ordinal: 3, title: "Senior Engineer", code: "E3", is_entry: false
+        )
+      end
+      emit_suggestion("level", lid, "title", "Staff Engineer")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Senior Engineer", rec.current_value
+      end
+    end
+
+    should "tolerate missing parent capability (current_value nil)" do
+      cap_id = SecureRandom.uuid_v7
+      emit_suggestion("capability", cap_id, "name", "Orphaned")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_not_nil rec
+        assert_nil rec.current_value
+        assert_equal "Orphaned", rec.suggested_value
+      end
+    end
+  end
+
   private
 
   # Emits an event through the projection.
@@ -597,5 +732,17 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
   # Executes a block within the test tenant context.
   def within_tenant(&block)
     ActsAsTenant.with_tenant(@tenant, &block)
+  end
+
+  # Emits an EditSuggested event with the standard test fixture ids.
+  def emit_suggestion(entity_type, entity_id, field, suggested_value)
+    emit(Frameworks::Events::EditSuggested,
+      framework_id: @framework_id,
+      suggestion_id: @sid,
+      target_entity_type: entity_type,
+      target_entity_id: entity_id,
+      field: field,
+      suggested_value: suggested_value,
+      author_id: @author_id)
   end
 end

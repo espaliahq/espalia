@@ -520,12 +520,25 @@ class Frameworks::Projections::PublishedState
   # @param entity_id [String]
   # @param field [String]
   # @return [String, nil]
-  def current_entity_value(entity_type, entity_id, field)
-    case entity_type
-    when "role_illustration"
-      record = FrameworkState::RoleIllustration.find_by(illustration_id: entity_id)
-      record&.public_send(field)
-    end
+  def current_entity_value(entity_type, entity_id, field) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+    record =
+      case entity_type
+      when "role_illustration"
+        FrameworkState::RoleIllustration.find_by(illustration_id: entity_id)
+      when "behavioural_expectation"
+        FrameworkState::BehaviouralExpectation.find_by(expectation_id: entity_id)
+      when "capability"
+        FrameworkState::Capability.find_by(capability_id: entity_id)
+      when "capability_category"
+        FrameworkState::CapabilityCategory.find_by(category_id: entity_id)
+      when "role"
+        FrameworkState::Role.find_by(role_id: entity_id)
+      when "role_family"
+        FrameworkState::RoleFamily.find_by(role_family_id: entity_id)
+      when "level"
+        FrameworkState::Level.find_by(level_id: entity_id)
+      end
+    record&.public_send(field)
   end
 
   # ── Collaborator handlers ──
