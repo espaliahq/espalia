@@ -47,6 +47,10 @@ class FrameworksSystemTest < ApplicationSystemTestCase
     should "navigate to framework show page" do
       visit frameworks_path
 
+      # Wait for the index to fully render before clicking through. Without
+      # this synchronisation, the click can land on a stale link and be
+      # silently dropped on slow CI runners.
+      assert_text "Frameworks"
       click_link "Test Framework"
 
       assert_text "Strategic Thinking"

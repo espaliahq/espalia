@@ -214,6 +214,42 @@ end
 - Use `visible: true` / `visible: :all` appropriately — `visible: true` checks CSS visibility, `:all` finds hidden DOM elements
 - Use `SCREENSHOTS=1` to visually verify responsive layouts at both sizes
 
+## Synchronising Navigation Steps (NON-NEGOTIABLE)
+
+**Always assert on the destination page before chaining another navigation.** When you `visit` a path or click a link that triggers Turbo navigation, the next interaction must wait for the destination DOM to commit. If you fire a second click immediately, on slow CI runners the click can land on a stale link that's about to be replaced — Selenium reports the click as successful but it never triggers anything, and the test fails one assertion later with a confusing "expected text on the wrong page" error.
+
+```ruby
+# WRONG — second click can be silently dropped before the index commits
+visit assessments_path
+click_link "Review Assessment"
+assert_text "Manager Review"  # may fail: page is still the index
+
+# WRONG — back-to-back clicks with no sync between them
+click_link "Assessments"
+click_link "Review Assessment"
+assert_text "Manager Review"
+
+# CORRECT — assertion on the destination page commits the navigation first
+visit assessments_path
+assert_text "Team Assessments"
+click_link "Review Assessment"
+assert_text "Manager Review"
+
+# CORRECT — same pattern between two click_link calls
+click_link "Assessments"
+assert_text "Team Assessments"
+click_link "Review Assessment"
+```
+
+**Key principles:**
+- After `visit` or any `click_link`/`click_button` that triggers navigation, add an `assert_text`/`assert_selector`/`assert_current_path` matching content unique to the destination page **before** the next navigation
+- Pick a sync target that only exists on the destination page (e.g. the page heading) — not generic chrome that's present everywhere
+- Form submissions (`click_button "Save"`) followed by an assertion on the response are already safe — the assertion waits for the server round-trip
+
+**When NOT needed:**
+- When the click is a form submission and the next line already asserts on response content
+- For sign-in flows that already end with `assert_current_path root_path`
+
 ## Waiting for Stimulus Controllers (NON-NEGOTIABLE)
 
 **Use `wait_for_stimulus` before interacting with Stimulus-controlled UI.** Stimulus controllers that extend `BaseController` set a `data-connected` attribute when connected. On slow CI runners, clicking before the controller connects means action handlers aren't attached yet — the click does nothing and the test flakes.

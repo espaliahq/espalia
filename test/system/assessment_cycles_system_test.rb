@@ -117,6 +117,10 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       # Visit the cycle in the UI and confirm the auto-enrolled participant appears
       sign_in @admin_user
       visit assessment_cycles_path
+      # Wait for the index to fully render before clicking through. Without
+      # this synchronisation, the click can land on a stale link and be
+      # silently dropped on slow CI runners.
+      assert_text "Assessment Cycles"
       click_link "Open Cycle"
 
       assert_text "New Hire"

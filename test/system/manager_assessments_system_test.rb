@@ -181,6 +181,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     should "show manager review matrix on mobile with scoring toggle visible" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessments_path
+      # Wait for the index to fully render before clicking through. Without
+      # this synchronisation, the click can land on a stale link and be
+      # silently dropped on slow CI runners.
+      assert_text "Team Assessments"
       click_link "Review Assessment"
 
       # Header elements should be visible — long names must not push scoring off-screen
