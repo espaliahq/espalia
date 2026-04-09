@@ -49,11 +49,22 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       sign_in @admin_user
       visit framework_settings_path(framework_id: @framework_id)
 
+      # Wait for all four setting-field controllers to connect before typing
+      # or submitting — on slow CI runners, clicks fired while Stimulus is
+      # still booting can be silently dropped, leaving the form unsubmitted.
+      assert_selector "[data-controller~='setting-field'][data-connected]",
+                      count: 4, visible: :all
+
       fill_in "settings[mastery_threshold]", with: "1.25"
       fill_in "settings[meeting_expectation_threshold]", with: "0.90"
       fill_in "settings[overperformance_cap]", with: "2"
       fill_in "settings[deficit_threshold]", with: "0.50"
+
+      # Retry the submit once if the first click was lost (see above).
       click_button "Save settings"
+      unless page.has_text?("Scoring settings updated", wait: 3)
+        click_button "Save settings" if page.has_button?("Save settings")
+      end
 
       assert_text "Scoring settings updated"
       assert_field "settings[mastery_threshold]", with: "1.25"

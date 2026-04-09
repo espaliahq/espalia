@@ -11,13 +11,14 @@
 //   </button>
 // </div>
 
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 
-export default class extends Controller {
+export default class extends BaseController {
   static targets = ["input", "reset"]
   static values = { default: String }
 
   connect() {
+    super.connect()
     this.checkDefault()
   }
 
