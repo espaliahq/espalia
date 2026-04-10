@@ -1,53 +1,50 @@
-# Pending-Draft Queue for Shape-Changing Suggestions - Done
+# Pending-Draft Queue for Shape-Changing Suggestions - Done (auto-open); Deferred (discard_draft)
 
-## Context
+## Status
 
-Under ADR-16, shape-changing events are draft-gated: they require an explicit `start_draft` call. Under the plan for [`todos/06-suggest-create-delete-paths.md`](06-suggest-create-delete-paths.md), a reviewer will be able to suggest creating a new capability or archiving an existing one — actions that are shape-changing.
+**Auto-open behaviour: DONE.** Approving a shape-changing suggestion with no draft in progress now implicitly emits `DraftVersionStarted(auto_opened: true)` before the structural event. Subsequent approvals join the same draft. Owner/editor publishes when ready.
 
-There is currently no mechanism for "this suggestion, when approved, should contribute to a draft". Approving a shape-changing suggestion today would raise `"No draft in progress — call start_draft first"` unless the reviewer has separately opened a draft first.
+**`discard_draft` command: DEFERRED** to a follow-up todo. Requires `DraftDiscarded` event, replay-skip range logic in both aggregate `on` handlers and `PublishedState#rebuild_framework_projection`, plus design decisions about whether discard rejects/archives/rewinds in-flight suggestions. Until implemented, un-published auto-opened drafts just accumulate structural changes.
 
-The desired behaviour: when a shape-changing suggestion is approved, the aggregate checks whether a draft is in progress. If yes, the event joins it. If no, a pending draft is auto-opened, the event lands in it, and the draft waits for an owner/editor to publish (or for other structural suggestions to accumulate). This gives the bottom-up collaborative-improvement workflow without forcing admins to babysit every proposed change.
+## What was implemented
 
-## What needs to change
+### Aggregate (`app/contexts/frameworks/aggregate.rb`)
 
-### Aggregate behaviour
+- `SHAPE_CHANGING_CREATE_TYPES` = `capability`, `behavioural_expectation`, `level`
+- `SHAPE_CHANGING_DELETE_TYPES` = `capability`
+- `maybe_auto_open_draft_for(suggestion, reviewer_id)` — called inside `approve_suggestion` after `SuggestionApproved`, before the structural dispatch. If `!@draft_in_progress && shape_changing_suggestion?(suggestion)`, emits `DraftVersionStarted(target_version: @current_version + 1, started_by: reviewer_id, auto_opened: true)`.
+- `shape_changing_suggestion?(suggestion)` — classifies by kind + target_entity_type.
 
-On `approve_suggestion` for a shape-changing creation/deletion:
+### Projection fix (`app/contexts/frameworks/projections/published_state.rb`)
 
-1. If `@draft_in_progress` is true — apply the shape-changing event into the current draft
-2. If `@draft_in_progress` is false — emit an implicit `DraftVersionStarted` first (started_by: the approver's person_id, target_version: `@current_version + 1`), then apply the shape-changing event
-
-Design concerns:
-
-- Multiple concurrent suggestions: the first approval opens the draft, subsequent ones join it. The draft owner is the first approver but subsequent approvals are allowed from any approver.
-- Who publishes: only `owner` and `editor` can call `publish_version`. The pending draft stays open until they do. If structural suggestions accumulate for weeks, the draft grows.
-- Abandonment: what happens if nobody publishes? A "cancel pending draft" command that reverts in-flight structural suggestions to a "pending-v(N+1)" state rather than discarding them. Or an admin-only `discard_draft` command that rejects all structural events accumulated since the implicit `DraftVersionStarted`.
-
-### New command: `discard_draft`
-
-```ruby
-def discard_draft(framework_id, discarded_by:)
-  ensure_draft_in_progress!
-  # Emit DraftDiscarded; the aggregate and projection treat this as
-  # "rewind to before DraftVersionStarted". The projection rebuild
-  # on DraftDiscarded wipes child read models and replays the stream
-  # up to (but not including) the DraftVersionStarted event.
-  apply(Frameworks::Events::DraftDiscarded.new(...))
-end
-```
-
-This is a larger lifecycle question: should draft events be "undoable" or should discard leave them in the stream with a marker? Events are immutable, so discard is really "a marker that the preceding DraftVersionStarted ... DraftDiscarded range should be ignored during replay." The projection rebuild logic needs to skip discarded ranges.
+Surfaced a pre-existing latent bug: `rebuild_framework_projection` replayed suggestion events on top of existing `FrameworkState::SuggestedEdit` rows (not wiped by `destroy_framework_children`), causing `RecordNotUnique`. Fixed by adding `SUGGESTION_EVENT_CLASSES` and `suggestion_event?(event)` to `skip_during_rebuild?`. Suggestion read models persist independently across version rebuilds.
 
 ### Tests
 
-- Approving a structural suggestion with no draft open → auto-opens draft
-- Approving two structural suggestions from different reviewers → both land in the same draft
-- Approving a structural suggestion while a draft is already open → joins existing draft
-- `discard_draft` wipes in-flight structural changes and restores the published projection to the previous version
+- `test/contexts/frameworks/aggregate_suggestion_test.rb` — 9 new auto-open scenarios (capability, expectation, level auto-open; delete auto-open; two approvals joining one draft; explicit draft not doubled; shape-preserving creation/deletion/edit not opening drafts).
+- `test/contexts/frameworks/projections/published_state_test.rb` — 1 new end-to-end test (suggest_create capability → approve → draft auto-opened + capability deferred → publish → capability visible after rebuild).
+
+## What is deferred
+
+### `discard_draft` command
+
+See the original design below. This requires:
+1. A `DraftDiscarded` event
+2. Aggregate `on` handler resetting draft state
+3. Replay-skip logic: the projection must identify `DraftVersionStarted … DraftDiscarded` ranges and skip all events within them during rebuild
+4. Design decision: does discard reject all in-flight structural suggestions? Archive them? Rewind them back to "pending"?
+
+Until this ships, an auto-opened draft with no publish just sits open indefinitely.
+
+## Original context (for reference)
+
+Under ADR-16, shape-changing events are draft-gated: they require an explicit `start_draft` call. Under [`todos/06-suggest-create-delete-paths.md`](06-suggest-create-delete-paths.md), a reviewer can suggest creating a new capability or archiving an existing one — actions that are shape-changing.
+
+The desired behaviour (now implemented): when a shape-changing suggestion is approved, the aggregate checks whether a draft is in progress. If yes, the event joins it. If no, a pending draft is auto-opened, the event lands in it, and the draft waits for an owner/editor to publish.
 
 ## Dependencies
 
-- [`todos/06-suggest-create-delete-paths.md`](06-suggest-create-delete-paths.md) — the suggest-create / suggest-delete commands must exist first
+- [`todos/06-suggest-create-delete-paths.md`](06-suggest-create-delete-paths.md) — done
 
 ## Verification
 
@@ -61,3 +58,4 @@ bin/rails development:precommit
 
 - UI for viewing and managing the pending draft — depends on [`todos/05-draft-preview-ui.md`](05-draft-preview-ui.md)
 - Cross-stream notification when a pending draft is opened — depends on notification integration
+- `discard_draft` / abandonment lifecycle — deferred follow-up

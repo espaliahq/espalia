@@ -171,9 +171,12 @@ Collaborator management:
   Permissions are the union of all held roles — never subtractive.
 
 Version lifecycle:
-  DraftVersionStarted { target_version, started_by }
+  DraftVersionStarted { target_version, started_by, auto_opened? }
     Emitted by: (a) FrameworkCreated bootstraps a v1 draft automatically
-    (started_by: "system"); (b) explicit start_draft command for v2+.
+    (started_by: "system"); (b) explicit start_draft command for v2+;
+    (c) approve_suggestion for a shape-changing suggestion when no draft
+    is in progress — auto-opens a pending draft (auto_opened: true,
+    started_by: the approver's person_id).
     Shape-changing events between this and FrameworkVersionPublished are
     only visible in the draft projection (not published). Editorial events
     apply live to both projections regardless of draft state.
@@ -248,7 +251,8 @@ Eight roles with scoped permissions. A person can hold multiple roles; permissio
 **Draft lifecycle:**
 - `FrameworkCreated` bootstraps a v1 draft automatically (emits `DraftVersionStarted(target_version: 1, started_by: "system")`). The caller populates the framework with structural content and calls `publish_version` to produce v1.
 - Subsequent drafts are opened explicitly via `start_draft(target_version, started_by)`. Only `owner` and `editor` can publish.
-- Shape-changing commands raise `"No draft in progress — call start_draft first"` if called outside a draft (enforced by `Frameworks::Aggregate#ensure_draft_in_progress!`).
+- **Auto-opened drafts:** When a shape-changing suggestion (e.g. create capability, archive capability, create level, set behavioural expectation) is approved and no draft is in progress, the aggregate implicitly emits `DraftVersionStarted(target_version: current+1, started_by: approver, auto_opened: true)` before applying the structural event. Subsequent approvals join the same draft. The draft stays open until owner/editor publishes.
+- Shape-changing **direct commands** (not via suggestion approval) still raise `"No draft in progress — call start_draft first"` if called outside a draft (enforced by `Frameworks::Aggregate#ensure_draft_in_progress!`).
 - Editorial commands work regardless of draft state.
 
 **Versioning workflow (v2+):**
