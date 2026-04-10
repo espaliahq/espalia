@@ -144,6 +144,7 @@ Architecture docs are split into focused files — read on demand, not all at on
 |------|-----------|
 | [adrs.md](docs/architecture/adrs.md) | Making architectural decisions; understanding *why* things are built a certain way |
 | [domain-models.md](docs/architecture/domain-models.md) | Working on Tenant, User, TenantUser, or Person; auth or multi-tenancy logic |
+| [08-framework-lifecycle.md](docs/08-framework-lifecycle.md) | Understanding drafts, suggestions, publishing, migration — conceptual overview before diving into the aggregate |
 | [framework-aggregate.md](docs/architecture/framework-aggregate.md) | Framework features — roles, capabilities, expectations, illustrations, versioning, collaborators |
 | [person-development-aggregate.md](docs/architecture/person-development-aggregate.md) | Assessments, evidence, growth plans, alignment conversations, check-ins |
 | [scoring-model.md](docs/architecture/scoring-model.md) | Assessment scoring, capability matrix display, performance verdicts, promotion readiness |
@@ -159,6 +160,7 @@ Other reference docs:
 - `docs/05-framework-structure.mermaid` — Two-layer expectation model
 - `docs/06-person-development-timeline.mermaid` — Worked example of person development events
 - `docs/07-versioning-flow.mermaid` — Framework versioning in event-sourced model
+- `docs/08-framework-lifecycle.md` — Human-friendly guide to drafts, suggestions, publishing, and migration
 
 ## Deployment Model
 
