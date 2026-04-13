@@ -11,11 +11,15 @@
 # automatically — no custom JavaScript fetch needed.
 #
 class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # @param illustration [FrameworkState::RoleIllustration]
   # @param framework_id [String] UUID of the framework (for the PATCH URL)
-  def initialize(illustration:, framework_id:)
+  # @param pending_edit_count [Integer] number of pending edit suggestions on this illustration
+  def initialize(illustration:, framework_id:, pending_edit_count: 0)
     @illustration = illustration
     @framework_id = framework_id
+    @pending_edit_count = pending_edit_count
   end
 
   def view_template
@@ -37,7 +41,8 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       class: "flex items-start gap-1 pl-2",
       data: { inline_editor_target: "display" }
     ) do
-      span(class: "flex-1") { @illustration.description }
+      decoration = suggestion_text_classes(pending_edit_count: @pending_edit_count)
+      span(class: "flex-1 #{decoration}".strip) { @illustration.description }
       button(
         type: "button",
         class: "opacity-0 group-hover/ill:opacity-100 transition-opacity " \

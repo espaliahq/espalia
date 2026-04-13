@@ -9,8 +9,10 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
     @author_user = FactoryBot.create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
-      FactoryBot.create(:tenant_user, tenant: @tenant, user: @author_user, role: :member)
+      @admin_person = FactoryBot.create(:person, tenant: @tenant, email: @admin_user.email)
+      @author_person = FactoryBot.create(:person, tenant: @tenant, email: @author_user.email)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @author_user, role: :member, person: @author_person)
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
@@ -34,6 +36,12 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
         @framework_id, @ill_id, SecureRandom.uuid_v7, @eid, rid, 1, "Seeks guidance from tech lead"
       )
       handler.publish_version(@framework_id, "v1")
+
+      # Add collaborator roles (required for suggestion access)
+      handler.add_collaborator(@framework_id, @admin_person.id.to_s, "owner",
+                               added_by: @admin_person.id.to_s)
+      handler.add_collaborator(@framework_id, @author_person.id.to_s, "collaborator",
+                               added_by: @admin_person.id.to_s)
 
       # Seed two pending suggestions, authored by @author_user, in mode :suggesting
       # so they don't auto-approve.

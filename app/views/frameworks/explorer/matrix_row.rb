@@ -7,6 +7,8 @@
 # 2. Expanded row (hidden by default): full illustrations for each cell
 #
 class Views::Frameworks::Explorer::MatrixRow < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
@@ -19,6 +21,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
+    @capability_pending_count = capability_data[:pending_suggestion_count] || 0
   end
 
   def view_template
@@ -53,7 +56,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           end
 
           div do
-            span(class: "text-sm font-medium text-gray-900 dark:text-white") { @capability.name }
+            decoration = suggestion_text_classes(pending_edit_count: @capability_pending_count)
+            span(class: "text-sm font-medium text-gray-900 dark:text-white #{decoration}".strip) { @capability.name }
             p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1") do
               @capability.description
             end if @capability.description.present?
@@ -100,11 +104,15 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
     td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
               "bg-blue-50/30 dark:bg-blue-900/10 align-top") do
+      ill_pending_edits = cell_data[:illustration_pending_edits] || {}
+      pending_creates = cell_data[:pending_illustration_creates] || []
+
       cell_data[:bound_selected_role_ids].each do |role_id|
         role = FrameworkState::Role.find_by(role_id: role_id)
         next unless role
 
         illustrations = cell_data[:illustrations_by_role][role_id] || []
+        role_pending_creates = pending_creates.select { |s| s.proposed_attributes["role_id"] == role_id }
 
         div(class: "mb-2 last:mb-0") do
           render Components::Kit::Badge.new(role.code, variant: :default)
@@ -115,6 +123,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
             illustrations.each do |ill|
               render Views::Frameworks::Explorer::IllustrationFrame.new(
                 illustration: ill,
+                framework_id: @framework_id,
+                pending_edit_count: ill_pending_edits[ill.illustration_id] || 0
+              )
+            end
+            role_pending_creates.each do |suggestion|
+              render Views::Frameworks::Explorer::PendingIllustrationFrame.new(
+                suggestion: suggestion,
                 framework_id: @framework_id
               )
             end

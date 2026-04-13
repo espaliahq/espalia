@@ -14,16 +14,16 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   include FrameworkCollaboratorPermissions
 
   # @return [Boolean]
-  def index? = tenant_member?
+  def index? = tenant_admin? || framework_collaborator_can_suggest?
 
   # @return [Boolean]
-  def show? = tenant_member?
+  def show? = tenant_admin? || framework_collaborator_can_suggest?
 
-  # Any tenant member can submit a suggestion (any kind). Approval gating
+  # Non-viewer collaborators can submit suggestions. Approval gating
   # happens at #approve?.
   #
   # @return [Boolean]
-  def create? = tenant_member?
+  def create? = tenant_admin? || framework_collaborator_can_suggest?
 
   # @return [Boolean]
   def approve?
@@ -63,5 +63,12 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   # @return [Boolean]
   def pending?
     record.status == "pending"
+  end
+
+  # @return [Boolean]
+  def framework_collaborator_can_suggest?
+    return false unless person.present?
+
+    can_suggest?
   end
 end

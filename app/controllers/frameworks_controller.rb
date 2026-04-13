@@ -26,10 +26,14 @@ class FrameworksController < ApplicationController
     selected_role_ids = parse_role_ids
     track_filter = params[:track].presence || "both"
 
+    pending_suggestions, pending_illustration_creates = load_pending_suggestion_maps
+
     matrix_data = Frameworks::MatrixDataBuilder.new(
       framework: @framework, role_families: role_families,
       categories: categories,
-      selected_role_ids: selected_role_ids, track_filter: track_filter
+      selected_role_ids: selected_role_ids, track_filter: track_filter,
+      pending_suggestions: pending_suggestions,
+      pending_illustration_creates: pending_illustration_creates
     ).build
 
     render Views::Frameworks::ShowView.new(
@@ -54,10 +58,14 @@ class FrameworksController < ApplicationController
     selected_role_ids = parse_role_ids
     track_filter = params[:track].presence || "both"
 
+    pending_suggestions, pending_illustration_creates = load_pending_suggestion_maps
+
     matrix_data = Frameworks::MatrixDataBuilder.new(
       framework: @framework, role_families: role_families,
       categories: categories,
-      selected_role_ids: selected_role_ids, track_filter: track_filter
+      selected_role_ids: selected_role_ids, track_filter: track_filter,
+      pending_suggestions: pending_suggestions,
+      pending_illustration_creates: pending_illustration_creates
     ).build
 
     render Views::Frameworks::MatrixFrameView.new(
@@ -90,5 +98,21 @@ class FrameworksController < ApplicationController
     @framework.capability_categories
       .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
       .order(:ordinal)
+  end
+
+  # Loads pending suggestion maps for the matrix visual affordance.
+  #
+  # @return [Array(Hash, Hash)] [entity counts map, illustration creates by parent]
+  def load_pending_suggestion_maps
+    base = FrameworkState::SuggestedEdit
+      .where(framework_id: @framework.framework_id)
+      .pending
+
+    counts = base.group(:target_entity_type, :target_entity_id).count
+    creates = base.creates
+      .where(target_entity_type: "role_illustration")
+      .to_a.group_by(&:parent_id)
+
+    [ counts, creates ]
   end
 end

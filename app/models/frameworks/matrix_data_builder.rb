@@ -22,12 +22,17 @@ class Frameworks::MatrixDataBuilder
   # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded with capabilities, bindings, expectations, illustrations
   # @param selected_role_ids [Array<String>] UUIDs of selected roles
   # @param track_filter [String] "ic", "management", or "both"
-  def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both")
+  # @param pending_suggestions [Hash] pre-queried map { [entity_type, entity_id] => count } for pending edits/deletes
+  # @param pending_illustration_creates [Hash] pre-queried map { parent_id => [SuggestedEdit, ...] } for pending creates
+  def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both",
+                 pending_suggestions: {}, pending_illustration_creates: {})
     @framework = framework
     @role_families = role_families
     @categories = categories
     @selected_role_ids = selected_role_ids
     @track_filter = track_filter
+    @pending_suggestions = pending_suggestions
+    @pending_illustration_creates = pending_illustration_creates
   end
 
   # Builds the matrix data structure.
@@ -118,7 +123,11 @@ class Frameworks::MatrixDataBuilder
       capabilities = build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
       next if capabilities.empty?
 
-      { category: category, capabilities: capabilities }
+      {
+        category: category,
+        capabilities: capabilities,
+        pending_suggestion_count: @pending_suggestions[[ "capability_category", category.category_id ]] || 0
+      }
     end
   end
 
@@ -138,7 +147,8 @@ class Frameworks::MatrixDataBuilder
       {
         capability: capability,
         bound_to_selected: bound_to_selected,
-        cells: cells
+        cells: cells,
+        pending_suggestion_count: @pending_suggestions[[ "capability", capability.capability_id ]] || 0
       }
     end
   end
@@ -178,8 +188,23 @@ class Frameworks::MatrixDataBuilder
         expectation: expectation,
         illustration_count: illustrations.size,
         illustrations_by_role: illustrations_by_role,
-        bound_selected_role_ids: bound_selected_role_ids
+        bound_selected_role_ids: bound_selected_role_ids,
+        pending_suggestion_count: @pending_suggestions[[ "behavioural_expectation", expectation.expectation_id ]] || 0,
+        illustration_pending_edits: illustration_pending_edits(illustrations),
+        pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
       }
+    end
+  end
+
+  # Builds a hash of illustration_id => pending edit count for illustrations
+  # that have pending suggestions.
+  #
+  # @param illustrations [Array<FrameworkState::RoleIllustration>]
+  # @return [Hash<String, Integer>]
+  def illustration_pending_edits(illustrations)
+    illustrations.each_with_object({}) do |ill, h|
+      count = @pending_suggestions[[ "role_illustration", ill.illustration_id ]]
+      h[ill.illustration_id] = count if count && count > 0
     end
   end
 end

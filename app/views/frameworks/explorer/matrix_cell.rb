@@ -7,6 +7,8 @@
 # not inline in the cell.
 #
 class Views::Frameworks::Explorer::MatrixCell < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
   # @param ordinal [Integer] the level ordinal for this column
   def initialize(cell_data:, ordinal:)
@@ -39,8 +41,15 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   end
 
   def expectation_text
-    p(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-3") do
+    pending_count = @cell_data[:pending_suggestion_count] || 0
+    decoration = suggestion_text_classes(pending_edit_count: pending_count)
+
+    p(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-3 #{decoration}".strip) do
       @cell_data[:expectation].description
+    end
+
+    if pending_count >= 2
+      render Views::Frameworks::Suggestions::InlineIndicator.new(count: pending_count)
     end
   end
 

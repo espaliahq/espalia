@@ -31,16 +31,16 @@ class FrameworkPolicy < ApplicationPolicy
   def update_illustration? = tenant_admin? || framework_collaborator_can_edit?
 
   # @return [Boolean]
-  def suggest_edit? = tenant_member?
+  def suggest_edit? = tenant_admin? || framework_collaborator_can_suggest?
 
-  # Any tenant member can submit a create/delete suggestion. Approval gating
-  # happens later in FrameworkSuggestionPolicy#approve?.
+  # Non-viewer collaborators can submit create/delete suggestions. Approval
+  # gating happens later in FrameworkSuggestionPolicy#approve?.
   #
   # @return [Boolean]
-  def submit_suggestion? = tenant_member?
+  def submit_suggestion? = tenant_admin? || framework_collaborator_can_suggest?
 
   # @return [Boolean]
-  def view_suggestions? = tenant_member?
+  def view_suggestions? = tenant_admin? || framework_collaborator_can_suggest?
 
   # Convenience method for views to conditionally render admin UI.
   #
@@ -57,5 +57,15 @@ class FrameworkPolicy < ApplicationPolicy
     return false unless person.present?
 
     collaborator_roles.with_edit_rights.exists?
+  end
+
+  # Checks whether the current person holds any non-viewer collaborator role
+  # on this framework (can propose suggestions).
+  #
+  # @return [Boolean]
+  def framework_collaborator_can_suggest?
+    return false unless person.present?
+
+    can_suggest?
   end
 end

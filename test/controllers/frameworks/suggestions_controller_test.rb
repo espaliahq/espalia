@@ -10,9 +10,12 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
     @author_user = create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
-      create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
-      create(:tenant_user, tenant: @tenant, user: @author_user, role: :member)
+      @admin_person = create(:person, tenant: @tenant, email: @admin_user.email)
+      @member_person = create(:person, tenant: @tenant, email: @member_user.email)
+      @author_person = create(:person, tenant: @tenant, email: @author_user.email)
+      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
+      create(:tenant_user, tenant: @tenant, user: @member_user, role: :member, person: @member_person)
+      create(:tenant_user, tenant: @tenant, user: @author_user, role: :member, person: @author_person)
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
@@ -36,6 +39,15 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
         @framework_id, @ill_id, SecureRandom.uuid_v7, @eid, @rid, 1, "Seeks guidance"
       )
       handler.publish_version(@framework_id, "test")
+
+      # Add collaborator roles — required after authorization tightening.
+      # Admin is owner, member and author are collaborators (can suggest, cannot approve).
+      handler.add_collaborator(@framework_id, @admin_person.id.to_s, "owner",
+                               added_by: @admin_person.id.to_s)
+      handler.add_collaborator(@framework_id, @member_person.id.to_s, "collaborator",
+                               added_by: @admin_person.id.to_s)
+      handler.add_collaborator(@framework_id, @author_person.id.to_s, "collaborator",
+                               added_by: @admin_person.id.to_s)
 
       # Seed two pending suggestions, authored by @author_user (not auto-approved
       # because we use mode: :suggesting).

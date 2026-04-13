@@ -6,6 +6,8 @@
 # followed by capability rows for this category.
 #
 class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # @param category_data [Hash] from MatrixDataBuilder: { category:, capabilities: [...] }
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
@@ -13,6 +15,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
+    @category_pending_count = category_data[:pending_suggestion_count] || 0
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
@@ -49,7 +52,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
             s.path(d: "M9 5l7 7-7 7")
           end
 
-          span(class: "text-sm font-semibold text-gray-700 dark:text-gray-300") do
+          decoration = suggestion_text_classes(pending_edit_count: @category_pending_count)
+          span(class: "text-sm font-semibold text-gray-700 dark:text-gray-300 #{decoration}".strip) do
             @category.name
           end
 
