@@ -16,8 +16,10 @@ class Views::Frameworks::ShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   # @param is_admin [Boolean] whether to show admin controls (settings link)
+  # @param pending_suggestion_count [Integer] count for the suggestions toggle badge
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
-                 matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false)
+                 matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
+                 pending_suggestion_count: 0)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -27,6 +29,7 @@ class Views::Frameworks::ShowView < Views::Base
     @current_tenant = current_tenant
     @tenants = tenants
     @is_admin = is_admin
+    @pending_suggestion_count = pending_suggestion_count
   end
 
   def view_template
@@ -128,6 +131,26 @@ class Views::Frameworks::ShowView < Views::Base
       end
       stat_item("Levels", level_count)
       stat_item("Capabilities", cap_count)
+      suggestions_toggle
+    end
+  end
+
+  def suggestions_toggle
+    button(
+      type: "button",
+      class: "ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-md " \
+             "bg-gray-100 dark:bg-gray-800 " \
+             "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+      data: {
+        action: "framework-explorer#toggleContextPane",
+        framework_explorer_target: "contextPaneToggle"
+      },
+      title: "Toggle suggestions panel"
+    ) do
+      span(class: "font-semibold text-gray-900 dark:text-white") do
+        @pending_suggestion_count.to_s
+      end
+      span { " #{'Suggestion'.pluralize(@pending_suggestion_count)}" }
     end
   end
 
@@ -191,11 +214,18 @@ class Views::Frameworks::ShowView < Views::Base
   def right_pane_placeholder
     aside(
       class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 hidden",
+             "bg-white dark:bg-gray-900 hidden flex-col overflow-hidden",
       data: { framework_explorer_target: "contextPane" }
     ) do
-      div(class: "p-6 text-center text-gray-400 dark:text-gray-500 text-sm") do
-        p { "Context pane coming soon" }
+      turbo_frame_tag(
+        "suggestion-panel",
+        src: framework_suggestions_path(@framework.framework_id, layout: "panel"),
+        loading: "lazy",
+        class: "block h-full"
+      ) do
+        div(class: "p-6 text-center text-gray-400 dark:text-gray-500 text-sm") do
+          p { "Loading suggestions\u2026" }
+        end
       end
     end
   end

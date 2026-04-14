@@ -83,6 +83,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         @eid3, @role_id, 1, "Creates a checklist of sub-tasks before starting work"
       )
 
+      # Publish v1 so shape-changing events land in the read model
+      handler.publish_version(@framework_id, "test")
+
       # Assign person and open cycle
       level = FrameworkState::Level.find_by!(level_id: @level2_id)
       pd_handler.assign_to_framework(@person.id, @framework_id, @role_id, level.level_id)
@@ -242,9 +245,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       ActsAsTenant.with_tenant(@tenant) do
         handler = Frameworks::CommandHandler.new
 
-        # Add a second category + capability for tab switching
-        @cat2_id = SecureRandom.uuid_v7
-        handler.add_capability_category(@framework_id, @cat2_id, "Delivering", ordinal: 2)
+        # Shape-changing commands (add_capability, create_capability_role_binding,
+        # set_behavioural_expectation) require a draft. add_capability_category is
+        # editorial-live.
+        handler.add_capability_category(@framework_id, @cat2_id = SecureRandom.uuid_v7, "Delivering", ordinal: 2)
+
+        handler.start_draft(@framework_id, 2, "test")
         @cap3_id = SecureRandom.uuid_v7
         @cap3_stable = SecureRandom.uuid_v7
         handler.add_capability(@framework_id, @cap3_id, @cap3_stable, @cat2_id, "Execution")
@@ -253,6 +259,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         )
         handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
           @cap3_id, 1, "Ships features reliably")
+        handler.publish_version(@framework_id, "test")
+
+        # Add illustration after publish (editorial, needs parent expectation to exist)
         handler.add_role_illustration(
           @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
           FrameworkState::BehaviouralExpectation.find_by!(capability_id: @cap3_id, level_ordinal: 1).expectation_id,

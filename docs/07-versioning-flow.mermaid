@@ -10,20 +10,22 @@ flowchart TB
             PE2["FrameworkVersionPublished { version: N }"]
         end
 
-        subgraph Editorial["Editorial Changes (apply immediately to published projection)"]
+        subgraph Editorial["Shape-preserving / editorial changes (live-apply, any state)"]
             ED1["EditSuggested → SuggestionApproved"]
             ED2["BehaviouralExpectationUpdated"]
-            ED3["RoleIllustrationAdded"]
+            ED3["RoleIllustrationAdded / Updated / Removed"]
+            ED4["RoleFamilyUpdated / RoleUpdated"]
+            ED5["CapabilityRoleBindingUpdated (weight)"]
             ED_NOTE["Applied immediately by Published projection.
             No draft phase needed.
-            Can flow during a draft phase too."]
+            Flow alongside draft phases — never held hostage by them."]
         end
 
-        subgraph DraftPhase["Draft Phase (structural changes accumulate)"]
+        subgraph DraftPhase["Draft Phase (shape-changing events accumulate)"]
             D1["DraftVersionStarted { target_version: N+1 }"]
             D2["CapabilityAdded { stable_id: X5 }"]
             D3["CapabilityArchived { id: ..., reason: merge source }"]
-            D4["BindingWeightChanged { ... }"]
+            D4["LevelAdded / LevelOrdinalChanged"]
             D5["MigrationMappingDefined
             { from: X1, to: X1, type: same }"]
             D6["MigrationMappingDefined
@@ -31,12 +33,23 @@ flowchart TB
             D7["MigrationMappingDefined
             { from: X2, to: X5+X6, type: split,
               requires_reassessment: true }"]
-            D8["FrameworkVersionPublished { version: N+1 }"]
+            D8["FrameworkVersionPublished { version: N+1 }
+            Rejected if archived caps lack mappings (ADR-17)"]
 
-            DRAFT_NOTE["Structural events between DraftVersionStarted
+            DRAFT_NOTE["Shape-changing events between DraftVersionStarted
             and FrameworkVersionPublished:
             • SKIPPED by Published projection
-            • INCLUDED in Draft/Editor projection"]
+            • INCLUDED in Draft/Editor projection
+            Aggregate enforces draft via ensure_draft_in_progress!
+            (ADR-16)"]
+        end
+
+        subgraph Bootstrap["Bootstrap draft (auto-opened on create)"]
+            B1["FrameworkCreated"]
+            B2["DraftVersionStarted
+            { target_version: 1, started_by: 'system' }"]
+            B3["... shape-changing setup commands ..."]
+            B4["FrameworkVersionPublished { version: 1 }"]
         end
 
         Published --> Editorial
@@ -47,14 +60,15 @@ flowchart TB
     subgraph TwoProjections["Two Projections of Same Stream"]
         direction LR
         subgraph PubProj["Published Projection"]
-            PP1["Skips structural events during draft.
+            PP1["Skips shape-changing events during draft.
             Applies editorial events immediately.
-            What assessors and managers see.
-            Standard AR read models with acts_as_tenant."]
+            On FrameworkVersionPublished: wipes child read
+            models and replays entire stream via handle().
+            What assessors and managers see."]
         end
         subgraph DraftProj["Draft / Editor Projection"]
             DP1["Replays ALL events to head.
-            Shows pending structural changes.
+            Shows pending shape-changing events.
             Shows inline suggested edits.
             What framework editors see."]
         end
@@ -64,7 +78,9 @@ flowchart TB
 
     subgraph OnPublish["On FrameworkVersionPublished"]
         I1["Published projection advances —
-        incorporates all structural changes"]
+        wipes child read models and replays
+        entire stream to incorporate all
+        shape-changing events"]
         I2["Completed assessments:
         preserved via replay to prior
         FullAlignmentCompleted"]
@@ -90,6 +106,7 @@ flowchart TB
 
     style Published fill:#d4edda,stroke:#28a745
     style Editorial fill:#d4edda,stroke:#28a745
+    style Bootstrap fill:#cce5ff,stroke:#004085
     style DraftPhase fill:#cce5ff,stroke:#004085
     style PubProj fill:#d4edda,stroke:#28a745
     style DraftProj fill:#cce5ff,stroke:#004085

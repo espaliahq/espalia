@@ -7,7 +7,16 @@
 ## Domain Concepts
 
 ### Framework
-The configurable career path blueprint. Event-sourced via RES as a single stream per framework (`tenant-{id}/Framework-{id}`). Versions are points in the stream marked by `FrameworkVersionPublished` events. Structural changes accumulate in a draft phase. Editorial changes apply immediately via suggested edits.
+The configurable career path blueprint. Event-sourced via RES as a single stream per framework (`tenant-{id}/Framework-{id}`). Versions are points in the stream marked by `FrameworkVersionPublished` events. **Shape-changing events** (see below) accumulate in a draft phase and become visible on publish. **Editorial / shape-preserving events** apply immediately regardless of draft state.
+
+### Shape-changing event
+A framework event that alters the `(capability_stable_id, level_ordinal)` rating grid that in-flight assessment cycles depend on. Deferred in the published projection while `draft_in_progress` is true; replayed when `FrameworkVersionPublished` triggers a rebuild. Aggregate-enforced to only fire inside a draft phase via `ensure_draft_in_progress!`. Examples: `CapabilityAdded`, `CapabilityArchived`, `LevelAdded`, `LevelOrdinalChanged`, `CapabilityRoleBindingCreated`/`Removed`, `BehaviouralExpectationSet`.
+
+### Editorial event
+A framework event that rewrites or adds content without changing the rating grid. Applies immediately to the published view regardless of draft state. No draft required, no version bump. Examples: `RoleFamilyUpdated`, `CapabilityCategoryAdded`, `BehaviouralExpectationUpdated`, `CapabilityRoleBindingUpdated` (weight), all `RoleIllustration*` events.
+
+### Bootstrap draft
+The implicit v1 draft opened by `FrameworkCreated`. The aggregate emits `FrameworkCreated` followed by `DraftVersionStarted(target_version: 1, started_by: "system")` in a single `create` command. The caller populates the framework with shape-changing content and calls `publish_version` to produce v1. See ADR-5.
 
 ### Role Family
 Grouping of related roles. Example: "Engineering" contains "Software Engineer" and "Engineering Manager". Enables career mobility visibility.
@@ -38,7 +47,16 @@ The canonical, org-wide definition of what good looks like for a Capability at a
 Clarifying example of how a BehaviouralExpectation manifests in a specific role. **Multiple per BehaviouralExpectation × Role. NOT separately rated.** Helps people interpret the expectation for their role context. Example for Engineers: "Evaluates technical approaches weighing maintenance cost, timeline, and team capability."
 
 ### SuggestedEdit
-Atomic, inline edit suggestion on a framework entity. Rendered in context (Google Docs suggestion mode). Flows through tiered review. Part of the Framework event stream as `EditSuggested` / `SuggestionApproved` / `SuggestionRejected` events. Applied immediately on approval — continuous delivery.
+Atomic, inline edit suggestion on a framework entity. Rendered in context (Google Docs suggestion mode). Three kinds: **edit** (change a field), **create** (propose a new entity), **delete** (propose archiving). Flows through tiered review. Part of the Framework event stream as `EditSuggested` / `EntityCreationSuggested` / `EntityDeletionSuggested` / `SuggestionApproved` / `SuggestionRejected` events. Applied immediately on approval — continuous delivery. See [Framework Lifecycle](08-framework-lifecycle.md) for the full suggestion workflow.
+
+### Draft-gated
+A command or event that requires an active draft phase (`@draft_in_progress == true`) to execute. The aggregate enforces this via `ensure_draft_in_progress!`. Shape-changing commands called without a draft raise an error. Shape-changing *suggestions* bypass this gate by auto-opening a draft on approval.
+
+### Auto-opened draft
+A draft implicitly opened by the aggregate when a shape-changing suggestion is approved and no draft is in progress. Emits `DraftVersionStarted` with `auto_opened: true` and `started_by` set to the approver's person ID. Subsequent shape-changing approvals join the same draft. Owner/editor must publish. Enables bottom-up structural improvement without requiring admin pre-planning. See [Framework Lifecycle: Auto-opened by suggestion approval](08-framework-lifecycle.md#how-drafts-open).
+
+### Migration mapping
+Instruction telling the system what to do with ratings when a capability is archived during a version transition. Five types: `same` (ratings carry), `evolved` (ratings carry, reassessment likely), `split` (ratings blanked, reassessment required), `archived` (ratings surface for relink/dismiss), `new` (starts blank). Mandatory for all archived capabilities before `publish_version` will succeed (ADR-17).
 
 ### FrameworkCollaborator
 Permission role on a framework. Eight roles: `owner` (full control + manage collaborators), `editor` (full structural/content but no collaborator management), `role_family_lead` / `role_lead` (scoped to their family/role + exclusively-bound capabilities), `capability_category_lead` / `capability_lead` (scoped to their category/capability), `collaborator` (can see drafts, suggest edits, and comment), `viewer` (published view only, no interaction). A person can hold multiple roles; permissions are the union. See architecture doc section 3.5.6 for full details.

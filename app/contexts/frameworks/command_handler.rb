@@ -95,16 +95,31 @@ class Frameworks::CommandHandler
     end
   end
 
-  # Updates a level.
+  # Updates a level's editorial details (title/code/is_entry). Shape-preserving
+  # — applies live regardless of draft state. For ordinal changes, use
+  # change_level_ordinal.
   #
   # @param framework_id [String] UUID of the framework
   # @param level_id [String] UUID of the level
-  # @param ordinal [Integer, nil] updated ordinal
   # @param title [String, nil] updated title
   # @param code [String, nil] updated code
-  def update_level(framework_id, level_id, ordinal: nil, title: nil, code: nil)
+  # @param is_entry [Boolean, nil] updated entry-level flag
+  def update_level_details(framework_id, level_id, title: nil, code: nil, is_entry: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.update_level(framework_id, level_id, ordinal: ordinal, title: title, code: code)
+      framework.update_level_details(framework_id, level_id, title: title, code: code, is_entry: is_entry)
+    end
+  end
+
+  # Changes a level's ordinal position. Shape-changing — requires a draft
+  # because it renumbers rating rows for any in-flight assessment cycle.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param level_id [String] UUID of the level
+  # @param new_ordinal [Integer] the new ordinal position
+  # @param reason [String] explanation for the change
+  def change_level_ordinal(framework_id, level_id, new_ordinal, reason:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.change_level_ordinal(framework_id, level_id, new_ordinal, reason: reason)
     end
   end
 
@@ -131,6 +146,18 @@ class Frameworks::CommandHandler
   def update_capability_category(framework_id, category_id, name: nil, description: nil, ordinal: nil)
     @repository.with_framework(framework_id) do |framework|
       framework.update_capability_category(framework_id, category_id, name: name, description: description, ordinal: ordinal)
+    end
+  end
+
+  # Updates a capability's name or description.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param capability_id [String] UUID of the capability
+  # @param name [String, nil] updated name
+  # @param description [String, nil] updated description
+  def update_capability(framework_id, capability_id, name: nil, description: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.update_capability(framework_id, capability_id, name: name, description: description)
     end
   end
 
@@ -351,6 +378,60 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Suggests creating a new framework entity. The target entity does not yet
+  # exist; proposed_attributes carries the data needed to construct it on
+  # approval.
+  #
+  # Auto-approves if the author has approval authority AND mode is :editing
+  # (the default), mirroring the suggest_edit pattern.
+  #
+  # Event trail on auto-approve: EntityCreationSuggested + SuggestionApproved + add_* event(s)
+  # Event trail on pending:      EntityCreationSuggested
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity to create (e.g. "capability")
+  # @param proposed_attributes [Hash] attributes for the new entity
+  # @param parent_id [String, nil] UUID of the parent entity, nil for framework-level entities
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] optional explanation
+  # @param mode [Symbol] :editing (auto-approve if authority) or :suggesting (always pending)
+  def suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
+                     parent_id:, author_id:, rationale: nil, mode: :editing)
+    @repository.with_framework(framework_id) do |framework|
+      framework.suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
+                               parent_id: parent_id, author_id: author_id, rationale: rationale)
+
+      if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
+        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+      end
+    end
+  end
+
+  # Suggests deleting (or archiving) an existing framework entity.
+  #
+  # Auto-approves if the author has approval authority AND mode is :editing
+  # (the default).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity (e.g. "capability")
+  # @param target_entity_id [String] UUID of the entity to delete
+  # @param author_id [String] UUID of the author
+  # @param rationale [String, nil] optional explanation
+  # @param mode [Symbol] :editing (auto-approve if authority) or :suggesting (always pending)
+  def suggest_delete(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                     author_id:, rationale: nil, mode: :editing)
+    @repository.with_framework(framework_id) do |framework|
+      framework.suggest_delete(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                               author_id: author_id, rationale: rationale)
+
+      if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
+        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+      end
+    end
+  end
+
   # Amends the author's own pending suggestion.
   #
   # @param framework_id [String] UUID of the framework
@@ -361,6 +442,19 @@ class Frameworks::CommandHandler
   def amend_suggestion(framework_id, suggestion_id, new_suggested_value, author_id, rationale: nil)
     @repository.with_framework(framework_id) do |framework|
       framework.amend_suggestion(suggestion_id, new_suggested_value, author_id, rationale: rationale)
+    end
+  end
+
+  # Approves a pending suggestion, applies the content change, and auto-rejects
+  # any competing pending suggestions on the same entity field.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion
+  # @param reviewer_id [String] UUID of the reviewer
+  # @param comment [String, nil] optional reviewer comment
+  def approve_suggestion(framework_id, suggestion_id, reviewer_id, comment: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.approve_suggestion(suggestion_id, reviewer_id, comment: comment)
     end
   end
 
@@ -380,9 +474,10 @@ class Frameworks::CommandHandler
   #
   # @param framework_id [String] UUID of the framework
   # @param suggestion_id [String] UUID of the suggestion
-  def withdraw_suggestion(framework_id, suggestion_id)
+  # @param author_id [String] UUID of the author (must match the original)
+  def withdraw_suggestion(framework_id, suggestion_id, author_id)
     @repository.with_framework(framework_id) do |framework|
-      framework.withdraw_suggestion(suggestion_id)
+      framework.withdraw_suggestion(suggestion_id, author_id)
     end
   end
 

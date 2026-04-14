@@ -20,6 +20,7 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
       @eid = SecureRandom.uuid_v7
       @ill_id = SecureRandom.uuid_v7
 
+      # create_framework opens a bootstrap v1 draft automatically.
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rfid, "Engineering")
       handler.add_role(@framework_id, @rid, rfid, "Software Engineer", "E", "ic")
@@ -31,6 +32,9 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
       handler.add_role_illustration(
         @framework_id, @ill_id, SecureRandom.uuid_v7, @eid, @rid, 1, "Seeks guidance from tech lead"
       )
+      # Publish v1 so shape-changing read models (capability, expectation, binding)
+      # are materialized — required for the controller tests to find the parent.
+      handler.publish_version(@framework_id, "test")
     end
   end
 

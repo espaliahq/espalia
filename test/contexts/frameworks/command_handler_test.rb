@@ -10,23 +10,29 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
   end
 
   context "#create_framework" do
-    should "publish FrameworkCreated event and create read model" do
+    should "publish FrameworkCreated + bootstrap DraftVersionStarted and create read model" do
       ActsAsTenant.with_tenant(@tenant) do
         handler = Frameworks::CommandHandler.new
         handler.create_framework(@framework_id, "Engineering Growth")
 
-        # Verify event in stream
+        # Verify both events in stream (create bootstraps a v1 draft)
         stream = EventStreamNaming.framework_stream(@framework_id)
         events = @event_store.read.stream(stream).to_a
-        assert_equal 1, events.length
-        assert_kind_of Frameworks::Events::FrameworkCreated, events.first
-        assert_equal "Engineering Growth", events.first.data[:name]
+        assert_equal 2, events.length
+        assert_kind_of Frameworks::Events::FrameworkCreated, events[0]
+        assert_equal "Engineering Growth", events[0].data[:name]
+        assert_kind_of Frameworks::Events::DraftVersionStarted, events[1]
+        assert_equal 1, events[1].data[:target_version]
+        assert_equal "system", events[1].data[:started_by]
 
-        # Verify read model created by projection
+        # Verify read model created by projection — in a bootstrap draft
         read_model = FrameworkState::Framework.find_by(framework_id: @framework_id)
         assert_not_nil read_model
         assert_equal "Engineering Growth", read_model.name
         assert_equal @tenant.id, read_model.tenant_id
+        assert read_model.draft_in_progress
+        assert_equal 1, read_model.draft_version
+        assert_equal 0, read_model.current_published_version
       end
     end
   end
@@ -46,6 +52,8 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
         exp_stable_id = SecureRandom.uuid_v7
         iid = SecureRandom.uuid_v7
 
+        # create_framework bootstraps a v1 draft, so shape-changing commands
+        # are available immediately.
         handler.create_framework(@framework_id, "me&u 2025")
         handler.add_role_family(@framework_id, rfid, "Data", description: "Data team roles")
         handler.add_role(@framework_id, rid, rfid, "Data Engineer", "DE", "ic")
@@ -56,10 +64,20 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
         handler.set_behavioural_expectation(@framework_id, eid, exp_stable_id, cap_id, 1, "Asks questions to understand problems.")
         handler.add_role_illustration(@framework_id, iid, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance from a data lead")
 
-        # Verify event stream
+        # Shape-changing events are deferred during the bootstrap draft.
+        # Verify that they are not visible until publish_version.
+        assert_nil FrameworkState::Capability.find_by(capability_id: cap_id)
+        assert_nil FrameworkState::Level.find_by(level_id: lid)
+
+        # Publish v1 — rebuild replays all events, making shape-changing
+        # events visible in the published projection.
+        handler.publish_version(@framework_id, "seed")
+
+        # Verify event stream: 1 FrameworkCreated + 1 DraftVersionStarted
+        # (bootstrap) + 9 commands + 1 FrameworkVersionPublished = 11 events
         stream = EventStreamNaming.framework_stream(@framework_id)
         events = @event_store.read.stream(stream).to_a
-        assert_equal 9, events.length
+        assert_equal 11, events.length
 
         # Verify all read models
         assert_equal 1, FrameworkState::Framework.count
@@ -74,6 +92,8 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
 
         # Verify associations work
         framework = FrameworkState::Framework.find_by!(framework_id: @framework_id)
+        assert_equal 1, framework.current_published_version
+        assert_not framework.draft_in_progress
         assert_equal "Data", framework.role_families.first.name
         assert_equal "Data Engineer", framework.role_families.first.roles.first.name
 
@@ -85,6 +105,74 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
         # Verify tenant metadata on events
         events.each do |event|
           assert_equal @tenant.id, event.metadata[:tenant_id]
+        end
+      end
+    end
+  end
+
+  context "#approve_suggestion" do
+    setup do
+      @ill_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        cat_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        eid = SecureRandom.uuid_v7
+
+        handler.create_framework(@framework_id, "Test")
+        handler.add_role_family(@framework_id, rfid, "Engineering")
+        handler.add_role(@framework_id, rid, rfid, "Software Engineer", "E", "ic")
+        handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "E1", "E1")
+        handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
+        handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
+        handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
+        handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Asks questions")
+        handler.add_role_illustration(
+          @framework_id, @ill_id, SecureRandom.uuid_v7, eid, rid, 1, "Seeks guidance"
+        )
+        handler.publish_version(@framework_id, "v1")
+
+        @suggestion_id = SecureRandom.uuid_v7
+        handler.suggest_edit(
+          @framework_id, @suggestion_id, "role_illustration", @ill_id, "description",
+          "Proactively seeks clarification", SecureRandom.uuid_v7,
+          mode: :suggesting
+        )
+      end
+    end
+
+    should "publish SuggestionApproved + RoleIllustrationUpdated and apply the change" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        stream = EventStreamNaming.framework_stream(@framework_id)
+        events_before = @event_store.read.stream(stream).to_a.size
+
+        handler.approve_suggestion(@framework_id, @suggestion_id, SecureRandom.uuid_v7,
+                                   comment: "Approved by reviewer")
+
+        events_after = @event_store.read.stream(stream).to_a
+        new_events = events_after.last(events_after.size - events_before)
+        assert_equal 2, new_events.size
+        assert_kind_of Frameworks::Events::SuggestionApproved, new_events[0]
+        assert_kind_of Frameworks::Events::RoleIllustrationUpdated, new_events[1]
+
+        suggestion = FrameworkState::SuggestedEdit.find_by(suggestion_id: @suggestion_id)
+        assert_equal "approved", suggestion.status
+        assert_equal "Approved by reviewer", suggestion.reviewer_comment
+
+        illustration = FrameworkState::RoleIllustration.find_by(illustration_id: @ill_id)
+        assert_equal "Proactively seeks clarification", illustration.description
+      end
+    end
+
+    should "raise when the suggestion does not exist" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        assert_raises(RuntimeError) do
+          handler.approve_suggestion(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
         end
       end
     end

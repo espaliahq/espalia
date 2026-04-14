@@ -41,7 +41,8 @@ class FrameworksController < ApplicationController
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants,
-      is_admin: policy(@framework).admin?
+      is_admin: policy(@framework).admin?,
+      pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count
     )
   end
 

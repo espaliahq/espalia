@@ -22,17 +22,17 @@ namespace :frameworks do
       end
 
       puts "Creating framework: #{framework_data['name']}"
+      # create_framework implicitly opens a v1 bootstrap draft. Shape-changing
+      # events (add_capability, add_level, set_behavioural_expectation, etc.)
+      # emitted before publish_version are deferred in the published projection
+      # and replayed in bulk on publish. Editorial events (add_role_family,
+      # add_capability_category, etc.) apply live.
       handler.create_framework(framework_id, framework_data["name"])
 
-      # Begin v1 draft — structural events from here until publish_version
-      # will be held back from the published projection. The rebuild on
-      # publish replays them in bulk.
-      puts "Starting v1 draft"
-      handler.start_draft(framework_id, 1, "seed")
-
       # Collect post-publish read-model mutations (department, deficit_threshold)
-      # because the published projection won't have the rows yet while we're
-      # still inside the draft phase.
+      # because the publish-time rebuild will wipe child read models and
+      # replay events from the stream — direct read-model writes made during
+      # the draft would be lost. Applied after publish.
       pending_department_updates = []         # [[role_family_id, department], ...]
       pending_category_threshold_updates = [] # [[category_id, deficit_threshold], ...]
 

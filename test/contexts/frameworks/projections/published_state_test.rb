@@ -128,6 +128,50 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "CapabilityUpdated" do
+    should "update the Capability read model" do
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap_id, stable_id: SecureRandom.uuid_v7,
+        category_id: SecureRandom.uuid_v7, name: "Original", description: "Original desc")
+      emit(Frameworks::Events::CapabilityUpdated,
+        framework_id: @framework_id, capability_id: cap_id,
+        name: "Renamed", description: "New desc")
+
+      within_tenant do
+        rm = FrameworkState::Capability.find_by(capability_id: cap_id)
+        assert_equal "Renamed", rm.name
+        assert_equal "New desc", rm.description
+      end
+    end
+
+    should "only update fields present in event data" do
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap_id, stable_id: SecureRandom.uuid_v7,
+        category_id: SecureRandom.uuid_v7, name: "Original", description: "Keep me")
+      emit(Frameworks::Events::CapabilityUpdated,
+        framework_id: @framework_id, capability_id: cap_id, name: "Renamed")
+
+      within_tenant do
+        rm = FrameworkState::Capability.find_by(capability_id: cap_id)
+        assert_equal "Renamed", rm.name
+        assert_equal "Keep me", rm.description
+      end
+    end
+
+    should "silently skip when parent capability is missing (draft-deferred)" do
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityUpdated,
+        framework_id: @framework_id, capability_id: cap_id, name: "Orphaned")
+
+      within_tenant do
+        assert_nil FrameworkState::Capability.find_by(capability_id: cap_id),
+          "Capability should not be created when parent is missing"
+      end
+    end
+  end
+
   context "CapabilityArchived" do
     should "set status to archived" do
       cap_id = SecureRandom.uuid_v7
@@ -219,6 +263,15 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       sid = SecureRandom.uuid_v7
       eid = SecureRandom.uuid_v7
       rid = SecureRandom.uuid_v7
+
+      # Illustrations are dependent-editorial: parent expectation must exist
+      within_tenant do
+        FrameworkState::BehaviouralExpectation.create!(
+          expectation_id: eid, stable_id: SecureRandom.uuid_v7,
+          capability_id: SecureRandom.uuid_v7, level_ordinal: 1, description: "Parent"
+        )
+      end
+
       emit(Frameworks::Events::RoleIllustrationAdded,
         framework_id: @framework_id, illustration_id: iid, stable_id: sid,
         expectation_id: eid, role_id: rid, ordinal: 1,
@@ -231,14 +284,36 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
         assert_equal 1, rm.ordinal
       end
     end
-  end
 
-  context "RoleIllustrationRemoved" do
-    should "destroy the illustration read model" do
+    should "silently skip when parent expectation is missing (draft-deferred)" do
       iid = SecureRandom.uuid_v7
       emit(Frameworks::Events::RoleIllustrationAdded,
         framework_id: @framework_id, illustration_id: iid, stable_id: SecureRandom.uuid_v7,
         expectation_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
+        ordinal: 1, description: "Orphaned")
+
+      within_tenant do
+        assert_nil FrameworkState::RoleIllustration.find_by(illustration_id: iid),
+          "Illustration should not be created when parent expectation is missing"
+      end
+    end
+  end
+
+  context "RoleIllustrationRemoved" do
+    should "destroy the illustration read model" do
+      eid = SecureRandom.uuid_v7
+      iid = SecureRandom.uuid_v7
+
+      within_tenant do
+        FrameworkState::BehaviouralExpectation.create!(
+          expectation_id: eid, stable_id: SecureRandom.uuid_v7,
+          capability_id: SecureRandom.uuid_v7, level_ordinal: 1, description: "Parent"
+        )
+      end
+
+      emit(Frameworks::Events::RoleIllustrationAdded,
+        framework_id: @framework_id, illustration_id: iid, stable_id: SecureRandom.uuid_v7,
+        expectation_id: eid, role_id: SecureRandom.uuid_v7,
         ordinal: 1, description: "Example")
       emit(Frameworks::Events::RoleIllustrationRemoved,
         framework_id: @framework_id, illustration_id: iid, reason: "Outdated")
@@ -255,6 +330,13 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       rid = SecureRandom.uuid_v7
       iid1 = SecureRandom.uuid_v7
       iid2 = SecureRandom.uuid_v7
+
+      within_tenant do
+        FrameworkState::BehaviouralExpectation.create!(
+          expectation_id: eid, stable_id: SecureRandom.uuid_v7,
+          capability_id: SecureRandom.uuid_v7, level_ordinal: 1, description: "Parent"
+        )
+      end
 
       emit(Frameworks::Events::RoleIllustrationAdded,
         framework_id: @framework_id, illustration_id: iid1, stable_id: SecureRandom.uuid_v7,
@@ -335,44 +417,103 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
-  context "structural events during draft" do
-    should "skip structural events when draft is in progress" do
+  context "shape-changing events during draft" do
+    should "skip shape-changing events when draft is in progress" do
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Test")
+      emit(Frameworks::Events::DraftVersionStarted,
+        framework_id: @framework_id, target_version: 1, started_by: "user-1")
+
+      # CapabilityCategoryAdded is editorial — applies immediately
+      cat_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityCategoryAdded,
+        framework_id: @framework_id, category_id: cat_id, name: "Cat", ordinal: 1)
+
+      # CapabilityAdded is shape-changing — deferred
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap_id, stable_id: SecureRandom.uuid_v7,
+        category_id: cat_id, name: "Cap")
+
+      within_tenant do
+        assert_not_nil FrameworkState::CapabilityCategory.find_by(category_id: cat_id),
+          "Category (editorial) SHOULD be created during draft"
+        assert_nil FrameworkState::Capability.find_by(capability_id: cap_id),
+          "Capability (shape-changing) should NOT be created during draft"
+      end
+    end
+  end
+
+  context "editorial events during draft" do
+    should "apply RoleFamilyAdded immediately while draft is in progress" do
       emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Test")
       emit(Frameworks::Events::DraftVersionStarted,
         framework_id: @framework_id, target_version: 1, started_by: "user-1")
 
       rfid = SecureRandom.uuid_v7
       emit(Frameworks::Events::RoleFamilyAdded,
-        framework_id: @framework_id, role_family_id: rfid, name: "New Family")
+        framework_id: @framework_id, role_family_id: rfid, name: "Engineering")
 
       within_tenant do
-        assert_nil FrameworkState::RoleFamily.find_by(role_family_id: rfid),
-          "RoleFamily should NOT be created during draft"
+        assert_not_nil FrameworkState::RoleFamily.find_by(role_family_id: rfid),
+          "RoleFamily (editorial) should be created immediately during draft"
+      end
+    end
+
+    should "apply BehaviouralExpectationUpdated immediately while draft is in progress" do
+      cap_id = SecureRandom.uuid_v7
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Test")
+      # Set up the expectation via publish first so the shape-changing event lands
+      emit(Frameworks::Events::DraftVersionStarted,
+        framework_id: @framework_id, target_version: 1, started_by: "user-1")
+
+      eid = SecureRandom.uuid_v7
+      # BehaviouralExpectationSet is shape-changing; during draft the projection
+      # skips it. We need to exercise the editorial path, so use an expectation
+      # that already exists post-publish. Simulate by manually creating the row.
+      within_tenant do
+        FrameworkState::BehaviouralExpectation.create!(
+          expectation_id: eid,
+          stable_id: SecureRandom.uuid_v7,
+          capability_id: cap_id,
+          level_ordinal: 1,
+          description: "Original"
+        )
+      end
+
+      emit(Frameworks::Events::BehaviouralExpectationUpdated,
+        framework_id: @framework_id, expectation_id: eid,
+        new_description: "Updated during draft", rationale: "typo fix")
+
+      within_tenant do
+        rm = FrameworkState::BehaviouralExpectation.find_by(expectation_id: eid)
+        assert_equal "Updated during draft", rm.description
       end
     end
   end
 
   context "FrameworkVersionPublished" do
-    should "rebuild projection with draft events included" do
-      # Use the full command handler so events go through the event store
-      # (the rebuild reads from the stream)
+    should "rebuild projection including shape-changing events from the draft" do
       ActsAsTenant.with_tenant(@tenant) do
         handler = Frameworks::CommandHandler.new
+        # create_framework opens bootstrap v1 draft automatically
         handler.create_framework(@framework_id, "Test Framework")
 
-        # Add a role family before draft
-        existing_rfid = SecureRandom.uuid_v7
-        handler.add_role_family(@framework_id, existing_rfid, "Engineering")
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        cat_id = SecureRandom.uuid_v7
+        handler.add_role_family(@framework_id, rfid, "Engineering")
+        handler.add_role(@framework_id, rid, rfid, "E", "E", "ic")
+        handler.add_capability_category(@framework_id, cat_id, "Thinking")
 
-        # Start draft
-        handler.start_draft(@framework_id, 1, "user-1")
+        # Editorial events are visible immediately
+        assert_not_nil FrameworkState::RoleFamily.find_by(role_family_id: rfid)
+        assert_not_nil FrameworkState::CapabilityCategory.find_by(category_id: cat_id)
 
-        # Add a role family during draft — should be skipped by published projection
-        draft_rfid = SecureRandom.uuid_v7
-        handler.add_role_family(@framework_id, draft_rfid, "Design")
-
-        assert_nil FrameworkState::RoleFamily.find_by(role_family_id: draft_rfid),
-          "Draft family should NOT exist before publish"
+        # CapabilityAdded is shape-changing — deferred until publish
+        cap_id = SecureRandom.uuid_v7
+        handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic")
+        assert_nil FrameworkState::Capability.find_by(capability_id: cap_id),
+          "Capability should NOT exist before publish"
 
         # Publish — triggers rebuild from event stream
         handler.publish_version(@framework_id, "user-1")
@@ -382,10 +523,84 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
         assert_not fw.draft_in_progress
         assert_nil fw.draft_version
 
-        # Both pre-draft and draft families should exist after rebuild
-        assert_not_nil FrameworkState::RoleFamily.find_by(role_family_id: existing_rfid)
-        assert_not_nil FrameworkState::RoleFamily.find_by(role_family_id: draft_rfid),
-          "Draft family should exist after publish rebuild"
+        # Rebuild replayed all events — shape-changing events are now visible
+        assert_not_nil FrameworkState::Capability.find_by(capability_id: cap_id),
+          "Capability should exist after publish rebuild"
+        # Editorial events that applied live also survive the rebuild
+        assert_not_nil FrameworkState::RoleFamily.find_by(role_family_id: rfid)
+      end
+    end
+
+    should "auto-open implicit draft when approving a shape-changing suggestion after v1" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Test Framework")
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        cat_id = SecureRandom.uuid_v7
+        handler.add_role_family(@framework_id, rfid, "Engineering")
+        handler.add_role(@framework_id, rid, rfid, "E", "E", "ic")
+        handler.add_capability_category(@framework_id, cat_id, "Thinking")
+        handler.publish_version(@framework_id, "user-1")
+
+        # v1 is published, no draft active.
+        fw = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert_equal 1, fw.current_published_version
+        assert_not fw.draft_in_progress
+
+        # Author suggests a new capability; reviewer approves.
+        # mode: :suggesting prevents the open-framework auto-approval path so
+        # the test exercises an explicit reviewer approval.
+        sug_id = SecureRandom.uuid_v7
+        author_id = SecureRandom.uuid_v7
+        reviewer_id = SecureRandom.uuid_v7
+        handler.suggest_create(@framework_id, sug_id, "capability",
+          { name: "Resilience" }, parent_id: cat_id, author_id: author_id, mode: :suggesting)
+        handler.approve_suggestion(@framework_id, sug_id, reviewer_id)
+
+        # The implicit draft is now open in the projection.
+        fw.reload
+        assert fw.draft_in_progress, "approval should have auto-opened a draft"
+        assert_equal 2, fw.draft_version
+
+        # The new capability is shape-changing — deferred until publish.
+        assert_equal 0, FrameworkState::Capability
+          .joins(:category).where(framework_capability_categories: { framework_id: @framework_id }).count,
+          "Capability should NOT be visible while the auto-opened draft is in progress"
+
+        # Publishing the implicit draft makes it visible via rebuild.
+        handler.publish_version(@framework_id, "user-1")
+
+        fw.reload
+        assert_equal 2, fw.current_published_version
+        assert_not fw.draft_in_progress
+        assert_equal 1, FrameworkState::Capability
+          .joins(:category).where(framework_capability_categories: { framework_id: @framework_id }).count
+        assert_not_nil FrameworkState::Capability.find_by(name: "Resilience")
+      end
+    end
+
+    should "preserve editorial changes made after v1 publish" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Test Framework")
+        rfid = SecureRandom.uuid_v7
+        handler.add_role_family(@framework_id, rfid, "Engineering")
+        handler.publish_version(@framework_id, "user-1")
+
+        # Post-v1 editorial update — live
+        handler.update_role_family(@framework_id, rfid, name: "Eng (post-v1)")
+
+        # Start v2 draft with a shape-changing event, then publish v2
+        handler.start_draft(@framework_id, 2, "user-1")
+        cat_id = SecureRandom.uuid_v7
+        handler.add_capability_category(@framework_id, cat_id, "Delivery")
+        handler.publish_version(@framework_id, "user-1")
+
+        # Editorial update from between v1 and v2 must survive the v2 rebuild
+        rf = FrameworkState::RoleFamily.find_by(role_family_id: rfid)
+        assert_equal "Eng (post-v1)", rf.name
+        assert_equal 2, FrameworkState::Framework.find_by(framework_id: @framework_id).current_published_version
       end
     end
   end
@@ -417,6 +632,141 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  # ── EditSuggested current_value snapshot per entity type ──
+
+  context "EditSuggested current_value snapshot" do
+    setup do
+      @sid = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+    end
+
+    should "snapshot current value for role_illustration" do
+      ill_id = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::RoleIllustration.create!(
+          illustration_id: ill_id, stable_id: SecureRandom.uuid_v7,
+          expectation_id: SecureRandom.uuid_v7, role_id: SecureRandom.uuid_v7,
+          ordinal: 1, description: "Original wording"
+        )
+      end
+      emit_suggestion("role_illustration", ill_id, "description", "New wording")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Original wording", rec.current_value
+        assert_equal "New wording", rec.suggested_value
+      end
+    end
+
+    should "snapshot current value for behavioural_expectation" do
+      eid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::BehaviouralExpectation.create!(
+          expectation_id: eid, stable_id: SecureRandom.uuid_v7,
+          capability_id: SecureRandom.uuid_v7, level_ordinal: 1, description: "Original"
+        )
+      end
+      emit_suggestion("behavioural_expectation", eid, "description", "Sharper")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Original", rec.current_value
+      end
+    end
+
+    should "snapshot current value for capability name" do
+      cap_id = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::Capability.create!(
+          capability_id: cap_id, stable_id: SecureRandom.uuid_v7,
+          category_id: SecureRandom.uuid_v7, name: "Original Cap", status: "active"
+        )
+      end
+      emit_suggestion("capability", cap_id, "name", "Renamed Cap")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Original Cap", rec.current_value
+      end
+    end
+
+    should "snapshot current value for capability_category description" do
+      cat_id = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::CapabilityCategory.create!(
+          framework_id: @framework_id, category_id: cat_id,
+          name: "Thinking", description: "How we think", ordinal: 1
+        )
+      end
+      emit_suggestion("capability_category", cat_id, "description", "How we reason")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "How we think", rec.current_value
+      end
+    end
+
+    should "snapshot current value for role" do
+      rid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::Role.create!(
+          role_id: rid, role_family_id: SecureRandom.uuid_v7,
+          name: "Engineer", code: "E", track: "ic"
+        )
+      end
+      emit_suggestion("role", rid, "name", "Software Engineer")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Engineer", rec.current_value
+      end
+    end
+
+    should "snapshot current value for role_family" do
+      rfid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::RoleFamily.create!(
+          framework_id: @framework_id, role_family_id: rfid,
+          name: "Engineering", description: "Tech roles"
+        )
+      end
+      emit_suggestion("role_family", rfid, "description", "Builds product")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Tech roles", rec.current_value
+      end
+    end
+
+    should "snapshot current value for level" do
+      lid = SecureRandom.uuid_v7
+      within_tenant do
+        FrameworkState::Level.create!(
+          level_id: lid, role_id: SecureRandom.uuid_v7,
+          ordinal: 3, title: "Senior Engineer", code: "E3", is_entry: false
+        )
+      end
+      emit_suggestion("level", lid, "title", "Staff Engineer")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_equal "Senior Engineer", rec.current_value
+      end
+    end
+
+    should "tolerate missing parent capability (current_value nil)" do
+      cap_id = SecureRandom.uuid_v7
+      emit_suggestion("capability", cap_id, "name", "Orphaned")
+
+      within_tenant do
+        rec = FrameworkState::SuggestedEdit.find_by(suggestion_id: @sid)
+        assert_not_nil rec
+        assert_nil rec.current_value
+        assert_equal "Orphaned", rec.suggested_value
+      end
+    end
+  end
+
   private
 
   # Emits an event through the projection.
@@ -431,5 +781,17 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
   # Executes a block within the test tenant context.
   def within_tenant(&block)
     ActsAsTenant.with_tenant(@tenant, &block)
+  end
+
+  # Emits an EditSuggested event with the standard test fixture ids.
+  def emit_suggestion(entity_type, entity_id, field, suggested_value)
+    emit(Frameworks::Events::EditSuggested,
+      framework_id: @framework_id,
+      suggestion_id: @sid,
+      target_entity_type: entity_type,
+      target_entity_id: entity_id,
+      field: field,
+      suggested_value: suggested_value,
+      author_id: @author_id)
   end
 end

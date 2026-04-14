@@ -274,19 +274,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.uuid "author_id", null: false
     t.datetime "created_at", null: false
     t.text "current_value"
-    t.string "field", null: false
+    t.string "field"
     t.uuid "framework_id", null: false
+    t.string "kind", default: "edit", null: false
+    t.uuid "parent_id"
+    t.jsonb "proposed_attributes", default: {}, null: false
     t.text "rationale"
     t.datetime "reviewed_at"
     t.uuid "reviewed_by"
     t.text "reviewer_comment"
     t.string "status", default: "pending", null: false
-    t.text "suggested_value", null: false
+    t.text "suggested_value"
     t.uuid "suggestion_id", null: false
-    t.uuid "target_entity_id", null: false
+    t.uuid "target_entity_id"
     t.string "target_entity_type", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
+    t.index ["framework_id", "kind", "status"], name: "index_fw_suggested_edits_on_kind"
     t.index ["framework_id", "status"], name: "index_framework_suggested_edits_on_framework_id_and_status"
     t.index ["suggestion_id"], name: "index_framework_suggested_edits_on_suggestion_id", unique: true
     t.index ["target_entity_type", "target_entity_id", "field"], name: "index_fw_suggested_edits_on_target"

@@ -22,7 +22,6 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       handler.add_role(@framework_id, @pd_role_id, @pd_family_id, "Product Designer", "PD", "ic")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @pd_role_id, 1, "Associate Product Designer", "PD1", is_entry: true)
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @pd_role_id, 2, "Product Designer", "PD2")
-      FrameworkState::RoleFamily.find_by!(role_family_id: @pd_family_id).update!(department: "Product + Engineering")
 
       # Role family: Software Engineering
       @eng_family_id = SecureRandom.uuid_v7
@@ -35,7 +34,6 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @eng_role_id, 3, "Senior Engineer", "E3")
       handler.add_role(@framework_id, @em_role_id, @eng_family_id, "Engineering Manager", "EM", "management")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @em_role_id, 3, "Engineering Manager", "EM3")
-      FrameworkState::RoleFamily.find_by!(role_family_id: @eng_family_id).update!(department: "Product + Engineering")
 
       # ── Department: Finance ──
       # Role family: Financial Control
@@ -44,7 +42,6 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       handler.add_role_family(@framework_id, @fc_family_id, "Financial Control")
       handler.add_role(@framework_id, @fc_role_id, @fc_family_id, "Financial Controller", "FC", "ic")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @fc_role_id, 1, "Junior Financial Controller", "FC1", is_entry: true)
-      FrameworkState::RoleFamily.find_by!(role_family_id: @fc_family_id).update!(department: "Finance")
 
       # ── Capability: bound to PD and E roles ──
       cat_id = SecureRandom.uuid_v7
@@ -64,6 +61,16 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Expectation at level 2
       eid2 = SecureRandom.uuid_v7
       handler.set_behavioural_expectation(@framework_id, eid2, SecureRandom.uuid_v7, cap_id, 2, "Identifies root causes")
+
+      # Publish v1 so shape-changing events land in the read model.
+      # Note: rebuild wipes child read models and replays events, so direct
+      # read-model-only updates (department) must happen AFTER publish.
+      handler.publish_version(@framework_id, "test")
+
+      # Department is a read-model-only field (not event-sourced) — set after publish
+      FrameworkState::RoleFamily.find_by!(role_family_id: @pd_family_id).update!(department: "Product + Engineering")
+      FrameworkState::RoleFamily.find_by!(role_family_id: @eng_family_id).update!(department: "Product + Engineering")
+      FrameworkState::RoleFamily.find_by!(role_family_id: @fc_family_id).update!(department: "Finance")
     end
 
     visit new_user_session_path
@@ -202,8 +209,15 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Open the role pane
       toggle_role_pane
 
-      # Click outside the role pane (right side of viewport, past the 18rem overlay)
-      page.driver.browser.action.move_to_location(350, 400).click.perform
+      # Click outside the role pane (right side of viewport, past the 18rem overlay).
+      # Uses JS dispatch because Selenium's synthetic pointer events at viewport
+      # coordinates don't reliably trigger window capture-phase listeners
+      # (used by stimulus-use's useClickOutside) in headless Chrome.
+      page.execute_script(
+        "document.elementFromPoint(350, 400)" \
+        ".dispatchEvent(new MouseEvent('click', " \
+        "{bubbles: true, cancelable: true, clientX: 350, clientY: 400, view: window}))"
+      )
 
       # Role pane should close
       assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true

@@ -33,6 +33,15 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def suggest_edit? = tenant_member?
 
+  # Any tenant member can submit a create/delete suggestion. Approval gating
+  # happens later in FrameworkSuggestionPolicy#approve?.
+  #
+  # @return [Boolean]
+  def submit_suggestion? = tenant_member?
+
+  # @return [Boolean]
+  def view_suggestions? = tenant_member?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]

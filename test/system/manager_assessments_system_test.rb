@@ -49,6 +49,9 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, 2,
         "Synthesises information from multiple sources")
 
+      # Publish v1 so shape-changing events land in the read model
+      handler.publish_version(@framework_id, "test")
+
       # Assign the report to the framework and enrol them in a cycle
       level = FrameworkState::Level.find_by!(level_id: @level2_id)
       pd_handler.assign_to_framework(@report.id, @framework_id, @role_id, level.level_id)

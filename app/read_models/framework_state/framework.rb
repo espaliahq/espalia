@@ -23,6 +23,9 @@ class FrameworkState::Framework < ApplicationRecord
   has_many :capability_categories, class_name: "FrameworkState::CapabilityCategory",
            primary_key: :framework_id, foreign_key: :framework_id, inverse_of: :framework,
            dependent: :destroy
+  has_many :suggested_edits, class_name: "FrameworkState::SuggestedEdit",
+           primary_key: :framework_id, foreign_key: :framework_id,
+           dependent: :destroy
 
   validates :framework_id, presence: true
   validates :name, presence: true

@@ -9,6 +9,12 @@
 class Frameworks::Aggregate
   include AggregateRoot
 
+  # Suggestion target_entity_types whose approval requires a draft because
+  # the underlying add_*/archive_* command is shape-changing (alters the
+  # (capability_stable_id, level_ordinal) rating grid — see ADR-16).
+  SHAPE_CHANGING_CREATE_TYPES = %w[capability behavioural_expectation level].freeze
+  SHAPE_CHANGING_DELETE_TYPES = %w[capability].freeze
+
   def initialize
     @name = nil
     @status = :new
@@ -24,9 +30,16 @@ class Frameworks::Aggregate
     @pending_edits = {}
     @current_version = 0
     @draft_in_progress = false
+    @draft_version = nil
+    @added_during_draft = Set.new
+    @archives_needing_mapping = Set.new
   end
 
-  # Creates a new framework.
+  # Creates a new framework and opens its bootstrap v1 draft.
+  #
+  # After create, the aggregate is in a draft for v1. Structural commands
+  # (add_capability, add_level, etc.) may be called to populate the initial
+  # framework content. Callers must invoke publish_version to produce v1.
   #
   # @param framework_id [String] UUID for the framework
   # @param name [String] display name
@@ -37,6 +50,13 @@ class Frameworks::Aggregate
     apply(Frameworks::Events::FrameworkCreated.new(data: {
       framework_id: framework_id,
       name: name
+    }))
+
+    # Bootstrap v1 draft so structural commands can populate initial content.
+    apply(Frameworks::Events::DraftVersionStarted.new(data: {
+      framework_id: framework_id,
+      target_version: 1,
+      started_by: "system"
     }))
   end
 
@@ -123,7 +143,7 @@ class Frameworks::Aggregate
     }.compact))
   end
 
-  # Adds a level to a role.
+  # Adds a level to a role. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param level_id [String] UUID for the new level
@@ -132,9 +152,9 @@ class Frameworks::Aggregate
   # @param title [String] display title
   # @param code [String] short code (e.g. "E3")
   # @param is_entry [Boolean] whether this is an entry-level position
-  # @raise [RuntimeError] if role not found or level already exists
+  # @raise [RuntimeError] if no draft in progress, role not found, or level already exists
   def add_level(framework_id, level_id, role_id, ordinal, title, code, is_entry: false)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
     raise "Level #{level_id} already exists" if @levels.key?(level_id)
 
@@ -149,25 +169,51 @@ class Frameworks::Aggregate
     }))
   end
 
-  # Updates a level.
+  # Updates a level's editorial details (title/code/is_entry). Shape-preserving
+  # — applies live regardless of draft state. For ordinal changes, use
+  # change_level_ordinal.
   #
   # @param framework_id [String] UUID of the framework
   # @param level_id [String] UUID of the level
-  # @param ordinal [Integer, nil] updated ordinal
   # @param title [String, nil] updated title
   # @param code [String, nil] updated code
+  # @param is_entry [Boolean, nil] updated entry-level flag
   # @raise [RuntimeError] if level does not exist
-  def update_level(framework_id, level_id, ordinal: nil, title: nil, code: nil)
+  def update_level_details(framework_id, level_id, title: nil, code: nil, is_entry: nil)
     ensure_created!
     raise "Level #{level_id} not found" unless @levels.key?(level_id)
 
     apply(Frameworks::Events::LevelUpdated.new(data: {
       framework_id: framework_id,
       level_id: level_id,
-      ordinal: ordinal,
       title: title,
-      code: code
+      code: code,
+      is_entry: is_entry
     }.compact))
+  end
+
+  # Changes a level's ordinal position. Shape-changing — requires a draft
+  # because it renumbers rating rows for any in-flight assessment cycle.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param level_id [String] UUID of the level
+  # @param new_ordinal [Integer] the new ordinal position
+  # @param reason [String] explanation for the change
+  # @raise [RuntimeError] if no draft in progress or level does not exist
+  def change_level_ordinal(framework_id, level_id, new_ordinal, reason:)
+    ensure_draft_in_progress!
+    raise "Level #{level_id} not found" unless @levels.key?(level_id)
+
+    previous_ordinal = @levels[level_id][:ordinal]
+    return if previous_ordinal == new_ordinal
+
+    apply(Frameworks::Events::LevelOrdinalChanged.new(data: {
+      framework_id: framework_id,
+      level_id: level_id,
+      new_ordinal: new_ordinal,
+      previous_ordinal: previous_ordinal,
+      reason: reason
+    }))
   end
 
   # Adds a capability category to the framework.
@@ -212,7 +258,26 @@ class Frameworks::Aggregate
     }.compact))
   end
 
-  # Adds a capability to a category.
+  # Updates a capability's name or description. Shape-preserving — editorial (applies live).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param capability_id [String] UUID of the capability
+  # @param name [String, nil] updated name
+  # @param description [String, nil] updated description
+  # @raise [RuntimeError] if framework not created or capability not found
+  def update_capability(framework_id, capability_id, name: nil, description: nil)
+    ensure_created!
+    raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
+
+    apply(Frameworks::Events::CapabilityUpdated.new(data: {
+      framework_id: framework_id,
+      capability_id: capability_id,
+      name: name,
+      description: description
+    }.compact))
+  end
+
+  # Adds a capability to a category. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param capability_id [String] UUID for the new capability
@@ -220,9 +285,9 @@ class Frameworks::Aggregate
   # @param category_id [String] UUID of the parent category
   # @param name [String] display name
   # @param description [String, nil] optional description
-  # @raise [RuntimeError] if category not found or capability already exists
+  # @raise [RuntimeError] if no draft in progress, category not found, or capability already exists
   def add_capability(framework_id, capability_id, stable_id, category_id, name, description: nil)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
     raise "Capability #{capability_id} already exists" if @capabilities.key?(capability_id)
 
@@ -236,14 +301,18 @@ class Frameworks::Aggregate
     }))
   end
 
-  # Archives a capability.
+  # Archives a capability. Shape-changing — requires a draft.
+  #
+  # Archived capabilities that existed at draft start must have a
+  # corresponding MigrationMappingDefined event before publish_version
+  # is called; otherwise publish will raise.
   #
   # @param framework_id [String] UUID of the framework
   # @param capability_id [String] UUID of the capability
   # @param reason [String] reason for archiving
-  # @raise [RuntimeError] if capability not found or already archived
+  # @raise [RuntimeError] if no draft in progress, capability not found, or already archived
   def archive_capability(framework_id, capability_id, reason:)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Capability #{capability_id} already archived" if @capabilities[capability_id][:status] == :archived
 
@@ -254,7 +323,7 @@ class Frameworks::Aggregate
     }))
   end
 
-  # Creates a capability-role binding.
+  # Creates a capability-role binding. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param binding_id [String] UUID for the new binding
@@ -263,9 +332,9 @@ class Frameworks::Aggregate
   # @param weight [BigDecimal] relative weight (default 1.0)
   # @param individual_tolerance [BigDecimal, nil] nil = category-governed,
   #   0 = mandatory, N = deficit capped at N before entering category pool
-  # @raise [RuntimeError] if capability or role not found, or binding already exists
+  # @raise [RuntimeError] if no draft in progress, capability or role not found, or binding already exists
   def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, individual_tolerance: nil)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
     raise "Binding #{binding_id} already exists" if @bindings.key?(binding_id)
@@ -299,13 +368,13 @@ class Frameworks::Aggregate
     }.compact))
   end
 
-  # Removes a capability-role binding.
+  # Removes a capability-role binding. Shape-changing — requires a draft.
   #
   # @param framework_id [String] UUID of the framework
   # @param binding_id [String] UUID of the binding
-  # @raise [RuntimeError] if binding does not exist
+  # @raise [RuntimeError] if no draft in progress or binding does not exist
   def remove_capability_role_binding(framework_id, binding_id)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Binding #{binding_id} not found" unless @bindings.key?(binding_id)
 
     apply(Frameworks::Events::CapabilityRoleBindingRemoved.new(data: {
@@ -315,6 +384,8 @@ class Frameworks::Aggregate
   end
 
   # Sets a behavioural expectation for a capability at a level ordinal.
+  # Shape-changing — requires a draft because it adds a new cell to the
+  # (capability_stable_id, level_ordinal) rating grid.
   #
   # @param framework_id [String] UUID of the framework
   # @param expectation_id [String] UUID for the expectation
@@ -322,9 +393,9 @@ class Frameworks::Aggregate
   # @param capability_id [String] UUID of the parent capability
   # @param level_ordinal [Integer] seniority level ordinal
   # @param description [String] the expectation description
-  # @raise [RuntimeError] if capability not found or expectation already exists
+  # @raise [RuntimeError] if no draft in progress, capability not found, or expectation already exists
   def set_behavioural_expectation(framework_id, expectation_id, stable_id, capability_id, level_ordinal, description)
-    ensure_created!
+    ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Expectation #{expectation_id} already exists" if @expectations.key?(expectation_id)
 
@@ -580,6 +651,74 @@ class Frameworks::Aggregate
     }.compact))
   end
 
+  # Suggests creating a new framework entity. The target entity does not yet
+  # exist; proposed_attributes carries the data needed to construct it on
+  # approval. parent_id identifies the entity the new one would nest under
+  # (e.g. expectation_id for an illustration, category_id for a capability).
+  #
+  # On approval, dispatches the matching add_* command on the aggregate. For
+  # shape-changing entities (capability, level, behavioural_expectation), that
+  # command's draft guard fires if no draft is in progress.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity to create (e.g. "capability")
+  # @param proposed_attributes [Hash] attributes for the new entity
+  # @param parent_id [String, nil] UUID of the parent entity, nil for framework-level entities
+  # @param author_id [String] UUID of the user
+  # @param rationale [String, nil] optional explanation
+  # @raise [RuntimeError] if framework not created, parent not found, suggestion exists,
+  #   entity type unknown, or proposed_attributes missing required keys
+  def suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
+                     parent_id:, author_id:, rationale: nil)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
+    raise_unless_parent_exists!(target_entity_type, parent_id)
+    validate_proposed_attributes!(target_entity_type, proposed_attributes)
+
+    apply(Frameworks::Events::EntityCreationSuggested.new(data: {
+      framework_id: framework_id,
+      suggestion_id: suggestion_id,
+      target_entity_type: target_entity_type,
+      proposed_attributes: proposed_attributes,
+      parent_id: parent_id,
+      author_id: author_id,
+      rationale: rationale
+    }.compact))
+  end
+
+  # Suggests deleting (or archiving) an existing framework entity.
+  #
+  # On approval, dispatches the matching destructive command on the aggregate
+  # (archive_capability for "capability", remove_role_illustration for
+  # "role_illustration"). Only entity types with available delete commands are
+  # accepted — proposing the deletion of a role/level/role_family raises here.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] type of entity (e.g. "capability")
+  # @param target_entity_id [String] UUID of the entity to delete
+  # @param author_id [String] UUID of the user
+  # @param rationale [String, nil] optional explanation
+  # @raise [RuntimeError] if framework not created, entity not found, suggestion exists,
+  #   or no delete command exists for this entity type
+  def suggest_delete(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                     author_id:, rationale: nil)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
+    raise_unless_entity_exists!(target_entity_type, target_entity_id)
+    raise_unless_deletable!(target_entity_type)
+
+    apply(Frameworks::Events::EntityDeletionSuggested.new(data: {
+      framework_id: framework_id,
+      suggestion_id: suggestion_id,
+      target_entity_type: target_entity_type,
+      target_entity_id: target_entity_id,
+      author_id: author_id,
+      rationale: rationale
+    }.compact))
+  end
+
   # Amends the author's own pending suggestion.
   #
   # @param suggestion_id [String] UUID of the suggestion
@@ -619,20 +758,15 @@ class Frameworks::Aggregate
       comment: comment
     }.compact))
 
-    apply_suggested_content_change(suggestion)
+    maybe_auto_open_draft_for(suggestion, reviewer_id)
 
-    # Auto-reject competing pending suggestions on the same field
-    @pending_edits.each_value do |competing|
-      next if competing[:suggestion_id] == suggestion_id
-      next unless competing[:target_entity_id] == suggestion[:target_entity_id]
-      next unless competing[:field] == suggestion[:field]
-
-      apply(Frameworks::Events::SuggestionRejected.new(data: {
-        suggestion_id: competing[:suggestion_id],
-        reviewer_id: reviewer_id,
-        comment: "Superseded by approved suggestion"
-      }))
+    case suggestion[:kind]
+    when :create then apply_suggested_creation(suggestion)
+    when :delete then apply_suggested_deletion(suggestion)
+    else              apply_suggested_content_change(suggestion)
     end
+
+    auto_reject_competing_suggestions(suggestion, reviewer_id)
   end
 
   # Rejects a pending suggestion.
@@ -655,10 +789,13 @@ class Frameworks::Aggregate
   # Withdraws the author's own pending suggestion.
   #
   # @param suggestion_id [String] UUID of the suggestion
-  # @raise [RuntimeError] if suggestion not found
-  def withdraw_suggestion(suggestion_id)
+  # @param author_id [String] UUID of the author (must match the original)
+  # @raise [RuntimeError] if suggestion not found or author mismatch
+  def withdraw_suggestion(suggestion_id, author_id)
     ensure_created!
-    raise "Suggestion #{suggestion_id} not found" unless @pending_edits.key?(suggestion_id)
+    suggestion = @pending_edits[suggestion_id]
+    raise "Suggestion #{suggestion_id} not found" unless suggestion
+    raise "Only the author can withdraw their suggestion" unless suggestion[:author_id] == author_id
 
     apply(Frameworks::Events::SuggestionWithdrawn.new(data: {
       suggestion_id: suggestion_id
@@ -738,15 +875,24 @@ class Frameworks::Aggregate
 
   # Publishes the current draft as a new framework version.
   #
-  # The published projection will advance to include all structural
-  # events that accumulated during the draft phase.
+  # The published projection will advance to include all shape-changing
+  # events that accumulated during the draft phase. Editorial events have
+  # already been applied live.
   #
   # @param framework_id [String] UUID of the framework
   # @param published_by [String] UUID of the user who published
-  # @raise [RuntimeError] if no draft is in progress
+  # @raise [RuntimeError] if no draft is in progress, or if any capability
+  #   archived during this draft lacks a MigrationMappingDefined entry
   def publish_version(framework_id, published_by)
     ensure_created!
     raise "No draft in progress" unless @draft_in_progress
+    if @archives_needing_mapping.any?
+      pending = @archives_needing_mapping.to_a.join(", ")
+      raise "Cannot publish: #{@archives_needing_mapping.size} archived " \
+            "capability/capabilities lack migration mappings (#{pending}). " \
+            "Call define_migration_mapping for each, with mapping_type of " \
+            "'archived', 'evolved', or 'split'."
+    end
 
     apply(Frameworks::Events::FrameworkVersionPublished.new(data: {
       framework_id: framework_id,
@@ -760,6 +906,48 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if the framework has not been created
   def ensure_created!
     raise "Framework not yet created" unless @status == :created
+  end
+
+  # Ensures the aggregate is inside a draft phase. Called by shape-changing
+  # commands (commands that alter the (capability_stable_id, level_ordinal)
+  # rating grid — see docs/architecture/framework-aggregate.md).
+  #
+  # @raise [RuntimeError] if no draft is in progress
+  def ensure_draft_in_progress!
+    ensure_created!
+    raise "No draft in progress — call start_draft first" unless @draft_in_progress
+  end
+
+  # Auto-opens an implicit draft when approving a shape-changing suggestion
+  # without an active draft. The draft stays open until owner/editor publishes
+  # — letting bottom-up structural improvements accumulate without forcing
+  # admins to bracket every approval with start_draft / publish_version.
+  #
+  # No-op if a draft is already in progress (the structural change joins it)
+  # or if the suggestion is shape-preserving (which apply live).
+  #
+  # @param suggestion [Hash] pending_edits entry being approved
+  # @param reviewer_id [String] approver's UUID — recorded as the draft owner
+  def maybe_auto_open_draft_for(suggestion, reviewer_id)
+    return if @draft_in_progress
+    return unless shape_changing_suggestion?(suggestion)
+
+    apply(Frameworks::Events::DraftVersionStarted.new(data: {
+      framework_id: @framework_id,
+      target_version: @current_version + 1,
+      started_by: reviewer_id,
+      auto_opened: true
+    }))
+  end
+
+  # @param suggestion [Hash] pending_edits entry
+  # @return [Boolean] whether approving this suggestion will require a draft
+  def shape_changing_suggestion?(suggestion)
+    case suggestion[:kind]
+    when :create then SHAPE_CHANGING_CREATE_TYPES.include?(suggestion[:target_entity_type])
+    when :delete then SHAPE_CHANGING_DELETE_TYPES.include?(suggestion[:target_entity_type])
+    else              false
+    end
   end
 
   on Frameworks::Events::FrameworkCreated do |event|
@@ -808,9 +996,13 @@ class Frameworks::Aggregate
 
   on Frameworks::Events::LevelUpdated do |event|
     level = @levels[event.data[:level_id]]
-    level[:ordinal] = event.data[:ordinal] if event.data.key?(:ordinal)
     level[:title] = event.data[:title] if event.data.key?(:title)
     level[:code] = event.data[:code] if event.data.key?(:code)
+    level[:is_entry] = event.data[:is_entry] if event.data.key?(:is_entry)
+  end
+
+  on Frameworks::Events::LevelOrdinalChanged do |event|
+    @levels[event.data[:level_id]][:ordinal] = event.data[:new_ordinal]
   end
 
   on Frameworks::Events::CapabilityCategoryAdded do |event|
@@ -835,10 +1027,27 @@ class Frameworks::Aggregate
       name: event.data[:name],
       status: :active
     }
+    # Track capabilities added inside the current draft so archiving them
+    # in the same draft doesn't require a migration mapping (nothing to migrate).
+    @added_during_draft << event.data[:stable_id] if @draft_in_progress
+  end
+
+  on Frameworks::Events::CapabilityUpdated do |event|
+    cap = @capabilities[event.data[:capability_id]]
+    cap[:name] = event.data[:name] if event.data.key?(:name)
+    # description is not tracked in aggregate state (same as categories)
   end
 
   on Frameworks::Events::CapabilityArchived do |event|
-    @capabilities[event.data[:capability_id]][:status] = :archived
+    cap = @capabilities[event.data[:capability_id]]
+    cap[:status] = :archived
+    stable_id = cap[:stable_id]
+    # Require a migration mapping unless the capability was also added in
+    # this same draft (in which case there's nothing from the previous
+    # published version to migrate).
+    if @draft_in_progress && !@added_during_draft.include?(stable_id)
+      @archives_needing_mapping << stable_id
+    end
   end
 
   on Frameworks::Events::CapabilityRoleBindingCreated do |event|
@@ -902,6 +1111,8 @@ class Frameworks::Aggregate
   on Frameworks::Events::DraftVersionStarted do |event|
     @draft_in_progress = true
     @draft_version = event.data[:target_version]
+    @added_during_draft = Set.new
+    @archives_needing_mapping = Set.new
   end
 
   on Frameworks::Events::FrameworkVersionPublished do |event|
@@ -909,20 +1120,47 @@ class Frameworks::Aggregate
     @draft_in_progress = false
     @draft_version = nil
     @migration_mappings = []
+    @added_during_draft = Set.new
+    @archives_needing_mapping = Set.new
   end
 
   on Frameworks::Events::MigrationMappingDefined do |event|
     @migration_mappings ||= []
     @migration_mappings << event.data[:mapping_id]
+    # Clear the from_stable_id from the pending-mapping set — any mapping
+    # type satisfies the "thought about it" requirement.
+    @archives_needing_mapping.delete(event.data[:from_stable_id]) if event.data[:from_stable_id]
   end
 
   on Frameworks::Events::EditSuggested do |event|
     @pending_edits[event.data[:suggestion_id]] = {
+      kind: :edit,
       suggestion_id: event.data[:suggestion_id],
       target_entity_type: event.data[:target_entity_type],
       target_entity_id: event.data[:target_entity_id],
       field: event.data[:field],
       suggested_value: event.data[:suggested_value],
+      author_id: event.data[:author_id]
+    }
+  end
+
+  on Frameworks::Events::EntityCreationSuggested do |event|
+    @pending_edits[event.data[:suggestion_id]] = {
+      kind: :create,
+      suggestion_id: event.data[:suggestion_id],
+      target_entity_type: event.data[:target_entity_type],
+      proposed_attributes: event.data[:proposed_attributes],
+      parent_id: event.data[:parent_id],
+      author_id: event.data[:author_id]
+    }
+  end
+
+  on Frameworks::Events::EntityDeletionSuggested do |event|
+    @pending_edits[event.data[:suggestion_id]] = {
+      kind: :delete,
+      suggestion_id: event.data[:suggestion_id],
+      target_entity_type: event.data[:target_entity_type],
+      target_entity_id: event.data[:target_entity_id],
       author_id: event.data[:author_id]
     }
   end
@@ -1005,25 +1243,66 @@ class Frameworks::Aggregate
   def review_tier(entity_type)
     case entity_type
     when "RoleIllustration", "role_illustration" then 1
-    when "Capability", "CapabilityCategory" then 2
-    when "BehaviouralExpectation" then 3
+    when "Capability", "CapabilityCategory",
+         "capability", "capability_category",
+         "role", "role_family", "level" then 2
+    when "BehaviouralExpectation", "behavioural_expectation" then 3
     else 1
     end
   end
 
   # Applies the actual content change event for an approved suggestion.
   #
+  # Dispatches the matching editorial Updated event for the suggestion's
+  # (target_entity_type, field) pair. Mirrors the existing role_illustration
+  # pattern: emits the event directly with a rationale tag, rather than
+  # calling the editorial command.
+  #
   # @param suggestion [Hash] pending_edits entry
   # @return [void]
-  def apply_suggested_content_change(suggestion)
-    case suggestion[:target_entity_type]
-    when "role_illustration"
+  # @raise [RuntimeError] if the (entity_type, field) combination is not supported
+  def apply_suggested_content_change(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+    entity_id = suggestion[:target_entity_id]
+    field = suggestion[:field]
+    new_value = suggestion[:suggested_value]
+    rationale_tag = "Applied via approved suggestion #{suggestion[:suggestion_id]}"
+
+    case [ suggestion[:target_entity_type], field ]
+    when [ "role_illustration", "description" ]
       apply(Frameworks::Events::RoleIllustrationUpdated.new(data: {
-        framework_id: @framework_id,
-        illustration_id: suggestion[:target_entity_id],
-        new_description: suggestion[:suggested_value],
-        rationale: "Applied via approved suggestion #{suggestion[:suggestion_id]}"
+        framework_id: @framework_id, illustration_id: entity_id,
+        new_description: new_value, rationale: rationale_tag
       }))
+    when [ "behavioural_expectation", "description" ]
+      apply(Frameworks::Events::BehaviouralExpectationUpdated.new(data: {
+        framework_id: @framework_id, expectation_id: entity_id,
+        new_description: new_value, rationale: rationale_tag
+      }))
+    when [ "capability", "name" ], [ "capability", "description" ]
+      apply(Frameworks::Events::CapabilityUpdated.new(data: {
+        framework_id: @framework_id, capability_id: entity_id,
+        field.to_sym => new_value
+      }))
+    when [ "capability_category", "name" ], [ "capability_category", "description" ]
+      apply(Frameworks::Events::CapabilityCategoryUpdated.new(data: {
+        framework_id: @framework_id, category_id: entity_id,
+        field.to_sym => new_value
+      }))
+    when [ "role_family", "name" ], [ "role_family", "description" ]
+      apply(Frameworks::Events::RoleFamilyUpdated.new(data: {
+        framework_id: @framework_id, role_family_id: entity_id,
+        field.to_sym => new_value
+      }))
+    when [ "role", "name" ]
+      apply(Frameworks::Events::RoleUpdated.new(data: {
+        framework_id: @framework_id, role_id: entity_id, name: new_value
+      }))
+    when [ "level", "title" ]
+      apply(Frameworks::Events::LevelUpdated.new(data: {
+        framework_id: @framework_id, level_id: entity_id, title: new_value
+      }))
+    else
+      raise "Unsupported suggestion target: #{suggestion[:target_entity_type]}/#{field}"
     end
   end
 
@@ -1036,8 +1315,213 @@ class Frameworks::Aggregate
     case entity_type
     when "role_illustration"
       raise "Illustration #{entity_id} not found" unless @illustrations.key?(entity_id)
+    when "behavioural_expectation"
+      raise "Expectation #{entity_id} not found" unless @expectations.key?(entity_id)
+    when "capability"
+      raise "Capability #{entity_id} not found" unless @capabilities.key?(entity_id)
+    when "capability_category"
+      raise "Category #{entity_id} not found" unless @capability_categories.key?(entity_id)
+    when "role"
+      raise "Role #{entity_id} not found" unless @roles.key?(entity_id)
+    when "role_family"
+      raise "Role family #{entity_id} not found" unless @role_families.key?(entity_id)
+    when "level"
+      raise "Level #{entity_id} not found" unless @levels.key?(entity_id)
     else
       raise "Unknown entity type: #{entity_type}"
+    end
+  end
+
+  # Raises unless the parent entity for a creation suggestion exists.
+  #
+  # Framework-level entities (role_family, capability_category) have no
+  # parent — parent_id is allowed to be nil for those.
+  #
+  # @param entity_type [String]
+  # @param parent_id [String, nil]
+  # @raise [RuntimeError] if parent not found or entity type unknown
+  def raise_unless_parent_exists!(entity_type, parent_id) # rubocop:disable Metrics/CyclomaticComplexity
+    case entity_type
+    when "role_illustration"
+      raise "Expectation #{parent_id} not found" unless @expectations.key?(parent_id)
+    when "behavioural_expectation"
+      raise "Capability #{parent_id} not found" unless @capabilities.key?(parent_id)
+    when "capability"
+      raise "Category #{parent_id} not found" unless @capability_categories.key?(parent_id)
+    when "role"
+      raise "Role family #{parent_id} not found" unless @role_families.key?(parent_id)
+    when "level"
+      raise "Role #{parent_id} not found" unless @roles.key?(parent_id)
+    when "capability_category", "role_family"
+      # Framework-level entities — no parent required.
+      nil
+    else
+      raise "Unknown entity type: #{entity_type}"
+    end
+  end
+
+  REQUIRED_CREATION_KEYS = {
+    "role_illustration" => %i[role_id description],
+    "behavioural_expectation" => %i[level_ordinal description],
+    "capability" => %i[name],
+    "capability_category" => %i[name],
+    "role" => %i[name code track],
+    "role_family" => %i[name],
+    "level" => %i[ordinal title code]
+  }.freeze
+
+  # Validates the proposed_attributes hash for a creation suggestion has the
+  # keys required to dispatch the matching add_* command on approval.
+  #
+  # Does NOT pre-validate semantics (uniqueness, allowed values) — that runs
+  # when the command actually executes after approval.
+  #
+  # @param entity_type [String]
+  # @param attrs [Hash]
+  # @raise [RuntimeError] if entity type unknown or required keys missing
+  def validate_proposed_attributes!(entity_type, attrs)
+    required = REQUIRED_CREATION_KEYS[entity_type]
+    raise "Unknown entity type: #{entity_type}" if required.nil?
+
+    attrs ||= {}
+    missing = required - attrs.keys.map(&:to_sym)
+    return if missing.empty?
+
+    raise "Missing proposed_attributes for #{entity_type}: #{missing.join(', ')}"
+  end
+
+  DELETABLE_ENTITY_TYPES = %w[role_illustration capability].freeze
+
+  # Raises unless the entity type has a destructive command available.
+  #
+  # @param entity_type [String]
+  # @raise [RuntimeError] if no delete command exists for this type
+  def raise_unless_deletable!(entity_type)
+    return if DELETABLE_ENTITY_TYPES.include?(entity_type)
+
+    raise "Cannot suggest deletion for #{entity_type} — no delete command available"
+  end
+
+  # Dispatches the matching add_* command for an approved creation suggestion.
+  #
+  # New entity ids (and stable_ids where required) are generated here, since
+  # the suggestion deliberately does not pre-allocate them.
+  #
+  # @param suggestion [Hash] pending_edits entry with kind: :create
+  # @raise [RuntimeError] if the entity type is not supported
+  def apply_suggested_creation(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+    type = suggestion[:target_entity_type]
+    attrs = (suggestion[:proposed_attributes] || {}).transform_keys(&:to_sym)
+    parent_id = suggestion[:parent_id]
+
+    case type
+    when "role_illustration"
+      add_role_illustration(@framework_id,
+                            SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                            parent_id, attrs[:role_id],
+                            attrs[:ordinal] || next_illustration_ordinal(parent_id, attrs[:role_id]),
+                            attrs[:description])
+    when "behavioural_expectation"
+      set_behavioural_expectation(@framework_id,
+                                  SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                  parent_id, attrs[:level_ordinal], attrs[:description])
+    when "capability"
+      add_capability(@framework_id,
+                     SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                     parent_id, attrs[:name], description: attrs[:description])
+    when "capability_category"
+      add_capability_category(@framework_id, SecureRandom.uuid_v7,
+                              attrs[:name], description: attrs[:description], ordinal: attrs[:ordinal])
+    when "role"
+      add_role(@framework_id, SecureRandom.uuid_v7, parent_id,
+               attrs[:name], attrs[:code], attrs[:track])
+    when "role_family"
+      add_role_family(@framework_id, SecureRandom.uuid_v7,
+                      attrs[:name], description: attrs[:description])
+    when "level"
+      add_level(@framework_id, SecureRandom.uuid_v7, parent_id,
+                attrs[:ordinal], attrs[:title], attrs[:code], is_entry: attrs.fetch(:is_entry, false))
+    else
+      raise "Unsupported creation target: #{type}"
+    end
+  end
+
+  # Dispatches the matching destructive command for an approved deletion suggestion.
+  #
+  # @param suggestion [Hash] pending_edits entry with kind: :delete
+  # @raise [RuntimeError] if the entity type is not supported
+  def apply_suggested_deletion(suggestion)
+    type = suggestion[:target_entity_type]
+    entity_id = suggestion[:target_entity_id]
+    rationale_tag = "Applied via approved suggestion #{suggestion[:suggestion_id]}"
+
+    case type
+    when "role_illustration"
+      remove_role_illustration(@framework_id, entity_id, reason: rationale_tag)
+    when "capability"
+      archive_capability(@framework_id, entity_id, reason: rationale_tag)
+    else
+      raise "Unsupported deletion target: #{type}"
+    end
+  end
+
+  # Returns the next ordinal for a new illustration on the given expectation
+  # and role. Used by suggest_create when ordinal isn't specified in
+  # proposed_attributes.
+  #
+  # @param expectation_id [String]
+  # @param role_id [String]
+  # @return [Integer]
+  def next_illustration_ordinal(expectation_id, role_id)
+    siblings = @illustrations.values.select do |i|
+      i[:expectation_id] == expectation_id && i[:role_id] == role_id
+    end
+    (siblings.map { |i| i[:ordinal] || 0 }.max || 0) + 1
+  end
+
+  # Auto-rejects pending suggestions superseded by an approved one.
+  #
+  # - approving an :edit rejects edits on the same entity_id + same field
+  # - approving a :delete rejects all edits and deletes on the same entity
+  #   (the entity is going away — pending edits are moot)
+  # - approving a :create does not auto-reject anything (different entities)
+  #
+  # @param approved [Hash] the just-approved pending_edits entry
+  # @param reviewer_id [String]
+  def auto_reject_competing_suggestions(approved, reviewer_id)
+    return if approved[:kind] == :create
+
+    competing_suggestions = @pending_edits.values.select do |competing|
+      competing[:suggestion_id] != approved[:suggestion_id] &&
+        competing_supersedes?(approved, competing)
+    end
+
+    competing_suggestions.each do |competing|
+      apply(Frameworks::Events::SuggestionRejected.new(data: {
+        suggestion_id: competing[:suggestion_id],
+        reviewer_id: reviewer_id,
+        comment: "Superseded by approved suggestion"
+      }))
+    end
+  end
+
+  # Determines whether the approved suggestion supersedes a competing one.
+  #
+  # @param approved [Hash]
+  # @param competing [Hash]
+  # @return [Boolean]
+  def competing_supersedes?(approved, competing)
+    case approved[:kind]
+    when :edit
+      competing[:kind] == :edit &&
+        competing[:target_entity_id] == approved[:target_entity_id] &&
+        competing[:field] == approved[:field]
+    when :delete
+      competing[:kind] != :create &&
+        competing[:target_entity_type] == approved[:target_entity_type] &&
+        competing[:target_entity_id] == approved[:target_entity_id]
+    else
+      false
     end
   end
 end
