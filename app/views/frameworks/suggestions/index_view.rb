@@ -173,16 +173,45 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   def suggestion_meta_row(suggestion)
     div(class: "flex items-center gap-2 mb-2") do
       render Components::Kit::Badge.new(entity_label(suggestion))
-      span(class: "text-xs text-gray-400 dark:text-gray-500") do
-        "field: #{suggestion.field}"
+      render Components::Kit::Badge.new(suggestion.kind, variant: kind_variant(suggestion.kind))
+      if suggestion.kind == "edit" && suggestion.field.present?
+        span(class: "text-xs text-gray-400 dark:text-gray-500") do
+          "field: #{suggestion.field}"
+        end
       end
     end
   end
 
   def suggestion_diff_preview(suggestion)
+    preview = suggestion_preview_text(suggestion)
+
     div(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-2 " \
                 "group-hover:text-primary transition-colors") do
-      plain suggestion.suggested_value.to_s
+      plain preview
+    end
+  end
+
+  # @param suggestion [FrameworkState::SuggestedEdit]
+  # @return [String]
+  def suggestion_preview_text(suggestion)
+    case suggestion.kind
+    when "create"
+      attrs = suggestion.proposed_attributes || {}
+      attrs.values.select(&:present?).first.to_s
+    when "delete"
+      suggestion.current_value.to_s
+    else
+      suggestion.suggested_value.to_s
+    end
+  end
+
+  # @param kind [String] "edit", "create", or "delete"
+  # @return [Symbol]
+  def kind_variant(kind)
+    case kind
+    when "create" then :success
+    when "delete" then :warning
+    else :info
     end
   end
 

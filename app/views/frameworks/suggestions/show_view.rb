@@ -64,27 +64,78 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     div(class: "mt-4 mb-6 flex items-start justify-between gap-4") do
       div do
         div(class: "flex items-center gap-3 mb-2") do
-          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Suggested edit" }
+          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { header_title }
           render Components::Kit::Badge.new(
             @suggestion.status.humanize,
             variant: STATUS_VARIANTS.fetch(@suggestion.status, :default)
           )
         end
         p(class: "text-sm text-gray-500 dark:text-gray-400") do
-          plain "#{entity_label} \u00b7 field: "
-          span(class: "font-mono text-xs") { @suggestion.field }
+          plain entity_label
+          if @suggestion.kind == "edit"
+            plain " \u00b7 field: "
+            span(class: "font-mono text-xs") { @suggestion.field }
+          end
         end
       end
     end
   end
 
+  def header_title
+    case @suggestion.kind
+    when "create" then "Suggested creation"
+    when "delete" then "Suggested deletion"
+    else "Suggested edit"
+    end
+  end
+
   def diff_card
+    case @suggestion.kind
+    when "create" then create_diff_card
+    when "delete" then delete_diff_card
+    else edit_diff_card
+    end
+  end
+
+  def edit_diff_card
     render Components::Kit::Card.new(title: "Proposed change") do |card|
       card.body do
         div(class: "grid grid-cols-1 md:grid-cols-2 gap-4") do
           diff_column("Current", @suggestion.current_value, color: :red)
           diff_column("Proposed", @suggestion.suggested_value, color: :green)
         end
+      end
+    end
+  end
+
+  def create_diff_card
+    attrs = @suggestion.proposed_attributes || {}
+
+    render Components::Kit::Card.new(title: "Proposed new #{entity_label.downcase}") do |card|
+      card.body do
+        dl(class: "space-y-3") do
+          attrs.each do |key, value|
+            next if value.blank?
+
+            div do
+              dt(class: "text-xs font-semibold uppercase text-gray-500 dark:text-gray-400") do
+                key.to_s.humanize
+              end
+              dd(class: "mt-0.5 rounded-md border border-green-200 dark:border-green-900/50 " \
+                        "bg-green-50 dark:bg-green-950/30 p-3 text-sm text-gray-900 dark:text-gray-100") do
+                plain value.to_s
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def delete_diff_card
+    render Components::Kit::Card.new(title: "Proposed deletion") do |card|
+      card.body do
+        diff_column("Will be removed", @suggestion.current_value, color: :red)
       end
     end
   end

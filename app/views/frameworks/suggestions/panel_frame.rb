@@ -87,7 +87,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
           )
         end
         p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
-          plain suggestion.suggested_value.to_s
+          plain suggestion_preview(suggestion)
         end
       end
     end
@@ -95,6 +95,18 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
 
   def pending
     @pending ||= @suggestions.select { |s| s.status == "pending" }
+  end
+
+  def suggestion_preview(suggestion)
+    case suggestion.kind
+    when "create"
+      attrs = suggestion.proposed_attributes || {}
+      attrs.values.select(&:present?).first.to_s
+    when "delete"
+      suggestion.current_value.to_s
+    else
+      suggestion.suggested_value.to_s
+    end
   end
 
   def entity_label(suggestion)
