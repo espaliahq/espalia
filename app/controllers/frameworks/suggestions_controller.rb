@@ -167,7 +167,8 @@ class Frameworks::SuggestionsController < ApplicationController
 
     Frameworks::CommandHandler.new.withdraw_suggestion(
       @framework.framework_id,
-      @suggestion.suggestion_id
+      @suggestion.suggestion_id,
+      current_user.id.to_s
     )
 
     redirect_to framework_suggestions_path(@framework.framework_id),

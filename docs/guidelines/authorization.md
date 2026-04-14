@@ -177,8 +177,9 @@ def authorize_admin!
   redirect_to root_path unless current_user.global_admin? || tenant_user&.admin?
 end
 
-# Bad — delegating auth to command handler (it won't check)
+# Bad — delegating auth to command handler only 
 # "Authorization is enforced in the command handler" — don't do this
+# we want authorization to be enfored in controller and command handler for defense in depth
 
 # Bad — querying policies in views
 def view_template

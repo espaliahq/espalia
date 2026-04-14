@@ -218,16 +218,29 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
         "role_illustration", @ill_id,
         "description", "To be withdrawn", @author_id
       )
-      @aggregate.withdraw_suggestion(@suggestion_id)
+      @aggregate.withdraw_suggestion(@suggestion_id, @author_id)
 
       event = last_event
       assert_kind_of Frameworks::Events::SuggestionWithdrawn, event
       assert_equal @suggestion_id, event.data[:suggestion_id]
     end
 
+    should "raise if author does not match" do
+      @aggregate.suggest_edit(
+        @framework_id, @suggestion_id,
+        "role_illustration", @ill_id,
+        "description", "To be withdrawn", @author_id
+      )
+      other_author = SecureRandom.uuid_v7
+
+      assert_raises(RuntimeError, /Only the author/) do
+        @aggregate.withdraw_suggestion(@suggestion_id, other_author)
+      end
+    end
+
     should "raise if suggestion not found" do
       assert_raises(RuntimeError, /not found/) do
-        @aggregate.withdraw_suggestion(SecureRandom.uuid_v7)
+        @aggregate.withdraw_suggestion(SecureRandom.uuid_v7, @author_id)
       end
     end
   end

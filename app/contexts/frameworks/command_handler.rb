@@ -474,9 +474,10 @@ class Frameworks::CommandHandler
   #
   # @param framework_id [String] UUID of the framework
   # @param suggestion_id [String] UUID of the suggestion
-  def withdraw_suggestion(framework_id, suggestion_id)
+  # @param author_id [String] UUID of the author (must match the original)
+  def withdraw_suggestion(framework_id, suggestion_id, author_id)
     @repository.with_framework(framework_id) do |framework|
-      framework.withdraw_suggestion(suggestion_id)
+      framework.withdraw_suggestion(suggestion_id, author_id)
     end
   end
 

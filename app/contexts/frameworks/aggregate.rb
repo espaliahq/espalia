@@ -789,10 +789,13 @@ class Frameworks::Aggregate
   # Withdraws the author's own pending suggestion.
   #
   # @param suggestion_id [String] UUID of the suggestion
-  # @raise [RuntimeError] if suggestion not found
-  def withdraw_suggestion(suggestion_id)
+  # @param author_id [String] UUID of the author (must match the original)
+  # @raise [RuntimeError] if suggestion not found or author mismatch
+  def withdraw_suggestion(suggestion_id, author_id)
     ensure_created!
-    raise "Suggestion #{suggestion_id} not found" unless @pending_edits.key?(suggestion_id)
+    suggestion = @pending_edits[suggestion_id]
+    raise "Suggestion #{suggestion_id} not found" unless suggestion
+    raise "Only the author can withdraw their suggestion" unless suggestion[:author_id] == author_id
 
     apply(Frameworks::Events::SuggestionWithdrawn.new(data: {
       suggestion_id: suggestion_id
@@ -1488,10 +1491,12 @@ class Frameworks::Aggregate
   def auto_reject_competing_suggestions(approved, reviewer_id)
     return if approved[:kind] == :create
 
-    @pending_edits.each_value do |competing|
-      next if competing[:suggestion_id] == approved[:suggestion_id]
-      next unless competing_supersedes?(approved, competing)
+    competing_suggestions = @pending_edits.values.select do |competing|
+      competing[:suggestion_id] != approved[:suggestion_id] &&
+        competing_supersedes?(approved, competing)
+    end
 
+    competing_suggestions.each do |competing|
       apply(Frameworks::Events::SuggestionRejected.new(data: {
         suggestion_id: competing[:suggestion_id],
         reviewer_id: reviewer_id,
