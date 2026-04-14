@@ -209,8 +209,15 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Open the role pane
       toggle_role_pane
 
-      # Click outside the role pane (right side of viewport, past the 18rem overlay)
-      page.driver.browser.action.move_to_location(350, 400).click.perform
+      # Click outside the role pane (right side of viewport, past the 18rem overlay).
+      # Uses JS dispatch because Selenium's synthetic pointer events at viewport
+      # coordinates don't reliably trigger window capture-phase listeners
+      # (used by stimulus-use's useClickOutside) in headless Chrome.
+      page.execute_script(
+        "document.elementFromPoint(350, 400)" \
+        ".dispatchEvent(new MouseEvent('click', " \
+        "{bubbles: true, cancelable: true, clientX: 350, clientY: 400, view: window}))"
+      )
 
       # Role pane should close
       assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true

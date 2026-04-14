@@ -128,11 +128,14 @@ module StimulusHelpers
 
     yield
 
+    # Wait long enough for a slow CI Turbo Frame round-trip before deciding
+    # the click was dropped. Too short (2s) and the retry fires mid-navigation,
+    # potentially interfering with the in-flight fetch.
     landed =
       if expect_text
-        page.has_text?(expect_text, wait: 2)
+        page.has_text?(expect_text, wait: 4)
       else
-        page.has_css?(expect_selector, wait: 2)
+        page.has_css?(expect_selector, wait: 4)
       end
 
     yield unless landed
