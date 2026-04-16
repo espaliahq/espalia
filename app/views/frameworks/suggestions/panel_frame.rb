@@ -22,11 +22,14 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   # @param framework [FrameworkState::Framework]
   # @param suggestions [Array<FrameworkState::SuggestedEdit>]
   # @param focus_descriptor [Hash] { level:, category_name:, capability_name:, level_label: }
+  # @param context_labels [Hash{String => String}] suggestion_id => role/level label
   # @param clear_path [String, nil] URL that clears focus (framework-wide panel)
-  def initialize(framework:, suggestions:, focus_descriptor: { level: :framework }, clear_path: nil)
+  def initialize(framework:, suggestions:, focus_descriptor: { level: :framework },
+                 context_labels: {}, clear_path: nil)
     @framework = framework
     @suggestions = suggestions
     @focus_descriptor = focus_descriptor
+    @context_labels = context_labels
     @clear_path = clear_path
   end
 
@@ -109,18 +112,20 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   end
 
   def panel_row(suggestion)
+    label = @context_labels[suggestion.suggestion_id]
+
     li do
       a(
         href: framework_suggestion_path(@framework.framework_id, suggestion.suggestion_id),
         class: "block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
         data: { turbo_frame: "_top" }
       ) do
-        div(class: "flex items-center gap-2 mb-1") do
-          render Components::Kit::Badge.new(entity_label(suggestion))
-          render Components::Kit::Badge.new(
-            "T#{review_tier(suggestion)}",
-            variant: tier_variant(review_tier(suggestion))
-          )
+        div(class: "flex items-center gap-1.5 mb-1") do
+          render Components::Kit::Badge.new(entity_label(suggestion), variant: :info)
+          render Components::Kit::Badge.new(kind_label(suggestion), variant: kind_variant(suggestion))
+        end
+        if label
+          p(class: "text-xs text-gray-500 dark:text-gray-400 mb-0.5") { plain label }
         end
         p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
           plain suggestion_preview(suggestion)
@@ -161,18 +166,18 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
     ENTITY_TYPE_LABELS.fetch(suggestion.target_entity_type, suggestion.target_entity_type.humanize)
   end
 
-  def review_tier(suggestion)
-    case suggestion.target_entity_type
-    when "role_illustration" then 1
-    when "behavioural_expectation" then 3
-    else 2
+  def kind_label(suggestion)
+    case suggestion.kind
+    when "create" then "New"
+    when "delete" then "Delete"
+    else "Edit"
     end
   end
 
-  def tier_variant(tier)
-    case tier
-    when 3 then :warning
-    when 2 then :info
+  def kind_variant(suggestion)
+    case suggestion.kind
+    when "create" then :success
+    when "delete" then :warning
     else :default
     end
   end

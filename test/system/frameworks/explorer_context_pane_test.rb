@@ -232,6 +232,46 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
   end
 
+  context "context labels" do
+    should "show full role and level for illustration suggestions" do
+      visit framework_path(@framework_id,
+        focus: "capability", capability_id: @cap_a_id)
+      open_context_pane
+
+      within "#suggestion-panel" do
+        # Illustration rows show "Role Name · Level Title" on their own line
+        assert_text "Product Designer \u00b7 Product Designer I"
+        assert_text "Software Engineer \u00b7 Engineer I"
+      end
+    end
+
+    should "show capability and level for expectation suggestions" do
+      visit framework_path(@framework_id)
+      open_context_pane
+
+      within "#suggestion-panel" do
+        # Expectation rows show "Capability Name · Level N"
+        assert_text "Strategic Thinking \u00b7 Level 1"
+        assert_text "Strategic Thinking \u00b7 Level 2"
+      end
+    end
+
+    should "show entity type and kind badges without tiers" do
+      visit framework_path(@framework_id)
+      open_context_pane
+
+      within "#suggestion-panel" do
+        assert_text "Illustration"
+        assert_text "Expectation"
+        assert_text "Edit"
+        # Tier badges should not appear
+        assert_no_text "T1"
+        assert_no_text "T2"
+        assert_no_text "T3"
+      end
+    end
+  end
+
   context "role filter combined with focus" do
     should "drop role_illustration rows outside selected roles" do
       # Select only PD — engineering illustration should drop from panel.

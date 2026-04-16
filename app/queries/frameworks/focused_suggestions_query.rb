@@ -76,6 +76,21 @@ class Frameworks::FocusedSuggestionsQuery
     end
   end
 
+  # Builds a lookup of human-readable context for each suggestion.
+  # Used by the panel view to show role name and level for each row.
+  #
+  # @param suggestions [Array<FrameworkState::SuggestedEdit>]
+  # @return [Hash{String => String}] suggestion_id => label (e.g. "Product Designer · Level 2")
+  def context_labels(suggestions)
+    build_scope_sets
+    build_role_lookup
+
+    suggestions.each_with_object({}) do |s, h|
+      label = context_label_for(s)
+      h[s.suggestion_id] = label if label
+    end
+  end
+
   # @return [Symbol] effective focus after validation
   attr_reader :focus
 
@@ -215,5 +230,108 @@ class Frameworks::FocusedSuggestionsQuery
 
   def focused_capability
     find_capability(preloaded_categories, @capability_id)
+  end
+
+  # ── Context label helpers ──
+
+  def build_role_lookup
+    return if @role_lookup
+
+    roles = @framework.role_families.includes(roles: :levels).flat_map(&:roles)
+    @role_lookup = roles.index_by(&:role_id)
+    @capability_lookup = preloaded_categories
+      .flat_map(&:capabilities)
+      .index_by(&:capability_id)
+    @expectation_lookup = preloaded_categories
+      .flat_map(&:capabilities)
+      .flat_map(&:expectations)
+      .index_by(&:expectation_id)
+  end
+
+  # @return [String, nil]
+  def context_label_for(suggestion)
+    case suggestion.target_entity_type
+    when "role_illustration"  then illustration_context_label(suggestion)
+    when "behavioural_expectation" then expectation_context_label(suggestion)
+    when "capability"         then capability_context_label(suggestion)
+    when "capability_category" then category_context_label(suggestion)
+    end
+  end
+
+  # Illustration: "Role Name · Level Title" (e.g. "Software Engineer · Engineer II").
+  # Both pieces are needed — the level title alone may not include the role name,
+  # and the role name alone doesn't identify the seniority band.
+  def illustration_context_label(suggestion)
+    role_id = resolve_illustration_role_id(suggestion)
+    expectation_id = resolve_illustration_expectation_id(suggestion)
+    role = @role_lookup[role_id]
+    expectation = @expectation_lookup[expectation_id] if expectation_id
+
+    level = nil
+    if expectation && role
+      level = role.levels.find { |l| l.ordinal == expectation.level_ordinal }
+    end
+
+    if role && level
+      "#{role.name} \u00b7 #{level.title}"
+    elsif role
+      "#{role.name} \u00b7 Level #{expectation&.level_ordinal || '?'}"
+    end
+  end
+
+  # Expectation: "Capability Name · Level N"
+  def expectation_context_label(suggestion)
+    if suggestion.kind == "create"
+      ordinal = suggestion.proposed_attributes&.dig("level_ordinal")
+      cap_id = suggestion.parent_id
+    else
+      exp = @expectation_lookup[suggestion.target_entity_id]
+      return nil unless exp
+
+      ordinal = exp.level_ordinal
+      cap_id = exp.capability_id
+    end
+
+    capability = @capability_lookup[cap_id]
+    parts = [ capability&.name, ("Level #{ordinal}" if ordinal) ].compact
+    parts.any? ? parts.join(" \u00b7 ") : nil
+  end
+
+  # Capability: "Capability name" or "Capability description".
+  # The entity name is in the preview already, so just indicate what field.
+  def capability_context_label(suggestion)
+    return nil if suggestion.kind == "create"
+
+    field = suggestion.field
+    "Capability #{field}" if field.present?
+  end
+
+  # Category: "Category name" or "Category description".
+  def category_context_label(suggestion)
+    return nil if suggestion.kind == "create"
+
+    field = suggestion.field
+    "Category #{field}" if field.present?
+  end
+
+  def resolve_illustration_role_id(suggestion)
+    if suggestion.kind == "create"
+      suggestion.proposed_attributes&.dig("role_id")
+    else
+      @illustration_role_ids[suggestion.target_entity_id]
+    end
+  end
+
+  def resolve_illustration_expectation_id(suggestion)
+    if suggestion.kind == "create"
+      suggestion.parent_id
+    else
+      preloaded_categories
+        .flat_map(&:capabilities)
+        .flat_map(&:expectations)
+        .flat_map(&:illustrations)
+        .find { |i| i.illustration_id == suggestion.target_entity_id }
+        &.expectation_id
+    end
   end
 end

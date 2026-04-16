@@ -191,10 +191,13 @@ class Frameworks::SuggestionsController < ApplicationController
       role_ids: Array.wrap(params[:roles]).select(&:present?)
     )
 
+    suggestions = query.call
+
     render Views::Frameworks::Suggestions::PanelFrame.new(
       framework: @framework,
-      suggestions: query.call,
+      suggestions: suggestions,
       focus_descriptor: query.descriptor,
+      context_labels: query.context_labels(suggestions),
       clear_path: framework_suggestions_path(@framework.framework_id, layout: "panel")
     ), layout: false
   end
