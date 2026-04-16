@@ -2,5 +2,37 @@
   "effortLevel": "high",
   "enabledPlugins": {
     "codex@openai-codex": true
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(file *)",
+      "Bash(which *)",
+      "Bash(pwd)",
+      "Bash(echo *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(git status*)",
+      "Bash(git log *)",
+      "Bash(git log)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git branch *)",
+      "Bash(git branch)",
+      "Bash(git show *)",
+      "Bash(git ls-tree *)",
+      "Bash(git rev-parse *)",
+      "Bash(curl -s *)"
+    ]
   }
 }
