@@ -199,15 +199,20 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
   end
 
   context "show-all clear" do
-    should "return to framework scope when the clear link is used" do
+    should "return to framework scope and collapse expanded rows" do
       visit framework_path(@framework_id)
       open_context_pane
-      wait_for_stimulus "matrix"
 
-      find("[data-action='click->matrix#focusCategory'][data-category-id='#{@cat_a_id}']").click
+      # Navigate to a capability via suggestion click to expand the row
+      within "#suggestion-panel" do
+        find("[data-nav-capability-id='#{@cap_a_id}']", match: :first).click
+      end
+
+      # Row should be expanded
+      assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
+                       visible: true
 
       within "#suggestion-panel" do
-        assert_text "Thinking \u2014 category"
         click_link "Show all framework suggestions"
       end
 
@@ -215,6 +220,10 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
         assert_text "All framework suggestions"
         assert_text "SUGG_CAP_B"
       end
+
+      # Matrix should have collapsed back
+      assert_no_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
+                          visible: true
     end
   end
 

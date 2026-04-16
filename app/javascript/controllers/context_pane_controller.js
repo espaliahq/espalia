@@ -61,6 +61,13 @@ export default class extends BaseController {
     this.#pushBrowserUrl()
   }
 
+  // Resets the explorer to framework-level focus — collapses any expanded row.
+  clearFocus() {
+    window.dispatchEvent(new CustomEvent("suggestion:navigate", {
+      detail: { level: "framework", categoryId: null, capabilityId: null, levelOrdinal: null }
+    }))
+  }
+
   // Handles click on a suggestion row body — dispatches a navigation event
   // so the matrix controller can expand the relevant row and scroll to it.
   focusSuggestion(event) {

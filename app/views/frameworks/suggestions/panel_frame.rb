@@ -74,7 +74,10 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
     a(
       href: @clear_path,
       class: "text-xs text-gray-500 dark:text-gray-400 hover:text-primary mt-1 inline-block",
-      data: { turbo_frame: "suggestion-panel" }
+      data: {
+        turbo_frame: "suggestion-panel",
+        action: "click->context-pane#clearFocus"
+      }
     ) { "\u2190 Show all framework suggestions" }
   end
 

@@ -214,7 +214,16 @@ export default class extends BaseController {
 
   navigateToEntity(event) {
     const { level, categoryId, capabilityId, levelOrdinal } = event.detail || {}
-    if (!level || level === "framework") return
+    if (!level) return
+
+    if (level === "framework") {
+      this.#collapseAllRows()
+      this.#setFocus({ level: "framework" })
+      if (this.hasScrollContainerTarget) {
+        this.scrollContainerTarget.scrollTo({ top: 0, left: 0, behavior: "smooth" })
+      }
+      return
+    }
 
     if (level === "category") {
       this.#scrollToCategoryHeader(categoryId)
@@ -268,6 +277,18 @@ export default class extends BaseController {
       sibling = sibling.previousElementSibling
     }
     return null
+  }
+
+  #collapseAllRows() {
+    this.expandedRowTargets.forEach(r => {
+      if (!r.classList.contains("hidden")) {
+        r.classList.add("hidden")
+        const row = this.rowTargets.find(rt => rt.dataset.capabilityId === r.dataset.capabilityId)
+        const chevron = row?.querySelector("[data-matrix-target='rowChevron']")
+        if (chevron) chevron.classList.remove("rotate-90")
+      }
+    })
+    this.#updateRowDimming(null)
   }
 
   // Programmatically expands a row by capability ID (accordion: collapses others).
