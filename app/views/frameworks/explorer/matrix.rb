@@ -28,21 +28,19 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   private
 
   def matrix_table
-    div(class: "overflow-x-auto") do
-      table(class: "w-full border-collapse") do
-        render Views::Frameworks::Explorer::MatrixHeader.new(
-          merged_levels: @merged_levels,
-          selected_role_count: @matrix_data[:selected_roles].size
-        )
-        tbody do
-          @categories.each do |cat_data|
-            render Views::Frameworks::Explorer::MatrixCategoryGroup.new(
-              category_data: cat_data,
-              merged_levels: @merged_levels,
-              selected_role_ids: @selected_role_ids,
-              framework_id: @framework_id
-            )
-          end
+    table(class: "w-full border-collapse") do
+      render Views::Frameworks::Explorer::MatrixHeader.new(
+        merged_levels: @merged_levels,
+        selected_role_count: @matrix_data[:selected_roles].size
+      )
+      tbody do
+        @categories.each do |cat_data|
+          render Views::Frameworks::Explorer::MatrixCategoryGroup.new(
+            category_data: cat_data,
+            merged_levels: @merged_levels,
+            selected_role_ids: @selected_role_ids,
+            framework_id: @framework_id
+          )
         end
       end
     end

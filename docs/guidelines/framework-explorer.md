@@ -206,6 +206,8 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 | Category headers | `sticky top-[41px]` | `z-[5]` | Below column headers, above data |
 | Left column (capability name) | `sticky left-0` | `z-[2]` | Visible when scrolling horizontally |
 
+**Single scroll container.** The only scroll container is `main_pane` in `show_view.rb` (`flex-1 overflow-auto`, tagged `data-matrix-target="scrollContainer"`). The `<table>` must be rendered as a direct child of the turbo-frame inside it — do NOT wrap it in `overflow-x-auto` (or any `overflow-*`) divs. CSS `position: sticky` anchors to the nearest scrolling ancestor, so a nested overflow wrapper silently captures the anchor and breaks vertical stickiness (see Hard-Won Lesson 11).
+
 ## Stimulus Controller Responsibilities
 
 ### framework_explorer_controller.js
@@ -298,6 +300,10 @@ const url = new URL(window.location.href)
 ```
 
 Without a semicolon after the first line, JavaScript parses `new URL(...)["focus", ...]` as a subscript access and the `.forEach` never runs. The panel content narrowed correctly because `#rebuildFrameSrc` writes the frame `src` directly, but the browser URL was never pushed and the deep-link test failed. Either terminate with semicolons or extract the array into a named constant.
+
+### 11. Nested `overflow-*` wrappers break sticky headers
+
+CSS `position: sticky` anchors to the nearest scrolling ancestor. If the matrix `<table>` is wrapped in an inner `overflow-x-auto` (or any `overflow-*`) div, that wrapper captures the sticky anchor — even when the outer pane is the real scroll container. Headers then ride the tbody instead of pinning to the top of the pane, despite having `sticky top-0` declared. The table must be a direct child of the pane that scrolls it; the pane's own `overflow-auto` handles both axes.
 
 ## Future Extension Points
 
