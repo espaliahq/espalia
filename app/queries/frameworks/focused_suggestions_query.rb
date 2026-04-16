@@ -91,6 +91,21 @@ class Frameworks::FocusedSuggestionsQuery
     end
   end
 
+  # Builds matrix navigation coordinates for each suggestion so the panel
+  # can scroll the explorer to the relevant entity on click.
+  #
+  # @param suggestions [Array<FrameworkState::SuggestedEdit>]
+  # @return [Hash{String => Hash}] suggestion_id => { level:, category_id:, capability_id:, level_ordinal: }
+  def navigation_coords(suggestions)
+    build_scope_sets
+    build_role_lookup
+
+    suggestions.each_with_object({}) do |s, h|
+      coords = coords_for(s)
+      h[s.suggestion_id] = coords if coords
+    end
+  end
+
   # @return [Symbol] effective focus after validation
   attr_reader :focus
 
@@ -230,6 +245,70 @@ class Frameworks::FocusedSuggestionsQuery
 
   def focused_capability
     find_capability(preloaded_categories, @capability_id)
+  end
+
+  # ── Navigation coord helpers ──
+
+  # @return [Hash, nil] { level:, category_id:, capability_id:, level_ordinal: }
+  def coords_for(suggestion)
+    case suggestion.target_entity_type
+    when "role_illustration"
+      illustration_coords(suggestion)
+    when "behavioural_expectation"
+      expectation_coords(suggestion)
+    when "capability"
+      capability_coords(suggestion)
+    when "capability_category"
+      category_coords(suggestion)
+    end
+  end
+
+  def illustration_coords(suggestion)
+    exp_id = resolve_illustration_expectation_id(suggestion)
+    exp = @expectation_lookup[exp_id]
+    return nil unless exp
+
+    cap = @capability_lookup[exp.capability_id]
+    return nil unless cap
+
+    { level: :cell, category_id: cap.category_id,
+      capability_id: cap.capability_id, level_ordinal: exp.level_ordinal }
+  end
+
+  def expectation_coords(suggestion)
+    if suggestion.kind == "create"
+      cap_id = suggestion.parent_id
+      ordinal = suggestion.proposed_attributes&.dig("level_ordinal")
+    else
+      exp = @expectation_lookup[suggestion.target_entity_id]
+      return nil unless exp
+
+      cap_id = exp.capability_id
+      ordinal = exp.level_ordinal
+    end
+
+    cap = @capability_lookup[cap_id]
+    return nil unless cap
+
+    { level: :cell, category_id: cap.category_id,
+      capability_id: cap.capability_id, level_ordinal: ordinal }
+  end
+
+  def capability_coords(suggestion)
+    cap_id = suggestion.target_entity_id || suggestion.parent_id
+    cap = @capability_lookup[cap_id]
+    return nil unless cap
+
+    { level: :capability, category_id: cap.category_id,
+      capability_id: cap.capability_id, level_ordinal: nil }
+  end
+
+  def category_coords(suggestion)
+    cat_id = suggestion.target_entity_id
+    return nil unless cat_id
+
+    { level: :category, category_id: cat_id,
+      capability_id: nil, level_ordinal: nil }
   end
 
   # ── Context label helpers ──

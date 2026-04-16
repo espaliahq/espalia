@@ -169,7 +169,8 @@ class Views::Frameworks::ShowView < Views::Base
       data: {
         controller: "matrix",
         matrix_base_path_value: matrix_framework_path(@framework.framework_id),
-        action: "tree:changed->matrix#updateSelection"
+        action: "tree:changed->matrix#updateSelection " \
+                "suggestion:navigate@window->matrix#navigateToEntity"
       }
     ) do
       left_pane

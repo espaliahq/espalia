@@ -23,13 +23,15 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   # @param suggestions [Array<FrameworkState::SuggestedEdit>]
   # @param focus_descriptor [Hash] { level:, category_name:, capability_name:, level_label: }
   # @param context_labels [Hash{String => String}] suggestion_id => role/level label
+  # @param navigation_coords [Hash{String => Hash}] suggestion_id => { level:, category_id:, ... }
   # @param clear_path [String, nil] URL that clears focus (framework-wide panel)
   def initialize(framework:, suggestions:, focus_descriptor: { level: :framework },
-                 context_labels: {}, clear_path: nil)
+                 context_labels: {}, navigation_coords: {}, clear_path: nil)
     @framework = framework
     @suggestions = suggestions
     @focus_descriptor = focus_descriptor
     @context_labels = context_labels
+    @navigation_coords = navigation_coords
     @clear_path = clear_path
   end
 
@@ -113,23 +115,69 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
 
   def panel_row(suggestion)
     label = @context_labels[suggestion.suggestion_id]
+    coords = @navigation_coords[suggestion.suggestion_id]
 
-    li do
-      a(
-        href: framework_suggestion_path(@framework.framework_id, suggestion.suggestion_id),
-        class: "block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
-        data: { turbo_frame: "_top" }
-      ) do
+    li(class: "group") do
+      div(class: "px-4 py-3") do
+        # Badges + detail link on same line
         div(class: "flex items-center gap-1.5 mb-1") do
           render Components::Kit::Badge.new(entity_label(suggestion), variant: :info)
           render Components::Kit::Badge.new(kind_label(suggestion), variant: kind_variant(suggestion))
+          detail_link(suggestion)
         end
-        if label
-          p(class: "text-xs text-gray-500 dark:text-gray-400 mb-0.5") { plain label }
-        end
-        p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
-          plain suggestion_preview(suggestion)
-        end
+
+        # Clickable body — navigates the matrix to the relevant entity
+        navigate_body(suggestion, label: label, coords: coords)
+      end
+    end
+  end
+
+  # The main click area — sets explorer focus to the suggestion's entity.
+  def navigate_body(suggestion, label:, coords:)
+    data = if coords
+      {
+        action: "click->context-pane#focusSuggestion",
+        nav_level: coords[:level],
+        nav_category_id: coords[:category_id],
+        nav_capability_id: coords[:capability_id],
+        nav_level_ordinal: coords[:level_ordinal]
+      }.compact
+    else
+      {}
+    end
+
+    div(
+      class: "#{'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ' if coords}" \
+             "-mx-4 -mb-3 px-4 pb-3 pt-0.5 rounded-b transition-colors",
+      **({ data: data } if data.any?)
+    ) do
+      if label
+        p(class: "text-xs text-gray-500 dark:text-gray-400 mb-0.5") { plain label }
+      end
+      p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
+        plain suggestion_preview(suggestion)
+      end
+    end
+  end
+
+  # Small link to the suggestion detail page.
+  def detail_link(suggestion)
+    a(
+      href: framework_suggestion_path(@framework.framework_id, suggestion.suggestion_id),
+      class: "ml-auto text-gray-400 dark:text-gray-500 hover:text-primary " \
+             "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
+      data: { turbo_frame: "_top" },
+      title: "View suggestion details",
+      aria_label: "View suggestion details"
+    ) do
+      svg(
+        xmlns: "http://www.w3.org/2000/svg", fill: "none", viewbox: "0 0 24 24",
+        stroke_width: "1.5", stroke: "currentColor", class: "w-4 h-4"
+      ) do |s|
+        s.path(
+          stroke_linecap: "round", stroke_linejoin: "round",
+          d: "M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+        )
       end
     end
   end

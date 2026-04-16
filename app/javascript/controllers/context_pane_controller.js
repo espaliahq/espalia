@@ -61,6 +61,20 @@ export default class extends BaseController {
     this.#pushBrowserUrl()
   }
 
+  // Handles click on a suggestion row body — dispatches a navigation event
+  // so the matrix controller can expand the relevant row and scroll to it.
+  focusSuggestion(event) {
+    const el = event.currentTarget
+    const detail = {
+      level: el.dataset.navLevel || "framework",
+      categoryId: el.dataset.navCategoryId || null,
+      capabilityId: el.dataset.navCapabilityId || null,
+      levelOrdinal: el.dataset.navLevelOrdinal ? parseInt(el.dataset.navLevelOrdinal, 10) : null
+    }
+
+    window.dispatchEvent(new CustomEvent("suggestion:navigate", { detail }))
+  }
+
   // private
 
   // Reads focus/role params from the browser URL so that a deep-link reload

@@ -198,6 +198,7 @@ class Frameworks::SuggestionsController < ApplicationController
       suggestions: suggestions,
       focus_descriptor: query.descriptor,
       context_labels: query.context_labels(suggestions),
+      navigation_coords: query.navigation_coords(suggestions),
       clear_path: framework_suggestions_path(@framework.framework_id, layout: "panel")
     ), layout: false
   end

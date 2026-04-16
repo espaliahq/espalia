@@ -210,6 +210,44 @@ export default class extends BaseController {
     })
   }
 
+  // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
+
+  navigateToEntity(event) {
+    const { level, categoryId, capabilityId, levelOrdinal } = event.detail || {}
+    if (!level || level === "framework") return
+
+    if (level === "category") {
+      this.#scrollToCategoryHeader(categoryId)
+      this.#setFocus({ level: "category", categoryId })
+      return
+    }
+
+    // capability or cell — expand the row and scroll to it
+    if (!capabilityId) return
+
+    const row = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
+    if (!row) return
+
+    this.#expandRow(capabilityId)
+
+    row.scrollIntoView({ behavior: "smooth", block: "center" })
+
+    if (level === "cell" && levelOrdinal != null) {
+      this.#setFocus({
+        level: "cell",
+        categoryId: categoryId || this.#categoryIdForRow(row),
+        capabilityId,
+        levelOrdinal
+      })
+    } else {
+      this.#setFocus({
+        level: "capability",
+        categoryId: categoryId || this.#categoryIdForRow(row),
+        capabilityId
+      })
+    }
+  }
+
   // ── Private ──
 
   // Dispatches matrix:focus-changed with a fully-specified detail payload.
@@ -230,6 +268,37 @@ export default class extends BaseController {
       sibling = sibling.previousElementSibling
     }
     return null
+  }
+
+  // Programmatically expands a row by capability ID (accordion: collapses others).
+  #expandRow(capId) {
+    const expandedRow = this.expandedRowTargets.find(r => r.dataset.capabilityId === capId)
+    if (!expandedRow) return
+
+    // Already expanded — nothing to do
+    if (!expandedRow.classList.contains("hidden")) return
+
+    // Collapse any other expanded row (accordion)
+    this.expandedRowTargets.forEach(r => {
+      if (r !== expandedRow && !r.classList.contains("hidden")) {
+        r.classList.add("hidden")
+        const otherRow = this.rowTargets.find(rt => rt.dataset.capabilityId === r.dataset.capabilityId)
+        const otherChevron = otherRow?.querySelector("[data-matrix-target='rowChevron']")
+        if (otherChevron) otherChevron.classList.remove("rotate-90")
+      }
+    })
+
+    expandedRow.classList.remove("hidden")
+    const row = this.rowTargets.find(r => r.dataset.capabilityId === capId)
+    const chevron = row?.querySelector("[data-matrix-target='rowChevron']")
+    if (chevron) chevron.classList.add("rotate-90")
+
+    this.#updateRowDimming(capId)
+  }
+
+  #scrollToCategoryHeader(categoryId) {
+    const header = this.categoryHeaderTargets.find(h => h.dataset.categoryId === categoryId)
+    if (header) header.scrollIntoView({ behavior: "smooth", block: "center" })
   }
 
   #categoryRows(headerRow) {

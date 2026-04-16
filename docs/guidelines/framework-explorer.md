@@ -160,6 +160,30 @@ The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its conten
 
 **Pane visibility is independent**: focus actions never auto-open the pane. The pane opens only via the "N Suggestions" toggle. Focus changes update URL + frame `src` but are invisible until the user opens the pane — state and visibility are separate concerns.
 
+### 9. Context Pane Row Presentation
+
+Each suggestion row in the panel must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
+
+**Row anatomy (top to bottom):**
+1. **Two badges** — entity type (Illustration / Expectation / Capability / Category) in blue, change kind (Edit / New / Delete) in neutral/green/amber.
+2. **Context line** — full-width, never truncated. Locates the suggestion within the framework hierarchy. Content varies by entity type:
+   - *Illustration*: "Role Name · Level Title" (e.g. "Software Engineer · Engineer II")
+   - *Expectation*: "Capability Name · Level N" (e.g. "Strategic Thinking · Level 2")
+   - *Capability*: "Capability name" or "Capability description" (the field being edited)
+   - *Category*: "Category name" or "Category description"
+3. **Preview text** — the proposed value (edit), proposed content (create), or current value (delete). Clamped to 2 lines.
+
+**Key principles:**
+- Never show review tiers (T1/T2/T3) — these are internal approval routing, not user context.
+- The context line gets its own full-width row, never sharing with badges. Long capability or role names must remain readable.
+- Both role AND level are required for illustrations — role alone doesn't identify the seniority band; level title alone may not identify the role.
+- Context labels are resolved in-memory by `FocusedSuggestionsQuery#context_labels` from eager-loaded framework associations; no extra queries.
+
+**Row click behaviour:**
+- Clicking the suggestion body (context + preview) navigates the explorer matrix to the relevant entity — expands the capability row, scrolls it into view, and sets the focus context. This lets the user see the suggestion *in the grid* before deciding to act.
+- A separate detail-page link (arrow icon, visible on hover) navigates to the full suggestion detail view via `data-turbo-frame="_top"`.
+- Navigation coordinates are pre-computed server-side by `FocusedSuggestionsQuery#navigation_coords` and rendered as `data-nav-*` attributes on the row body. The `context_pane_controller` dispatches `suggestion:navigate` on click; `matrix_controller` listens and programmatically expands + scrolls.
+
 ### 7. Responsive Behaviour
 
 | Viewport | Role Tree | Matrix | Toggle Button |
@@ -202,6 +226,7 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 - **Row expansion** (toggle hidden expanded row by capability ID). Dispatches `matrix:focus-changed` with `level: "capability"` on expand, `level: "framework"` on collapse.
 - **Cell focus** (`focusCell` on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"`. Ignores clicks that land on interactive children (buttons, links, inputs, forms, `[contenteditable]`) so inline editors inside the cell don't accidentally toggle focus.
 - **Category focus** (`focusCategory` on the category name span). Dispatches `matrix:focus-changed` with `level: "category"`. Re-click clears to framework focus.
+- **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header.
 - **URL sync** (pushState for shareability — explorer uses role/track params)
 - **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
@@ -212,7 +237,10 @@ Lives on the right-hand `<aside>` element. Sole owner of:
 - **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=` via `history.pushState()`; removes them when focus returns to `framework`.
 - **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch.
 
-Listens at window scope via `data-action="tree:changed@window->context-pane#onTreeChanged matrix:focus-changed@window->context-pane#onFocusChanged"`. Does not dispatch events — consumes only.
+Listens at window scope via `data-action="tree:changed@window->context-pane#onTreeChanged matrix:focus-changed@window->context-pane#onFocusChanged"`.
+
+Also dispatches:
+- **`suggestion:navigate`** — fired by `focusSuggestion` when the user clicks a suggestion row body. Reads `data-nav-*` attributes from the clicked element and dispatches to window for `matrix_controller` to handle.
 
 ### Event contracts
 
@@ -220,6 +248,7 @@ Listens at window scope via `data-action="tree:changed@window->context-pane#onTr
 |-------|--------|--------|
 | `tree:changed` | `tree_controller` | `{ roleIds: string[], track: "ic" \| "management" \| "both" }` |
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
+| `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null }` — triggers `matrix_controller#navigateToEntity` |
 
 ## Hard-Won Lessons
 
@@ -272,8 +301,11 @@ Without a semicolon after the first line, JavaScript parses `new URL(...)["focus
 
 ## Future Extension Points
 
-### Collaborative Editing (Suggested Edits)
-The right pane placeholder is reserved for a contextual feed showing suggested edits, comments, and activity. Selection focus hierarchy: cell → row → category → framework. The `MatrixCell` could show edit indicators (small icons for pending suggestions).
+### Context Pane: Comments & Activity Feed
+The context pane currently shows suggested edits. Future content types — comments, activity log, evidence — will reuse the same focus protocol (`matrix:focus-changed` event, `FocusedSuggestionsQuery`-style in-memory filtering) and row anatomy (entity badge + kind badge, context line, preview). Each content type should follow the same principle: no internal categorisations in the UI, always show where-in-the-framework context, never truncate the context line.
+
+### Matrix Cell Edit Indicators
+`MatrixCell` could show small icons for pending suggestions (a dot or count badge) to surface collaborative activity without opening the context pane. The pending-count data is already available via `MatrixDataBuilder`'s `pending_suggestions` map.
 
 ## File Reference
 

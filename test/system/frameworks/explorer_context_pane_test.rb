@@ -272,6 +272,32 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
   end
 
+  context "suggestion row navigation" do
+    should "expand the capability row in the matrix when clicking an illustration suggestion" do
+      visit framework_path(@framework_id)
+      open_context_pane
+
+      within "#suggestion-panel" do
+        # Click the suggestion body (not the detail link) for an illustration
+        find("[data-nav-capability-id='#{@cap_a_id}']", match: :first).click
+      end
+
+      # The matrix should expand the matching capability row
+      assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
+                       visible: true
+    end
+
+    should "provide a separate detail link to the suggestion page" do
+      visit framework_path(@framework_id)
+      open_context_pane
+
+      within "#suggestion-panel" do
+        # The detail link (arrow icon) should navigate to the suggestion detail page
+        assert_selector "a[title='View suggestion details']", visible: :all
+      end
+    end
+  end
+
   context "role filter combined with focus" do
     should "drop role_illustration rows outside selected roles" do
       # Select only PD — engineering illustration should drop from panel.
