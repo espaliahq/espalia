@@ -32,9 +32,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     col_count = @merged_levels.size + 1 # +1 for capability name column
 
     tr(
-      class: "sticky top-[41px] z-[5] cursor-pointer",
+      class: "sticky top-[41px] z-[5]",
       data: {
-        action: "click->matrix#toggleCategory",
         matrix_target: "categoryHeader",
         category_id: @category.category_id
       }
@@ -44,21 +43,42 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
       ) do
         div(class: "flex items-center gap-2") do
-          svg(
-            class: "w-3 h-3 text-gray-400 rotate-90 transition-transform",
-            data: { matrix_target: "categoryChevron" },
-            fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
-          ) do |s|
-            s.path(d: "M9 5l7 7-7 7")
+          # Chevron collapses/expands the category rows
+          button(
+            type: "button",
+            class: "flex items-center justify-center w-4 h-4 cursor-pointer rounded " \
+                   "hover:bg-gray-200 dark:hover:bg-gray-700",
+            data: {
+              action: "click->matrix#toggleCategory",
+              category_id: @category.category_id
+            },
+            aria_label: "Toggle category"
+          ) do
+            svg(
+              class: "w-3 h-3 text-gray-400 rotate-90 transition-transform",
+              data: { matrix_target: "categoryChevron" },
+              fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
+            ) do |s|
+              s.path(d: "M9 5l7 7-7 7")
+            end
           end
 
-          decoration = suggestion_text_classes(pending_edit_count: @category_pending_count)
-          span(class: "text-sm font-semibold text-gray-700 dark:text-gray-300 #{decoration}".strip) do
-            @category.name
-          end
+          # Category name + count are the focus hit target
+          span(
+            class: "flex items-center gap-2 cursor-pointer hover:underline",
+            data: {
+              action: "click->matrix#focusCategory",
+              category_id: @category.category_id
+            }
+          ) do
+            decoration = suggestion_text_classes(pending_edit_count: @category_pending_count)
+            span(class: "text-sm font-semibold text-gray-700 dark:text-gray-300 #{decoration}".strip) do
+              @category.name
+            end
 
-          span(class: "text-xs text-gray-400 dark:text-gray-500") do
-            "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+            span(class: "text-xs text-gray-400 dark:text-gray-500") do
+              "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+            end
           end
         end
       end

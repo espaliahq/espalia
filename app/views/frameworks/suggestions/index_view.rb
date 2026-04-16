@@ -45,6 +45,9 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
+    @author_names = Views::Frameworks::Suggestions::AuthorNames.for(
+      @suggestions.map(&:author_id)
+    )
   end
 
   def view_template
@@ -191,18 +194,32 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
     end
   end
 
+  CONTENT_KEYS = %w[description name title code].freeze
+
   # @param suggestion [FrameworkState::SuggestedEdit]
   # @return [String]
   def suggestion_preview_text(suggestion)
     case suggestion.kind
     when "create"
-      attrs = suggestion.proposed_attributes || {}
-      attrs.values.select(&:present?).first.to_s
+      creation_preview(suggestion.proposed_attributes || {})
     when "delete"
       suggestion.current_value.to_s
     else
       suggestion.suggested_value.to_s
     end
+  end
+
+  # Prefers human-readable content keys over IDs when previewing a create.
+  #
+  # @param attrs [Hash]
+  # @return [String]
+  def creation_preview(attrs)
+    normalized = attrs.transform_keys(&:to_s)
+    CONTENT_KEYS.each do |key|
+      value = normalized[key]
+      return value.to_s if value.present?
+    end
+    normalized.values.select(&:present?).first.to_s
   end
 
   # @param kind [String] "edit", "create", or "delete"
@@ -217,7 +234,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
 
   def suggestion_footer(suggestion)
     div(class: "mt-2 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400") do
-      span { "by #{suggestion.author_id[0, 8]}…" }
+      span { "by #{@author_names.resolve(suggestion.author_id)}" }
       span { local_time_ago(suggestion.created_at) }
       if suggestion.rationale.present?
         span { "\u2014 #{truncate_text(suggestion.rationale, 80)}" }

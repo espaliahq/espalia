@@ -55,7 +55,7 @@ User toggles role checkbox
 PageLayout
 └── div[data-controller="framework-explorer"]
     ├── framework_header (back link, name, badge)
-    ├── stats_bar (role count toggle button, levels, capabilities)
+    ├── stats_bar (role count toggle button, levels, capabilities, suggestion count toggle)
     └── explorer_layout[data-controller="matrix"]
         ├── aside[data-controller="tree"]  ← left pane (role tree)
         │   └── RoleTree
@@ -65,12 +65,15 @@ PageLayout
         │       └── Matrix
         │           ├── MatrixHeader (sticky thead)
         │           └── MatrixCategoryGroup (per category)
-        │               ├── category header row (sticky, collapsible)
+        │               ├── category header row (sticky)
+        │               │   ├── chevron button → matrix#toggleCategory
+        │               │   └── name span     → matrix#focusCategory
         │               └── MatrixRow (per capability)
-        │                   ├── compact row (expectation cells)
+        │                   ├── compact row (click → matrix#toggleRow)
         │                   └── expanded row (illustrations, hidden)
-        │                       └── MatrixCell (per level ordinal)
-        └── aside (right pane placeholder, hidden)
+        │                       └── expanded td (click → matrix#focusCell)
+        └── aside[data-controller="context-pane"]  ← right pane (context feed)
+            └── turbo-frame#suggestion-panel (Suggestions::PanelFrame)
 ```
 
 ### Data Flow
@@ -124,12 +127,38 @@ Illustrations appear only in the expanded row, never inline in cells. This keeps
 
 ### 6. URL-Driven State
 
-Selected roles and track filter are encoded in URL query params:
+Selected roles, track filter, and **focus context** are encoded in URL query params:
 ```
 /frameworks/:id?roles[]=uuid1&roles[]=uuid2&track=ic
+                &focus=capability&capability_id=<uuid>
+                &focus=category&category_id=<uuid>
+                &focus=cell&capability_id=<uuid>&level_ordinal=2
 ```
 
-This enables bookmarking, sharing, and browser back/forward. The server reads params on page load to set initial state. The matrix controller pushes state via `history.pushState()` on each selection change.
+This enables bookmarking, sharing, and browser back/forward. The server reads role/track params on page load to set initial matrix state; focus params are seeded into `context_pane_controller` which primes the suggestion panel frame so deep links render filtered content.
+
+- `matrix_controller` pushes `roles[]=` / `track=` on every selection change.
+- `context_pane_controller` pushes `focus=` / `category_id=` / `capability_id=` / `level_ordinal=` on every focus change and deletes them when focus returns to `framework`.
+- The suggestion panel frame's `src` mirrors the browser URL but also carries `layout=panel`. The controller short-circuits when the computed `src` string equals the current `src` — prevents duplicate fetches on no-op role changes at framework focus.
+
+### 8. Focus Context (Context Pane)
+
+The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
+
+| Level | Trigger | Clear |
+|-------|---------|-------|
+| `framework` (default) | No explicit action | — |
+| `category` | Click the category **name** (chevron still collapses) | Re-click name, or "Show all" |
+| `capability` | Expand a row | Collapse the row, or "Show all" |
+| `cell` | Click an expanded-row cell | Re-click same cell (→ capability), collapse row (→ framework), or "Show all" |
+
+**Single-scope accordion**: at most one focus scope is active. Focusing a new row clears any prior cell focus. Collapsing a row clears cell focus.
+
+**Role filter layering**: role selection always applies, but only to `role_illustration` rows in the panel. Higher-level entity types (capability, category, expectation) are unaffected by the roles filter — those are framework-level constructs.
+
+**Server-side filtering**: `Frameworks::FocusedSuggestionsQuery` walks eager-loaded framework associations once and builds in-memory `Set`s of in-scope IDs (category / capability / expectation / illustration). No denormalized columns or migrations on `framework_suggested_edits`. The framework read model is small enough (100-200 capabilities) that in-memory resolution is cheap.
+
+**Pane visibility is independent**: focus actions never auto-open the pane. The pane opens only via the "N Suggestions" toggle. Focus changes update URL + frame `src` but are invisible until the user opens the pane — state and visibility are separate concerns.
 
 ### 7. Responsive Behaviour
 
@@ -169,11 +198,28 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 
 ### matrix_controller.js
 - **Turbo Frame update** (builds URL from selection, sets frame src)
-- **Category collapse** (sibling row walking)
-- **Row expansion** (toggle hidden expanded row by capability ID)
+- **Category collapse** (sibling row walking — triggered by chevron button only; the category name runs `focusCategory`)
+- **Row expansion** (toggle hidden expanded row by capability ID). Dispatches `matrix:focus-changed` with `level: "capability"` on expand, `level: "framework"` on collapse.
+- **Cell focus** (`focusCell` on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"`. Ignores clicks that land on interactive children (buttons, links, inputs, forms, `[contenteditable]`) so inline editors inside the cell don't accidentally toggle focus.
+- **Category focus** (`focusCategory` on the category name span). Dispatches `matrix:focus-changed` with `level: "category"`. Re-click clears to framework focus.
 - **URL sync** (pushState for shareability — explorer uses role/track params)
 - **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
+
+### context_pane_controller.js (explorer only)
+Lives on the right-hand `<aside>` element. Sole owner of:
+- **Panel frame src** (`#suggestion-panel`). Rebuilds the frame URL whenever focus or role selection changes; short-circuits when the computed URL equals the current `src` to prevent duplicate fetches.
+- **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=` via `history.pushState()`; removes them when focus returns to `framework`.
+- **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch.
+
+Listens at window scope via `data-action="tree:changed@window->context-pane#onTreeChanged matrix:focus-changed@window->context-pane#onFocusChanged"`. Does not dispatch events — consumes only.
+
+### Event contracts
+
+| Event | Source | Detail |
+|-------|--------|--------|
+| `tree:changed` | `tree_controller` | `{ roleIds: string[], track: "ic" \| "management" \| "both" }` |
+| `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 
 ## Hard-Won Lessons
 
@@ -205,6 +251,25 @@ The matrix is server-rendered. When roles change, the client must update the Tur
 
 Finding all rows belonging to a category requires walking DOM siblings from the category header `<tr>` until hitting the next category header. CSS selectors alone can't express "all siblings between two markers."
 
+### 8. Focus pane visibility and URL state are separate concerns
+
+It's tempting to auto-open the context pane when the user takes a focus action (click a category name, click a cell). Don't. The URL always encodes the current focus so deep links work, but the pane itself only opens via the explicit toggle. Conflating visibility with focus causes surprise UI pops: users who closed the pane don't want it reopening every time they expand a row. Keep focus an invisible background state until the user explicitly asks to see it.
+
+### 9. Stimulus `this.dispatch(...)` doesn't accept a `target:` option
+
+To dispatch a window-scoped custom event from a controller, use native `window.dispatchEvent(new CustomEvent("prefix:name", { detail }))` rather than `this.dispatch(...)`. The built-in helper only dispatches on the controller's element; event listeners bound via `data-action="prefix:name@window->..."` never see controller-scoped dispatches.
+
+### 10. JavaScript ASI bites array literals on new lines
+
+This silently did the wrong thing:
+
+```js
+const url = new URL(window.location.href)
+["focus", "category_id"].forEach(k => url.searchParams.delete(k))
+```
+
+Without a semicolon after the first line, JavaScript parses `new URL(...)["focus", ...]` as a subscript access and the `.forEach` never runs. The panel content narrowed correctly because `#rebuildFrameSrc` writes the frame `src` directly, but the browser URL was never pushed and the deep-link test failed. Either terminate with semicolons or extract the array into a named constant.
+
 ## Future Extension Points
 
 ### Collaborative Editing (Suggested Edits)
@@ -223,12 +288,18 @@ The right pane placeholder is reserved for a contextual feed showing suggested e
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator |
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities) |
+| `app/views/frameworks/suggestions/panel_frame.rb` | Context pane Turbo Frame content (focused suggestion list + focus header + "Show all" clear link) |
 | `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
-| `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion (shared with assessment) |
+| `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
+| `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync |
+| `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for suggestion panel |
 | `app/controllers/frameworks_controller.rb` | show + matrix actions |
+| `app/controllers/frameworks/suggestions_controller.rb` | Suggestion list + panel-layout branch |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
+| `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests |
 | `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests |
+| `test/queries/frameworks/focused_suggestions_query_test.rb` | Focus filter unit tests |
 
 ## Keeping This Document Current
 

@@ -385,6 +385,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
   add_foreign_key "framework_role_illustrations", "tenants"
   add_foreign_key "framework_roles", "tenants"
   add_foreign_key "framework_states", "tenants"
+  add_foreign_key "framework_suggested_edits", "people", column: "author_id"
+  add_foreign_key "framework_suggested_edits", "people", column: "reviewed_by"
   add_foreign_key "framework_suggested_edits", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"

@@ -24,7 +24,7 @@ class Frameworks::IllustrationsController < ApplicationController
       .where(expectation_id: expectation_id, role_id: role_id)
       .count + 1
 
-    Frameworks::CommandHandler.new.suggest_create(
+    created_entity_id = Frameworks::CommandHandler.new.suggest_create(
       @framework.framework_id,
       suggestion_id,
       "role_illustration",
@@ -34,11 +34,10 @@ class Frameworks::IllustrationsController < ApplicationController
       mode: :editing
     )
 
-    suggestion = FrameworkState::SuggestedEdit.find_by!(suggestion_id: suggestion_id)
-
-    if suggestion.status == "approved"
-      render_created_turbo_stream(expectation_id, role_id, description)
+    if created_entity_id
+      render_created_turbo_stream(created_entity_id, expectation_id, role_id)
     else
+      suggestion = FrameworkState::SuggestedEdit.find_by!(suggestion_id: suggestion_id)
       render_pending_turbo_stream(suggestion, expectation_id, role_id)
     end
   rescue ActiveRecord::RecordNotFound
@@ -89,19 +88,23 @@ class Frameworks::IllustrationsController < ApplicationController
     head :not_found
   end
 
-  # Uses person_id for collaborator-based approval lookup, falls back to
-  # user_id for tenant admins who may not have a person record.
+  # Returns the current Person's id — the canonical author identity for
+  # framework suggestions. ApplicationController#auto_link_person guarantees
+  # every authenticated TenantUser has a linked Person, so current_person
+  # is present here.
   #
   # @return [String]
   def resolve_author_id
-    (current_person&.id || current_user.id).to_s
+    current_person.id.to_s
   end
 
   # Renders turbo stream for an auto-approved illustration create.
-  def render_created_turbo_stream(expectation_id, role_id, description)
-    illustration = FrameworkState::RoleIllustration
-      .where(expectation_id: expectation_id, role_id: role_id, description: description)
-      .order(created_at: :desc).first!
+  #
+  # @param illustration_id [String] UUID returned by the aggregate on approval
+  # @param expectation_id [String]
+  # @param role_id [String]
+  def render_created_turbo_stream(illustration_id, expectation_id, role_id)
+    illustration = FrameworkState::RoleIllustration.find_by!(illustration_id: illustration_id)
 
     render turbo_stream: [
       turbo_stream.append(

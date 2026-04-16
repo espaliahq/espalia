@@ -71,6 +71,14 @@ if meandu_tenant
     if framework && FrameworkState::SuggestedEdit.where(framework_id: framework.framework_id).none?
       handler = Frameworks::CommandHandler.new
       admin_user = User.find_by(global_admin: true)
+      # framework_suggested_edits.author_id is a foreign key to people(id).
+      # TenantUser#ensure_person! is the shared invariant helper — it links
+      # an existing email-matched Person, or bootstraps a minimal one when
+      # the admin has never been provisioned via HRIS.
+      admin_person = TenantUser.find_by(user_id: admin_user.id)&.ensure_person!
+      raise "Admin user has no TenantUser in meandu tenant — cannot seed suggestions" unless admin_person
+
+      admin_author_id = admin_person.id.to_s
 
       # Grab sample entities from the seeded framework
       category = framework.capability_categories.first
@@ -86,7 +94,7 @@ if meandu_tenant
           framework.framework_id, SecureRandom.uuid_v7,
           "behavioural_expectation", expectation.expectation_id,
           "description", "Consistently asks clarifying questions to uncover hidden assumptions",
-          admin_user.id.to_s, rationale: "More specific wording",
+          admin_author_id, rationale: "More specific wording",
           mode: :suggesting
         )
 
@@ -95,7 +103,7 @@ if meandu_tenant
           framework.framework_id, SecureRandom.uuid_v7,
           "role_illustration", illustration.illustration_id,
           "description", "Identifies and escalates unclear requirements before starting work",
-          admin_user.id.to_s, rationale: "Better real-world example",
+          admin_author_id, rationale: "Better real-world example",
           mode: :suggesting
         )
 
@@ -104,7 +112,7 @@ if meandu_tenant
           framework.framework_id, SecureRandom.uuid_v7,
           "capability", capability.capability_id,
           "name", "#{capability.name} & Problem Solving",
-          admin_user.id.to_s, rationale: "Broaden the scope",
+          admin_author_id, rationale: "Broaden the scope",
           mode: :suggesting
         )
 
@@ -113,7 +121,7 @@ if meandu_tenant
           framework.framework_id, SecureRandom.uuid_v7,
           "capability_category", category.category_id,
           "name", "#{category.name} (Revised)",
-          admin_user.id.to_s, rationale: "Clarify category scope",
+          admin_author_id, rationale: "Clarify category scope",
           mode: :suggesting
         )
 
@@ -125,7 +133,7 @@ if meandu_tenant
             "role_illustration",
             { role_id: role.role_id, description: "Proposes alternative solutions when blocked" },
             parent_id: expectation.expectation_id,
-            author_id: admin_user.id.to_s,
+            author_id: admin_author_id,
             mode: :suggesting
           )
         end
@@ -136,7 +144,7 @@ if meandu_tenant
           handler.suggest_delete(
             framework.framework_id, SecureRandom.uuid_v7,
             "role_illustration", second_illustration.illustration_id,
-            author_id: admin_user.id.to_s, rationale: "Redundant with first illustration",
+            author_id: admin_author_id, rationale: "Redundant with first illustration",
             mode: :suggesting
           )
         end

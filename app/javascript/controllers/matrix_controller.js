@@ -30,6 +30,10 @@ export default class extends BaseController {
     if (this.urlSyncValue) {
       this.#listenForFrameLoad()
     }
+    // Current focus context in the explorer matrix. Mirrored in the
+    // matrix:focus-changed event payload.
+    this.currentFocus = { level: "framework", categoryId: null, capabilityId: null,
+                          levelOrdinal: null, expectationId: null }
   }
 
   disconnect() {
@@ -60,8 +64,10 @@ export default class extends BaseController {
   // ── Category Collapse ──
 
   toggleCategory(event) {
-    const header = event.currentTarget
-    const categoryId = header.dataset.categoryId
+    event.stopPropagation()
+    const trigger = event.currentTarget
+    const header = trigger.closest("[data-matrix-target='categoryHeader']") || trigger
+    const categoryId = trigger.dataset.categoryId
     if (!categoryId) return
 
     // Find all rows belonging to this category (sibling rows until next category header)
@@ -125,9 +131,106 @@ export default class extends BaseController {
     if (this.urlSyncValue) {
       this.#syncCapabilityToUrl(isExpanding ? capId : null)
     }
+
+    // Dispatch focus change for the context pane
+    if (isExpanding) {
+      const categoryId = this.#categoryIdForRow(row)
+      this.#setFocus({
+        level: "capability",
+        categoryId: categoryId,
+        capabilityId: capId,
+        levelOrdinal: null,
+        expectationId: null
+      })
+    } else {
+      this.#setFocus({ level: "framework" })
+    }
+  }
+
+  // ── Category focus ── (framework explorer)
+
+  focusCategory(event) {
+    event.stopPropagation()
+    const target = event.currentTarget
+    const categoryId = target.dataset.categoryId
+    if (!categoryId) return
+
+    // Toggle off if already focused on this category
+    if (this.currentFocus.level === "category" &&
+        this.currentFocus.categoryId === categoryId) {
+      this.#setFocus({ level: "framework" })
+      return
+    }
+
+    this.#setFocus({
+      level: "category",
+      categoryId: categoryId,
+      capabilityId: null,
+      levelOrdinal: null,
+      expectationId: null
+    })
+  }
+
+  // ── Cell focus ── (framework explorer, expanded-row cells)
+
+  focusCell(event) {
+    // Skip when the click lands on an interactive child (illustration editors,
+    // forms, links). Cell focus is triggered only by background clicks.
+    if (event.target.closest("button, a, input, textarea, form, [contenteditable]")) {
+      return
+    }
+
+    event.stopPropagation()
+    const cell = event.currentTarget
+    const capabilityId = cell.dataset.capabilityId
+    const levelOrdinal = parseInt(cell.dataset.levelOrdinal, 10)
+    const expectationId = cell.dataset.expectationId || null
+    if (!capabilityId || isNaN(levelOrdinal)) return
+
+    // Toggle off if already focused on this cell
+    if (this.currentFocus.level === "cell" &&
+        this.currentFocus.capabilityId === capabilityId &&
+        this.currentFocus.levelOrdinal === levelOrdinal) {
+      this.#setFocus({
+        level: "capability",
+        categoryId: this.currentFocus.categoryId,
+        capabilityId: capabilityId,
+        levelOrdinal: null,
+        expectationId: null
+      })
+      return
+    }
+
+    this.#setFocus({
+      level: "cell",
+      categoryId: this.currentFocus.categoryId,
+      capabilityId: capabilityId,
+      levelOrdinal: levelOrdinal,
+      expectationId: expectationId
+    })
   }
 
   // ── Private ──
+
+  // Dispatches matrix:focus-changed with a fully-specified detail payload.
+  #setFocus({ level, categoryId = null, capabilityId = null, levelOrdinal = null, expectationId = null }) {
+    this.currentFocus = { level, categoryId, capabilityId, levelOrdinal, expectationId }
+    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
+      detail: { ...this.currentFocus }
+    }))
+  }
+
+  // Walks back from a capability row to its category header to find the category id.
+  #categoryIdForRow(row) {
+    let sibling = row.previousElementSibling
+    while (sibling) {
+      if (sibling.dataset?.matrixTarget === "categoryHeader") {
+        return sibling.dataset.categoryId || null
+      }
+      sibling = sibling.previousElementSibling
+    }
+    return null
+  }
 
   #categoryRows(headerRow) {
     const rows = []

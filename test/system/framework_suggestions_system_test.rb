@@ -50,7 +50,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
         @framework_id, @illustration_suggestion_id,
         "role_illustration", @ill_id, "description",
         "Proactively asks clarifying questions of the tech lead",
-        @author_user.id.to_s, mode: :suggesting
+        @author_person.id.to_s, mode: :suggesting
       )
 
       @expectation_suggestion_id = SecureRandom.uuid_v7
@@ -58,7 +58,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
         @framework_id, @expectation_suggestion_id,
         "behavioural_expectation", @eid, "description",
         "Asks open-ended questions to surface assumptions",
-        @author_user.id.to_s, mode: :suggesting
+        @author_person.id.to_s, mode: :suggesting
       )
     end
   end

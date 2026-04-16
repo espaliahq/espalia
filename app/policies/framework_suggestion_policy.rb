@@ -54,10 +54,13 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
     end
   end
 
+  # author_id is a foreign key to people(id) — see CreateFrameworkSuggestedEdits.
+  # Compare against the current Person, not the User auth identity.
+  #
   # @return [Boolean]
   def author?
-    return false unless user.present?
-    record.author_id == user.id.to_s
+    return false unless person.present?
+    record.author_id == person.id.to_s
   end
 
   # @return [Boolean]

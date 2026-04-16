@@ -16,26 +16,10 @@ class Frameworks::SuggestionsController < ApplicationController
   def index
     authorize @framework, :view_suggestions?
 
-    scope = @framework.suggested_edits
-    scope = scope.where(status: status_filter) if status_filter.present?
-    scope = scope.where(target_entity_type: entity_type_filter) if entity_type_filter.present?
-    scope = scope.order(created_at: :desc)
-
-    suggestions = scope.to_a
-
     if panel_layout?
-      render Views::Frameworks::Suggestions::PanelFrame.new(
-        framework: @framework, suggestions: suggestions
-      ), layout: false
+      render_panel
     else
-      render Views::Frameworks::Suggestions::IndexView.new(
-        framework: @framework,
-        suggestions: suggestions,
-        filters: { status: status_filter, entity_type: entity_type_filter },
-        user: current_user,
-        current_tenant: ActsAsTenant.current_tenant,
-        tenants: tenants_for_navbar
-      )
+      render_index
     end
   end
 
@@ -78,7 +62,7 @@ class Frameworks::SuggestionsController < ApplicationController
         attrs[:target_entity_type],
         (attrs[:proposed_attributes] || {}).to_h.symbolize_keys,
         parent_id: attrs[:parent_id].presence,
-        author_id: current_user.id.to_s,
+        author_id: current_person.id.to_s,
         rationale: attrs[:rationale].presence,
         mode: :suggesting
       )
@@ -86,7 +70,7 @@ class Frameworks::SuggestionsController < ApplicationController
       handler.suggest_delete(
         @framework.framework_id, suggestion_id,
         attrs[:target_entity_type], attrs[:target_entity_id],
-        author_id: current_user.id.to_s,
+        author_id: current_person.id.to_s,
         rationale: attrs[:rationale].presence,
         mode: :suggesting
       )
@@ -111,7 +95,7 @@ class Frameworks::SuggestionsController < ApplicationController
     Frameworks::CommandHandler.new.approve_suggestion(
       @framework.framework_id,
       @suggestion.suggestion_id,
-      current_user.id.to_s,
+      current_person.id.to_s,
       comment: params[:comment].presence
     )
 
@@ -129,7 +113,7 @@ class Frameworks::SuggestionsController < ApplicationController
     Frameworks::CommandHandler.new.reject_suggestion(
       @framework.framework_id,
       @suggestion.suggestion_id,
-      current_user.id.to_s,
+      current_person.id.to_s,
       comment: params[:comment].presence
     )
 
@@ -150,7 +134,7 @@ class Frameworks::SuggestionsController < ApplicationController
       @framework.framework_id,
       @suggestion.suggestion_id,
       amendment[:suggested_value],
-      current_user.id.to_s,
+      current_person.id.to_s,
       rationale: amendment[:rationale].presence
     )
 
@@ -168,7 +152,7 @@ class Frameworks::SuggestionsController < ApplicationController
     Frameworks::CommandHandler.new.withdraw_suggestion(
       @framework.framework_id,
       @suggestion.suggestion_id,
-      current_user.id.to_s
+      current_person.id.to_s
     )
 
     redirect_to framework_suggestions_path(@framework.framework_id),
@@ -180,6 +164,40 @@ class Frameworks::SuggestionsController < ApplicationController
   end
 
   private
+
+  def render_index
+    scope = @framework.suggested_edits
+    scope = scope.where(status: status_filter) if status_filter.present?
+    scope = scope.where(target_entity_type: entity_type_filter) if entity_type_filter.present?
+    scope = scope.order(created_at: :desc)
+
+    render Views::Frameworks::Suggestions::IndexView.new(
+      framework: @framework,
+      suggestions: scope.to_a,
+      filters: { status: status_filter, entity_type: entity_type_filter },
+      user: current_user,
+      current_tenant: ActsAsTenant.current_tenant,
+      tenants: tenants_for_navbar
+    )
+  end
+
+  def render_panel
+    query = Frameworks::FocusedSuggestionsQuery.new(
+      framework: @framework,
+      focus: focus_param,
+      category_id: params[:category_id].presence,
+      capability_id: params[:capability_id].presence,
+      level_ordinal: params[:level_ordinal].presence&.to_i,
+      role_ids: Array.wrap(params[:roles]).select(&:present?)
+    )
+
+    render Views::Frameworks::Suggestions::PanelFrame.new(
+      framework: @framework,
+      suggestions: query.call,
+      focus_descriptor: query.descriptor,
+      clear_path: framework_suggestions_path(@framework.framework_id, layout: "panel")
+    ), layout: false
+  end
 
   def suggestion_create_params
     params.expect(suggestion: [
@@ -215,6 +233,12 @@ class Frameworks::SuggestionsController < ApplicationController
   # @return [Boolean]
   def panel_layout?
     params[:layout] == "panel"
+  end
+
+  # @return [Symbol] one of Frameworks::FocusedSuggestionsQuery::FOCUS_LEVELS
+  def focus_param
+    raw = params[:focus].to_s.to_sym
+    Frameworks::FocusedSuggestionsQuery::FOCUS_LEVELS.include?(raw) ? raw : :framework
   end
 
   # @return [Array<Tenant>]

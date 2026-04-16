@@ -102,8 +102,17 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
     expectation = cell_data[:expectation]
 
-    td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
-              "bg-blue-50/30 dark:bg-blue-900/10 align-top") do
+    td(
+      class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
+             "bg-blue-50/30 dark:bg-blue-900/10 align-top cursor-pointer " \
+             "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors",
+      data: {
+        action: "click->matrix#focusCell",
+        capability_id: @capability.capability_id,
+        level_ordinal: ordinal,
+        expectation_id: expectation.expectation_id
+      }
+    ) do
       ill_pending_edits = cell_data[:illustration_pending_edits] || {}
       pending_creates = cell_data[:pending_illustration_creates] || []
 

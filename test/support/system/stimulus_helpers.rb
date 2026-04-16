@@ -78,6 +78,18 @@ module StimulusHelpers
     )
   end
 
+  # Opens the framework explorer context (right) pane.
+  #
+  # @param scope [String, nil] optional CSS selector to scope the toggle
+  def toggle_context_pane(scope: nil)
+    wait_for_stimulus "framework-explorer", scope: scope
+    stimulus_toggle(
+      "[data-action='framework-explorer#toggleContextPane']",
+      visible_selector: "[data-framework-explorer-target='contextPane']",
+      scope: scope
+    )
+  end
+
   # Opens a panel (e.g. scoring panel).
   #
   # @param scope [String, nil] optional CSS selector to scope the toggle

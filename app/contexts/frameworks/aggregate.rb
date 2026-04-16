@@ -747,6 +747,7 @@ class Frameworks::Aggregate
   # @param reviewer_id [String] UUID of the reviewer
   # @param comment [String, nil] optional reviewer comment
   # @raise [RuntimeError] if suggestion not found
+  # @return [String, nil] the created entity ID for :create suggestions, nil otherwise
   def approve_suggestion(suggestion_id, reviewer_id, comment: nil)
     ensure_created!
     suggestion = @pending_edits[suggestion_id]
@@ -760,13 +761,15 @@ class Frameworks::Aggregate
 
     maybe_auto_open_draft_for(suggestion, reviewer_id)
 
-    case suggestion[:kind]
+    created_entity_id = case suggestion[:kind]
     when :create then apply_suggested_creation(suggestion)
-    when :delete then apply_suggested_deletion(suggestion)
-    else              apply_suggested_content_change(suggestion)
+    when :delete then apply_suggested_deletion(suggestion); nil
+    else              apply_suggested_content_change(suggestion); nil
     end
 
     auto_reject_competing_suggestions(suggestion, reviewer_id)
+
+    created_entity_id
   end
 
   # Rejects a pending suggestion.
@@ -1409,41 +1412,47 @@ class Frameworks::Aggregate
   #
   # @param suggestion [Hash] pending_edits entry with kind: :create
   # @raise [RuntimeError] if the entity type is not supported
+  # @return [String] the generated entity ID for the created record
   def apply_suggested_creation(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
     type = suggestion[:target_entity_type]
     attrs = (suggestion[:proposed_attributes] || {}).transform_keys(&:to_sym)
     parent_id = suggestion[:parent_id]
 
+    entity_id = SecureRandom.uuid_v7
+    stable_id = SecureRandom.uuid_v7
+
     case type
     when "role_illustration"
       add_role_illustration(@framework_id,
-                            SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                            entity_id, stable_id,
                             parent_id, attrs[:role_id],
                             attrs[:ordinal] || next_illustration_ordinal(parent_id, attrs[:role_id]),
                             attrs[:description])
     when "behavioural_expectation"
       set_behavioural_expectation(@framework_id,
-                                  SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                  entity_id, stable_id,
                                   parent_id, attrs[:level_ordinal], attrs[:description])
     when "capability"
       add_capability(@framework_id,
-                     SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                     entity_id, stable_id,
                      parent_id, attrs[:name], description: attrs[:description])
     when "capability_category"
-      add_capability_category(@framework_id, SecureRandom.uuid_v7,
+      add_capability_category(@framework_id, entity_id,
                               attrs[:name], description: attrs[:description], ordinal: attrs[:ordinal])
     when "role"
-      add_role(@framework_id, SecureRandom.uuid_v7, parent_id,
+      add_role(@framework_id, entity_id, parent_id,
                attrs[:name], attrs[:code], attrs[:track])
     when "role_family"
-      add_role_family(@framework_id, SecureRandom.uuid_v7,
+      add_role_family(@framework_id, entity_id,
                       attrs[:name], description: attrs[:description])
     when "level"
-      add_level(@framework_id, SecureRandom.uuid_v7, parent_id,
+      add_level(@framework_id, entity_id, parent_id,
                 attrs[:ordinal], attrs[:title], attrs[:code], is_entry: attrs.fetch(:is_entry, false))
     else
       raise "Unsupported creation target: #{type}"
     end
+
+    entity_id
   end
 
   # Dispatches the matching destructive command for an approved deletion suggestion.

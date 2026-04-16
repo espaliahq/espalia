@@ -184,12 +184,14 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
   context "as the author of a pending suggestion" do
     setup do
       @user = create(:user)
-      @tenant_user = ActsAsTenant.with_tenant(@tenant) do
-        create(:tenant_user, tenant: @tenant, user: @user, role: :member)
+      @person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @user.email)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: p, role: :member)
+        p
       end
-      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
       @suggestion = build_suggestion(
-        target_entity_type: "role_illustration", author_id: @user.id.to_s, status: "pending"
+        target_entity_type: "role_illustration", author_id: @person.id.to_s, status: "pending"
       )
     end
 
@@ -205,12 +207,14 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
   context "as the author of an approved suggestion" do
     setup do
       @user = create(:user)
-      @tenant_user = ActsAsTenant.with_tenant(@tenant) do
-        create(:tenant_user, tenant: @tenant, user: @user, role: :member)
+      @person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @user.email)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: p, role: :member)
+        p
       end
-      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
       @suggestion = build_suggestion(
-        target_entity_type: "role_illustration", author_id: @user.id.to_s, status: "approved"
+        target_entity_type: "role_illustration", author_id: @person.id.to_s, status: "approved"
       )
     end
 

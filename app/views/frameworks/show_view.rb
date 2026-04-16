@@ -215,13 +215,22 @@ class Views::Frameworks::ShowView < Views::Base
     aside(
       class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 hidden flex-col overflow-hidden",
-      data: { framework_explorer_target: "contextPane" }
+      data: {
+        framework_explorer_target: "contextPane",
+        controller: "context-pane",
+        context_pane_base_path_value: framework_suggestions_path(@framework.framework_id),
+        context_pane_initial_role_ids_value: @selected_role_ids.to_json,
+        context_pane_initial_track_value: @track_filter,
+        action: "tree:changed@window->context-pane#onTreeChanged " \
+                "matrix:focus-changed@window->context-pane#onFocusChanged"
+      }
     ) do
       turbo_frame_tag(
         "suggestion-panel",
         src: framework_suggestions_path(@framework.framework_id, layout: "panel"),
         loading: "lazy",
-        class: "block h-full"
+        class: "block h-full",
+        data: { context_pane_target: "frame" }
       ) do
         div(class: "p-6 text-center text-gray-400 dark:text-gray-500 text-sm") do
           p { "Loading suggestions\u2026" }
