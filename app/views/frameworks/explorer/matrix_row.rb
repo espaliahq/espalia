@@ -58,8 +58,12 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           end
 
           div do
-            decoration = suggestion_text_classes(pending_edit_count: @capability_pending_count)
-            span(class: "text-sm font-medium text-gray-900 dark:text-white #{decoration}".strip) { @capability.name }
+            render Views::Frameworks::Explorer::CapabilityNameFrame.new(
+              capability: @capability,
+              framework_id: @framework_id,
+              mode: @mode,
+              pending_edit_count: @capability_pending_count
+            )
             draft_state_badge if @mode == :edit
             p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1") do
               @capability.description
@@ -73,6 +77,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
         render Views::Frameworks::Explorer::MatrixCell.new(
           cell_data: @cells[level[:ordinal]],
           ordinal: level[:ordinal],
+          framework_id: @framework_id,
           mode: @mode
         )
       end

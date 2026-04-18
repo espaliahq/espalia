@@ -116,6 +116,35 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "inline editing in edit mode" do
+    should "submit a capability name edit and swap the frame" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      # Reveal the inline-editor form for the capability name. The pencil is
+      # hover-only in CSS; flip the display/form visibility directly.
+      editor = find("turbo-frame#capability-name-" \
+                    "#{FrameworkState::Capability.first.capability_id} > div")
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
+        editor
+      )
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
+        editor
+      )
+
+      textarea = editor.find("textarea[name='capability[name]']")
+      textarea.fill_in with: "Sharper Strategic Thinking"
+      editor.find("button[type='submit']", match: :first).click
+
+      # Turbo swaps the frame; the updated name and wavy-underline decoration
+      # (pending edit) both appear.
+      assert_text "Sharper Strategic Thinking"
+      assert_no_text "Strategic Thinking", exact: true
+    end
+  end
+
   private
 
   def sign_in_as(user)

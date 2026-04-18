@@ -11,10 +11,12 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
   # @param ordinal [Integer] the level ordinal for this column
+  # @param framework_id [String] UUID — required when mode is :edit for the expectation edit URL
   # @param mode [Symbol] :view or :edit
-  def initialize(cell_data:, ordinal:, mode: :view)
+  def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view)
     @cell_data = cell_data
     @ordinal = ordinal
+    @framework_id = framework_id
     @mode = mode
   end
 
@@ -44,14 +46,16 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
   def expectation_text
     pending_count = @cell_data[:pending_suggestion_count] || 0
-    decoration = suggestion_text_classes(pending_edit_count: pending_count)
+    expectation = @cell_data[:expectation]
 
-    p(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-3 #{decoration}".strip) do
-      @cell_data[:expectation].description
-    end
+    render Views::Frameworks::Explorer::ExpectationTextFrame.new(
+      expectation: expectation,
+      framework_id: @framework_id,
+      mode: @mode,
+      pending_edit_count: pending_count
+    )
 
-    if @mode == :edit && @cell_data[:expectation].respond_to?(:added_in_draft) &&
-       @cell_data[:expectation].added_in_draft
+    if @mode == :edit && expectation.respond_to?(:added_in_draft) && expectation.added_in_draft
       span(class: "mt-1 inline-flex items-center rounded-full px-2 py-0.5 " \
                   "text-[10px] font-semibold bg-emerald-100 text-emerald-700 " \
                   "dark:bg-emerald-900/30 dark:text-emerald-300") { "New in draft" }

@@ -1,0 +1,67 @@
+# frozen_string_literal: true
+
+# Turbo Frame wrapping a capability's name + inline edit affordance in the
+# matrix's sticky left column. Rendered both in-place (by
+# {Views::Frameworks::Explorer::MatrixRow}) and as the PATCH response from
+# {Frameworks::CapabilitiesController#update} so Turbo swaps the frame
+# content without losing surrounding matrix state.
+#
+# Display mode (both :view and :edit) shows the name with suggestion-edit
+# decoration (amber wavy underline when a pending edit exists). In :edit,
+# a hover-revealed pencil + inline form are added.
+#
+class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
+  include Phlex::Rails::Helpers::TurboFrameTag
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::InlineEditable
+
+  # @param capability [FrameworkState::Capability, Frameworks::ExplorerGraph::Capability]
+  # @param framework_id [String]
+  # @param mode [Symbol] :view or :edit
+  # @param pending_edit_count [Integer]
+  def initialize(capability:, framework_id:, mode: :view, pending_edit_count: 0)
+    @capability = capability
+    @framework_id = framework_id
+    @mode = mode
+    @pending_edit_count = pending_edit_count
+  end
+
+  def view_template
+    turbo_frame_tag("capability-name-#{@capability.capability_id}") do
+      if @mode == :edit
+        editable
+      else
+        plain_name
+      end
+    end
+  end
+
+  private
+
+  def plain_name
+    span(class: "text-sm font-medium text-gray-900 dark:text-white #{decoration}".strip) do
+      @capability.name
+    end
+  end
+
+  def editable
+    div(class: "group/ine inline-flex items-start gap-1",
+        data: { controller: "inline-editor" }) do
+      div(class: "flex items-start gap-1",
+          data: { inline_editor_target: "display" }) do
+        plain_name
+        render_inline_editor_pencil(aria_label: "Edit capability name")
+      end
+      render_inline_editor_form(
+        action: framework_capability_path(framework_id: @framework_id, id: @capability.capability_id),
+        field_name: "capability[name]",
+        current_value: @capability.name,
+        rows: 2
+      )
+    end
+  end
+
+  def decoration
+    suggestion_text_classes(pending_edit_count: @pending_edit_count)
+  end
+end

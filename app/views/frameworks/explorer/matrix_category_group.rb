@@ -73,10 +73,12 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
               category_id: @category.category_id
             }
           ) do
-            decoration = suggestion_text_classes(pending_edit_count: @category_pending_count)
-            span(class: "text-sm font-semibold text-gray-700 dark:text-gray-300 #{decoration}".strip) do
-              @category.name
-            end
+            render Views::Frameworks::Explorer::CategoryNameFrame.new(
+              category: @category,
+              framework_id: @framework_id,
+              mode: @mode,
+              pending_edit_count: @category_pending_count
+            )
 
             span(class: "text-xs text-gray-400 dark:text-gray-500") do
               "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
