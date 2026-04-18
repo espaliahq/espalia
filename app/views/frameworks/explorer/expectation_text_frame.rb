@@ -34,7 +34,11 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
   private
 
   def plain_text
-    p(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-3 #{decoration}".strip) do
+    # Full text — no line-clamp. The matrix row grows to accommodate.
+    # Truncating expectation text loses critical behavioural nuance, and
+    # the cell width plus the viewer's horizontal scroll are already doing
+    # the width-budget negotiation.
+    p(class: "text-sm text-gray-700 dark:text-gray-300 #{decoration}".strip) do
       @expectation.description
     end
   end
