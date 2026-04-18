@@ -185,10 +185,14 @@ class Views::Frameworks::ShowView < Views::Base
       end
       stat_item("Levels", level_count)
       stat_item("Capabilities", cap_count)
-      suggestions_toggle
+      suggestions_toggle if @mode == :edit
     end
   end
 
+  # Rendered only in edit mode. View mode hides both the toggle and the
+  # pane entirely — viewers have no business with the in-flight
+  # suggestion feed, and the grid itself already suppresses pending-edit
+  # decorations in view mode (see FrameworksController#load_explorer_matrix).
   def suggestions_toggle
     button(
       type: "button",
@@ -229,7 +233,7 @@ class Views::Frameworks::ShowView < Views::Base
     ) do
       left_pane
       main_pane
-      right_pane_placeholder
+      right_pane_placeholder if @mode == :edit
     end
   end
 
@@ -268,14 +272,12 @@ class Views::Frameworks::ShowView < Views::Base
   end
 
   def right_pane_placeholder
-    # Edit mode defaults the context pane open — contributors are usually
-    # here *because* of the suggestion feed. View mode keeps it closed so
-    # viewers aren't distracted by collaborative chatter.
-    initial_visibility = @mode == :edit ? "flex" : "hidden"
-
+    # Edit mode only — view mode omits the pane entirely
+    # (FrameworksController hides pending-suggestion indicators from the
+    # grid too, so viewers see only published state).
     aside(
       class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 #{initial_visibility} flex-col overflow-hidden",
+             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden",
       data: {
         framework_explorer_target: "contextPane",
         controller: "context-pane",
@@ -286,10 +288,12 @@ class Views::Frameworks::ShowView < Views::Base
                 "matrix:focus-changed@window->context-pane#onFocusChanged"
       }
     ) do
+      # No `src:` — the context-pane Stimulus controller sets the src on
+      # connect with any focus/role params applied. Avoids a race where the
+      # auto-fetch with an unfocused URL lands before the controller primes
+      # the focused URL on a deep link.
       turbo_frame_tag(
         "suggestion-panel",
-        src: framework_suggestions_path(@framework.framework_id, layout: "panel"),
-        loading: "lazy",
         class: "block h-full",
         data: { context_pane_target: "frame" }
       ) do

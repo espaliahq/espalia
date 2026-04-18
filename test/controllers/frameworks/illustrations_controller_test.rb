@@ -210,6 +210,19 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "illustration-#{@ill_id}"
     end
 
+    should "include the pencil affordance in the response so re-editing stays possible" do
+      sign_in @user
+      patch framework_illustration_path(framework_id: @framework_id, id: @ill_id),
+            params: { illustration: { description: "First edit" } }
+
+      assert_response :success
+      # Pencil button has data-action="inline-editor#startEdit" — if mode:
+      # is not passed as :edit the button is dropped and subsequent edits
+      # become impossible. Caught a regression in the inline-editor refactor.
+      assert_includes response.body, "inline-editor#startEdit",
+                      "response must retain the edit affordance for the next click"
+    end
+
     should "create 3 events (EditSuggested + SuggestionApproved + RoleIllustrationUpdated)" do
       sign_in @user
       stream = ActsAsTenant.with_tenant(@tenant) { EventStreamNaming.framework_stream(@framework_id) }

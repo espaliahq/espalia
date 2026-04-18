@@ -66,7 +66,8 @@ class Frameworks::IllustrationsController < ApplicationController
 
     render Views::Frameworks::Explorer::IllustrationFrame.new(
       illustration: @illustration,
-      framework_id: @framework.framework_id
+      framework_id: @framework.framework_id,
+      mode: :edit
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :unprocessable_content
@@ -112,7 +113,8 @@ class Frameworks::IllustrationsController < ApplicationController
         render_to_string(
           Views::Frameworks::Explorer::IllustrationFrame.new(
             illustration: illustration,
-            framework_id: @framework.framework_id
+            framework_id: @framework.framework_id,
+            mode: :edit
           ),
           layout: false
         )

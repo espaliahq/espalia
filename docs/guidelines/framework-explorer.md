@@ -8,6 +8,13 @@ This document captures the design decisions, interaction patterns, and hard-won 
 
 The Framework Explorer is a three-pane interactive view for browsing career frameworks. It renders a **capability x level matrix** filtered by user-selected roles, with a hierarchical role tree for navigation.
 
+The explorer has two modes, both backed by the same components:
+
+- **View mode** (`GET /frameworks/:id`) — published state only. No inline editors, no pending-suggestion decorations on the grid, no context pane. The `.flex` layout has two panes (role tree + matrix).
+- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability / category / expectation / illustration text, "+ Add illustration" affordances, draft-only and pending-archive badges, the amber "Edit mode" header badge, and the context (suggestions) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin.
+
+Both modes read structural data from the same `Frameworks::ExplorerGraph` snapshot (see [docs/architecture/framework-edit-mode-benchmarks.md](../architecture/framework-edit-mode-benchmarks.md)). A `mode: :view | :edit` kwarg is threaded from `ShowView` down through `Matrix`, `MatrixCategoryGroup`, `MatrixRow`, `MatrixCell`, and each entity's inline-edit frame. The `MatrixDataBuilder` filters out `added_in_draft` entities in view mode — matching `PublishedState`'s event-deferral semantics from ADR-16.
+
 ```
 +---------------------------+----------------------------------------------+
 | Navbar (Home | Framework) |                                              |
@@ -143,6 +150,8 @@ This enables bookmarking, sharing, and browser back/forward. The server reads ro
 
 ### 8. Focus Context (Context Pane)
 
+**Edit mode only.** The context pane does not render in view mode — viewers see no "N Suggestions" toggle and no right-hand pane. View mode is "published state, clean"; collaborative chatter lives behind `/edit`.
+
 The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
 
 | Level | Trigger | Clear |
@@ -160,7 +169,7 @@ The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its conten
 
 **Server-side filtering**: `Frameworks::FocusedSuggestionsQuery` walks eager-loaded framework associations once and builds in-memory `Set`s of in-scope IDs (category / capability / expectation / illustration). No denormalized columns or migrations on `framework_suggested_edits`. The framework read model is small enough (100-200 capabilities) that in-memory resolution is cheap.
 
-**Pane visibility is independent**: focus actions never auto-open the pane. The pane opens only via the "N Suggestions" toggle. Focus changes update URL + frame `src` but are invisible until the user opens the pane — state and visibility are separate concerns.
+**Pane default visibility**: in edit mode the pane is open by default — contributors are usually here *because* of the suggestion feed. Within edit mode, focus actions still never auto-close or re-open the pane; the user can collapse it with the "N Suggestions" toggle and it stays collapsed until they reopen. The no-auto-open rule remains valid inside the mode (focus is an invisible background state until visible); it no longer needs to justify a closed default.
 
 ### 9. Context Pane Row Presentation
 
@@ -204,7 +213,9 @@ Each suggestion row in the panel must answer three questions at a glance: **what
 
 ### 10. In-Matrix Suggestion Indicators
 
-Suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has pending changes":
+**Edit mode only.** In view mode the controller passes empty pending-suggestion maps to `MatrixDataBuilder`, so none of the indicators below render on the grid. View mode is the published-state-as-published view.
+
+In edit mode, suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has pending changes":
 
 **Decoration concern** (`app/views/frameworks/explorer/concerns/suggestion_decoration.rb`):
 - `PENDING_EDIT_CLASSES` — amber wavy underline (applied when `pending_edit_count > 0`, covers both pending edits and pending creates).
@@ -347,6 +358,18 @@ Without a semicolon after the first line, JavaScript parses `new URL(...)["focus
 
 CSS `position: sticky` anchors to the nearest scrolling ancestor. If the matrix `<table>` is wrapped in an inner `overflow-x-auto` (or any `overflow-*`) div, that wrapper captures the sticky anchor — even when the outer pane is the real scroll container. Headers then ride the tbody instead of pinning to the top of the pane, despite having `sticky top-0` declared. The table must be a direct child of the pane that scrolls it; the pane's own `overflow-auto` handles both axes.
 
+### 12. Tailwind JIT can't see interpolated class names
+
+Tailwind v4 scans Ruby source files for class literals at compile time. A class built by interpolation — e.g. `"group-hover/#{token}:opacity-100"` — is invisible to the scanner. The final string lands on the DOM element, but no matching CSS rule is ever generated, so a hover-revealed pencil button stays permanently at `opacity-0`. Any token used inside a Tailwind utility (group names, variant suffixes, arbitrary values) must appear as a literal string somewhere in source, not be assembled at runtime.
+
+### 13. Controller responses that re-render an editable component must pass `mode: :edit`
+
+When an inline-edit controller (e.g. `IllustrationsController`, `CapabilitiesController`) responds with a re-rendered turbo-frame, the component's `mode:` kwarg must be explicitly set to `:edit` — otherwise it falls back to the default `:view` and the response drops the pencil affordance, the hover-revealed form, and the `data-controller="inline-editor"` attribute. The user can edit once successfully; the second edit is impossible because the affordance is gone. Every edit endpoint needs `mode: :edit` in its response render call.
+
+### 14. A visible Turbo Frame with `src:` auto-fetches before Stimulus primes
+
+With the context pane hidden by default, `loading: "lazy"` meant the frame only fetched on first open — by which time `context_pane_controller` had run `connect()` and set the focused `src`. Making the pane visible by default in edit mode broke that: the lazy fetch fires on initial layout, using the un-focused server-rendered `src`, before the controller rebuilds for deep-link focus params. Fix: omit the `src:` from the server-rendered frame and let the controller unconditionally set it on connect.
+
 ## Future Extension Points
 
 ### Context Pane: Comments & Activity Feed
@@ -364,9 +387,14 @@ The context pane currently shows suggested edits. Future content types — comme
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2) |
-| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration |
-| `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions |
+| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil |
+| `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
+| `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
+| `app/views/frameworks/explorer/capability_name_frame.rb` | Capability name + edit-mode inline editor |
+| `app/views/frameworks/explorer/category_name_frame.rb` | Category name + edit-mode inline editor |
+| `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
+| `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form |
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, pending-suggestion counts) |
 | `app/views/frameworks/suggestions/panel_frame.rb` | Context pane Turbo Frame content (focused suggestion list + focus header + "Show all" clear link + empty state) |
@@ -375,11 +403,18 @@ The context pane currently shows suggested edits. Future content types — comme
 | `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
 | `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync |
 | `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for suggestion panel |
-| `app/controllers/frameworks_controller.rb` | show + matrix actions |
+| `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) |
 | `app/controllers/frameworks/suggestions_controller.rb` | Suggestion list + panel-layout branch |
+| `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH/POST) |
+| `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name (PATCH) |
+| `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name (PATCH) |
+| `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH) |
+| `app/policies/framework_policy.rb` | `edit?` / `edit_matrix?` predicates for the edit route |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
-| `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests |
+| `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
+| `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |
 | `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests |
+| `test/models/frameworks/matrix_data_builder_mode_test.rb` | `mode:` filter unit tests |
 | `test/queries/frameworks/focused_suggestions_query_test.rb` | Focus filter unit tests |
 
 ## Keeping This Document Current

@@ -107,7 +107,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "initial panel" do
     should "show all framework suggestions when the pane is opened with no focus" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       within "#suggestion-panel" do
@@ -121,7 +121,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "capability focus" do
     should "narrow panel to the expanded capability" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       wait_for_stimulus "matrix"
@@ -141,7 +141,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "cell focus" do
     should "narrow panel to a single capability \u00d7 level cell" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       wait_for_stimulus "matrix"
@@ -163,7 +163,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "category focus" do
     should "focus a category when the category name is clicked" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       wait_for_stimulus "matrix"
@@ -181,7 +181,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
 
     should "collapse category rows via the chevron without changing focus" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
 
       # Collapse via the chevron button
@@ -200,7 +200,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "show-all clear" do
     should "return to framework scope and collapse expanded rows" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       # Navigate to a capability via suggestion click to expand the row
@@ -229,7 +229,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "deep link" do
     should "restore capability focus from URL params" do
-      visit framework_path(@framework_id,
+      visit edit_framework_path(@framework_id,
         focus: "capability", capability_id: @cap_a_id)
       open_context_pane
 
@@ -243,7 +243,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "context labels" do
     should "show full role and level for illustration suggestions" do
-      visit framework_path(@framework_id,
+      visit edit_framework_path(@framework_id,
         focus: "capability", capability_id: @cap_a_id)
       open_context_pane
 
@@ -255,7 +255,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
 
     should "show capability and level for expectation suggestions" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       within "#suggestion-panel" do
@@ -266,7 +266,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
 
     should "show entity type and kind badges without tiers" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       within "#suggestion-panel" do
@@ -283,7 +283,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
   context "suggestion row navigation" do
     should "expand the capability row in the matrix when clicking an illustration suggestion" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       within "#suggestion-panel" do
@@ -297,7 +297,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
 
     should "provide a separate detail link to the suggestion page" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
       open_context_pane
 
       within "#suggestion-panel" do
@@ -310,7 +310,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
   context "role filter combined with focus" do
     should "drop role_illustration rows outside selected roles" do
       # Select only PD — engineering illustration should drop from panel.
-      visit framework_path(@framework_id,
+      visit edit_framework_path(@framework_id,
         focus: "capability", capability_id: @cap_a_id, roles: [ @pd_role_id ])
       open_context_pane
 

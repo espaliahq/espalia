@@ -23,15 +23,20 @@
 #
 module Views::Frameworks::Explorer::Concerns::InlineEditable
   # Small pencil icon button that triggers inline-editor#startEdit. Visible
-  # on hover via the `group-hover/ill` / `group-hover/ine` token defined by
-  # the caller on an ancestor element.
+  # on hover via the `group-hover/ine` token — the caller must add
+  # `group/ine` to an ancestor element.
+  #
+  # The class literal is intentionally not built by interpolation because
+  # Tailwind's JIT scans source files and only generates CSS for the exact
+  # strings it sees. An interpolated `group-hover/#{token}:opacity-100` is
+  # invisible to the scanner — the class lands on the element but no
+  # matching CSS is produced, so the pencil stays permanently hidden.
   #
   # @param aria_label [String]
-  # @param hover_token [String] tailwind group-hover token, e.g. "ine"
-  def render_inline_editor_pencil(aria_label:, hover_token: "ine")
+  def render_inline_editor_pencil(aria_label:)
     button(
       type: "button",
-      class: "opacity-0 group-hover/#{hover_token}:opacity-100 transition-opacity " \
+      class: "opacity-0 group-hover/ine:opacity-100 transition-opacity " \
              "text-gray-400 hover:text-primary shrink-0",
       data: { action: "inline-editor#startEdit" },
       aria_label: aria_label

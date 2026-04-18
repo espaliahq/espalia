@@ -295,6 +295,11 @@ test/
 | Pagination | `pagy` |
 | Nil assertions | `assert_nil value` (not `assert_equal nil, value`) |
 
+## Behaviours and practices
+
+* Commit messages should tell the story of what functionality was created, not be a catalog of code changes
+* Always update relevant documentation if functionality diverges from what is documented
+
 ## Learnings
 
 > **CRITICAL**: Any important learnings, add them here.

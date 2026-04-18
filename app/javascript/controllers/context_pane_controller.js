@@ -97,11 +97,12 @@ export default class extends BaseController {
     const levelOrdinal = url.searchParams.get("level_ordinal")
     if (levelOrdinal) this.state.levelOrdinal = parseInt(levelOrdinal, 10)
 
-    // If URL includes any focus param, prime the frame on connect so deep
-    // links load the filtered panel.
-    if (focus || categoryId || capabilityId || levelOrdinal) {
-      this.#rebuildFrameSrc()
-    }
+    // Always prime the frame src on connect — in edit mode the pane is
+    // visible at page load and Turbo's lazy fetch fires immediately, so we
+    // need the focused URL set before (or quickly after) that first fetch.
+    // #rebuildFrameSrc short-circuits when the computed URL equals current,
+    // so re-priming with a non-focused state costs nothing.
+    this.#rebuildFrameSrc()
   }
 
   #rebuildFrameSrc() {

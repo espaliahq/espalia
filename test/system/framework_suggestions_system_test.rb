@@ -107,9 +107,9 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "show the suggestions toggle in the framework explorer header" do
+    should "show the suggestions toggle in the framework explorer header (edit mode only)" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       wait_for_stimulus "framework-explorer"
       assert_selector "button", text: /Suggestions/

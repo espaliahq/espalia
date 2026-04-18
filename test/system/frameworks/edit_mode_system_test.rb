@@ -51,10 +51,12 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "a[href*='/edit']", text: "Edit mode"
     end
 
-    should "hide the context pane by default" do
+    should "not render the context pane or its toggle at all" do
       sign_in_as(@admin_user)
       visit framework_path(@framework_id)
-      assert_no_selector "[data-framework-explorer-target='contextPane']:not(.hidden)"
+      assert_no_selector "[data-framework-explorer-target='contextPane']"
+      assert_no_selector "[data-framework-explorer-target='contextPaneToggle']"
+      assert_no_text(/Suggestion/)
     end
 
     should "not render inline-editor controllers on illustrations" do
