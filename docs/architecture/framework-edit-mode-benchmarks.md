@@ -85,17 +85,19 @@ the `Frameworks::ExplorerGraph` namespace.
 
 Measured after snapshot-on-write wiring (`Frameworks::Repository#with_framework`
 writes a fresh graph in the same DB transaction as every event). Read side is
-a single indexed row fetch + `Marshal.load`:
+a single indexed `jsonb` fetch — the value comes back as a Ruby `Hash` already
+parsed by the PG driver, then fed through per-class `from_hash_tree`
+constructors:
 
-| Size   | Events | Blob size | Read p50 | Read p95 | Speedup vs Pass 2 |
-|--------|-------:|----------:|---------:|---------:|------------------:|
-| Small  | 1,627  |   395 KB  |  6.08 ms | 17.06 ms |   ~32× faster     |
-| Medium | 6,520  |   940 KB  | 19.39 ms | 22.91 ms |   ~28× faster     |
+| Size   | Events | Blob size (JSON) | Read p50 | Read p95 | Speedup vs Pass 2 |
+|--------|-------:|-----------------:|---------:|---------:|------------------:|
+| Small  | 1,627  |     551 KB       |  5.86 ms | 17.70 ms |   ~33× faster     |
+| Medium | 6,520  |    1.52 MB       | 17.43 ms | 29.57 ms |   ~27× faster     |
 
-Well under the 50 ms p95 decision-gate threshold at both sizes. Medium blob
-size is approaching 1 MB; worth considering `Zlib` compression if Large-scale
-frameworks push past ~1.5 MB, but Postgres TOAST already handles column-side
-compression and no action is needed yet.
+Well under the 50 ms p95 decision-gate threshold at both sizes. JSON costs
+~40-60% more on-disk than Marshal would have, but read latency is effectively
+identical because Postgres `jsonb` is parsed server-side. Safer too —
+deserialization has no RCE primitive (Brakeman-clean).
 
 Reproduce with:
 

@@ -10,4 +10,24 @@ Frameworks::ExplorerGraph::RoleFamily = Data.define(
   :description,
   :department,
   :roles
-)
+) do
+  def to_hash_tree
+    {
+      "role_family_id" => role_family_id,
+      "name" => name,
+      "description" => description,
+      "department" => department,
+      "roles" => roles.map(&:to_hash_tree)
+    }
+  end
+
+  def self.from_hash_tree(h)
+    new(
+      role_family_id: h["role_family_id"],
+      name: h["name"],
+      description: h["description"],
+      department: h["department"],
+      roles: h.fetch("roles", []).map { |x| Frameworks::ExplorerGraph::Role.from_hash_tree(x) }
+    )
+  end
+end

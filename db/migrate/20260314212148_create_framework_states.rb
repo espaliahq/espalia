@@ -23,7 +23,10 @@ class CreateFrameworkStates < ActiveRecord::Migration[8.1]
     # docs/architecture/framework-edit-mode-benchmarks.md for why the
     # explorer uses this snapshot rather than the FrameworkState AR tables.
     create_table :framework_explorer_graphs, primary_key: :framework_id, id: :uuid do |t|
-      t.binary :graph_blob, null: false
+      # Plain-hash tree serialized as JSON — no Marshal. The shape is versioned
+      # via `format_version` so schema bumps can be detected and lazily
+      # rebuilt rather than break reads.
+      t.jsonb :graph_data, null: false
       t.integer :format_version, null: false, default: 1
       t.timestamps
     end

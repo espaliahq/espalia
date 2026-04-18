@@ -87,7 +87,7 @@ namespace :bench do
       mean = (samples.sum / samples.size.to_f).round(3)
 
       puts "Framework: #{framework.name} (#{framework_id})"
-      puts "Graph blob: #{row.graph_blob.bytesize} bytes"
+      puts "Graph data: #{row.graph_data.to_json.bytesize} bytes (JSON)"
       puts "Iterations: #{iterations} (warmup #{warmup})"
       puts format("p50=%.2fms  p95=%.2fms  max=%.2fms  mean=%.2fms", p50, p95, max, mean)
     end

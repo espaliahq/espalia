@@ -182,7 +182,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
   create_table "framework_explorer_graphs", primary_key: "framework_id", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "format_version", default: 1, null: false
-    t.binary "graph_blob", null: false
+    t.jsonb "graph_data", null: false
     t.datetime "updated_at", null: false
   end
 

@@ -21,16 +21,16 @@ module Frameworks::ExplorerGraph
 
   module_function
 
-  # Serializes the graph and upserts its row. Intended to be called inside
-  # the same DB transaction as the event write that produced it.
+  # Serializes the graph as a plain hash tree (jsonb on the Postgres side)
+  # and upserts its row. Intended to be called inside the same DB
+  # transaction as the event write that produced it.
   #
   # @param framework_id [String]
   # @param graph [Frameworks::ExplorerGraph::Framework]
   # @return [FrameworkExplorerGraph]
   def store(framework_id, graph)
-    blob = Marshal.dump(graph)
     row = FrameworkExplorerGraph.find_or_initialize_by(framework_id: framework_id)
-    row.graph_blob = blob
+    row.graph_data = graph.to_hash_tree
     row.format_version = FORMAT_VERSION
     row.save!
     row
@@ -44,22 +44,36 @@ module Frameworks::ExplorerGraph
     return nil if row.nil?
     return nil if row.format_version != FORMAT_VERSION
 
-    Marshal.load(row.graph_blob) # rubocop:disable Security/MarshalLoad
+    Frameworks::ExplorerGraph::Framework.from_hash_tree(row.graph_data)
   end
 
   # Loads the aggregate, builds a fresh graph, stores it. Used as a lazy
   # fallback when `load` returns nil, and by {rebuild_all!} after a
   # FORMAT_VERSION bump.
   #
+  # Falls back to the AR-based builder when the event stream is empty (test
+  # factories that create `FrameworkState::Framework` rows directly bypass
+  # the command path and therefore have no events). Snapshots are not
+  # persisted in that case — there's no authoritative aggregate to keep
+  # them in sync with.
+  #
   # @param framework_id [String]
   # @return [Frameworks::ExplorerGraph::Framework]
   def rebuild(framework_id)
     graph = nil
     Frameworks::Repository.new.with_framework(framework_id) do |agg|
-      graph = Frameworks::ExplorerGraphBuilder.new(agg).build
+      graph = Frameworks::ExplorerGraphBuilder.new(agg).build if agg.framework_id
     end
-    store(framework_id, graph)
-    graph
+
+    if graph
+      store(framework_id, graph)
+      return graph
+    end
+
+    ar_framework = FrameworkState::Framework.find_by(framework_id: framework_id)
+    raise "No framework #{framework_id} in event stream or AR read model" unless ar_framework
+
+    Frameworks::ExplorerGraph::ArBuilder.new(ar_framework).build
   end
 
   # Rebuilds every framework's graph. Run after a FORMAT_VERSION bump.

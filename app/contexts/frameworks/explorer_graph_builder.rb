@@ -40,10 +40,26 @@ class Frameworks::ExplorerGraphBuilder
         role_family_id: rfid,
         name: data[:name],
         description: data[:description],
-        department: data[:department],
+        # `department` lives only on the AR read model today — it is not
+        # event-sourced (see seed_framework.rake). Pull it from there so the
+        # graph stays faithful without opening the aggregate up to a
+        # department event.
+        department: department_by_role_family[rfid],
         roles: build_roles_for(rfid)
       )
     end
+  end
+
+  def department_by_role_family
+    @department_by_role_family ||=
+      if @aggregate.framework_id
+        FrameworkState::RoleFamily
+          .where(framework_id: @aggregate.framework_id)
+          .pluck(:role_family_id, :department)
+          .to_h
+      else
+        {}
+      end
   end
 
   def build_roles_for(role_family_id)

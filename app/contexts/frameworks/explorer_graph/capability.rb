@@ -23,4 +23,34 @@ Frameworks::ExplorerGraph::Capability = Data.define(
   :expectations,
   :added_in_draft,
   :pending_archive
-)
+) do
+  def to_hash_tree
+    {
+      "capability_id" => capability_id,
+      "stable_id" => stable_id,
+      "category_id" => category_id,
+      "name" => name,
+      "description" => description,
+      "status" => status,
+      "bindings" => bindings.map(&:to_hash_tree),
+      "expectations" => expectations.map(&:to_hash_tree),
+      "added_in_draft" => added_in_draft,
+      "pending_archive" => pending_archive
+    }
+  end
+
+  def self.from_hash_tree(h)
+    new(
+      capability_id: h["capability_id"],
+      stable_id: h["stable_id"],
+      category_id: h["category_id"],
+      name: h["name"],
+      description: h["description"],
+      status: h["status"],
+      bindings: h.fetch("bindings", []).map { |x| Frameworks::ExplorerGraph::CapabilityRoleBinding.from_hash_tree(x) },
+      expectations: h.fetch("expectations", []).map { |x| Frameworks::ExplorerGraph::BehaviouralExpectation.from_hash_tree(x) },
+      added_in_draft: h["added_in_draft"],
+      pending_archive: h["pending_archive"]
+    )
+  end
+end

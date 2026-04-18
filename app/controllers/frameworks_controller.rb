@@ -20,27 +20,14 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id
   def show
     authorize @framework
+    graph, matrix_data = load_explorer_matrix
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
-    role_families = load_role_families
-    categories = load_categories
-    selected_role_ids = parse_role_ids
-    track_filter = params[:track].presence || "both"
-
-    pending_suggestions, pending_illustration_creates = load_pending_suggestion_maps
-
-    matrix_data = Frameworks::MatrixDataBuilder.new(
-      framework: @framework, role_families: role_families,
-      categories: categories,
-      selected_role_ids: selected_role_ids, track_filter: track_filter,
-      pending_suggestions: pending_suggestions,
-      pending_illustration_creates: pending_illustration_creates
-    ).build
 
     render Views::Frameworks::ShowView.new(
-      framework: @framework,
-      role_families: role_families,
-      selected_role_ids: selected_role_ids,
-      track_filter: track_filter,
+      framework: graph,
+      role_families: graph.role_families,
+      selected_role_ids: parse_role_ids,
+      track_filter: resolved_track_filter,
       matrix_data: matrix_data,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -53,25 +40,12 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id/matrix
   def matrix
     authorize @framework, :matrix?
-    role_families = load_role_families
-    categories = load_categories
-    selected_role_ids = parse_role_ids
-    track_filter = params[:track].presence || "both"
-
-    pending_suggestions, pending_illustration_creates = load_pending_suggestion_maps
-
-    matrix_data = Frameworks::MatrixDataBuilder.new(
-      framework: @framework, role_families: role_families,
-      categories: categories,
-      selected_role_ids: selected_role_ids, track_filter: track_filter,
-      pending_suggestions: pending_suggestions,
-      pending_illustration_creates: pending_illustration_creates
-    ).build
+    graph, matrix_data = load_explorer_matrix
 
     render Views::Frameworks::MatrixFrameView.new(
-      framework: @framework,
+      framework: graph,
       matrix_data: matrix_data,
-      selected_role_ids: selected_role_ids
+      selected_role_ids: parse_role_ids
     ), layout: false
   end
 
@@ -83,21 +57,37 @@ class FrameworksController < ApplicationController
     redirect_to frameworks_path
   end
 
+  # Builds the matrix data consumed by the explorer. Sources structural
+  # data from the persisted {Frameworks::ExplorerGraph} snapshot; pending
+  # suggestions still come from the AR suggested_edits table.
+  #
+  # @return [Array(Frameworks::ExplorerGraph::Framework, Hash)]
+  def load_explorer_matrix
+    graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
+            Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
+
+    pending_suggestions, pending_illustration_creates = load_pending_suggestion_maps
+
+    matrix_data = Frameworks::MatrixDataBuilder.new(
+      framework: graph,
+      role_families: graph.role_families,
+      categories: graph.capability_categories,
+      selected_role_ids: parse_role_ids,
+      track_filter: resolved_track_filter,
+      pending_suggestions: pending_suggestions,
+      pending_illustration_creates: pending_illustration_creates
+    ).build
+
+    [ graph, matrix_data ]
+  end
+
   # @return [Array<String>] role UUIDs from params
   def parse_role_ids
     Array.wrap(params[:roles]).select(&:present?)
   end
 
-  # @return [ActiveRecord::Relation<FrameworkState::RoleFamily>]
-  def load_role_families
-    @framework.role_families.includes(roles: :levels).order(:name)
-  end
-
-  # @return [ActiveRecord::Relation<FrameworkState::CapabilityCategory>]
-  def load_categories
-    @framework.capability_categories
-      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
+  def resolved_track_filter
+    params[:track].presence || "both"
   end
 
   # Loads pending suggestion maps for the matrix visual affordance.
