@@ -13,11 +13,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (for illustration PATCH URLs)
-  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:)
+  # @param mode [Symbol] :view or :edit
+  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
+    @mode = mode
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -58,6 +60,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           div do
             decoration = suggestion_text_classes(pending_edit_count: @capability_pending_count)
             span(class: "text-sm font-medium text-gray-900 dark:text-white #{decoration}".strip) { @capability.name }
+            draft_state_badge if @mode == :edit
             p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1") do
               @capability.description
             end if @capability.description.present?
@@ -69,9 +72,27 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       @merged_levels.each do |level|
         render Views::Frameworks::Explorer::MatrixCell.new(
           cell_data: @cells[level[:ordinal]],
-          ordinal: level[:ordinal]
+          ordinal: level[:ordinal],
+          mode: @mode
         )
       end
+    end
+  end
+
+  # Visible only in edit mode — signals that the capability is new in the
+  # current draft ("New") or staged for archive ("Pending archive"). View
+  # mode filters these entities entirely, so the badges never render there.
+  def draft_state_badge
+    return unless @capability.respond_to?(:added_in_draft)
+
+    if @capability.added_in_draft
+      span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
+                  "text-[10px] font-semibold bg-emerald-100 text-emerald-700 " \
+                  "dark:bg-emerald-900/30 dark:text-emerald-300") { "New in draft" }
+    elsif @capability.respond_to?(:pending_archive) && @capability.pending_archive
+      span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
+                  "text-[10px] font-semibold bg-amber-100 text-amber-700 " \
+                  "dark:bg-amber-900/30 dark:text-amber-300") { "Pending archive" }
     end
   end
 
@@ -133,7 +154,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               render Views::Frameworks::Explorer::IllustrationFrame.new(
                 illustration: ill,
                 framework_id: @framework_id,
-                pending_edit_count: ill_pending_edits[ill.illustration_id] || 0
+                pending_edit_count: ill_pending_edits[ill.illustration_id] || 0,
+                mode: @mode
               )
             end
             role_pending_creates.each do |suggestion|
@@ -143,11 +165,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               )
             end
           end
-          render Views::Frameworks::Explorer::NewIllustrationFrame.new(
-            expectation_id: expectation.expectation_id,
-            role_id: role_id,
-            framework_id: @framework_id
-          )
+          if @mode == :edit
+            render Views::Frameworks::Explorer::NewIllustrationFrame.new(
+              expectation_id: expectation.expectation_id,
+              role_id: role_id,
+              framework_id: @framework_id
+            )
+          end
         end
       end
     end

@@ -16,20 +16,24 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   # @param illustration [FrameworkState::RoleIllustration]
   # @param framework_id [String] UUID of the framework (for the PATCH URL)
   # @param pending_edit_count [Integer] number of pending edit suggestions on this illustration
-  def initialize(illustration:, framework_id:, pending_edit_count: 0)
+  # @param mode [Symbol] :view or :edit — gates the pencil affordance
+  def initialize(illustration:, framework_id:, pending_edit_count: 0, mode: :view)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
+    @mode = mode
   end
 
   def view_template
     turbo_frame_tag("illustration-#{@illustration.illustration_id}") do
-      li(
-        class: "group/ill relative text-xs text-gray-600 dark:text-gray-400",
-        data: { controller: "inline-editor" }
-      ) do
+      attrs = {
+        class: "group/ill relative text-xs text-gray-600 dark:text-gray-400"
+      }
+      attrs[:data] = { controller: "inline-editor" } if @mode == :edit
+
+      li(**attrs) do
         display_mode
-        edit_mode
+        edit_mode if @mode == :edit
       end
     end
   end
@@ -43,19 +47,23 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
     ) do
       decoration = suggestion_text_classes(pending_edit_count: @pending_edit_count)
       span(class: "flex-1 #{decoration}".strip) { @illustration.description }
-      button(
-        type: "button",
-        class: "opacity-0 group-hover/ill:opacity-100 transition-opacity " \
-               "text-gray-400 hover:text-primary shrink-0 mt-0.5",
-        data: { action: "inline-editor#startEdit" },
-        aria_label: "Edit illustration"
-      ) do
-        # Pencil icon
-        svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
-            stroke: "currentColor", stroke_width: "2") do |s|
-          s.path(d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" \
-                    "m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
-        end
+      edit_button if @mode == :edit
+    end
+  end
+
+  def edit_button
+    button(
+      type: "button",
+      class: "opacity-0 group-hover/ill:opacity-100 transition-opacity " \
+             "text-gray-400 hover:text-primary shrink-0 mt-0.5",
+      data: { action: "inline-editor#startEdit" },
+      aria_label: "Edit illustration"
+    ) do
+      # Pencil icon
+      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
+          stroke: "currentColor", stroke_width: "2") do |s|
+        s.path(d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" \
+                  "m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
       end
     end
   end

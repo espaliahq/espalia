@@ -11,9 +11,11 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
   # @param ordinal [Integer] the level ordinal for this column
-  def initialize(cell_data:, ordinal:)
+  # @param mode [Symbol] :view or :edit
+  def initialize(cell_data:, ordinal:, mode: :view)
     @cell_data = cell_data
     @ordinal = ordinal
+    @mode = mode
   end
 
   def view_template
@@ -46,6 +48,13 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
     p(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-3 #{decoration}".strip) do
       @cell_data[:expectation].description
+    end
+
+    if @mode == :edit && @cell_data[:expectation].respond_to?(:added_in_draft) &&
+       @cell_data[:expectation].added_in_draft
+      span(class: "mt-1 inline-flex items-center rounded-full px-2 py-0.5 " \
+                  "text-[10px] font-semibold bg-emerald-100 text-emerald-700 " \
+                  "dark:bg-emerald-900/30 dark:text-emerald-300") { "New in draft" }
     end
 
     if pending_count >= 2

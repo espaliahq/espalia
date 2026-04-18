@@ -9,10 +9,12 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   # @param matrix_data [Hash] output from MatrixDataBuilder
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
-  def initialize(matrix_data:, selected_role_ids:, framework_id:)
+  # @param mode [Symbol] :view or :edit
+  def initialize(matrix_data:, selected_role_ids:, framework_id:, mode: :view)
     @matrix_data = matrix_data
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
+    @mode = mode
     @merged_levels = matrix_data[:merged_levels]
     @categories = matrix_data[:categories]
   end
@@ -39,7 +41,8 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             category_data: cat_data,
             merged_levels: @merged_levels,
             selected_role_ids: @selected_role_ids,
-            framework_id: @framework_id
+            framework_id: @framework_id,
+            mode: @mode
           )
         end
       end

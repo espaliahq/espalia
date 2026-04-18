@@ -20,33 +20,13 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id
   def show
     authorize @framework
-    graph, matrix_data = load_explorer_matrix(mode: :view)
-    tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
-
-    render Views::Frameworks::ShowView.new(
-      framework: graph,
-      role_families: graph.role_families,
-      selected_role_ids: parse_role_ids,
-      track_filter: resolved_track_filter,
-      matrix_data: matrix_data,
-      user: current_user,
-      current_tenant: ActsAsTenant.current_tenant,
-      tenants: tenants,
-      is_admin: policy(@framework).admin?,
-      pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count
-    )
+    render_explorer(mode: :view)
   end
 
   # GET /frameworks/:id/matrix
   def matrix
     authorize @framework, :matrix?
-    graph, matrix_data = load_explorer_matrix(mode: :view)
-
-    render Views::Frameworks::MatrixFrameView.new(
-      framework: graph,
-      matrix_data: matrix_data,
-      selected_role_ids: parse_role_ids
-    ), layout: false
+    render_matrix_frame(mode: :view)
   end
 
   # GET /frameworks/:id/edit
@@ -57,8 +37,24 @@ class FrameworksController < ApplicationController
   # entities and pending archives become visible.
   def edit
     authorize @framework, :edit?
-    graph, matrix_data = load_explorer_matrix(mode: :edit)
+    render_explorer(mode: :edit)
+  end
+
+  # GET /frameworks/:id/edit/matrix
+  def edit_matrix
+    authorize @framework, :edit_matrix?
+    render_matrix_frame(mode: :edit)
+  end
+
+  private
+
+  # Renders the full Framework Explorer shell for the given mode. Keeps
+  # show/#edit symmetric — only mode and the `can_edit`/`is_admin` flags
+  # differ between them.
+  def render_explorer(mode:)
+    graph, matrix_data = load_explorer_matrix(mode: mode)
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
+    fw_policy = policy(@framework)
 
     render Views::Frameworks::ShowView.new(
       framework: graph,
@@ -69,24 +65,23 @@ class FrameworksController < ApplicationController
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants,
-      is_admin: policy(@framework).admin?,
-      pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count
+      is_admin: fw_policy.admin?,
+      pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count,
+      mode: mode,
+      can_edit: fw_policy.edit?
     )
   end
 
-  # GET /frameworks/:id/edit/matrix
-  def edit_matrix
-    authorize @framework, :edit_matrix?
-    graph, matrix_data = load_explorer_matrix(mode: :edit)
+  def render_matrix_frame(mode:)
+    graph, matrix_data = load_explorer_matrix(mode: mode)
 
     render Views::Frameworks::MatrixFrameView.new(
       framework: graph,
       matrix_data: matrix_data,
-      selected_role_ids: parse_role_ids
+      selected_role_ids: parse_role_ids,
+      mode: mode
     ), layout: false
   end
-
-  private
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:id))

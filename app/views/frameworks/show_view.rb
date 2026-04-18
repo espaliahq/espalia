@@ -7,8 +7,8 @@
 # Right pane: placeholder for future contextual feed.
 #
 class Views::Frameworks::ShowView < Views::Base
-  # @param framework [FrameworkState::Framework]
-  # @param role_families [Array<FrameworkState::RoleFamily>] eager-loaded with roles + levels
+  # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
+  # @param role_families [Array] role families with roles + levels
   # @param selected_role_ids [Array<String>]
   # @param track_filter [String]
   # @param matrix_data [Hash] output from MatrixDataBuilder
@@ -17,9 +17,11 @@ class Views::Frameworks::ShowView < Views::Base
   # @param tenants [Array<Tenant>]
   # @param is_admin [Boolean] whether to show admin controls (settings link)
   # @param pending_suggestion_count [Integer] count for the suggestions toggle badge
+  # @param mode [Symbol] :view (default) or :edit — gates inline-edit affordances and sets context-pane default-open
+  # @param can_edit [Boolean] whether the current user can reach edit mode — controls mode switcher visibility
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
-                 pending_suggestion_count: 0)
+                 pending_suggestion_count: 0, mode: :view, can_edit: false)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -30,6 +32,8 @@ class Views::Frameworks::ShowView < Views::Base
     @tenants = tenants
     @is_admin = is_admin
     @pending_suggestion_count = pending_suggestion_count
+    @mode = mode
+    @can_edit = can_edit
   end
 
   def view_template
@@ -63,13 +67,63 @@ class Views::Frameworks::ShowView < Views::Base
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )
+            edit_mode_badge if @mode == :edit
           end
         end
 
-        settings_link if @is_admin
+        div(class: "flex items-center gap-2") do
+          mode_switcher if @can_edit
+          settings_link if @is_admin
+        end
       end
 
       stats_bar
+    end
+  end
+
+  # Shown only while rendering /edit to make the mode visible even when
+  # the toggle isn't (e.g. mobile-narrow viewports). Amber to stand out
+  # from the blue version badge.
+  def edit_mode_badge
+    render Components::Kit::Badge.new("Edit mode", variant: :warning)
+  end
+
+  # Mode switcher pill — always rendered when the user can reach edit mode,
+  # so there is a clear exit from edit back to view. Hidden for pure viewers
+  # (the edit route is 404 for them anyway).
+  def mode_switcher
+    target_path = @mode == :edit ? framework_path(@framework.framework_id) : edit_framework_path(@framework.framework_id)
+    target_label = @mode == :edit ? "Exit edit mode" : "Edit mode"
+
+    a(
+      href: target_path,
+      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm " \
+             "#{mode_switcher_style_classes} " \
+             "transition-colors",
+      title: target_label
+    ) do
+      svg(
+        xmlns: "http://www.w3.org/2000/svg", fill: "none", viewbox: "0 0 24 24",
+        stroke_width: "1.5", stroke: "currentColor", class: "w-4 h-4"
+      ) do |s|
+        s.path(
+          stroke_linecap: "round", stroke_linejoin: "round",
+          d: "M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 " \
+             "19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 " \
+             "011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
+        )
+      end
+      plain target_label
+    end
+  end
+
+  def mode_switcher_style_classes
+    if @mode == :edit
+      "bg-amber-100 text-amber-800 hover:bg-amber-200 " \
+        "dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+    else
+      "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 " \
+        "hover:bg-gray-100 dark:hover:bg-gray-800"
     end
   end
 
@@ -206,16 +260,22 @@ class Views::Frameworks::ShowView < Views::Base
         render Views::Frameworks::Explorer::Matrix.new(
           matrix_data: @matrix_data,
           selected_role_ids: @selected_role_ids,
-          framework_id: @framework.framework_id
+          framework_id: @framework.framework_id,
+          mode: @mode
         )
       end
     end
   end
 
   def right_pane_placeholder
+    # Edit mode defaults the context pane open — contributors are usually
+    # here *because* of the suggestion feed. View mode keeps it closed so
+    # viewers aren't distracted by collaborative chatter.
+    initial_visibility = @mode == :edit ? "flex" : "hidden"
+
     aside(
       class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 hidden flex-col overflow-hidden",
+             "bg-white dark:bg-gray-900 #{initial_visibility} flex-col overflow-hidden",
       data: {
         framework_explorer_target: "contextPane",
         controller: "context-pane",
