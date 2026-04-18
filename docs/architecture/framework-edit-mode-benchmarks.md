@@ -74,24 +74,36 @@ to make the decision (see below).
 ## Decision
 
 **Reject option A as a standalone strategy.** The clean in-memory-replay path
-is too slow for realistic framework sizes. Two viable paths remain:
+is too slow for realistic framework sizes. The shipped approach is a
+**dedicated ExplorerGraph view model**: one persistent Marshal-serialized
+graph per framework, written atomically with each framework event, consumed
+by both view and edit modes of the explorer. See
+[../guidelines/framework-explorer.md](../guidelines/framework-explorer.md) and
+the `Frameworks::ExplorerGraph` namespace.
 
-- **A′ — replay + aggressive caching.** Cache the loaded aggregate (or the
-  materialized draft graph) in SolidCache, keyed by framework_id and the last
-  event position. Invalidate on any new event in the stream. First edit-mode
-  request on a framework is slow, subsequent ones within the cache window are
-  ~free. Complexity: one cache layer, a keep-in-sync subscriber.
-- **B — polymorphic parallel draft projection.** Persistent draft tables
-  mirroring published ones, fed by the same projection code parameterised on
-  a `ModelSet`. Complexity: ~8 new tables, migration lifecycle, editorial
-  event fan-out to both table families during a draft. Once built, reads are
-  native-AR fast.
+### Validation — snapshot read path
 
-Given the size curve, **A′ is the likely winner for MVP**: it preserves "no
-new schema", keeps the aggregate as the single source of truth, and trades
-one-time latency for cache complexity rather than schema complexity. B
-remains the right upgrade path if edit mode grows features that need rich
-reads (search, activity feed, admin lists).
+Measured after snapshot-on-write wiring (`Frameworks::Repository#with_framework`
+writes a fresh graph in the same DB transaction as every event). Read side is
+a single indexed row fetch + `Marshal.load`:
+
+| Size   | Events | Blob size | Read p50 | Read p95 | Speedup vs Pass 2 |
+|--------|-------:|----------:|---------:|---------:|------------------:|
+| Small  | 1,627  |   395 KB  |  6.08 ms | 17.06 ms |   ~32× faster     |
+| Medium | 6,520  |   940 KB  | 19.39 ms | 22.91 ms |   ~28× faster     |
+
+Well under the 50 ms p95 decision-gate threshold at both sizes. Medium blob
+size is approaching 1 MB; worth considering `Zlib` compression if Large-scale
+frameworks push past ~1.5 MB, but Postgres TOAST already handles column-side
+compression and no action is needed yet.
+
+Reproduce with:
+
+```bash
+bin/rails bench:explorer_graph_read                            # seeded (Small)
+SIZE=medium bin/rails bench:fatten_framework                   # build Medium
+FRAMEWORK_ID=<printed-uuid> bin/rails bench:explorer_graph_read
+```
 
 ## Reproducing
 

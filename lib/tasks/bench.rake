@@ -50,6 +50,49 @@ namespace :bench do
     end
   end
 
+  desc "Benchmark Frameworks::ExplorerGraph.load latency (post-1b). " \
+       "Measures the hot read path for the Framework Explorer: indexed row fetch + Marshal.load. " \
+       "Pass FRAMEWORK_ID=<uuid> to bench a specific framework."
+  task explorer_graph_read: :environment do
+    iterations = Integer(ENV.fetch("ITERATIONS", "50"))
+    warmup = Integer(ENV.fetch("WARMUP", "5"))
+    framework_id_override = ENV["FRAMEWORK_ID"].presence
+
+    tenant = Tenant.find_by!(slug: "meandu")
+    ActsAsTenant.with_tenant(tenant) do
+      framework =
+        if framework_id_override
+          FrameworkState::Framework.find_by!(framework_id: framework_id_override)
+        else
+          FrameworkState::Framework.first
+        end
+      raise "No framework seeded — run bin/rails db:seed first" unless framework
+
+      framework_id = framework.framework_id
+      row = FrameworkExplorerGraph.find_by(framework_id: framework_id)
+      raise "No ExplorerGraph row for #{framework_id} — has it been written?" unless row
+
+      warmup.times { Frameworks::ExplorerGraph.load(framework_id) }
+
+      samples = Array.new(iterations) do
+        t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        Frameworks::ExplorerGraph.load(framework_id)
+        ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round(3)
+      end
+
+      sorted = samples.sort
+      p50 = sorted[sorted.size / 2]
+      p95 = sorted[(sorted.size * 0.95).floor]
+      max = sorted.last
+      mean = (samples.sum / samples.size.to_f).round(3)
+
+      puts "Framework: #{framework.name} (#{framework_id})"
+      puts "Graph blob: #{row.graph_blob.bytesize} bytes"
+      puts "Iterations: #{iterations} (warmup #{warmup})"
+      puts format("p50=%.2fms  p95=%.2fms  max=%.2fms  mean=%.2fms", p50, p95, max, mean)
+    end
+  end
+
   desc "Build a synthetic framework with SIZE=small|medium|large (for benchmarking). " \
        "Prints the new framework_id. One-shot diagnostic; creates events that persist."
   task fatten_framework: :environment do
