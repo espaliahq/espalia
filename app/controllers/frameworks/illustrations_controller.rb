@@ -3,6 +3,8 @@
 # Handles inline illustration create and edit submissions.
 #
 class Frameworks::IllustrationsController < ApplicationController
+  include FrameworkEditMode
+
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
 
@@ -31,7 +33,7 @@ class Frameworks::IllustrationsController < ApplicationController
       { role_id: role_id, description: description, ordinal: ordinal },
       parent_id: expectation_id,
       author_id: resolve_author_id,
-      mode: :editing
+      mode: framework_edit_mode
     )
 
     if created_entity_id
@@ -59,7 +61,8 @@ class Frameworks::IllustrationsController < ApplicationController
       @illustration.illustration_id,
       "description",
       new_description,
-      resolve_author_id
+      resolve_author_id,
+      mode: framework_edit_mode
     )
 
     @illustration.reload
@@ -67,7 +70,8 @@ class Frameworks::IllustrationsController < ApplicationController
     render Views::Frameworks::Explorer::IllustrationFrame.new(
       illustration: @illustration,
       framework_id: @framework.framework_id,
-      mode: :edit
+      mode: :edit,
+      pending_edit_count: pending_edits_on_illustration
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :unprocessable_content
@@ -97,6 +101,15 @@ class Frameworks::IllustrationsController < ApplicationController
   # @return [String]
   def resolve_author_id
     current_person.id.to_s
+  end
+
+  def pending_edits_on_illustration
+    FrameworkState::SuggestedEdit.where(
+      framework_id: @framework.framework_id,
+      target_entity_type: "role_illustration",
+      target_entity_id: @illustration.illustration_id,
+      status: "pending"
+    ).count
   end
 
   # Renders turbo stream for an auto-approved illustration create.

@@ -147,6 +147,64 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "Editing / Suggesting toggle" do
+    should "render the segmented toggle in edit mode only" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_selector "[data-controller='edit-mode-toggle']"
+      assert_selector "button[data-edit-mode-toggle-target='editingButton']", text: "Editing"
+      assert_selector "button[data-edit-mode-toggle-target='suggestingButton']", text: "Suggesting"
+
+      visit framework_path(@framework_id)
+      assert_no_selector "[data-controller='edit-mode-toggle']"
+    end
+
+    should "persist the choice across reload via cookie and land admin edits as pending when Suggesting" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      wait_for_stimulus "edit-mode-toggle"
+      find("button[data-edit-mode-toggle-target='suggestingButton']").click
+
+      # Reload — the toggle should still show Suggesting as the active segment.
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "edit-mode-toggle"
+      assert_equal "true",
+        find("button[data-edit-mode-toggle-target='suggestingButton']")["aria-pressed"]
+      assert_equal "false",
+        find("button[data-edit-mode-toggle-target='editingButton']")["aria-pressed"]
+
+      # Inline-edit a capability name.
+      cap_id = FrameworkState::Capability.first.capability_id
+      editor = find("turbo-frame#capability-name-#{cap_id} > div")
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
+        editor
+      )
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
+        editor
+      )
+      editor.find("textarea[name='capability[name]']").fill_in with: "Proposed Name"
+      editor.find("button[type='submit']", match: :first).click
+
+      # Wait for the Turbo frame to swap — pending-edit decoration is the
+      # reliable signal that the server responded.
+      assert_selector "turbo-frame#capability-name-#{cap_id} .decoration-wavy"
+
+      # Even though the current user is a tenant admin (auto-approve authority),
+      # Suggesting mode overrides and the change lands as pending. The
+      # grid still shows the old name because no auto-approval ran.
+      suggestion = FrameworkState::SuggestedEdit.where(
+        framework_id: @framework_id,
+        target_entity_type: "capability",
+        target_entity_id: cap_id
+      ).last
+      assert_equal "pending", suggestion.status
+      assert_equal "Proposed Name", suggestion.suggested_value
+    end
+  end
+
   private
 
   def sign_in_as(user)

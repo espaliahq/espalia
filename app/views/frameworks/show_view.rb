@@ -72,6 +72,7 @@ class Views::Frameworks::ShowView < Views::Base
         end
 
         div(class: "flex items-center gap-2") do
+          edit_suggest_toggle if @mode == :edit
           mode_switcher if @can_edit
           settings_link if @is_admin
         end
@@ -79,6 +80,41 @@ class Views::Frameworks::ShowView < Views::Base
 
       stats_bar
     end
+  end
+
+  # Segmented Editing / Suggesting toggle — only rendered in edit mode.
+  # Persisted client-side via the `framework_edit_mode` cookie; read
+  # server-side by the FrameworkEditMode concern on every inline-edit
+  # submission.
+  def edit_suggest_toggle
+    div(
+      class: "inline-flex items-stretch rounded-md border border-gray-200 dark:border-gray-700 " \
+             "bg-gray-50 dark:bg-gray-800 p-0.5 text-sm",
+      data: {
+        controller: "edit-mode-toggle",
+        edit_mode_toggle_active_class: "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs",
+        edit_mode_toggle_inactive_class: "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+      }
+    ) do
+      edit_suggest_segment("editing", "Editing",
+                           "Changes you make apply immediately (when you have approval authority).")
+      edit_suggest_segment("suggesting", "Suggesting",
+                           "Changes land as pending suggestions for review.")
+    end
+  end
+
+  def edit_suggest_segment(value, label, tooltip)
+    button(
+      type: "button",
+      class: "inline-flex items-center rounded px-3 py-1 font-medium transition-colors",
+      data: {
+        action: "edit-mode-toggle#select",
+        edit_mode_toggle_target: "#{value}Button",
+        edit_mode_value: value
+      },
+      title: tooltip,
+      aria_pressed: "false"
+    ) { label }
   end
 
   # Shown only while rendering /edit to make the mode visible even when

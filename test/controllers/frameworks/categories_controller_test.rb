@@ -38,6 +38,22 @@ class Frameworks::CategoriesControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Cognition &amp; Thinking"
     end
 
+    should "keep the edit pending when the suggesting cookie is set" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { name: "Proposed Name" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        suggestion = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id,
+          target_entity_type: "capability_category",
+          target_entity_id: @cat_id
+        ).last
+        assert_equal "pending", suggestion.status
+      end
+    end
+
     should "deny non-contributor viewers" do
       viewer = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do

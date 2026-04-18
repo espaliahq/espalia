@@ -40,6 +40,39 @@ class Frameworks::CapabilitiesControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Sharper Strategic Thinking"
     end
 
+    should "auto-approve the edit when no cookie is set (editing mode)" do
+      sign_in @user
+      patch framework_capability_path(framework_id: @framework_id, id: @cap_id),
+            params: { capability: { name: "Auto-Applied Name" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        suggestion = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id,
+          target_entity_type: "capability",
+          target_entity_id: @cap_id
+        ).last
+        assert_equal "approved", suggestion.status,
+                     "default cookie state should auto-approve for admins"
+      end
+    end
+
+    should "keep the edit pending when the suggesting cookie is set" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+      patch framework_capability_path(framework_id: @framework_id, id: @cap_id),
+            params: { capability: { name: "Proposed Only" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        suggestion = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id,
+          target_entity_type: "capability",
+          target_entity_id: @cap_id
+        ).last
+        assert_equal "pending", suggestion.status,
+                     "suggesting cookie should bypass auto-approval"
+      end
+    end
+
     should "return unprocessable_content when no editable field is supplied" do
       sign_in @user
       patch framework_capability_path(framework_id: @framework_id, id: @cap_id),

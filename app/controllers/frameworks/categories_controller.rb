@@ -5,6 +5,8 @@
 # {Frameworks::IllustrationsController}.
 #
 class Frameworks::CategoriesController < ApplicationController
+  include FrameworkEditMode
+
   before_action :set_framework
   before_action :set_category
 
@@ -18,14 +20,16 @@ class Frameworks::CategoriesController < ApplicationController
     Frameworks::CommandHandler.new.suggest_edit(
       @framework.framework_id, SecureRandom.uuid_v7,
       "capability_category", @category.category_id,
-      field, value, resolve_author_id
+      field, value, resolve_author_id,
+      mode: framework_edit_mode
     )
 
     @category.reload
     render Views::Frameworks::Explorer::CategoryNameFrame.new(
       category: @category,
       framework_id: @framework.framework_id,
-      mode: :edit
+      mode: :edit,
+      pending_edit_count: pending_edits_on_category
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :unprocessable_content
@@ -49,6 +53,15 @@ class Frameworks::CategoriesController < ApplicationController
 
   def resolve_author_id
     current_person.id.to_s
+  end
+
+  def pending_edits_on_category
+    FrameworkState::SuggestedEdit.where(
+      framework_id: @framework.framework_id,
+      target_entity_type: "capability_category",
+      target_entity_id: @category.category_id,
+      status: "pending"
+    ).count
   end
 
   def first_edited_field(attrs)

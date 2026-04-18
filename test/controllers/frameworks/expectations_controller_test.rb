@@ -43,6 +43,22 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Asks better clarifying questions"
     end
 
+    should "keep the edit pending when the suggesting cookie is set" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+      patch framework_expectation_path(framework_id: @framework_id, id: @eid),
+            params: { behavioural_expectation: { description: "Proposed only" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        suggestion = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id,
+          target_entity_type: "behavioural_expectation",
+          target_entity_id: @eid
+        ).last
+        assert_equal "pending", suggestion.status
+      end
+    end
+
     should "reject blank descriptions" do
       sign_in @user
       patch framework_expectation_path(framework_id: @framework_id, id: @eid),

@@ -210,6 +210,22 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "illustration-#{@ill_id}"
     end
 
+    should "keep the edit pending when the suggesting cookie is set" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+      patch framework_illustration_path(framework_id: @framework_id, id: @ill_id),
+            params: { illustration: { description: "Proposed only" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        suggestion = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id,
+          target_entity_type: "role_illustration",
+          target_entity_id: @ill_id
+        ).last
+        assert_equal "pending", suggestion.status
+      end
+    end
+
     should "include the pencil affordance in the response so re-editing stays possible" do
       sign_in @user
       patch framework_illustration_path(framework_id: @framework_id, id: @ill_id),

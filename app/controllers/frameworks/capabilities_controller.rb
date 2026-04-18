@@ -6,6 +6,8 @@
 # `suggest_edit` so audit + approval rules are consistent.
 #
 class Frameworks::CapabilitiesController < ApplicationController
+  include FrameworkEditMode
+
   before_action :set_framework
   before_action :set_capability
 
@@ -19,14 +21,16 @@ class Frameworks::CapabilitiesController < ApplicationController
     Frameworks::CommandHandler.new.suggest_edit(
       @framework.framework_id, SecureRandom.uuid_v7,
       "capability", @capability.capability_id,
-      field, value, resolve_author_id
+      field, value, resolve_author_id,
+      mode: framework_edit_mode
     )
 
     @capability.reload
     render Views::Frameworks::Explorer::CapabilityNameFrame.new(
       capability: @capability,
       framework_id: @framework.framework_id,
-      mode: :edit
+      mode: :edit,
+      pending_edit_count: pending_edits_on_capability
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :unprocessable_content
@@ -50,6 +54,15 @@ class Frameworks::CapabilitiesController < ApplicationController
 
   def resolve_author_id
     current_person.id.to_s
+  end
+
+  def pending_edits_on_capability
+    FrameworkState::SuggestedEdit.where(
+      framework_id: @framework.framework_id,
+      target_entity_type: "capability",
+      target_entity_id: @capability.capability_id,
+      status: "pending"
+    ).count
   end
 
   # Picks the first present field from the permitted attrs so clients can

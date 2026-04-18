@@ -15,6 +15,22 @@ The explorer has two modes, both backed by the same components:
 
 Both modes read structural data from the same `Frameworks::ExplorerGraph` snapshot (see [docs/architecture/framework-edit-mode-benchmarks.md](../architecture/framework-edit-mode-benchmarks.md)). A `mode: :view | :edit` kwarg is threaded from `ShowView` down through `Matrix`, `MatrixCategoryGroup`, `MatrixRow`, `MatrixCell`, and each entity's inline-edit frame. The `MatrixDataBuilder` filters out `added_in_draft` entities in view mode — matching `PublishedState`'s event-deferral semantics from ADR-16.
 
+### Editing vs Suggesting toggle (within edit mode)
+
+A segmented pill in the edit-mode header lets contributors flip between two submodes:
+
+- **Editing** (default): inline edits to capability / category / expectation / illustration text auto-apply for users with approval authority (owner, editor, capability/category lead, role lead — scoped to tier). Non-authority users' changes land as pending regardless.
+- **Suggesting**: inline edits always land as pending suggestions, even from authority-holders. Useful when a reviewer wants to propose a change for discussion rather than commit it.
+
+Plumbing:
+- Persisted client-side in a 1-year cookie `framework_edit_mode` (`editing` | `suggesting`). Single global cookie — applies across frameworks.
+- [`app/controllers/concerns/framework_edit_mode.rb`](../../app/controllers/concerns/framework_edit_mode.rb) reads the cookie server-side and returns `:editing` / `:suggesting`.
+- The four inline-edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`) `include FrameworkEditMode` and pass `mode: framework_edit_mode` to `Frameworks::CommandHandler#suggest_edit` / `#suggest_create`.
+- `SuggestionsController#create` (the explicit "propose a change" endpoint for full-form creates/deletes) is intentionally **not** wired — it always submits as pending regardless of the toggle.
+- Stimulus controller [`edit_mode_toggle_controller.js`](../../app/javascript/controllers/edit_mode_toggle_controller.js) writes the cookie and swaps `aria-pressed` + the caller-supplied active/inactive classes when clicked. No server round-trip on select; the cookie is picked up on the next form submission.
+
+After a pending edit, the inline-edit controllers re-query the AR `SuggestedEdit` table and pass `pending_edit_count` into the re-rendered frame, so the amber wavy underline appears immediately in Suggesting mode — the user sees their proposal land without needing a full reload.
+
 ```
 +---------------------------+----------------------------------------------+
 | Navbar (Home | Framework) |                                              |
@@ -410,6 +426,8 @@ The context pane currently shows suggested edits. Future content types — comme
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name (PATCH) |
 | `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH) |
 | `app/policies/framework_policy.rb` | `edit?` / `edit_matrix?` predicates for the edit route |
+| `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
+| `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |

@@ -7,6 +7,8 @@
 # and not directly edited.
 #
 class Frameworks::ExpectationsController < ApplicationController
+  include FrameworkEditMode
+
   before_action :set_framework
   before_action :set_expectation
 
@@ -19,14 +21,16 @@ class Frameworks::ExpectationsController < ApplicationController
     Frameworks::CommandHandler.new.suggest_edit(
       @framework.framework_id, SecureRandom.uuid_v7,
       "behavioural_expectation", @expectation.expectation_id,
-      "description", new_description, resolve_author_id
+      "description", new_description, resolve_author_id,
+      mode: framework_edit_mode
     )
 
     @expectation.reload
     render Views::Frameworks::Explorer::ExpectationTextFrame.new(
       expectation: @expectation,
       framework_id: @framework.framework_id,
-      mode: :edit
+      mode: :edit,
+      pending_edit_count: pending_edits_on_expectation
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :unprocessable_content
@@ -50,5 +54,14 @@ class Frameworks::ExpectationsController < ApplicationController
 
   def resolve_author_id
     current_person.id.to_s
+  end
+
+  def pending_edits_on_expectation
+    FrameworkState::SuggestedEdit.where(
+      framework_id: @framework.framework_id,
+      target_entity_type: "behavioural_expectation",
+      target_entity_id: @expectation.expectation_id,
+      status: "pending"
+    ).count
   end
 end
