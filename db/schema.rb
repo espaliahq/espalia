@@ -179,6 +179,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.check_constraint "(scope_type IS NULL) = (scope_id IS NULL)", name: "chk_framework_collaborators_scope_consistency"
   end
 
+  create_table "framework_explorer_graphs", primary_key: "framework_id", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "format_version", default: 1, null: false
+    t.binary "graph_blob", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "framework_levels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "code", null: false
     t.datetime "created_at", null: false

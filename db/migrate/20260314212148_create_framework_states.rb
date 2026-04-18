@@ -15,5 +15,17 @@ class CreateFrameworkStates < ActiveRecord::Migration[8.1]
     end
 
     add_index :framework_states, [ :tenant_id, :framework_id ], unique: true
+
+    # One serialized graph snapshot per framework — the dedicated view model
+    # powering the Framework Explorer (both view and edit modes). Written
+    # atomically with each framework event in the same DB transaction. Read
+    # by FrameworksController#show/#edit. See
+    # docs/architecture/framework-edit-mode-benchmarks.md for why the
+    # explorer uses this snapshot rather than the FrameworkState AR tables.
+    create_table :framework_explorer_graphs, primary_key: :framework_id, id: :uuid do |t|
+      t.binary :graph_blob, null: false
+      t.integer :format_version, null: false, default: 1
+      t.timestamps
+    end
   end
 end
