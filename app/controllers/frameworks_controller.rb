@@ -93,6 +93,11 @@ class FrameworksController < ApplicationController
   # data from the persisted {Frameworks::ExplorerGraph} snapshot; pending
   # suggestions still come from the AR suggested_edits table.
   #
+  # View mode surfaces no pending-suggestion hints in the grid (no wavy
+  # underlines, no "N pending" pill, no ghost-entry illustrations) — that
+  # visual chatter belongs in edit mode only, where contributors are
+  # actively reviewing in-flight changes. Edit mode gets the full maps.
+  #
   # @param mode [Symbol] :view (public/contributor view of published state)
   #   or :edit (contributor view showing draft-only additions + pending archives)
   # @return [Array(Frameworks::ExplorerGraph::Framework, Hash)]
@@ -100,7 +105,8 @@ class FrameworksController < ApplicationController
     graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
             Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
 
-    pending_suggestions, pending_illustration_creates = load_pending_suggestion_maps
+    pending_suggestions, pending_illustration_creates =
+      mode == :edit ? load_pending_suggestion_maps : [ {}, {} ]
 
     matrix_data = Frameworks::MatrixDataBuilder.new(
       framework: graph,
