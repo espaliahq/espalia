@@ -121,7 +121,7 @@ Not all capabilities apply to all roles. The matrix shows:
 
 1. **Category** — collapsible group header (click to show/hide all capabilities in category)
 2. **Row** — compact state shows expectation text per level; click to expand illustrations
-3. **Cell** — in compact state, shows expectation + "N examples" indicator badge
+3. **Cell** — in compact state, shows expectation + "N examples" indicator badge (plus a separate amber "N pending" pill when ≥2 pending suggestions exist — see §10)
 
 Illustrations appear only in the expanded row, never inline in cells. This keeps the compact matrix dense and scannable.
 
@@ -152,6 +152,8 @@ The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its conten
 | `capability` | Expand a row | Collapse the row, or "Show all" |
 | `cell` | Click an expanded-row cell | Re-click same cell (→ capability), collapse row (→ framework), or "Show all" |
 
+**Panel header is focus-driven**: `FocusedSuggestionsQuery#descriptor` renders the focus title ("All framework suggestions" / "`<Category>` — category" / capability / "`<Capability>` × L`<n>`") and the server-rendered `clear_path` powers the "Show all" link. See §9 for full header/row anatomy.
+
 **Single-scope accordion**: at most one focus scope is active. Focusing a new row clears any prior cell focus. Collapsing a row clears cell focus.
 
 **Role filter layering**: role selection always applies, but only to `role_illustration` rows in the panel. Higher-level entity types (capability, category, expectation) are unaffected by the roles filter — those are framework-level constructs.
@@ -164,16 +166,32 @@ The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its conten
 
 Each suggestion row in the panel must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
 
+**Panel header** (rendered by `PanelFrame#header`):
+- **Focus title** — derived from `FocusedSuggestionsQuery#descriptor`:
+  - `:framework` → "All framework suggestions"
+  - `:category` → "`<Category>` — category"
+  - `:capability` → capability name
+  - `:cell` → "`<Capability>` × L`<n>`"
+- **Pending count** — "N pending" subtext (counted after status filtering, see below).
+- **"← Show all framework suggestions"** clear-focus link — only rendered when focus is not `:framework`. The server passes a `clear_path` that drops focus params; clicking it navigates via the `suggestion-panel` Turbo Frame and fires `click->context-pane#clearFocus` to keep the browser URL in sync.
+- **"View all"** link (top-right) — breaks out of the frame via `data-turbo-frame="_top"` to the full suggestion index.
+
 **Row anatomy (top to bottom):**
-1. **Two badges** — entity type (Illustration / Expectation / Capability / Category) in blue, change kind (Edit / New / Delete) in neutral/green/amber.
-2. **Context line** — full-width, never truncated. Locates the suggestion within the framework hierarchy. Content varies by entity type:
-   - *Illustration*: "Role Name · Level Title" (e.g. "Software Engineer · Engineer II")
-   - *Expectation*: "Capability Name · Level N" (e.g. "Strategic Thinking · Level 2")
-   - *Capability*: "Capability name" or "Capability description" (the field being edited)
-   - *Category*: "Category name" or "Category description"
-3. **Preview text** — the proposed value (edit), proposed content (create), or current value (delete). Clamped to 2 lines.
+1. **Two badges** on the same line as the (hover-revealed) detail arrow — entity type in blue, change kind (Edit / New / Delete) in neutral/green/amber. Entity labels come from `Suggestions::IndexView::ENTITY_TYPE_LABELS`.
+2. **Context line** — full-width, never truncated. Locates the suggestion within the framework hierarchy. Content varies by entity type *and kind*:
+   - *Illustration*: "Role Name · Level Title" (e.g. "Software Engineer · Engineer II"). Falls back to "Role Name · Level N" when no matching level title is found.
+   - *Expectation*: "Capability Name · Level N" (e.g. "Strategic Thinking · Level 2").
+   - *Capability edit/delete*: "Capability `<field>`" (e.g. "Capability description"). **Creates render no context line** — the capability name appears in the preview.
+   - *Category edit/delete*: "Category `<field>`". Creates render no context line.
+   - *Role / Role family / Level suggestions*: no context line (these appear only at framework focus — see entity coverage below).
+3. **Preview text** — the proposed value (edit), proposed content (create), or current value (delete). Clamped to 2 lines. For creates, `PanelFrame#creation_preview` picks the first present value from a preferred set of content keys so previews read as names/descriptions rather than raw IDs.
+
+**Empty state**: when no suggestions match the current filter, the body renders "No pending suggestions." in a centred panel. The header (title, count "0 pending", "Show all" link if focused, "View all") still renders.
+
+**Entity type coverage**: the four matrix-anchored types — Illustration, Expectation, Capability, Category — match at every focus level. `role`, `role_family`, and `level` suggestions are served by `FocusedSuggestionsQuery` **only at framework focus** (`match?` else-branch) because they have no matrix coordinates to narrow against.
 
 **Key principles:**
+- Only pending suggestions render (`PanelFrame#pending` filters `status == "pending"` client-side after the query returns). Approved/rejected/withdrawn are visible only via "View all".
 - Never show review tiers (T1/T2/T3) — these are internal approval routing, not user context.
 - The context line gets its own full-width row, never sharing with badges. Long capability or role names must remain readable.
 - Both role AND level are required for illustrations — role alone doesn't identify the seniority band; level title alone may not identify the role.
@@ -182,7 +200,31 @@ Each suggestion row in the panel must answer three questions at a glance: **what
 **Row click behaviour:**
 - Clicking the suggestion body (context + preview) navigates the explorer matrix to the relevant entity — expands the capability row, scrolls it into view, and sets the focus context. This lets the user see the suggestion *in the grid* before deciding to act.
 - A separate detail-page link (arrow icon, visible on hover) navigates to the full suggestion detail view via `data-turbo-frame="_top"`.
-- Navigation coordinates are pre-computed server-side by `FocusedSuggestionsQuery#navigation_coords` and rendered as `data-nav-*` attributes on the row body. The `context_pane_controller` dispatches `suggestion:navigate` on click; `matrix_controller` listens and programmatically expands + scrolls.
+- Navigation coordinates are pre-computed server-side by `FocusedSuggestionsQuery#navigation_coords` and rendered as `data-nav-*` attributes on the row body. The `context_pane_controller` dispatches `suggestion:navigate` on click; `matrix_controller` listens and programmatically expands + scrolls. Rows without resolvable coordinates (e.g. role/family/level at framework focus) render without the `nav_*` data attributes and are non-interactive for navigation.
+
+### 10. In-Matrix Suggestion Indicators
+
+Suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has pending changes":
+
+**Decoration concern** (`app/views/frameworks/explorer/concerns/suggestion_decoration.rb`):
+- `PENDING_EDIT_CLASSES` — amber wavy underline (applied when `pending_edit_count > 0`, covers both pending edits and pending creates).
+- `PENDING_DELETE_CLASSES` — red strikethrough (applied when `pending_delete_count > 0`).
+- Delete wins over edit if both are non-zero.
+
+**Where decoration is applied** — four sites, each pulling its count from `MatrixDataBuilder`'s `pending_suggestions` map:
+
+| Component | Decorated text | Count source |
+|-----------|----------------|--------------|
+| `MatrixCategoryGroup` | Category name (in the sticky category header) | `category_data[:pending_suggestion_count]` |
+| `MatrixRow` | Capability name (compact row, sticky left column) | `capability_data[:pending_suggestion_count]` |
+| `MatrixCell` | Expectation text (compact cell) | `cell_data[:pending_suggestion_count]` |
+| `IllustrationFrame` | Illustration text (expanded row) | `cell_data[:illustration_pending_edits][illustration_id]` |
+
+**InlineIndicator pill** (`app/views/frameworks/suggestions/inline_indicator.rb`) — small amber "N pending" count badge. Currently rendered **only** by `MatrixCell`, and **only** when `pending_suggestion_count >= 2`. The threshold is deliberate: a single pending edit is already visible as the underline, so the pill exists to disambiguate *stacked* edits on the same expectation where the underline alone doesn't reveal how many proposals are in flight. Category / capability / illustration rows do not render the pill.
+
+**Ghost entries for pending-create illustrations** (`app/views/frameworks/explorer/pending_illustration_frame.rb`) — pending `role_illustration` creates render inline in the expanded row as a wavy-underlined list item alongside the real illustrations for that role. They carry the same pencil-icon affordance as real illustrations: the suggestion's original author can amend the pending proposal; other collaborators submit an alternative suggestion. This keeps pending proposals visible *in situ* rather than only in the context pane, so reviewers see the illustration next to its peers.
+
+**Data source invariants** — all pending counts are pre-aggregated by `MatrixDataBuilder` during the single eager-load pass. No view component queries the database for suggestion counts.
 
 ### 7. Responsive Behaviour
 
@@ -310,9 +352,6 @@ CSS `position: sticky` anchors to the nearest scrolling ancestor. If the matrix 
 ### Context Pane: Comments & Activity Feed
 The context pane currently shows suggested edits. Future content types — comments, activity log, evidence — will reuse the same focus protocol (`matrix:focus-changed` event, `FocusedSuggestionsQuery`-style in-memory filtering) and row anatomy (entity badge + kind badge, context line, preview). Each content type should follow the same principle: no internal categorisations in the UI, always show where-in-the-framework context, never truncate the context line.
 
-### Matrix Cell Edit Indicators
-`MatrixCell` could show small icons for pending suggestions (a dot or count badge) to surface collaborative activity without opening the context pane. The pending-count data is already available via `MatrixDataBuilder`'s `pending_suggestions` map.
-
 ## File Reference
 
 | File | Purpose |
@@ -324,9 +363,13 @@ The context pane currently shows suggested edits. Future content types — comme
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row |
-| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator |
-| `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities) |
-| `app/views/frameworks/suggestions/panel_frame.rb` | Context pane Turbo Frame content (focused suggestion list + focus header + "Show all" clear link) |
+| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2) |
+| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration |
+| `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions |
+| `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
+| `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
+| `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, pending-suggestion counts) |
+| `app/views/frameworks/suggestions/panel_frame.rb` | Context pane Turbo Frame content (focused suggestion list + focus header + "Show all" clear link + empty state) |
 | `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
 | `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
