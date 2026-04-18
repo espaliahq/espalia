@@ -114,6 +114,70 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "GET /frameworks/:id/edit" do
+    should "redirect viewer (no collaborator role) with not-authorised flash" do
+      sign_in @user
+      get edit_framework_path(@framework.framework_id)
+
+      assert_response :redirect
+      assert_match(/not authorized/i, flash[:alert])
+    end
+
+    should "render 200 for a collaborator with suggest rights" do
+      ActsAsTenant.with_tenant(@tenant) do
+        person = create(:person, tenant: @tenant, email: @user.email)
+        TenantUser.find_by(user: @user).update!(person: person)
+        create(:framework_collaborator, tenant: @tenant,
+               framework_id: @framework.framework_id, person_id: person.id,
+               role: "collaborator")
+      end
+
+      sign_in @user
+      get edit_framework_path(@framework.framework_id)
+
+      assert_response :success
+      assert_includes response.body, "Engineering Growth"
+    end
+
+    should "render 200 for a tenant admin" do
+      admin_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: admin_user, role: :admin)
+      end
+
+      sign_in admin_user
+      get edit_framework_path(@framework.framework_id)
+
+      assert_response :success
+    end
+  end
+
+  context "GET /frameworks/:id/edit/matrix" do
+    should "redirect non-collaborator" do
+      sign_in @user
+      get edit_matrix_framework_path(@framework.framework_id)
+
+      assert_response :redirect
+    end
+
+    should "render turbo frame for a collaborator with suggest rights" do
+      ActsAsTenant.with_tenant(@tenant) do
+        person = create(:person, tenant: @tenant, email: @user.email)
+        TenantUser.find_by(user: @user).update!(person: person)
+        create(:framework_collaborator, tenant: @tenant,
+               framework_id: @framework.framework_id, person_id: person.id,
+               role: "collaborator")
+      end
+
+      sign_in @user
+      get edit_matrix_framework_path(@framework.framework_id)
+
+      assert_response :success
+      assert_includes response.body, "turbo-frame"
+      assert_not_includes response.body, "<html"
+    end
+  end
+
   private
 
   def sign_in(user)

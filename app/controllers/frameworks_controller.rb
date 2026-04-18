@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class FrameworksController < ApplicationController
-  before_action :set_framework, only: [ :show, :matrix ]
+  before_action :set_framework, only: [ :show, :matrix, :edit, :edit_matrix ]
 
   # GET /frameworks
   def index
@@ -20,7 +20,7 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id
   def show
     authorize @framework
-    graph, matrix_data = load_explorer_matrix
+    graph, matrix_data = load_explorer_matrix(mode: :view)
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
 
     render Views::Frameworks::ShowView.new(
@@ -40,7 +40,44 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id/matrix
   def matrix
     authorize @framework, :matrix?
-    graph, matrix_data = load_explorer_matrix
+    graph, matrix_data = load_explorer_matrix(mode: :view)
+
+    render Views::Frameworks::MatrixFrameView.new(
+      framework: graph,
+      matrix_data: matrix_data,
+      selected_role_ids: parse_role_ids
+    ), layout: false
+  end
+
+  # GET /frameworks/:id/edit
+  #
+  # Edit-mode counterpart of #show. Restricted to collaborators with suggest
+  # rights (see FrameworkPolicy#edit?). Renders the same explorer shell but
+  # sources the matrix from the graph in :edit mode, so draft-only
+  # entities and pending archives become visible.
+  def edit
+    authorize @framework, :edit?
+    graph, matrix_data = load_explorer_matrix(mode: :edit)
+    tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
+
+    render Views::Frameworks::ShowView.new(
+      framework: graph,
+      role_families: graph.role_families,
+      selected_role_ids: parse_role_ids,
+      track_filter: resolved_track_filter,
+      matrix_data: matrix_data,
+      user: current_user,
+      current_tenant: ActsAsTenant.current_tenant,
+      tenants: tenants,
+      is_admin: policy(@framework).admin?,
+      pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count
+    )
+  end
+
+  # GET /frameworks/:id/edit/matrix
+  def edit_matrix
+    authorize @framework, :edit_matrix?
+    graph, matrix_data = load_explorer_matrix(mode: :edit)
 
     render Views::Frameworks::MatrixFrameView.new(
       framework: graph,
@@ -61,8 +98,10 @@ class FrameworksController < ApplicationController
   # data from the persisted {Frameworks::ExplorerGraph} snapshot; pending
   # suggestions still come from the AR suggested_edits table.
   #
+  # @param mode [Symbol] :view (public/contributor view of published state)
+  #   or :edit (contributor view showing draft-only additions + pending archives)
   # @return [Array(Frameworks::ExplorerGraph::Framework, Hash)]
-  def load_explorer_matrix
+  def load_explorer_matrix(mode:)
     graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
             Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
 
@@ -74,6 +113,7 @@ class FrameworksController < ApplicationController
       categories: graph.capability_categories,
       selected_role_ids: parse_role_ids,
       track_filter: resolved_track_filter,
+      mode: mode,
       pending_suggestions: pending_suggestions,
       pending_illustration_creates: pending_illustration_creates
     ).build

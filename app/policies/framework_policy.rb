@@ -30,6 +30,15 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def update_illustration? = tenant_admin? || framework_collaborator_can_edit?
 
+  # Edit-mode access for the Framework Explorer: same bar as submitting a
+  # suggestion — any collaborator role plus tenant admin. Viewers get 404.
+  #
+  # @return [Boolean]
+  def edit? = tenant_admin? || framework_collaborator_can_suggest?
+
+  # @return [Boolean]
+  def edit_matrix? = edit?
+
   # @return [Boolean]
   def suggest_edit? = tenant_admin? || framework_collaborator_can_suggest?
 

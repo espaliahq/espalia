@@ -35,6 +35,14 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.suggest_edit?
     end
 
+    should "deny edit without collaborator role" do
+      assert_not policy.edit?
+    end
+
+    should "deny edit_matrix without collaborator role" do
+      assert_not policy.edit_matrix?
+    end
+
     should "deny submit_suggestion without collaborator role" do
       assert_not policy.submit_suggestion?
     end
@@ -96,6 +104,14 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "allow view_suggestions" do
       assert policy.view_suggestions?
     end
+
+    should "allow edit" do
+      assert policy.edit?
+    end
+
+    should "allow edit_matrix" do
+      assert policy.edit_matrix?
+    end
   end
 
   context "as a global admin" do
@@ -149,6 +165,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.view_suggestions?
     end
 
+    should "allow edit" do
+      assert policy.edit?
+    end
+
     should "deny settings (requires tenant admin)" do
       assert_not policy.settings?
     end
@@ -185,6 +205,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "deny view_suggestions" do
       assert_not policy.view_suggestions?
     end
+
+    should "deny edit" do
+      assert_not policy.edit?
+    end
   end
 
   context "with no tenant membership" do
@@ -202,6 +226,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.suggest_edit?
       assert_not policy.submit_suggestion?
       assert_not policy.view_suggestions?
+      assert_not policy.edit?
+      assert_not policy.edit_matrix?
     end
   end
 
