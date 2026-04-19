@@ -78,7 +78,8 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       ),
       data: {
         inline_editor_target: "form",
-        turbo: "true"
+        turbo: "true",
+        action: "turbo:submit-end->inline-editor#submitted"
       }
     ) do
       input(type: "hidden", name: "_method", value: "patch")

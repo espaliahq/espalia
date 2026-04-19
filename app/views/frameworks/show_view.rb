@@ -321,7 +321,8 @@ class Views::Frameworks::ShowView < Views::Base
         context_pane_initial_role_ids_value: @selected_role_ids.to_json,
         context_pane_initial_track_value: @track_filter,
         action: "tree:changed@window->context-pane#onTreeChanged " \
-                "matrix:focus-changed@window->context-pane#onFocusChanged"
+                "matrix:focus-changed@window->context-pane#onFocusChanged " \
+                "suggestion:submitted@window->context-pane#onSuggestionSubmitted"
       }
     ) do
       # No `src:` — the context-pane Stimulus controller sets the src on

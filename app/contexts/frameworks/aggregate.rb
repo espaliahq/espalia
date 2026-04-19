@@ -1123,7 +1123,13 @@ class Frameworks::Aggregate
 
   on Frameworks::Events::BehaviouralExpectationUpdated do |event|
     exp = @expectations[event.data[:expectation_id]]
-    exp[:description] = event.data[:description] if event.data.key?(:description)
+    # Both update_behavioural_expectation and apply_suggested_content_change
+    # emit this event with `:new_description` (the canonical key on update
+    # events — see the event at line 446 and line 1328). Reading `:description`
+    # left the aggregate stale after auto-approved edits, which leaked into
+    # the ExplorerGraph snapshot once the aggregate became the graph's source.
+    new_desc = event.data[:new_description] || event.data[:description]
+    exp[:description] = new_desc if new_desc
   end
 
   on Frameworks::Events::RoleIllustrationAdded do |event|
@@ -1138,7 +1144,10 @@ class Frameworks::Aggregate
 
   on Frameworks::Events::RoleIllustrationUpdated do |event|
     ill = @illustrations[event.data[:illustration_id]]
-    ill[:description] = event.data[:description] if event.data.key?(:description)
+    # See BehaviouralExpectationUpdated above — same `:new_description` vs
+    # `:description` discrepancy between emit sites and this handler.
+    new_desc = event.data[:new_description] || event.data[:description]
+    ill[:description] = new_desc if new_desc
   end
 
   on Frameworks::Events::RoleIllustrationRemoved do |event|

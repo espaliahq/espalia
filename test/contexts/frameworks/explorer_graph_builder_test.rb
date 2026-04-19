@@ -203,4 +203,39 @@ class Frameworks::ExplorerGraphBuilderTest < ActiveSupport::TestCase
       assert_equal "archived", cap.status
     end
   end
+
+  context "description tracking after approved suggestion edits" do
+    # An auto-approved edit on an illustration or expectation emits
+    # Role/BehaviouralIllustrationUpdated / BehaviouralExpectationUpdated
+    # with `:new_description`. The aggregate handlers must pick that up so
+    # the ExplorerGraph snapshot reflects the approved text — otherwise
+    # re-editing after an earlier pending suggestion rolls the graph back
+    # to the original text on reload.
+    should "propagate approved illustration description change into the graph" do
+      suggestion_id = SecureRandom.uuid_v7
+      @aggregate.suggest_edit(@framework_id, suggestion_id,
+                              "role_illustration", @illustration_id,
+                              "description", "Rewritten illustration",
+                              "author-1")
+      @aggregate.approve_suggestion(suggestion_id, "reviewer-1")
+
+      graph = Frameworks::ExplorerGraphBuilder.new(@aggregate).build
+      ill = graph.capability_categories.first.capabilities.first
+        .expectations.first.illustrations.first
+      assert_equal "Rewritten illustration", ill.description
+    end
+
+    should "propagate approved expectation description change into the graph" do
+      suggestion_id = SecureRandom.uuid_v7
+      @aggregate.suggest_edit(@framework_id, suggestion_id,
+                              "behavioural_expectation", @expectation_id,
+                              "description", "Rewritten expectation",
+                              "author-1")
+      @aggregate.approve_suggestion(suggestion_id, "reviewer-1")
+
+      graph = Frameworks::ExplorerGraphBuilder.new(@aggregate).build
+      exp = graph.capability_categories.first.capabilities.first.expectations.first
+      assert_equal "Rewritten expectation", exp.description
+    end
+  end
 end

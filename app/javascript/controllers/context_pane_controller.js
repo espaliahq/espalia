@@ -61,6 +61,17 @@ export default class extends BaseController {
     this.#pushBrowserUrl()
   }
 
+  // Dispatched by inline_editor_controller after any successful inline
+  // edit or add (illustration / capability / category / expectation).
+  // Reloads the panel so a freshly-landed pending suggestion appears in
+  // the feed without a page refresh. #reload forces a re-fetch even when
+  // the src hasn't changed.
+  onSuggestionSubmitted() {
+    if (!this.hasFrameTarget) return
+    this.#rebuildFrameSrc()
+    this.frameTarget.reload()
+  }
+
   // Resets the explorer to framework-level focus — collapses any expanded row.
   clearFocus() {
     window.dispatchEvent(new CustomEvent("suggestion:navigate", {

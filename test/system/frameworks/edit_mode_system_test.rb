@@ -202,6 +202,13 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       ).last
       assert_equal "pending", suggestion.status
       assert_equal "Proposed Name", suggestion.suggested_value
+
+      # The suggestions pane should surface the freshly-landed pending row
+      # WITHOUT a page refresh — the inline-editor dispatches
+      # `suggestion:submitted` and the context pane reloads its frame.
+      within "#suggestion-panel" do
+        assert_text "Proposed Name"
+      end
     end
   end
 

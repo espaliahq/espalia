@@ -61,7 +61,14 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
       class: "hidden",
       method: "post",
       action: action,
-      data: { inline_editor_target: "form", turbo: "true" }
+      data: {
+        inline_editor_target: "form",
+        turbo: "true",
+        # Fire a window-scoped suggestion:submitted event after Turbo has
+        # landed the response. The context pane listens for it and reloads
+        # the suggestions panel so pending rows appear without a refresh.
+        action: "turbo:submit-end->inline-editor#submitted"
+      }
     ) do
       input(type: "hidden", name: "_method", value: "patch")
       textarea(
