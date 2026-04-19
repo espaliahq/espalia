@@ -76,12 +76,19 @@ module Frameworks::ExplorerGraph
     Frameworks::ExplorerGraph::ArBuilder.new(ar_framework).build
   end
 
-  # Rebuilds every framework's graph. Run after a FORMAT_VERSION bump.
-  # Yields progress for callers that want to log it.
+  # Rebuilds every framework's graph across every tenant. Run after a
+  # FORMAT_VERSION bump.
+  #
+  # The initial enumeration uses `ActsAsTenant.without_tenant` so a caller
+  # holding an ambient tenant context (mid-request, or a seed/rake step
+  # that ran `with_tenant` earlier) still sees every framework. The
+  # per-framework rebuild then re-enters the correct tenant for its events.
   #
   # @yield [framework_id, index, total]
   def rebuild_all!
-    ids = FrameworkState::Framework.pluck(:framework_id, :tenant_id)
+    ids = ActsAsTenant.without_tenant do
+      FrameworkState::Framework.pluck(:framework_id, :tenant_id)
+    end
     ids.each_with_index do |(fid, tenant_id), i|
       ActsAsTenant.with_tenant(Tenant.find(tenant_id)) do
         rebuild(fid)

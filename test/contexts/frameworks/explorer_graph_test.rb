@@ -68,4 +68,30 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
       assert_equal graph.framework_id, Frameworks::ExplorerGraph.load(@framework_id).framework_id
     end
   end
+
+  context ".rebuild_all!" do
+    setup do
+      @other_tenant = create(:tenant)
+      @other_framework_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@other_tenant) do
+        Frameworks::CommandHandler.new.create_framework(@other_framework_id, "Other Framework")
+      end
+    end
+
+    should "visit every framework across tenants even when called inside a tenant scope" do
+      visited = []
+      # Call from inside the first tenant's scope — acts_as_tenant's default
+      # scope would silently filter the pluck to @tenant's frameworks only.
+      # rebuild_all! must use without_tenant to see @other_tenant's too.
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::ExplorerGraph.rebuild_all! do |fid, _i, _total|
+          visited << fid
+        end
+      end
+
+      assert_includes visited, @framework_id
+      assert_includes visited, @other_framework_id
+    end
+  end
 end
