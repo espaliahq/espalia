@@ -6,7 +6,7 @@ This document captures the design decisions, interaction patterns, and hard-won 
 
 ## Overview
 
-The Framework Explorer is a three-pane interactive view for browsing career frameworks. It renders a **capability x level matrix** filtered by user-selected roles, with a hierarchical role tree for navigation.
+The Framework Explorer is a two- or three-pane interactive view for browsing career frameworks. It renders a **capability x level matrix** filtered by user-selected roles, with a hierarchical role tree for navigation. View mode has two panes (role tree + matrix); edit mode adds a third — the context / suggestions pane on the right.
 
 The explorer has two modes, both backed by the same components:
 
@@ -51,7 +51,7 @@ After a pending edit, the inline-edit controllers re-query the AR `SuggestedEdit
 |      [x] Software Eng.    |              |            |            |     |
 |      [ ] Eng. Manager     |              |            |            |     |
 +---------------------------+----------------------------------------------+
-|  (future: context pane)                                                  |
+|  Edit mode only: context (suggestions) pane to the right of the matrix  |
 +--------------------------------------------------------------------------+
 ```
 
@@ -77,8 +77,10 @@ User toggles role checkbox
 ```
 PageLayout
 └── div[data-controller="framework-explorer"]
-    ├── framework_header (back link, name, badge)
-    ├── stats_bar (role count toggle button, levels, capabilities, suggestion count toggle)
+    ├── framework_header
+    │   ├── back link, framework name, version badge, "Edit mode" badge (edit only)
+    │   └── right cluster: edit-suggest toggle (edit only) + mode switcher + settings link
+    ├── stats_bar (role count toggle, levels, capabilities; "N Suggestions" toggle — edit only)
     └── explorer_layout[data-controller="matrix"]
         ├── aside[data-controller="tree"]  ← left pane (role tree)
         │   └── RoleTree
@@ -90,25 +92,37 @@ PageLayout
         │           └── MatrixCategoryGroup (per category)
         │               ├── category header row (sticky)
         │               │   ├── chevron button → matrix#toggleCategory
-        │               │   └── name span     → matrix#focusCategory
+        │               │   └── CategoryNameFrame (edit: inline editor; view: plain name)
         │               └── MatrixRow (per capability)
         │                   ├── compact row (click → matrix#toggleRow)
+        │                   │   ├── CapabilityNameFrame (edit: inline editor)
+        │                   │   └── MatrixCell × N
+        │                   │       └── ExpectationTextFrame (edit: inline editor)
         │                   └── expanded row (illustrations, hidden)
         │                       └── expanded td (click → matrix#focusCell)
-        └── aside[data-controller="context-pane"]  ← right pane (context feed)
+        │                           ├── IllustrationFrame (edit: pencil + inline editor)
+        │                           ├── PendingIllustrationFrame (ghost; edit mode only)
+        │                           └── NewIllustrationFrame ("+ Add"; edit mode only)
+        └── aside[data-controller="context-pane"]  ← right pane (edit mode only)
             └── turbo-frame#suggestion-panel (Suggestions::PanelFrame)
 ```
 
 ### Data Flow
 
 ```
-Controller (eager loads)
-  → MatrixDataBuilder (filters in-memory, builds matrix structure)
-    → ShowView / MatrixFrameView (renders Phlex components)
-      → Stimulus controllers (manage interactivity)
+Controller
+  → Frameworks::ExplorerGraph.load(framework_id)          # single indexed jsonb fetch
+      (falls back to .rebuild on miss / format bump)
+  → MatrixDataBuilder(framework: graph, mode: :view|:edit) # in-memory filter + structure
+      — view mode: filter out added_in_draft entities, drop pending-suggestion maps
+      — edit mode: include everything, wire pending decorations
+  → ShowView / MatrixFrameView (renders Phlex components with mode:)
+    → Stimulus controllers (manage interactivity)
 ```
 
-The `MatrixDataBuilder` is the single source of truth for what the matrix displays. It operates entirely on eager-loaded ActiveRecord associations — no additional queries. This is safe because framework data is relatively small (100-200 capabilities, 50-100 roles).
+The matrix reads from the `Frameworks::ExplorerGraph` snapshot — a persistent JSON hash tree written atomically with every framework event by `Repository#with_framework`. The explorer no longer eager-loads the `FrameworkState::*` AR tree; that substrate remains for assessments, reporting, HRIS, and the full suggestions index. See `docs/architecture/framework-edit-mode-benchmarks.md` for why (read latency is ~6 ms p50 at Small, ~19 ms at Medium — versus hundreds of ms for AR eager-load or aggregate replay).
+
+`MatrixDataBuilder` is the single source of truth for what the matrix displays. Operates entirely in-memory on the duck-typed graph — no additional queries. Framework size stays in the 100–200 capability / 50–100 role range.
 
 ## Key Design Decisions
 
@@ -302,16 +316,27 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 - **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
 
-### context_pane_controller.js (explorer only)
+### context_pane_controller.js (edit mode only)
 Lives on the right-hand `<aside>` element. Sole owner of:
-- **Panel frame src** (`#suggestion-panel`). Rebuilds the frame URL whenever focus or role selection changes; short-circuits when the computed URL equals the current `src` to prevent duplicate fetches.
+- **Panel frame src** (`#suggestion-panel`). Rebuilds the frame URL whenever focus, role selection, or a fresh suggestion submission occurs. Short-circuits when the computed URL equals the current `src` to prevent duplicate fetches. Forces a reload on `onSuggestionSubmitted` so a just-landed pending row surfaces even if the URL didn't change.
 - **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=` via `history.pushState()`; removes them when focus returns to `framework`.
-- **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch.
+- **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch. Unconditionally primes the frame `src` on connect because the pane is visible from initial render in edit mode (no lazy-until-open grace period — see Hard-Won Lesson 14).
 
-Listens at window scope via `data-action="tree:changed@window->context-pane#onTreeChanged matrix:focus-changed@window->context-pane#onFocusChanged"`.
+Listens at window scope for:
+- `tree:changed@window->context-pane#onTreeChanged`
+- `matrix:focus-changed@window->context-pane#onFocusChanged`
+- `suggestion:submitted@window->context-pane#onSuggestionSubmitted`
 
 Also dispatches:
 - **`suggestion:navigate`** — fired by `focusSuggestion` when the user clicks a suggestion row body. Reads `data-nav-*` attributes from the clicked element and dispatches to window for `matrix_controller` to handle.
+
+### inline_editor_controller.js
+Wraps every inline-edit site (IllustrationFrame, PendingIllustrationFrame, NewIllustrationFrame, CapabilityNameFrame, CategoryNameFrame, ExpectationTextFrame).
+- **Display / form toggle** — `startEdit` hides the display target and reveals the form; `cancel` restores display and resets the textarea to its `defaultValue`.
+- **Post-submit signal** — on `turbo:submit-end` (bound via `data-action="turbo:submit-end->inline-editor#submitted"` on each form), dispatches a window-scoped `suggestion:submitted` event if the submission succeeded. `context_pane_controller` listens for it and reloads the suggestions panel so a just-landed pending row appears without a page refresh.
+
+### edit_mode_toggle_controller.js (edit mode only)
+Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
 
 ### Event contracts
 
@@ -320,6 +345,7 @@ Also dispatches:
 | `tree:changed` | `tree_controller` | `{ roleIds: string[], track: "ic" \| "management" \| "both" }` |
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 | `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null }` — triggers `matrix_controller#navigateToEntity` |
+| `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
 
 ## Hard-Won Lessons
 
@@ -385,6 +411,16 @@ When an inline-edit controller (e.g. `IllustrationsController`, `CapabilitiesCon
 ### 14. A visible Turbo Frame with `src:` auto-fetches before Stimulus primes
 
 With the context pane hidden by default, `loading: "lazy"` meant the frame only fetched on first open — by which time `context_pane_controller` had run `connect()` and set the focused `src`. Making the pane visible by default in edit mode broke that: the lazy fetch fires on initial layout, using the un-focused server-rendered `src`, before the controller rebuilds for deep-link focus params. Fix: omit the `src:` from the server-rendered frame and let the controller unconditionally set it on connect.
+
+### 15. Aggregate on-handlers and event data keys drift silently until the aggregate becomes a read source
+
+`Frameworks::Aggregate` emits `RoleIllustrationUpdated` and `BehaviouralExpectationUpdated` with `new_description:` in the event payload (both from `update_role_illustration` / `update_behavioural_expectation` and from `apply_suggested_content_change` after an approved suggestion). The aggregate's `on` handlers, however, were reading `event.data[:description]` — which is nil — so the in-memory ivars never updated. This was invisible for years because the aggregate was only a write-side validator; the PublishedState projection read `event.data[:new_description]` correctly and kept the AR read model in sync.
+
+The moment the aggregate became the source for `ExplorerGraph` (see the snapshot-on-write path in `Repository#with_framework`), the bug surfaced as "missing content": after an auto-approved inline edit, the graph snapshot captured the pre-edit text from the stale aggregate ivar, and subsequent page loads served the old value. Fix was a one-line change per handler to read `:new_description` (with `:description` as a defensive fallback). Lesson: whenever an aggregate handler's behaviour starts mattering beyond command validation — anywhere a reader consumes the aggregate's in-memory state — audit the handlers against the event payload keys.
+
+### 16. Controller responses that swap an entity frame must re-query the pending count
+
+After a submit lands, the inline-edit controllers (`Illustrations`, `Capabilities`, `Categories`, `Expectations`) render a fresh turbo-frame containing the post-edit entity. If they pass `pending_edit_count: 0` (or omit it), the wavy-underline decoration doesn't appear — even though a pending suggestion just got created in Suggesting mode. Each response must re-query `FrameworkState::SuggestedEdit.pending` for the entity and thread the count into the frame constructor, so the user sees the pending decoration land immediately without a reload. The `MatrixDataBuilder` path would pick this up on the next full render, but for the in-place Turbo swap the controller has to do it itself.
 
 ## Future Extension Points
 
