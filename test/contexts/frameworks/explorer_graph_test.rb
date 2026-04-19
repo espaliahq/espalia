@@ -18,9 +18,10 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
 
   context ".store + .load round-trip" do
     should "persist and deserialize identically" do
-      Frameworks::ExplorerGraph.store(@framework_id, @graph)
-
-      loaded = Frameworks::ExplorerGraph.load(@framework_id)
+      loaded = ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+        Frameworks::ExplorerGraph.load(@framework_id)
+      end
       assert_equal @framework_id, loaded.framework_id
       assert_equal "Engineering Growth", loaded.name
       assert_equal [], loaded.role_families
@@ -28,24 +29,42 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
     end
 
     should "upsert rather than create duplicate rows" do
-      Frameworks::ExplorerGraph.store(@framework_id, @graph)
-      Frameworks::ExplorerGraph.store(@framework_id, @graph)
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+      end
 
       assert_equal 1, FrameworkExplorerGraph.where(framework_id: @framework_id).count
+    end
+
+    should "scope rows by tenant so another tenant's load misses" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+      end
+
+      other_tenant = create(:tenant)
+      loaded = ActsAsTenant.with_tenant(other_tenant) do
+        Frameworks::ExplorerGraph.load(@framework_id)
+      end
+      assert_nil loaded, "load under a different tenant must not see the row"
     end
   end
 
   context ".load" do
     should "return nil when no row exists" do
-      assert_nil Frameworks::ExplorerGraph.load(SecureRandom.uuid_v7)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil Frameworks::ExplorerGraph.load(SecureRandom.uuid_v7)
+      end
     end
 
     should "return nil on format_version mismatch (stale row)" do
-      Frameworks::ExplorerGraph.store(@framework_id, @graph)
-      FrameworkExplorerGraph.find_by(framework_id: @framework_id)
-        .update_columns(format_version: Frameworks::ExplorerGraph::FORMAT_VERSION + 1)
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+        FrameworkExplorerGraph.find_by(framework_id: @framework_id)
+          .update_columns(format_version: Frameworks::ExplorerGraph::FORMAT_VERSION + 1)
 
-      assert_nil Frameworks::ExplorerGraph.load(@framework_id)
+        assert_nil Frameworks::ExplorerGraph.load(@framework_id)
+      end
     end
   end
 
@@ -59,13 +78,14 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
     end
 
     should "load the aggregate, rebuild, store, and return the graph" do
-      graph = ActsAsTenant.with_tenant(@tenant) do
-        Frameworks::ExplorerGraph.rebuild(@framework_id)
+      graph, loaded = ActsAsTenant.with_tenant(@tenant) do
+        g = Frameworks::ExplorerGraph.rebuild(@framework_id)
+        [ g, Frameworks::ExplorerGraph.load(@framework_id) ]
       end
 
       assert_equal 1, graph.role_families.length
       assert_equal "Engineering", graph.role_families.first.name
-      assert_equal graph.framework_id, Frameworks::ExplorerGraph.load(@framework_id).framework_id
+      assert_equal graph.framework_id, loaded.framework_id
     end
   end
 

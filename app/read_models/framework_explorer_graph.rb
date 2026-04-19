@@ -20,6 +20,9 @@ class FrameworkExplorerGraph < ApplicationRecord
   self.table_name = "framework_explorer_graphs"
   self.primary_key = "framework_id"
 
+  acts_as_tenant :tenant
+  belongs_to :tenant
+
   validates :graph_data, presence: true
   validates :format_version, presence: true,
             numericality: { only_integer: true, greater_than: 0 }

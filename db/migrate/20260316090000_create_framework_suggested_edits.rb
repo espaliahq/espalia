@@ -28,8 +28,17 @@ class CreateFrameworkSuggestedEdits < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_foreign_key :framework_suggested_edits, :people, column: :author_id
-    add_foreign_key :framework_suggested_edits, :people, column: :reviewed_by
+    # author_id is NOT NULL — restrict prevents deleting a Person who has
+    # authored a suggestion. HRIS sync marks people inactive rather than
+    # deleting them, so this is primarily a guard against ad-hoc deletes
+    # (e.g. GDPR right-to-be-forgotten) that would otherwise orphan the
+    # audit trail.
+    add_foreign_key :framework_suggested_edits, :people, column: :author_id,
+                    on_delete: :restrict
+    # reviewed_by is nullable — on Person delete, null out the reviewer so
+    # the suggestion stays intact but loses its reviewer attribution.
+    add_foreign_key :framework_suggested_edits, :people, column: :reviewed_by,
+                    on_delete: :nullify
 
     add_index :framework_suggested_edits, :suggestion_id, unique: true
     add_index :framework_suggested_edits, [ :framework_id, :status ]

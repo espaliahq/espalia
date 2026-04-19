@@ -23,6 +23,12 @@ class CreateFrameworkStates < ActiveRecord::Migration[8.1]
     # docs/architecture/framework-edit-mode-benchmarks.md for why the
     # explorer uses this snapshot rather than the FrameworkState AR tables.
     create_table :framework_explorer_graphs, primary_key: :framework_id, id: :uuid do |t|
+      # Every framework read model is row-level tenant-scoped via
+      # acts_as_tenant (see CLAUDE.md). Defence-in-depth — framework_id is
+      # a UUID and already unique globally, but the convention is that
+      # every tenant-owned projection row carries tenant_id + FK so a
+      # mis-set ActsAsTenant scope can't leak cross-tenant data.
+      t.references :tenant, type: :uuid, null: false, foreign_key: true
       # Plain-hash tree serialized as JSON — no Marshal. The shape is versioned
       # via `format_version` so schema bumps can be detected and lazily
       # rebuilt rather than break reads.
