@@ -42,13 +42,10 @@ class TenantUser < ApplicationRecord
     return person if person_id.present?
 
     ActsAsTenant.with_tenant(tenant) do
-      linked = Person.find_by(email: user.email) ||
-               Person.create!(
-                 tenant: tenant,
-                 email: user.email,
-                 name: self.class.derive_person_name(user.email),
-                 status: "active"
-               )
+      linked = Person.create_or_find_by!(tenant: tenant, email: user.email) do |p|
+        p.name = self.class.derive_person_name(user.email)
+        p.status = "active"
+      end
       update!(person: linked)
       linked
     end
