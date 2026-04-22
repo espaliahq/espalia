@@ -22,6 +22,26 @@ services:
     depends_on:
     - selenium-hub
     - postgres
+    - otelcol
+
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    restart: unless-stopped
+    # Parse the single Authorization header out of OTEL_EXPORTER_OTLP_HEADERS
+    # ("Authorization=Bearer …") so the collector config can reference it as
+    # ${env:UPSTREAM_AUTHORIZATION}. $$ escapes `$` for docker-compose so the
+    # shell (not compose) expands the variable.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export UPSTREAM_AUTHORIZATION="$$(printf %s "$$OTEL_EXPORTER_OTLP_HEADERS" | sed -En 's/^[Aa]uthorization=//p')"
+        exec /otelcol-contrib --config=/etc/otelcol/config.yaml
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+    volumes:
+      - ./otelcol-config.yaml:/etc/otelcol/config.yaml:ro
 
   selenium-hub:
     image: selenium/hub:latest

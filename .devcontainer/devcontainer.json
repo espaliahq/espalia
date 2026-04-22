@@ -26,7 +26,8 @@
     "OTEL_EXPORTER_OTLP_HEADERS": "${localEnv:OTEL_EXPORTER_OTLP_HEADERS}"
   },
   "containerEnv": {
-    "CLAUDE_CODE_EFFORT_LEVEL": "high"
+    "CLAUDE_CODE_EFFORT_LEVEL": "high",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://otelcol:4318"
   },
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   "forwardPorts": [
