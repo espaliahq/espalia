@@ -50,8 +50,9 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   def edit_button
     button(
       type: "button",
-      class: "opacity-0 group-hover/ill:opacity-100 transition-opacity " \
-             "text-gray-400 hover:text-primary shrink-0 mt-0.5",
+      class: "opacity-0 group-hover/ill:opacity-100 " \
+             "group-focus-within/ill:opacity-100 focus-visible:opacity-100 " \
+             "transition-opacity text-gray-400 hover:text-primary shrink-0 mt-0.5",
       data: { action: "inline-editor#startEdit" },
       aria_label: @is_author ? "Amend suggestion" : "Suggest alternative"
     ) do
@@ -76,7 +77,11 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
         framework_id: @framework_id,
         id: @suggestion.suggestion_id
       ),
-      data: { inline_editor_target: "form", turbo: "true" }
+      data: {
+        inline_editor_target: "form",
+        turbo: "true",
+        action: "turbo:submit-end->inline-editor#submitted"
+      }
     ) do
       input(type: "hidden", name: "_method", value: "patch")
       # amend endpoint expects suggestion[suggested_value]
@@ -94,7 +99,11 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
       class: "hidden pl-2",
       method: "post",
       action: framework_illustrations_path(framework_id: @framework_id),
-      data: { inline_editor_target: "form", turbo: "true" }
+      data: {
+        inline_editor_target: "form",
+        turbo: "true",
+        action: "turbo:submit-end->inline-editor#submitted"
+      }
     ) do
       input(type: "hidden", name: "illustration[expectation_id]", value: @suggestion.parent_id)
       input(type: "hidden", name: "illustration[role_id]", value: @attrs[:role_id])

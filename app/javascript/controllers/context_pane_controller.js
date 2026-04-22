@@ -40,6 +40,18 @@ export default class extends BaseController {
       track: this.initialTrackValue
     }
     this.#hydrateFromUrl()
+
+    // Browser back/forward changes the URL without re-mounting the
+    // Stimulus controller, so the pane would stay stuck on the previous
+    // focus unless we re-hydrate. Bind once on connect, unbind on
+    // disconnect to avoid leaks on Turbo navigations.
+    this.onPopState = () => this.#hydrateFromUrl()
+    window.addEventListener("popstate", this.onPopState)
+  }
+
+  disconnect() {
+    super.disconnect()
+    window.removeEventListener("popstate", this.onPopState)
   }
 
   onTreeChanged(event) {
@@ -95,18 +107,16 @@ export default class extends BaseController {
 
   // private
 
-  // Reads focus/role params from the browser URL so that a deep-link reload
-  // restores state for the panel (the matrix already reads roles/track itself).
+  // Reads focus params from the browser URL into state. Called on connect
+  // AND on popstate — browser back/forward can remove params just as
+  // easily as add them, so reset focus state before repopulating.
   #hydrateFromUrl() {
     const url = new URL(window.location.href)
-    const focus = url.searchParams.get("focus")
-    if (focus) this.state.focus = focus
-    const categoryId = url.searchParams.get("category_id")
-    if (categoryId) this.state.categoryId = categoryId
-    const capabilityId = url.searchParams.get("capability_id")
-    if (capabilityId) this.state.capabilityId = capabilityId
+    this.state.focus = url.searchParams.get("focus") || "framework"
+    this.state.categoryId = url.searchParams.get("category_id") || null
+    this.state.capabilityId = url.searchParams.get("capability_id") || null
     const levelOrdinal = url.searchParams.get("level_ordinal")
-    if (levelOrdinal) this.state.levelOrdinal = parseInt(levelOrdinal, 10)
+    this.state.levelOrdinal = levelOrdinal ? parseInt(levelOrdinal, 10) : null
 
     // Always prime the frame src on connect — in edit mode the pane is
     // visible at page load and Turbo's lazy fetch fires immediately, so we

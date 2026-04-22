@@ -283,15 +283,24 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
         card.body do
           div(class: "space-y-4") do
             primary_actions_row if primary_actions_visible?
-            amend_section if @can_amend && @suggestion.status == "pending"
+            amend_section if amend_visible?
           end
         end
       end
     end
   end
 
+  # Amend is only offered for edit-kind suggestions. Create suggestions
+  # carry their payload in proposed_attributes, which the current amend
+  # form doesn't round-trip into — approving a create amended this way
+  # would silently ignore the edited text. Gate the UI until a create-
+  # aware amend contract exists.
+  def amend_visible?
+    @can_amend && @suggestion.status == "pending" && @suggestion.kind == "edit"
+  end
+
   def any_actions_visible?
-    primary_actions_visible? || (@can_amend && @suggestion.status == "pending")
+    primary_actions_visible? || amend_visible?
   end
 
   def primary_actions_visible?

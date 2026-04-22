@@ -237,6 +237,10 @@ export default class extends BaseController {
     const row = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
     if (!row) return
 
+    // If the target row's category is collapsed (navigating from the
+    // suggestions pane), reveal it first — otherwise the expand + scroll
+    // land on a still-hidden row.
+    this.#revealCategoryForRow(row)
     this.#expandRow(capabilityId)
 
     row.scrollIntoView({ behavior: "smooth", block: "center" })
@@ -334,6 +338,25 @@ export default class extends BaseController {
     }
 
     return rows
+  }
+
+  // Ensures the target row's category is uncollapsed so subsequent expand +
+  // scroll operations operate on a visible node. No-op when the category is
+  // already open.
+  #revealCategoryForRow(row) {
+    const categoryId = this.#categoryIdForRow(row)
+    if (!categoryId) return
+
+    const header = this.categoryHeaderTargets.find(h => h.dataset.categoryId === categoryId)
+    if (!header) return
+
+    this.#categoryRows(header).forEach(r => r.classList.remove("hidden"))
+
+    const chevron = header.querySelector("[data-matrix-target='categoryChevron']")
+    if (chevron) {
+      chevron.classList.add("rotate-90")
+      chevron.classList.remove("rotate-0")
+    }
   }
 
   #updateBrowserUrl(roleIds, track) {
