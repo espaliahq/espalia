@@ -10,9 +10,12 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
     @author_user = create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
-      create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
-      create(:tenant_user, tenant: @tenant, user: @author_user, role: :member)
+      @admin_person = create(:person, tenant: @tenant, email: @admin_user.email)
+      @member_person = create(:person, tenant: @tenant, email: @member_user.email)
+      @author_person = create(:person, tenant: @tenant, email: @author_user.email)
+      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
+      create(:tenant_user, tenant: @tenant, user: @member_user, role: :member, person: @member_person)
+      create(:tenant_user, tenant: @tenant, user: @author_user, role: :member, person: @author_person)
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
@@ -37,13 +40,22 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       )
       handler.publish_version(@framework_id, "test")
 
+      # Add collaborator roles — required after authorization tightening.
+      # Admin is owner, member and author are collaborators (can suggest, cannot approve).
+      handler.add_collaborator(@framework_id, @admin_person.id.to_s, "owner",
+                               added_by: @admin_person.id.to_s)
+      handler.add_collaborator(@framework_id, @member_person.id.to_s, "collaborator",
+                               added_by: @admin_person.id.to_s)
+      handler.add_collaborator(@framework_id, @author_person.id.to_s, "collaborator",
+                               added_by: @admin_person.id.to_s)
+
       # Seed two pending suggestions, authored by @author_user (not auto-approved
       # because we use mode: :suggesting).
       @illustration_suggestion_id = SecureRandom.uuid_v7
       handler.suggest_edit(
         @framework_id, @illustration_suggestion_id,
         "role_illustration", @ill_id, "description",
-        "Proactively seeks clarification", @author_user.id.to_s,
+        "Proactively seeks clarification", @author_person.id.to_s,
         rationale: "Sharper wording",
         mode: :suggesting
       )
@@ -52,7 +64,7 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       handler.suggest_edit(
         @framework_id, @expectation_suggestion_id,
         "behavioural_expectation", @eid, "description",
-        "Asks open-ended questions to surface assumptions", @author_user.id.to_s,
+        "Asks open-ended questions to surface assumptions", @author_person.id.to_s,
         mode: :suggesting
       )
     end
@@ -89,6 +101,61 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
     should "redirect unauthenticated users to sign in" do
       get framework_suggestions_path(framework_id: @framework_id)
       assert_redirected_to new_user_session_path
+    end
+  end
+
+  context "GET /frameworks/:framework_id/suggestions?layout=panel focused" do
+    should "narrow panel to a single capability's suggestions" do
+      sign_in @member_user
+      get framework_suggestions_path(
+        framework_id: @framework_id, layout: "panel",
+        focus: "capability", capability_id: @cap_id
+      )
+
+      assert_response :success
+      # Expectation suggestion is inside the focused capability — must appear
+      assert_includes response.body, "Asks open-ended questions"
+      # Illustration suggestion is also inside the capability — must appear
+      assert_includes response.body, "Proactively seeks clarification"
+    end
+
+    should "narrow panel to a single cell (capability + level_ordinal)" do
+      sign_in @member_user
+      get framework_suggestions_path(
+        framework_id: @framework_id, layout: "panel",
+        focus: "cell", capability_id: @cap_id, level_ordinal: 1
+      )
+
+      assert_response :success
+      assert_includes response.body, "Asks open-ended questions"
+      assert_includes response.body, "Proactively seeks clarification"
+    end
+
+    should "fall back to framework focus when focus param is invalid" do
+      sign_in @member_user
+      get framework_suggestions_path(
+        framework_id: @framework_id, layout: "panel", focus: "bogus"
+      )
+
+      assert_response :success
+      assert_includes response.body, "All framework suggestions"
+    end
+
+    should "combine role filter with capability focus" do
+      # With a role that doesn't match the seeded illustration role, the
+      # illustration suggestion drops from the panel, but the expectation
+      # suggestion remains.
+      other_role = SecureRandom.uuid_v7
+      sign_in @member_user
+      get framework_suggestions_path(
+        framework_id: @framework_id, layout: "panel",
+        focus: "capability", capability_id: @cap_id,
+        roles: [ other_role ]
+      )
+
+      assert_response :success
+      assert_includes response.body, "Asks open-ended questions"
+      refute_includes response.body, "Proactively seeks clarification"
     end
   end
 

@@ -15,6 +15,10 @@ class CreateFrameworkSuggestedEdits < ActiveRecord::Migration[8.1]
       # proposed_attributes/parent_id populated for create kind only.
       t.jsonb :proposed_attributes, default: {}, null: false
       t.uuid :parent_id
+      # author_id / reviewed_by are foreign keys to people(id): suggestions
+      # are authored and reviewed by tenant domain entities, never by the
+      # global User auth identity. ApplicationController#auto_link_person
+      # guarantees every authenticated TenantUser has a linked Person.
       t.uuid :author_id, null: false
       t.text :rationale
       t.string :status, default: "pending", null: false
@@ -23,6 +27,18 @@ class CreateFrameworkSuggestedEdits < ActiveRecord::Migration[8.1]
       t.text :reviewer_comment
       t.timestamps
     end
+
+    # author_id is NOT NULL — restrict prevents deleting a Person who has
+    # authored a suggestion. HRIS sync marks people inactive rather than
+    # deleting them, so this is primarily a guard against ad-hoc deletes
+    # (e.g. GDPR right-to-be-forgotten) that would otherwise orphan the
+    # audit trail.
+    add_foreign_key :framework_suggested_edits, :people, column: :author_id,
+                    on_delete: :restrict
+    # reviewed_by is nullable — on Person delete, null out the reviewer so
+    # the suggestion stays intact but loses its reviewer attribution.
+    add_foreign_key :framework_suggested_edits, :people, column: :reviewed_by,
+                    on_delete: :nullify
 
     add_index :framework_suggested_edits, :suggestion_id, unique: true
     add_index :framework_suggested_edits, [ :framework_id, :status ]

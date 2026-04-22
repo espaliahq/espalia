@@ -38,4 +38,17 @@ export default class extends Controller {
     this.formTarget.classList.add("hidden")
     this.displayTarget.classList.remove("hidden")
   }
+
+  // Fired from `data-action="turbo:submit-end->inline-editor#submitted"` on
+  // each inline-edit form. Dispatches a window-scoped `suggestion:submitted`
+  // event so the context pane (which isn't a DOM ancestor of the form) can
+  // reload its turbo frame and surface the fresh pending-suggestion row.
+  submitted(event) {
+    if (!event.detail.success) return
+
+    window.dispatchEvent(new CustomEvent("suggestion:submitted", {
+      bubbles: true,
+      detail: { formAction: event.target.action }
+    }))
+  }
 }

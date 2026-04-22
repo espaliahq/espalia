@@ -38,6 +38,38 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
       @suggestion = build_suggestion(target_entity_type: "role_illustration")
     end
 
+    should "deny viewing without collaborator role" do
+      assert_not policy.index?
+      assert_not policy.show?
+    end
+
+    should "deny submitting without collaborator role" do
+      assert_not policy.create?
+    end
+
+    should "deny approving" do
+      assert_not policy.approve?
+      assert_not policy.reject?
+    end
+  end
+
+  context "as a non-viewer collaborator" do
+    setup do
+      @user = create(:user)
+      @person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @user.email)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: p, role: :member)
+        create(:framework_collaborator,
+               tenant: @tenant,
+               framework_id: @framework.framework_id,
+               person_id: p.id,
+               role: "collaborator")
+        p
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
+      @suggestion = build_suggestion(target_entity_type: "role_illustration")
+    end
+
     should "allow viewing" do
       assert policy.index?
       assert policy.show?
@@ -47,9 +79,8 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
       assert policy.create?
     end
 
-    should "deny approving" do
+    should "deny approving (collaborator role has no edit rights)" do
       assert_not policy.approve?
-      assert_not policy.reject?
     end
   end
 
@@ -60,6 +91,13 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
         create(:tenant_user, tenant: @tenant, user: @user, role: :admin)
       end
       @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
+    end
+
+    should "allow viewing, submitting, and approving" do
+      @suggestion = build_suggestion(target_entity_type: "role_illustration")
+      assert policy.index?
+      assert policy.show?
+      assert policy.create?
     end
 
     should "approve tier 1 illustrations" do
@@ -146,12 +184,14 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
   context "as the author of a pending suggestion" do
     setup do
       @user = create(:user)
-      @tenant_user = ActsAsTenant.with_tenant(@tenant) do
-        create(:tenant_user, tenant: @tenant, user: @user, role: :member)
+      @person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @user.email)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: p, role: :member)
+        p
       end
-      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
       @suggestion = build_suggestion(
-        target_entity_type: "role_illustration", author_id: @user.id.to_s, status: "pending"
+        target_entity_type: "role_illustration", author_id: @person.id.to_s, status: "pending"
       )
     end
 
@@ -167,12 +207,14 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
   context "as the author of an approved suggestion" do
     setup do
       @user = create(:user)
-      @tenant_user = ActsAsTenant.with_tenant(@tenant) do
-        create(:tenant_user, tenant: @tenant, user: @user, role: :member)
+      @person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @user.email)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: p, role: :member)
+        p
       end
-      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
       @suggestion = build_suggestion(
-        target_entity_type: "role_illustration", author_id: @user.id.to_s, status: "approved"
+        target_entity_type: "role_illustration", author_id: @person.id.to_s, status: "approved"
       )
     end
 

@@ -7,6 +7,9 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     @tenant = create(:tenant)
     @projection = Frameworks::Projections::PublishedState.new
     @framework_id = SecureRandom.uuid_v7
+    # framework_suggested_edits.author_id/reviewed_by are FKs to people(id) —
+    # tests that emit suggestion events need a real Person in the tenant.
+    @author_person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
   end
 
   context "FrameworkCreated" do
@@ -552,11 +555,10 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
         # mode: :suggesting prevents the open-framework auto-approval path so
         # the test exercises an explicit reviewer approval.
         sug_id = SecureRandom.uuid_v7
-        author_id = SecureRandom.uuid_v7
-        reviewer_id = SecureRandom.uuid_v7
+        reviewer_person = create(:person, tenant: @tenant)
         handler.suggest_create(@framework_id, sug_id, "capability",
-          { name: "Resilience" }, parent_id: cat_id, author_id: author_id, mode: :suggesting)
-        handler.approve_suggestion(@framework_id, sug_id, reviewer_id)
+          { name: "Resilience" }, parent_id: cat_id, author_id: @author_person.id.to_s, mode: :suggesting)
+        handler.approve_suggestion(@framework_id, sug_id, reviewer_person.id.to_s)
 
         # The implicit draft is now open in the projection.
         fw.reload
@@ -637,7 +639,7 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
   context "EditSuggested current_value snapshot" do
     setup do
       @sid = SecureRandom.uuid_v7
-      @author_id = SecureRandom.uuid_v7
+      @author_id = @author_person.id.to_s
     end
 
     should "snapshot current value for role_illustration" do

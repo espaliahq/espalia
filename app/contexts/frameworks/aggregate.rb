@@ -33,7 +33,30 @@ class Frameworks::Aggregate
     @draft_version = nil
     @added_during_draft = Set.new
     @archives_needing_mapping = Set.new
+
+    # ── ExplorerGraph projection support ──
+    # Native-ID Sets of entities added during the current open draft. The
+    # ExplorerGraphBuilder reads these to tag graph nodes with
+    # `added_in_draft: true` so view-mode rendering can hide them (matching
+    # PublishedState's shape-changing event deferral — see ADR-16).
+    # All four are cleared when a draft starts or a version publishes.
+    # Distinct from `@added_during_draft` (stable_ids, for archive-mapping).
+    @draft_added_level_ids = Set.new
+    @draft_added_capability_ids = Set.new
+    @draft_added_binding_ids = Set.new
+    @draft_added_expectation_ids = Set.new
   end
+
+  # ── ExplorerGraph projection support ──
+  # Read-only access to aggregate state for
+  # {Frameworks::ExplorerGraphBuilder}. Not part of the aggregate's public
+  # command contract — these are intentional projection-side affordances.
+  attr_reader :framework_id, :name, :role_families, :roles, :levels,
+              :capability_categories, :capabilities, :bindings,
+              :expectations, :illustrations, :current_version,
+              :draft_in_progress, :draft_version, :added_during_draft,
+              :draft_added_level_ids, :draft_added_capability_ids,
+              :draft_added_binding_ids, :draft_added_expectation_ids
 
   # Creates a new framework and opens its bootstrap v1 draft.
   #
@@ -747,6 +770,7 @@ class Frameworks::Aggregate
   # @param reviewer_id [String] UUID of the reviewer
   # @param comment [String, nil] optional reviewer comment
   # @raise [RuntimeError] if suggestion not found
+  # @return [String, nil] the created entity ID for :create suggestions, nil otherwise
   def approve_suggestion(suggestion_id, reviewer_id, comment: nil)
     ensure_created!
     suggestion = @pending_edits[suggestion_id]
@@ -760,13 +784,15 @@ class Frameworks::Aggregate
 
     maybe_auto_open_draft_for(suggestion, reviewer_id)
 
-    case suggestion[:kind]
+    created_entity_id = case suggestion[:kind]
     when :create then apply_suggested_creation(suggestion)
-    when :delete then apply_suggested_deletion(suggestion)
-    else              apply_suggested_content_change(suggestion)
+    when :delete then apply_suggested_deletion(suggestion); nil
+    else              apply_suggested_content_change(suggestion); nil
     end
 
     auto_reject_competing_suggestions(suggestion, reviewer_id)
+
+    created_entity_id
   end
 
   # Rejects a pending suggestion.
@@ -990,8 +1016,12 @@ class Frameworks::Aggregate
       role_id: event.data[:role_id],
       ordinal: event.data[:ordinal],
       title: event.data[:title],
-      code: event.data[:code]
+      code: event.data[:code],
+      is_entry: event.data[:is_entry]
     }
+    # LevelAdded is shape-changing (ADR-16): levels added in a draft are
+    # hidden in view mode until publish. Tracked for the ExplorerGraph.
+    @draft_added_level_ids << event.data[:level_id] if @draft_in_progress
   end
 
   on Frameworks::Events::LevelUpdated do |event|
@@ -1025,17 +1055,22 @@ class Frameworks::Aggregate
       stable_id: event.data[:stable_id],
       category_id: event.data[:category_id],
       name: event.data[:name],
+      description: event.data[:description],
       status: :active
     }
     # Track capabilities added inside the current draft so archiving them
     # in the same draft doesn't require a migration mapping (nothing to migrate).
     @added_during_draft << event.data[:stable_id] if @draft_in_progress
+    # Also track by native ID for the ExplorerGraph (distinct from the
+    # stable_id tracking above — archive-mapping and graph-tagging have
+    # different lookup needs).
+    @draft_added_capability_ids << event.data[:capability_id] if @draft_in_progress
   end
 
   on Frameworks::Events::CapabilityUpdated do |event|
     cap = @capabilities[event.data[:capability_id]]
     cap[:name] = event.data[:name] if event.data.key?(:name)
-    # description is not tracked in aggregate state (same as categories)
+    cap[:description] = event.data[:description] if event.data.key?(:description)
   end
 
   on Frameworks::Events::CapabilityArchived do |event|
@@ -1057,6 +1092,8 @@ class Frameworks::Aggregate
       weight: event.data[:weight],
       individual_tolerance: event.data[:individual_tolerance]
     }
+    # CapabilityRoleBindingCreated is shape-changing (ADR-16).
+    @draft_added_binding_ids << event.data[:binding_id] if @draft_in_progress
   end
 
   on Frameworks::Events::CapabilityRoleBindingUpdated do |event|
@@ -1077,12 +1114,22 @@ class Frameworks::Aggregate
     @expectations[event.data[:expectation_id]] = {
       stable_id: event.data[:stable_id],
       capability_id: event.data[:capability_id],
-      level_ordinal: event.data[:level_ordinal]
+      level_ordinal: event.data[:level_ordinal],
+      description: event.data[:description]
     }
+    # BehaviouralExpectationSet is shape-changing (ADR-16).
+    @draft_added_expectation_ids << event.data[:expectation_id] if @draft_in_progress
   end
 
   on Frameworks::Events::BehaviouralExpectationUpdated do |event|
-    # State doesn't track description, only existence
+    exp = @expectations[event.data[:expectation_id]]
+    # Both update_behavioural_expectation and apply_suggested_content_change
+    # emit this event with `:new_description` (the canonical key on update
+    # events — see the event at line 446 and line 1328). Reading `:description`
+    # left the aggregate stale after auto-approved edits, which leaked into
+    # the ExplorerGraph snapshot once the aggregate became the graph's source.
+    new_desc = event.data[:new_description] || event.data[:description]
+    exp[:description] = new_desc if new_desc
   end
 
   on Frameworks::Events::RoleIllustrationAdded do |event|
@@ -1090,12 +1137,17 @@ class Frameworks::Aggregate
       stable_id: event.data[:stable_id],
       expectation_id: event.data[:expectation_id],
       role_id: event.data[:role_id],
-      ordinal: event.data[:ordinal]
+      ordinal: event.data[:ordinal],
+      description: event.data[:description]
     }
   end
 
   on Frameworks::Events::RoleIllustrationUpdated do |event|
-    # State doesn't track description, only existence
+    ill = @illustrations[event.data[:illustration_id]]
+    # See BehaviouralExpectationUpdated above — same `:new_description` vs
+    # `:description` discrepancy between emit sites and this handler.
+    new_desc = event.data[:new_description] || event.data[:description]
+    ill[:description] = new_desc if new_desc
   end
 
   on Frameworks::Events::RoleIllustrationRemoved do |event|
@@ -1113,6 +1165,10 @@ class Frameworks::Aggregate
     @draft_version = event.data[:target_version]
     @added_during_draft = Set.new
     @archives_needing_mapping = Set.new
+    @draft_added_level_ids = Set.new
+    @draft_added_capability_ids = Set.new
+    @draft_added_binding_ids = Set.new
+    @draft_added_expectation_ids = Set.new
   end
 
   on Frameworks::Events::FrameworkVersionPublished do |event|
@@ -1122,6 +1178,10 @@ class Frameworks::Aggregate
     @migration_mappings = []
     @added_during_draft = Set.new
     @archives_needing_mapping = Set.new
+    @draft_added_level_ids = Set.new
+    @draft_added_capability_ids = Set.new
+    @draft_added_binding_ids = Set.new
+    @draft_added_expectation_ids = Set.new
   end
 
   on Frameworks::Events::MigrationMappingDefined do |event|
@@ -1409,41 +1469,47 @@ class Frameworks::Aggregate
   #
   # @param suggestion [Hash] pending_edits entry with kind: :create
   # @raise [RuntimeError] if the entity type is not supported
+  # @return [String] the generated entity ID for the created record
   def apply_suggested_creation(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
     type = suggestion[:target_entity_type]
     attrs = (suggestion[:proposed_attributes] || {}).transform_keys(&:to_sym)
     parent_id = suggestion[:parent_id]
 
+    entity_id = SecureRandom.uuid_v7
+    stable_id = SecureRandom.uuid_v7
+
     case type
     when "role_illustration"
       add_role_illustration(@framework_id,
-                            SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                            entity_id, stable_id,
                             parent_id, attrs[:role_id],
                             attrs[:ordinal] || next_illustration_ordinal(parent_id, attrs[:role_id]),
                             attrs[:description])
     when "behavioural_expectation"
       set_behavioural_expectation(@framework_id,
-                                  SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                  entity_id, stable_id,
                                   parent_id, attrs[:level_ordinal], attrs[:description])
     when "capability"
       add_capability(@framework_id,
-                     SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                     entity_id, stable_id,
                      parent_id, attrs[:name], description: attrs[:description])
     when "capability_category"
-      add_capability_category(@framework_id, SecureRandom.uuid_v7,
+      add_capability_category(@framework_id, entity_id,
                               attrs[:name], description: attrs[:description], ordinal: attrs[:ordinal])
     when "role"
-      add_role(@framework_id, SecureRandom.uuid_v7, parent_id,
+      add_role(@framework_id, entity_id, parent_id,
                attrs[:name], attrs[:code], attrs[:track])
     when "role_family"
-      add_role_family(@framework_id, SecureRandom.uuid_v7,
+      add_role_family(@framework_id, entity_id,
                       attrs[:name], description: attrs[:description])
     when "level"
-      add_level(@framework_id, SecureRandom.uuid_v7, parent_id,
+      add_level(@framework_id, entity_id, parent_id,
                 attrs[:ordinal], attrs[:title], attrs[:code], is_entry: attrs.fetch(:is_entry, false))
     else
       raise "Unsupported creation target: #{type}"
     end
+
+    entity_id
   end
 
   # Dispatches the matching destructive command for an approved deletion suggestion.

@@ -43,7 +43,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
   context "inline illustration editing" do
     should "expand row and show illustration text" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       # Expand the capability row using the matrix helper, which retries the
       # click if it was silently dropped on slow CI runners.
@@ -54,7 +54,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
     end
 
     should "allow saving updated illustration text inline" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       # Expand the capability row using the matrix helper (retries on dropped clicks)
       expand_matrix_row("tr[data-capability-id]")
@@ -78,7 +78,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
     end
 
     should "cancel editing and restore original text" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       # Expand the capability row using the matrix helper (retries on dropped clicks)
       expand_matrix_row("tr[data-capability-id]")
@@ -120,7 +120,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
     end
 
     should "show Add illustration button when no illustrations exist for a role" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       # Expand the capability row using the matrix helper (retries on dropped clicks)
       expand_matrix_row("tr[data-capability-id]")
@@ -130,7 +130,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
     end
 
     should "allow adding a new illustration for a role that had none" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       # Expand the capability row using the matrix helper (retries on dropped clicks)
       expand_matrix_row("tr[data-capability-id]")
@@ -152,7 +152,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
     end
 
     should "cancel adding and restore the Add button without saving" do
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       # Expand the capability row using the matrix helper (retries on dropped clicks)
       expand_matrix_row("tr[data-capability-id]")
