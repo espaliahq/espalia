@@ -159,10 +159,13 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
       # Rate as "Consistent"
       find("#rating-#{@cap_stable}-2 button", text: "Consistent").click
-      assert_selector "#cell-#{@cap_stable}-2"
+      # Wait for the rating to land — ring-1 marks the selected button. Without
+      # this, the untoggle click below can fire before the first POST's
+      # turbo-stream lands, leaving both actions racing on CI.
+      assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistent"
 
       # Click "Consistent" again to untoggle — rating should be cleared
-      find("#rating-#{@cap_stable}-2 button", text: "Consistent").click
+      find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistent").click
 
       # After clearing, no frequency button should have the selected ring style
       within("#rating-#{@cap_stable}-2") do
