@@ -49,9 +49,10 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSyncTest < ActiveSupport::
       )
       @handler.call(event)
 
-      assert_raises(RuntimeError, /Already in a cycle/) do
+      err = assert_raises(RuntimeError) do
         @handler.call(event)
       end
+      assert_match /Already in a cycle/, err.message
     end
   end
 

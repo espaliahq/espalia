@@ -63,33 +63,36 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
         "description", "Better wording", @author_id
       )
 
-      assert_raises(RuntimeError, /already exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(
           @framework_id, @suggestion_id,
           "role_illustration", @ill_id,
           "description", "Another wording", @author_id
         )
       end
+      assert_match /already exists/, err.message
     end
 
     should "raise if illustration not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(
           @framework_id, @suggestion_id,
           "role_illustration", SecureRandom.uuid_v7,
           "description", "Text", @author_id
         )
       end
+      assert_match /not found/, err.message
     end
 
     should "raise for unknown entity type" do
-      assert_raises(RuntimeError, /Unknown entity type/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(
           @framework_id, @suggestion_id,
           "unknown_type", @ill_id,
           "description", "Text", @author_id
         )
       end
+      assert_match /Unknown entity type/, err.message
     end
   end
 
@@ -117,15 +120,17 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
     should "raise if author does not match" do
       other_author = SecureRandom.uuid_v7
 
-      assert_raises(RuntimeError, /Only the author/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.amend_suggestion(@suggestion_id, "Revised wording", other_author)
       end
+      assert_match /Only the author/, err.message
     end
 
     should "raise if suggestion not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.amend_suggestion(SecureRandom.uuid_v7, "Revised wording", @author_id)
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -177,9 +182,10 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
     end
 
     should "raise if suggestion not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.approve_suggestion(SecureRandom.uuid_v7, SecureRandom.uuid_v7)
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -203,9 +209,10 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
     end
 
     should "raise if suggestion not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.reject_suggestion(SecureRandom.uuid_v7, SecureRandom.uuid_v7)
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -233,15 +240,17 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
       )
       other_author = SecureRandom.uuid_v7
 
-      assert_raises(RuntimeError, /Only the author/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.withdraw_suggestion(@suggestion_id, other_author)
       end
+      assert_match /Only the author/, err.message
     end
 
     should "raise if suggestion not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.withdraw_suggestion(SecureRandom.uuid_v7, @author_id)
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -257,51 +266,57 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
 
   context "#suggest_edit for tier-2 and tier-3 entities" do
     should "raise if behavioural_expectation not found" do
-      assert_raises(RuntimeError, /Expectation .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(@framework_id, @suggestion_id,
           "behavioural_expectation", SecureRandom.uuid_v7,
           "description", "Text", @author_id)
       end
+      assert_match /Expectation .* not found/, err.message
     end
 
     should "raise if capability not found" do
-      assert_raises(RuntimeError, /Capability .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(@framework_id, @suggestion_id,
           "capability", SecureRandom.uuid_v7,
           "name", "Text", @author_id)
       end
+      assert_match /Capability .* not found/, err.message
     end
 
     should "raise if capability_category not found" do
-      assert_raises(RuntimeError, /Category .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(@framework_id, @suggestion_id,
           "capability_category", SecureRandom.uuid_v7,
           "name", "Text", @author_id)
       end
+      assert_match /Category .* not found/, err.message
     end
 
     should "raise if role not found" do
-      assert_raises(RuntimeError, /Role .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(@framework_id, @suggestion_id,
           "role", SecureRandom.uuid_v7,
           "name", "Text", @author_id)
       end
+      assert_match /Role .* not found/, err.message
     end
 
     should "raise if role_family not found" do
-      assert_raises(RuntimeError, /Role family .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(@framework_id, @suggestion_id,
           "role_family", SecureRandom.uuid_v7,
           "name", "Text", @author_id)
       end
+      assert_match /Role family .* not found/, err.message
     end
 
     should "raise if level not found" do
-      assert_raises(RuntimeError, /Level .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_edit(@framework_id, @suggestion_id,
           "level", SecureRandom.uuid_v7,
           "title", "Text", @author_id)
       end
+      assert_match /Level .* not found/, err.message
     end
 
     should "succeed for valid behavioural_expectation" do
@@ -431,9 +446,10 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
       @aggregate.suggest_edit(@framework_id, @suggestion_id,
         "capability", @cap_id, "ordinal", "5", @author_id)
 
-      assert_raises(RuntimeError, /Unsupported suggestion target/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
       end
+      assert_match /Unsupported suggestion target/, err.message
     end
   end
 
@@ -555,7 +571,7 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
         parent_id: nil, author_id: @author_id
       )
 
-      assert_raises(RuntimeError, /already exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "capability_category",
@@ -563,10 +579,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: nil, author_id: @author_id
         )
       end
+      assert_match /already exists/, err.message
     end
 
     should "raise if parent expectation does not exist (illustration)" do
-      assert_raises(RuntimeError, /Expectation .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "role_illustration",
@@ -574,10 +591,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: SecureRandom.uuid_v7, author_id: @author_id
         )
       end
+      assert_match /Expectation .* not found/, err.message
     end
 
     should "raise if parent capability does not exist (expectation)" do
-      assert_raises(RuntimeError, /Capability .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "behavioural_expectation",
@@ -585,10 +603,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: SecureRandom.uuid_v7, author_id: @author_id
         )
       end
+      assert_match /Capability .* not found/, err.message
     end
 
     should "raise if parent category does not exist (capability)" do
-      assert_raises(RuntimeError, /Category .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "capability",
@@ -596,10 +615,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: SecureRandom.uuid_v7, author_id: @author_id
         )
       end
+      assert_match /Category .* not found/, err.message
     end
 
     should "raise if parent role family does not exist (role)" do
-      assert_raises(RuntimeError, /Role family .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "role",
@@ -607,10 +627,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: SecureRandom.uuid_v7, author_id: @author_id
         )
       end
+      assert_match /Role family .* not found/, err.message
     end
 
     should "raise if parent role does not exist (level)" do
-      assert_raises(RuntimeError, /Role .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "level",
@@ -618,10 +639,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: SecureRandom.uuid_v7, author_id: @author_id
         )
       end
+      assert_match /Role .* not found/, err.message
     end
 
     should "raise for unknown entity type" do
-      assert_raises(RuntimeError, /Unknown entity type/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "unknown_type",
@@ -629,10 +651,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: nil, author_id: @author_id
         )
       end
+      assert_match /Unknown entity type/, err.message
     end
 
     should "raise if proposed_attributes missing required keys for capability" do
-      assert_raises(RuntimeError, /Missing proposed_attributes for capability: name/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "capability",
@@ -640,10 +663,11 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: @cat_id, author_id: @author_id
         )
       end
+      assert_match /Missing proposed_attributes for capability: name/, err.message
     end
 
     should "raise if proposed_attributes missing required keys for role" do
-      assert_raises(RuntimeError, /Missing proposed_attributes for role/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_create(
           @framework_id, @suggestion_id,
           "role",
@@ -651,6 +675,7 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           parent_id: @rfid, author_id: @author_id
         )
       end
+      assert_match /Missing proposed_attributes for role/, err.message
     end
   end
 
@@ -687,57 +712,63 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
         "role_illustration", @ill_id, author_id: @author_id
       )
 
-      assert_raises(RuntimeError, /already exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_delete(
           @framework_id, @suggestion_id,
           "role_illustration", @ill_id, author_id: @author_id
         )
       end
+      assert_match /already exists/, err.message
     end
 
     should "raise if entity not found" do
-      assert_raises(RuntimeError, /Illustration .* not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_delete(
           @framework_id, @suggestion_id,
           "role_illustration", SecureRandom.uuid_v7, author_id: @author_id
         )
       end
+      assert_match /Illustration .* not found/, err.message
     end
 
     should "raise for entity type without delete command (role)" do
-      assert_raises(RuntimeError, /no delete command available/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_delete(
           @framework_id, @suggestion_id,
           "role", @rid, author_id: @author_id
         )
       end
+      assert_match /no delete command available/, err.message
     end
 
     should "raise for entity type without delete command (capability_category)" do
-      assert_raises(RuntimeError, /no delete command available/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_delete(
           @framework_id, @suggestion_id,
           "capability_category", @cat_id, author_id: @author_id
         )
       end
+      assert_match /no delete command available/, err.message
     end
 
     should "raise for entity type without delete command (level)" do
-      assert_raises(RuntimeError, /no delete command available/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_delete(
           @framework_id, @suggestion_id,
           "level", @lid, author_id: @author_id
         )
       end
+      assert_match /no delete command available/, err.message
     end
 
     should "raise for entity type without delete command (behavioural_expectation)" do
-      assert_raises(RuntimeError, /no delete command available/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.suggest_delete(
           @framework_id, @suggestion_id,
           "behavioural_expectation", @eid, author_id: @author_id
         )
       end
+      assert_match /no delete command available/, err.message
     end
   end
 

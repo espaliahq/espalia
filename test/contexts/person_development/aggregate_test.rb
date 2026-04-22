@@ -29,9 +29,10 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     should "raise if already assigned" do
       @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
 
-      assert_raises(RuntimeError, /already assigned/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
       end
+      assert_match /already assigned/, err.message
     end
   end
 
@@ -58,15 +59,17 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
 
     should "raise if not assigned" do
       aggregate = PersonDevelopment::Aggregate.new
-      assert_raises(RuntimeError, /not yet assigned/) do
+      err = assert_raises(RuntimeError) do
         aggregate.change_role(@new_role_id, @new_level_id)
       end
+      assert_match /not yet assigned/, err.message
     end
 
     should "raise if role is unchanged" do
-      assert_raises(RuntimeError, /unchanged/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.change_role(@role_id, @new_level_id)
       end
+      assert_match /unchanged/, err.message
     end
   end
 
@@ -90,15 +93,17 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
 
     should "raise if not assigned" do
       aggregate = PersonDevelopment::Aggregate.new
-      assert_raises(RuntimeError, /not yet assigned/) do
+      err = assert_raises(RuntimeError) do
         aggregate.change_level(@new_level_id)
       end
+      assert_match /not yet assigned/, err.message
     end
 
     should "raise if level is unchanged" do
-      assert_raises(RuntimeError, /unchanged/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.change_level(@level_id)
       end
+      assert_match /unchanged/, err.message
     end
   end
 
@@ -121,17 +126,19 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
 
     should "raise if not assigned" do
       aggregate = PersonDevelopment::Aggregate.new
-      assert_raises(RuntimeError, /not yet assigned/) do
+      err = assert_raises(RuntimeError) do
         aggregate.join_cycle(SecureRandom.uuid_v7, 1)
       end
+      assert_match /not yet assigned/, err.message
     end
 
     should "raise if already in a cycle" do
       @aggregate.join_cycle(SecureRandom.uuid_v7, 1)
 
-      assert_raises(RuntimeError, /Already in a cycle/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.join_cycle(SecureRandom.uuid_v7, 1)
       end
+      assert_match /Already in a cycle/, err.message
     end
   end
 
@@ -164,15 +171,17 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     should "raise if not in a cycle" do
       @aggregate.leave_cycle(@cycle_id, "manual")
 
-      assert_raises(RuntimeError, /Not currently in a cycle/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.leave_cycle(@cycle_id, "manual")
       end
+      assert_match /Not currently in a cycle/, err.message
     end
 
     should "raise if cycle_id does not match" do
-      assert_raises(RuntimeError, /does not match/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.leave_cycle(SecureRandom.uuid_v7, "manual")
       end
+      assert_match /does not match/, err.message
     end
   end
 
@@ -209,27 +218,30 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise for invalid frequency" do
-      assert_raises(RuntimeError, /Invalid frequency/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "sometimes",
           cycle_id: @cycle_id)
       end
+      assert_match /Invalid frequency/, err.message
     end
 
     should "raise if not in a cycle" do
       aggregate = PersonDevelopment::Aggregate.new
       aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
 
-      assert_raises(RuntimeError, /Not currently in an assessment cycle/) do
+      err = assert_raises(RuntimeError) do
         aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "some",
           cycle_id: SecureRandom.uuid_v7)
       end
+      assert_match /Not currently in an assessment cycle/, err.message
     end
 
     should "raise if cycle_id does not match current" do
-      assert_raises(RuntimeError, /does not match/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "some",
           cycle_id: SecureRandom.uuid_v7)
       end
+      assert_match /does not match/, err.message
     end
   end
 
@@ -257,10 +269,11 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if no prior self-rating for capability at that level" do
-      assert_raises(RuntimeError, /No self-rating exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.revise_self_rating(@cap_sid, level_ordinal: 4, frequency: "some",
           rationale: "test", cycle_id: @cycle_id)
       end
+      assert_match /No self-rating exists/, err.message
     end
   end
 
@@ -288,10 +301,11 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise for invalid frequency" do
-      assert_raises(RuntimeError, /Invalid frequency/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "never",
           cycle_id: @cycle_id)
       end
+      assert_match /Invalid frequency/, err.message
     end
   end
 
@@ -319,17 +333,19 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if no prior manager rating for capability at that level" do
-      assert_raises(RuntimeError, /No manager rating exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.revise_manager_rating(@cap_sid, level_ordinal: 4, frequency: "some",
           rationale: "test", cycle_id: @cycle_id)
       end
+      assert_match /No manager rating exists/, err.message
     end
 
     should "raise for invalid frequency" do
-      assert_raises(RuntimeError, /Invalid frequency/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.revise_manager_rating(@cap_sid, level_ordinal: 3, frequency: "always",
           rationale: "test", cycle_id: @cycle_id)
       end
+      assert_match /Invalid frequency/, err.message
     end
   end
 
@@ -353,9 +369,10 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if no prior manager rating for capability at that level" do
-      assert_raises(RuntimeError, /No manager rating exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.clear_manager_rating(@cap_sid, level_ordinal: 4, cycle_id: @cycle_id)
       end
+      assert_match /No manager rating exists/, err.message
     end
   end
 
@@ -383,20 +400,22 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise for invalid frequency" do
-      assert_raises(RuntimeError, /Invalid/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1,
           aligned_frequency: "always", cycle_id: @cycle_id)
       end
+      assert_match /Invalid/, err.message
     end
 
     should "raise if not in a cycle" do
       aggregate = PersonDevelopment::Aggregate.new
       aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
 
-      assert_raises(RuntimeError, /Not currently in an assessment cycle/) do
+      err = assert_raises(RuntimeError) do
         aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1,
           aligned_frequency: "some", cycle_id: SecureRandom.uuid_v7)
       end
+      assert_match /Not currently in an assessment cycle/, err.message
     end
   end
 end
