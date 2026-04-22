@@ -214,8 +214,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # Manager opens the report's assessment
       click_link "Assessments"
       assert_text "Team Assessments"
-      click_link "Review Assessment"
-      assert_text "Manager Review"
+      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
       wait_for_stimulus "matrix"
 
       # Verify WebSocket subscription and sync controller are ready
