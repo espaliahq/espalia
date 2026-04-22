@@ -60,13 +60,9 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       fill_in "settings[overperformance_cap]", with: "2"
       fill_in "settings[deficit_threshold]", with: "0.50"
 
-      # Retry the submit once if the first click was lost (see above).
-      click_button "Save settings"
-      unless page.has_text?("Scoring settings updated", wait: 3)
-        click_button "Save settings" if page.has_button?("Save settings")
-      end
+      # Retry the submit once if the first click was lost on slow CI.
+      click_with_retry(expect_text: "Scoring settings updated") { click_button "Save settings" }
 
-      assert_text "Scoring settings updated"
       assert_field "settings[mastery_threshold]", with: "1.25"
       assert_field "settings[meeting_expectation_threshold]", with: "0.9"
       assert_field "settings[overperformance_cap]", with: "2"
