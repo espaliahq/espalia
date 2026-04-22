@@ -54,8 +54,9 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   def edit_button
     button(
       type: "button",
-      class: "opacity-0 group-hover/ill:opacity-100 transition-opacity " \
-             "text-gray-400 hover:text-primary shrink-0 mt-0.5",
+      class: "opacity-0 group-hover/ill:opacity-100 " \
+             "group-focus-within/ill:opacity-100 focus-visible:opacity-100 " \
+             "transition-opacity text-gray-400 hover:text-primary shrink-0 mt-0.5",
       data: { action: "inline-editor#startEdit" },
       aria_label: "Edit illustration"
     ) do

@@ -149,17 +149,28 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
       {}
     end
 
-    div(
-      class: "#{'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ' if coords}" \
-             "-mx-4 -mb-3 px-4 pb-3 pt-0.5 rounded-b transition-colors",
-      **({ data: data } if data.any?)
-    ) do
-      if label
-        p(class: "text-xs text-gray-500 dark:text-gray-400 mb-0.5") { plain label }
-      end
-      p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
-        plain suggestion_preview(suggestion)
-      end
+    # Button (not div) for the navigable case so keyboard users can focus
+    # + Enter to navigate. The non-navigable case (no coords) stays a div
+    # to avoid a non-functional button landing in the tab order.
+    wrapper_class = "#{'w-full text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ' if coords}" \
+                    "-mx-4 -mb-3 px-4 pb-3 pt-0.5 rounded-b transition-colors"
+    wrapper_attrs = { class: wrapper_class }
+    wrapper_attrs[:data] = data if data.any?
+
+    if coords
+      wrapper_attrs[:type] = "button"
+      button(**wrapper_attrs) { navigate_body_content(suggestion, label) }
+    else
+      div(**wrapper_attrs) { navigate_body_content(suggestion, label) }
+    end
+  end
+
+  def navigate_body_content(suggestion, label)
+    if label
+      p(class: "text-xs text-gray-500 dark:text-gray-400 mb-0.5") { plain label }
+    end
+    p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
+      plain suggestion_preview(suggestion)
     end
   end
 

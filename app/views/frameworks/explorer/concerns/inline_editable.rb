@@ -34,10 +34,13 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
   #
   # @param aria_label [String]
   def render_inline_editor_pencil(aria_label:)
+    # Visible on hover (desktop pointer) and on keyboard focus so
+    # tab-navigating users can reach the edit affordance too.
     button(
       type: "button",
-      class: "opacity-0 group-hover/ine:opacity-100 transition-opacity " \
-             "text-gray-400 hover:text-primary shrink-0",
+      class: "opacity-0 group-hover/ine:opacity-100 " \
+             "group-focus-within/ine:opacity-100 focus-visible:opacity-100 " \
+             "transition-opacity text-gray-400 hover:text-primary shrink-0",
       data: { action: "inline-editor#startEdit" },
       aria_label: aria_label
     ) do

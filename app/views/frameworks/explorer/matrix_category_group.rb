@@ -13,7 +13,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
   # @param mode [Symbol] :view or :edit
-  def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view)
+  # @param roles_by_id [Hash] { role_id => Role } — passed through to rows to avoid per-cell AR lookups
+  def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view, roles_by_id: {})
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
@@ -21,6 +22,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
     @mode = mode
+    @roles_by_id = roles_by_id
   end
 
   def view_template
@@ -65,9 +67,11 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
             end
           end
 
-          # Category name + count are the focus hit target
-          span(
-            class: "flex items-center gap-2 cursor-pointer hover:underline",
+          # Category name + count are the focus hit target. Button (not span)
+          # so keyboard + assistive-tech users can reach the focus action.
+          button(
+            type: "button",
+            class: "flex items-center gap-2 cursor-pointer hover:underline text-left",
             data: {
               action: "click->matrix#focusCategory",
               category_id: @category.category_id
@@ -96,7 +100,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         merged_levels: @merged_levels,
         selected_role_ids: @selected_role_ids,
         framework_id: @framework_id,
-        mode: @mode
+        mode: @mode,
+        roles_by_id: @roles_by_id
       )
     end
   end
