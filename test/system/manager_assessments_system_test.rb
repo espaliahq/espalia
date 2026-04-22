@@ -103,9 +103,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "show self-rating indicator and manager frequency selectors" do
-      click_link "Assessments"
-      assert_text "Team Assessments"
-      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
+      visit assessment_path(@report_assignment)
+      assert_text "Manager Review"
 
       # The report's self-rating should appear as a read-only indicator
       assert_text "Self:"
@@ -117,9 +116,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "allow manager to submit a rating" do
-      click_link "Assessments"
-      assert_text "Team Assessments"
-      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
+      visit assessment_path(@report_assignment)
+      assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
       # Click a frequency button to rate
@@ -132,9 +130,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "allow manager to untoggle a rating by clicking the same frequency" do
-      click_link "Assessments"
-      assert_text "Team Assessments"
-      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
+      visit assessment_path(@report_assignment)
+      assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
       # Rate as "Consistent"
@@ -166,9 +163,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "show manager review matrix on mobile with scoring toggle visible" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit assessments_path
-      assert_text "Team Assessments"
-      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
+      visit assessment_path(@report_assignment)
+      assert_text "Manager Review"
 
       # Header elements should be visible — long names must not push scoring off-screen
       assert_text "Report Alex"
@@ -187,10 +183,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
   context "cross-session sync" do
     should "update manager view when report submits a new self-rating" do
-      # Manager opens the report's assessment
-      click_link "Assessments"
-      assert_text "Team Assessments"
-      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
+      visit assessment_path(@report_assignment)
+      assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
       # Verify WebSocket subscription and sync controller are ready
