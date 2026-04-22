@@ -47,7 +47,14 @@ class Frameworks::ExpectationsController < ApplicationController
   end
 
   def set_expectation
-    @expectation = FrameworkState::BehaviouralExpectation.find_by!(expectation_id: params.expect(:id))
+    # Scope to the current framework via capability → category to prevent
+    # a framework-A request targeting a framework-B expectation.
+    @expectation = FrameworkState::BehaviouralExpectation
+      .joins(capability: :category)
+      .find_by!(
+        expectation_id: params.expect(:id),
+        framework_capability_categories: { framework_id: @framework.framework_id }
+      )
   rescue ActiveRecord::RecordNotFound
     head :not_found
   end

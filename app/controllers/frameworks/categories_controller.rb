@@ -11,16 +11,19 @@ class Frameworks::CategoriesController < ApplicationController
   before_action :set_category
 
   # PATCH /frameworks/:framework_id/categories/:id
+  #
+  # Only `name` is accepted — the turbo-frame response re-renders
+  # CategoryNameFrame. Description edits need their own endpoint + frame
+  # when the UI for it exists.
   def update
     authorize @framework, :suggest_edit?
-    attrs = params.expect(capability_category: [ :name, :description ])
-    field, value = first_edited_field(attrs)
-    return head(:unprocessable_content) if field.nil?
+    new_name = params.expect(capability_category: [ :name ])[:name]
+    return head(:unprocessable_content) if new_name.blank?
 
     Frameworks::CommandHandler.new.suggest_edit(
       @framework.framework_id, SecureRandom.uuid_v7,
       "capability_category", @category.category_id,
-      field, value, resolve_author_id,
+      "name", new_name, resolve_author_id,
       mode: framework_edit_mode
     )
 
@@ -46,7 +49,10 @@ class Frameworks::CategoriesController < ApplicationController
   end
 
   def set_category
-    @category = FrameworkState::CapabilityCategory.find_by!(category_id: params.expect(:id))
+    @category = FrameworkState::CapabilityCategory.find_by!(
+      framework_id: @framework.framework_id,
+      category_id: params.expect(:id)
+    )
   rescue ActiveRecord::RecordNotFound
     head :not_found
   end
@@ -62,13 +68,5 @@ class Frameworks::CategoriesController < ApplicationController
       target_entity_id: @category.category_id,
       status: "pending"
     ).count
-  end
-
-  def first_edited_field(attrs)
-    %i[name description].each do |candidate|
-      value = attrs[candidate]
-      return [ candidate.to_s, value ] if value.present?
-    end
-    [ nil, nil ]
   end
 end

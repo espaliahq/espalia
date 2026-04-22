@@ -12,16 +12,19 @@ class Frameworks::CapabilitiesController < ApplicationController
   before_action :set_capability
 
   # PATCH /frameworks/:framework_id/capabilities/:id
+  #
+  # The turbo-frame response only knows how to re-render the capability name
+  # (CapabilityNameFrame). Only accept `name` here — description edits need
+  # their own endpoint + frame when that UI is built.
   def update
     authorize @framework, :suggest_edit?
-    attrs = params.expect(capability: [ :name, :description ])
-    field, value = first_edited_field(attrs)
-    return head(:unprocessable_content) if field.nil?
+    new_name = params.expect(capability: [ :name ])[:name]
+    return head(:unprocessable_content) if new_name.blank?
 
     Frameworks::CommandHandler.new.suggest_edit(
       @framework.framework_id, SecureRandom.uuid_v7,
       "capability", @capability.capability_id,
-      field, value, resolve_author_id,
+      "name", new_name, resolve_author_id,
       mode: framework_edit_mode
     )
 
@@ -47,7 +50,13 @@ class Frameworks::CapabilitiesController < ApplicationController
   end
 
   def set_capability
-    @capability = FrameworkState::Capability.find_by!(capability_id: params.expect(:id))
+    # Scope to the current framework so a request for framework A can't
+    # target a capability that belongs to framework B in the same tenant.
+    @capability = FrameworkState::Capability.joins(:category)
+      .find_by!(
+        capability_id: params.expect(:id),
+        framework_capability_categories: { framework_id: @framework.framework_id }
+      )
   rescue ActiveRecord::RecordNotFound
     head :not_found
   end
@@ -63,16 +72,5 @@ class Frameworks::CapabilitiesController < ApplicationController
       target_entity_id: @capability.capability_id,
       status: "pending"
     ).count
-  end
-
-  # Picks the first present field from the permitted attrs so clients can
-  # post a single-field payload without explicitly declaring which field
-  # they mean.
-  def first_edited_field(attrs)
-    %i[name description].each do |candidate|
-      value = attrs[candidate]
-      return [ candidate.to_s, value ] if value.present?
-    end
-    [ nil, nil ]
   end
 end
