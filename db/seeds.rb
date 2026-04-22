@@ -63,12 +63,16 @@ end
 # Seed framework data (must run BEFORE HRIS sync so Pass 5 has a framework to assign to)
 Rake::Task["frameworks:seed_meandu"].invoke
 
-# Seed pending suggestions for visual affordance testing
-meandu_tenant = Tenant.find_by(slug: "meandu")
+# Seed pending suggestions for visual affordance testing — dev/test only.
+# Production seeds must never surface demo editorial state to real tenants.
+meandu_tenant = Rails.env.production? ? nil : Tenant.find_by(slug: "meandu")
 if meandu_tenant
   ActsAsTenant.with_tenant(meandu_tenant) do
     framework = FrameworkState::Framework.first
     if framework && FrameworkState::SuggestedEdit.where(framework_id: framework.framework_id).none?
+      # Transaction keeps re-runs safe — partial failure rolls back rather
+      # than leaving the guard's `.none?` predicate false forever.
+      ActiveRecord::Base.transaction do
       handler = Frameworks::CommandHandler.new
       admin_user = User.find_by(global_admin: true)
       # framework_suggested_edits.author_id is a foreign key to people(id).
@@ -153,6 +157,7 @@ if meandu_tenant
       else
         puts "Skipping suggestion seeding — framework entities not ready"
       end
+      end # transaction
     else
       puts "Suggestions already seeded or no framework found"
     end
