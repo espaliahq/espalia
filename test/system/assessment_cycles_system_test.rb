@@ -59,10 +59,9 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
 
       fill_in "Name", with: "Q2 2026 Review"
       # Framework select defaults to the only option; cycle_type defaults to "regular"
-      click_button "Define cycle"
+      click_with_retry(expect_text: "Cycle defined") { click_button "Define cycle" }
 
       assert_text "Q2 2026 Review"
-      assert_text "Cycle defined"
 
       # Enroll the assigned person
       select "Assigned Person", from: "Person"
