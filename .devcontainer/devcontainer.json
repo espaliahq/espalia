@@ -42,7 +42,7 @@
     "vscode": {
       "extensions": [
         "anthropic.claude-code",
-        "coderabbitai.coderabbit-vscode"
+        "CodeRabbit.coderabbit-vscode"
       ]
     }
   },
@@ -50,5 +50,5 @@
   // "remoteUser": "root",
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": "bin/setup",
-  "postStartCommand": "cd /workspaces/${localWorkspaceFolderBasename}/ && rm -f .overmind.sock"
+  "postStartCommand": "cd /workspaces/${localWorkspaceFolderBasename}/ && bin/rails db:prepare &&rm -f .overmind.sock"
 }

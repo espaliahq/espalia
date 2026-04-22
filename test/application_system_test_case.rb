@@ -6,8 +6,6 @@ Dir["#{File.dirname(__FILE__)}/support/system/**/*.rb"].sort.each { |f| require 
 
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   if ENV["CAPYBARA_SERVER_PORT"]
-    served_by host: "rails-app", port: ENV["CAPYBARA_SERVER_PORT"]
-
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ], options: {
       browser: :remote,
       url: "http://#{ENV["SELENIUM_HOST"]}:4444"
@@ -16,9 +14,26 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
   end
 
-  # CI runners (2 cores) can't sustain multiple Chrome processes — JavaScript
-  # event loops get starved, causing Stimulus actions to miss Capybara's wait window.
-  parallelize(workers: 1)
+  # Default to a single worker — 2-core CI runners can't sustain multiple Chrome
+  # processes (starved JS event loops miss Capybara's wait window). Devcontainer
+  # compose sets SYSTEM_TEST_WORKERS=2 to fan out across Selenium Grid nodes.
+  parallelize(workers: ENV.fetch("SYSTEM_TEST_WORKERS", "1").to_i)
+
+  # Each worker forks its own process and needs its own Puma port. Worker 0 uses
+  # the base port; workers 1..N get base+worker. The browser (remote Selenium)
+  # dials rails-app on that port.
+  if ENV["CAPYBARA_SERVER_PORT"]
+    Capybara.server_host = "rails-app"
+    Capybara.server_port = ENV["CAPYBARA_SERVER_PORT"].to_i
+    Capybara.app_host    = "http://rails-app:#{Capybara.server_port}"
+  end
+
+  parallelize_setup do |worker|
+    if ENV["CAPYBARA_SERVER_PORT"]
+      Capybara.server_port = ENV["CAPYBARA_SERVER_PORT"].to_i + worker
+      Capybara.app_host    = "http://rails-app:#{Capybara.server_port}"
+    end
+  end
 
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze

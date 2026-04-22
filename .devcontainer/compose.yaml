@@ -15,28 +15,103 @@ services:
 
     environment:
       DB_HOST: postgres
-      SELENIUM_HOST: selenium
+      SELENIUM_HOST: selenium-hub
       CAPYBARA_SERVER_PORT: "45678"
+      SYSTEM_TEST_WORKERS: "4"
 
     depends_on:
-    - selenium
+    - selenium-hub
     - postgres
 
-  selenium:
-    image: selenium/standalone-chromium:latest
+  selenium-hub:
+    image: selenium/hub:latest
     platform: linux/amd64
     restart: unless-stopped
-    shm_size: 3g
+    environment:
+      GRID_MAX_SESSION: 4
+      GRID_BROWSER_TIMEOUT: 120
+      GRID_TIMEOUT: 120
+      SE_SESSION_REQUEST_TIMEOUT: 120
+
+  selenium-node-1:
+    image: selenium/node-chromium:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    shm_size: 1g
+    depends_on:
+    - selenium-hub
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 1
+      SE_NODE_SESSION_TIMEOUT: 120
+      JAVA_OPTS: "-Xmx512m"
     deploy:
       resources:
         reservations:
-          cpus: "4"
-          memory: 2g
+          cpus: "2"
+          memory: 1500m
+
+  selenium-node-2:
+    image: selenium/node-chromium:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    shm_size: 1g
+    depends_on:
+    - selenium-hub
     environment:
-      SE_NODE_MAX_SESSIONS: 2
-      SE_SESSION_REQUEST_TIMEOUT: 120
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 1
       SE_NODE_SESSION_TIMEOUT: 120
       JAVA_OPTS: "-Xmx512m"
+    deploy:
+      resources:
+        reservations:
+          cpus: "2"
+          memory: 1500m
+
+  selenium-node-3:
+    image: selenium/node-chromium:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    shm_size: 1g
+    depends_on:
+    - selenium-hub
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 1
+      SE_NODE_SESSION_TIMEOUT: 120
+      JAVA_OPTS: "-Xmx512m"
+    deploy:
+      resources:
+        reservations:
+          cpus: "2"
+          memory: 1500m
+
+  selenium-node-4:
+    image: selenium/node-chromium:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    shm_size: 1g
+    depends_on:
+    - selenium-hub
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 1
+      SE_NODE_SESSION_TIMEOUT: 120
+      JAVA_OPTS: "-Xmx512m"
+    deploy:
+      resources:
+        reservations:
+          cpus: "2"
+          memory: 1500m
 
   postgres:
     image: postgres:16

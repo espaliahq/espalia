@@ -9,8 +9,10 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
     @author_user = FactoryBot.create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
-      FactoryBot.create(:tenant_user, tenant: @tenant, user: @author_user, role: :member)
+      @admin_person = FactoryBot.create(:person, tenant: @tenant, email: @admin_user.email)
+      @author_person = FactoryBot.create(:person, tenant: @tenant, email: @author_user.email)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @author_user, role: :member, person: @author_person)
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
@@ -35,6 +37,12 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       )
       handler.publish_version(@framework_id, "v1")
 
+      # Add collaborator roles (required for suggestion access)
+      handler.add_collaborator(@framework_id, @admin_person.id.to_s, "owner",
+                               added_by: @admin_person.id.to_s)
+      handler.add_collaborator(@framework_id, @author_person.id.to_s, "collaborator",
+                               added_by: @admin_person.id.to_s)
+
       # Seed two pending suggestions, authored by @author_user, in mode :suggesting
       # so they don't auto-approve.
       @illustration_suggestion_id = SecureRandom.uuid_v7
@@ -42,7 +50,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
         @framework_id, @illustration_suggestion_id,
         "role_illustration", @ill_id, "description",
         "Proactively asks clarifying questions of the tech lead",
-        @author_user.id.to_s, mode: :suggesting
+        @author_person.id.to_s, mode: :suggesting
       )
 
       @expectation_suggestion_id = SecureRandom.uuid_v7
@@ -50,7 +58,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
         @framework_id, @expectation_suggestion_id,
         "behavioural_expectation", @eid, "description",
         "Asks open-ended questions to surface assumptions",
-        @author_user.id.to_s, mode: :suggesting
+        @author_person.id.to_s, mode: :suggesting
       )
     end
   end
@@ -99,9 +107,9 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "show the suggestions toggle in the framework explorer header" do
+    should "show the suggestions toggle in the framework explorer header (edit mode only)" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-      visit framework_path(@framework_id)
+      visit edit_framework_path(@framework_id)
 
       wait_for_stimulus "framework-explorer"
       assert_selector "button", text: /Suggestions/
@@ -114,7 +122,11 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
     should "withdraw their own pending suggestion" do
       visit framework_suggestion_path(@framework_id, @illustration_suggestion_id)
 
-      accept_confirm { click_button "Withdraw" }
+      # Wait for the page to finish rendering before clicking — on slow
+      # CI runners the click can fire before Turbo's confirm handler is
+      # bound, silently dropping the submit and timing out the modal wait.
+      assert_selector "form[data-turbo-confirm] button", text: "Withdraw"
+      accept_confirm(wait: 10) { click_button "Withdraw" }
 
       assert_current_path framework_suggestions_path(@framework_id)
       assert_text "Suggestion withdrawn"

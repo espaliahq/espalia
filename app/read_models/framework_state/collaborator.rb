@@ -22,6 +22,7 @@ class FrameworkState::Collaborator < ApplicationRecord
   ].freeze
 
   EDIT_ROLES = %w[owner editor role_family_lead role_lead capability_category_lead capability_lead].freeze
+  SUGGEST_ROLES = %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator].freeze
   PUBLISH_ROLES = %w[owner editor].freeze
 
   validates :framework_id, presence: true
@@ -31,5 +32,6 @@ class FrameworkState::Collaborator < ApplicationRecord
   scope :for_framework, ->(framework_id) { where(framework_id: framework_id) }
   scope :for_person, ->(person_id) { where(person_id: person_id) }
   scope :with_edit_rights, -> { where(role: EDIT_ROLES) }
+  scope :with_suggest_rights, -> { where(role: SUGGEST_ROLES) }
   scope :with_publish_rights, -> { where(role: PUBLISH_ROLES) }
 end

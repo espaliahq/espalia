@@ -6,16 +6,25 @@
 # followed by capability rows for this category.
 #
 class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # @param category_data [Hash] from MatrixDataBuilder: { category:, capabilities: [...] }
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
-  def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:)
+  # @param mode [Symbol] :view or :edit
+  # @param roles_by_id [Hash] { role_id => Role } — passed through to rows to avoid per-cell AR lookups
+  def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
+                 roles_by_id: {}, current_person_id: nil)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
+    @category_pending_count = category_data[:pending_suggestion_count] || 0
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
+    @mode = mode
+    @roles_by_id = roles_by_id
+    @current_person_id = current_person_id
   end
 
   def view_template
@@ -29,9 +38,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     col_count = @merged_levels.size + 1 # +1 for capability name column
 
     tr(
-      class: "sticky top-[41px] z-[5] cursor-pointer",
+      class: "sticky top-[41px] z-[5]",
       data: {
-        action: "click->matrix#toggleCategory",
         matrix_target: "categoryHeader",
         category_id: @category.category_id
       }
@@ -41,20 +49,46 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
       ) do
         div(class: "flex items-center gap-2") do
-          svg(
-            class: "w-3 h-3 text-gray-400 rotate-90 transition-transform",
-            data: { matrix_target: "categoryChevron" },
-            fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
-          ) do |s|
-            s.path(d: "M9 5l7 7-7 7")
+          # Chevron collapses/expands the category rows
+          button(
+            type: "button",
+            class: "flex items-center justify-center w-4 h-4 cursor-pointer rounded " \
+                   "hover:bg-gray-200 dark:hover:bg-gray-700",
+            data: {
+              action: "click->matrix#toggleCategory",
+              category_id: @category.category_id
+            },
+            aria_label: "Toggle category"
+          ) do
+            svg(
+              class: "w-3 h-3 text-gray-400 rotate-90 transition-transform",
+              data: { matrix_target: "categoryChevron" },
+              fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
+            ) do |s|
+              s.path(d: "M9 5l7 7-7 7")
+            end
           end
 
-          span(class: "text-sm font-semibold text-gray-700 dark:text-gray-300") do
-            @category.name
-          end
+          # Category name + count are the focus hit target. Button (not span)
+          # so keyboard + assistive-tech users can reach the focus action.
+          button(
+            type: "button",
+            class: "flex items-center gap-2 cursor-pointer hover:underline text-left",
+            data: {
+              action: "click->matrix#focusCategory",
+              category_id: @category.category_id
+            }
+          ) do
+            render Views::Frameworks::Explorer::CategoryNameFrame.new(
+              category: @category,
+              framework_id: @framework_id,
+              mode: @mode,
+              pending_edit_count: @category_pending_count
+            )
 
-          span(class: "text-xs text-gray-400 dark:text-gray-500") do
-            "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+            span(class: "text-xs text-gray-400 dark:text-gray-500") do
+              "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+            end
           end
         end
       end
@@ -67,7 +101,10 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         capability_data: cap_data,
         merged_levels: @merged_levels,
         selected_role_ids: @selected_role_ids,
-        framework_id: @framework_id
+        framework_id: @framework_id,
+        mode: @mode,
+        roles_by_id: @roles_by_id,
+        current_person_id: @current_person_id
       )
     end
   end

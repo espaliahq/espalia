@@ -31,8 +31,24 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.matrix?
     end
 
-    should "allow suggest_edit" do
-      assert policy.suggest_edit?
+    should "deny suggest_edit without collaborator role" do
+      assert_not policy.suggest_edit?
+    end
+
+    should "deny edit without collaborator role" do
+      assert_not policy.edit?
+    end
+
+    should "deny edit_matrix without collaborator role" do
+      assert_not policy.edit_matrix?
+    end
+
+    should "deny submit_suggestion without collaborator role" do
+      assert_not policy.submit_suggestion?
+    end
+
+    should "deny view_suggestions without collaborator role" do
+      assert_not policy.view_suggestions?
     end
 
     should "deny settings" do
@@ -76,6 +92,26 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "allow admin" do
       assert policy.admin?
     end
+
+    should "allow suggest_edit" do
+      assert policy.suggest_edit?
+    end
+
+    should "allow submit_suggestion" do
+      assert policy.submit_suggestion?
+    end
+
+    should "allow view_suggestions" do
+      assert policy.view_suggestions?
+    end
+
+    should "allow edit" do
+      assert policy.edit?
+    end
+
+    should "allow edit_matrix" do
+      assert policy.edit_matrix?
+    end
   end
 
   context "as a global admin" do
@@ -117,6 +153,22 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.update_illustration?
     end
 
+    should "allow suggest_edit" do
+      assert policy.suggest_edit?
+    end
+
+    should "allow submit_suggestion" do
+      assert policy.submit_suggestion?
+    end
+
+    should "allow view_suggestions" do
+      assert policy.view_suggestions?
+    end
+
+    should "allow edit" do
+      assert policy.edit?
+    end
+
     should "deny settings (requires tenant admin)" do
       assert_not policy.settings?
     end
@@ -141,6 +193,22 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "deny create_illustration" do
       assert_not policy.create_illustration?
     end
+
+    should "deny suggest_edit" do
+      assert_not policy.suggest_edit?
+    end
+
+    should "deny submit_suggestion" do
+      assert_not policy.submit_suggestion?
+    end
+
+    should "deny view_suggestions" do
+      assert_not policy.view_suggestions?
+    end
+
+    should "deny edit" do
+      assert_not policy.edit?
+    end
   end
 
   context "with no tenant membership" do
@@ -156,6 +224,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.settings?
       assert_not policy.create_illustration?
       assert_not policy.suggest_edit?
+      assert_not policy.submit_suggestion?
+      assert_not policy.view_suggestions?
+      assert_not policy.edit?
+      assert_not policy.edit_matrix?
     end
   end
 

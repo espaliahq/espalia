@@ -33,8 +33,13 @@ Rails.application.routes.draw do
   resources :frameworks, only: [ :index, :show ] do
     member do
       get :matrix
+      get :edit
+      get "edit/matrix" => "frameworks#edit_matrix", as: :edit_matrix
     end
     resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
+    resources :capabilities, only: [ :update ], controller: "frameworks/capabilities"
+    resources :categories,   only: [ :update ], controller: "frameworks/categories"
+    resources :expectations, only: [ :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
     resources :suggestions, only: [ :index, :show, :create, :destroy ], controller: "frameworks/suggestions" do
       member do
