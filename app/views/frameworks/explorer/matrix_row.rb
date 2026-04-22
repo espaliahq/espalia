@@ -7,18 +7,28 @@
 # 2. Expanded row (hidden by default): full illustrations for each cell
 #
 class Views::Frameworks::Explorer::MatrixRow < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (for illustration PATCH URLs)
-  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:)
+  # @param mode [Symbol] :view or :edit
+  # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
+  #   don't each fire a `FrameworkState::Role.find_by` query
+  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
+                 roles_by_id: {}, current_person_id: nil)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
+    @mode = mode
+    @roles_by_id = roles_by_id
+    @current_person_id = current_person_id
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
+    @capability_pending_count = capability_data[:pending_suggestion_count] || 0
   end
 
   def view_template
@@ -53,7 +63,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           end
 
           div do
-            span(class: "text-sm font-medium text-gray-900 dark:text-white") { @capability.name }
+            render Views::Frameworks::Explorer::CapabilityNameFrame.new(
+              capability: @capability,
+              framework_id: @framework_id,
+              mode: @mode,
+              pending_edit_count: @capability_pending_count
+            )
+            draft_state_badge if @mode == :edit
             p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1") do
               @capability.description
             end if @capability.description.present?
@@ -65,9 +81,28 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       @merged_levels.each do |level|
         render Views::Frameworks::Explorer::MatrixCell.new(
           cell_data: @cells[level[:ordinal]],
-          ordinal: level[:ordinal]
+          ordinal: level[:ordinal],
+          framework_id: @framework_id,
+          mode: @mode
         )
       end
+    end
+  end
+
+  # Visible only in edit mode — signals that the capability is new in the
+  # current draft ("New") or staged for archive ("Pending archive"). View
+  # mode filters these entities entirely, so the badges never render there.
+  def draft_state_badge
+    return unless @capability.respond_to?(:added_in_draft)
+
+    if @capability.added_in_draft
+      span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
+                  "text-[10px] font-semibold bg-emerald-100 text-emerald-700 " \
+                  "dark:bg-emerald-900/30 dark:text-emerald-300") { "New in draft" }
+    elsif @capability.respond_to?(:pending_archive) && @capability.pending_archive
+      span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
+                  "text-[10px] font-semibold bg-amber-100 text-amber-700 " \
+                  "dark:bg-amber-900/30 dark:text-amber-300") { "Pending archive" }
     end
   end
 
@@ -98,13 +133,26 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
     expectation = cell_data[:expectation]
 
-    td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
-              "bg-blue-50/30 dark:bg-blue-900/10 align-top") do
+    td(
+      class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
+             "bg-blue-50/30 dark:bg-blue-900/10 align-top cursor-pointer " \
+             "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors",
+      data: {
+        action: "click->matrix#focusCell",
+        capability_id: @capability.capability_id,
+        level_ordinal: ordinal,
+        expectation_id: expectation.expectation_id
+      }
+    ) do
+      ill_pending_edits = cell_data[:illustration_pending_edits] || {}
+      pending_creates = cell_data[:pending_illustration_creates] || []
+
       cell_data[:bound_selected_role_ids].each do |role_id|
-        role = FrameworkState::Role.find_by(role_id: role_id)
+        role = @roles_by_id[role_id]
         next unless role
 
         illustrations = cell_data[:illustrations_by_role][role_id] || []
+        role_pending_creates = pending_creates.select { |s| s.proposed_attributes["role_id"] == role_id }
 
         div(class: "mb-2 last:mb-0") do
           render Components::Kit::Badge.new(role.code, variant: :default)
@@ -115,15 +163,26 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
             illustrations.each do |ill|
               render Views::Frameworks::Explorer::IllustrationFrame.new(
                 illustration: ill,
-                framework_id: @framework_id
+                framework_id: @framework_id,
+                pending_edit_count: ill_pending_edits[ill.illustration_id] || 0,
+                mode: @mode
+              )
+            end
+            role_pending_creates.each do |suggestion|
+              render Views::Frameworks::Explorer::PendingIllustrationFrame.new(
+                suggestion: suggestion,
+                framework_id: @framework_id,
+                is_author: suggestion.author_id.to_s == @current_person_id.to_s
               )
             end
           end
-          render Views::Frameworks::Explorer::NewIllustrationFrame.new(
-            expectation_id: expectation.expectation_id,
-            role_id: role_id,
-            framework_id: @framework_id
-          )
+          if @mode == :edit
+            render Views::Frameworks::Explorer::NewIllustrationFrame.new(
+              expectation_id: expectation.expectation_id,
+              role_id: role_id,
+              framework_id: @framework_id
+            )
+          end
         end
       end
     end

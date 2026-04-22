@@ -64,29 +64,22 @@ class ApplicationController < ActionController::Base
     redirect_back fallback_location: root_path, alert: "You are not authorized to perform this action."
   end
 
-  # Auto-links a TenantUser to a Person by matching email.
+  # Ensures the TenantUser has a linked Person — the invariant that lets
+  # domain-authored columns be foreign keys to people(id). Delegates to
+  # TenantUser#ensure_person! which is also used from seeds/other non-web
+  # paths.
   #
-  # Called lazily on sign-in when a TenantUser has no linked Person.
-  # Uses the unique [tenant_id, email] index for fast lookup.
-  # Best-effort: failures are logged but never raised, since this runs on
-  # every authenticated request and must not break page loads.
+  # Best-effort: failures are logged but never raised — this runs on every
+  # authenticated request and must not break page loads.
   #
   # @param tenant_user [TenantUser, nil]
   # @return [void]
   def auto_link_person(tenant_user)
-    return unless tenant_user
-
-    ActsAsTenant.with_tenant(tenant_user.tenant) do
-      person = Person.find_by(email: tenant_user.user.email)
-      next unless person
-
-      unless tenant_user.update(person: person)
-        Rails.logger.warn(
-          "auto_link_person could not link TenantUser #{tenant_user.id} to Person #{person.id}: " \
-          "#{tenant_user.errors.full_messages.join(', ')}"
-        )
-      end
-    end
+    tenant_user&.ensure_person!
+  rescue ActiveRecord::RecordInvalid => e
+    Rails.logger.warn(
+      "ensure_person! failed for TenantUser #{tenant_user&.id}: #{e.message}"
+    )
   end
 
   # Resolves the current tenant for the request.

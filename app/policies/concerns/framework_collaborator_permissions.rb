@@ -27,6 +27,11 @@ module FrameworkCollaboratorPermissions
   end
 
   # @return [Boolean]
+  def can_suggest?
+    collaborator_roles.with_suggest_rights.exists?
+  end
+
+  # @return [Boolean]
   def can_publish?
     collaborator_roles.with_publish_rights.exists?
   end
