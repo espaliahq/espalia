@@ -183,15 +183,14 @@ module StimulusHelpers
 
     find(toggle_selector).click
 
-    # Retry up to twice if the click didn't take effect — the event loop can
+    # Retry once if the click didn't take effect — the event loop can
     # starve on slow CI runners, silently dropping the first click even after
-    # Stimulus reports connected. Bumped wait (2s) gives the browser room to
-    # process before we assume the click was lost.
-    2.times do
-      settled = scoped_verify ? page.has_css?(scoped_verify, visible: :all, wait: 2)
-                              : page.has_css?(scoped_visible, visible: true, wait: 2)
-      break if settled
-
+    # Stimulus reports connected. The wait must be long enough to distinguish
+    # "click was lost" from "click landed but the handler is still running" —
+    # retrying mid-handler on a toggle action re-toggles and hides the target.
+    settled = scoped_verify ? page.has_css?(scoped_verify, visible: :all, wait: 5)
+                            : page.has_css?(scoped_visible, visible: true, wait: 5)
+    unless settled
       # Re-resolve the element — the earlier click may have triggered a
       # Turbo frame swap that replaced the original node.
       target = first(toggle_selector, wait: 1)
