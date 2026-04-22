@@ -120,7 +120,7 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       # this synchronisation, the click can land on a stale link and be
       # silently dropped on slow CI runners.
       assert_text "Assessment Cycles"
-      click_link "Open Cycle"
+      click_with_retry(expect_text: "New Hire") { click_link "Open Cycle" }
 
       assert_text "New Hire"
       assert_text "newhire@example.com"
