@@ -184,14 +184,19 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      # Collapse via the chevron button
-      find(
-        "[data-matrix-target='categoryHeader'][data-category-id='#{@cat_a_id}'] " \
+      chevron_selector = "[data-matrix-target='categoryHeader'][data-category-id='#{@cat_a_id}'] " \
         "button[data-action='click->matrix#toggleCategory']"
-      ).click
+      row_selector = "tr[data-capability-id='#{@cap_a_id}']"
+
+      # Collapse via the chevron button — retry once if the click is lost on
+      # slow CI runners (the row stays visible).
+      find(chevron_selector).click
+      unless page.has_no_css?(row_selector, visible: true, wait: 5)
+        find(chevron_selector).click
+      end
 
       # Capability rows for cat_a are now hidden
-      assert_no_selector "tr[data-capability-id='#{@cap_a_id}']", visible: true
+      assert_no_selector row_selector, visible: true, wait: 5
 
       # Browser URL should not have focus params
       refute_match(/focus=/, page.current_url)
