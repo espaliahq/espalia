@@ -27,11 +27,10 @@ class Frameworks::Repository
     raise ArgumentError, "No tenant context available" unless tenant
 
     snapshot_after = lambda do |aggregate|
-      # Skip the snapshot when no command ran (e.g. a read-only use of the
-      # repository on a framework that hasn't been created yet). The
-      # aggregate's framework_id is only populated once FrameworkCreated
-      # has been applied.
-      return unless aggregate.framework_id
+      # Only rewrite the snapshot when this call actually mutated the
+      # aggregate. Read-only uses (load-and-inspect) on an existing
+      # framework would otherwise churn the graph row every request.
+      return if aggregate.unpublished_events.none?
 
       graph = Frameworks::ExplorerGraphBuilder.new(aggregate).build
       Frameworks::ExplorerGraph.store(aggregate.framework_id, graph)
