@@ -297,7 +297,7 @@ test/
 
 ## Behaviours and practices
 
-* Commit messages should tell the story of what functionality was created, not be a catalog of code changes
+* Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
 * Always update relevant documentation if functionality diverges from what is documented
 
 ## Learnings

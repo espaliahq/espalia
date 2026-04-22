@@ -179,19 +179,23 @@ module StimulusHelpers
   def stimulus_toggle(toggle_selector, visible_selector:, verify_selector: nil, scope: nil)
     toggle_selector = "#{scope} #{toggle_selector}" if scope
     scoped_visible = scope ? "#{scope} #{visible_selector}" : visible_selector
+    scoped_verify = verify_selector && (scope ? "#{scope} #{verify_selector}" : verify_selector)
 
     find(toggle_selector).click
 
-    # Check whether the click took effect. If not, retry once.
-    if verify_selector
-      scoped_verify = scope ? "#{scope} #{verify_selector}" : verify_selector
-      unless page.has_css?(scoped_verify, visible: :all, wait: 1)
-        find(toggle_selector).click
-      end
-    else
-      unless page.has_css?(scoped_visible, visible: true, wait: 1)
-        find(toggle_selector).click
-      end
+    # Retry up to twice if the click didn't take effect — the event loop can
+    # starve on slow CI runners, silently dropping the first click even after
+    # Stimulus reports connected. Bumped wait (2s) gives the browser room to
+    # process before we assume the click was lost.
+    2.times do
+      settled = scoped_verify ? page.has_css?(scoped_verify, visible: :all, wait: 2)
+                              : page.has_css?(scoped_visible, visible: true, wait: 2)
+      break if settled
+
+      # Re-resolve the element — the earlier click may have triggered a
+      # Turbo frame swap that replaced the original node.
+      target = first(toggle_selector, wait: 1)
+      target&.click
     end
 
     assert_selector scoped_visible, visible: true
