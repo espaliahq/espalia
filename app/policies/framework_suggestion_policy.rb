@@ -14,16 +14,16 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   include FrameworkCollaboratorPermissions
 
   # @return [Boolean]
-  def index? = tenant_member?
+  def index? = tenant_admin? || framework_collaborator_can_suggest?
 
   # @return [Boolean]
-  def show? = tenant_member?
+  def show? = tenant_admin? || framework_collaborator_can_suggest?
 
-  # Any tenant member can submit a suggestion (any kind). Approval gating
+  # Non-viewer collaborators can submit suggestions. Approval gating
   # happens at #approve?.
   #
   # @return [Boolean]
-  def create? = tenant_member?
+  def create? = tenant_admin? || framework_collaborator_can_suggest?
 
   # @return [Boolean]
   def approve?
@@ -54,14 +54,24 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
     end
   end
 
+  # author_id is a foreign key to people(id) — see CreateFrameworkSuggestedEdits.
+  # Compare against the current Person, not the User auth identity.
+  #
   # @return [Boolean]
   def author?
-    return false unless user.present?
-    record.author_id == user.id.to_s
+    return false unless person.present?
+    record.author_id == person.id.to_s
   end
 
   # @return [Boolean]
   def pending?
     record.status == "pending"
+  end
+
+  # @return [Boolean]
+  def framework_collaborator_can_suggest?
+    return false unless person.present?
+
+    can_suggest?
   end
 end

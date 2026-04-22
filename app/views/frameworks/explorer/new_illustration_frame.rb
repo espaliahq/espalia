@@ -54,7 +54,11 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
       class: "hidden",
       method: "post",
       action: framework_illustrations_path(framework_id: @framework_id),
-      data: { inline_editor_target: "form", turbo: "true" }
+      data: {
+        inline_editor_target: "form",
+        turbo: "true",
+        action: "turbo:submit-end->inline-editor#submitted"
+      }
     ) do
       input(type: "hidden", name: "illustration[expectation_id]", value: @expectation_id)
       input(type: "hidden", name: "illustration[role_id]", value: @role_id)

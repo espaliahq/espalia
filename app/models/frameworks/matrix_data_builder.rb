@@ -17,17 +17,24 @@
 #   ).build
 #
 class Frameworks::MatrixDataBuilder
-  # @param framework [FrameworkState::Framework]
-  # @param role_families [Array<FrameworkState::RoleFamily>] eager-loaded with roles + levels
-  # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded with capabilities, bindings, expectations, illustrations
+  # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
+  # @param role_families [Array] role families with roles + levels; may be ExplorerGraph values or AR records
+  # @param categories [Array] categories with capabilities, bindings, expectations, illustrations
   # @param selected_role_ids [Array<String>] UUIDs of selected roles
   # @param track_filter [String] "ic", "management", or "both"
-  def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both")
+  # @param mode [Symbol] `:view` (default) hides draft-only entities matching PublishedState semantics; `:edit` includes them
+  # @param pending_suggestions [Hash] pre-queried map { [entity_type, entity_id] => count } for pending edits/deletes
+  # @param pending_illustration_creates [Hash] pre-queried map { parent_id => [SuggestedEdit, ...] } for pending creates
+  def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both",
+                 mode: :view, pending_suggestions: {}, pending_illustration_creates: {})
     @framework = framework
     @role_families = role_families
     @categories = categories
     @selected_role_ids = selected_role_ids
     @track_filter = track_filter
+    @mode = mode
+    @pending_suggestions = pending_suggestions
+    @pending_illustration_creates = pending_illustration_creates
   end
 
   # Builds the matrix data structure.
@@ -79,6 +86,8 @@ class Frameworks::MatrixDataBuilder
 
     selected_roles.each do |role|
       role.levels.each do |level|
+        next unless entity_visible?(level)
+
         levels_by_ordinal[level.ordinal] ||= { ordinal: level.ordinal, role_codes: [] }
         levels_by_ordinal[level.ordinal][:role_codes] << {
           role_id: role.role_id,
@@ -90,6 +99,19 @@ class Frameworks::MatrixDataBuilder
     end
 
     levels_by_ordinal.values.sort_by { |l| l[:ordinal] }
+  end
+
+  # In :view mode, entities flagged `added_in_draft` (new shape-changing
+  # entries inside an open draft) are hidden — matching the published
+  # projection's event-deferral (ADR-16). In :edit mode, everything is
+  # visible and the UI styles draft-only entries distinctly.
+  #
+  # AR records don't carry the flag; their `respond_to?` check short-circuits.
+  def entity_visible?(entity)
+    return true if @mode == :edit
+    return true unless entity.respond_to?(:added_in_draft)
+
+    !entity.added_in_draft
   end
 
   # Collects all role_ids belonging to the same role families as selected roles.
@@ -118,7 +140,11 @@ class Frameworks::MatrixDataBuilder
       capabilities = build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
       next if capabilities.empty?
 
-      { category: category, capabilities: capabilities }
+      {
+        category: category,
+        capabilities: capabilities,
+        pending_suggestion_count: @pending_suggestions[[ "capability_category", category.category_id ]] || 0
+      }
     end
   end
 
@@ -126,8 +152,11 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [Array<Hash>]
   def build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
-    category.capabilities.select { |c| c.status == "active" }.filter_map do |capability|
-      binding_role_ids = capability.bindings.map(&:role_id).to_set
+    category.capabilities
+      .select { |c| c.status == "active" && entity_visible?(c) }
+      .filter_map do |capability|
+      visible_bindings = capability.bindings.select { |b| entity_visible?(b) }
+      binding_role_ids = visible_bindings.map(&:role_id).to_set
 
       # Only include capabilities bound to roles in the same families
       next unless binding_role_ids.intersect?(family_role_ids)
@@ -138,7 +167,8 @@ class Frameworks::MatrixDataBuilder
       {
         capability: capability,
         bound_to_selected: bound_to_selected,
-        cells: cells
+        cells: cells,
+        pending_suggestion_count: @pending_suggestions[[ "capability", capability.capability_id ]] || 0
       }
     end
   end
@@ -153,10 +183,14 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [Hash<Integer, Hash>] ordinal => cell data
   def build_cells(capability, ordinals, selected_role_id_set) # rubocop:disable Metrics/MethodLength
-    expectations_by_ordinal = capability.expectations.index_by(&:level_ordinal)
-    binding_role_ids = capability.bindings.map(&:role_id).to_set
+    expectations_by_ordinal = capability.expectations
+      .select { |e| entity_visible?(e) }
+      .index_by(&:level_ordinal)
+    binding_role_ids = capability.bindings
+      .select { |b| entity_visible?(b) }
+      .map(&:role_id).to_set
     role_ordinals = @selected_roles.each_with_object({}) do |role, h|
-      h[role.role_id] = role.levels.map(&:ordinal).to_set
+      h[role.role_id] = role.levels.select { |l| entity_visible?(l) }.map(&:ordinal).to_set
     end
 
     ordinals.each_with_object({}) do |ordinal, cells|
@@ -178,8 +212,23 @@ class Frameworks::MatrixDataBuilder
         expectation: expectation,
         illustration_count: illustrations.size,
         illustrations_by_role: illustrations_by_role,
-        bound_selected_role_ids: bound_selected_role_ids
+        bound_selected_role_ids: bound_selected_role_ids,
+        pending_suggestion_count: @pending_suggestions[[ "behavioural_expectation", expectation.expectation_id ]] || 0,
+        illustration_pending_edits: illustration_pending_edits(illustrations),
+        pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
       }
+    end
+  end
+
+  # Builds a hash of illustration_id => pending edit count for illustrations
+  # that have pending suggestions.
+  #
+  # @param illustrations [Array<FrameworkState::RoleIllustration>]
+  # @return [Hash<String, Integer>]
+  def illustration_pending_edits(illustrations)
+    illustrations.each_with_object({}) do |ill, h|
+      count = @pending_suggestions[[ "role_illustration", ill.illustration_id ]]
+      h[ill.illustration_id] = count if count && count > 0
     end
   end
 end

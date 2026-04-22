@@ -163,6 +163,43 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "sticky header on vertical scroll" do
+    should "keep column headers pinned to the top of the scroll container" do
+      # Short viewport forces the matrix to overflow vertically even with one
+      # capability row — expanding it adds illustration rows so there is
+      # definitely something to scroll past.
+      page.driver.browser.manage.window.resize_to(1400, 500)
+      visit framework_path(@framework_id, roles: [ @pd_role_id ])
+
+      expand_matrix_row("tr[data-matrix-target='row']")
+
+      # The table must be a direct child of the turbo-frame inside the scroll
+      # container — an intermediate overflow wrapper would capture the sticky
+      # anchor and break vertical stickiness (see framework-explorer.md §11).
+      assert_selector "[data-matrix-target='scrollContainer'] > turbo-frame#framework-matrix > table"
+
+      scrolled = page.evaluate_script(<<~JS)
+        (() => {
+          const pane = document.querySelector('[data-matrix-target="scrollContainer"]');
+          pane.scrollTop = 300;
+          return pane.scrollTop;
+        })()
+      JS
+      assert scrolled.positive?, "Expected matrix pane to scroll vertically (got scrollTop=#{scrolled})"
+
+      header_pinned = page.evaluate_script(<<~JS)
+        (() => {
+          const pane = document.querySelector('[data-matrix-target="scrollContainer"]');
+          const corner = pane.querySelector('thead th');
+          const paneRect = pane.getBoundingClientRect();
+          const cornerRect = corner.getBoundingClientRect();
+          return Math.abs(cornerRect.top - paneRect.top) < 2;
+        })()
+      JS
+      assert header_pinned, "Column header should stay pinned to the top of the scroll container after scrolling"
+    end
+  end
+
   context "responsive behaviour" do
     should "show role tree inline on desktop and toggle it" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)

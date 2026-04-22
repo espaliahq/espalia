@@ -63,6 +63,109 @@ end
 # Seed framework data (must run BEFORE HRIS sync so Pass 5 has a framework to assign to)
 Rake::Task["frameworks:seed_meandu"].invoke
 
+# Seed pending suggestions for visual affordance testing — dev/test only.
+# Production seeds must never surface demo editorial state to real tenants.
+meandu_tenant = Rails.env.production? ? nil : Tenant.find_by(slug: "meandu")
+if meandu_tenant
+  ActsAsTenant.with_tenant(meandu_tenant) do
+    framework = FrameworkState::Framework.first
+    if framework && FrameworkState::SuggestedEdit.where(framework_id: framework.framework_id).none?
+      # Transaction keeps re-runs safe — partial failure rolls back rather
+      # than leaving the guard's `.none?` predicate false forever.
+      ActiveRecord::Base.transaction do
+      handler = Frameworks::CommandHandler.new
+      admin_user = User.find_by(global_admin: true)
+      raise "No global admin user found — cannot seed suggestions" unless admin_user
+
+      # framework_suggested_edits.author_id is a foreign key to people(id).
+      # TenantUser#ensure_person! is the shared invariant helper — it links
+      # an existing email-matched Person, or bootstraps a minimal one when
+      # the admin has never been provisioned via HRIS.
+      admin_person = TenantUser.find_by(user_id: admin_user.id)&.ensure_person!
+      raise "Admin user has no TenantUser in meandu tenant — cannot seed suggestions" unless admin_person
+
+      admin_author_id = admin_person.id.to_s
+
+      # Grab sample entities from the seeded framework
+      category = framework.capability_categories.first
+      capability = category&.capabilities&.first
+      expectation = capability&.expectations&.first
+      illustration = expectation&.illustrations&.first
+
+      if expectation && illustration
+        puts "Seeding pending suggestions for visual affordance testing..."
+
+        # Pending edit on a behavioural_expectation
+        handler.suggest_edit(
+          framework.framework_id, SecureRandom.uuid_v7,
+          "behavioural_expectation", expectation.expectation_id,
+          "description", "Consistently asks clarifying questions to uncover hidden assumptions",
+          admin_author_id, rationale: "More specific wording",
+          mode: :suggesting
+        )
+
+        # Pending edit on a role_illustration
+        handler.suggest_edit(
+          framework.framework_id, SecureRandom.uuid_v7,
+          "role_illustration", illustration.illustration_id,
+          "description", "Identifies and escalates unclear requirements before starting work",
+          admin_author_id, rationale: "Better real-world example",
+          mode: :suggesting
+        )
+
+        # Pending edit on a capability name
+        handler.suggest_edit(
+          framework.framework_id, SecureRandom.uuid_v7,
+          "capability", capability.capability_id,
+          "name", "#{capability.name} & Problem Solving",
+          admin_author_id, rationale: "Broaden the scope",
+          mode: :suggesting
+        )
+
+        # Pending edit on a capability_category name
+        handler.suggest_edit(
+          framework.framework_id, SecureRandom.uuid_v7,
+          "capability_category", category.category_id,
+          "name", "#{category.name} (Revised)",
+          admin_author_id, rationale: "Clarify category scope",
+          mode: :suggesting
+        )
+
+        # Pending create for a role_illustration
+        role = FrameworkState::Role.first
+        if role
+          handler.suggest_create(
+            framework.framework_id, SecureRandom.uuid_v7,
+            "role_illustration",
+            { role_id: role.role_id, description: "Proposes alternative solutions when blocked" },
+            parent_id: expectation.expectation_id,
+            author_id: admin_author_id,
+            mode: :suggesting
+          )
+        end
+
+        # Pending delete for a role_illustration (if there's a second illustration)
+        second_illustration = expectation.illustrations.second
+        if second_illustration
+          handler.suggest_delete(
+            framework.framework_id, SecureRandom.uuid_v7,
+            "role_illustration", second_illustration.illustration_id,
+            author_id: admin_author_id, rationale: "Redundant with first illustration",
+            mode: :suggesting
+          )
+        end
+
+        puts "  Seeded #{FrameworkState::SuggestedEdit.where(framework_id: framework.framework_id).pending.count} pending suggestions"
+      else
+        puts "Skipping suggestion seeding — framework entities not ready"
+      end
+      end # transaction
+    else
+      puts "Suggestions already seeded or no framework found"
+    end
+  end
+end
+
 # Seed assessment data (person assignment + open cycle)
 Rake::Task["assessments:seed"].invoke
 

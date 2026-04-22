@@ -7,8 +7,8 @@
 # Right pane: placeholder for future contextual feed.
 #
 class Views::Frameworks::ShowView < Views::Base
-  # @param framework [FrameworkState::Framework]
-  # @param role_families [Array<FrameworkState::RoleFamily>] eager-loaded with roles + levels
+  # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
+  # @param role_families [Array] role families with roles + levels
   # @param selected_role_ids [Array<String>]
   # @param track_filter [String]
   # @param matrix_data [Hash] output from MatrixDataBuilder
@@ -17,9 +17,12 @@ class Views::Frameworks::ShowView < Views::Base
   # @param tenants [Array<Tenant>]
   # @param is_admin [Boolean] whether to show admin controls (settings link)
   # @param pending_suggestion_count [Integer] count for the suggestions toggle badge
+  # @param mode [Symbol] :view (default) or :edit — gates inline-edit affordances and sets context-pane default-open
+  # @param can_edit [Boolean] whether the current user can reach edit mode — controls mode switcher visibility
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
-                 pending_suggestion_count: 0)
+                 pending_suggestion_count: 0, mode: :view, can_edit: false,
+                 current_person_id: nil)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -30,6 +33,9 @@ class Views::Frameworks::ShowView < Views::Base
     @tenants = tenants
     @is_admin = is_admin
     @pending_suggestion_count = pending_suggestion_count
+    @mode = mode
+    @can_edit = can_edit
+    @current_person_id = current_person_id
   end
 
   def view_template
@@ -63,13 +69,99 @@ class Views::Frameworks::ShowView < Views::Base
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )
+            edit_mode_badge if @mode == :edit
           end
         end
 
-        settings_link if @is_admin
+        div(class: "flex items-center gap-2") do
+          edit_suggest_toggle if @mode == :edit
+          mode_switcher if @can_edit
+          settings_link if @is_admin
+        end
       end
 
       stats_bar
+    end
+  end
+
+  # Segmented Editing / Suggesting toggle — only rendered in edit mode.
+  # Persisted client-side via the `framework_edit_mode` cookie; read
+  # server-side by the FrameworkEditMode concern on every inline-edit
+  # submission.
+  def edit_suggest_toggle
+    div(
+      class: "inline-flex items-stretch rounded-md border border-gray-200 dark:border-gray-700 " \
+             "bg-gray-50 dark:bg-gray-800 p-0.5 text-sm",
+      data: {
+        controller: "edit-mode-toggle",
+        edit_mode_toggle_active_class: "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs",
+        edit_mode_toggle_inactive_class: "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+      }
+    ) do
+      edit_suggest_segment("editing", "Editing",
+                           "Changes you make apply immediately (when you have approval authority).")
+      edit_suggest_segment("suggesting", "Suggesting",
+                           "Changes land as pending suggestions for review.")
+    end
+  end
+
+  def edit_suggest_segment(value, label, tooltip)
+    button(
+      type: "button",
+      class: "inline-flex items-center rounded px-3 py-1 font-medium transition-colors",
+      data: {
+        action: "edit-mode-toggle#select",
+        edit_mode_toggle_target: "#{value}Button",
+        edit_mode_value: value
+      },
+      title: tooltip,
+      aria_pressed: "false"
+    ) { label }
+  end
+
+  # Shown only while rendering /edit to make the mode visible even when
+  # the toggle isn't (e.g. mobile-narrow viewports). Amber to stand out
+  # from the blue version badge.
+  def edit_mode_badge
+    render Components::Kit::Badge.new("Edit mode", variant: :warning)
+  end
+
+  # Mode switcher pill — always rendered when the user can reach edit mode,
+  # so there is a clear exit from edit back to view. Hidden for pure viewers
+  # (the edit route is 404 for them anyway).
+  def mode_switcher
+    target_path = @mode == :edit ? framework_path(@framework.framework_id) : edit_framework_path(@framework.framework_id)
+    target_label = @mode == :edit ? "Exit edit mode" : "Edit mode"
+
+    a(
+      href: target_path,
+      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm " \
+             "#{mode_switcher_style_classes} " \
+             "transition-colors",
+      title: target_label
+    ) do
+      svg(
+        xmlns: "http://www.w3.org/2000/svg", fill: "none", viewbox: "0 0 24 24",
+        stroke_width: "1.5", stroke: "currentColor", class: "w-4 h-4"
+      ) do |s|
+        s.path(
+          stroke_linecap: "round", stroke_linejoin: "round",
+          d: "M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 " \
+             "19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 " \
+             "011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
+        )
+      end
+      plain target_label
+    end
+  end
+
+  def mode_switcher_style_classes
+    if @mode == :edit
+      "bg-amber-100 text-amber-800 hover:bg-amber-200 " \
+        "dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+    else
+      "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 " \
+        "hover:bg-gray-100 dark:hover:bg-gray-800"
     end
   end
 
@@ -131,10 +223,14 @@ class Views::Frameworks::ShowView < Views::Base
       end
       stat_item("Levels", level_count)
       stat_item("Capabilities", cap_count)
-      suggestions_toggle
+      suggestions_toggle if @mode == :edit
     end
   end
 
+  # Rendered only in edit mode. View mode hides both the toggle and the
+  # pane entirely — viewers have no business with the in-flight
+  # suggestion feed, and the grid itself already suppresses pending-edit
+  # decorations in view mode (see FrameworksController#load_explorer_matrix).
   def suggestions_toggle
     button(
       type: "button",
@@ -169,12 +265,13 @@ class Views::Frameworks::ShowView < Views::Base
       data: {
         controller: "matrix",
         matrix_base_path_value: matrix_framework_path(@framework.framework_id),
-        action: "tree:changed->matrix#updateSelection"
+        action: "tree:changed->matrix#updateSelection " \
+                "suggestion:navigate@window->matrix#navigateToEntity"
       }
     ) do
       left_pane
       main_pane
-      right_pane_placeholder
+      right_pane_placeholder if @mode == :edit
     end
   end
 
@@ -205,23 +302,40 @@ class Views::Frameworks::ShowView < Views::Base
         render Views::Frameworks::Explorer::Matrix.new(
           matrix_data: @matrix_data,
           selected_role_ids: @selected_role_ids,
-          framework_id: @framework.framework_id
+          framework_id: @framework.framework_id,
+          mode: @mode,
+          current_person_id: @current_person_id
         )
       end
     end
   end
 
   def right_pane_placeholder
+    # Edit mode only — view mode omits the pane entirely
+    # (FrameworksController hides pending-suggestion indicators from the
+    # grid too, so viewers see only published state).
     aside(
       class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 hidden flex-col overflow-hidden",
-      data: { framework_explorer_target: "contextPane" }
+             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden",
+      data: {
+        framework_explorer_target: "contextPane",
+        controller: "context-pane",
+        context_pane_base_path_value: framework_suggestions_path(@framework.framework_id),
+        context_pane_initial_role_ids_value: @selected_role_ids.to_json,
+        context_pane_initial_track_value: @track_filter,
+        action: "tree:changed@window->context-pane#onTreeChanged " \
+                "matrix:focus-changed@window->context-pane#onFocusChanged " \
+                "suggestion:submitted@window->context-pane#onSuggestionSubmitted"
+      }
     ) do
+      # No `src:` — the context-pane Stimulus controller sets the src on
+      # connect with any focus/role params applied. Avoids a race where the
+      # auto-fetch with an unfocused URL lands before the controller primes
+      # the focused URL on a deep link.
       turbo_frame_tag(
         "suggestion-panel",
-        src: framework_suggestions_path(@framework.framework_id, layout: "panel"),
-        loading: "lazy",
-        class: "block h-full"
+        class: "block h-full",
+        data: { context_pane_target: "frame" }
       ) do
         div(class: "p-6 text-center text-gray-400 dark:text-gray-500 text-sm") do
           p { "Loading suggestions\u2026" }

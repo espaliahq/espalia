@@ -87,7 +87,12 @@ FactoryBot.define do
     field { "description" }
     current_value { "Original text." }
     suggested_value { "Improved text." }
-    author_id { SecureRandom.uuid_v7 }
+    # author_id is a FK to people(id) — create a person in the same tenant
+    # unless the caller overrides it.
+    kind { "edit" }
+    author_id do
+      ActsAsTenant.with_tenant(tenant) { create(:person, tenant: tenant).id }
+    end
     status { "pending" }
   end
 end

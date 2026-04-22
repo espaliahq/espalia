@@ -26,7 +26,12 @@ export default class extends BaseController {
     this.isMobile = window.innerWidth < 1024
     // On desktop the pane starts visible; on mobile it starts hidden
     this.rolePaneOpen = !this.isMobile
-    this.contextPaneOpen = false
+    // Read the context pane's initial open/closed state from the DOM. Edit
+    // mode server-renders the pane with `flex` (open); view mode with
+    // `hidden` (closed). Initialising from the rendered classes keeps the
+    // toggle affordance in sync with what the user actually sees.
+    this.contextPaneOpen = this.hasContextPaneTarget &&
+      !this.contextPaneTarget.classList.contains("hidden")
     this.#updateToggleAffordance()
     this.#updateContextToggleAffordance()
   }

@@ -218,6 +218,92 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
       end
     end
 
+    context "pending suggestion counts" do
+      should "include zero counts when no pending suggestions" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
+
+        category = result[:categories].first
+        assert_equal 0, category[:pending_suggestion_count]
+
+        cap = category[:capabilities].first
+        assert_equal 0, cap[:pending_suggestion_count]
+
+        cell = cap[:cells].values.first
+        assert_equal 0, cell[:pending_suggestion_count]
+        assert_empty cell[:illustration_pending_edits]
+        assert_empty cell[:pending_illustration_creates]
+      end
+
+      should "include pending counts for expectations when pending suggestions exist" do
+        eid = @expectations[0].expectation_id
+        pending_map = { [ "behavioural_expectation", eid ] => 2 }
+
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id ],
+          pending_suggestions: pending_map
+        )
+
+        cap = find_capability(result, "Strategic Thinking")
+        assert_equal 2, cap[:cells][1][:pending_suggestion_count]
+        assert_equal 0, cap[:cells][2][:pending_suggestion_count]
+      end
+
+      should "include pending counts for category and capability" do
+        pending_map = {
+          [ "capability_category", @category.category_id ] => 1,
+          [ "capability", @capability.capability_id ] => 3
+        }
+
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id ],
+          pending_suggestions: pending_map
+        )
+
+        assert_equal 1, result[:categories].first[:pending_suggestion_count]
+        assert_equal 3, find_capability(result, "Strategic Thinking")[:pending_suggestion_count]
+      end
+
+      should "include illustration pending edit counts" do
+        illustration = @expectations[0].illustrations.first
+        pending_map = { [ "role_illustration", illustration.illustration_id ] => 1 }
+
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id ],
+          pending_suggestions: pending_map
+        )
+
+        cap = find_capability(result, "Strategic Thinking")
+        edits = cap[:cells][1][:illustration_pending_edits]
+        assert_equal 1, edits[illustration.illustration_id]
+      end
+
+      should "include pending illustration creates by expectation" do
+        suggestion = create(:framework_suggested_edit,
+          tenant: @tenant,
+          framework_id: @framework.framework_id,
+          kind: "create",
+          target_entity_type: "role_illustration",
+          target_entity_id: nil,
+          field: nil,
+          current_value: nil,
+          suggested_value: nil,
+          proposed_attributes: { "role_id" => @ic_role.role_id, "description" => "New example" },
+          parent_id: @expectations[0].expectation_id)
+
+        creates_map = { @expectations[0].expectation_id => [ suggestion ] }
+
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id ],
+          pending_illustration_creates: creates_map
+        )
+
+        cap = find_capability(result, "Strategic Thinking")
+        pending = cap[:cells][1][:pending_illustration_creates]
+        assert_equal 1, pending.size
+        assert_equal "New example", pending.first.proposed_attributes["description"]
+      end
+    end
+
     context "empty categories" do
       should "skip categories with no matching capabilities" do
         # Select only design role — Thinking category has "Strategic Thinking" bound to eng only
@@ -233,13 +319,16 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
 
   private
 
-  def build_matrix(selected_role_ids:, track_filter: "both", categories: nil)
+  def build_matrix(selected_role_ids:, track_filter: "both", categories: nil,
+                   pending_suggestions: {}, pending_illustration_creates: {})
     Frameworks::MatrixDataBuilder.new(
       framework: @framework,
       role_families: @role_families,
       categories: categories || @categories,
       selected_role_ids: selected_role_ids,
-      track_filter: track_filter
+      track_filter: track_filter,
+      pending_suggestions: pending_suggestions,
+      pending_illustration_creates: pending_illustration_creates
     ).build
   end
 

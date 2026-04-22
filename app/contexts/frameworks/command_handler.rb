@@ -396,16 +396,21 @@ class Frameworks::CommandHandler
   # @param author_id [String] UUID of the author
   # @param rationale [String, nil] optional explanation
   # @param mode [Symbol] :editing (auto-approve if authority) or :suggesting (always pending)
+  # @return [String, nil] the created entity ID when auto-approved, nil when pending
   def suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
                      parent_id:, author_id:, rationale: nil, mode: :editing)
+    created_entity_id = nil
+
     @repository.with_framework(framework_id) do |framework|
       framework.suggest_create(framework_id, suggestion_id, target_entity_type, proposed_attributes,
                                parent_id: parent_id, author_id: author_id, rationale: rationale)
 
       if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
-        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+        created_entity_id = framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
       end
     end
+
+    created_entity_id
   end
 
   # Suggests deleting (or archiving) an existing framework entity.

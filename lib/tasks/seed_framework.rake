@@ -156,6 +156,12 @@ namespace :frameworks do
           .update!(deficit_threshold: threshold)
       end
 
+      # Department + deficit_threshold were applied directly to AR read
+      # models after publish — the aggregate-based snapshot written during
+      # publish doesn't see them. Rebuild the snapshot so the explorer
+      # graph reflects the final seeded state.
+      Frameworks::ExplorerGraph.rebuild(framework_id)
+
       puts "\nSeed complete!"
       puts "  Framework: #{framework_data['name']}"
       puts "  Role families: #{framework_data['role_families'].count { |rf| rf['roles'] }}"

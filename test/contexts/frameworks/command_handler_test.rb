@@ -113,6 +113,7 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
   context "#approve_suggestion" do
     setup do
       @ill_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) { @author_person = create(:person, tenant: @tenant) }
 
       ActsAsTenant.with_tenant(@tenant) do
         handler = Frameworks::CommandHandler.new
@@ -138,7 +139,7 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
         @suggestion_id = SecureRandom.uuid_v7
         handler.suggest_edit(
           @framework_id, @suggestion_id, "role_illustration", @ill_id, "description",
-          "Proactively seeks clarification", SecureRandom.uuid_v7,
+          "Proactively seeks clarification", @author_person.id.to_s,
           mode: :suggesting
         )
       end
@@ -150,7 +151,7 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
         stream = EventStreamNaming.framework_stream(@framework_id)
         events_before = @event_store.read.stream(stream).to_a.size
 
-        handler.approve_suggestion(@framework_id, @suggestion_id, SecureRandom.uuid_v7,
+        handler.approve_suggestion(@framework_id, @suggestion_id, @author_person.id.to_s,
                                    comment: "Approved by reviewer")
 
         events_after = @event_store.read.stream(stream).to_a
