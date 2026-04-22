@@ -122,7 +122,11 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
     should "withdraw their own pending suggestion" do
       visit framework_suggestion_path(@framework_id, @illustration_suggestion_id)
 
-      accept_confirm { click_button "Withdraw" }
+      # Wait for the page to finish rendering before clicking — on slow
+      # CI runners the click can fire before Turbo's confirm handler is
+      # bound, silently dropping the submit and timing out the modal wait.
+      assert_selector "form[data-turbo-confirm] button", text: "Withdraw"
+      accept_confirm(wait: 10) { click_button "Withdraw" }
 
       assert_current_path framework_suggestions_path(@framework_id)
       assert_text "Suggestion withdrawn"
