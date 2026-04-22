@@ -21,4 +21,17 @@ class FrameworkState::RoleFamily < ApplicationRecord
   validates :framework_id, presence: true
   validates :role_family_id, presence: true
   validates :name, presence: true
+
+  # `department` is not event-sourced — it is written directly to this read
+  # model after publish (see seed_framework.rake). Rebuild the explorer
+  # graph snapshot when it changes so view-mode rendering stays fresh.
+  # Event-sourced fields like `name` reach the snapshot via the aggregate
+  # on the normal write path, so no callback is needed for them here.
+  after_update_commit :rebuild_explorer_graph, if: :saved_change_to_department?
+
+  private
+
+  def rebuild_explorer_graph
+    Frameworks::ExplorerGraph.rebuild(framework_id)
+  end
 end

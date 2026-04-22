@@ -295,6 +295,11 @@ test/
 | Pagination | `pagy` |
 | Nil assertions | `assert_nil value` (not `assert_equal nil, value`) |
 
+## Behaviours and practices
+
+* Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
+* Always update relevant documentation if functionality diverges from what is documented
+
 ## Learnings
 
 > **CRITICAL**: Any important learnings, add them here.

@@ -179,6 +179,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.check_constraint "(scope_type IS NULL) = (scope_id IS NULL)", name: "chk_framework_collaborators_scope_consistency"
   end
 
+  create_table "framework_explorer_graphs", primary_key: "framework_id", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "format_version", default: 1, null: false
+    t.jsonb "graph_data", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id"], name: "index_framework_explorer_graphs_on_tenant_id"
+  end
+
   create_table "framework_levels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "code", null: false
     t.datetime "created_at", null: false
@@ -379,12 +388,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
   add_foreign_key "framework_capability_categories", "tenants"
   add_foreign_key "framework_capability_role_bindings", "tenants"
   add_foreign_key "framework_collaborators", "tenants"
+  add_foreign_key "framework_explorer_graphs", "tenants"
   add_foreign_key "framework_levels", "tenants"
   add_foreign_key "framework_migration_mappings", "tenants"
   add_foreign_key "framework_role_families", "tenants"
   add_foreign_key "framework_role_illustrations", "tenants"
   add_foreign_key "framework_roles", "tenants"
   add_foreign_key "framework_states", "tenants"
+  add_foreign_key "framework_suggested_edits", "people", column: "author_id", on_delete: :restrict
+  add_foreign_key "framework_suggested_edits", "people", column: "reviewed_by", on_delete: :nullify
   add_foreign_key "framework_suggested_edits", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
