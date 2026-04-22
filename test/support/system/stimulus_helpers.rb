@@ -145,17 +145,20 @@ module StimulusHelpers
     # potentially interfering with the in-flight fetch.
     landed =
       if expect_text
-        page.has_text?(expect_text, wait: 4)
+        page.has_text?(expect_text, wait: 6)
       else
-        page.has_css?(expect_selector, wait: 4)
+        page.has_css?(expect_selector, wait: 6)
       end
 
     yield unless landed
 
+    # The final wait also needs to be generous: when we retry a dropped click,
+    # the fresh navigation + Turbo round-trip itself can exceed Capybara's
+    # default on a starved CI runner.
     if expect_text
-      assert_text expect_text
+      assert_text expect_text, wait: 6
     else
-      assert_selector expect_selector
+      assert_selector expect_selector, wait: 6
     end
   end
 
