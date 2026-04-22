@@ -14,12 +14,15 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (for illustration PATCH URLs)
   # @param mode [Symbol] :view or :edit
-  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view)
+  # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
+  #   don't each fire a `FrameworkState::Role.find_by` query
+  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view, roles_by_id: {})
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
     @mode = mode
+    @roles_by_id = roles_by_id
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -143,7 +146,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       pending_creates = cell_data[:pending_illustration_creates] || []
 
       cell_data[:bound_selected_role_ids].each do |role_id|
-        role = FrameworkState::Role.find_by(role_id: role_id)
+        role = @roles_by_id[role_id]
         next unless role
 
         illustrations = cell_data[:illustrations_by_role][role_id] || []

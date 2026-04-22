@@ -17,6 +17,9 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
     @mode = mode
     @merged_levels = matrix_data[:merged_levels]
     @categories = matrix_data[:categories]
+    # Prebuild role lookup so expanded cells don't hit AR once per bound
+    # role per row — that was adding N+1 queries on edit-mode render.
+    @roles_by_id = matrix_data[:selected_roles].index_by(&:role_id)
   end
 
   def view_template
@@ -42,7 +45,8 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             merged_levels: @merged_levels,
             selected_role_ids: @selected_role_ids,
             framework_id: @framework_id,
-            mode: @mode
+            mode: @mode,
+            roles_by_id: @roles_by_id
           )
         end
       end
