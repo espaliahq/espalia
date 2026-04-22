@@ -16,13 +16,15 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
   #   don't each fire a `FrameworkState::Role.find_by` query
-  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view, roles_by_id: {})
+  def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
+                 roles_by_id: {}, current_person_id: nil)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
     @mode = mode
     @roles_by_id = roles_by_id
+    @current_person_id = current_person_id
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -169,7 +171,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
             role_pending_creates.each do |suggestion|
               render Views::Frameworks::Explorer::PendingIllustrationFrame.new(
                 suggestion: suggestion,
-                framework_id: @framework_id
+                framework_id: @framework_id,
+                is_author: suggestion.author_id.to_s == @current_person_id.to_s
               )
             end
           end

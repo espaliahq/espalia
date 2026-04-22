@@ -32,10 +32,8 @@ class Frameworks::ExpectationsController < ApplicationController
       mode: :edit,
       pending_edit_count: pending_edits_on_expectation
     ), layout: false
-  rescue ActiveRecord::RecordNotFound
+  rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
-  rescue RuntimeError => e
-    render json: { error: e.message }, status: :unprocessable_content
   end
 
   private

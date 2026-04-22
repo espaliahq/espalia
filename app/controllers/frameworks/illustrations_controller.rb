@@ -44,8 +44,8 @@ class Frameworks::IllustrationsController < ApplicationController
     end
   rescue ActiveRecord::RecordNotFound
     head :not_found
-  rescue RuntimeError => e
-    render json: { error: e.message }, status: :unprocessable_content
+  rescue RuntimeError
+    head :unprocessable_content
   end
 
   # PATCH /frameworks/:framework_id/illustrations/:id
@@ -73,10 +73,8 @@ class Frameworks::IllustrationsController < ApplicationController
       mode: :edit,
       pending_edit_count: pending_edits_on_illustration
     ), layout: false
-  rescue ActiveRecord::RecordNotFound
+  rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
-  rescue RuntimeError => e
-    render json: { error: e.message }, status: :unprocessable_content
   end
 
   private

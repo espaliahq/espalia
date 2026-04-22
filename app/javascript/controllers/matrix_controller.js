@@ -187,13 +187,19 @@ export default class extends BaseController {
     const expectationId = cell.dataset.expectationId || null
     if (!capabilityId || isNaN(levelOrdinal)) return
 
+    // Resolve the category from the row the cell belongs to — reusing
+    // `this.currentFocus.categoryId` would leak a stale value when the user
+    // focused on one category and then clicked a cell in another.
+    const row = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
+    const categoryId = row ? this.#categoryIdForRow(row) : null
+
     // Toggle off if already focused on this cell
     if (this.currentFocus.level === "cell" &&
         this.currentFocus.capabilityId === capabilityId &&
         this.currentFocus.levelOrdinal === levelOrdinal) {
       this.#setFocus({
         level: "capability",
-        categoryId: this.currentFocus.categoryId,
+        categoryId: categoryId,
         capabilityId: capabilityId,
         levelOrdinal: null,
         expectationId: null
@@ -203,7 +209,7 @@ export default class extends BaseController {
 
     this.#setFocus({
       level: "cell",
-      categoryId: this.currentFocus.categoryId,
+      categoryId: categoryId,
       capabilityId: capabilityId,
       levelOrdinal: levelOrdinal,
       expectationId: expectationId
@@ -213,7 +219,7 @@ export default class extends BaseController {
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
 
   navigateToEntity(event) {
-    const { level, categoryId, capabilityId, levelOrdinal } = event.detail || {}
+    const { level, categoryId, capabilityId, levelOrdinal, expectationId } = event.detail || {}
     if (!level) return
 
     if (level === "framework") {
@@ -250,7 +256,8 @@ export default class extends BaseController {
         level: "cell",
         categoryId: categoryId || this.#categoryIdForRow(row),
         capabilityId,
-        levelOrdinal
+        levelOrdinal,
+        expectationId: expectationId || null
       })
     } else {
       this.#setFocus({

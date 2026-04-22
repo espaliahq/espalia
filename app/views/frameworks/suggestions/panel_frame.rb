@@ -179,6 +179,8 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
     a(
       href: framework_suggestion_path(@framework.framework_id, suggestion.suggestion_id),
       class: "ml-auto text-gray-400 dark:text-gray-500 hover:text-primary " \
+             "focus-visible:text-primary focus-visible:opacity-100 " \
+             "focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 " \
              "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
       data: { turbo_frame: "_top" },
       title: "View suggestion details",

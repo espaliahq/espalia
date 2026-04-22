@@ -10,11 +10,12 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
   # @param mode [Symbol] :view or :edit
-  def initialize(matrix_data:, selected_role_ids:, framework_id:, mode: :view)
+  def initialize(matrix_data:, selected_role_ids:, framework_id:, mode: :view, current_person_id: nil)
     @matrix_data = matrix_data
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
     @mode = mode
+    @current_person_id = current_person_id
     @merged_levels = matrix_data[:merged_levels]
     @categories = matrix_data[:categories]
     # Prebuild role lookup so expanded cells don't hit AR once per bound
@@ -46,7 +47,8 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             selected_role_ids: @selected_role_ids,
             framework_id: @framework_id,
             mode: @mode,
-            roles_by_id: @roles_by_id
+            roles_by_id: @roles_by_id,
+            current_person_id: @current_person_id
           )
         end
       end

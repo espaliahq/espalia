@@ -10,11 +10,14 @@ class Views::Frameworks::MatrixFrameView < Views::Base
   # @param matrix_data [Hash] output from MatrixDataBuilder
   # @param selected_role_ids [Array<String>]
   # @param mode [Symbol] :view or :edit
-  def initialize(framework:, matrix_data:, selected_role_ids:, mode: :view)
+  # @param current_person_id [String, nil] viewing person — used to decide
+  #   author-specific affordances (e.g. amend their own pending illustration)
+  def initialize(framework:, matrix_data:, selected_role_ids:, mode: :view, current_person_id: nil)
     @framework = framework
     @matrix_data = matrix_data
     @selected_role_ids = selected_role_ids
     @mode = mode
+    @current_person_id = current_person_id
   end
 
   def view_template
@@ -23,7 +26,8 @@ class Views::Frameworks::MatrixFrameView < Views::Base
         matrix_data: @matrix_data,
         selected_role_ids: @selected_role_ids,
         framework_id: @framework.framework_id,
-        mode: @mode
+        mode: @mode,
+        current_person_id: @current_person_id
       )
     end
   end

@@ -21,7 +21,8 @@ class Views::Frameworks::ShowView < Views::Base
   # @param can_edit [Boolean] whether the current user can reach edit mode — controls mode switcher visibility
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
-                 pending_suggestion_count: 0, mode: :view, can_edit: false)
+                 pending_suggestion_count: 0, mode: :view, can_edit: false,
+                 current_person_id: nil)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -34,6 +35,7 @@ class Views::Frameworks::ShowView < Views::Base
     @pending_suggestion_count = pending_suggestion_count
     @mode = mode
     @can_edit = can_edit
+    @current_person_id = current_person_id
   end
 
   def view_template
@@ -301,7 +303,8 @@ class Views::Frameworks::ShowView < Views::Base
           matrix_data: @matrix_data,
           selected_role_ids: @selected_role_ids,
           framework_id: @framework.framework_id,
-          mode: @mode
+          mode: @mode,
+          current_person_id: @current_person_id
         )
       end
     end
