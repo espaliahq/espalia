@@ -39,9 +39,10 @@ class Frameworks::AggregateCollaboratorTest < ActiveSupport::TestCase
     should "raise if collaborator already has this role" do
       @aggregate.add_collaborator(@framework_id, @person_id, "editor", added_by: @added_by)
 
-      assert_raises(RuntimeError, /already has this role/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_collaborator(@framework_id, @person_id, "editor", added_by: @added_by)
       end
+      assert_match /already has this role/, err.message
     end
 
     should "allow same person with different roles" do
@@ -58,9 +59,10 @@ class Frameworks::AggregateCollaboratorTest < ActiveSupport::TestCase
     should "raise if framework not created" do
       aggregate = Frameworks::Aggregate.new
 
-      assert_raises(RuntimeError, /not yet created/) do
+      err = assert_raises(RuntimeError) do
         aggregate.add_collaborator(SecureRandom.uuid_v7, @person_id, "editor", added_by: @added_by)
       end
+      assert_match /not yet created/, err.message
     end
   end
 
@@ -78,9 +80,10 @@ class Frameworks::AggregateCollaboratorTest < ActiveSupport::TestCase
     end
 
     should "raise if collaborator does not have old role" do
-      assert_raises(RuntimeError, /does not have this role/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.change_collaborator_role(@framework_id, @person_id, "editor", "owner", changed_by: @added_by)
       end
+      assert_match /does not have this role/, err.message
     end
   end
 
@@ -98,9 +101,10 @@ class Frameworks::AggregateCollaboratorTest < ActiveSupport::TestCase
     end
 
     should "raise if collaborator does not have this role" do
-      assert_raises(RuntimeError, /does not have this role/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.remove_collaborator(@framework_id, @person_id, "editor", removed_by: @added_by)
       end
+      assert_match /does not have this role/, err.message
     end
   end
 

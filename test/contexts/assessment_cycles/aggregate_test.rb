@@ -28,15 +28,17 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
     should "raise if already defined" do
       @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
 
-      assert_raises(RuntimeError, /already defined/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
       end
+      assert_match /already defined/, err.message
     end
 
     should "raise for invalid cycle_type" do
-      assert_raises(RuntimeError, /Invalid cycle type/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.define(@cycle_id, @framework_id, "Q1", "nonsense", 1)
       end
+      assert_match /Invalid cycle type/, err.message
     end
 
     %w[regular performance_review promotion_review].each do |valid_type|
@@ -68,23 +70,26 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
     should "raise if person already enrolled" do
       @aggregate.enroll(@person_id)
 
-      assert_raises(RuntimeError, /already enrolled/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.enroll(@person_id)
       end
+      assert_match /already enrolled/, err.message
     end
 
     should "raise if cycle not defined" do
       fresh = AssessmentCycles::Aggregate.new
-      assert_raises(RuntimeError, /not defined/) do
+      err = assert_raises(RuntimeError) do
         fresh.enroll(@person_id)
       end
+      assert_match /not defined/, err.message
     end
 
     should "raise if cycle is closed" do
       @aggregate.close
-      assert_raises(RuntimeError, /closed/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.enroll(@person_id)
       end
+      assert_match /closed/, err.message
     end
   end
 
@@ -106,9 +111,10 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if person not enrolled" do
-      assert_raises(RuntimeError, /not enrolled/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.unenroll(SecureRandom.uuid_v7, "nope")
       end
+      assert_match /not enrolled/, err.message
     end
 
     should "allow re-enrolling after unenroll" do
@@ -142,16 +148,18 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
 
     should "raise if already closed" do
       @aggregate.close
-      assert_raises(RuntimeError, /closed/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.close
       end
+      assert_match /closed/, err.message
     end
 
     should "prevent further enrollment after close" do
       @aggregate.close
-      assert_raises(RuntimeError, /closed/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.enroll(SecureRandom.uuid_v7)
       end
+      assert_match /closed/, err.message
     end
   end
 end

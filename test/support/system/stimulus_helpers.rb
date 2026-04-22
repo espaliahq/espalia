@@ -185,11 +185,13 @@ module StimulusHelpers
 
     # Retry up to twice if the click didn't take effect — the event loop can
     # starve on slow CI runners, silently dropping the first click even after
-    # Stimulus reports connected. Bumped wait (2s) gives the browser room to
-    # process before we assume the click was lost.
+    # Stimulus reports connected. Waits between retries must be long enough
+    # to distinguish "click was lost" from "click landed but the handler is
+    # still running" — retrying mid-handler on a toggle action re-toggles and
+    # hides the target.
     2.times do
-      settled = scoped_verify ? page.has_css?(scoped_verify, visible: :all, wait: 2)
-                              : page.has_css?(scoped_visible, visible: true, wait: 2)
+      settled = scoped_verify ? page.has_css?(scoped_verify, visible: :all, wait: 5)
+                              : page.has_css?(scoped_visible, visible: true, wait: 5)
       break if settled
 
       # Re-resolve the element — the earlier click may have triggered a
@@ -198,6 +200,6 @@ module StimulusHelpers
       target&.click
     end
 
-    assert_selector scoped_visible, visible: true
+    assert_selector scoped_visible, visible: true, wait: 5
   end
 end

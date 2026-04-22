@@ -28,9 +28,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if framework already created" do
-      assert_raises(RuntimeError, /already created/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.create(@framework_id, "Duplicate")
       end
+      assert_match /already created/, err.message
     end
   end
 
@@ -52,16 +53,18 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       rfid = SecureRandom.uuid_v7
       @aggregate.add_role_family(@framework_id, rfid, "Engineering")
 
-      assert_raises(RuntimeError, /already exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_role_family(@framework_id, rfid, "Duplicate")
       end
+      assert_match /already exists/, err.message
     end
 
     should "raise if framework not created" do
       aggregate = Frameworks::Aggregate.new
-      assert_raises(RuntimeError, /not yet created/) do
+      err = assert_raises(RuntimeError) do
         aggregate.add_role_family("fid", "rfid", "Test")
       end
+      assert_match /not yet created/, err.message
     end
   end
 
@@ -77,9 +80,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if role family not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.update_role_family(@framework_id, "nonexistent", name: "X")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -104,18 +108,20 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if role family not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_role(@framework_id, SecureRandom.uuid_v7, "nonexistent", "X", "X", "ic")
       end
+      assert_match /not found/, err.message
     end
 
     should "raise if role already exists" do
       rid = SecureRandom.uuid_v7
       @aggregate.add_role(@framework_id, rid, @rfid, "Engineer", "E", "ic")
 
-      assert_raises(RuntimeError, /already exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_role(@framework_id, rid, @rfid, "Duplicate", "D", "ic")
       end
+      assert_match /already exists/, err.message
     end
   end
 
@@ -143,9 +149,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if role not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_level(@framework_id, SecureRandom.uuid_v7, "nonexistent", 1, "X", "X1")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -167,9 +174,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       cid = SecureRandom.uuid_v7
       @aggregate.add_capability_category(@framework_id, cid, "Category")
 
-      assert_raises(RuntimeError, /already exists/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_capability_category(@framework_id, cid, "Duplicate")
       end
+      assert_match /already exists/, err.message
     end
   end
 
@@ -194,9 +202,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if category not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_capability(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, "nonexistent", "X")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -227,9 +236,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if capability not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.update_capability(@framework_id, "nonexistent", name: "X")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -253,9 +263,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     should "raise if already archived" do
       @aggregate.archive_capability(@framework_id, @cap_id, reason: "Superseded")
 
-      assert_raises(RuntimeError, /already archived/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.archive_capability(@framework_id, @cap_id, reason: "Again")
       end
+      assert_match /already archived/, err.message
     end
   end
 
@@ -285,15 +296,17 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if capability not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, "nonexistent", @rid)
       end
+      assert_match /not found/, err.message
     end
 
     should "raise if role not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, "nonexistent")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -342,9 +355,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if capability not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, "nonexistent", 1, "X")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -398,15 +412,17 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if expectation not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_role_illustration(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, "nonexistent", @rid, 1, "X")
       end
+      assert_match /not found/, err.message
     end
 
     should "raise if role not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.add_role_illustration(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @eid, "nonexistent", 1, "X")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -490,15 +506,17 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     should "raise if draft already in progress" do
       @fresh.start_draft(@framework_id, 2, "user-1")
 
-      assert_raises(RuntimeError, /Draft already in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.start_draft(@framework_id, 3, "user-1")
       end
+      assert_match /Draft already in progress/, err.message
     end
 
     should "raise if target version not greater than current" do
-      assert_raises(RuntimeError, /greater than current/) do
+      err = assert_raises(RuntimeError) do
         @fresh.start_draft(@framework_id, 1, "user-1")
       end
+      assert_match /greater than current/, err.message
     end
 
     should "raise if draft already in progress on a fresh bootstrap framework" do
@@ -506,9 +524,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       fid = SecureRandom.uuid_v7
       freshly_bootstrapped.create(fid, "Boot")
       # The bootstrap draft is v1 — calling start_draft again should error
-      assert_raises(RuntimeError, /Draft already in progress/) do
+      err = assert_raises(RuntimeError) do
         freshly_bootstrapped.start_draft(fid, 2, "user-1")
       end
+      assert_match /Draft already in progress/, err.message
     end
   end
 
@@ -529,9 +548,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       fresh.create(@framework_id, "Test")
       fresh.publish_version(@framework_id, "user-1") # close bootstrap
 
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         fresh.publish_version(@framework_id, "user-1")
       end
+      assert_match /No draft in progress/, err.message
     end
 
     should "allow starting a new draft after publishing" do
@@ -569,10 +589,11 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       fresh.create(@framework_id, "Test")
       fresh.publish_version(@framework_id, "user-1") # close bootstrap
 
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         fresh.define_migration_mapping(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
                                        SecureRandom.uuid_v7, "same")
       end
+      assert_match /No draft in progress/, err.message
     end
   end
 
@@ -594,47 +615,54 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "add_level raises outside a draft" do
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 1, "L1", "R1")
       end
+      assert_match /No draft in progress/, err.message
     end
 
     should "add_capability raises outside a draft" do
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.add_capability(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cat_id, "New")
       end
+      assert_match /No draft in progress/, err.message
     end
 
     should "archive_capability raises outside a draft" do
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.archive_capability(@framework_id, @cap_id, reason: "test")
       end
+      assert_match /No draft in progress/, err.message
     end
 
     should "create_capability_role_binding raises outside a draft" do
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid)
       end
+      assert_match /No draft in progress/, err.message
     end
 
     should "remove_capability_role_binding raises outside a draft" do
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.remove_capability_role_binding(@framework_id, SecureRandom.uuid_v7)
       end
+      assert_match /No draft in progress/, err.message
     end
 
     should "set_behavioural_expectation raises outside a draft" do
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
                                            @cap_id, 1, "desc")
       end
+      assert_match /No draft in progress/, err.message
     end
 
     should "change_level_ordinal raises outside a draft" do
       # No level exists at this point in setup; guard fires before the lookup
-      assert_raises(RuntimeError, /No draft in progress/) do
+      err = assert_raises(RuntimeError) do
         @fresh.change_level_ordinal(@framework_id, SecureRandom.uuid_v7, 5, reason: "test")
       end
+      assert_match /No draft in progress/, err.message
     end
   end
 
@@ -727,9 +755,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if level not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.update_level_details(@framework_id, "nonexistent", title: "X")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -761,9 +790,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise if level not found" do
-      assert_raises(RuntimeError, /not found/) do
+      err = assert_raises(RuntimeError) do
         @aggregate.change_level_ordinal(@framework_id, "nonexistent", 5, reason: "test")
       end
+      assert_match /not found/, err.message
     end
   end
 
@@ -783,9 +813,10 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       fresh.start_draft(@framework_id, 2, "user-1")
       fresh.archive_capability(@framework_id, cap_id, reason: "Superseded")
 
-      assert_raises(RuntimeError, /lack migration mappings/) do
+      err = assert_raises(RuntimeError) do
         fresh.publish_version(@framework_id, "user-1")
       end
+      assert_match /lack migration mappings/, err.message
     end
 
     should "succeed when archived capability has a mapping" do

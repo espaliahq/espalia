@@ -94,10 +94,9 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       click_link "Assessments"
       assert_text "Team Assessments"
 
-      click_link "Review Assessment"
+      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
 
       assert_text "Report Alex"
-      assert_text "Manager Review"
       assert_text "assessment-matrix" if false # DOM id, not visible text
       assert_text "Critical Thinking"
       assert_text "Synthesises information"
@@ -105,11 +104,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "show self-rating indicator and manager frequency selectors" do
       click_link "Assessments"
-      # Wait for the index to fully render before clicking through. Without
-      # this synchronisation, the second click can land on a stale link
-      # and be silently dropped on slow CI runners.
       assert_text "Team Assessments"
-      click_link "Review Assessment"
+      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
 
       # The report's self-rating should appear as a read-only indicator
       assert_text "Self:"
@@ -122,16 +118,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "allow manager to submit a rating" do
       click_link "Assessments"
-      # Wait for the index to fully render before clicking through. Without
-      # this synchronisation, the second click can land on a stale link
-      # and be silently dropped on slow CI runners.
       assert_text "Team Assessments"
-      click_link "Review Assessment"
-
-      # Synchronise with Turbo navigation before waiting on the matrix
-      # controller. Without this, slow CI can exhaust Capybara's wait window
-      # on navigation alone, leaving nothing for the controller-ready check.
-      assert_text "Manager Review"
+      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
       wait_for_stimulus "matrix"
 
       # Click a frequency button to rate
@@ -145,16 +133,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "allow manager to untoggle a rating by clicking the same frequency" do
       click_link "Assessments"
-      # Wait for the index to fully render before clicking through. Without
-      # this synchronisation, the second click can land on a stale link
-      # and be silently dropped on slow CI runners.
       assert_text "Team Assessments"
-      click_link "Review Assessment"
-
-      # Synchronise with Turbo navigation before waiting on the matrix
-      # controller. Without this, slow CI can exhaust Capybara's wait window
-      # on navigation alone, leaving nothing for the controller-ready check.
-      assert_text "Manager Review"
+      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
       wait_for_stimulus "matrix"
 
       # Rate as "Consistent"
@@ -187,15 +167,11 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     should "show manager review matrix on mobile with scoring toggle visible" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessments_path
-      # Wait for the index to fully render before clicking through. Without
-      # this synchronisation, the click can land on a stale link and be
-      # silently dropped on slow CI runners.
       assert_text "Team Assessments"
-      click_link "Review Assessment"
+      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
 
       # Header elements should be visible — long names must not push scoring off-screen
       assert_text "Report Alex"
-      assert_text "Manager Review"
       assert_text "me&u 2025 Career Framework"
       assert_text "Software Engineer"
       assert_text "Senior Software Engineer"
