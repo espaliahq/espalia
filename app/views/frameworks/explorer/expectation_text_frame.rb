@@ -14,11 +14,15 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
   # @param framework_id [String]
   # @param mode [Symbol] :view or :edit
   # @param pending_edit_count [Integer]
-  def initialize(expectation:, framework_id:, mode: :view, pending_edit_count: 0)
+  # @param pending_edit [Hash, nil] latest pending edit descriptor
+  #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
+  #   description renders as an inline diff instead of the plain value.
+  def initialize(expectation:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil)
     @expectation = expectation
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
+    @pending_edit = pending_edit
   end
 
   def view_template
@@ -38,8 +42,13 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
     # Truncating expectation text loses critical behavioural nuance, and
     # the cell width plus the viewer's horizontal scroll are already doing
     # the width-budget negotiation.
-    p(class: "text-sm text-gray-700 dark:text-gray-300 #{decoration}".strip) do
-      @expectation.description
+    base = "text-sm text-gray-700 dark:text-gray-300"
+    if @pending_edit
+      p(class: base) do
+        render_inline_diff(original: @expectation.description, pending_edit: @pending_edit)
+      end
+    else
+      p(class: "#{base} #{decoration}".strip) { @expectation.description }
     end
   end
 

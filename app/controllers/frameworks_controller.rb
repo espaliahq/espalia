@@ -135,17 +135,52 @@ class FrameworksController < ApplicationController
 
   # Loads pending suggestion maps for the matrix visual affordance.
   #
-  # @return [Array(Hash, Hash)] [entity counts map, illustration creates by parent]
+  # Returned `suggestions` map is keyed by `[entity_type, entity_id]` and
+  # carries both a `count` (used for badges / pills) and `latest_edit`
+  # (the most recent pending `kind: "edit"` on the in-scope text field,
+  # or nil) — {Views::Frameworks::Explorer::Concerns::SuggestionDecoration#render_inline_diff}
+  # uses `latest_edit[:suggested_value]` to produce the inline diff.
+  #
+  # @return [Array(Hash, Hash)] [suggestions map, illustration creates by parent]
   def load_pending_suggestion_maps
     base = FrameworkState::SuggestedEdit
       .where(framework_id: @framework.framework_id)
       .pending
 
-    counts = base.group(:target_entity_type, :target_entity_id).count
+    suggestions = build_suggestions_map(base)
     creates = base.creates
       .where(target_entity_type: "role_illustration")
       .to_a.group_by(&:parent_id)
 
-    [ counts, creates ]
+    [ suggestions, creates ]
+  end
+
+  # Iterates pending suggestions once, aggregating counts and capturing
+  # the latest edit per entity for the four inline-diff text fields.
+  TEXT_EDIT_FIELDS = {
+    "capability_category" => "name",
+    "capability" => "name",
+    "behavioural_expectation" => "description",
+    "role_illustration" => "description"
+  }.freeze
+  private_constant :TEXT_EDIT_FIELDS
+
+  def build_suggestions_map(scope)
+    suggestions = {}
+    scope.order(created_at: :desc).find_each do |edit|
+      key = [ edit.target_entity_type, edit.target_entity_id ]
+      entry = suggestions[key] ||= { count: 0, latest_edit: nil }
+      entry[:count] += 1
+
+      next unless entry[:latest_edit].nil?
+      next unless edit.kind == "edit" && TEXT_EDIT_FIELDS[edit.target_entity_type] == edit.field
+
+      entry[:latest_edit] = {
+        suggested_value: edit.suggested_value,
+        suggestion_id: edit.suggestion_id,
+        created_at: edit.created_at
+      }
+    end
+    suggestions
   end
 end

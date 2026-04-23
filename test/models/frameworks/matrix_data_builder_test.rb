@@ -224,19 +224,30 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
 
         category = result[:categories].first
         assert_equal 0, category[:pending_suggestion_count]
+        assert_nil category[:pending_edit]
 
         cap = category[:capabilities].first
         assert_equal 0, cap[:pending_suggestion_count]
+        assert_nil cap[:pending_edit]
 
         cell = cap[:cells].values.first
         assert_equal 0, cell[:pending_suggestion_count]
+        assert_nil cell[:pending_edit]
         assert_empty cell[:illustration_pending_edits]
+        assert_empty cell[:illustration_pending_edit_details]
         assert_empty cell[:pending_illustration_creates]
       end
 
-      should "include pending counts for expectations when pending suggestions exist" do
+      should "include pending counts and latest edit for expectations" do
         eid = @expectations[0].expectation_id
-        pending_map = { [ "behavioural_expectation", eid ] => 2 }
+        pending_map = {
+          [ "behavioural_expectation", eid ] => {
+            count: 2,
+            latest_edit: { suggested_value: "Updated expectation",
+                           suggestion_id: SecureRandom.uuid_v7,
+                           created_at: Time.current }
+          }
+        }
 
         result = build_matrix(
           selected_role_ids: [ @ic_role.role_id ],
@@ -244,14 +255,21 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         )
 
         cap = find_capability(result, "Strategic Thinking")
-        assert_equal 2, cap[:cells][1][:pending_suggestion_count]
+        cell = cap[:cells][1]
+        assert_equal 2, cell[:pending_suggestion_count]
+        assert_equal "Updated expectation", cell[:pending_edit][:suggested_value]
         assert_equal 0, cap[:cells][2][:pending_suggestion_count]
+        assert_nil cap[:cells][2][:pending_edit]
       end
 
       should "include pending counts for category and capability" do
         pending_map = {
-          [ "capability_category", @category.category_id ] => 1,
-          [ "capability", @capability.capability_id ] => 3
+          [ "capability_category", @category.category_id ] =>
+            { count: 1, latest_edit: { suggested_value: "Thinking v2",
+                                       suggestion_id: SecureRandom.uuid_v7,
+                                       created_at: Time.current } },
+          [ "capability", @capability.capability_id ] =>
+            { count: 3, latest_edit: nil }
         }
 
         result = build_matrix(
@@ -260,12 +278,23 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         )
 
         assert_equal 1, result[:categories].first[:pending_suggestion_count]
-        assert_equal 3, find_capability(result, "Strategic Thinking")[:pending_suggestion_count]
+        assert_equal "Thinking v2", result[:categories].first[:pending_edit][:suggested_value]
+
+        cap = find_capability(result, "Strategic Thinking")
+        assert_equal 3, cap[:pending_suggestion_count]
+        assert_nil cap[:pending_edit]
       end
 
-      should "include illustration pending edit counts" do
+      should "include illustration pending edit counts and latest edit" do
         illustration = @expectations[0].illustrations.first
-        pending_map = { [ "role_illustration", illustration.illustration_id ] => 1 }
+        pending_map = {
+          [ "role_illustration", illustration.illustration_id ] => {
+            count: 1,
+            latest_edit: { suggested_value: "Proposed illustration",
+                           suggestion_id: SecureRandom.uuid_v7,
+                           created_at: Time.current }
+          }
+        }
 
         result = build_matrix(
           selected_role_ids: [ @ic_role.role_id ],
@@ -273,8 +302,10 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         )
 
         cap = find_capability(result, "Strategic Thinking")
-        edits = cap[:cells][1][:illustration_pending_edits]
-        assert_equal 1, edits[illustration.illustration_id]
+        cell = cap[:cells][1]
+        assert_equal 1, cell[:illustration_pending_edits][illustration.illustration_id]
+        assert_equal "Proposed illustration",
+          cell[:illustration_pending_edit_details][illustration.illustration_id][:suggested_value]
       end
 
       should "include pending illustration creates by expectation" do

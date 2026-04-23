@@ -52,7 +52,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
       expectation: expectation,
       framework_id: @framework_id,
       mode: @mode,
-      pending_edit_count: pending_count
+      pending_edit_count: pending_count,
+      pending_edit: @cell_data[:pending_edit]
     )
 
     if @mode == :edit && expectation.respond_to?(:added_in_draft) && expectation.added_in_draft

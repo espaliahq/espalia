@@ -19,6 +19,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
+    @category_pending_edit = category_data[:pending_edit]
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
@@ -83,7 +84,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
               category: @category,
               framework_id: @framework_id,
               mode: @mode,
-              pending_edit_count: @category_pending_count
+              pending_edit_count: @category_pending_count,
+              pending_edit: @category_pending_edit
             )
 
             span(class: "text-xs text-gray-400 dark:text-gray-500") do

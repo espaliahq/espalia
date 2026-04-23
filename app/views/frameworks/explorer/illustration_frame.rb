@@ -16,11 +16,15 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   # @param illustration [FrameworkState::RoleIllustration]
   # @param framework_id [String] UUID of the framework (for the PATCH URL)
   # @param pending_edit_count [Integer] number of pending edit suggestions on this illustration
+  # @param pending_edit [Hash, nil] latest pending edit descriptor
+  #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
+  #   description renders as an inline diff instead of the plain value.
   # @param mode [Symbol] :view or :edit — gates the pencil affordance
-  def initialize(illustration:, framework_id:, pending_edit_count: 0, mode: :view)
+  def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
+    @pending_edit = pending_edit
     @mode = mode
   end
 
@@ -45,8 +49,14 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       class: "flex items-start gap-1 pl-2",
       data: { inline_editor_target: "display" }
     ) do
-      decoration = suggestion_text_classes(pending_edit_count: @pending_edit_count)
-      span(class: "flex-1 #{decoration}".strip) { @illustration.description }
+      if @pending_edit
+        span(class: "flex-1") do
+          render_inline_diff(original: @illustration.description, pending_edit: @pending_edit)
+        end
+      else
+        decoration = suggestion_text_classes(pending_edit_count: @pending_edit_count)
+        span(class: "flex-1 #{decoration}".strip) { @illustration.description }
+      end
       edit_button if @mode == :edit
     end
   end

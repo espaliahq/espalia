@@ -33,7 +33,8 @@ class Frameworks::CapabilitiesController < ApplicationController
       capability: @capability,
       framework_id: @framework.framework_id,
       mode: :edit,
-      pending_edit_count: pending_edits_on_capability
+      pending_edit_count: pending_edits_on_capability,
+      pending_edit: latest_pending_edit
     ), layout: false
   rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
@@ -64,11 +65,24 @@ class Frameworks::CapabilitiesController < ApplicationController
   end
 
   def pending_edits_on_capability
+    pending_edits_scope.count
+  end
+
+  def latest_pending_edit
+    edit = pending_edits_scope.edits.where(field: "name").order(created_at: :desc).first
+    return nil unless edit
+
+    { suggested_value: edit.suggested_value,
+      suggestion_id: edit.suggestion_id,
+      created_at: edit.created_at }
+  end
+
+  def pending_edits_scope
     FrameworkState::SuggestedEdit.where(
       framework_id: @framework.framework_id,
       target_entity_type: "capability",
       target_entity_id: @capability.capability_id,
       status: "pending"
-    ).count
+    )
   end
 end

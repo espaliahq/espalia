@@ -29,6 +29,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
     @capability_pending_count = capability_data[:pending_suggestion_count] || 0
+    @capability_pending_edit = capability_data[:pending_edit]
   end
 
   def view_template
@@ -67,7 +68,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               capability: @capability,
               framework_id: @framework_id,
               mode: @mode,
-              pending_edit_count: @capability_pending_count
+              pending_edit_count: @capability_pending_count,
+              pending_edit: @capability_pending_edit
             )
             draft_state_badge if @mode == :edit
             p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1") do
@@ -145,6 +147,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       }
     ) do
       ill_pending_edits = cell_data[:illustration_pending_edits] || {}
+      ill_pending_edit_details = cell_data[:illustration_pending_edit_details] || {}
       pending_creates = cell_data[:pending_illustration_creates] || []
 
       cell_data[:bound_selected_role_ids].each do |role_id|
@@ -165,6 +168,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 illustration: ill,
                 framework_id: @framework_id,
                 pending_edit_count: ill_pending_edits[ill.illustration_id] || 0,
+                pending_edit: ill_pending_edit_details[ill.illustration_id],
                 mode: @mode
               )
             end

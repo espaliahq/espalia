@@ -212,6 +212,77 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "inline diff for pending text edits" do
+    should "render added and removed spans when a small pending edit exists on a capability name" do
+      capability = FrameworkState::Capability.first
+      FactoryBot.create(:framework_suggested_edit,
+        tenant: @tenant,
+        framework_id: @framework_id,
+        target_entity_type: "capability",
+        target_entity_id: capability.capability_id,
+        field: "name",
+        current_value: capability.name,
+        suggested_value: "Strategic Thinkings",
+        kind: "edit",
+        status: "pending")
+
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      within "turbo-frame#capability-name-#{capability.capability_id}" do
+        # Added suffix "s" is styled with the sky-blue wavy underline.
+        assert_selector "span.decoration-sky-400", text: "s"
+        # Amber wavy underline no longer decorates the entity wrapper.
+        assert_no_selector "span.decoration-amber-400"
+      end
+    end
+
+    should "render the proposed value styled as sky-blue when the diff exceeds the density threshold" do
+      capability = FrameworkState::Capability.first
+      FactoryBot.create(:framework_suggested_edit,
+        tenant: @tenant,
+        framework_id: @framework_id,
+        target_entity_type: "capability",
+        target_entity_id: capability.capability_id,
+        field: "name",
+        current_value: capability.name,
+        suggested_value: "Totally Unrelated Replacement Text",
+        kind: "edit",
+        status: "pending")
+
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      within "turbo-frame#capability-name-#{capability.capability_id}" do
+        assert_selector "span.decoration-sky-400", text: "Totally Unrelated Replacement Text"
+        assert_no_selector "span.line-through"
+      end
+    end
+
+    should "render the inline diff on an illustration when a pending edit exists" do
+      illustration = FrameworkState::RoleIllustration.first
+      FactoryBot.create(:framework_suggested_edit,
+        tenant: @tenant,
+        framework_id: @framework_id,
+        target_entity_type: "role_illustration",
+        target_entity_id: illustration.illustration_id,
+        field: "description",
+        current_value: illustration.description,
+        suggested_value: "Seeks guidance from tech leads",
+        kind: "edit",
+        status: "pending")
+
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      expand_matrix_row("tr[data-capability-id]")
+
+      within "turbo-frame#illustration-#{illustration.illustration_id}" do
+        # Added "s" at the end renders as a sky-blue wavy span.
+        assert_selector "span.decoration-sky-400", text: "s"
+      end
+    end
+  end
+
   private
 
   def sign_in_as(user)

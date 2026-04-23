@@ -19,11 +19,15 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   # @param framework_id [String]
   # @param mode [Symbol] :view or :edit
   # @param pending_edit_count [Integer]
-  def initialize(capability:, framework_id:, mode: :view, pending_edit_count: 0)
+  # @param pending_edit [Hash, nil] latest pending edit descriptor
+  #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
+  #   name renders as an inline diff instead of the plain value.
+  def initialize(capability:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil)
     @capability = capability
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
+    @pending_edit = pending_edit
   end
 
   def view_template
@@ -39,8 +43,13 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   private
 
   def plain_name
-    span(class: "text-sm font-medium text-gray-900 dark:text-white #{decoration}".strip) do
-      @capability.name
+    base = "text-sm font-medium text-gray-900 dark:text-white"
+    if @pending_edit
+      span(class: base) do
+        render_inline_diff(original: @capability.name, pending_edit: @pending_edit)
+      end
+    else
+      span(class: "#{base} #{decoration}".strip) { @capability.name }
     end
   end
 
