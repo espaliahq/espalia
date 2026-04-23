@@ -8,7 +8,7 @@ receivers:
 
 exporters:
   debug:
-    verbosity: detailed
+    verbosity: normal
   otlphttp/upstream:
     endpoint: ${env:OTEL_EXPORTER_OTLP_ENDPOINT}
     headers:
