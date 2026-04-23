@@ -13,11 +13,15 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   # @param framework_id [String]
   # @param mode [Symbol] :view or :edit
   # @param pending_edit_count [Integer]
-  def initialize(category:, framework_id:, mode: :view, pending_edit_count: 0)
+  # @param pending_edit [Hash, nil] latest pending edit descriptor
+  #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
+  #   name renders as an inline diff instead of the plain value.
+  def initialize(category:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil)
     @category = category
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
+    @pending_edit = pending_edit
   end
 
   def view_template
@@ -33,8 +37,13 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   private
 
   def plain_name
-    span(class: "text-sm font-semibold text-gray-700 dark:text-gray-300 #{decoration}".strip) do
-      @category.name
+    base = "text-sm font-semibold text-gray-700 dark:text-gray-300"
+    if @pending_edit
+      span(class: base) do
+        render_inline_diff(original: @category.name, pending_edit: @pending_edit)
+      end
+    else
+      span(class: "#{base} #{decoration}".strip) { @category.name }
     end
   end
 

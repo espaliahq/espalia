@@ -113,5 +113,8 @@ gem "rails_event_store", "~> 2.16"
 # HTTP client for HRIS and external API integrations
 gem "faraday", "~> 2.0"
 
+# Character/grapheme-level diff for inline suggestion display
+gem "diff-lcs", "~> 1.5"
+
 # We recommend using strong migrations when your app is in production
 # gem "strong_migrations"

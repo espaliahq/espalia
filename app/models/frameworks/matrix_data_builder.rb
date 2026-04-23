@@ -23,7 +23,13 @@ class Frameworks::MatrixDataBuilder
   # @param selected_role_ids [Array<String>] UUIDs of selected roles
   # @param track_filter [String] "ic", "management", or "both"
   # @param mode [Symbol] `:view` (default) hides draft-only entities matching PublishedState semantics; `:edit` includes them
-  # @param pending_suggestions [Hash] pre-queried map { [entity_type, entity_id] => count } for pending edits/deletes
+  # @param pending_suggestions [Hash] pre-queried map
+  #   `{ [entity_type, entity_id] => { count:, latest_edit: } }`. `latest_edit`
+  #   carries `{ suggested_value:, suggestion_id:, created_at: }` for the most
+  #   recent pending `kind: "edit"` on the four text fields (category name,
+  #   capability name, expectation description, illustration description) —
+  #   consumed by the inline-diff decoration helper. `nil` when the entity has
+  #   only pending deletes or no pending text edits.
   # @param pending_illustration_creates [Hash] pre-queried map { parent_id => [SuggestedEdit, ...] } for pending creates
   def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both",
                  mode: :view, pending_suggestions: {}, pending_illustration_creates: {})
@@ -143,7 +149,8 @@ class Frameworks::MatrixDataBuilder
       {
         category: category,
         capabilities: capabilities,
-        pending_suggestion_count: @pending_suggestions[[ "capability_category", category.category_id ]] || 0
+        pending_suggestion_count: pending_count("capability_category", category.category_id),
+        pending_edit: pending_latest_edit("capability_category", category.category_id)
       }
     end
   end
@@ -168,7 +175,8 @@ class Frameworks::MatrixDataBuilder
         capability: capability,
         bound_to_selected: bound_to_selected,
         cells: cells,
-        pending_suggestion_count: @pending_suggestions[[ "capability", capability.capability_id ]] || 0
+        pending_suggestion_count: pending_count("capability", capability.capability_id),
+        pending_edit: pending_latest_edit("capability", capability.capability_id)
       }
     end
   end
@@ -213,8 +221,10 @@ class Frameworks::MatrixDataBuilder
         illustration_count: illustrations.size,
         illustrations_by_role: illustrations_by_role,
         bound_selected_role_ids: bound_selected_role_ids,
-        pending_suggestion_count: @pending_suggestions[[ "behavioural_expectation", expectation.expectation_id ]] || 0,
+        pending_suggestion_count: pending_count("behavioural_expectation", expectation.expectation_id),
+        pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id),
         illustration_pending_edits: illustration_pending_edits(illustrations),
+        illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
         pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
       }
     end
@@ -227,8 +237,30 @@ class Frameworks::MatrixDataBuilder
   # @return [Hash<String, Integer>]
   def illustration_pending_edits(illustrations)
     illustrations.each_with_object({}) do |ill, h|
-      count = @pending_suggestions[[ "role_illustration", ill.illustration_id ]]
-      h[ill.illustration_id] = count if count && count > 0
+      count = pending_count("role_illustration", ill.illustration_id)
+      h[ill.illustration_id] = count if count > 0
     end
+  end
+
+  # Builds a hash of illustration_id => latest-edit descriptor for inline
+  # diff rendering. Only populated for illustrations with a pending text
+  # edit; illustrations with pending deletes / creates only don't appear.
+  #
+  # @return [Hash<String, Hash>]
+  def illustration_pending_edit_details(illustrations)
+    illustrations.each_with_object({}) do |ill, h|
+      latest = pending_latest_edit("role_illustration", ill.illustration_id)
+      h[ill.illustration_id] = latest if latest
+    end
+  end
+
+  def pending_count(entity_type, entity_id)
+    entry = @pending_suggestions[[ entity_type, entity_id ]]
+    entry ? entry[:count] : 0
+  end
+
+  def pending_latest_edit(entity_type, entity_id)
+    entry = @pending_suggestions[[ entity_type, entity_id ]]
+    entry && entry[:latest_edit]
   end
 end

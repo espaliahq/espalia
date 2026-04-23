@@ -39,3 +39,6 @@
 # Ignore local Claude Code settings (personal overrides).
 .claude/settings.local.json
 
+# Devcontainer host-side env (contains the upstream OTLP bearer token).
+.devcontainer/.env
+

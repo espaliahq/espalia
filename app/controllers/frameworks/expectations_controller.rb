@@ -30,7 +30,8 @@ class Frameworks::ExpectationsController < ApplicationController
       expectation: @expectation,
       framework_id: @framework.framework_id,
       mode: :edit,
-      pending_edit_count: pending_edits_on_expectation
+      pending_edit_count: pending_edits_on_expectation,
+      pending_edit: latest_pending_edit
     ), layout: false
   rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
@@ -62,11 +63,24 @@ class Frameworks::ExpectationsController < ApplicationController
   end
 
   def pending_edits_on_expectation
+    pending_edits_scope.count
+  end
+
+  def latest_pending_edit
+    edit = pending_edits_scope.edits.where(field: "description").order(created_at: :desc).first
+    return nil unless edit
+
+    { suggested_value: edit.suggested_value,
+      suggestion_id: edit.suggestion_id,
+      created_at: edit.created_at }
+  end
+
+  def pending_edits_scope
     FrameworkState::SuggestedEdit.where(
       framework_id: @framework.framework_id,
       target_entity_type: "behavioural_expectation",
       target_entity_id: @expectation.expectation_id,
       status: "pending"
-    ).count
+    )
   end
 end

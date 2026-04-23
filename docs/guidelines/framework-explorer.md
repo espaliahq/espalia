@@ -243,29 +243,45 @@ Each suggestion row in the panel must answer three questions at a glance: **what
 
 ### 10. In-Matrix Suggestion Indicators
 
-**Edit mode only.** In view mode the controller passes empty pending-suggestion maps to `MatrixDataBuilder`, so none of the indicators below render on the grid. View mode is the published-state-as-published view.
+**Edit mode only.** In view mode the controller passes an empty pending-suggestion map to `MatrixDataBuilder`, so none of the indicators below render on the grid. View mode is the published-state-as-published view.
 
-In edit mode, suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has pending changes":
+In edit mode, suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has a pending change" with the proposal itself visible inline.
 
-**Decoration concern** (`app/views/frameworks/explorer/concerns/suggestion_decoration.rb`):
-- `PENDING_EDIT_CLASSES` — amber wavy underline (applied when `pending_edit_count > 0`, covers both pending edits and pending creates).
-- `PENDING_DELETE_CLASSES` — red strikethrough (applied when `pending_delete_count > 0`).
-- Delete wins over edit if both are non-zero.
+**Inline diff (primary affordance for text edits).** When an entity has a pending `kind: "edit"` on its text field, the entity re-renders as a character-level diff over the original text:
 
-**Where decoration is applied** — four sites, each pulling its count from `MatrixDataBuilder`'s `pending_suggestions` map:
+- **Added graphemes** — light-blue wavy underline (`PENDING_ADD_CLASSES`, `decoration-sky-400 decoration-wavy`).
+- **Removed graphemes** — strikethrough (`PENDING_REMOVE_CLASSES`).
+- When the diff exceeds `Frameworks::SuggestionDiff::MAX_CHANGE_RUNS` (3 change runs), the interleaved view is too dense to scan — we fall back to rendering just the proposed value styled with `PROPOSED_TEXT_CLASSES` (same sky-blue wavy underline, no strikethrough). Readers can still open the context pane for the full side-by-side.
 
-| Component | Decorated text | Count source |
-|-----------|----------------|--------------|
-| `MatrixCategoryGroup` | Category name (in the sticky category header) | `category_data[:pending_suggestion_count]` |
-| `MatrixRow` | Capability name (compact row, sticky left column) | `capability_data[:pending_suggestion_count]` |
-| `MatrixCell` | Expectation text (compact cell) | `cell_data[:pending_suggestion_count]` |
-| `IllustrationFrame` | Illustration text (expanded row) | `cell_data[:illustration_pending_edits][illustration_id]` |
+The diff operates on grapheme clusters (not bytes), so emoji and combining accents count as single characters. Whitespace-only diffs (trailing trim, double-space collapse) are treated as no-ops and render plain proposed text.
 
-**InlineIndicator pill** (`app/views/frameworks/suggestions/inline_indicator.rb`) — small amber "N pending" count badge. Currently rendered **only** by `MatrixCell`, and **only** when `pending_suggestion_count >= 2`. The threshold is deliberate: a single pending edit is already visible as the underline, so the pill exists to disambiguate *stacked* edits on the same expectation where the underline alone doesn't reveal how many proposals are in flight. Category / capability / illustration rows do not render the pill.
+See `app/models/frameworks/suggestion_diff.rb` for the algorithm and `test/models/frameworks/suggestion_diff_test.rb` for the cases that pin down its behaviour.
 
-**Ghost entries for pending-create illustrations** (`app/views/frameworks/explorer/pending_illustration_frame.rb`) — pending `role_illustration` creates render inline in the expanded row as a wavy-underlined list item alongside the real illustrations for that role. They carry the same pencil-icon affordance as real illustrations: the suggestion's original author can amend the pending proposal; other collaborators submit an alternative suggestion. This keeps pending proposals visible *in situ* rather than only in the context pane, so reviewers see the illustration next to its peers.
+**Stacked edits.** When an entity has multiple pending edits, the inline diff renders the **most recent** suggestion, and `MatrixCell`'s existing "N pending" pill (below) remains the signal that more proposals exist on the same expectation. Reviewers click through to the context pane to see the stack.
 
-**Data source invariants** — all pending counts are pre-aggregated by `MatrixDataBuilder` during the single eager-load pass. No view component queries the database for suggestion counts.
+**Decoration concern** (`app/views/frameworks/explorer/concerns/suggestion_decoration.rb`) — shared styling tokens + the `render_inline_diff(original:, pending_edit:)` Phlex helper:
+- `PENDING_ADD_CLASSES` — light-blue wavy underline for added graphemes + the fallback proposed-only view.
+- `PENDING_REMOVE_CLASSES` — strikethrough for removed graphemes.
+- `PROPOSED_TEXT_CLASSES` — alias of `PENDING_ADD_CLASSES`, used for the fallback.
+- `PENDING_DELETE_CLASSES` — red strikethrough on the entity wrapper (applied when `pending_delete_count > 0`). Delete wins over edit if both are non-zero.
+- `PENDING_EDIT_CLASSES` — legacy amber wavy underline retained as a wrapper-level fallback when an entity has a pending edit but no `pending_edit` payload is available (e.g. a future entity type that hasn't been wired through the map yet). Not expected to render on the four text-edit sites in normal operation.
+
+**Where the inline diff is applied** — four sites, each fed by `MatrixDataBuilder` from the two-part `pending_suggestions` map `{ count:, latest_edit: }`:
+
+| Component | Decorated text | Count source | Diff payload source |
+|-----------|----------------|--------------|---------------------|
+| `MatrixCategoryGroup` → `CategoryNameFrame` | Category name (sticky category header) | `category_data[:pending_suggestion_count]` | `category_data[:pending_edit]` |
+| `MatrixRow` → `CapabilityNameFrame` | Capability name (compact row, sticky left column) | `capability_data[:pending_suggestion_count]` | `capability_data[:pending_edit]` |
+| `MatrixCell` → `ExpectationTextFrame` | Expectation text (compact cell) | `cell_data[:pending_suggestion_count]` | `cell_data[:pending_edit]` |
+| `MatrixRow` → `IllustrationFrame` | Illustration text (expanded row) | `cell_data[:illustration_pending_edits][illustration_id]` | `cell_data[:illustration_pending_edit_details][illustration_id]` |
+
+**InlineIndicator pill** (`app/views/frameworks/suggestions/inline_indicator.rb`) — small amber "N pending" count badge. Currently rendered **only** by `MatrixCell`, and **only** when `pending_suggestion_count >= 2`. With the inline diff visible, the pill's job shifts: it tells reviewers that more proposals exist on this expectation than the one currently shown interleaved. Category / capability / illustration rows do not render the pill.
+
+**Ghost entries for pending-create illustrations** (`app/views/frameworks/explorer/pending_illustration_frame.rb`) — pending `role_illustration` creates render inline in the expanded row as amber-wavy-underlined list items alongside the real illustrations for that role (creates have no "original" to diff against, so they keep the original amber-wavy styling). They carry the same pencil-icon affordance as real illustrations: the suggestion's original author can amend the pending proposal; other collaborators submit an alternative suggestion.
+
+**Controller-side hydration after a submit.** When an inline edit lands via one of the four edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`), the re-rendered turbo-frame response re-queries the latest pending `SuggestedEdit` for the entity and passes it in as `pending_edit:`, so the inline diff appears immediately in Suggesting mode without a page reload. Hard-Won Lesson 16 (controller responses must re-query the pending count) now extends to the latest edit's `suggested_value` as well.
+
+**Data source invariants** — all pending counts *and* the `latest_edit` descriptors are pre-aggregated by `FrameworksController#load_pending_suggestion_maps` in a single indexed pass over `framework_suggested_edits`. `MatrixDataBuilder` and every view component operate in memory; no view queries the database for suggestion data.
 
 ### 7. Responsive Behaviour
 
@@ -448,7 +464,8 @@ The context pane currently shows suggested edits. Future content types — comme
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
 | `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form |
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
-| `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, pending-suggestion counts) |
+| `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, pending-suggestion counts + latest-edit descriptors) |
+| `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
 | `app/views/frameworks/suggestions/panel_frame.rb` | Context pane Turbo Frame content (focused suggestion list + focus header + "Show all" clear link + empty state) |
 | `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
@@ -469,6 +486,7 @@ The context pane currently shows suggested edits. Future content types — comme
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |
 | `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests |
 | `test/models/frameworks/matrix_data_builder_mode_test.rb` | `mode:` filter unit tests |
+| `test/models/frameworks/suggestion_diff_test.rb` | Inline-diff algorithm unit tests (examples, density fallback, graphemes, whitespace) |
 | `test/queries/frameworks/focused_suggestions_query_test.rb` | Focus filter unit tests |
 
 ## Keeping This Document Current
