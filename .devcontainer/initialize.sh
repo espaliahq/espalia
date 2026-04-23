@@ -1,20 +1,9 @@
 #!/bin/sh
-# Runs on the host before `docker compose up`. Extracts the bearer value from
-# OTEL_EXPORTER_OTLP_HEADERS (format: "Authorization=Bearer …") and writes it
-# to .devcontainer/.env so the otelcol container (which is distroless and has
-# no shell) can substitute ${UPSTREAM_AUTHORIZATION} directly.
+# Runs on the host before `docker compose up`. Mirrors the macOS Keychain
+# Claude Code credential into the bind-mounted ~/.claude/ dir and seeds the
+# Linux-side onboarding flags so the devcontainer's Claude CLI inherits the
+# host's identity without re-running the first-run wizard.
 set -eu
-
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-env_file="$script_dir/.env"
-
-authorization=""
-if [ -n "${OTEL_EXPORTER_OTLP_HEADERS:-}" ]; then
-  authorization=$(printf %s "$OTEL_EXPORTER_OTLP_HEADERS" | sed -En 's/^[Aa]uthorization=//p')
-fi
-
-umask 077
-printf 'UPSTREAM_AUTHORIZATION=%s\n' "$authorization" > "$env_file"
 
 # Mirror the macOS Keychain Claude Code credential into ~/.claude/.credentials.json
 # so the devcontainer (which can't reach Keychain) inherits the host's identity.
