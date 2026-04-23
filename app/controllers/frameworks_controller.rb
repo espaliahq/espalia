@@ -178,9 +178,13 @@ class FrameworksController < ApplicationController
       next unless edit.kind == "edit" && TEXT_EDIT_FIELDS[edit.target_entity_type] == edit.field
 
       current = entry[:latest_edit]
-      next if current && current[:created_at] >= edit.created_at
+      if current
+        next if current[:created_at] > edit.created_at
+        next if current[:created_at] == edit.created_at && current[:id] >= edit.id
+      end
 
       entry[:latest_edit] = {
+        id: edit.id,
         suggested_value: edit.suggested_value,
         suggestion_id: edit.suggestion_id,
         created_at: edit.created_at
