@@ -298,7 +298,8 @@ test/
 ## Behaviours and practices
 
 * Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
-* Always update relevant documentation if functionality diverges from what is documented
+* Always update relevant documentation if functionality diverges from what is documented.
+* When tracking PR ci, always investigate any code review suggestions. Any fixes, in individual commits towards the PR. 
 
 ## Learnings
 
