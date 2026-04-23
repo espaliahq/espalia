@@ -57,8 +57,6 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
     return false if pending_edit.nil?
 
     proposed = pending_edit[:suggested_value].to_s
-    return false if proposed.blank?
-
     diff = Frameworks::SuggestionDiff.call(original: original.to_s, proposed: proposed)
 
     if diff == :fallback

@@ -167,13 +167,18 @@ class FrameworksController < ApplicationController
 
   def build_suggestions_map(scope)
     suggestions = {}
-    scope.order(created_at: :desc).find_each do |edit|
+    # find_each ignores any scoped `order`, so we pick the latest edit per
+    # entity by comparing created_at inside the loop rather than relying on
+    # iteration order.
+    scope.find_each do |edit|
       key = [ edit.target_entity_type, edit.target_entity_id ]
       entry = suggestions[key] ||= { count: 0, latest_edit: nil }
       entry[:count] += 1
 
-      next unless entry[:latest_edit].nil?
       next unless edit.kind == "edit" && TEXT_EDIT_FIELDS[edit.target_entity_type] == edit.field
+
+      current = entry[:latest_edit]
+      next if current && current[:created_at] >= edit.created_at
 
       entry[:latest_edit] = {
         suggested_value: edit.suggested_value,

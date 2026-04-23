@@ -8,7 +8,7 @@
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>umask 077; /usr/bin/security find-generic-password -s "Claude Code-credentials" -w > "$HOME/.claude/.credentials.json" &amp;&amp; /bin/chmod 600 "$HOME/.claude/.credentials.json"</string>
+    <string>umask 077; t=$(/usr/bin/mktemp "$HOME/.claude/.credentials.json.XXXXXX") &amp;&amp; /usr/bin/security find-generic-password -s "Claude Code-credentials" -w > "$t" &amp;&amp; /bin/chmod 600 "$t" &amp;&amp; /bin/mv "$t" "$HOME/.claude/.credentials.json" || { /bin/rm -f "$t"; exit 1; }</string>
   </array>
   <key>StartInterval</key>
   <integer>1800</integer>

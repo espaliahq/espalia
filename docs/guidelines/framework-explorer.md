@@ -245,7 +245,7 @@ Each suggestion row in the panel must answer three questions at a glance: **what
 
 **Edit mode only.** In view mode the controller passes an empty pending-suggestion map to `MatrixDataBuilder`, so none of the indicators below render on the grid. View mode is the published-state-as-published view.
 
-In edit mode, suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has a pending change" with the proposal itself visible in situ.
+In edit mode, suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has a pending change" with the proposal itself visible inline.
 
 **Inline diff (primary affordance for text edits).** When an entity has a pending `kind: "edit"` on its text field, the entity re-renders as a character-level diff over the original text:
 
