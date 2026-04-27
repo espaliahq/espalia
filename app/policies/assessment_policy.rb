@@ -25,6 +25,17 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def create_manager_rating? = manages_assessee?
 
+  # Either the assessee or their manager can record an alignment.
+  # Alignment is a shared act, not a manager-only one.
+  #
+  # @return [Boolean]
+  def create_alignment_rating? = owns_assessment? || manages_assessee?
+
+  # Whether the viewer may switch into alignment mode in the UI.
+  #
+  # @return [Boolean]
+  def align? = create_alignment_rating?
+
   private
 
   # The current user's person matches the assignment's person.

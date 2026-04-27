@@ -15,13 +15,16 @@ class Views::Assessments::ManagerShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(assignment:, assessee:, framework:, matrix_data:, active_category_id: nil,
-                 expanded_capability_id: nil, user: nil, current_tenant: nil, tenants: [])
+                 expanded_capability_id: nil, context: :manager, can_align: false,
+                 user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @assessee = assessee
     @framework = framework
     @matrix_data = matrix_data
     @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
+    @context = context
+    @can_align = can_align
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -55,7 +58,7 @@ class Views::Assessments::ManagerShowView < Views::Base
             h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
               @assessee.name
             end
-            render Components::Kit::Badge.new("Manager Review", variant: :info)
+            render Components::Kit::Badge.new(header_badge_label, variant: header_badge_variant)
           end
           div(class: "mt-1 flex flex-wrap items-center gap-2") do
             render Components::Kit::Badge.new(@framework.name, variant: :default)
@@ -67,30 +70,77 @@ class Views::Assessments::ManagerShowView < Views::Base
           end
         end
 
-        # Mobile scoring toggle
-        button(
-          type: "button",
-          class: "lg:hidden shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md " \
-                 "bg-gray-100 dark:bg-gray-800 text-sm font-medium " \
-                 "text-gray-700 dark:text-gray-300 hover:bg-gray-200 " \
-                 "dark:hover:bg-gray-700 transition-colors",
-          data: { action: "panel#toggle" }
-        ) do
-          plain "Scoring"
-          score_percentage
+        div(class: "flex items-center gap-2 shrink-0") do
+          alignment_toggle if @can_align
+          mobile_scoring_toggle
         end
       end
     end
   end
 
+  def header_badge_label
+    @context == :alignment ? "Aligning" : "Manager Review"
+  end
+
+  def header_badge_variant
+    @context == :alignment ? :warning : :info
+  end
+
+  def alignment_toggle
+    if @context == :alignment
+      a(
+        href: assessment_path(@assignment, alignment_toggle_query_params(remove_mode: true)),
+        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-amber-300 " \
+               "dark:border-amber-600 text-amber-800 dark:text-amber-300 " \
+               "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+      ) { "Exit alignment" }
+    else
+      a(
+        href: assessment_path(@assignment, alignment_toggle_query_params(remove_mode: false)),
+        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 " \
+               "dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
+               "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+      ) { "Start alignment" }
+    end
+  end
+
+  def alignment_toggle_query_params(remove_mode:)
+    params = {}
+    params[:category] = @active_category_id if @active_category_id
+    params[:capability] = @expanded_capability_id if @expanded_capability_id
+    params[:mode] = "alignment" unless remove_mode
+    params
+  end
+
+  def mobile_scoring_toggle
+    button(
+      type: "button",
+      class: "lg:hidden shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md " \
+             "bg-gray-100 dark:bg-gray-800 text-sm font-medium " \
+             "text-gray-700 dark:text-gray-300 hover:bg-gray-200 " \
+             "dark:hover:bg-gray-700 transition-colors",
+      data: { action: "panel#toggle" }
+    ) do
+      plain "Scoring"
+      score_percentage
+    end
+  end
+
   def score_percentage
-    scoring = @matrix_data[:manager_scoring] || @matrix_data[:scoring]
+    scoring = primary_scoring
     ratio = scoring[:performance_ratio]
     pct = format_ratio(ratio)
     color = ratio >= 1.0 ? "text-green-600 dark:text-green-400" :
             ratio >= 0.8 ? "text-amber-600 dark:text-amber-400" :
             "text-red-600 dark:text-red-400"
     span(id: "score-percentage-badge", class: "ml-1 font-semibold #{color}") { "#{pct}%" }
+  end
+
+  def primary_scoring
+    case @context
+    when :alignment then @matrix_data[:aligned_scoring] || @matrix_data[:scoring]
+    else                 @matrix_data[:manager_scoring] || @matrix_data[:scoring]
+    end
   end
 
   # ── Layout ──
@@ -118,7 +168,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         render Views::Assessments::AssessmentMatrix.new(
           matrix_data: @matrix_data,
           assessment_id: @assignment.id,
-          context: :manager,
+          context: @context,
           active_category_id: @active_category_id,
           expanded_capability_id: @expanded_capability_id
         )
@@ -150,7 +200,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
           active_category_id: @active_category_id,
           assessment_id: @assignment.id,
-          context: :manager
+          context: @context
         )
       end
     end
@@ -160,12 +210,14 @@ class Views::Assessments::ManagerShowView < Views::Base
     p = {}
     p[:category] = @active_category_id if @active_category_id
     p[:capability] = @expanded_capability_id if @expanded_capability_id
+    p[:mode] = "alignment" if @context == :alignment
     p
   end
 
   def scoring_frame_params
     p = {}
     p[:category] = @active_category_id if @active_category_id
+    p[:mode] = "alignment" if @context == :alignment
     p
   end
 

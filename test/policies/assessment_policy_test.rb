@@ -42,6 +42,14 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     should "deny create_manager_rating" do
       assert_not policy.create_manager_rating?
     end
+
+    should "allow create_alignment_rating" do
+      assert policy.create_alignment_rating?
+    end
+
+    should "allow align" do
+      assert policy.align?
+    end
   end
 
   context "as the person's manager" do
@@ -63,6 +71,14 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
 
     should "deny create_self_rating" do
       assert_not policy.create_self_rating?
+    end
+
+    should "allow create_alignment_rating" do
+      assert policy.create_alignment_rating?
+    end
+
+    should "allow align" do
+      assert policy.align?
     end
   end
 
@@ -88,6 +104,14 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     should "deny create_manager_rating" do
       assert_not policy.create_manager_rating?
     end
+
+    should "deny create_alignment_rating" do
+      assert_not policy.create_alignment_rating?
+    end
+
+    should "deny align" do
+      assert_not policy.align?
+    end
   end
 
   context "with no person linked" do
@@ -104,6 +128,8 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not policy.show?
       assert_not policy.create_self_rating?
       assert_not policy.create_manager_rating?
+      assert_not policy.create_alignment_rating?
+      assert_not policy.align?
     end
   end
 
