@@ -152,6 +152,19 @@ end
 
 An amber divergence dot appears on category headers when secondary perspectives disagree on pass/fail. Capability contribution labels and blocked status also follow the primary perspective.
 
+## Frequency Rating Vocabulary
+
+The four rating values have distinct display labels and underlying enum values. UI buttons use the short form; tooltips and aria-labels use the long form. Data values (enum, events, DB, test fixtures) **never** change.
+
+| Enum value | Short label (button/bar) | Long label (tooltip/aria) |
+|------------|--------------------------|---------------------------|
+| `none` | None | None |
+| `some` | Some | Some times |
+| `occasional` | Most | Most times |
+| `consistent` | Consistently | Consistently |
+
+The `FrequencyBar` component abbreviates further when space-constrained (`Con.` for `consistent`), but still carries the long label as a `title` attribute.
+
 ## Cell Background Coloring
 
 Cell backgrounds encode frequency + level position at a glance:
@@ -159,12 +172,12 @@ Cell backgrounds encode frequency + level position at a glance:
 | Level Position | Frequency | Background |
 |---------------|-----------|------------|
 | Below person_level | Unrated | Muted green (assumed consistent) |
-| Below person_level | Consistent | Solid green |
-| Below person_level | Occasional | Amber |
-| Below person_level | Some/None | Red |
+| Below person_level | Consistently (`consistent`) | Solid green |
+| Below person_level | Most times (`occasional`) | Amber |
+| Below person_level | Some times / None | Red |
 | At/above person_level | Unrated | Neutral gray |
-| At/above person_level | Consistent | Solid green |
-| At/above person_level | Some/Occasional | Blue (stretch attempt) |
+| At/above person_level | Consistently (`consistent`) | Solid green |
+| At/above person_level | Some times / Most times | Blue (stretch attempt) |
 
 ## Multi-Perspective Scoring
 
@@ -290,7 +303,7 @@ Events are defined (`GrowthGoalSet`, `FocusAreaAdded`, `CheckInRecorded`) but no
 | `app/views/assessments/assessment_row.rb` | Context-aware capability row |
 | `app/views/assessments/assessment_cell.rb` | Context-aware cell (self/manager/alignment) |
 | `app/views/assessments/matrix_header.rb` | Level columns with person_level highlight |
-| `app/views/assessments/frequency_selector.rb` | Four-button rating control (None/Some/Occasional/Consistent) |
+| `app/views/assessments/frequency_selector.rb` | Four-button rating control (None/Some/Most/Consistently) |
 | `app/views/assessments/frequency_bar.rb` | Read-only secondary rating bar with divergence dot |
 | `app/views/assessments/scoring_panel.rb` | Multi-perspective scoring sidebar |
 | `app/views/assessments/scoring_panel_frame_view.rb` | Scoring panel Turbo Frame |
