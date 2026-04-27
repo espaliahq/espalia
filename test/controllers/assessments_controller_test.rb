@@ -122,8 +122,8 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_includes response.body, "Some"
-      assert_includes response.body, "Occasional"
-      assert_includes response.body, "Consistent"
+      assert_includes response.body, "Most"
+      assert_includes response.body, "Consistently"
     end
 
     should "redirect if person not assigned to framework" do

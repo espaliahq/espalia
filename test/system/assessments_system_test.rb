@@ -126,8 +126,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # Frequency selector buttons visible
       assert_button "Some"
-      assert_button "Occasional"
-      assert_button "Consistent"
+      assert_button "Most"
+      assert_button "Consistently"
 
       # Scoring panel visible on desktop
       assert_text "Performance"
@@ -137,8 +137,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "rate a capability and see scoring update" do
       visit assessment_path(@assignment)
 
-      # Click the first "Consistent" button using a precise selector
-      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+      # Click the first "Consistently" button using a precise selector
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 
       # Scoring panel should update (performance ratio changes)
       assert_selector "#scoring-panel"
@@ -232,7 +232,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # Click a rating button inside the same row.
       # Use the capability stable_id to build a precise selector, avoiding
       # stale element references from Turbo Stream replacements.
-      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 
       # Illustrations should still be visible
       assert_selector "[data-matrix-target='expandedRow']", visible: true
@@ -321,7 +321,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
 
       # Rate a capability in the first tab
-      find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+      find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 
       # Tab progress should update
       within "#category-tabs" do

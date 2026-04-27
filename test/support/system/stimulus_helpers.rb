@@ -164,45 +164,53 @@ module StimulusHelpers
 
   private
 
-  # Clicks a toggle element and retries once if the action was lost.
+  # Clicks a toggle element via JS-dispatch and asserts the visible state.
   #
-  # On slow CI runners, Selenium clicks can be silently dropped when
-  # Chrome's JS event loop is starved. This method clicks, checks a
-  # verification condition, retries once if the click didn't take
-  # effect, and asserts the final visible state.
+  # Capybara's default click simulates a real user pointer click, which on
+  # slow CI runners has been observed to be silently dropped when Chrome's
+  # JS event loop is starved, or when the target is momentarily obscured by
+  # a sticky element, scroll position, or mid-flight layout. The retry-clicks
+  # we used to compensate caused worse ping-pong bugs: on a true toggle
+  # (visible ↔ hidden), a stray second click undoes the first, so parity
+  # across 1–3 retries produced non-deterministic outcomes.
+  #
+  # JS-dispatched click is synchronous (the Stimulus action handler runs
+  # inline before +execute_script+ returns) and bypasses pointer
+  # hit-testing entirely, so exactly one click is needed and it is
+  # guaranteed to reach the action handler. The Stimulus ready check
+  # happens in +wait_for_stimulus+ at the call site.
   #
   # @param toggle_selector [String] CSS selector for the element to click
   # @param visible_selector [String] CSS selector that should become
-  #   visible after a successful toggle (used for the final assertion)
+  #   visible after the toggle (used for the final assertion)
   # @param verify_selector [String, nil] fast synchronous check selector
   #   (e.g. aria-expanded attribute). Checked with `visible: :all` since
-  #   the attribute may be on a non-visible element. Falls back to
-  #   +visible_selector+ with `visible: true` when nil.
+  #   the attribute may be on a non-visible element. When provided, asserted
+  #   before +visible_selector+ so animated transitions don't mask a
+  #   synchronously-applied state change.
   # @param scope [String, nil] optional CSS scope prefix
   def stimulus_toggle(toggle_selector, visible_selector:, verify_selector: nil, scope: nil)
     toggle_selector = "#{scope} #{toggle_selector}" if scope
     scoped_visible = scope ? "#{scope} #{visible_selector}" : visible_selector
     scoped_verify = verify_selector && (scope ? "#{scope} #{verify_selector}" : verify_selector)
 
-    find(toggle_selector).click
+    # Idempotent: if the target is already visible (e.g. the framework-explorer
+    # context pane is open by default in edit mode), the caller asked for "make
+    # it visible" and it already is — no click needed.
+    return if page.has_css?(scoped_visible, visible: true, wait: 0)
 
-    # Retry up to twice if the click didn't take effect — the event loop can
-    # starve on slow CI runners, silently dropping the first click even after
-    # Stimulus reports connected. Waits between retries must be long enough
-    # to distinguish "click was lost" from "click landed but the handler is
-    # still running" — retrying mid-handler on a toggle action re-toggles and
-    # hides the target.
-    2.times do
-      settled = scoped_verify ? page.has_css?(scoped_verify, visible: :all, wait: 5)
-                              : page.has_css?(scoped_visible, visible: true, wait: 5)
-      break if settled
+    # Surface genuine missing-target bugs. +assert_selector+ allows multiple
+    # matches (unlike +find+), so callers that pass non-unique selectors like
+    # `tr[data-capability-id]` still work — +querySelector+ below picks the
+    # first one, which is intentional.
+    assert_selector toggle_selector
 
-      # Re-resolve the element — the earlier click may have triggered a
-      # Turbo frame swap that replaced the original node.
-      target = first(toggle_selector, wait: 1)
-      target&.click
-    end
+    page.execute_script(<<~JS, toggle_selector)
+      const el = document.querySelector(arguments[0]);
+      if (el) el.click();
+    JS
 
+    assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
     assert_selector scoped_visible, visible: true, wait: 5
   end
 end

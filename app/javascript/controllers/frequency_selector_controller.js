@@ -5,11 +5,14 @@
 //
 // <div data-controller="frequency-selector">
 //   <button data-frequency-selector-target="button"
-//           data-action="frequency-selector#select">Some</button>
+//           data-action="frequency-selector#select"
+//           title="Some times" aria-label="Some times">Some</button>
 //   <button data-frequency-selector-target="button"
-//           data-action="frequency-selector#select">Occasional</button>
+//           data-action="frequency-selector#select"
+//           title="Most times" aria-label="Most times">Most</button>
 //   <button data-frequency-selector-target="button"
-//           data-action="frequency-selector#select">Consistent</button>
+//           data-action="frequency-selector#select"
+//           title="Consistently" aria-label="Consistently">Consistently</button>
 // </div>
 
 import { Controller } from "@hotwired/stimulus"

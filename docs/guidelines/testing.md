@@ -278,7 +278,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 ## Stimulus Toggle Helpers (NON-NEGOTIABLE)
 
-**Use purpose-specific toggle helpers instead of bare `find(...).click` for Stimulus-driven toggles.** On slow CI runners, Selenium clicks can be silently lost when Chrome's JS event loop is starved. These helpers click, verify the expected state change, retry once if the click was lost, and assert the target is visible.
+**Use purpose-specific toggle helpers instead of bare `find(...).click` for Stimulus-driven toggles.** On slow CI runners, Selenium's synthetic pointer clicks have been observed to drop silently when Chrome's JS event loop is starved or when the target is momentarily obscured (sticky element, mid-flight layout, scroll position). These helpers dispatch the click via JS (`element.click()`) instead — synchronous, bypasses pointer hit-testing, the Stimulus action handler runs inline before the script returns. One click, no retry ping-pong.
 
 Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 
@@ -291,15 +291,15 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 | `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector |
 
 ```ruby
-# WRONG — bare click can be silently lost on CI
+# WRONG — bare Capybara click can be silently lost on CI
 wait_for_stimulus "dropdown"
 find("[data-action='dropdown#toggle']").click
 assert_selector "[role='menu']", visible: true
 
-# CORRECT — helper waits, clicks, verifies, retries if needed
+# CORRECT — helper waits for Stimulus, dispatches a JS click, asserts state
 open_dropdown
 
-# WRONG — matrix expansion without retry protection
+# WRONG — matrix expansion without JS-dispatched click
 wait_for_stimulus "matrix"
 find("#capability-name-#{@cap_stable}").click
 assert_selector "[data-matrix-target='expandedRow']", visible: true
@@ -308,7 +308,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 expand_matrix_row("#capability-name-#{@cap_stable}")
 ```
 
-**When to use:** Any time you need to open/expand a Stimulus-controlled toggle in a system test. The helpers handle controller readiness, click retries, and visibility assertions.
+**When to use:** Any time you need to open/expand a Stimulus-controlled toggle in a system test. The helpers handle controller readiness and visibility assertions.
 
 **When NOT needed:** When testing the *close* path (clicking to hide/collapse), since the helper asserts the element becomes visible.
 
@@ -393,11 +393,11 @@ end
 ```ruby
 # WRONG — first() caches the element, Turbo Stream replaces it, click_button hits a stale ref
 within first("[id^='rating-']") do
-  click_button "Consistent"
+  click_button "Consistently"
 end
 
 # CORRECT — single find + click resolves the element at click time
-find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 ```
 
 **Key principles:**
