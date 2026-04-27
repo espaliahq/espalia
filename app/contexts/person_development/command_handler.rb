@@ -173,6 +173,22 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Formally opens alignment for a person's current assessment cycle.
+  #
+  # Once started, individual self/manager ratings are frozen for the cycle.
+  # Issued only by the assessee's current direct manager (enforced by
+  # the controller-side {AssessmentPolicy#start_alignment?}).
+  #
+  # @param person_id [String] UUID of the person being assessed
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle alignment is starting on
+  # @param started_by_id [String] UUID of the person who started alignment
+  def start_alignment(person_id, framework_id, cycle_id, started_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.start_alignment(cycle_id, started_by_id: started_by_id)
+    end
+  end
+
   # Records an agreed assessment for a capability at a specific level.
   #
   # @param person_id [String] UUID of the person

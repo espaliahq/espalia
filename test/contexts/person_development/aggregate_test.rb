@@ -383,6 +383,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
       @cycle_id = SecureRandom.uuid_v7
       @aggregate.join_cycle(@cycle_id, 1)
+      @aggregate.start_alignment(@cycle_id, started_by_id: SecureRandom.uuid_v7)
     end
 
     should "apply AssessmentAligned event with cycle_id" do
@@ -416,6 +417,107 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
           aligned_frequency: "some", cycle_id: SecureRandom.uuid_v7)
       end
       assert_match /Not currently in an assessment cycle/, err.message
+    end
+
+    should "raise if alignment has not been started" do
+      aggregate = PersonDevelopment::Aggregate.new
+      aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      cycle_id = SecureRandom.uuid_v7
+      aggregate.join_cycle(cycle_id, 1)
+
+      err = assert_raises(RuntimeError) do
+        aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1,
+          aligned_frequency: "some", cycle_id: cycle_id)
+      end
+      assert_match /Alignment has not been started/, err.message
+    end
+  end
+
+  context "#start_alignment" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(@cycle_id, 1)
+      @started_by_id = SecureRandom.uuid_v7
+    end
+
+    should "apply AlignmentStarted event with cycle_id and started_by_id" do
+      @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::AlignmentStarted, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+      assert_equal @started_by_id, event.data[:started_by_id]
+    end
+
+    should "raise if already started" do
+      @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+      end
+      assert_match /already started/, err.message
+    end
+
+    should "raise if not in a cycle" do
+      aggregate = PersonDevelopment::Aggregate.new
+      aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+
+      err = assert_raises(RuntimeError) do
+        aggregate.start_alignment(SecureRandom.uuid_v7, started_by_id: @started_by_id)
+      end
+      assert_match /Not currently in an assessment cycle/, err.message
+    end
+
+    should "freeze rate_self after starting" do
+      @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "some",
+          cycle_id: @cycle_id)
+      end
+      assert_match /frozen during alignment/, err.message
+    end
+
+    should "freeze rate_as_manager after starting" do
+      @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "some",
+          cycle_id: @cycle_id)
+      end
+      assert_match /frozen during alignment/, err.message
+    end
+
+    should "freeze revise_self_rating and clear_self_rating after starting" do
+      cap_sid = SecureRandom.uuid_v7
+      @aggregate.rate_self(cap_sid, level_ordinal: 1, frequency: "some", cycle_id: @cycle_id)
+      @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.revise_self_rating(cap_sid, level_ordinal: 1, frequency: "occasional",
+          rationale: "x", cycle_id: @cycle_id)
+      end
+      assert_match /frozen during alignment/, err.message
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.clear_self_rating(cap_sid, level_ordinal: 1, cycle_id: @cycle_id)
+      end
+      assert_match /frozen during alignment/, err.message
+    end
+
+    should "reset frozen state when a new cycle is joined" do
+      @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+      @aggregate.leave_cycle(@cycle_id, "completed")
+
+      new_cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(new_cycle_id, 2)
+
+      # Should be able to rate again
+      assert_nothing_raised do
+        @aggregate.rate_self(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "some",
+          cycle_id: new_cycle_id)
+      end
     end
   end
 end

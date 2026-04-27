@@ -100,7 +100,9 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       rating.reload
       assert_equal "occasional", rating.manager_rated_frequency
 
-      # Alignment
+      # Manager starts alignment, then aligns
+      @handler.start_alignment(@person_id, @framework_id, cycle_id,
+        started_by_id: SecureRandom.uuid_v7)
       @handler.align_assessment(@person_id, @framework_id, cap_sid,
         level_ordinal: 3, aligned_frequency: "occasional", cycle_id: cycle_id,
         comment: "Agreed on occasional")

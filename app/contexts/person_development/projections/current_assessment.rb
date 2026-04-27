@@ -33,6 +33,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::ManagerRated,
       PersonDevelopment::Events::ManagerRatingRevised,
       PersonDevelopment::Events::ManagerRatingCleared,
+      PersonDevelopment::Events::AlignmentStarted,
       PersonDevelopment::Events::AssessmentAligned
     ]
   end
@@ -59,6 +60,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::ManagerRated then handle_manager_rated(event)
     when PersonDevelopment::Events::ManagerRatingRevised then handle_manager_rating_revised(event)
     when PersonDevelopment::Events::ManagerRatingCleared then handle_manager_rating_cleared(event)
+    when PersonDevelopment::Events::AlignmentStarted then handle_alignment_started(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
     end
   end
@@ -160,13 +162,29 @@ class PersonDevelopment::Projections::CurrentAssessment
     broadcast_assessment_sync(event)
   end
 
+  def handle_alignment_started(event)
+    participant = AssessmentCycleParticipant.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    )
+    return unless participant
+
+    now = event.metadata[:timestamp] || Time.current
+    participant.update!(
+      status: "aligning",
+      alignment_started_at: now,
+      alignment_started_by_id: event.data[:started_by_id],
+      started_at: participant.started_at || now
+    )
+    broadcast_assessment_sync(event)
+  end
+
   def handle_assessment_aligned(event)
     rating = find_or_init_rating(event)
     rating.aligned_frequency = event.data[:aligned_frequency]
     rating.aligned_comment = event.data[:comment]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
     rating.save!
-    mark_participant_aligned(event)
     broadcast_assessment_sync(event)
   end
 
@@ -212,24 +230,6 @@ class PersonDevelopment::Projections::CurrentAssessment
       started_at: now,
       status: "started",
       updated_at: now
-    )
-  end
-
-  # Marks the participant as aligned.
-  #
-  # @param event [RubyEventStore::Event]
-  def mark_participant_aligned(event)
-    participant = AssessmentCycleParticipant.find_by(
-      cycle_id: event.data[:cycle_id],
-      person_id: event.metadata[:person_id]
-    )
-    return unless participant
-
-    now = event.metadata[:timestamp] || Time.current
-    participant.update!(
-      status: "aligned",
-      aligned_at: now,
-      started_at: participant.started_at || now
     )
   end
 

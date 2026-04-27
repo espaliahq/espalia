@@ -16,6 +16,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
 
   create_table "assessment_cycle_participants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "aligned_at"
+    t.datetime "alignment_started_at"
+    t.uuid "alignment_started_by_id"
     t.datetime "created_at", null: false
     t.uuid "cycle_id", null: false
     t.datetime "enrolled_at", null: false

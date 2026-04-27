@@ -75,6 +75,10 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
         @report.id, @framework_id, @cap_stable,
         level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id, comment: "Manager-rated"
       )
+
+      # Open the alignment phase so alignment ratings are accepted by the policy.
+      # PR 2 will replace this server-side seed with a UI button on the manager view.
+      pd_handler.start_alignment(@report.id, @framework_id, @cycle_id, started_by_id: @manager.id)
     end
 
     visit new_user_session_path

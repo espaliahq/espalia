@@ -262,8 +262,24 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "AlignmentStarted" do
+    should "flip participant status to aligning and stamp the started_by_id" do
+      started_by_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::AlignmentStarted,
+        cycle_id: @cycle_id, started_by_id: started_by_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligning", participant.status
+        assert_not_nil participant.alignment_started_at
+        assert_equal started_by_id, participant.alignment_started_by_id
+      end
+    end
+  end
+
   context "AssessmentAligned" do
-    should "set aligned_frequency on the row and mark participant aligned" do
+    should "set aligned_frequency on the row without changing participant status" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::AssessmentAligned,
@@ -278,9 +294,11 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         assert_not_nil rating
         assert_equal "consistent", rating.aligned_frequency
 
+        # Status changes are now driven by AlignmentStarted (PR 1) and
+        # FullAlignmentCompleted (PR 3) — AssessmentAligned no longer
+        # touches participant lifecycle status.
         participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_equal "aligned", participant.status
-        assert_not_nil participant.aligned_at
+        assert_not_equal "aligned", participant.status
       end
     end
   end

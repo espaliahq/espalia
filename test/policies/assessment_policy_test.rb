@@ -43,12 +43,8 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not policy.create_manager_rating?
     end
 
-    should "allow create_alignment_rating" do
-      assert policy.create_alignment_rating?
-    end
-
-    should "allow align" do
-      assert policy.align?
+    should "deny start_alignment" do
+      assert_not policy.start_alignment?
     end
   end
 
@@ -71,14 +67,6 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
 
     should "deny create_self_rating" do
       assert_not policy.create_self_rating?
-    end
-
-    should "allow create_alignment_rating" do
-      assert policy.create_alignment_rating?
-    end
-
-    should "allow align" do
-      assert policy.align?
     end
   end
 
@@ -112,6 +100,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     should "deny align" do
       assert_not policy.align?
     end
+
+    should "deny start_alignment" do
+      assert_not policy.start_alignment?
+    end
   end
 
   context "with no person linked" do
@@ -130,6 +122,95 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not policy.create_manager_rating?
       assert_not policy.create_alignment_rating?
       assert_not policy.align?
+      assert_not policy.start_alignment?
+    end
+  end
+
+  # ── Cycle-state-aware predicates ──
+  #
+  # create_self_rating?, create_manager_rating?, create_alignment_rating?,
+  # align?, and start_alignment? all depend on the participant's status
+  # in the current open cycle. These contexts cover the lifecycle.
+
+  context "with an open cycle in :started state" do
+    setup do
+      @cycle = ActsAsTenant.with_tenant(@tenant) do
+        cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
+        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+          person_id: @person.id, status: "started", started_at: Time.current)
+        cycle
+      end
+      @manager_ctx = manager_context
+    end
+
+    should "allow manager to start alignment" do
+      assert AssessmentPolicy.new(@manager_ctx, @assignment).start_alignment?
+    end
+
+    should "deny assessee from starting alignment" do
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).start_alignment?
+    end
+
+    should "allow assessee to record self ratings (not yet frozen)" do
+      assert AssessmentPolicy.new(assessee_context, @assignment).create_self_rating?
+    end
+
+    should "deny alignment ratings before alignment is started" do
+      assert_not AssessmentPolicy.new(@manager_ctx, @assignment).create_alignment_rating?
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).create_alignment_rating?
+    end
+  end
+
+  context "with an open cycle in :aligning state" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
+        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+          person_id: @person.id, status: "aligning", started_at: 1.day.ago,
+          alignment_started_at: Time.current, alignment_started_by_id: @manager.id)
+      end
+    end
+
+    should "freeze self rating for assessee" do
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).create_self_rating?
+    end
+
+    should "freeze manager rating" do
+      assert_not AssessmentPolicy.new(manager_context, @assignment).create_manager_rating?
+    end
+
+    should "allow alignment ratings from both parties" do
+      assert AssessmentPolicy.new(assessee_context, @assignment).create_alignment_rating?
+      assert AssessmentPolicy.new(manager_context, @assignment).create_alignment_rating?
+    end
+
+    should "deny start_alignment (already started)" do
+      assert_not AssessmentPolicy.new(manager_context, @assignment).start_alignment?
+    end
+  end
+
+  context "with an open cycle in :aligned state" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
+        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+          person_id: @person.id, status: "aligned", started_at: 1.day.ago,
+          aligned_at: Time.current)
+      end
+    end
+
+    should "freeze self and manager ratings" do
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).create_self_rating?
+      assert_not AssessmentPolicy.new(manager_context, @assignment).create_manager_rating?
+    end
+
+    should "deny alignment ratings (alignment is complete)" do
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).create_alignment_rating?
+      assert_not AssessmentPolicy.new(manager_context, @assignment).create_alignment_rating?
+    end
+
+    should "deny start_alignment" do
+      assert_not AssessmentPolicy.new(manager_context, @assignment).start_alignment?
     end
   end
 
@@ -137,5 +218,21 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
 
   def policy
     AssessmentPolicy.new(@ctx, @assignment)
+  end
+
+  def assessee_context
+    user = create(:user)
+    tu = ActsAsTenant.with_tenant(@tenant) do
+      create(:tenant_user, tenant: @tenant, user: user, person: @person)
+    end
+    AuthorizationContext.new(user: user, tenant_user: tu, person: @person)
+  end
+
+  def manager_context
+    user = create(:user)
+    tu = ActsAsTenant.with_tenant(@tenant) do
+      create(:tenant_user, tenant: @tenant, user: user, person: @manager)
+    end
+    AuthorizationContext.new(user: user, tenant_user: tu, person: @manager)
   end
 end
