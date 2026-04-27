@@ -6,13 +6,17 @@
 #
 class Views::Assessments::FrequencySelector < Views::Base
   FREQUENCIES = [
-    { value: "none", label: "None", bg: "bg-gray-200 dark:bg-gray-600",
+    { value: "none", short_label: "None", long_label: "None",
+      bg: "bg-gray-200 dark:bg-gray-600",
       text: "text-gray-700 dark:text-gray-200", ring: "ring-gray-400 dark:ring-gray-500" },
-    { value: "some", label: "Some", bg: "bg-amber-100 dark:bg-amber-900/30",
+    { value: "some", short_label: "Some", long_label: "Some times",
+      bg: "bg-amber-100 dark:bg-amber-900/30",
       text: "text-amber-800 dark:text-amber-300", ring: "ring-amber-300 dark:ring-amber-700" },
-    { value: "occasional", label: "Occasional", bg: "bg-blue-100 dark:bg-blue-900/30",
+    { value: "occasional", short_label: "Most", long_label: "Most times",
+      bg: "bg-blue-100 dark:bg-blue-900/30",
       text: "text-blue-800 dark:text-blue-300", ring: "ring-blue-300 dark:ring-blue-700" },
-    { value: "consistent", label: "Consistent", bg: "bg-green-100 dark:bg-green-900/30",
+    { value: "consistent", short_label: "Consistently", long_label: "Consistently",
+      bg: "bg-green-100 dark:bg-green-900/30",
       text: "text-green-800 dark:text-green-300", ring: "ring-green-300 dark:ring-green-700" }
   ].freeze
 
@@ -60,11 +64,13 @@ class Views::Assessments::FrequencySelector < Views::Base
       button(
         type: "submit",
         class: button_classes(freq, selected),
+        title: freq[:long_label],
+        aria: { label: freq[:long_label] },
         data: {
           frequency_selector_target: "button",
           action: "frequency-selector#select"
         }
-      ) { freq[:label] }
+      ) { freq[:short_label] }
     end
   end
 

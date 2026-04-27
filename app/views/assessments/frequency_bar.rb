@@ -9,14 +9,14 @@
 #   render Views::Assessments::FrequencyBar.new(
 #     label: "Mgr", frequency: "occasional", primary_frequency: "consistent"
 #   )
-#   # => Mgr  ████████  Occ.  ⚠
+#   # => Mgr  ████████  Most  ⚠
 #
 class Views::Assessments::FrequencyBar < Views::Base
   FREQUENCY_CONFIG = {
-    "none"       => { label: "None", width: "w-1/12",  bg: "bg-gray-300 dark:bg-gray-600" },
-    "some"       => { label: "Some", width: "w-3/12",  bg: "bg-amber-300 dark:bg-amber-700" },
-    "occasional" => { label: "Occ.",  width: "w-6/12",  bg: "bg-blue-300 dark:bg-blue-700" },
-    "consistent" => { label: "Cons.", width: "w-full",  bg: "bg-green-300 dark:bg-green-700" }
+    "none"       => { label: "None", long_label: "None",         width: "w-1/12", bg: "bg-gray-300 dark:bg-gray-600" },
+    "some"       => { label: "Some", long_label: "Some times",   width: "w-3/12", bg: "bg-amber-300 dark:bg-amber-700" },
+    "occasional" => { label: "Most", long_label: "Most times",   width: "w-6/12", bg: "bg-blue-300 dark:bg-blue-700" },
+    "consistent" => { label: "Con.", long_label: "Consistently", width: "w-full", bg: "bg-green-300 dark:bg-green-700" }
   }.freeze
 
   # @param label [String] "Self", "Mgr", or "Agreed"
@@ -46,7 +46,10 @@ class Views::Assessments::FrequencyBar < Views::Base
       end
 
       # Frequency label
-      span(class: "text-[10px] text-gray-500 dark:text-gray-400 w-7 shrink-0 text-right") do
+      span(
+        class: "text-[10px] text-gray-500 dark:text-gray-400 w-7 shrink-0 text-right",
+        title: config[:long_label]
+      ) do
         config[:label]
       end
 

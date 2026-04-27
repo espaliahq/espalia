@@ -393,11 +393,11 @@ end
 ```ruby
 # WRONG — first() caches the element, Turbo Stream replaces it, click_button hits a stale ref
 within first("[id^='rating-']") do
-  click_button "Consistent"
+  click_button "Consistently"
 end
 
 # CORRECT — single find + click resolves the element at click time
-find("#rating-#{@cap1_stable}-1 button", text: "Consistent").click
+find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 ```
 
 **Key principles:**
