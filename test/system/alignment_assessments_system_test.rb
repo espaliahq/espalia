@@ -121,6 +121,34 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "in-frame navigation preserves alignment mode" do
+    should "render category tab links carrying mode=alignment" do
+      visit assessment_path(@report_assignment, mode: "alignment")
+      assert_text "Aligning"
+      wait_for_stimulus "matrix"
+
+      tab_links = page.all("nav#category-tabs a", visible: :all)
+      assert tab_links.any?, "Expected at least one category tab link"
+      tab_links.each do |link|
+        assert_includes link[:href], "mode=alignment",
+          "Category tab link #{link[:href]} should preserve mode=alignment"
+      end
+    end
+
+    should "render scoring-panel category links carrying mode=alignment" do
+      visit assessment_path(@report_assignment, mode: "alignment")
+      assert_text "Aligning"
+      wait_for_stimulus "matrix"
+
+      panel_links = page.all("#scoring-panel a", visible: :all)
+      assert panel_links.any?, "Expected at least one scoring-panel category link"
+      panel_links.each do |link|
+        assert_includes link[:href], "mode=alignment",
+          "Scoring-panel link #{link[:href]} should preserve mode=alignment"
+      end
+    end
+  end
+
   context "exiting alignment mode" do
     should "return to Manager Review after clicking Exit alignment" do
       visit assessment_path(@report_assignment, mode: "alignment")
