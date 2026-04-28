@@ -262,6 +262,61 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "seeded ratings" do
+    should "stamp source=seeded and seeded_from_cycle_id when SelfRated carries source: 'seeded'" do
+      cap_sid = SecureRandom.uuid_v7
+      prior_cycle_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: prior_cycle_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 2
+        )
+        assert_equal "seeded", rating.source
+        assert_equal prior_cycle_id, rating.seeded_from_cycle_id
+        assert_equal "consistent", rating.self_rated_frequency
+      end
+    end
+
+    should "NOT touch participant.started_at on a seeded SelfRated" do
+      cap_sid = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "enrolled", participant.status
+        assert_nil participant.started_at
+      end
+    end
+
+    should "flip source back to 'human' when a seeded rating is revised by the user" do
+      cap_sid = SecureRandom.uuid_v7
+      prior_cycle_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: prior_cycle_id)
+      emit(PersonDevelopment::Events::SelfRatingRevised,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "occasional",
+        cycle_id: @cycle_id, rationale: "downgrade")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 2
+        )
+        assert_equal "human", rating.source
+        assert_equal prior_cycle_id, rating.seeded_from_cycle_id, "seeded_from_cycle_id should remain for audit"
+      end
+    end
+  end
+
   context "AlignmentStarted" do
     should "flip participant status to aligning and stamp the started_by_id" do
       manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }

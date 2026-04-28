@@ -9,6 +9,10 @@
 #   @option data [String] :frequency "some", "occasional", or "consistent"
 #   @option data [String] :cycle_id UUID of the cycle this rating belongs to
 #   @option data [String] :comment optional rationale or comment
+#   @option data [String] :source "human" (default) when entered by the manager, or
+#     "seeded" when carried over from a prior cycle's aligned value at cycle join
+#   @option data [String, nil] :seeded_from_cycle_id UUID of the originating cycle
+#     when source == "seeded"
 #
 class PersonDevelopment::Events::ManagerRated < RubyEventStore::Event
 end

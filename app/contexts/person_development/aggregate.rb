@@ -138,7 +138,8 @@ class PersonDevelopment::Aggregate
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
-  def rate_self(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
+  def rate_self(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
+                source: "human", seeded_from_cycle_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -148,7 +149,9 @@ class PersonDevelopment::Aggregate
       level_ordinal: level_ordinal,
       frequency: frequency,
       cycle_id: cycle_id,
-      comment: comment
+      comment: comment,
+      source: source,
+      seeded_from_cycle_id: seeded_from_cycle_id
     }))
   end
 
@@ -207,7 +210,8 @@ class PersonDevelopment::Aggregate
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
-  def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
+  def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
+                      source: "human", seeded_from_cycle_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -217,7 +221,9 @@ class PersonDevelopment::Aggregate
       level_ordinal: level_ordinal,
       frequency: frequency,
       cycle_id: cycle_id,
-      comment: comment
+      comment: comment,
+      source: source,
+      seeded_from_cycle_id: seeded_from_cycle_id
     }))
   end
 

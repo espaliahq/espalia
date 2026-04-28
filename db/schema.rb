@@ -73,6 +73,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.string "migration_status", default: "not_flagged", null: false
     t.uuid "person_id", null: false
     t.text "reassessment_reason"
+    t.uuid "seeded_from_cycle_id"
     t.text "self_rated_comment"
     t.string "self_rated_frequency"
     t.string "source", default: "human", null: false
@@ -81,6 +82,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.index ["cycle_id", "person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_assessment_ratings_cycle_person_cap_level", unique: true
     t.index ["cycle_id", "person_id"], name: "idx_assessment_ratings_cycle_person"
     t.index ["person_id", "framework_id"], name: "index_assessment_level_ratings_on_person_id_and_framework_id"
+    t.index ["seeded_from_cycle_id"], name: "idx_assessment_ratings_seeded_from_cycle_id", where: "(seeded_from_cycle_id IS NOT NULL)"
     t.index ["tenant_id"], name: "index_assessment_level_ratings_on_tenant_id"
   end
 

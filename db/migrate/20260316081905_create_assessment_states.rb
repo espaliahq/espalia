@@ -13,7 +13,8 @@ class CreateAssessmentStates < ActiveRecord::Migration[8.1]
       t.string :self_rated_frequency       # nil | "some" | "occasional" | "consistent"
       t.string :manager_rated_frequency    # nil | "some" | "occasional" | "consistent"
       t.string :aligned_frequency          # nil | "some" | "occasional" | "consistent"
-      t.string :source, default: "human", null: false  # "human" | "agent"
+      t.string :source, default: "human", null: false  # "human" | "agent" | "seeded"
+      t.uuid :seeded_from_cycle_id  # set when source == "seeded"
 
       t.text :self_rated_comment
       t.text :manager_rated_comment
@@ -34,5 +35,8 @@ class CreateAssessmentStates < ActiveRecord::Migration[8.1]
     add_index :assessment_level_ratings, [ :person_id, :framework_id ]
     add_index :assessment_level_ratings, [ :cycle_id, :person_id ],
               name: "idx_assessment_ratings_cycle_person"
+    add_index :assessment_level_ratings, :seeded_from_cycle_id,
+              where: "seeded_from_cycle_id IS NOT NULL",
+              name: "idx_assessment_ratings_seeded_from_cycle_id"
   end
 end

@@ -123,4 +123,76 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal 3, rating_events.length
     end
   end
+
+  context "#seed_ratings_from_prior_cycle" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Build a real framework + capability so the stable_id lookup matches.
+        @framework = create(:framework_state, framework_id: @framework_id, name: "FW")
+        rf = create(:framework_role_family, framework_id: @framework_id, name: "Eng")
+        @role = create(:framework_role, role_family_id: rf.role_family_id,
+          name: "SE", code: "E", track: "ic")
+        @level = create(:framework_level, role_id: @role.role_id, ordinal: 2, title: "Mid", code: "E2")
+        cat = create(:framework_capability_category, framework_id: @framework_id,
+          name: "Thinking", ordinal: 1)
+        @cap_stable_id = SecureRandom.uuid_v7
+        @cap = create(:framework_capability, category_id: cat.category_id,
+          name: "Critical Thinking", stable_id: @cap_stable_id)
+
+        # Real Person records — required by FK on assessment_cycle_participants
+        # for alignment_started_by_id / aligned_by_id.
+        @assessee = create(:person, tenant: @tenant, name: "Assessee")
+        @manager = create(:person, tenant: @tenant, name: "Mgr")
+      end
+
+      @person_id = @assessee.id
+
+      @handler.assign_to_framework(@person_id, @framework_id, @role.role_id, @level.level_id)
+
+      # Build a prior cycle that completed alignment with one aligned value.
+      @prior_cycle_id = SecureRandom.uuid_v7
+      @cycle_handler.define_cycle(@prior_cycle_id, @framework_id, "Q1 2026", "regular", 1,
+        defined_by: @manager.id)
+      @cycle_handler.enroll(@prior_cycle_id, @person_id, enrolled_by: @manager.id)
+      @handler.rate_self(@person_id, @framework_id, @cap_stable_id,
+        level_ordinal: 2, frequency: "occasional", cycle_id: @prior_cycle_id)
+      @handler.start_alignment(@person_id, @framework_id, @prior_cycle_id, started_by_id: @manager.id)
+      @handler.align_assessment(@person_id, @framework_id, @cap_stable_id,
+        level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @prior_cycle_id)
+      @handler.complete_alignment(@person_id, @framework_id, @prior_cycle_id, completed_by_id: @manager.id)
+
+      # Close the prior cycle (which leaves all participants) so a new one can open.
+      @cycle_handler.close_cycle(@prior_cycle_id, closed_by: @manager.id)
+
+      @new_cycle_id = SecureRandom.uuid_v7
+      @cycle_handler.define_cycle(@new_cycle_id, @framework_id, "Q2 2026", "regular", 1,
+        defined_by: @manager.id)
+      @cycle_handler.enroll(@new_cycle_id, @person_id, enrolled_by: @manager.id)
+    end
+
+    should "auto-seed both perspectives in the new cycle from prior aligned values" do
+      # The PersonEnrollmentSync handler should have already seeded as part of enrol.
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @new_cycle_id, person_id: @person_id,
+          capability_stable_id: @cap_stable_id, level_ordinal: 2
+        )
+        assert_not_nil rating
+        assert_equal "consistent", rating.self_rated_frequency
+        assert_equal "consistent", rating.manager_rated_frequency
+        assert_equal "seeded", rating.source
+        assert_equal @prior_cycle_id, rating.seeded_from_cycle_id
+      end
+    end
+
+    should "leave participant status at :enrolled because seeded events do not start the cycle" do
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(
+          cycle_id: @new_cycle_id, person_id: @person_id
+        )
+        assert_equal "enrolled", participant.status
+        assert_nil participant.started_at
+      end
+    end
+  end
 end

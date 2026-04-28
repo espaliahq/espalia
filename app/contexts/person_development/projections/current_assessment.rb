@@ -113,8 +113,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
+    apply_source(rating, event)
     rating.save!
-    touch_participant_started(event)
+    touch_participant_started(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -123,6 +124,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
+    rating.source = "human"
     rating.save!
     touch_participant_started(event)
     broadcast_assessment_sync(event)
@@ -141,8 +143,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    apply_source(rating, event)
     rating.save!
-    touch_participant_started(event)
+    touch_participant_started(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -151,6 +154,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    rating.source = "human"
     rating.save!
     touch_participant_started(event)
     broadcast_assessment_sync(event)
@@ -204,6 +208,30 @@ class PersonDevelopment::Projections::CurrentAssessment
       aligned_by_id: event.data[:completed_by_id]
     )
     broadcast_assessment_sync(event)
+  end
+
+  # Whether the rating event was emitted as part of a seeding flow.
+  #
+  # @param event [RubyEventStore::Event]
+  # @return [Boolean]
+  def seeded_event?(event)
+    event.data[:source] == "seeded"
+  end
+
+  # Sets the rating's source attribution.
+  # New seeded rating → source: "seeded", seeded_from_cycle_id stamped.
+  # Human entry on a previously-seeded row → source flips to "human".
+  # Default: "human" (unchanged for legacy rows).
+  #
+  # @param rating [AssessmentLevelRating]
+  # @param event [RubyEventStore::Event]
+  def apply_source(rating, event)
+    if seeded_event?(event)
+      rating.source = "seeded" if rating.new_record? || rating.source != "human"
+      rating.seeded_from_cycle_id ||= event.data[:seeded_from_cycle_id]
+    else
+      rating.source = "human"
+    end
   end
 
   # Finds or initialises an AssessmentLevelRating for the (cycle, person,
