@@ -205,4 +205,20 @@ class PersonDevelopment::CommandHandler
         aligned_frequency: aligned_frequency, cycle_id: cycle_id, comment: comment)
     end
   end
+
+  # Marks alignment complete for the current cycle.
+  #
+  # After this lands, all ratings (including aligned values) are frozen.
+  # Issued only by the assessee's current direct manager (enforced by
+  # the controller-side {AssessmentPolicy#complete_alignment?}).
+  #
+  # @param person_id [String] UUID of the person being assessed
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle being completed
+  # @param completed_by_id [String] UUID of the person completing alignment
+  def complete_alignment(person_id, framework_id, cycle_id, completed_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.complete_alignment(cycle_id, completed_by_id: completed_by_id)
+    end
+  end
 end

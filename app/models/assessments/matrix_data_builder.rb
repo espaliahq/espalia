@@ -72,7 +72,8 @@ class Assessments::MatrixDataBuilder
       total_cells: count_total_cells(categories),
       rated_cells: count_rated_cells(categories),
       participant_status: @participant_status,
-      individual_ratings_frozen: %w[aligning aligned].include?(@participant_status)
+      individual_ratings_frozen: %w[aligning aligned].include?(@participant_status),
+      alignment_locked: @participant_status == "aligned"
     }
   end
 

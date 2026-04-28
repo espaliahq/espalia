@@ -19,9 +19,11 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param show_header [Boolean] whether to render the sticky category header row
+  # @param frozen [Boolean] whether self/manager rating cells are read-only (alignment in progress)
+  # @param alignment_locked [Boolean] whether alignment cells are read-only (alignment completed)
   def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
-                 expanded_capability_id: nil, show_header: true, frozen: false)
+                 expanded_capability_id: nil, show_header: true, frozen: false, alignment_locked: false)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -35,6 +37,7 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
     @expanded_capability_id = expanded_capability_id
     @show_header = show_header
     @frozen = frozen
+    @alignment_locked = alignment_locked
   end
 
   def view_template
@@ -78,7 +81,8 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         secondary_contributions: secondary_capability_contributions(stable_id),
         expanded: stable_id == @expanded_capability_id,
         category_id: @category.category_id,
-        frozen: @frozen
+        frozen: @frozen,
+        alignment_locked: @alignment_locked
       )
     end
   end

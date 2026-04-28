@@ -264,16 +264,32 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
 
   context "AlignmentStarted" do
     should "flip participant status to aligning and stamp the started_by_id" do
-      started_by_id = SecureRandom.uuid_v7
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
 
       emit(PersonDevelopment::Events::AlignmentStarted,
-        cycle_id: @cycle_id, started_by_id: started_by_id)
+        cycle_id: @cycle_id, started_by_id: manager.id)
 
       ActsAsTenant.with_tenant(@tenant) do
         participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
         assert_equal "aligning", participant.status
         assert_not_nil participant.alignment_started_at
-        assert_equal started_by_id, participant.alignment_started_by_id
+        assert_equal manager.id, participant.alignment_started_by_id
+      end
+    end
+  end
+
+  context "FullAlignmentCompleted" do
+    should "flip participant status to aligned and stamp completed_by_id" do
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
+
+      emit(PersonDevelopment::Events::FullAlignmentCompleted,
+        cycle_id: @cycle_id, completed_by_id: manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligned", participant.status
+        assert_not_nil participant.aligned_at
+        assert_equal manager.id, participant.aligned_by_id
       end
     end
   end

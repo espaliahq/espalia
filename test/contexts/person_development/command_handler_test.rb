@@ -101,8 +101,9 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal "occasional", rating.manager_rated_frequency
 
       # Manager starts alignment, then aligns
+      manager = create(:person, tenant: @tenant, name: "Mgr")
       @handler.start_alignment(@person_id, @framework_id, cycle_id,
-        started_by_id: SecureRandom.uuid_v7)
+        started_by_id: manager.id)
       @handler.align_assessment(@person_id, @framework_id, cap_sid,
         level_ordinal: 3, aligned_frequency: "occasional", cycle_id: cycle_id,
         comment: "Agreed on occasional")

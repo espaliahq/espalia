@@ -52,6 +52,16 @@ class AssessmentPolicy < ApplicationPolicy
     current_open_cycle_participant&.status == "started"
   end
 
+  # Only the assessee's current direct manager can mark alignment
+  # complete. Requires the cycle to be in the `aligning` state.
+  #
+  # @return [Boolean]
+  def complete_alignment?
+    return false unless manages_assessee?
+
+    current_open_cycle_participant&.status == "aligning"
+  end
+
   private
 
   # Whether self/manager ratings are still mutable for the current cycle.

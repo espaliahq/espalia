@@ -520,4 +520,68 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "#complete_alignment" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(@cycle_id, 1)
+      @aggregate.start_alignment(@cycle_id, started_by_id: SecureRandom.uuid_v7)
+      @completed_by_id = SecureRandom.uuid_v7
+    end
+
+    should "apply FullAlignmentCompleted event" do
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::FullAlignmentCompleted, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+      assert_equal @completed_by_id, event.data[:completed_by_id]
+    end
+
+    should "raise if alignment has not been started" do
+      aggregate = PersonDevelopment::Aggregate.new
+      aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      cycle_id = SecureRandom.uuid_v7
+      aggregate.join_cycle(cycle_id, 1)
+
+      err = assert_raises(RuntimeError) do
+        aggregate.complete_alignment(cycle_id, completed_by_id: @completed_by_id)
+      end
+      assert_match /Alignment has not been started/, err.message
+    end
+
+    should "raise if already completed" do
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
+      end
+      assert_match /already completed/, err.message
+    end
+
+    should "freeze align_assessment after completion" do
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1,
+          aligned_frequency: "some", cycle_id: @cycle_id)
+      end
+      assert_match /Alignment has been completed/, err.message
+    end
+
+    should "reset completion state when a new cycle is joined" do
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
+      @aggregate.leave_cycle(@cycle_id, "completed")
+
+      new_cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(new_cycle_id, 2)
+      @aggregate.start_alignment(new_cycle_id, started_by_id: @completed_by_id)
+
+      assert_nothing_raised do
+        @aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1,
+          aligned_frequency: "some", cycle_id: new_cycle_id)
+      end
+    end
+  end
 end

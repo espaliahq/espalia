@@ -15,6 +15,7 @@ class CreateAssessmentCycleParticipants < ActiveRecord::Migration[8.1]
       t.datetime :alignment_started_at
       t.uuid :alignment_started_by_id
       t.datetime :aligned_at
+      t.uuid :aligned_by_id
       t.datetime :withdrawn_at
       t.string :withdrawal_reason
       t.timestamps
@@ -24,5 +25,16 @@ class CreateAssessmentCycleParticipants < ActiveRecord::Migration[8.1]
               name: "idx_assessment_cycle_participants_unique"
     add_index :assessment_cycle_participants, [ :tenant_id, :person_id, :status ],
               name: "idx_assessment_cycle_participants_by_person_status"
+    add_index :assessment_cycle_participants, :alignment_started_by_id,
+              name: "idx_assessment_cycle_participants_alignment_started_by_id",
+              where: "alignment_started_by_id IS NOT NULL"
+    add_index :assessment_cycle_participants, :aligned_by_id,
+              name: "idx_assessment_cycle_participants_aligned_by_id",
+              where: "aligned_by_id IS NOT NULL"
+
+    add_foreign_key :assessment_cycle_participants, :people,
+      column: :alignment_started_by_id, on_delete: :nullify
+    add_foreign_key :assessment_cycle_participants, :people,
+      column: :aligned_by_id, on_delete: :nullify
   end
 end

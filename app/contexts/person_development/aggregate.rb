@@ -29,6 +29,7 @@ class PersonDevelopment::Aggregate
     @assigned = false
     @current_cycle_id = nil
     @alignment_started = false
+    @alignment_completed = false
     @self_ratings = {}   # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
   end
@@ -303,6 +304,7 @@ class PersonDevelopment::Aggregate
   def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, cycle_id:, comment: nil)
     ensure_in_cycle!(cycle_id)
     raise "Alignment has not been started for this cycle" unless @alignment_started
+    raise "Alignment has been completed for this cycle" if @alignment_completed
     raise "Invalid frequency: #{aligned_frequency}" unless FREQUENCIES.include?(aligned_frequency)
 
     apply(PersonDevelopment::Events::AssessmentAligned.new(data: {
@@ -311,6 +313,28 @@ class PersonDevelopment::Aggregate
       aligned_frequency: aligned_frequency,
       cycle_id: cycle_id,
       comment: comment
+    }))
+  end
+
+  # Marks alignment complete for the current cycle.
+  #
+  # After this lands, all ratings (including aligned values) are frozen for
+  # the cycle. Issued by the assessee's current direct manager (enforced by
+  # the controller-side {AssessmentPolicy#complete_alignment?}).
+  #
+  # Snapshot point — long streams compress here.
+  #
+  # @param cycle_id [String] UUID of the cycle being completed
+  # @param completed_by_id [String] UUID of the person completing alignment
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or already completed
+  def complete_alignment(cycle_id, completed_by_id:)
+    ensure_in_cycle!(cycle_id)
+    raise "Alignment has not been started for this cycle" unless @alignment_started
+    raise "Alignment already completed for this cycle" if @alignment_completed
+
+    apply(PersonDevelopment::Events::FullAlignmentCompleted.new(data: {
+      cycle_id: cycle_id,
+      completed_by_id: completed_by_id
     }))
   end
 
@@ -352,6 +376,7 @@ class PersonDevelopment::Aggregate
   on PersonDevelopment::Events::JoinedAssessmentCycle do |event|
     @current_cycle_id = event.data[:cycle_id]
     @alignment_started = false
+    @alignment_completed = false
     @self_ratings = {}
     @manager_ratings = {}
   end
@@ -359,10 +384,15 @@ class PersonDevelopment::Aggregate
   on PersonDevelopment::Events::LeftAssessmentCycle do |_event|
     @current_cycle_id = nil
     @alignment_started = false
+    @alignment_completed = false
   end
 
   on PersonDevelopment::Events::AlignmentStarted do |_event|
     @alignment_started = true
+  end
+
+  on PersonDevelopment::Events::FullAlignmentCompleted do |_event|
+    @alignment_completed = true
   end
 
   on PersonDevelopment::Events::SelfRated do |event|

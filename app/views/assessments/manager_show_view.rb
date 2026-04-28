@@ -16,7 +16,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   # @param tenants [Array<Tenant>]
   def initialize(assignment:, assessee:, framework:, matrix_data:, active_category_id: nil,
                  expanded_capability_id: nil, context: :manager, can_align: false,
-                 can_start_alignment: false,
+                 can_start_alignment: false, can_complete_alignment: false,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @assessee = assessee
@@ -27,6 +27,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @context = context
     @can_align = can_align
     @can_start_alignment = can_start_alignment
+    @can_complete_alignment = can_complete_alignment
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -82,6 +83,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
+          mark_complete_button if show_mark_complete?
           alignment_toggle if @can_align
           mobile_scoring_toggle
         end
@@ -137,6 +139,32 @@ class Views::Assessments::ManagerShowView < Views::Base
 
   def alignment_in_progress?
     %w[aligning aligned].include?(@matrix_data[:participant_status])
+  end
+
+  def show_mark_complete?
+    @can_complete_alignment && @context == :alignment
+  end
+
+  def mark_complete_confirm_message
+    "Marking alignment complete will lock all ratings for this cycle, " \
+      "including the agreed values. Continue?"
+  end
+
+  def mark_complete_button
+    form(
+      action: assessment_alignment_completion_path(@assignment),
+      method: "post",
+      data: { turbo_confirm: mark_complete_confirm_message },
+      class: "hidden md:inline-block"
+    ) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      button(
+        type: "submit",
+        class: "text-sm font-medium px-3 py-1.5 rounded-md " \
+               "bg-green-600 dark:bg-green-700 text-white " \
+               "hover:bg-green-700 dark:hover:bg-green-600 cursor-pointer"
+      ) { "Mark alignment complete" }
+    end
   end
 
   def alignment_toggle_query_params(remove_mode:)

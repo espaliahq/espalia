@@ -43,6 +43,7 @@ class AssessmentsController < ApplicationController
     policy = AssessmentPolicy.new(pundit_user, @assignment)
     can_align = policy.align?
     can_start_alignment = policy.start_alignment?
+    can_complete_alignment = policy.complete_alignment?
     if manager_viewing?
       render Views::Assessments::ManagerShowView.new(
         assignment: @assignment,
@@ -54,6 +55,7 @@ class AssessmentsController < ApplicationController
         context: context,
         can_align: can_align,
         can_start_alignment: can_start_alignment,
+        can_complete_alignment: can_complete_alignment,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants

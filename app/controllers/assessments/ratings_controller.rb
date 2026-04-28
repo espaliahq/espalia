@@ -138,7 +138,8 @@ class Assessments::RatingsController < ApplicationController
             assessment_id: @assignment.id,
             context: :self,
             category_id: active_category_id || category_id,
-            frozen: matrix_data[:individual_ratings_frozen]
+            frozen: matrix_data[:individual_ratings_frozen],
+            alignment_locked: matrix_data[:alignment_locked]
           ),
           layout: false
         )

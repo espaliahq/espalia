@@ -24,8 +24,10 @@ class Views::Assessments::AssessmentCell < Views::Base
   # @param category_id [String, nil] active category for tab preservation on rating
   # @param frozen [Boolean] when true and context is :self/:manager, render the
   #   primary frequency as a read-only bar (alignment has been started)
+  # @param alignment_locked [Boolean] when true and context is :alignment, render
+  #   the primary frequency as a read-only bar (alignment has been completed)
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self,
-                 category_id: nil, frozen: false)
+                 category_id: nil, frozen: false, alignment_locked: false)
     @cell_data = cell_data
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
@@ -34,6 +36,7 @@ class Views::Assessments::AssessmentCell < Views::Base
     @context = context
     @category_id = category_id
     @frozen = frozen
+    @alignment_locked = alignment_locked
   end
 
   def view_template
@@ -77,7 +80,7 @@ class Views::Assessments::AssessmentCell < Views::Base
   # manager perspectives are frozen until the cycle ends).
   def primary_selector
     div(id: "rating-#{@capability_stable_id}-#{@ordinal}", class: "mt-2") do
-      if individual_perspective_frozen?
+      if primary_perspective_frozen?
         render Views::Assessments::FrequencyBar.new(
           label: primary_label,
           frequency: primary_frequency
@@ -95,8 +98,12 @@ class Views::Assessments::AssessmentCell < Views::Base
     end
   end
 
-  def individual_perspective_frozen?
-    @frozen && @context != :alignment
+  def primary_perspective_frozen?
+    if @context == :alignment
+      @alignment_locked
+    else
+      @frozen
+    end
   end
 
   def primary_label

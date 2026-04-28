@@ -34,7 +34,8 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::ManagerRatingRevised,
       PersonDevelopment::Events::ManagerRatingCleared,
       PersonDevelopment::Events::AlignmentStarted,
-      PersonDevelopment::Events::AssessmentAligned
+      PersonDevelopment::Events::AssessmentAligned,
+      PersonDevelopment::Events::FullAlignmentCompleted
     ]
   end
 
@@ -62,6 +63,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::ManagerRatingCleared then handle_manager_rating_cleared(event)
     when PersonDevelopment::Events::AlignmentStarted then handle_alignment_started(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
+    when PersonDevelopment::Events::FullAlignmentCompleted then handle_full_alignment_completed(event)
     end
   end
 
@@ -185,6 +187,22 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.aligned_comment = event.data[:comment]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    broadcast_assessment_sync(event)
+  end
+
+  def handle_full_alignment_completed(event)
+    participant = AssessmentCycleParticipant.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    )
+    return unless participant
+
+    now = event.metadata[:timestamp] || Time.current
+    participant.update!(
+      status: "aligned",
+      aligned_at: now,
+      aligned_by_id: event.data[:completed_by_id]
+    )
     broadcast_assessment_sync(event)
   end
 

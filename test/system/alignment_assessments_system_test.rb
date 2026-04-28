@@ -233,6 +233,38 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "manager marks alignment complete" do
+    setup { seed_alignment_started! }
+
+    should "show 'Mark alignment complete' only in alignment mode" do
+      visit assessment_path(@report_assignment)
+      assert_no_button "Mark alignment complete"
+
+      visit assessment_path(@report_assignment, mode: "alignment")
+      assert_button "Mark alignment complete"
+    end
+
+    should "complete alignment, flip the badge to Aligned, and freeze alignment cells" do
+      visit assessment_path(@report_assignment, mode: "alignment")
+      assert_text "Aligning"
+
+      accept_confirm(/lock all ratings for this cycle/) do
+        click_button "Mark alignment complete"
+      end
+
+      assert_text "Aligned"
+      assert_no_button "Mark alignment complete"
+
+      # The alignment cell selectors should now be read-only bars (no buttons).
+      visit assessment_path(@report_assignment, mode: "alignment")
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "matrix"
+      within("#cell-#{@cap_stable}-2") do
+        assert_no_selector "button"
+      end
+    end
+  end
+
   context "responsive behaviour" do
     setup { seed_alignment_started! }
 

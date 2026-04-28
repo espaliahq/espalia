@@ -201,6 +201,14 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     should "deny start_alignment (already started)" do
       assert_not AssessmentPolicy.new(manager_context, @assignment).start_alignment?
     end
+
+    should "allow manager to complete alignment" do
+      assert AssessmentPolicy.new(manager_context, @assignment).complete_alignment?
+    end
+
+    should "deny assessee from completing alignment" do
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).complete_alignment?
+    end
   end
 
   context "with an open cycle in :aligned state" do
@@ -225,6 +233,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
 
     should "deny start_alignment" do
       assert_not AssessmentPolicy.new(manager_context, @assignment).start_alignment?
+    end
+
+    should "deny complete_alignment (already completed)" do
+      assert_not AssessmentPolicy.new(manager_context, @assignment).complete_alignment?
     end
   end
 

@@ -20,9 +20,11 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param category_id [String, nil] active category for tab preservation on rating
   # @param frozen [Boolean] when true and context is :self/:manager, cells render
   #   primary frequency read-only (alignment in progress)
+  # @param alignment_locked [Boolean] when true and context is :alignment, cells render
+  #   primary frequency read-only (alignment completed)
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self,
                  blocked: false, block_reason: nil, contribution: nil, secondary_contributions: [],
-                 expanded: false, category_id: nil, frozen: false)
+                 expanded: false, category_id: nil, frozen: false, alignment_locked: false)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -41,6 +43,7 @@ class Views::Assessments::AssessmentRow < Views::Base
     @expanded = expanded && @has_illustrations
     @category_id = category_id
     @frozen = frozen
+    @alignment_locked = alignment_locked
   end
 
   def view_template
@@ -70,7 +73,8 @@ class Views::Assessments::AssessmentRow < Views::Base
           assessment_id: @assessment_id,
           context: @context,
           category_id: @category_id,
-          frozen: @frozen
+          frozen: @frozen,
+          alignment_locked: @alignment_locked
         )
       end
     end
