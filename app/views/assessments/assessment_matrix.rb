@@ -20,6 +20,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @context = context
     @active_category_id = active_category_id || first_category_id
     @expanded_capability_id = expanded_capability_id
+    @frozen = matrix_data[:individual_ratings_frozen] || false
   end
 
   def view_template
@@ -55,7 +56,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                 assessment_id: @assessment_id,
                 context: @context,
                 expanded_capability_id: @expanded_capability_id,
-                show_header: false
+                show_header: false,
+                frozen: @frozen
               )
             end
           end

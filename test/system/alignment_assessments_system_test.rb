@@ -76,9 +76,8 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
         level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id, comment: "Manager-rated"
       )
 
-      # Open the alignment phase so alignment ratings are accepted by the policy.
-      # PR 2 will replace this server-side seed with a UI button on the manager view.
-      pd_handler.start_alignment(@report.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      # NOTE: alignment is NOT pre-started in setup. Tests that need an
+      # already-aligning state call seed_alignment_started! explicitly.
     end
 
     visit new_user_session_path
@@ -88,18 +87,32 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     assert_current_path root_path
   end
 
-  context "manager enters alignment mode" do
-    should "show Start alignment pill on the manager view" do
+  context "manager starts alignment" do
+    should "show a Start alignment button on the manager view before alignment begins" do
       visit assessment_path(@report_assignment)
       assert_text "Manager Review"
-      assert_link "Start alignment"
+      assert_button "Start alignment"
+      assert_no_link "Continue alignment"
+      assert_no_link "Exit alignment"
     end
 
-    should "switch into Aligning mode and expose alignment frequency selectors" do
+    should "POST to alignment_start when the button is clicked (auto-confirmed) and switch into Aligning" do
       visit assessment_path(@report_assignment)
-      click_with_retry(expect_text: "Aligning") { click_link "Start alignment" }
+      assert_text "Manager Review"
 
+      accept_confirm(/Starting alignment will lock/) do
+        click_button "Start alignment"
+      end
+
+      assert_text "Aligning"
+      assert_link "Exit alignment"
+    end
+
+    should "render alignment frequency selectors once aligning" do
+      seed_alignment_started!
+      visit assessment_path(@report_assignment, mode: "alignment")
       wait_for_stimulus "matrix"
+
       assert_text "Report Alex"
       assert_text "Critical Thinking"
       assert_selector "button", text: "Consistent"
@@ -107,6 +120,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "record an alignment when a frequency is clicked" do
+      seed_alignment_started!
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
       wait_for_stimulus "matrix"
@@ -117,7 +131,6 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
         assert_selector "button.ring-1", text: "Consistent"
       end
 
-      # Verify an AssessmentAligned event landed on the person-development stream
       stream_name = "tenant-#{@tenant.id}/PersonDev-#{@report.id}-#{@framework_id}"
       events = Rails.configuration.event_store.read.stream(stream_name).to_a
       assert events.any? { |e| e.event_type.include?("AssessmentAligned") },
@@ -125,7 +138,60 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "freeze of self/manager ratings during alignment" do
+    setup { seed_alignment_started! }
+
+    should "render manager-side cells as read-only frequency bars (no selector buttons)" do
+      visit assessment_path(@report_assignment)
+      wait_for_stimulus "matrix"
+
+      # The interactive selector buttons should NOT be present in the rating cell.
+      # FrequencyBar renders no <button>, only spans + a colored bar div.
+      within("#rating-#{@cap_stable}-2") do
+        assert_no_selector "button"
+      end
+    end
+
+    should "show 'Continue alignment' link instead of the Start button on the manager view" do
+      visit assessment_path(@report_assignment)
+      assert_text "Aligning"
+      assert_link "Continue alignment"
+      assert_no_button "Start alignment"
+    end
+  end
+
+  context "assessee experience during alignment" do
+    setup do
+      seed_alignment_started!
+
+      Capybara.reset_sessions!
+      visit new_user_session_path
+      fill_in "Email", with: @report_user.email
+      fill_in "Password", with: "password123"
+      click_button "Log in"
+      assert_current_path root_path
+    end
+
+    should "show 'Aligning with manager' badge and a Continue alignment link" do
+      visit assessment_path(@report_assignment)
+      assert_text "Aligning with manager"
+      assert_link "Continue alignment"
+      assert_no_button "Start alignment"
+    end
+
+    should "render self-side cells as read-only frequency bars" do
+      visit assessment_path(@report_assignment)
+      wait_for_stimulus "matrix"
+
+      within("#rating-#{@cap_stable}-2") do
+        assert_no_selector "button"
+      end
+    end
+  end
+
   context "in-frame navigation preserves alignment mode" do
+    setup { seed_alignment_started! }
+
     should "render category tab links carrying mode=alignment" do
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
@@ -154,17 +220,22 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "exiting alignment mode" do
-    should "return to Manager Review after clicking Exit alignment" do
+    setup { seed_alignment_started! }
+
+    should "return to Manager Review after clicking Exit alignment but keep Continue link" do
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
       click_with_retry(expect_text: "Manager Review") { click_link "Exit alignment" }
       assert_no_link "Exit alignment"
-      assert_link "Start alignment"
+      assert_link "Continue alignment"
+      assert_no_button "Start alignment"
     end
   end
 
   context "responsive behaviour" do
+    setup { seed_alignment_started! }
+
     should "render alignment view with Scoring toggle visible on mobile" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@report_assignment, mode: "alignment")
@@ -173,6 +244,19 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Critical Thinking"
       scoring_button = find_button("Scoring")
       assert scoring_button.obscured? == false, "Scoring button is off-screen or obscured in alignment mode"
+    end
+  end
+
+  private
+
+  # Server-side seed: opens alignment for the cycle (sets participant to `aligning`).
+  # Tests that need to start from an in-progress alignment use this; tests that
+  # exercise the start-alignment UI flow do NOT.
+  def seed_alignment_started!
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.start_alignment(
+        @report.id, @framework_id, @cycle_id, started_by_id: @manager.id
+      )
     end
   end
 end

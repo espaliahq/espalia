@@ -18,9 +18,11 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param secondary_contributions [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
   # @param expanded [Boolean] whether this row should be pre-expanded (URL-driven)
   # @param category_id [String, nil] active category for tab preservation on rating
+  # @param frozen [Boolean] when true and context is :self/:manager, cells render
+  #   primary frequency read-only (alignment in progress)
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self,
                  blocked: false, block_reason: nil, contribution: nil, secondary_contributions: [],
-                 expanded: false, category_id: nil)
+                 expanded: false, category_id: nil, frozen: false)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -38,6 +40,7 @@ class Views::Assessments::AssessmentRow < Views::Base
     @has_illustrations = @cells.any? { |_, c| c[:illustration_count]&.positive? }
     @expanded = expanded && @has_illustrations
     @category_id = category_id
+    @frozen = frozen
   end
 
   def view_template
@@ -66,7 +69,8 @@ class Views::Assessments::AssessmentRow < Views::Base
           person_level: @person_level,
           assessment_id: @assessment_id,
           context: @context,
-          category_id: @category_id
+          category_id: @category_id,
+          frozen: @frozen
         )
       end
     end

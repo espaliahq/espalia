@@ -42,11 +42,14 @@ class AssessmentPolicy < ApplicationPolicy
   def align? = (owns_assessment? || manages_assessee?) && current_open_cycle_present?
 
   # Only the assessee's current direct manager can formally start
-  # alignment for a cycle. Requires an open cycle in a pre-alignment state.
+  # alignment for a cycle. Requires the participant to have at least
+  # begun rating (status `started`) — there must be something to align on.
   #
   # @return [Boolean]
   def start_alignment?
-    manages_assessee? && current_open_cycle_participant&.individual_ratings_editable?
+    return false unless manages_assessee?
+
+    current_open_cycle_participant&.status == "started"
   end
 
   private

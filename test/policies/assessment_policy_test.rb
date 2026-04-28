@@ -43,7 +43,7 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not policy.create_manager_rating?
     end
 
-    should "deny start_alignment" do
+    should "deny start_alignment (assessee can never start alignment)" do
       assert_not policy.start_alignment?
     end
   end
@@ -131,6 +131,20 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
   # create_self_rating?, create_manager_rating?, create_alignment_rating?,
   # align?, and start_alignment? all depend on the participant's status
   # in the current open cycle. These contexts cover the lifecycle.
+
+  context "with an open cycle in :enrolled state (no ratings yet)" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
+        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+          person_id: @person.id, status: "enrolled")
+      end
+    end
+
+    should "deny manager start_alignment until at least one rating exists" do
+      assert_not AssessmentPolicy.new(manager_context, @assignment).start_alignment?
+    end
+  end
 
   context "with an open cycle in :started state" do
     setup do

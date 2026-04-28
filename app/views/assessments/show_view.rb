@@ -60,7 +60,11 @@ class Views::Assessments::ShowView < Views::Base
           div(class: "mt-1 flex flex-wrap items-center gap-2") do
             render Components::Kit::Badge.new(@matrix_data[:role].name, variant: :info)
             render Components::Kit::Badge.new(@matrix_data[:level].title, variant: :default)
-            if @assignment.current_open_cycle
+            if @matrix_data[:participant_status] == "aligning"
+              render Components::Kit::Badge.new("Aligning with manager", variant: :warning)
+            elsif @matrix_data[:participant_status] == "aligned"
+              render Components::Kit::Badge.new("Aligned", variant: :success)
+            elsif @assignment.current_open_cycle
               render Components::Kit::Badge.new("In Progress", variant: :warning)
             end
           end
@@ -83,14 +87,18 @@ class Views::Assessments::ShowView < Views::Base
                "dark:border-amber-600 text-amber-800 dark:text-amber-300 " \
                "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50"
       ) { "Exit alignment" }
-    else
+    elsif alignment_in_progress?
       a(
         href: assessment_path(@assignment, alignment_toggle_query_params(remove_mode: false)),
-        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 " \
-               "dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
-               "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-      ) { "Start alignment" }
+        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-amber-300 " \
+               "dark:border-amber-600 text-amber-800 dark:text-amber-300 " \
+               "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+      ) { "Continue alignment" }
     end
+  end
+
+  def alignment_in_progress?
+    %w[aligning aligned].include?(@matrix_data[:participant_status])
   end
 
   def alignment_toggle_query_params(remove_mode:)

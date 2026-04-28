@@ -25,13 +25,18 @@ class Assessments::MatrixDataBuilder
   # @param cycle_id [String, nil] UUID of the assessment cycle whose ratings
   #   should be shown. When nil, the builder returns no ratings (empty matrix).
   # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded
-  def initialize(framework:, role:, level:, person_id:, cycle_id:, categories:)
+  # @param participant_status [String, nil] current cycle participant lifecycle
+  #   status (`enrolled` | `started` | `aligning` | `aligned` | `withdrawn`).
+  #   Used by views to decide read-only vs interactive rendering.
+  def initialize(framework:, role:, level:, person_id:, cycle_id:, categories:,
+                 participant_status: nil)
     @framework = framework
     @role = role
     @level = level
     @person_id = person_id
     @cycle_id = cycle_id
     @categories = categories
+    @participant_status = participant_status
   end
 
   # Builds the assessment matrix data structure.
@@ -65,7 +70,9 @@ class Assessments::MatrixDataBuilder
         PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
       inferred_level: scoring_engine.inferred_level,
       total_cells: count_total_cells(categories),
-      rated_cells: count_rated_cells(categories)
+      rated_cells: count_rated_cells(categories),
+      participant_status: @participant_status,
+      individual_ratings_frozen: %w[aligning aligned].include?(@participant_status)
     }
   end
 

@@ -31,6 +31,11 @@ class Assessments::AlignmentStartsControllerTest < ActionDispatch::IntegrationTe
       cycle_handler.define_cycle(@cycle_id, framework_id, "Q1 2026", "regular", 1, defined_by: @manager.id)
       cycle_handler.enroll(@cycle_id, @report.id, enrolled_by: @manager.id)
 
+      # Seed at least one rating so participant status is `started` —
+      # AssessmentPolicy#start_alignment? requires this.
+      handler.rate_self(@report.id, framework_id, SecureRandom.uuid_v7,
+        level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id)
+
       @report_assignment = PersonFrameworkAssignment.for_person(@report.id).first
     end
   end

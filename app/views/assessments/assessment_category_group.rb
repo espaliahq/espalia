@@ -21,7 +21,7 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param show_header [Boolean] whether to render the sticky category header row
   def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
-                 expanded_capability_id: nil, show_header: true)
+                 expanded_capability_id: nil, show_header: true, frozen: false)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -34,6 +34,7 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
     @context = context
     @expanded_capability_id = expanded_capability_id
     @show_header = show_header
+    @frozen = frozen
   end
 
   def view_template
@@ -76,7 +77,8 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         contribution: contribution,
         secondary_contributions: secondary_capability_contributions(stable_id),
         expanded: stable_id == @expanded_capability_id,
-        category_id: @category.category_id
+        category_id: @category.category_id,
+        frozen: @frozen
       )
     end
   end

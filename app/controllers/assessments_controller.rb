@@ -40,7 +40,9 @@ class AssessmentsController < ApplicationController
     load_assessment_data
     active_category_id = resolve_active_category_id
     context = assessment_context
-    can_align = AssessmentPolicy.new(pundit_user, @assignment).align?
+    policy = AssessmentPolicy.new(pundit_user, @assignment)
+    can_align = policy.align?
+    can_start_alignment = policy.start_alignment?
     if manager_viewing?
       render Views::Assessments::ManagerShowView.new(
         assignment: @assignment,
@@ -51,6 +53,7 @@ class AssessmentsController < ApplicationController
         expanded_capability_id: params[:capability],
         context: context,
         can_align: can_align,
+        can_start_alignment: can_start_alignment,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -148,7 +151,8 @@ class AssessmentsController < ApplicationController
       level: FrameworkState::Level.find_by!(level_id: @assignment.level_id),
       person_id: @assignment.person_id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories
+      categories: categories,
+      participant_status: @assignment.current_open_cycle_participant&.status
     ).build
   end
 

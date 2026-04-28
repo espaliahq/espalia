@@ -88,7 +88,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
       framework: framework, role: role, level: level,
       person_id: @assignment.person_id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories
+      categories: categories,
+      participant_status: @assignment.current_open_cycle_participant&.status
     ).build
 
     category_id = find_category_id(capability_stable_id, matrix_data)
@@ -115,7 +116,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             person_level: matrix_data[:person_level],
             assessment_id: @assignment.id,
             context: :alignment,
-            category_id: active_category_id || category_id
+            category_id: active_category_id || category_id,
+            frozen: matrix_data[:individual_ratings_frozen]
           ),
           layout: false
         )
