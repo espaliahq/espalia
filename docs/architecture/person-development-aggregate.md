@@ -52,7 +52,7 @@ Alignment lifecycle (per cycle):
     ← Manager-only. Flips participant status to `aligning` and FREEZES self/manager
       ratings for the cycle. Aggregate guard rejects rate_self / rate_as_manager /
       revise_* / clear_* once started until leave_cycle.
-  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, comment }
+  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, cycle_id, comment }
     ← Per-cell agreed frequency. Requires alignment to have been started.
       Agreed level is DERIVED (never stored): max(level_ordinal where
       aligned_frequency == "consistent").

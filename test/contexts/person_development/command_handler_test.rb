@@ -195,6 +195,51 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "be idempotent — re-running the seed does not duplicate events on the new cycle" do
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      events_before = Rails.configuration.event_store.read.stream(stream).to_a
+      seed_event_count = events_before.grep(PersonDevelopment::Events::SelfRated)
+        .count { |e| e.data[:source] == "seeded" && e.data[:cycle_id] == @new_cycle_id }
+
+      result = @handler.seed_ratings_from_prior_cycle(
+        @person_id, @framework_id, @new_cycle_id, @prior_cycle_id,
+        seeded_by_id: @manager.id
+      )
+      assert_equal 0, result[:seeded], "expected no new seed events on a re-run"
+
+      events_after = Rails.configuration.event_store.read.stream(stream).to_a
+      reseeded = events_after.grep(PersonDevelopment::Events::SelfRated)
+        .count { |e| e.data[:source] == "seeded" && e.data[:cycle_id] == @new_cycle_id }
+      assert_equal seed_event_count, reseeded, "re-running the seed must not append duplicate seeded SelfRated events"
+    end
+
+    should "refuse to seed from a prior cycle that did not complete alignment" do
+      # Use a separate framework so we don't collide with the open new_cycle_id
+      # on the existing framework (one open cycle per framework constraint).
+      other_framework_id = SecureRandom.uuid_v7
+      partial_cycle_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = create(:assessment_cycle, tenant: @tenant, cycle_id: partial_cycle_id,
+          framework_id: other_framework_id, framework_version: 1)
+        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+          person_id: @person_id, status: "aligning",
+          alignment_started_at: Time.current, alignment_started_by_id: @manager.id)
+        AssessmentLevelRating.create!(tenant: @tenant, cycle_id: partial_cycle_id,
+          person_id: @person_id, framework_id: other_framework_id,
+          capability_stable_id: @cap_stable_id, level_ordinal: 2,
+          aligned_frequency: "consistent", source: "human", migration_status: "not_flagged")
+      end
+
+      target_cycle_id = SecureRandom.uuid_v7
+
+      result = @handler.seed_ratings_from_prior_cycle(
+        @person_id, other_framework_id, target_cycle_id, partial_cycle_id,
+        seeded_by_id: @manager.id
+      )
+      assert_equal 0, result[:seeded]
+      assert_equal [], result[:skipped]
+    end
+
     should "emit a RatingSeedSkipped event for any prior aligned capability missing from the new framework" do
       # The setup seeded one capability successfully. Add a second prior-aligned
       # value whose stable_id does NOT exist in the current framework — the
@@ -213,7 +258,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
           capability_stable_id: orphan_stable_id,
           level_ordinal: 2,
           aligned_frequency: "occasional",
-          source: "human"
+          source: "human",
+          migration_status: "not_flagged"
         )
       end
 
@@ -225,7 +271,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
         seeded_by_id: @manager.id
       )
 
-      assert_operator result[:skipped], :>=, 1, "expected at least one skip"
+      assert_operator result[:skipped].length, :>=, 1, "expected at least one skip"
 
       stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
       events = Rails.configuration.event_store.read.stream(stream).to_a

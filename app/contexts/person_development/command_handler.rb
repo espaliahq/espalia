@@ -87,6 +87,10 @@ class PersonDevelopment::CommandHandler
   # @param frequency [String] "some", "occasional", or "consistent"
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
+  # @param source [String] "human" (default) when entered by the person, or
+  #   "seeded" when carried over from a prior cycle's aligned value at cycle join
+  # @param seeded_from_cycle_id [String, nil] UUID of the originating cycle when
+  #   source == "seeded"; nil otherwise
   def rate_self(person_id, framework_id, capability_stable_id,
                 level_ordinal:, frequency:, cycle_id:, comment: nil,
                 source: "human", seeded_from_cycle_id: nil)
@@ -137,6 +141,10 @@ class PersonDevelopment::CommandHandler
   # @param frequency [String] "some", "occasional", or "consistent"
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
+  # @param source [String] "human" (default) when entered by the manager, or
+  #   "seeded" when carried over from a prior cycle's aligned value at cycle join
+  # @param seeded_from_cycle_id [String, nil] UUID of the originating cycle when
+  #   source == "seeded"; nil otherwise
   def rate_as_manager(person_id, framework_id, capability_stable_id,
                       level_ordinal:, frequency:, cycle_id:, comment: nil,
                       source: "human", seeded_from_cycle_id: nil)
@@ -250,6 +258,19 @@ class PersonDevelopment::CommandHandler
   # @return [Hash] :seeded count, :skipped array of {capability_stable_id, reason}
   def seed_ratings_from_prior_cycle(person_id, framework_id, current_cycle_id, prior_cycle_id,
                                      seeded_by_id:)
+    # Refuse to seed unless the prior cycle actually reached the `aligned`
+    # lifecycle state — i.e. the manager fired FullAlignmentCompleted on it.
+    # A cycle that is still merely `aligning` may have a few aligned cells
+    # from a partial conversation, but those aren't a valid carry-forward
+    # baseline. The participant's `aligned_at` is set only by
+    # FullAlignmentCompleted and survives subsequent cycle closure.
+    prior_completed = AssessmentCycleParticipant
+      .where(cycle_id: prior_cycle_id, person_id: person_id)
+      .where.not(aligned_at: nil)
+      .exists?
+
+    return { seeded: 0, skipped: [], seeded_by_id: seeded_by_id } unless prior_completed
+
     prior_aligned = AssessmentLevelRating
       .for_person(person_id)
       .for_framework(framework_id)
@@ -262,8 +283,18 @@ class PersonDevelopment::CommandHandler
       .pluck(:stable_id)
       .to_set
 
+    # Idempotency: any (cap, level) pair we've already seeded into the new
+    # cycle — by an earlier run, or by a manual rate during enrolment — is
+    # left alone. Re-running the seed is a no-op for those pairs.
+    already_seeded_pairs = AssessmentLevelRating
+      .for_person(person_id)
+      .for_framework(framework_id)
+      .for_cycle(current_cycle_id)
+      .pluck(:capability_stable_id, :level_ordinal)
+      .to_set
+
     seeded = 0
-    skipped = 0
+    skipped = []
 
     # Load the aggregate ONCE, emit all seed + skip events inside a
     # single with_person_development block. Avoids per-event aggregate
@@ -271,6 +302,8 @@ class PersonDevelopment::CommandHandler
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       prior_aligned.each do |rating|
         stable_id = rating.capability_stable_id
+        next if already_seeded_pairs.include?([ stable_id, rating.level_ordinal ])
+
         unless valid_stable_ids.include?(stable_id)
           aggregate.record_seed_skip(stable_id,
             level_ordinal: rating.level_ordinal,
@@ -278,7 +311,12 @@ class PersonDevelopment::CommandHandler
             current_cycle_id: current_cycle_id,
             prior_cycle_id: prior_cycle_id,
             reason: "capability_not_in_current_framework")
-          skipped += 1
+          skipped << {
+            capability_stable_id: stable_id,
+            level_ordinal: rating.level_ordinal,
+            prior_aligned_frequency: rating.aligned_frequency,
+            reason: "capability_not_in_current_framework"
+          }
           next
         end
 

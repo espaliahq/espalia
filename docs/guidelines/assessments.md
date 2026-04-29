@@ -281,7 +281,7 @@ When a rating changes, `assessment_sync_controller` reloads the matrix frame. Wi
 
 Each enrolled `AssessmentCycleParticipant` walks a lifecycle that the views render explicitly:
 
-```
+```text
 enrolled → started → aligning → aligned → withdrawn
 ```
 

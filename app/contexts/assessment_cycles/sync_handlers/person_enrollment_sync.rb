@@ -71,12 +71,14 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
   # the `aligned_at` timestamp. No-op if there is no prior aligned
   # cycle (first enrolment, or alignment never completed).
   def seed_from_prior_cycle(person_id, framework_id, current_cycle_id, enrolled_by)
+    # Use the association join (not a raw SQL join) so ActsAsTenant adds
+    # the assessment_cycles tenant filter — otherwise the lookup could
+    # resolve against another tenant's cycle row.
     prior_cycle_id = AssessmentCycleParticipant
       .where(person_id: person_id)
       .where.not(aligned_at: nil)
       .where.not(cycle_id: current_cycle_id)
-      .joins("INNER JOIN assessment_cycles ON assessment_cycles.cycle_id = " \
-             "assessment_cycle_participants.cycle_id")
+      .joins(:cycle)
       .where(assessment_cycles: { framework_id: framework_id })
       .order(aligned_at: :desc)
       .limit(1)

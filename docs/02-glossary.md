@@ -87,7 +87,7 @@ Manager-only event opening alignment for a cycle. Flips participant status to `a
 Manager-only event marking alignment complete for a cycle. Flips participant status to `aligned` and freezes ALL ratings (including aligned values). Natural snapshot point for RES — long person-development streams will compress here when snapshotting infrastructure ships.
 
 ### Seeded Rating
-A `SelfRated` / `ManagerRated` event with `source: "seeded"` and `seeded_from_cycle_id` set. Emitted automatically when a person enrols in a new cycle for a framework where they had previously completed alignment — both perspectives are pre-populated with the prior cycle's `aligned_frequency`. The participant remains in `enrolled` (seed events don't trigger `started`) until a real human revise lands. Source flips back to `"human"` on first revise.
+A `SelfRated` / `ManagerRated` event with `source: "seeded"` and `seeded_from_cycle_id` set. Emitted automatically when a person enrols in a new cycle for a framework where they had previously completed alignment — both perspectives are pre-populated with the prior cycle's `aligned_frequency`. The participant remains in `enrolled` (seed events don't trigger `started`) until a real human revision lands. Source flips back to `"human"` on first revision.
 
 ### RatingSeedSkipped
 Audit-only event emitted during seed-from-prior-cycle when a prior aligned capability's `stable_id` no longer exists in the new cycle's framework version. No projection writes a read model row today; the future framework-migration UI will replay these to surface a "use this rating" affordance against the migrated equivalent capability.
