@@ -119,7 +119,8 @@ Per-level frequency ratings per capability. One row per `(person, framework, cap
 #   self_rated_frequency, manager_rated_frequency, aligned_frequency,
 #   self_rated_comment, manager_rated_comment, aligned_comment,
 #   last_self_rated_at, last_manager_rated_at, last_aligned_at,
-#   source (human | agent), migration_status, reassessment_reason
+#   source (human | seeded | agent), seeded_from_cycle_id,
+#   migration_status, reassessment_reason
 #
 # Effective frequency fallback: aligned → manager → self → default
 #   default: 1.0 for level_ordinal <= person_level (assume consistent)
