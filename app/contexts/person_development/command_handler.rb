@@ -263,16 +263,22 @@ class PersonDevelopment::CommandHandler
       .to_set
 
     seeded = 0
-    skipped = []
+    skipped = 0
 
-    # Load the aggregate ONCE, emit 2N seed events inside a single
-    # with_person_development block. Avoids 2N aggregate replays.
+    # Load the aggregate ONCE, emit all seed + skip events inside a
+    # single with_person_development block. Avoids per-event aggregate
+    # replays.
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       prior_aligned.each do |rating|
         stable_id = rating.capability_stable_id
         unless valid_stable_ids.include?(stable_id)
-          skipped << { capability_stable_id: stable_id, level_ordinal: rating.level_ordinal,
-                       reason: "capability_not_in_current_framework" }
+          aggregate.record_seed_skip(stable_id,
+            level_ordinal: rating.level_ordinal,
+            prior_aligned_frequency: rating.aligned_frequency,
+            current_cycle_id: current_cycle_id,
+            prior_cycle_id: prior_cycle_id,
+            reason: "capability_not_in_current_framework")
+          skipped += 1
           next
         end
 

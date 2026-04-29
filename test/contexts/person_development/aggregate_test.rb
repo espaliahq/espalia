@@ -521,6 +521,50 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#record_seed_skip" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @aggregate.join_cycle(SecureRandom.uuid_v7, 1)
+    end
+
+    should "apply RatingSeedSkipped event with all audit fields" do
+      cap_sid = SecureRandom.uuid_v7
+      current_cycle_id = SecureRandom.uuid_v7
+      prior_cycle_id = SecureRandom.uuid_v7
+
+      @aggregate.record_seed_skip(cap_sid,
+        level_ordinal: 3,
+        prior_aligned_frequency: "consistent",
+        current_cycle_id: current_cycle_id,
+        prior_cycle_id: prior_cycle_id,
+        reason: "capability_not_in_current_framework")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::RatingSeedSkipped, event
+      assert_equal cap_sid, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal "consistent", event.data[:prior_aligned_frequency]
+      assert_equal current_cycle_id, event.data[:current_cycle_id]
+      assert_equal prior_cycle_id, event.data[:prior_cycle_id]
+      assert_equal "capability_not_in_current_framework", event.data[:reason]
+    end
+
+    should "not mutate aggregate state — alignment can still proceed normally" do
+      cap_sid = SecureRandom.uuid_v7
+      @aggregate.record_seed_skip(cap_sid, level_ordinal: 1,
+        prior_aligned_frequency: "some",
+        current_cycle_id: SecureRandom.uuid_v7,
+        prior_cycle_id: SecureRandom.uuid_v7,
+        reason: "capability_not_in_current_framework")
+
+      # Aggregate should still be in a fresh-cycle state — alignment not started.
+      assert_nothing_raised do
+        @aggregate.start_alignment(@aggregate.instance_variable_get(:@current_cycle_id),
+          started_by_id: SecureRandom.uuid_v7)
+      end
+    end
+  end
+
   context "#complete_alignment" do
     setup do
       @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)

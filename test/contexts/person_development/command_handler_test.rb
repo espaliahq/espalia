@@ -194,5 +194,50 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
         assert_nil participant.started_at
       end
     end
+
+    should "emit a RatingSeedSkipped event for any prior aligned capability missing from the new framework" do
+      # The setup seeded one capability successfully. Add a second prior-aligned
+      # value whose stable_id does NOT exist in the current framework — the
+      # seeder should land a RatingSeedSkipped audit event for it instead.
+      orphan_stable_id = SecureRandom.uuid_v7
+
+      # Inject the orphan rating directly into the prior cycle's projection — the
+      # seeder reads from AssessmentLevelRating, so this is enough to simulate a
+      # capability that existed in the prior framework version but not the new one.
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.create!(
+          tenant: @tenant,
+          cycle_id: @prior_cycle_id,
+          person_id: @person_id,
+          framework_id: @framework_id,
+          capability_stable_id: orphan_stable_id,
+          level_ordinal: 2,
+          aligned_frequency: "occasional",
+          source: "human"
+        )
+      end
+
+      # Re-run the seed against the new cycle. The orphan should be skipped,
+      # the existing one is already seeded so it'd revise — but the stream
+      # check below only looks at the orphan.
+      result = @handler.seed_ratings_from_prior_cycle(
+        @person_id, @framework_id, @new_cycle_id, @prior_cycle_id,
+        seeded_by_id: @manager.id
+      )
+
+      assert_operator result[:skipped], :>=, 1, "expected at least one skip"
+
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      events = Rails.configuration.event_store.read.stream(stream).to_a
+      skip_events = events.grep(PersonDevelopment::Events::RatingSeedSkipped)
+      orphan_skip = skip_events.find { |e| e.data[:capability_stable_id] == orphan_stable_id }
+
+      assert_not_nil orphan_skip, "expected a RatingSeedSkipped event for the orphan capability"
+      assert_equal 2, orphan_skip.data[:level_ordinal]
+      assert_equal "occasional", orphan_skip.data[:prior_aligned_frequency]
+      assert_equal @new_cycle_id, orphan_skip.data[:current_cycle_id]
+      assert_equal @prior_cycle_id, orphan_skip.data[:prior_cycle_id]
+      assert_equal "capability_not_in_current_framework", orphan_skip.data[:reason]
+    end
   end
 end

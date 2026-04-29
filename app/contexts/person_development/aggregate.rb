@@ -322,6 +322,33 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Records that a single capability was skipped during seed-from-prior-cycle
+  # because its stable_id is no longer present in the current framework
+  # version. Audit-only — no aggregate state changes; the event lands on
+  # the person-development stream for later migration tooling to replay.
+  #
+  # Always called from inside seed_ratings_from_prior_cycle (same
+  # with_person_development block as the SelfRated/ManagerRated seed
+  # events) — does not require the cycle to be open or any other state.
+  #
+  # @param capability_stable_id [String] stable UUID of the prior capability
+  # @param level_ordinal [Integer] level the prior aligned value sat at
+  # @param prior_aligned_frequency [String] frequency that would have been seeded
+  # @param current_cycle_id [String] UUID of the cycle being seeded into
+  # @param prior_cycle_id [String] UUID of the cycle the value came from
+  # @param reason [String] machine-friendly reason
+  def record_seed_skip(capability_stable_id, level_ordinal:, prior_aligned_frequency:,
+                       current_cycle_id:, prior_cycle_id:, reason:)
+    apply(PersonDevelopment::Events::RatingSeedSkipped.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      prior_aligned_frequency: prior_aligned_frequency,
+      current_cycle_id: current_cycle_id,
+      prior_cycle_id: prior_cycle_id,
+      reason: reason
+    }))
+  end
+
   # Marks alignment complete for the current cycle.
   #
   # After this lands, all ratings (including aligned values) are frozen for
@@ -399,6 +426,10 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::FullAlignmentCompleted do |_event|
     @alignment_completed = true
+  end
+
+  on PersonDevelopment::Events::RatingSeedSkipped do |_event|
+    # Audit-only — no aggregate state to mutate.
   end
 
   on PersonDevelopment::Events::SelfRated do |event|
