@@ -26,7 +26,7 @@
 class AssessmentLevelRating < ApplicationRecord
   FREQUENCIES = %w[none some occasional consistent].freeze
   MIGRATION_STATUSES = %w[not_flagged flagged resolved].freeze
-  SOURCES = %w[human agent].freeze
+  SOURCES = %w[human agent seeded].freeze
 
   acts_as_tenant :tenant
 
@@ -52,4 +52,6 @@ class AssessmentLevelRating < ApplicationRecord
   scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
   scope :self_rated, -> { where.not(self_rated_frequency: nil) }
   scope :aligned, -> { where.not(aligned_frequency: nil) }
+  scope :seeded, -> { where(source: "seeded") }
+  scope :human_entered, -> { where(source: "human") }
 end

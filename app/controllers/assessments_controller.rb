@@ -39,6 +39,11 @@ class AssessmentsController < ApplicationController
     authorize @assignment
     load_assessment_data
     active_category_id = resolve_active_category_id
+    context = assessment_context
+    policy = AssessmentPolicy.new(pundit_user, @assignment)
+    can_align = policy.align?
+    can_start_alignment = policy.start_alignment?
+    can_complete_alignment = policy.complete_alignment?
     if manager_viewing?
       render Views::Assessments::ManagerShowView.new(
         assignment: @assignment,
@@ -47,6 +52,10 @@ class AssessmentsController < ApplicationController
         matrix_data: @matrix_data,
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
+        context: context,
+        can_align: can_align,
+        can_start_alignment: can_start_alignment,
+        can_complete_alignment: can_complete_alignment,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -58,6 +67,8 @@ class AssessmentsController < ApplicationController
         matrix_data: @matrix_data,
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
+        context: context,
+        can_align: can_align,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -116,11 +127,17 @@ class AssessmentsController < ApplicationController
     @assignment.person_id != current_person.id
   end
 
-  # Returns the assessment context based on the viewer's relationship.
+  # Returns the assessment context based on the viewer's relationship,
+  # honouring the explicit `?mode=alignment` opt-in when the viewer is
+  # permitted to align.
   #
   # @return [Symbol] :self, :manager, or :alignment
   def assessment_context
-    manager_viewing? ? :manager : :self
+    if params[:mode] == "alignment" && AssessmentPolicy.new(pundit_user, @assignment).align?
+      :alignment
+    else
+      manager_viewing? ? :manager : :self
+    end
   end
 
   def load_assessment_data
@@ -136,7 +153,8 @@ class AssessmentsController < ApplicationController
       level: FrameworkState::Level.find_by!(level_id: @assignment.level_id),
       person_id: @assignment.person_id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories
+      categories: categories,
+      participant_status: @assignment.current_open_cycle_participant&.status
     ).build
   end
 

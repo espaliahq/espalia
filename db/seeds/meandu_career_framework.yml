@@ -4103,7 +4103,9 @@ framework:
     - name: 'Technical Expertise: Cloud Architecture & Infrastructure'
       description: Designs, implements, and manages scalable, secure, and cost-effective
         cloud solutions that support continuous innovation and operational efficiency.
-      scope: Software Engineer
+      scope:
+      - Software Engineer
+      - Engineering Manager
       individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
@@ -4165,7 +4167,9 @@ framework:
     - name: 'Technical Expertise: Data & Databases'
       description: Designs, queries, and maintains reliable, performant, and scalable
         data systems across SQL and NoSQL technologies.
-      scope: Software Engineer
+      scope:
+      - Software Engineer
+      - Engineering Manager
       individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
@@ -4222,7 +4226,9 @@ framework:
     - name: 'Technical Expertise: Back-end (Nest JS)'
       description: Designs, builds, and maintains scalable, secure, and maintainable
         back-end systems with deep knowledge of NestJS and adjacent technologies.
-      scope: Software Engineer
+      scope:
+      - Software Engineer
+      - Engineering Manager
       individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
@@ -4291,7 +4297,9 @@ framework:
       description: Builds performant, accessible, and responsive interfaces using
         React, Next.js, and Tailwind or equivalent Connect stack. Drives modern front-end
         standards and scalable architecture.
-      scope: Software Engineer
+      scope:
+      - Software Engineer
+      - Engineering Manager
       individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
@@ -4374,7 +4382,9 @@ framework:
       description: Designs components and systems that are scalable, maintainable,
         cost-effective, and aligned with long-term product direction, engineering
         principles, and technical vision.
-      scope: Software Engineer
+      scope:
+      - Software Engineer
+      - Engineering Manager
       sheet: Software Engineering
       expectations:
       - level: 1
@@ -4433,7 +4443,9 @@ framework:
       description: Writes clean, testable code and builds in ways that reduce risk
         and improve reliability. Aligns to our testing pyramid and contributes to
         knowledge quality through clear documentation and communicable code.
-      scope: Software Engineer
+      scope:
+      - Software Engineer
+      - Engineering Manager
       sheet: Software Engineering
       expectations:
       - level: 1
@@ -4495,7 +4507,9 @@ framework:
     - name: DevSecOps (Development, Security & Operations) Mindset
       description: Takes ownership of the operational health and security of the systems
         they build. Supports delivery through tooling, observability, and automation.
-      scope: Software Engineer
+      scope:
+      - Software Engineer
+      - Engineering Manager
       sheet: Software Engineering
       expectations:
       - level: 1

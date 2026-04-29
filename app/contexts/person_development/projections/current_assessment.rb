@@ -33,7 +33,9 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::ManagerRated,
       PersonDevelopment::Events::ManagerRatingRevised,
       PersonDevelopment::Events::ManagerRatingCleared,
-      PersonDevelopment::Events::AssessmentAligned
+      PersonDevelopment::Events::AlignmentStarted,
+      PersonDevelopment::Events::AssessmentAligned,
+      PersonDevelopment::Events::FullAlignmentCompleted
     ]
   end
 
@@ -59,7 +61,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::ManagerRated then handle_manager_rated(event)
     when PersonDevelopment::Events::ManagerRatingRevised then handle_manager_rating_revised(event)
     when PersonDevelopment::Events::ManagerRatingCleared then handle_manager_rating_cleared(event)
+    when PersonDevelopment::Events::AlignmentStarted then handle_alignment_started(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
+    when PersonDevelopment::Events::FullAlignmentCompleted then handle_full_alignment_completed(event)
     end
   end
 
@@ -109,8 +113,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
+    apply_source(rating, event)
     rating.save!
-    touch_participant_started(event)
+    touch_participant_started(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -119,6 +124,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
+    rating.source = "human"
     rating.save!
     touch_participant_started(event)
     broadcast_assessment_sync(event)
@@ -137,8 +143,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    apply_source(rating, event)
     rating.save!
-    touch_participant_started(event)
+    touch_participant_started(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -147,6 +154,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    rating.source = "human"
     rating.save!
     touch_participant_started(event)
     broadcast_assessment_sync(event)
@@ -160,14 +168,70 @@ class PersonDevelopment::Projections::CurrentAssessment
     broadcast_assessment_sync(event)
   end
 
+  def handle_alignment_started(event)
+    participant = AssessmentCycleParticipant.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    )
+    return unless participant
+
+    now = event.metadata[:timestamp] || Time.current
+    participant.update!(
+      status: "aligning",
+      alignment_started_at: now,
+      alignment_started_by_id: event.data[:started_by_id],
+      started_at: participant.started_at || now
+    )
+    broadcast_assessment_sync(event)
+  end
+
   def handle_assessment_aligned(event)
     rating = find_or_init_rating(event)
     rating.aligned_frequency = event.data[:aligned_frequency]
     rating.aligned_comment = event.data[:comment]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
     rating.save!
-    mark_participant_aligned(event)
     broadcast_assessment_sync(event)
+  end
+
+  def handle_full_alignment_completed(event)
+    participant = AssessmentCycleParticipant.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    )
+    return unless participant
+
+    now = event.metadata[:timestamp] || Time.current
+    participant.update!(
+      status: "aligned",
+      aligned_at: now,
+      aligned_by_id: event.data[:completed_by_id]
+    )
+    broadcast_assessment_sync(event)
+  end
+
+  # Whether the rating event was emitted as part of a seeding flow.
+  #
+  # @param event [RubyEventStore::Event]
+  # @return [Boolean]
+  def seeded_event?(event)
+    event.data[:source] == "seeded"
+  end
+
+  # Sets the rating's source attribution.
+  # New seeded rating → source: "seeded", seeded_from_cycle_id stamped.
+  # Human entry on a previously-seeded row → source flips to "human".
+  # Default: "human" (unchanged for legacy rows).
+  #
+  # @param rating [AssessmentLevelRating]
+  # @param event [RubyEventStore::Event]
+  def apply_source(rating, event)
+    if seeded_event?(event)
+      rating.source = "seeded" if rating.new_record? || rating.source != "human"
+      rating.seeded_from_cycle_id ||= event.data[:seeded_from_cycle_id]
+    else
+      rating.source = "human"
+    end
   end
 
   # Finds or initialises an AssessmentLevelRating for the (cycle, person,
@@ -212,24 +276,6 @@ class PersonDevelopment::Projections::CurrentAssessment
       started_at: now,
       status: "started",
       updated_at: now
-    )
-  end
-
-  # Marks the participant as aligned.
-  #
-  # @param event [RubyEventStore::Event]
-  def mark_participant_aligned(event)
-    participant = AssessmentCycleParticipant.find_by(
-      cycle_id: event.data[:cycle_id],
-      person_id: event.metadata[:person_id]
-    )
-    return unless participant
-
-    now = event.metadata[:timestamp] || Time.current
-    participant.update!(
-      status: "aligned",
-      aligned_at: now,
-      started_at: participant.started_at || now
     )
   end
 

@@ -28,6 +28,9 @@ Rails.application.routes.draw do
     end
     resources :ratings, only: [ :create ], controller: "assessments/ratings"
     resources :manager_ratings, only: [ :create ], controller: "assessments/manager_ratings"
+    resources :alignment_ratings, only: [ :create ], controller: "assessments/alignment_ratings"
+    resource :alignment_start, only: [ :create ], controller: "assessments/alignment_starts"
+    resource :alignment_completion, only: [ :create ], controller: "assessments/alignment_completions"
   end
 
   resources :frameworks, only: [ :index, :show ] do

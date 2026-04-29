@@ -277,16 +277,52 @@ When a rating changes, `assessment_sync_controller` reloads the matrix frame. Wi
 
 `build_perspective_scoring` returns `nil` (not an empty hash) when no ratings exist for a perspective. `ScoringPanel` checks this via `using_fallback?` and falls back to effective scoring, showing a "No ratings yet" badge. Returning an empty hash would display misleading zero scores.
 
+## Lifecycle
+
+Each enrolled `AssessmentCycleParticipant` walks a lifecycle that the views render explicitly:
+
+```text
+enrolled → started → aligning → aligned → withdrawn
+```
+
+| Status | Trigger | What's editable |
+|---|---|---|
+| `enrolled` | `PersonEnrolled` lands; participant created | Self + manager ratings |
+| `started` | First `SelfRated` / `ManagerRated` event with `source: "human"` | Self + manager ratings |
+| `aligning` | Manager fires `AlignmentStarted` (manager-only command) | Aligned values only — self + manager are FROZEN |
+| `aligned` | Manager fires `FullAlignmentCompleted` (manager-only) | Nothing — all ratings, including aligned values, are frozen |
+| `withdrawn` | Person unenrolled or cycle closed | Nothing |
+
+**Threading the status to the views.** `MatrixDataBuilder` reads `participant_status` (controller derives via `assignment.current_open_cycle_participant&.status`) and produces two boolean flags on the matrix data hash:
+- `individual_ratings_frozen` — true for `aligning` / `aligned`. Threaded into `AssessmentRow` and `AssessmentCell` as `frozen:`. When the cell context is `:self` or `:manager`, the primary `FrequencySelector` is replaced with a read-only `FrequencyBar`.
+- `alignment_locked` — true only for `aligned`. Threaded in as `alignment_locked:`. When the cell context is `:alignment`, the alignment selector also becomes a read-only bar.
+
+Both flags also flow through the rating controllers' Turbo Stream `respond_with_turbo_stream` paths so post-event re-renders pick the correct read-only / interactive shape.
+
+**Header pills.**
+- Manager view, status `started`: a "Start alignment" `<form>` with `data-turbo-confirm` warning that self + manager ratings will lock. Hidden on mobile (`hidden md:inline-block`) — the action is significant enough to warrant desktop confirmation; mobile pages still allow alignment after a manager opens it elsewhere.
+- Manager view, status `aligning` / `aligned`: a "Continue alignment" link to `?mode=alignment`.
+- Manager view in `:alignment` context with status `aligning`: an extra green "Mark alignment complete" button (also `data-turbo-confirm`).
+- Self view, status `aligning`: an "Aligning with manager" warning badge in the second badge row (no edit pill).
+- Self view, status `aligned`: an "Aligned" success badge (no edit pill).
+
+**`AlignmentStartsController` / `AlignmentCompletionsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment, mode: "alignment")` (start) or `assessment_path(@assignment)` (complete). Both rescue `RuntimeError` from the aggregate to surface a generic flash alert (the underlying message is logged via `Rails.logger.error` only).
+
+**Cross-cycle seeding.** When a person enrols in a new cycle for a framework where they previously completed alignment, both their self and manager ratings are pre-populated from the prior cycle's `aligned_frequency`. The seeded events carry `source: "seeded"` (vs the default `"human"`) and `seeded_from_cycle_id`. The participant stays in `enrolled` until the user makes their first real edit — seeded events alone do not trigger `started`, and the projection's `apply_source` flips the row's source back to `"human"` on any user revise. See `PR 4` of the assessment-lifecycle plan for full details.
+
 ## Future Extension Points
 
-### Alignment Conversation UI
-The `:alignment` context is plumbed through views and scoring but has no controller or route yet. Would need an `alignment_ratings_controller.rb` with `align_assessment` command dispatch, plus UI for conversation notes and full-alignment completion.
+### Framework version migration UI for skipped seed values
+`RatingSeedSkipped` events are already emitted on the person-development stream when a prior aligned capability's `stable_id` no longer exists in the new cycle's framework — but no read model or UI surface consumes them yet. Once framework-version migration mappings ship, the migration UI should replay these events and surface a "use this rating against `<migrated equivalent>`" affordance.
 
 ### Evidence Collection
 Events are defined (`EvidenceRecorded`, `EvidenceRelinked`, `EvidenceWithdrawn`) but no UI exists. Cell expansion would show an evidence attachment UI, letting users link evidence to a specific capability × level intersection.
 
 ### Growth Plans
 Events are defined (`GrowthGoalSet`, `FocusAreaAdded`, `CheckInRecorded`) but no UI or read model projection exists yet.
+
+### Notifications and Snapshots
+Both are listed in the architecture docs as cross-cutting concerns. Neither has any infrastructure today; PR 3 of the lifecycle plan specifically deferred snapshot subscription on `FullAlignmentCompleted` until a `PersonDevelopment::Snapshotting` async handler exists.
 
 ## File Reference
 
@@ -313,9 +349,12 @@ Events are defined (`GrowthGoalSet`, `FocusAreaAdded`, `CheckInRecorded`) but no
 | `app/views/assessments/contribution_label.rb` | Capability contribution indicator |
 | `app/views/assessments/rating_error.rb` | Rating error flash |
 | **Controllers** | |
-| `app/controllers/assessments_controller.rb` | show/index/matrix/scoring with self/manager context routing |
+| `app/controllers/assessments_controller.rb` | show/index/matrix/scoring with self/manager/alignment context routing |
 | `app/controllers/assessments/ratings_controller.rb` | Self-rating POST (rate_self, revise, clear) |
 | `app/controllers/assessments/manager_ratings_controller.rb` | Manager-rating POST (rate_as_manager, revise, clear) |
+| `app/controllers/assessments/alignment_ratings_controller.rb` | Per-cell alignment POST (align_assessment) |
+| `app/controllers/assessments/alignment_starts_controller.rb` | Manager-only POST that fires `AlignmentStarted` and locks individual ratings |
+| `app/controllers/assessments/alignment_completions_controller.rb` | Manager-only POST that fires `FullAlignmentCompleted` and locks all ratings |
 | **Data** | |
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder with ratings + 4-perspective scoring |
 | `app/read_models/assessment_level_rating.rb` | Three-frequency read model (self/manager/aligned) |

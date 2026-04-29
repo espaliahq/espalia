@@ -81,6 +81,8 @@ class Views::Assessments::FrequencySelector < Views::Base
     case @context
     when :manager
       assessment_manager_ratings_path(@assessment_id)
+    when :alignment
+      assessment_alignment_ratings_path(@assessment_id)
     else
       assessment_ratings_path(@assessment_id)
     end

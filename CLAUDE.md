@@ -297,9 +297,10 @@ test/
 
 ## Behaviours and practices
 
-* Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
-* Always update relevant documentation if functionality diverges from what is documented.
-* When tracking PR ci, always investigate any code review suggestions. Any fixes, in individual commits towards the PR. 
+- Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
+- Always update relevant documentation if functionality diverges from what is documented.
+- `/coderabbit:review --base main` - Use CodeRabbit to review the change code vs main branch before commit
+- When tracking PR CI, always investigate code review suggestions and commit each fix as a separate commit in the PR.
 
 ## Learnings
 

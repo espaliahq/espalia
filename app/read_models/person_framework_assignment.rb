@@ -53,4 +53,16 @@ class PersonFrameworkAssignment < ApplicationRecord
       .where.not(assessment_cycle_participants: { status: "withdrawn" })
       .first
   end
+
+  # The participant row for this person on the current open cycle.
+  # Carries lifecycle status (enrolled/started/aligning/aligned), used by
+  # {AssessmentPolicy} to gate rating commands.
+  #
+  # @return [AssessmentCycleParticipant, nil]
+  def current_open_cycle_participant
+    cycle = current_open_cycle
+    return nil unless cycle
+
+    AssessmentCycleParticipant.find_by(cycle_id: cycle.cycle_id, person_id: person_id)
+  end
 end

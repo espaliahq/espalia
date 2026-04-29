@@ -56,11 +56,40 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
   end
 
   def handle_person_enrolled(event)
-    command_handler.join_cycle(
-      event.data[:person_id],
-      event.data[:framework_id],
-      event.data[:cycle_id],
-      event.data[:framework_version]
+    person_id = event.data[:person_id]
+    framework_id = event.data[:framework_id]
+    cycle_id = event.data[:cycle_id]
+
+    command_handler.join_cycle(person_id, framework_id, cycle_id, event.data[:framework_version])
+    seed_from_prior_cycle(person_id, framework_id, cycle_id, event.data[:enrolled_by])
+  end
+
+  # Seeds the new cycle's ratings from the most recent prior cycle for
+  # this (person, framework) that ever reached `aligned`. We look at
+  # `aligned_at IS NOT NULL` rather than current status because cycle
+  # closure flips participant status to `withdrawn` while preserving
+  # the `aligned_at` timestamp. No-op if there is no prior aligned
+  # cycle (first enrolment, or alignment never completed).
+  def seed_from_prior_cycle(person_id, framework_id, current_cycle_id, enrolled_by)
+    # Use the association join (not a raw SQL join) so ActsAsTenant adds
+    # the assessment_cycles tenant filter — otherwise the lookup could
+    # resolve against another tenant's cycle row.
+    prior_cycle_id = AssessmentCycleParticipant
+      .where(person_id: person_id)
+      .where.not(aligned_at: nil)
+      .where.not(cycle_id: current_cycle_id)
+      .joins(:cycle)
+      .where(assessment_cycles: { framework_id: framework_id })
+      .order(aligned_at: :desc)
+      .limit(1)
+      .pluck(:cycle_id)
+      .first
+
+    return unless prior_cycle_id
+
+    command_handler.seed_ratings_from_prior_cycle(
+      person_id, framework_id, current_cycle_id, prior_cycle_id,
+      seeded_by_id: enrolled_by
     )
   end
 

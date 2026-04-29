@@ -29,6 +29,13 @@ FactoryBot.define do
       started_at { Time.current }
     end
 
+    trait :aligning do
+      status { "aligning" }
+      started_at { 1.day.ago }
+      alignment_started_at { Time.current }
+      alignment_started_by_id { SecureRandom.uuid_v7 }
+    end
+
     trait :aligned do
       status { "aligned" }
       started_at { Time.current }

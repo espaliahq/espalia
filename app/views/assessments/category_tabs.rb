@@ -54,7 +54,7 @@ class Views::Assessments::CategoryTabs < Views::Base
     progress = tab_progress(cat_data)
 
     a(
-      href: matrix_assessment_path(@assessment_id, category: cat_id),
+      href: matrix_assessment_path(@assessment_id, matrix_link_params(cat_id)),
       data: { turbo_frame: "assessment-matrix" },
       class: tab_classes(active),
       aria_current: (active ? "page" : nil)
@@ -162,6 +162,12 @@ class Views::Assessments::CategoryTabs < Views::Base
     return false unless a && b
 
     (a > 0 && b < 0) || (a < 0 && b > 0)
+  end
+
+  def matrix_link_params(cat_id)
+    params = { category: cat_id }
+    params[:mode] = "alignment" if @context == :alignment
+    params
   end
 
   def tab_classes(active)

@@ -28,6 +28,8 @@ class PersonDevelopment::Aggregate
     @level_id = nil
     @assigned = false
     @current_cycle_id = nil
+    @alignment_started = false
+    @alignment_completed = false
     @self_ratings = {}   # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
   end
@@ -136,8 +138,10 @@ class PersonDevelopment::Aggregate
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
-  def rate_self(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
+  def rate_self(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
+                source: "human", seeded_from_cycle_id: nil)
     ensure_in_cycle!(cycle_id)
+    ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
     apply(PersonDevelopment::Events::SelfRated.new(data: {
@@ -145,7 +149,9 @@ class PersonDevelopment::Aggregate
       level_ordinal: level_ordinal,
       frequency: frequency,
       cycle_id: cycle_id,
-      comment: comment
+      comment: comment,
+      source: source,
+      seeded_from_cycle_id: seeded_from_cycle_id
     }))
   end
 
@@ -160,6 +166,7 @@ class PersonDevelopment::Aggregate
   # @raise [RuntimeError] if no prior self-rating for this capability at this level
   def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
     ensure_in_cycle!(cycle_id)
+    ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
     raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @self_ratings.key?([ capability_stable_id, level_ordinal ])
@@ -182,6 +189,7 @@ class PersonDevelopment::Aggregate
   # @raise [RuntimeError] if no prior self-rating for this capability at this level
   def clear_self_rating(capability_stable_id, level_ordinal:, cycle_id:)
     ensure_in_cycle!(cycle_id)
+    ensure_individual_ratings_unfrozen!
     raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @self_ratings.key?([ capability_stable_id, level_ordinal ])
 
@@ -202,8 +210,10 @@ class PersonDevelopment::Aggregate
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
-  def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
+  def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
+                      source: "human", seeded_from_cycle_id: nil)
     ensure_in_cycle!(cycle_id)
+    ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
     apply(PersonDevelopment::Events::ManagerRated.new(data: {
@@ -211,7 +221,9 @@ class PersonDevelopment::Aggregate
       level_ordinal: level_ordinal,
       frequency: frequency,
       cycle_id: cycle_id,
-      comment: comment
+      comment: comment,
+      source: source,
+      seeded_from_cycle_id: seeded_from_cycle_id
     }))
   end
 
@@ -226,6 +238,7 @@ class PersonDevelopment::Aggregate
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
   def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
     ensure_in_cycle!(cycle_id)
+    ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
@@ -248,6 +261,7 @@ class PersonDevelopment::Aggregate
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
   def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:)
     ensure_in_cycle!(cycle_id)
+    ensure_individual_ratings_unfrozen!
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
 
@@ -260,10 +274,31 @@ class PersonDevelopment::Aggregate
 
   # ── Alignment ──
 
+  # Formally opens alignment for the current cycle.
+  #
+  # Once started, individual self/manager ratings are frozen — the
+  # assessment becomes a shared conversation about agreed values.
+  # Issued by the assessee's current direct manager (enforced by the
+  # controller-side policy, not the aggregate).
+  #
+  # @param cycle_id [String] UUID of the cycle alignment is starting on
+  # @param started_by_id [String] UUID of the person who started alignment
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, or already started
+  def start_alignment(cycle_id, started_by_id:)
+    ensure_in_cycle!(cycle_id)
+    raise "Alignment already started for this cycle" if @alignment_started
+
+    apply(PersonDevelopment::Events::AlignmentStarted.new(data: {
+      cycle_id: cycle_id,
+      started_by_id: started_by_id
+    }))
+  end
+
   # Records an agreed assessment for a capability at a specific level.
   #
-  # The aligned_frequency is the authoritative view used in scoring.
-  # Agreed level is derived as the highest level_ordinal where
+  # Requires alignment to have been formally started for the cycle. The
+  # aligned_frequency is the authoritative view used in scoring. Agreed
+  # level is derived as the highest level_ordinal where
   # aligned_frequency == "consistent".
   #
   # @param capability_stable_id [String] stable UUID of the capability
@@ -271,9 +306,11 @@ class PersonDevelopment::Aggregate
   # @param aligned_frequency [String] agreed frequency
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param comment [String, nil] optional comment
-  # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or invalid frequency
   def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, cycle_id:, comment: nil)
     ensure_in_cycle!(cycle_id)
+    raise "Alignment has not been started for this cycle" unless @alignment_started
+    raise "Alignment has been completed for this cycle" if @alignment_completed
     raise "Invalid frequency: #{aligned_frequency}" unless FREQUENCIES.include?(aligned_frequency)
 
     apply(PersonDevelopment::Events::AssessmentAligned.new(data: {
@@ -282,6 +319,55 @@ class PersonDevelopment::Aggregate
       aligned_frequency: aligned_frequency,
       cycle_id: cycle_id,
       comment: comment
+    }))
+  end
+
+  # Records that a single capability was skipped during seed-from-prior-cycle
+  # because its stable_id is no longer present in the current framework
+  # version. Audit-only — no aggregate state changes; the event lands on
+  # the person-development stream for later migration tooling to replay.
+  #
+  # Always called from inside seed_ratings_from_prior_cycle (same
+  # with_person_development block as the SelfRated/ManagerRated seed
+  # events) — does not require the cycle to be open or any other state.
+  #
+  # @param capability_stable_id [String] stable UUID of the prior capability
+  # @param level_ordinal [Integer] level the prior aligned value sat at
+  # @param prior_aligned_frequency [String] frequency that would have been seeded
+  # @param current_cycle_id [String] UUID of the cycle being seeded into
+  # @param prior_cycle_id [String] UUID of the cycle the value came from
+  # @param reason [String] machine-friendly reason
+  def record_seed_skip(capability_stable_id, level_ordinal:, prior_aligned_frequency:,
+                       current_cycle_id:, prior_cycle_id:, reason:)
+    apply(PersonDevelopment::Events::RatingSeedSkipped.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      prior_aligned_frequency: prior_aligned_frequency,
+      current_cycle_id: current_cycle_id,
+      prior_cycle_id: prior_cycle_id,
+      reason: reason
+    }))
+  end
+
+  # Marks alignment complete for the current cycle.
+  #
+  # After this lands, all ratings (including aligned values) are frozen for
+  # the cycle. Issued by the assessee's current direct manager (enforced by
+  # the controller-side {AssessmentPolicy#complete_alignment?}).
+  #
+  # Snapshot point — long streams compress here.
+  #
+  # @param cycle_id [String] UUID of the cycle being completed
+  # @param completed_by_id [String] UUID of the person completing alignment
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or already completed
+  def complete_alignment(cycle_id, completed_by_id:)
+    ensure_in_cycle!(cycle_id)
+    raise "Alignment has not been started for this cycle" unless @alignment_started
+    raise "Alignment already completed for this cycle" if @alignment_completed
+
+    apply(PersonDevelopment::Events::FullAlignmentCompleted.new(data: {
+      cycle_id: cycle_id,
+      completed_by_id: completed_by_id
     }))
   end
 
@@ -295,6 +381,10 @@ class PersonDevelopment::Aggregate
     ensure_assigned!
     raise "Not currently in an assessment cycle" if @current_cycle_id.nil?
     raise "Cycle ID does not match current cycle" unless @current_cycle_id == expected_cycle_id
+  end
+
+  def ensure_individual_ratings_unfrozen!
+    raise "Self and manager ratings are frozen during alignment" if @alignment_started
   end
 
   # ── Event handlers ──
@@ -318,12 +408,28 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::JoinedAssessmentCycle do |event|
     @current_cycle_id = event.data[:cycle_id]
+    @alignment_started = false
+    @alignment_completed = false
     @self_ratings = {}
     @manager_ratings = {}
   end
 
   on PersonDevelopment::Events::LeftAssessmentCycle do |_event|
     @current_cycle_id = nil
+    @alignment_started = false
+    @alignment_completed = false
+  end
+
+  on PersonDevelopment::Events::AlignmentStarted do |_event|
+    @alignment_started = true
+  end
+
+  on PersonDevelopment::Events::FullAlignmentCompleted do |_event|
+    @alignment_completed = true
+  end
+
+  on PersonDevelopment::Events::RatingSeedSkipped do |_event|
+    # Audit-only — no aggregate state to mutate.
   end
 
   on PersonDevelopment::Events::SelfRated do |event|

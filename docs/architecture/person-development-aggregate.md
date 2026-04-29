@@ -30,26 +30,45 @@ Assessment cycle:
   AssessmentCycleCompleted { cycle_id }
 
 Self-assessment:
-  SelfRated { capability_stable_id, level_ordinal, frequency, comment }
+  SelfRated { capability_stable_id, level_ordinal, frequency, comment, source, seeded_from_cycle_id }
     frequency: "some" (0.25×) | "occasional" (0.5×) | "consistent" (1.0×)
+    source: "human" (default, person entered it) | "seeded" (carried from prior cycle's
+            aligned value at cycle join) | "agent" (reserved for future AI-generated ratings)
+    seeded_from_cycle_id: UUID of the originating cycle when source == "seeded".
   SelfRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale }
+    ← Always flips the row's source back to "human" — any user revise is a real edit.
   SelfRatingCleared { capability_stable_id, level_ordinal }
     → Removes a self-rating (untoggle). Projection nils the frequency on the read model.
       Scoring falls back to the default for that cell.
 
 Manager assessment:
-  ManagerRated { capability_stable_id, level_ordinal, frequency, comment }
+  ManagerRated { capability_stable_id, level_ordinal, frequency, comment, source, seeded_from_cycle_id }
+    Same source / seeded_from_cycle_id semantics as SelfRated.
   ManagerRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale }
+    ← Like SelfRatingRevised, always flips the row's source back to "human".
 
-Alignment:
-  AlignmentConversationStarted { cycle_id, mode, started_by }
-    mode: async | live | record_only
-  AlignmentCommentAdded { capability_stable_id, author_id, content }
-  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, comment }
-    ← Agreed frequency at a specific level. Agreed level is DERIVED (never stored):
-      max(level_ordinal where aligned_frequency == "consistent").
-  FullAlignmentCompleted { cycle_id, summary_notes }
-    ← SNAPSHOT POINT. All capabilities aligned for this cycle.
+Alignment lifecycle (per cycle):
+  AlignmentStarted { cycle_id, started_by_id }
+    ← Manager-only. Flips participant status to `aligning` and FREEZES self/manager
+      ratings for the cycle. Aggregate guard rejects rate_self / rate_as_manager /
+      revise_* / clear_* once started until leave_cycle.
+  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, cycle_id, comment }
+    ← Per-cell agreed frequency. Requires alignment to have been started.
+      Agreed level is DERIVED (never stored): max(level_ordinal where
+      aligned_frequency == "consistent").
+  FullAlignmentCompleted { cycle_id, completed_by_id }
+    ← Manager-only. Flips participant status to `aligned` and freezes ALL
+      ratings (including aligned values). SNAPSHOT POINT — long streams will
+      compress here when snapshotting infrastructure ships.
+
+Cross-cycle seeding:
+  RatingSeedSkipped { capability_stable_id, level_ordinal, prior_aligned_frequency,
+                      current_cycle_id, prior_cycle_id, reason }
+    ← Audit-only. Emitted during seed-from-prior-cycle when a prior aligned
+      capability's stable_id no longer exists in the new cycle's framework
+      version. No projection writes a read model row today; the future
+      framework-migration UI will replay these to surface a "use this rating"
+      affordance against the migrated equivalent capability.
 
 Growth plan:
   GrowthGoalSet { goal, goal_type, target_date, set_by }
@@ -100,7 +119,8 @@ Per-level frequency ratings per capability. One row per `(person, framework, cap
 #   self_rated_frequency, manager_rated_frequency, aligned_frequency,
 #   self_rated_comment, manager_rated_comment, aligned_comment,
 #   last_self_rated_at, last_manager_rated_at, last_aligned_at,
-#   source (human | agent), migration_status, reassessment_reason
+#   source (human | seeded | agent), seeded_from_cycle_id,
+#   migration_status, reassessment_reason
 #
 # Effective frequency fallback: aligned → manager → self → default
 #   default: 1.0 for level_ordinal <= person_level (assume consistent)

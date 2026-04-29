@@ -11,7 +11,8 @@
 # {PersonDevelopment::Projections::CurrentAssessment}.
 #
 class AssessmentCycleParticipant < ApplicationRecord
-  STATUSES = %w[enrolled started self_complete manager_complete aligned withdrawn].freeze
+  STATUSES = %w[enrolled started self_complete manager_complete aligning aligned withdrawn].freeze
+  INDIVIDUAL_RATING_STATUSES = %w[enrolled started].freeze
 
   # Pundit policy lookup: reuse the AssessmentCyclePolicy
   def self.policy_class
@@ -34,4 +35,20 @@ class AssessmentCycleParticipant < ApplicationRecord
   scope :for_person, ->(person_id) { where(person_id: person_id) }
   scope :active, -> { where.not(status: "withdrawn") }
   scope :withdrawn, -> { where(status: "withdrawn") }
+
+  # Whether self/manager ratings can still be edited.
+  # False once alignment has been started for the cycle.
+  #
+  # @return [Boolean]
+  def individual_ratings_editable?
+    INDIVIDUAL_RATING_STATUSES.include?(status)
+  end
+
+  # Whether alignment ratings can be recorded for this participant.
+  # True only while the cycle is in the `aligning` status.
+  #
+  # @return [Boolean]
+  def alignment_in_progress?
+    status == "aligning"
+  end
 end

@@ -87,10 +87,17 @@ class PersonDevelopment::CommandHandler
   # @param frequency [String] "some", "occasional", or "consistent"
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
-  def rate_self(person_id, framework_id, capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil)
+  # @param source [String] "human" (default) when entered by the person, or
+  #   "seeded" when carried over from a prior cycle's aligned value at cycle join
+  # @param seeded_from_cycle_id [String, nil] UUID of the originating cycle when
+  #   source == "seeded"; nil otherwise
+  def rate_self(person_id, framework_id, capability_stable_id,
+                level_ordinal:, frequency:, cycle_id:, comment: nil,
+                source: "human", seeded_from_cycle_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.rate_self(capability_stable_id, level_ordinal: level_ordinal,
-        frequency: frequency, cycle_id: cycle_id, comment: comment)
+        frequency: frequency, cycle_id: cycle_id, comment: comment,
+        source: source, seeded_from_cycle_id: seeded_from_cycle_id)
     end
   end
 
@@ -134,11 +141,17 @@ class PersonDevelopment::CommandHandler
   # @param frequency [String] "some", "occasional", or "consistent"
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
+  # @param source [String] "human" (default) when entered by the manager, or
+  #   "seeded" when carried over from a prior cycle's aligned value at cycle join
+  # @param seeded_from_cycle_id [String, nil] UUID of the originating cycle when
+  #   source == "seeded"; nil otherwise
   def rate_as_manager(person_id, framework_id, capability_stable_id,
-                      level_ordinal:, frequency:, cycle_id:, comment: nil)
+                      level_ordinal:, frequency:, cycle_id:, comment: nil,
+                      source: "human", seeded_from_cycle_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.rate_as_manager(capability_stable_id, level_ordinal: level_ordinal,
-        frequency: frequency, cycle_id: cycle_id, comment: comment)
+        frequency: frequency, cycle_id: cycle_id, comment: comment,
+        source: source, seeded_from_cycle_id: seeded_from_cycle_id)
     end
   end
 
@@ -173,6 +186,22 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Formally opens alignment for a person's current assessment cycle.
+  #
+  # Once started, individual self/manager ratings are frozen for the cycle.
+  # Issued only by the assessee's current direct manager (enforced by
+  # the controller-side {AssessmentPolicy#start_alignment?}).
+  #
+  # @param person_id [String] UUID of the person being assessed
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle alignment is starting on
+  # @param started_by_id [String] UUID of the person who started alignment
+  def start_alignment(person_id, framework_id, cycle_id, started_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.start_alignment(cycle_id, started_by_id: started_by_id)
+    end
+  end
+
   # Records an agreed assessment for a capability at a specific level.
   #
   # @param person_id [String] UUID of the person
@@ -188,5 +217,127 @@ class PersonDevelopment::CommandHandler
       aggregate.align_assessment(capability_stable_id, level_ordinal: level_ordinal,
         aligned_frequency: aligned_frequency, cycle_id: cycle_id, comment: comment)
     end
+  end
+
+  # Marks alignment complete for the current cycle.
+  #
+  # After this lands, all ratings (including aligned values) are frozen.
+  # Issued only by the assessee's current direct manager (enforced by
+  # the controller-side {AssessmentPolicy#complete_alignment?}).
+  #
+  # @param person_id [String] UUID of the person being assessed
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle being completed
+  # @param completed_by_id [String] UUID of the person completing alignment
+  def complete_alignment(person_id, framework_id, cycle_id, completed_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.complete_alignment(cycle_id, completed_by_id: completed_by_id)
+    end
+  end
+
+  # Seeds the current cycle's ratings from a prior cycle's aligned values.
+  #
+  # For each (capability, level) where the prior cycle reached an aligned
+  # frequency, emits both a SelfRated and ManagerRated event with
+  # `source: "seeded"` and `seeded_from_cycle_id: <prior>`. The new cycle
+  # starts with both perspectives pre-populated so the conversation
+  # opens with "this is where we agreed you were last cycle — confirm
+  # or update."
+  #
+  # Skip-and-flag for framework version drift: only seeds capabilities
+  # whose `stable_id` exists in the new cycle's framework_id (the active
+  # FrameworkState projection). Skipped capabilities are returned in the
+  # result hash for caller logging.
+  #
+  # @param person_id [String] UUID of the person being seeded
+  # @param framework_id [String] UUID of the framework (current cycle)
+  # @param current_cycle_id [String] UUID of the cycle being seeded INTO
+  # @param prior_cycle_id [String] UUID of the cycle being seeded FROM
+  # @param seeded_by_id [String] UUID of the actor (typically the HR person
+  #   who triggered the new cycle's enrolment)
+  # @return [Hash] :seeded count, :skipped array of {capability_stable_id, reason}
+  def seed_ratings_from_prior_cycle(person_id, framework_id, current_cycle_id, prior_cycle_id,
+                                     seeded_by_id:)
+    # Refuse to seed unless the prior cycle actually reached the `aligned`
+    # lifecycle state — i.e. the manager fired FullAlignmentCompleted on it.
+    # A cycle that is still merely `aligning` may have a few aligned cells
+    # from a partial conversation, but those aren't a valid carry-forward
+    # baseline. The participant's `aligned_at` is set only by
+    # FullAlignmentCompleted and survives subsequent cycle closure.
+    prior_completed = AssessmentCycleParticipant
+      .where(cycle_id: prior_cycle_id, person_id: person_id)
+      .where.not(aligned_at: nil)
+      .exists?
+
+    return { seeded: 0, skipped: [], seeded_by_id: seeded_by_id } unless prior_completed
+
+    prior_aligned = AssessmentLevelRating
+      .for_person(person_id)
+      .for_framework(framework_id)
+      .for_cycle(prior_cycle_id)
+      .aligned
+
+    valid_stable_ids = FrameworkState::Capability
+      .joins(:category)
+      .where(framework_capability_categories: { framework_id: framework_id })
+      .pluck(:stable_id)
+      .to_set
+
+    # Idempotency: any (cap, level) pair we've already seeded into the new
+    # cycle — by an earlier run, or by a manual rate during enrolment — is
+    # left alone. Re-running the seed is a no-op for those pairs.
+    already_seeded_pairs = AssessmentLevelRating
+      .for_person(person_id)
+      .for_framework(framework_id)
+      .for_cycle(current_cycle_id)
+      .pluck(:capability_stable_id, :level_ordinal)
+      .to_set
+
+    seeded = 0
+    skipped = []
+
+    # Load the aggregate ONCE, emit all seed + skip events inside a
+    # single with_person_development block. Avoids per-event aggregate
+    # replays.
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      prior_aligned.each do |rating|
+        stable_id = rating.capability_stable_id
+        next if already_seeded_pairs.include?([ stable_id, rating.level_ordinal ])
+
+        unless valid_stable_ids.include?(stable_id)
+          aggregate.record_seed_skip(stable_id,
+            level_ordinal: rating.level_ordinal,
+            prior_aligned_frequency: rating.aligned_frequency,
+            current_cycle_id: current_cycle_id,
+            prior_cycle_id: prior_cycle_id,
+            reason: "capability_not_in_current_framework")
+          skipped << {
+            capability_stable_id: stable_id,
+            level_ordinal: rating.level_ordinal,
+            prior_aligned_frequency: rating.aligned_frequency,
+            reason: "capability_not_in_current_framework"
+          }
+          next
+        end
+
+        aggregate.rate_self(stable_id,
+          level_ordinal: rating.level_ordinal,
+          frequency: rating.aligned_frequency,
+          cycle_id: current_cycle_id,
+          comment: "Seeded from prior cycle",
+          source: "seeded",
+          seeded_from_cycle_id: prior_cycle_id)
+        aggregate.rate_as_manager(stable_id,
+          level_ordinal: rating.level_ordinal,
+          frequency: rating.aligned_frequency,
+          cycle_id: current_cycle_id,
+          comment: "Seeded from prior cycle",
+          source: "seeded",
+          seeded_from_cycle_id: prior_cycle_id)
+        seeded += 1
+      end
+    end
+
+    { seeded: seeded, skipped: skipped, seeded_by_id: seeded_by_id }
   end
 end

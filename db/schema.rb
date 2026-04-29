@@ -16,6 +16,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
 
   create_table "assessment_cycle_participants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "aligned_at"
+    t.uuid "aligned_by_id"
+    t.datetime "alignment_started_at"
+    t.uuid "alignment_started_by_id"
     t.datetime "created_at", null: false
     t.uuid "cycle_id", null: false
     t.datetime "enrolled_at", null: false
@@ -28,6 +31,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.datetime "updated_at", null: false
     t.string "withdrawal_reason"
     t.datetime "withdrawn_at"
+    t.index ["aligned_by_id"], name: "idx_assessment_cycle_participants_aligned_by_id", where: "(aligned_by_id IS NOT NULL)"
+    t.index ["alignment_started_by_id"], name: "idx_assessment_cycle_participants_alignment_started_by_id", where: "(alignment_started_by_id IS NOT NULL)"
     t.index ["cycle_id", "person_id"], name: "idx_assessment_cycle_participants_unique", unique: true
     t.index ["tenant_id", "person_id", "status"], name: "idx_assessment_cycle_participants_by_person_status"
     t.index ["tenant_id"], name: "index_assessment_cycle_participants_on_tenant_id"
@@ -68,6 +73,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.string "migration_status", default: "not_flagged", null: false
     t.uuid "person_id", null: false
     t.text "reassessment_reason"
+    t.uuid "seeded_from_cycle_id"
     t.text "self_rated_comment"
     t.string "self_rated_frequency"
     t.string "source", default: "human", null: false
@@ -76,6 +82,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.index ["cycle_id", "person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_assessment_ratings_cycle_person_cap_level", unique: true
     t.index ["cycle_id", "person_id"], name: "idx_assessment_ratings_cycle_person"
     t.index ["person_id", "framework_id"], name: "index_assessment_level_ratings_on_person_id_and_framework_id"
+    t.index ["seeded_from_cycle_id"], name: "idx_assessment_ratings_seeded_from_cycle_id", where: "(seeded_from_cycle_id IS NOT NULL)"
     t.index ["tenant_id"], name: "index_assessment_level_ratings_on_tenant_id"
   end
 
@@ -379,6 +386,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_08_000001) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "assessment_cycle_participants", "people", column: "aligned_by_id", on_delete: :nullify
+  add_foreign_key "assessment_cycle_participants", "people", column: "alignment_started_by_id", on_delete: :nullify
   add_foreign_key "assessment_cycle_participants", "tenants"
   add_foreign_key "assessment_cycles", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"

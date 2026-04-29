@@ -262,8 +262,95 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "seeded ratings" do
+    should "stamp source=seeded and seeded_from_cycle_id when SelfRated carries source: 'seeded'" do
+      cap_sid = SecureRandom.uuid_v7
+      prior_cycle_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: prior_cycle_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 2
+        )
+        assert_equal "seeded", rating.source
+        assert_equal prior_cycle_id, rating.seeded_from_cycle_id
+        assert_equal "consistent", rating.self_rated_frequency
+      end
+    end
+
+    should "NOT touch participant.started_at on a seeded SelfRated" do
+      cap_sid = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "enrolled", participant.status
+        assert_nil participant.started_at
+      end
+    end
+
+    should "flip source back to 'human' when a seeded rating is revised by the user" do
+      cap_sid = SecureRandom.uuid_v7
+      prior_cycle_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: prior_cycle_id)
+      emit(PersonDevelopment::Events::SelfRatingRevised,
+        capability_stable_id: cap_sid, level_ordinal: 2, frequency: "occasional",
+        cycle_id: @cycle_id, rationale: "downgrade")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 2
+        )
+        assert_equal "human", rating.source
+        assert_equal prior_cycle_id, rating.seeded_from_cycle_id, "seeded_from_cycle_id should remain for audit"
+      end
+    end
+  end
+
+  context "AlignmentStarted" do
+    should "flip participant status to aligning and stamp the started_by_id" do
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
+
+      emit(PersonDevelopment::Events::AlignmentStarted,
+        cycle_id: @cycle_id, started_by_id: manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligning", participant.status
+        assert_not_nil participant.alignment_started_at
+        assert_equal manager.id, participant.alignment_started_by_id
+      end
+    end
+  end
+
+  context "FullAlignmentCompleted" do
+    should "flip participant status to aligned and stamp completed_by_id" do
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
+
+      emit(PersonDevelopment::Events::FullAlignmentCompleted,
+        cycle_id: @cycle_id, completed_by_id: manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligned", participant.status
+        assert_not_nil participant.aligned_at
+        assert_equal manager.id, participant.aligned_by_id
+      end
+    end
+  end
+
   context "AssessmentAligned" do
-    should "set aligned_frequency on the row and mark participant aligned" do
+    should "set aligned_frequency on the row without changing participant status" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::AssessmentAligned,
@@ -278,9 +365,11 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         assert_not_nil rating
         assert_equal "consistent", rating.aligned_frequency
 
+        # Status changes are now driven by AlignmentStarted (PR 1) and
+        # FullAlignmentCompleted (PR 3) — AssessmentAligned no longer
+        # touches participant lifecycle status.
         participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_equal "aligned", participant.status
-        assert_not_nil participant.aligned_at
+        assert_not_equal "aligned", participant.status
       end
     end
   end

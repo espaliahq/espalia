@@ -77,8 +77,20 @@ Three perspectives on a person's level for a capability. Aligned is the "officia
 ### Alignment
 Conversation to agree on capability ratings. Three modes: `async` (comment threads), `live` (real-time), `record_only` (outcome of offline conversation).
 
+### Alignment Lifecycle
+Per-cycle state machine on `AssessmentCycleParticipant`: `enrolled → started → aligning → aligned → withdrawn`. The `aligning` state begins when the manager fires `AlignmentStarted` (manager-only); from that point self/manager rating commands are rejected by both the policy and the aggregate. `aligned` is reached only via `FullAlignmentCompleted` (also manager-only) and freezes all ratings, including the agreed values themselves.
+
+### AlignmentStarted
+Manager-only event opening alignment for a cycle. Flips participant status to `aligning` and freezes individual self/manager edits. Required precondition for any `AssessmentAligned` event.
+
 ### FullAlignmentCompleted
-Key event marking when all capabilities have been aligned for a cycle. Natural snapshot point for RES. Replaying to this event gives exact "official" assessment state.
+Manager-only event marking alignment complete for a cycle. Flips participant status to `aligned` and freezes ALL ratings (including aligned values). Natural snapshot point for RES — long person-development streams will compress here when snapshotting infrastructure ships.
+
+### Seeded Rating
+A `SelfRated` / `ManagerRated` event with `source: "seeded"` and `seeded_from_cycle_id` set. Emitted automatically when a person enrols in a new cycle for a framework where they had previously completed alignment — both perspectives are pre-populated with the prior cycle's `aligned_frequency`. The participant remains in `enrolled` (seed events don't trigger `started`) until a real human revision lands. Source flips back to `"human"` on first revision.
+
+### RatingSeedSkipped
+Audit-only event emitted during seed-from-prior-cycle when a prior aligned capability's `stable_id` no longer exists in the new cycle's framework version. No projection writes a read model row today; the future framework-migration UI will replay these to surface a "use this rating" affordance against the migrated equivalent capability.
 
 ### Evidence
 Feedback, observation, or documented behaviour. Has `source` (self/manager/peer), `evidence_type` (predefined enum + `other` with `custom_type_label`), optional `ExternalReference` (system, url, external_id, metadata) for linking to GitHub PRs, Linear issues, Slack threads, etc.

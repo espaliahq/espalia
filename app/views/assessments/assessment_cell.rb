@@ -22,8 +22,12 @@ class Views::Assessments::AssessmentCell < Views::Base
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
   # @param category_id [String, nil] active category for tab preservation on rating
+  # @param frozen [Boolean] when true and context is :self/:manager, render the
+  #   primary frequency as a read-only bar (alignment has been started)
+  # @param alignment_locked [Boolean] when true and context is :alignment, render
+  #   the primary frequency as a read-only bar (alignment has been completed)
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self,
-                 category_id: nil)
+                 category_id: nil, frozen: false, alignment_locked: false)
     @cell_data = cell_data
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
@@ -31,6 +35,8 @@ class Views::Assessments::AssessmentCell < Views::Base
     @assessment_id = assessment_id
     @context = context
     @category_id = category_id
+    @frozen = frozen
+    @alignment_locked = alignment_locked
   end
 
   def view_template
@@ -69,17 +75,42 @@ class Views::Assessments::AssessmentCell < Views::Base
     end
   end
 
-  # Interactive frequency selector for the primary rating.
+  # Interactive frequency selector for the primary rating, OR a read-only
+  # frequency bar when alignment has been started for the cycle (self and
+  # manager perspectives are frozen until the cycle ends).
   def primary_selector
     div(id: "rating-#{@capability_stable_id}-#{@ordinal}", class: "mt-2") do
-      render Views::Assessments::FrequencySelector.new(
-        capability_stable_id: @capability_stable_id,
-        level_ordinal: @ordinal,
-        current_frequency: primary_frequency,
-        assessment_id: @assessment_id,
-        context: @context,
-        category_id: @category_id
-      )
+      if primary_perspective_frozen?
+        render Views::Assessments::FrequencyBar.new(
+          label: primary_label,
+          frequency: primary_frequency
+        )
+      else
+        render Views::Assessments::FrequencySelector.new(
+          capability_stable_id: @capability_stable_id,
+          level_ordinal: @ordinal,
+          current_frequency: primary_frequency,
+          assessment_id: @assessment_id,
+          context: @context,
+          category_id: @category_id
+        )
+      end
+    end
+  end
+
+  def primary_perspective_frozen?
+    if @context == :alignment
+      @alignment_locked
+    else
+      @frozen
+    end
+  end
+
+  def primary_label
+    case @context
+    when :self    then "Self"
+    when :manager then "Mgr"
+    else "Agreed"
     end
   end
 

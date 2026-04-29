@@ -30,18 +30,19 @@ flowchart TB
         Quality First → L3
         Communication → L3"]
 
-        E7["AlignmentConversationStarted
-        mode: async"]
+        E7["AlignmentStarted
+        manager-only — freezes self+manager ratings
+        cycle status → aligning"]
 
-        E8["AlignmentCommentAdded
-        cap: Communication
-        manager: 'Retro facilitation was strong L3'"]
-
-        E9["CapabilityAligned
+        E8["AssessmentAligned
         Communication → L3 (upgraded from self L2)"]
 
+        E9["AssessmentAligned
+        Strategic Thinking → L3 (no change)"]
+
         E10["FullAlignmentCompleted
-        cycle: Q1 2026
+        manager-only — freezes ALL ratings
+        cycle status → aligned
         ← RES SNAPSHOT POINT"]
 
         E11["GrowthGoalSet
@@ -71,9 +72,29 @@ flowchart TB
         E18["ReassessmentFlagged
         Strategic Thinking: expectations tightened"]
 
+        E19["JoinedAssessmentCycle
+        cycle: Q3 2026"]
+
+        E20["SelfRated (source: seeded)
+        Strategic Thinking → L3 (carried from Q1 cycle)
+        Quality First → L3
+        Communication → L3
+        seeded_from_cycle_id: <Q1 2026>"]
+
+        E21["ManagerRated (source: seeded)
+        Strategic Thinking → L3 (carried from Q1 cycle)
+        Quality First → L3
+        Communication → L3
+        seeded_from_cycle_id: <Q1 2026>"]
+
+        E22["RatingSeedSkipped (audit-only)
+        capability: <archived in v2>
+        prior_aligned_frequency: consistent
+        reason: capability_not_in_current_framework"]
+
         E1 --> E2 --> E3 --> E4 --> E5 --> E6 --> E7 --> E8 --> E9
         E9 --> E10 --> E11 --> E12 --> E13 --> E14 --> E15 --> E16
-        E16 --> E17 --> E18
+        E16 --> E17 --> E18 --> E19 --> E20 --> E21 --> E22
     end
 
     subgraph Projections["Synchronous Projections (ActiveRecord read models)"]
@@ -95,7 +116,11 @@ flowchart TB
 
     Stream --> Projections
 
+    style E7 fill:#fff3cd,stroke:#ffc107
     style E10 fill:#d4edda,stroke:#28a745
     style E13 fill:#d4edda,stroke:#28a745
     style E17 fill:#fff3cd,stroke:#ffc107
     style E18 fill:#f8d7da,stroke:#721c24
+    style E20 fill:#e2e3f3,stroke:#6c757d
+    style E21 fill:#e2e3f3,stroke:#6c757d
+    style E22 fill:#f8d7da,stroke:#721c24

@@ -248,7 +248,7 @@ class Views::Assessments::ScoringPanel < Views::Base
 
     if @assessment_id
       a(
-        href: matrix_assessment_path(@assessment_id, category: category.category_id),
+        href: matrix_assessment_path(@assessment_id, matrix_link_params(category.category_id)),
         data: { turbo_frame: "assessment-matrix" },
         class: row_classes
       ) { category_result_content(category, result, divergent, alt_results) }
@@ -386,6 +386,12 @@ class Views::Assessments::ScoringPanel < Views::Base
         end
       end
     end
+  end
+
+  def matrix_link_params(category_id)
+    params = { category: category_id }
+    params[:mode] = "alignment" if @context == :alignment
+    params
   end
 
   # ── Perspective helpers ──
