@@ -244,7 +244,13 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
-      panel_links = page.all("#scoring-panel a", visible: :all)
+      # Wait for the scoring-panel Turbo Frame to finish its eager fetch
+      # before reading link hrefs — the inline fallback may render an
+      # interstitial without href attributes.
+      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
+      assert_selector "#scoring-panel a[href]"
+
+      panel_links = page.all("#scoring-panel a[href]", visible: :all)
       assert panel_links.any?, "Expected at least one scoring-panel category link"
       panel_links.each do |link|
         assert_includes link[:href], "mode=alignment",
