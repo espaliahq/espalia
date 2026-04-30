@@ -192,13 +192,40 @@ class PersonDevelopment::CommandHandler
   # Issued only by the assessee's current direct manager (enforced by
   # the controller-side {AssessmentPolicy#start_alignment?}).
   #
+  # As part of the same RES transaction, every (capability × level) cell
+  # where both perspectives explicitly rated the same frequency is
+  # auto-aligned with an `AssessmentAligned` event. The conversation
+  # then focuses on disagreements and unrated cells. Default-fallback
+  # agreements (where one or both perspectives never recorded an
+  # explicit value) do NOT auto-align — only deliberate, recorded
+  # agreement counts.
+  #
   # @param person_id [String] UUID of the person being assessed
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle alignment is starting on
   # @param started_by_id [String] UUID of the person who started alignment
   def start_alignment(person_id, framework_id, cycle_id, started_by_id:)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
+      # Snapshot self/manager matches inside the same transaction as
+      # AlignmentStarted so a rating event can't slip in between the query
+      # and the aggregate emit (TOCTOU).
+      matching_rows = AssessmentLevelRating
+        .for_person(person_id)
+        .for_framework(framework_id)
+        .for_cycle(cycle_id)
+        .where.not(self_rated_frequency: nil)
+        .where("self_rated_frequency = manager_rated_frequency")
+        .pluck(:capability_stable_id, :level_ordinal, :self_rated_frequency)
+
       aggregate.start_alignment(cycle_id, started_by_id: started_by_id)
+
+      matching_rows.each do |stable_id, level_ordinal, frequency|
+        aggregate.align_assessment(stable_id,
+          level_ordinal: level_ordinal,
+          aligned_frequency: frequency,
+          cycle_id: cycle_id,
+          comment: "Auto-aligned: self and manager already agreed")
+      end
     end
   end
 
