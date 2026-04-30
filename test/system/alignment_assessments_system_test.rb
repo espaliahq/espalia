@@ -231,7 +231,13 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
-      tab_links = page.all("nav#category-tabs a", visible: :all)
+      # Wait for the matrix Turbo Frame to finish its eager fetch before
+      # reading link hrefs — the inline fallback can briefly render <a>
+      # elements without href attributes during the initial fetch.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      assert_selector "nav#category-tabs a[href]"
+
+      tab_links = page.all("nav#category-tabs a[href]", visible: :all)
       assert tab_links.any?, "Expected at least one category tab link"
       tab_links.each do |link|
         assert_includes link[:href], "mode=alignment",
