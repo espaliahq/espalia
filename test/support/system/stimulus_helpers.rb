@@ -169,12 +169,14 @@ module StimulusHelpers
   # +data-turbo-confirm+ dialog is occasionally dropped. Without retry,
   # +Capybara::ModalNotFound+ raises on the first attempt.
   #
-  # @param wait [Integer] seconds to wait for the dialog
+  # Forwards any positional matcher (text or regex) and the +wait+ kwarg
+  # straight through to +accept_confirm+, so it's a drop-in replacement.
+  #
   # @yield the block performing the click that triggers the confirm dialog
-  def accept_confirm_with_retry(wait: Capybara.default_max_wait_time, &block)
-    accept_confirm(wait: wait, &block)
+  def accept_confirm_with_retry(*args, wait: Capybara.default_max_wait_time, &block)
+    accept_confirm(*args, wait: wait, &block)
   rescue Capybara::ModalNotFound
-    accept_confirm(wait: wait, &block)
+    accept_confirm(*args, wait: wait, &block)
   end
 
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no

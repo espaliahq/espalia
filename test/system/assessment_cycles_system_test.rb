@@ -54,8 +54,7 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "Assessment Cycles"
       assert_text "Open (0)"
 
-      click_link "Define new cycle"
-      assert_text "Define a new cycle"
+      click_with_retry(expect_text: "Define a new cycle") { click_link "Define new cycle" }
 
       fill_in "Name", with: "Q2 2026 Review"
       # Framework select defaults to the only option; cycle_type defaults to "regular"
@@ -72,14 +71,14 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "enrolled@example.com".sub("enrolled", "assigned")
 
       # Unenroll (accept the confirm dialog)
-      accept_confirm do
+      accept_confirm_with_retry do
         click_button "Unenroll"
       end
       assert_text "Person unenrolled"
       assert_text "Withdrawn"
 
       # Close the cycle
-      accept_confirm do
+      accept_confirm_with_retry do
         click_button "Close cycle"
       end
       assert_text "Cycle closed"

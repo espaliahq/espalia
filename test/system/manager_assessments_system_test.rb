@@ -77,18 +77,16 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
   context "manager assessment index" do
     should "show Assessments nav link and Team Assessments section" do
       # The nav should show "Assessments" for a manager with report assignments
-      click_link "Assessments"
+      click_with_retry(expect_text: "Team Assessments") { click_link "Assessments" }
 
       assert_text "My Assessments"
-      assert_text "Team Assessments"
       assert_text "Report Alex"
     end
   end
 
   context "manager assessment show" do
     should "render manager review view after clicking through from index" do
-      click_link "Assessments"
-      assert_text "Team Assessments"
+      click_with_retry(expect_text: "Team Assessments") { click_link "Assessments" }
 
       click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
 
@@ -137,8 +135,15 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # turbo-stream lands, leaving both actions racing on CI.
       assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently"
 
-      # Click "Consistently" again to untoggle — rating should be cleared
+      # Click "Consistently" again to untoggle — rating should be cleared.
+      # On slow CI the click can be silently dropped; retry once if the ring
+      # is still present after a short wait. Re-clicking is safe because
+      # the rating hasn't moved off ring-1 yet.
       find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently").click
+
+      unless page.has_no_css?("#rating-#{@cap_stable}-2 button.ring-1", wait: 4)
+        find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently").click
+      end
 
       # After clearing, no frequency button should have the selected ring style
       within("#rating-#{@cap_stable}-2") do

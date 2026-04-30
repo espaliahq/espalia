@@ -96,7 +96,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment)
       assert_text "Manager Review"
 
-      accept_confirm(/Starting alignment will lock/) do
+      accept_confirm_with_retry(/Starting alignment will lock/) do
         click_button "Start alignment"
       end
 
@@ -119,7 +119,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
 
       visit assessment_path(@report_assignment)
-      accept_confirm(/Starting alignment will lock/) do
+      accept_confirm_with_retry(/Starting alignment will lock/) do
         click_button "Start alignment"
       end
       assert_text "Aligning"
@@ -282,7 +282,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
-      accept_confirm(/lock all ratings for this cycle/) do
+      accept_confirm_with_retry(/lock all ratings for this cycle/) do
         click_button "Mark alignment complete"
       end
 

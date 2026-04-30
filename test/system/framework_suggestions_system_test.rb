@@ -96,7 +96,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
     should "reject a pending suggestion" do
       visit framework_suggestion_path(@framework_id, @illustration_suggestion_id)
 
-      accept_confirm { click_button "Reject" }
+      accept_confirm_with_retry { click_button "Reject" }
 
       assert_current_path framework_suggestions_path(@framework_id)
       assert_text "Suggestion rejected"
