@@ -80,11 +80,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       # already-aligning state call seed_alignment_started! explicitly.
     end
 
-    visit new_user_session_path
-    fill_in "Email", with: @manager_user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@manager_user)
   end
 
   context "manager starts alignment" do
@@ -207,11 +203,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       seed_alignment_started!
 
       Capybara.reset_sessions!
-      visit new_user_session_path
-      fill_in "Email", with: @report_user.email
-      fill_in "Password", with: "password123"
-      click_button "Log in"
-      assert_current_path root_path
+      sign_in_as(@report_user)
     end
 
     should "show 'Aligning with manager' badge and a Continue alignment link" do

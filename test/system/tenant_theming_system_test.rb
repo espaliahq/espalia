@@ -10,11 +10,7 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
     ActsAsTenant.with_tenant(@tenant_a) { FactoryBot.create(:tenant_user, tenant: @tenant_a, user: @user) }
     ActsAsTenant.with_tenant(@tenant_b) { FactoryBot.create(:tenant_user, tenant: @tenant_b, user: @user) }
 
-    visit new_user_session_path
-    fill_in "Email", with: @user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@user)
   end
 
   context "tenant theming" do
@@ -41,6 +37,14 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
         find("button[type='submit']", match: :first).click
       end
       screenshot("after_switch")
+
+      # The tenant switch is a form POST that re-renders the page with new
+      # theme variables. Read the style only after Capybara has waited for
+      # the new DOM to commit — has_no_xpath? polls within Capybara's wait.
+      assert page.has_no_xpath?(
+        "//style[@id='tenant-theme'][text()=#{initial_style.inspect}]",
+        wait: Capybara.default_max_wait_time
+      ), "CSS variables should change after tenant switch"
 
       new_style = evaluate_script("document.getElementById('tenant-theme')?.textContent || ''")
       assert_not_equal initial_style, new_style, "CSS variables should change after tenant switch"

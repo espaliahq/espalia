@@ -145,20 +145,60 @@ module StimulusHelpers
     # potentially interfering with the in-flight fetch.
     landed =
       if expect_text
-        page.has_text?(expect_text, wait: 6)
+        page.has_text?(expect_text, wait: 8)
       else
-        page.has_css?(expect_selector, wait: 6)
+        page.has_css?(expect_selector, wait: 8)
       end
 
     yield unless landed
 
     # The final wait also needs to be generous: when we retry a dropped click,
     # the fresh navigation + Turbo round-trip itself can exceed Capybara's
-    # default on a starved CI runner.
+    # default on a starved CI runner. We've observed cases where even an 8s
+    # wait misses on the first runner cycle of the day — bumping to match
+    # Capybara's default_max_wait_time gives us full headroom.
     if expect_text
-      assert_text expect_text, wait: 6
+      assert_text expect_text, wait: Capybara.default_max_wait_time
     else
-      assert_selector expect_selector, wait: 6
+      assert_selector expect_selector, wait: Capybara.default_max_wait_time
+    end
+  end
+
+  # Wraps Capybara's +accept_confirm+ to retry once if the dialog never
+  # appears — on slow CI runners, the click that should trigger Turbo's
+  # +data-turbo-confirm+ dialog is occasionally dropped. Without retry,
+  # +Capybara::ModalNotFound+ raises on the first attempt.
+  #
+  # @param wait [Integer] seconds to wait for the dialog
+  # @yield the block performing the click that triggers the confirm dialog
+  def accept_confirm_with_retry(wait: Capybara.default_max_wait_time, &block)
+    accept_confirm(wait: wait, &block)
+  rescue Capybara::ModalNotFound
+    accept_confirm(wait: wait, &block)
+  end
+
+  # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no
+  # in-flight navigation. Use after a click that triggers Turbo navigation
+  # and before reading state that depends on the destination DOM having
+  # committed.
+  #
+  # @param wait [Integer] seconds to wait for idle (default Capybara's max)
+  def wait_for_turbo_idle(wait: Capybara.default_max_wait_time)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
+
+    loop do
+      idle = page.evaluate_script(<<~JS)
+        (() => {
+          if (document.querySelector('turbo-frame[busy]')) return false;
+          if (document.querySelector('html[aria-busy="true"]')) return false;
+          return true;
+        })()
+      JS
+      return if idle
+
+      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep 0.1
     end
   end
 
@@ -169,16 +209,18 @@ module StimulusHelpers
   # Capybara's default click simulates a real user pointer click, which on
   # slow CI runners has been observed to be silently dropped when Chrome's
   # JS event loop is starved, or when the target is momentarily obscured by
-  # a sticky element, scroll position, or mid-flight layout. The retry-clicks
-  # we used to compensate caused worse ping-pong bugs: on a true toggle
-  # (visible ↔ hidden), a stray second click undoes the first, so parity
-  # across 1–3 retries produced non-deterministic outcomes.
+  # a sticky element, scroll position, or mid-flight layout.
   #
   # JS-dispatched click is synchronous (the Stimulus action handler runs
   # inline before +execute_script+ returns) and bypasses pointer
-  # hit-testing entirely, so exactly one click is needed and it is
-  # guaranteed to reach the action handler. The Stimulus ready check
-  # happens in +wait_for_stimulus+ at the call site.
+  # hit-testing entirely. In practice we have still seen rare cases on
+  # 2-core CI runners where the dispatch returns before the handler has
+  # finished its DOM mutations, or where the controller hadn't yet attached
+  # delegated listeners despite +data-connected+ being set. To stay
+  # deterministic without ping-pong, we re-dispatch the click only if the
+  # toggle is still in its un-toggled state — re-clicking a toggle that has
+  # already moved to the "visible" state would undo the first click, which
+  # is exactly the bug we want to avoid.
   #
   # @param toggle_selector [String] CSS selector for the element to click
   # @param visible_selector [String] CSS selector that should become
@@ -205,12 +247,30 @@ module StimulusHelpers
     # first one, which is intentional.
     assert_selector toggle_selector
 
-    page.execute_script(<<~JS, toggle_selector)
+    dispatch_js_click(toggle_selector)
+
+    # Short window for the synchronous handler to flip the visible state.
+    # If it lands, we're done after the standard verify+visible asserts.
+    if page.has_css?(scoped_visible, visible: true, wait: 3)
+      assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
+      assert_selector scoped_visible, visible: true
+      return
+    end
+
+    # First click was dropped or the controller hadn't fully wired its
+    # action when we dispatched. Re-dispatch only because the toggle is
+    # still in its un-toggled state — re-clicking a toggle that has already
+    # moved to "visible" would undo the first click.
+    dispatch_js_click(toggle_selector)
+
+    assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
+    assert_selector scoped_visible, visible: true
+  end
+
+  def dispatch_js_click(selector)
+    page.execute_script(<<~JS, selector)
       const el = document.querySelector(arguments[0]);
       if (el) el.click();
     JS
-
-    assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
-    assert_selector scoped_visible, visible: true, wait: 5
   end
 end

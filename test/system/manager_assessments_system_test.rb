@@ -71,11 +71,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     # Sign in as the manager
-    visit new_user_session_path
-    fill_in "Email", with: @manager_user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@manager_user)
   end
 
   context "manager assessment index" do

@@ -8,10 +8,7 @@ class PagesSystemTest < ApplicationSystemTestCase
     @user = FactoryBot.create(:user, password: "password123")
     ActsAsTenant.with_tenant(@tenant) { FactoryBot.create(:tenant_user, tenant: @tenant, user: @user) }
 
-    visit new_user_session_path
-    fill_in "Email", with: @user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
+    sign_in_as(@user)
     assert_text "Welcome to GrowthOS"
   end
 

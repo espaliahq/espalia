@@ -126,7 +126,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       # CI runners the click can fire before Turbo's confirm handler is
       # bound, silently dropping the submit and timing out the modal wait.
       assert_selector "form[data-turbo-confirm] button", text: "Withdraw"
-      accept_confirm(wait: 10) { click_button "Withdraw" }
+      accept_confirm_with_retry { click_button "Withdraw" }
 
       assert_current_path framework_suggestions_path(@framework_id)
       assert_text "Suggestion withdrawn"
@@ -136,15 +136,5 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
         assert_equal "withdrawn", suggestion.status
       end
     end
-  end
-
-  private
-
-  def sign_in_as(user)
-    visit new_user_session_path
-    fill_in "Email", with: user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
   end
 end

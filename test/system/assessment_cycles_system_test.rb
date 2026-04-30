@@ -137,10 +137,6 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
   private
 
   def sign_in(user)
-    visit new_user_session_path
-    fill_in "Email", with: user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(user)
   end
 end
