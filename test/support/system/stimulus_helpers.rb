@@ -164,19 +164,29 @@ module StimulusHelpers
     end
   end
 
-  # Wraps Capybara's +accept_confirm+ to retry once if the dialog never
-  # appears — on slow CI runners, the click that should trigger Turbo's
-  # +data-turbo-confirm+ dialog is occasionally dropped. Without retry,
-  # +Capybara::ModalNotFound+ raises on the first attempt.
+  # Wraps Capybara's +accept_confirm+ to retry up to two more times if the
+  # dialog never appears — on slow CI runners, the click that should
+  # trigger Turbo's +data-turbo-confirm+ dialog is occasionally dropped.
+  # Without retry, +Capybara::ModalNotFound+ raises on the first attempt.
   #
   # Forwards any positional matcher (text or regex) and the +wait+ kwarg
   # straight through to +accept_confirm+, so it's a drop-in replacement.
   #
   # @yield the block performing the click that triggers the confirm dialog
-  def accept_confirm_with_retry(*args, wait: Capybara.default_max_wait_time, &block)
-    accept_confirm(*args, wait: wait, &block)
-  rescue Capybara::ModalNotFound
-    accept_confirm(*args, wait: wait, &block)
+  def accept_confirm_with_retry(*args, wait: 5, &block)
+    attempts = 0
+    begin
+      attempts += 1
+      accept_confirm(*args, wait: wait, &block)
+    rescue Capybara::ModalNotFound
+      raise if attempts >= 3
+
+      # Brief pause lets any in-flight Turbo + Stimulus boot finish before
+      # the next click — clicks fired during the boot are the typical cause
+      # of dropped Turbo-confirm dialogs.
+      sleep 0.5
+      retry
+    end
   end
 
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no
