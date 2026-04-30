@@ -108,6 +108,48 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_link "Exit alignment"
     end
 
+    should "auto-align cells where self and manager already agree, leaving disagreements for the conversation" do
+      # Set up two cells: cap_stable at L2 disagrees (self=occasional, mgr=consistent
+      # from the parent setup), and a SECOND cell at L1 where both rate "consistent".
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id
+        )
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@report_assignment)
+      accept_confirm(/Starting alignment will lock/) do
+        click_button "Start alignment"
+      end
+      assert_text "Aligning"
+
+      stream = "tenant-#{@tenant.id}/PersonDev-#{@report.id}-#{@framework_id}"
+      events = Rails.configuration.event_store.read.stream(stream).to_a
+      auto_aligned = events.grep(PersonDevelopment::Events::AssessmentAligned)
+      assert_equal 1, auto_aligned.length, "expected exactly one auto-aligned event for the L1 match"
+      assert_equal 1, auto_aligned.first.data[:level_ordinal]
+      assert_equal "consistent", auto_aligned.first.data[:aligned_frequency]
+      assert_match(/Auto-aligned/, auto_aligned.first.data[:comment])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        l1 = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @report.id,
+          capability_stable_id: @cap_stable, level_ordinal: 1
+        )
+        l2 = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @report.id,
+          capability_stable_id: @cap_stable, level_ordinal: 2
+        )
+        assert_equal "consistent", l1.aligned_frequency
+        assert_nil l2.aligned_frequency
+      end
+    end
+
     should "render alignment frequency selectors once aligning" do
       seed_alignment_started!
       visit assessment_path(@report_assignment, mode: "alignment")

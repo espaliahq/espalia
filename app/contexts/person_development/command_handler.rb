@@ -192,6 +192,13 @@ class PersonDevelopment::CommandHandler
   # Issued only by the assessee's current direct manager (enforced by
   # the controller-side {AssessmentPolicy#start_alignment?}).
   #
+  # The aggregate additionally auto-emits an AssessmentAligned event for
+  # every (capability × level) cell where both perspectives explicitly
+  # rated the same frequency. The conversation then focuses on
+  # disagreements and unrated cells. Default-fallback agreements (where
+  # one or both perspectives never recorded an explicit value) do NOT
+  # auto-align — only deliberate, recorded agreement counts.
+  #
   # @param person_id [String] UUID of the person being assessed
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle alignment is starting on

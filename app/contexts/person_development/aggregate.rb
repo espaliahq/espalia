@@ -292,6 +292,25 @@ class PersonDevelopment::Aggregate
       cycle_id: cycle_id,
       started_by_id: started_by_id
     }))
+
+    # Auto-align cells where self and manager explicitly recorded the same
+    # frequency. Derived from the aggregate's own state (`@self_ratings`
+    # and `@manager_ratings`) so we're guaranteed consistent with the
+    # event stream this aggregate was loaded from — unlike a read-model
+    # query, which can race with concurrent rate_* commits.
+    @self_ratings.each do |key, self_freq|
+      manager_freq = @manager_ratings[key]
+      next unless manager_freq == self_freq
+
+      capability_stable_id, level_ordinal = key
+      apply(PersonDevelopment::Events::AssessmentAligned.new(data: {
+        capability_stable_id: capability_stable_id,
+        level_ordinal: level_ordinal,
+        aligned_frequency: self_freq,
+        cycle_id: cycle_id,
+        comment: "Auto-aligned: self and manager already agreed"
+      }))
+    end
   end
 
   # Records an agreed assessment for a capability at a specific level.

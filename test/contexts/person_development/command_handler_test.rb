@@ -124,6 +124,196 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "re-enrolling into the same cycle after unenroll" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant, name: "Mgr")
+        @assessee = create(:person, tenant: @tenant, name: "Assessee")
+      end
+      @person_id = @assessee.id
+
+      @handler.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @cycle_handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1,
+        defined_by: @manager.id)
+      @cycle_handler.enroll(@cycle_id, @person_id, enrolled_by: @manager.id)
+
+      # Build state in the original enrolment: rate, start alignment, then unenroll.
+      @cap_sid = SecureRandom.uuid_v7
+      @handler.rate_self(@person_id, @framework_id, @cap_sid,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+      @handler.rate_as_manager(@person_id, @framework_id, @cap_sid,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @cycle_handler.unenroll(@cycle_id, @person_id, "manual", unenrolled_by: @manager.id)
+
+      # Re-enroll into the SAME cycle.
+      @cycle_handler.enroll(@cycle_id, @person_id, enrolled_by: @manager.id)
+    end
+
+    should "let the person rate again without raising about a missing prior rating" do
+      assert_nothing_raised do
+        @handler.rate_self(@person_id, @framework_id, @cap_sid,
+          level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id)
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: @cap_sid, level_ordinal: 2
+        )
+        assert_equal "occasional", rating.self_rated_frequency
+        # Stale aligned/manager values from the prior enrolment must be gone.
+        assert_nil rating.manager_rated_frequency
+        assert_nil rating.aligned_frequency
+      end
+    end
+
+    should "reset the participant's alignment lifecycle columns on re-enrol" do
+      ActsAsTenant.with_tenant(@tenant) do
+        participant = AssessmentCycleParticipant.find_by(
+          cycle_id: @cycle_id, person_id: @person_id
+        )
+        assert_equal "enrolled", participant.status
+        assert_nil participant.started_at
+        assert_nil participant.alignment_started_at
+        assert_nil participant.alignment_started_by_id
+        assert_nil participant.aligned_at
+        assert_nil participant.aligned_by_id
+      end
+    end
+  end
+
+  context "#start_alignment auto-alignment" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant, name: "Mgr")
+        @assessee = create(:person, tenant: @tenant, name: "Assessee")
+      end
+      @person_id = @assessee.id
+
+      @handler.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @cycle_handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1,
+        defined_by: @manager.id)
+      @cycle_handler.enroll(@cycle_id, @person_id, enrolled_by: @manager.id)
+    end
+
+    should "emit AssessmentAligned for cells where self and manager match" do
+      cap_a = SecureRandom.uuid_v7
+      @handler.rate_self(@person_id, @framework_id, cap_a,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+      @handler.rate_as_manager(@person_id, @framework_id, cap_a,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      events = Rails.configuration.event_store.read.stream(stream).to_a
+      aligned_events = events.grep(PersonDevelopment::Events::AssessmentAligned)
+
+      assert_equal 1, aligned_events.length
+      e = aligned_events.first
+      assert_equal cap_a, e.data[:capability_stable_id]
+      assert_equal 2, e.data[:level_ordinal]
+      assert_equal "consistent", e.data[:aligned_frequency]
+      assert_match(/Auto-aligned/, e.data[:comment])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_a, level_ordinal: 2
+        )
+        assert_equal "consistent", rating.aligned_frequency
+      end
+    end
+
+    should "NOT auto-align when self and manager differ" do
+      cap_b = SecureRandom.uuid_v7
+      @handler.rate_self(@person_id, @framework_id, cap_b,
+        level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id)
+      @handler.rate_as_manager(@person_id, @framework_id, cap_b,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_b, level_ordinal: 2
+        )
+        assert_nil rating.aligned_frequency
+      end
+    end
+
+    should "NOT auto-align when only one party rated" do
+      cap_c = SecureRandom.uuid_v7
+      @handler.rate_self(@person_id, @framework_id, cap_c,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_c, level_ordinal: 2
+        )
+        assert_not_nil rating, "expected the self-rated row to exist after start_alignment"
+        assert_nil rating.aligned_frequency
+      end
+    end
+
+    should "NOT auto-align cells where neither party rated (no row exists)" do
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      events = Rails.configuration.event_store.read.stream(stream).to_a
+      aligned_events = events.grep(PersonDevelopment::Events::AssessmentAligned)
+      assert_empty aligned_events
+    end
+
+    should "auto-align matching 'none' values (none is a deliberate rating)" do
+      cap_d = SecureRandom.uuid_v7
+      @handler.rate_self(@person_id, @framework_id, cap_d,
+        level_ordinal: 1, frequency: "none", cycle_id: @cycle_id)
+      @handler.rate_as_manager(@person_id, @framework_id, cap_d,
+        level_ordinal: 1, frequency: "none", cycle_id: @cycle_id)
+
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_d, level_ordinal: 1
+        )
+        assert_equal "none", rating.aligned_frequency
+      end
+    end
+
+    should "emit start_alignment + N AssessmentAligned events in a single transaction" do
+      cap_e = SecureRandom.uuid_v7
+      cap_f = SecureRandom.uuid_v7
+      [ cap_e, cap_f ].each do |cap|
+        @handler.rate_self(@person_id, @framework_id, cap,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+        @handler.rate_as_manager(@person_id, @framework_id, cap,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+      end
+
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      events = Rails.configuration.event_store.read.stream(stream).to_a
+
+      start_idx = events.index { |e| e.is_a?(PersonDevelopment::Events::AlignmentStarted) }
+      assert_not_nil start_idx, "expected AlignmentStarted on stream"
+
+      auto_aligned = events[(start_idx + 1)..]
+        .take_while { |e| e.is_a?(PersonDevelopment::Events::AssessmentAligned) }
+      assert_equal 2, auto_aligned.length
+    end
+  end
+
   context "#seed_ratings_from_prior_cycle" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
