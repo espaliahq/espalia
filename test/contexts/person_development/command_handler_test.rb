@@ -258,7 +258,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
           cycle_id: @cycle_id, person_id: @person_id,
           capability_stable_id: cap_c, level_ordinal: 2
         )
-        assert_nil rating&.aligned_frequency
+        assert_not_nil rating, "expected the self-rated row to exist after start_alignment"
+        assert_nil rating.aligned_frequency
       end
     end
 
