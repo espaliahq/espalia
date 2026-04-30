@@ -111,6 +111,35 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         assert_not_nil assignment
       end
     end
+
+    should "wipe stale AssessmentLevelRating rows when a cycle is re-joined" do
+      cap_sid = SecureRandom.uuid_v7
+
+      # Simulate a prior enrolment with a manager+self rating recorded.
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.create!(
+          tenant: @tenant, cycle_id: @cycle_id, person_id: @person_id,
+          framework_id: @framework_id,
+          capability_stable_id: cap_sid, level_ordinal: 2,
+          self_rated_frequency: "consistent",
+          manager_rated_frequency: "consistent",
+          aligned_frequency: "consistent",
+          source: "human"
+        )
+      end
+
+      # Re-joining the same cycle (after unenroll → re-enroll) wipes the row
+      # so the read model matches the aggregate's reset in-memory state.
+      emit(PersonDevelopment::Events::JoinedAssessmentCycle,
+        cycle_id: @cycle_id, framework_version: 1)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 2
+        )
+      end
+    end
   end
 
   context "SelfRated" do

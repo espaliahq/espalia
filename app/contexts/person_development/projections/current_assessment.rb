@@ -95,13 +95,23 @@ class PersonDevelopment::Projections::CurrentAssessment
     assignment.update!(level_id: event.data[:new_level_id])
   end
 
-  # Join/leave events are informational on the PersonDev stream — the
-  # authoritative participant row is maintained by
-  # {AssessmentCycles::Projections::CurrentState} via its own event
-  # subscriptions. These handlers intentionally do not write to any
-  # read model.
-  def handle_joined_cycle(_event)
-    # no-op
+  # On (re-)joining a cycle, wipe any stale AssessmentLevelRating rows
+  # for this (cycle, person). The aggregate's `JoinedAssessmentCycle`
+  # on-handler resets `@self_ratings` / `@manager_ratings` / alignment
+  # flags to a fresh-cycle state, so the read model must mirror that.
+  # Without this, an unenroll → re-enroll within the same cycle leaves
+  # the prior cycle's frequencies on the row; the next rating attempt
+  # then routes through `revise_*` and the aggregate raises because no
+  # rating exists in its in-memory state.
+  #
+  # First-time enrolments are unaffected — there are no existing rows to
+  # delete. The authoritative participant lifecycle row is maintained by
+  # {AssessmentCycles::Projections::CurrentState}.
+  def handle_joined_cycle(event)
+    AssessmentLevelRating.where(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    ).delete_all
   end
 
   def handle_left_cycle(_event)

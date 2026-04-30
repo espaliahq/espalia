@@ -70,7 +70,10 @@ class AssessmentCycles::Projections::CurrentState
       status: "enrolled",
       enrolled_at: event.metadata[:timestamp] || Time.current,
       started_at: nil,
+      alignment_started_at: nil,
+      alignment_started_by_id: nil,
       aligned_at: nil,
+      aligned_by_id: nil,
       withdrawn_at: nil,
       withdrawal_reason: nil
     )
