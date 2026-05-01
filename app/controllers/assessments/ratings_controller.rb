@@ -108,7 +108,8 @@ class Assessments::RatingsController < ApplicationController
       person_id: current_person.id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories,
-      participant_status: @assignment.current_open_cycle_participant&.status
+      participant_status: @assignment.current_open_cycle_participant&.status,
+      context: :self
     ).build
 
     # Find the capability's category for targeted category header update

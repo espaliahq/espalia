@@ -101,6 +101,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not policy.align?
     end
 
+    should "deny enter_alignment" do
+      assert_not policy.enter_alignment?
+    end
+
     should "deny start_alignment" do
       assert_not policy.start_alignment?
     end
@@ -173,6 +177,11 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not AssessmentPolicy.new(@manager_ctx, @assignment).create_alignment_rating?
       assert_not AssessmentPolicy.new(assessee_context, @assignment).create_alignment_rating?
     end
+
+    should "deny enter_alignment for both parties before alignment starts" do
+      assert_not AssessmentPolicy.new(@manager_ctx, @assignment).enter_alignment?
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).enter_alignment?
+    end
   end
 
   context "with an open cycle in :aligning state" do
@@ -209,6 +218,11 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     should "deny assessee from completing alignment" do
       assert_not AssessmentPolicy.new(assessee_context, @assignment).complete_alignment?
     end
+
+    should "allow enter_alignment for both parties" do
+      assert AssessmentPolicy.new(manager_context, @assignment).enter_alignment?
+      assert AssessmentPolicy.new(assessee_context, @assignment).enter_alignment?
+    end
   end
 
   context "with an open cycle in :aligned state" do
@@ -229,6 +243,11 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     should "deny alignment ratings (alignment is complete)" do
       assert_not AssessmentPolicy.new(assessee_context, @assignment).create_alignment_rating?
       assert_not AssessmentPolicy.new(manager_context, @assignment).create_alignment_rating?
+    end
+
+    should "deny enter_alignment after completion" do
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).enter_alignment?
+      assert_not AssessmentPolicy.new(manager_context, @assignment).enter_alignment?
     end
 
     should "deny start_alignment" do

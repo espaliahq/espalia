@@ -133,7 +133,7 @@ class AssessmentsController < ApplicationController
   #
   # @return [Symbol] :self, :manager, or :alignment
   def assessment_context
-    if params[:mode] == "alignment" && AssessmentPolicy.new(pundit_user, @assignment).align?
+    if params[:mode] == "alignment" && AssessmentPolicy.new(pundit_user, @assignment).enter_alignment?
       :alignment
     else
       manager_viewing? ? :manager : :self
@@ -154,7 +154,8 @@ class AssessmentsController < ApplicationController
       person_id: @assignment.person_id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories,
-      participant_status: @assignment.current_open_cycle_participant&.status
+      participant_status: @assignment.current_open_cycle_participant&.status,
+      context: assessment_context
     ).build
   end
 

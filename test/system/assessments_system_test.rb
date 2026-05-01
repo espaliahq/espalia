@@ -169,6 +169,36 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "manager-rating privacy" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        FactoryBot.create(:assessment_level_rating,
+          tenant: @tenant, person_id: @person.id, framework_id: @framework_id,
+          cycle_id: @cycle_id, capability_stable_id: @cap1_stable,
+          level_ordinal: 1, self_rated_frequency: "consistent",
+          manager_rated_frequency: "occasional", aligned_frequency: nil)
+      end
+    end
+
+    should "hide manager rating from the assessee's self-view" do
+      visit assessment_path(@assignment)
+      assert_text "Critical Thinking"
+
+      # No "Mgr:" label should appear in any cell — manager rating is private
+      # to the manager until alignment formally begins.
+      assert_no_text "Mgr:"
+    end
+
+    should "deny URL-hacked alignment mode before alignment is in progress" do
+      # Cycle is in :enrolled state, manager has not started alignment.
+      # Even with explicit ?mode=alignment, the assessee falls back to :self
+      # context and must not see manager ratings.
+      visit assessment_path(@assignment, mode: "alignment")
+      assert_text "Critical Thinking"
+      assert_no_text "Mgr:"
+    end
+  end
+
   context "row expansion accordion" do
     should "expand a row when clicking it" do
       visit assessment_path(@assignment)
