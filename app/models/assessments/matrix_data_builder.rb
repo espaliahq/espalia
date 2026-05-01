@@ -28,8 +28,12 @@ class Assessments::MatrixDataBuilder
   # @param participant_status [String, nil] current cycle participant lifecycle
   #   status (`enrolled` | `started` | `aligning` | `aligned` | `withdrawn`).
   #   Used by views to decide read-only vs interactive rendering.
+  # @param context [Symbol] viewer context (`:self` | `:manager` | `:alignment`).
+  #   When `:self`, manager and aligned ratings are scrubbed from the result so
+  #   the assessee never receives data they shouldn't see — even via HTML
+  #   inspection — until the manager formally starts alignment.
   def initialize(framework:, role:, level:, person_id:, cycle_id:, categories:,
-                 participant_status: nil)
+                 context:, participant_status: nil)
     @framework = framework
     @role = role
     @level = level
@@ -37,6 +41,7 @@ class Assessments::MatrixDataBuilder
     @cycle_id = cycle_id
     @categories = categories
     @participant_status = participant_status
+    @context = context
   end
 
   # Builds the assessment matrix data structure.
@@ -48,7 +53,7 @@ class Assessments::MatrixDataBuilder
     levels = build_levels
     ordinals = levels.map { |l| l[:ordinal] }
     categories = build_categories(ordinals)
-    scoring_engine = build_scoring_engine(categories)
+    scoring_engine = build_scoring_engine(categories, perspective: primary_scoring_perspective)
     all_bindings = categories.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
     enrich_levels_with_performance_ratios(levels, scoring_engine)
     enrich_capabilities_with_contributions(categories, scoring_engine)
@@ -62,8 +67,8 @@ class Assessments::MatrixDataBuilder
       categories: categories,
       scoring: scoring,
       self_scoring: build_perspective_scoring(categories, :self_only),
-      manager_scoring: build_perspective_scoring(categories, :manager_only),
-      aligned_scoring: build_perspective_scoring(categories, :aligned_only),
+      manager_scoring: hide_others? ? nil : build_perspective_scoring(categories, :manager_only),
+      aligned_scoring: hide_others? ? nil : build_perspective_scoring(categories, :aligned_only),
       meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f ||
         PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
       mastery_threshold: @framework.mastery_threshold&.to_f ||
@@ -142,8 +147,8 @@ class Assessments::MatrixDataBuilder
       cells[ordinal] = {
         expectation: expectation,
         current_frequency: rating&.self_rated_frequency,
-        manager_frequency: rating&.manager_rated_frequency,
-        aligned_frequency: rating&.aligned_frequency,
+        manager_frequency: hide_others? ? nil : rating&.manager_rated_frequency,
+        aligned_frequency: hide_others? ? nil : rating&.aligned_frequency,
         illustrations: illustrations,
         illustration_count: illustrations.size
       }
@@ -283,6 +288,20 @@ class Assessments::MatrixDataBuilder
       end
 
     @ratings_index.values.any? { |r| r.public_send(field).present? }
+  end
+
+  # When the viewer is the assessee themselves, hide manager and aligned data
+  # until alignment formally begins. Defense-in-depth — the data never reaches
+  # the HTML, not just the visible UI.
+  def hide_others?
+    @context == :self
+  end
+
+  # In :self context the effective fallback chain (aligned → manager → self)
+  # would otherwise leak manager-derived numbers into the primary `scoring`
+  # result. Force the engine to self-only so the fallback collapses safely.
+  def primary_scoring_perspective
+    @context == :self ? :self_only : :effective
   end
 
   def count_total_cells(categories)

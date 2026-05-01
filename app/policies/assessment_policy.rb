@@ -41,6 +41,17 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def align? = (owns_assessment? || manages_assessee?) && current_open_cycle_present?
 
+  # Whether the viewer may actually flip the assessment view into alignment
+  # mode right now. Stricter than {#align?}: the manager must have formally
+  # started alignment (cycle status `aligning`). This prevents the assessee
+  # from URL-hacking `?mode=alignment` to see the manager's ratings before
+  # the alignment phase has begun.
+  #
+  # @return [Boolean]
+  def enter_alignment?
+    (owns_assessment? || manages_assessee?) && alignment_in_progress?
+  end
+
   # Only the assessee's current direct manager can formally start
   # alignment for a cycle. Requires the participant to have at least
   # begun rating (status `started`) — there must be something to align on.

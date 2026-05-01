@@ -111,7 +111,8 @@ class Assessments::ManagerRatingsController < ApplicationController
       person_id: @assignment.person_id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories,
-      participant_status: @assignment.current_open_cycle_participant&.status
+      participant_status: @assignment.current_open_cycle_participant&.status,
+      context: :manager
     ).build
 
     category_id = find_category_id(capability_stable_id, matrix_data)

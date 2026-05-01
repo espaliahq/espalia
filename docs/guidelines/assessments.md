@@ -42,8 +42,16 @@ end
 ```
 
 This routes to different views:
-- **Self** (`context: :self`) → `ShowView` — person rates themselves
+- **Self** (`context: :self`) → `ShowView` — person rates themselves. Manager and aligned ratings are hidden — see *Self-assessment privacy* below.
 - **Manager** (`context: :manager`) → `ManagerShowView` — manager rates their direct report
+- **Alignment** (`context: :alignment`) → opt-in via `?mode=alignment`. Both parties see all three rating perspectives. Gated by `AssessmentPolicy#enter_alignment?`, which requires the cycle to be in the `aligning` state (manager has called `start_alignment`).
+
+### Self-assessment privacy
+
+The assessee must not see the manager's rating until alignment formally begins. This is enforced at two layers:
+
+1. **Data layer** — `Assessments::MatrixDataBuilder` accepts a `context:` kwarg. When `context == :self`, manager and aligned data are scrubbed from the result — `manager_frequency` / `aligned_frequency` per cell, plus `manager_scoring` / `aligned_scoring` at the top level. The primary scoring perspective is also forced to `:self_only` so the effective fallback chain (aligned → manager → self) cannot leak manager-derived numbers into the displayed totals.
+2. **Policy layer** — `AssessmentPolicy#enter_alignment?` requires `alignment_in_progress?`. Even if the assessee crafts `?mode=alignment`, they fall back to `:self` context until the manager has started alignment. (Note: `align?` remains looser — it gates whether the alignment-toggle UI wrapper is rendered at all, including the manager's "Start alignment" button.)
 
 ## Component Hierarchy
 
@@ -104,12 +112,15 @@ end
 
 def secondary_rating_entries
   case @context
-  when :self      # shows Mgr + Agreed as read-only bars
+  when :self      # shows nothing — manager and aligned ratings are private
+                  # to the manager until alignment formally begins
   when :manager   # shows Self + Agreed as read-only bars
   when :alignment # shows Self + Mgr as read-only bars
   end
 end
 ```
+
+In `:self` context, manager and aligned data are scrubbed from `cell_data` (and `manager_scoring` / `aligned_scoring` set to `nil`) by `Assessments::MatrixDataBuilder` itself — defense-in-depth, so the data never reaches the assessee's HTML, not just hidden in CSS.
 
 ### FrequencySelector — context determines the POST endpoint
 
