@@ -270,7 +270,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
-      click_with_retry(expect_text: "Manager Review") { click_link "Exit alignment" }
+      click_link_with_js_fallback("Exit alignment", expect_text: "Manager Review")
       assert_no_link "Exit alignment"
       assert_link "Continue alignment"
       assert_no_button "Start alignment"

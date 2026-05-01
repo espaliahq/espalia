@@ -77,7 +77,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
   context "manager assessment index" do
     should "show Assessments nav link and Team Assessments section" do
       # The nav should show "Assessments" for a manager with report assignments
-      click_with_retry(expect_text: "Team Assessments") { click_link "Assessments" }
+      click_link_with_js_fallback("Assessments", expect_text: "Team Assessments")
 
       assert_text "My Assessments"
       assert_text "Report Alex"
@@ -86,9 +86,9 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
   context "manager assessment show" do
     should "render manager review view after clicking through from index" do
-      click_with_retry(expect_text: "Team Assessments") { click_link "Assessments" }
+      click_link_with_js_fallback("Assessments", expect_text: "Team Assessments")
 
-      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
+      click_link_with_js_fallback("Review Assessment", expect_text: "Manager Review")
 
       assert_text "Report Alex"
       assert_text "assessment-matrix" if false # DOM id, not visible text

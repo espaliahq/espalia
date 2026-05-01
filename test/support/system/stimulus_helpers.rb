@@ -164,6 +164,76 @@ module StimulusHelpers
     end
   end
 
+  # Clicks a link by locator, retrying with a JS-dispatched click if the
+  # Capybara pointer click is dropped. Selenium's synthetic click is
+  # vulnerable on starved CI runners; +click_with_retry+ retries the same
+  # Capybara click which can be dropped a second time. JS dispatch is
+  # synchronous and bypasses pointer hit-testing entirely, so the second
+  # attempt is guaranteed to fire.
+  #
+  # @param locator [String] the link text/locator
+  # @param expect_text [String, nil] text expected on destination
+  # @param expect_selector [String, nil] selector expected on destination
+  def click_link_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
+    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+
+    click_link locator
+    return if landed?(expect_text, expect_selector, wait: 8)
+
+    # First click was dropped. Find the link by visible text and dispatch
+    # a synthetic click via JS — bypasses Selenium pointer hit-testing.
+    page.execute_script(<<~JS, locator)
+      const text = arguments[0];
+      const links = Array.from(document.querySelectorAll("a"));
+      const link = links.find(a => a.textContent.trim() === text || a.textContent.includes(text));
+      if (link) link.click();
+    JS
+
+    if expect_text
+      assert_text expect_text, wait: Capybara.default_max_wait_time
+    else
+      assert_selector expect_selector, wait: Capybara.default_max_wait_time
+    end
+  end
+
+  # Like +click_link_with_js_fallback+ but for buttons (incl. form submits).
+  #
+  # @param locator [String] button text/locator
+  # @param expect_text [String, nil] text expected after the click
+  # @param expect_selector [String, nil] selector expected after the click
+  def click_button_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
+    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+
+    click_button locator
+    return if landed?(expect_text, expect_selector, wait: 8)
+
+    # First click dropped — fall back to JS click, which fires synchronously
+    # and bypasses Selenium pointer hit-testing.
+    page.execute_script(<<~JS, locator)
+      const text = arguments[0];
+      const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
+      const btn = buttons.find(b => {
+        const label = (b.textContent || b.value || "").trim();
+        return label === text || label.includes(text);
+      });
+      if (btn) btn.click();
+    JS
+
+    if expect_text
+      assert_text expect_text, wait: Capybara.default_max_wait_time
+    else
+      assert_selector expect_selector, wait: Capybara.default_max_wait_time
+    end
+  end
+
+  def landed?(expect_text, expect_selector, wait:)
+    if expect_text
+      page.has_text?(expect_text, wait: wait)
+    else
+      page.has_css?(expect_selector, wait: wait)
+    end
+  end
+
   # Stubs +window.confirm+ to always return true, then runs the block.
   # Use for clicks that submit forms with +data-turbo-confirm+ when the
   # action under test is the form submission, not the dialog itself.

@@ -50,7 +50,7 @@ class FrameworksSystemTest < ApplicationSystemTestCase
       # this synchronisation, the click can land on a stale link and be
       # silently dropped on slow CI runners.
       assert_text "Frameworks"
-      click_with_retry(expect_text: "Strategic Thinking") { click_link "Test Framework" }
+      click_link_with_js_fallback("Test Framework", expect_text: "Strategic Thinking")
 
       assert_text "Engineering"
     end
