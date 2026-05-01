@@ -6,7 +6,7 @@ ruby file: ".ruby-version"
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem "rails", "~> 8.1.0"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
-gem "propshaft", "~> 1.0"
+gem "propshaft", "~> 1.3"
 # Use postgresql as the database for Active Record
 gem "pg"
 # Use the Puma web server [https://github.com/puma/puma]
@@ -99,7 +99,7 @@ end
 # gem "redis", "~> 5.1"
 
 # ActionText editor
-gem "lexxy", "~> 0.9.9.beta"
+gem "lexxy", "~> 0.9.10.beta"
 
 # Model attribute translations stored in JSONB columns
 gem "json_translate"
