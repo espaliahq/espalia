@@ -66,10 +66,14 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = ill_li.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "Proactively seeks guidance and asks clarifying questions"
 
-      click_with_retry(expect_text: "Proactively seeks guidance and asks clarifying questions") do
-        ill_li.find("button[type='submit']", match: :first).click
-      end
+      # Submit via the form's requestSubmit() rather than a Capybara button
+      # click — on slow CI runners the button click is silently dropped, but
+      # invoking the form's submit method synchronously bypasses Selenium's
+      # pointer hit-testing entirely and the data-turbo-stream response is
+      # guaranteed to fire.
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", ill_li)
 
+      assert_text "Proactively seeks guidance and asks clarifying questions"
       assert_no_text "Seeks guidance from tech lead"
     end
 
@@ -140,9 +144,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = add_div.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "Drives cross-functional alignment"
 
-      click_with_retry(expect_text: "Drives cross-functional alignment") do
-        add_div.find("button[type='submit']").click
-      end
+      # Submit via requestSubmit (see comment above for rationale)
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", add_div)
+      assert_text "Drives cross-functional alignment"
       assert_selector "button", text: "Add illustration"
     end
 

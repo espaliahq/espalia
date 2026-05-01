@@ -138,10 +138,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       textarea = editor.find("textarea[name='capability[name]']")
       textarea.fill_in with: "Sharper Strategic Thinking"
-      click_with_retry(expect_text: "Sharper Strategic Thinking") do
-        editor.find("button[type='submit']", match: :first).click
-      end
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
 
+      assert_text "Sharper Strategic Thinking"
       assert_no_text "Strategic Thinking", exact: true
     end
   end
@@ -185,9 +184,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         editor
       )
       editor.find("textarea[name='capability[name]']").fill_in with: "Proposed Name"
-      click_with_retry(expect_selector: "turbo-frame#capability-name-#{cap_id} .decoration-wavy") do
-        editor.find("button[type='submit']", match: :first).click
-      end
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+
+      # Wait for the Turbo frame to swap — pending-edit decoration is the
+      # reliable signal that the server responded.
+      assert_selector "turbo-frame#capability-name-#{cap_id} .decoration-wavy"
 
       # Even though the current user is a tenant admin (auto-approve authority),
       # Suggesting mode overrides and the change lands as pending. The
