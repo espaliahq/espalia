@@ -18,6 +18,8 @@
 #   ).build
 #
 class Assessments::MatrixDataBuilder
+  VALID_CONTEXTS = %i[self manager alignment].freeze
+
   # @param framework [FrameworkState::Framework]
   # @param role [FrameworkState::Role] the person's assigned role
   # @param level [FrameworkState::Level] the person's assigned level
@@ -41,7 +43,11 @@ class Assessments::MatrixDataBuilder
     @cycle_id = cycle_id
     @categories = categories
     @participant_status = participant_status
-    @context = context
+    @context = context&.to_sym
+    return if VALID_CONTEXTS.include?(@context)
+
+    raise ArgumentError,
+      "Invalid context #{context.inspect} — expected one of #{VALID_CONTEXTS.inspect}"
   end
 
   # Builds the assessment matrix data structure.

@@ -38,16 +38,34 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       tenant: @tenant, framework_id: framework_id, framework_version: 1)
     @cycle_id = @cycle.cycle_id
 
+    # Self / manager / aligned each get a distinct frequency so that any
+    # fallback-chain leak (aligned → manager → self) is detectable in scoring.
     create(:assessment_level_rating,
       tenant: @tenant, person_id: @person_id, framework_id: framework_id,
       cycle_id: @cycle_id, capability_stable_id: @capability.stable_id,
       level_ordinal: 2, self_rated_frequency: "consistent",
-      manager_rated_frequency: "occasional", aligned_frequency: "consistent")
+      manager_rated_frequency: "occasional", aligned_frequency: "none")
 
     @categories = FrameworkState::CapabilityCategory
       .where(framework_id: framework_id)
       .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
       .order(:ordinal)
+  end
+
+  teardown do
+    ActsAsTenant.current_tenant = nil
+  end
+
+  context "context validation" do
+    should "raise ArgumentError on unknown context values" do
+      assert_raises(ArgumentError) do
+        Assessments::MatrixDataBuilder.new(
+          framework: @framework, role: @role, level: @level,
+          person_id: @person_id, cycle_id: @cycle_id, categories: @categories,
+          context: :selff
+        ).build
+      end
+    end
   end
 
   context "context: :self" do
@@ -85,6 +103,15 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
     should "still build self_scoring" do
       assert_not_nil @data[:self_scoring]
     end
+
+    should "force effective scoring to match self-only (no fallback leak)" do
+      # The fallback chain (aligned → manager → self) would otherwise produce
+      # different totals than self-only when aligned and manager carry data.
+      # In :self context the primary perspective is forced to :self_only so
+      # effective scoring cannot leak manager- or aligned-derived numbers.
+      assert_equal @data[:self_scoring][:performance_ratio],
+                   @data[:scoring][:performance_ratio]
+    end
   end
 
   context "context: :manager" do
@@ -108,7 +135,7 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
 
     should "expose aligned_frequency in cells" do
       cell = @data[:categories].first[:capabilities].first[:cells][2]
-      assert_equal "consistent", cell[:aligned_frequency]
+      assert_equal "none", cell[:aligned_frequency]
     end
 
     should "build all perspective scorings" do
@@ -131,7 +158,7 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       cell = @data[:categories].first[:capabilities].first[:cells][2]
       assert_equal "consistent", cell[:current_frequency]
       assert_equal "occasional", cell[:manager_frequency]
-      assert_equal "consistent", cell[:aligned_frequency]
+      assert_equal "none", cell[:aligned_frequency]
     end
 
     should "build all perspective scorings" do
