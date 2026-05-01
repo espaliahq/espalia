@@ -276,9 +276,25 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 - For simple links, forms, or elements that don't use Stimulus actions
 - When the next assertion already waits (e.g. `assert_text` on server-rendered content)
 
+## Default Capybara Wait Time
+
+**Capybara's `default_max_wait_time` is 10s in this project**, set in `ApplicationSystemTestCase`. GitHub-hosted ubuntu-latest runners (no Selenium grid, 2 cores) starve Chrome's JS event loop enough that Turbo Drive round-trips can exceed even 5s under load. 10s is the floor — don't lower it or pass shorter waits to assertions unless you have a specific reason.
+
+## Sign-In Helper (NON-NEGOTIABLE)
+
+**Use `sign_in_as(user)` for Devise sign-in in system test setup.** Defined in `ApplicationSystemTestCase`, it visits the form, fills email/password, clicks Log in, and re-submits once if the redirect to `root_path` doesn't land within the wait window. The duplicated `visit new_user_session_path / fill_in / click_button "Log in" / assert_current_path root_path` pattern is forbidden — that exact pattern is the most common entry-point flake (the click is dropped on a starved CI runner and every subsequent assertion fails on the still-rendered sign-in form).
+
+```ruby
+setup do
+  @user = FactoryBot.create(:user, password: "password123")
+  ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, user: @user, tenant: @tenant) }
+  sign_in_as(@user)   # default password is TEST_PASSWORD ("password123")
+end
+```
+
 ## Stimulus Toggle Helpers (NON-NEGOTIABLE)
 
-**Use purpose-specific toggle helpers instead of bare `find(...).click` for Stimulus-driven toggles.** On slow CI runners, Selenium's synthetic pointer clicks have been observed to drop silently when Chrome's JS event loop is starved or when the target is momentarily obscured (sticky element, mid-flight layout, scroll position). These helpers dispatch the click via JS (`element.click()`) instead — synchronous, bypasses pointer hit-testing, the Stimulus action handler runs inline before the script returns. One click, no retry ping-pong.
+**Use purpose-specific toggle helpers instead of bare `find(...).click` for Stimulus-driven toggles.** On slow CI runners, Selenium's synthetic pointer clicks have been observed to drop silently when Chrome's JS event loop is starved or when the target is momentarily obscured (sticky element, mid-flight layout, scroll position). These helpers dispatch the click via JS (`element.click()`) instead — synchronous, bypasses pointer hit-testing, the Stimulus action handler runs inline before the script returns. The primitive (`stimulus_toggle`) re-dispatches once if the visible state never appears, gated on the toggle still being un-toggled (avoids ping-pong). It also waits for `wait_for_turbo_idle` before and after the click so a mid-flight Turbo Frame replacement can't detach the just-toggled element.
 
 Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 
@@ -289,6 +305,7 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 | `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane |
 | `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
 | `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector |
+| `click_rating_frequency(cell_selector, freq)` | (rating cell) | Clicks a frequency button, retries until ring-1 lands |
 
 ```ruby
 # WRONG — bare Capybara click can be silently lost on CI
@@ -336,6 +353,65 @@ end
 **When to use:** Any click that triggers a Turbo navigation (Turbo Drive page nav, Turbo Frame fetch, or Turbo Stream broadcast) where the destination content is the only signal the click was honoured.
 
 **When NOT needed:** When the click is on a Stimulus-controlled toggle (use the toggle helpers above) or when the click is a form submission already followed by an `assert_text` on the response (the form submit already round-trips).
+
+**Both attempts dropped — use the JS-fallback helpers.** `click_with_retry` retries the same Capybara mechanism, so when Chrome's event loop stays starved across both yields, both attempts can be lost on the same run. For the highest-traffic navigation links (sign-in flows, "Define new cycle", "Test Framework", "Review Assessment", "Save settings", etc.) prefer:
+
+| Helper | Replaces |
+|--------|----------|
+| `click_link_with_js_fallback(locator, expect_text:)` | `click_with_retry { click_link "..." }` |
+| `click_button_with_js_fallback(locator, expect_text:)` | `click_with_retry { click_button "..." }` |
+
+These do one Capybara click, and if the destination text/selector doesn't appear within 8s, dispatch a synchronous `el.click()` via `execute_script` — bypasses Selenium pointer hit-testing entirely so the second attempt is guaranteed to fire.
+
+## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
+
+**Use `auto_confirm { ... }` for Turbo `data-turbo-confirm` form submissions where the test cares about the action, not the dialog text.** Capybara's `accept_confirm` registers a modal handler then yields the click block, then waits for the dialog. On slow CI, the click can fire before the modal handler is fully registered — the dialog appears, fires `confirm()` instantly with no listener, and is gone before Capybara polls. Even with retry, this can fail repeatedly because each attempt re-races the same registration window.
+
+`auto_confirm` stubs `window.confirm` to return `true` before the click, so Turbo's submit-listener resolves the confirm synchronously without ever opening a dialog. Wrap it in `click_with_retry` to also retry the click itself if dropped:
+
+```ruby
+# WRONG — accept_confirm flakes on starved CI even with retry
+accept_confirm(/Starting alignment will lock/) { click_button "Start alignment" }
+
+# CORRECT — auto-confirm + click retry
+click_with_retry(expect_text: "Aligning") do
+  auto_confirm { click_button "Start alignment" }
+end
+```
+
+**When NOT to use:** When the dialog's text/behaviour is itself under test. Then keep `accept_confirm` and pay the flake cost knowingly (or write the assertion at the integration test layer).
+
+## Inline-Editor Form Submits — `requestSubmit()` Over Click
+
+**Submit inline-editor forms via `form.requestSubmit()` not Capybara button click.** The inline-editor pattern (illustration save, capability rename, etc.) uses a hover-revealed Save button. On slow CI the button click is silently dropped repeatedly — even `click_with_retry`'s second attempt has been observed to drop. Invoking the form's submit method synchronously via JS bypasses pointer hit-testing entirely and Turbo's submit interceptor fires every time:
+
+```ruby
+# WRONG — pointer click can be dropped, retry uses same mechanism
+ill_li.find("button[type='submit']", match: :first).click
+assert_text "Proactively seeks guidance"
+
+# CORRECT — synchronous form submit via JS
+page.execute_script("arguments[0].querySelector('form').requestSubmit();", ill_li)
+assert_text "Proactively seeks guidance"
+```
+
+This is the same primitive the suite already uses for the inline-editor display↔form toggle.
+
+## Click-Outside Listeners Need a Real `MouseEvent`
+
+**Dispatch outside-click events via `execute_script` with a constructed `MouseEvent`, not Selenium's pointer or `find(...).click`.** stimulus-use's `useClickOutside` registers a window capture-phase click listener. Selenium's synthetic pointer events do not reliably trigger that listener under headless Chrome load — the dropdown/sidebar/overlay never closes:
+
+```ruby
+# WRONG — synthetic pointer click misses the window capture-phase listener
+find("main").click
+
+# CORRECT — JS-dispatched MouseEvent bubbles to the window listener
+page.execute_script(<<~JS)
+  document.querySelector("main").dispatchEvent(
+    new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+  )
+JS
+```
 
 ## Waiting for Lazy-Loaded Turbo Frames (NON-NEGOTIABLE)
 
