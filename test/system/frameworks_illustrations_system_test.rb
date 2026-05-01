@@ -146,7 +146,13 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
       # Submit via requestSubmit (see comment above for rationale)
       page.execute_script("arguments[0].querySelector('form').requestSubmit();", add_div)
-      assert_text "Drives cross-functional alignment"
+
+      # Wait for the Turbo Stream response to fully insert the new illustration.
+      # On slow CI runners assert_text can read the page mid-render and only
+      # see a partially-rendered element (visible-text-only); :all forces
+      # Capybara to inspect the full DOM tree, including any visually-clipped
+      # nodes during the Turbo append.
+      assert_selector "li", text: "Drives cross-functional alignment", visible: :all
       assert_selector "button", text: "Add illustration"
     end
 
