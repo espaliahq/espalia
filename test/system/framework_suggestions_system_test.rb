@@ -96,7 +96,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
     should "reject a pending suggestion" do
       visit framework_suggestion_path(@framework_id, @illustration_suggestion_id)
 
-      accept_confirm_with_retry { click_button "Reject" }
+      auto_confirm { click_button "Reject" }
 
       assert_current_path framework_suggestions_path(@framework_id)
       assert_text "Suggestion rejected"
@@ -126,7 +126,7 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       # CI runners the click can fire before Turbo's confirm handler is
       # bound, silently dropping the submit and timing out the modal wait.
       assert_selector "form[data-turbo-confirm] button", text: "Withdraw"
-      accept_confirm_with_retry { click_button "Withdraw" }
+      auto_confirm { click_button "Withdraw" }
 
       assert_current_path framework_suggestions_path(@framework_id)
       assert_text "Suggestion withdrawn"

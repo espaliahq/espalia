@@ -164,6 +164,26 @@ module StimulusHelpers
     end
   end
 
+  # Stubs +window.confirm+ to always return true, then runs the block.
+  # Use for clicks that submit forms with +data-turbo-confirm+ when the
+  # action under test is the form submission, not the dialog itself.
+  #
+  # On slow CI runners, Capybara's +accept_confirm+ has a race window
+  # between the click and the dialog appearing — when the JS event loop
+  # is starved, the click can fire before Capybara's modal handler is
+  # registered, so the dialog appears, fires confirm() instantly with no
+  # handler, and is gone before Capybara polls. Stubbing +window.confirm+
+  # eliminates the race entirely: Turbo's submit-listener calls confirm()
+  # synchronously and our stub returns true with no dialog ever showing.
+  #
+  # @yield the block performing the click that triggers the confirm dialog
+  def auto_confirm
+    page.execute_script("window.__originalConfirm = window.confirm; window.confirm = () => true;")
+    yield
+  ensure
+    page.execute_script("if (window.__originalConfirm) { window.confirm = window.__originalConfirm; }")
+  end
+
   # Wraps Capybara's +accept_confirm+ to retry up to two more times if the
   # dialog never appears — on slow CI runners, the click that should
   # trigger Turbo's +data-turbo-confirm+ dialog is occasionally dropped.
@@ -174,6 +194,12 @@ module StimulusHelpers
   #
   # @yield the block performing the click that triggers the confirm dialog
   def accept_confirm_with_retry(*args, wait: 5, &block)
+    # Turbo intercepts form submissions with +data-turbo-confirm+ at submit
+    # time. If +window.Turbo+ isn't yet defined when the click fires, the
+    # form submits directly and no dialog appears. Wait for Turbo to load
+    # before the first attempt so the dialog has the best chance of showing.
+    wait_for_turbo_ready
+
     attempts = 0
     begin
       attempts += 1
@@ -186,6 +212,19 @@ module StimulusHelpers
       # of dropped Turbo-confirm dialogs.
       sleep 0.5
       retry
+    end
+  end
+
+  # Polls the browser until +window.Turbo+ is defined. Turbo's submission
+  # interception relies on this global being installed — clicks fired
+  # before it loads will bypass +data-turbo-confirm+ entirely.
+  def wait_for_turbo_ready(wait: Capybara.default_max_wait_time)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
+    loop do
+      return if page.evaluate_script("typeof Turbo !== 'undefined'")
+      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep 0.1
     end
   end
 

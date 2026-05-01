@@ -96,9 +96,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment)
       assert_text "Manager Review"
 
-      accept_confirm_with_retry(/Starting alignment will lock/) do
-        click_button "Start alignment"
-      end
+      auto_confirm { click_button "Start alignment" }
 
       assert_text "Aligning"
       assert_link "Exit alignment"
@@ -119,9 +117,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
 
       visit assessment_path(@report_assignment)
-      accept_confirm_with_retry(/Starting alignment will lock/) do
-        click_button "Start alignment"
-      end
+      auto_confirm { click_button "Start alignment" }
       assert_text "Aligning"
 
       stream = "tenant-#{@tenant.id}/PersonDev-#{@report.id}-#{@framework_id}"
@@ -294,9 +290,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
-      accept_confirm_with_retry(/lock all ratings for this cycle/) do
-        click_button "Mark alignment complete"
-      end
+      auto_confirm { click_button "Mark alignment complete" }
 
       assert_text "Aligned"
       assert_no_button "Mark alignment complete"
