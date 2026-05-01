@@ -32,11 +32,7 @@ class FrameworksSystemTest < ApplicationSystemTestCase
       handler.publish_version(@framework_id, "test")
     end
 
-    visit new_user_session_path
-    fill_in "Email", with: @user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@user)
   end
 
   context "frameworks index" do
@@ -54,9 +50,8 @@ class FrameworksSystemTest < ApplicationSystemTestCase
       # this synchronisation, the click can land on a stale link and be
       # silently dropped on slow CI runners.
       assert_text "Frameworks"
-      click_link "Test Framework"
+      click_link_with_js_fallback("Test Framework", expect_text: "Strategic Thinking")
 
-      assert_text "Strategic Thinking"
       assert_text "Engineering"
     end
   end

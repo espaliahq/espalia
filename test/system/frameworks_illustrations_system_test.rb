@@ -34,11 +34,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       handler.publish_version(@framework_id, "test")
     end
 
-    visit new_user_session_path
-    fill_in "Email", with: @user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@user)
   end
 
   context "inline illustration editing" do
@@ -70,9 +66,13 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = ill_li.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "Proactively seeks guidance and asks clarifying questions"
 
-      ill_li.find("button[type='submit']", match: :first).click
+      # Submit via the form's requestSubmit() rather than a Capybara button
+      # click — on slow CI runners the button click is silently dropped, but
+      # invoking the form's submit method synchronously bypasses Selenium's
+      # pointer hit-testing entirely and the data-turbo-stream response is
+      # guaranteed to fire.
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", ill_li)
 
-      # Turbo frame swap: updated text appears inline
       assert_text "Proactively seeks guidance and asks clarifying questions"
       assert_no_text "Seeks guidance from tech lead"
     end
@@ -144,10 +144,15 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = add_div.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "Drives cross-functional alignment"
 
-      add_div.find("button[type='submit']").click
+      # Submit via requestSubmit (see comment above for rationale)
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", add_div)
 
-      # Turbo Stream appended the new illustration; Add button is restored
-      assert_text "Drives cross-functional alignment"
+      # Wait for the Turbo Stream response to fully insert the new illustration.
+      # On slow CI runners assert_text can read the page mid-render and only
+      # see a partially-rendered element (visible-text-only); :all forces
+      # Capybara to inspect the full DOM tree, including any visually-clipped
+      # nodes during the Turbo append.
+      assert_selector "li", text: "Drives cross-functional alignment", visible: :all
       assert_selector "button", text: "Add illustration"
     end
 

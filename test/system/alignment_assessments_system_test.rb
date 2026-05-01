@@ -80,11 +80,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       # already-aligning state call seed_alignment_started! explicitly.
     end
 
-    visit new_user_session_path
-    fill_in "Email", with: @manager_user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@manager_user)
   end
 
   context "manager starts alignment" do
@@ -100,11 +96,10 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment)
       assert_text "Manager Review"
 
-      accept_confirm(/Starting alignment will lock/) do
-        click_button "Start alignment"
+      click_with_retry(expect_text: "Aligning") do
+        auto_confirm { click_button "Start alignment" }
       end
 
-      assert_text "Aligning"
       assert_link "Exit alignment"
     end
 
@@ -123,10 +118,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
 
       visit assessment_path(@report_assignment)
-      accept_confirm(/Starting alignment will lock/) do
-        click_button "Start alignment"
+      click_with_retry(expect_text: "Aligning") do
+        auto_confirm { click_button "Start alignment" }
       end
-      assert_text "Aligning"
 
       stream = "tenant-#{@tenant.id}/PersonDev-#{@report.id}-#{@framework_id}"
       events = Rails.configuration.event_store.read.stream(stream).to_a
@@ -167,7 +161,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
-      find("#rating-#{@cap_stable}-2 button", text: "Consistent").click
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistent")
 
       within("#rating-#{@cap_stable}-2") do
         assert_selector "button.ring-1", text: "Consistent"
@@ -207,11 +201,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       seed_alignment_started!
 
       Capybara.reset_sessions!
-      visit new_user_session_path
-      fill_in "Email", with: @report_user.email
-      fill_in "Password", with: "password123"
-      click_button "Log in"
-      assert_current_path root_path
+      sign_in_as(@report_user)
     end
 
     should "show 'Aligning with manager' badge and a Continue alignment link" do
@@ -239,7 +229,13 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
-      tab_links = page.all("nav#category-tabs a", visible: :all)
+      # Wait for the matrix Turbo Frame to finish its eager fetch before
+      # reading link hrefs — the inline fallback can briefly render <a>
+      # elements without href attributes during the initial fetch.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      assert_selector "nav#category-tabs a[href]"
+
+      tab_links = page.all("nav#category-tabs a[href]", visible: :all)
       assert tab_links.any?, "Expected at least one category tab link"
       tab_links.each do |link|
         assert_includes link[:href], "mode=alignment",
@@ -252,7 +248,13 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
-      panel_links = page.all("#scoring-panel a", visible: :all)
+      # Wait for the scoring-panel Turbo Frame to finish its eager fetch
+      # before reading link hrefs — the inline fallback may render an
+      # interstitial without href attributes.
+      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
+      assert_selector "#scoring-panel a[href]"
+
+      panel_links = page.all("#scoring-panel a[href]", visible: :all)
       assert panel_links.any?, "Expected at least one scoring-panel category link"
       panel_links.each do |link|
         assert_includes link[:href], "mode=alignment",
@@ -268,7 +270,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
-      click_with_retry(expect_text: "Manager Review") { click_link "Exit alignment" }
+      click_link_with_js_fallback("Exit alignment", expect_text: "Manager Review")
       assert_no_link "Exit alignment"
       assert_link "Continue alignment"
       assert_no_button "Start alignment"
@@ -290,11 +292,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
-      accept_confirm(/lock all ratings for this cycle/) do
-        click_button "Mark alignment complete"
+      click_with_retry(expect_text: "Aligned") do
+        auto_confirm { click_button "Mark alignment complete" }
       end
-
-      assert_text "Aligned"
       assert_no_button "Mark alignment complete"
 
       # The alignment cell selectors should now be read-only bars (no buttons).

@@ -98,11 +98,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
 
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-    visit new_user_session_path
-    fill_in "Email", with: @user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@user)
   end
 
   context "initial panel" do

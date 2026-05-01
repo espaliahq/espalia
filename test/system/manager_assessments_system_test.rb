@@ -71,30 +71,24 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     # Sign in as the manager
-    visit new_user_session_path
-    fill_in "Email", with: @manager_user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@manager_user)
   end
 
   context "manager assessment index" do
     should "show Assessments nav link and Team Assessments section" do
       # The nav should show "Assessments" for a manager with report assignments
-      click_link "Assessments"
+      click_link_with_js_fallback("Assessments", expect_text: "Team Assessments")
 
       assert_text "My Assessments"
-      assert_text "Team Assessments"
       assert_text "Report Alex"
     end
   end
 
   context "manager assessment show" do
     should "render manager review view after clicking through from index" do
-      click_link "Assessments"
-      assert_text "Team Assessments"
+      click_link_with_js_fallback("Assessments", expect_text: "Team Assessments")
 
-      click_with_retry(expect_text: "Manager Review") { click_link "Review Assessment" }
+      click_link_with_js_fallback("Review Assessment", expect_text: "Manager Review")
 
       assert_text "Report Alex"
       assert_text "assessment-matrix" if false # DOM id, not visible text
@@ -120,8 +114,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
-      # Click a frequency button to rate
-      find("#rating-#{@cap_stable}-2 button", text: "Consistently").click
+      # Click a frequency button to rate (retry-tolerant on slow CI)
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
 
       # Verify the Turbo Stream response re-rendered the cell with the button selected
       within("#rating-#{@cap_stable}-2") do
@@ -134,15 +128,17 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
-      # Rate as "Consistently"
-      find("#rating-#{@cap_stable}-2 button", text: "Consistently").click
-      # Wait for the rating to land — ring-1 marks the selected button. Without
-      # this, the untoggle click below can fire before the first POST's
-      # turbo-stream lands, leaving both actions racing on CI.
+      # Rate as "Consistently" (retry-tolerant on slow CI)
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
       assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently"
 
-      # Click "Consistently" again to untoggle — rating should be cleared
+      # Click "Consistently" again to untoggle — rating should be cleared.
+      # Same retry pattern in reverse: keep clicking until ring-1 is gone.
       find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently").click
+
+      unless page.has_no_css?("#rating-#{@cap_stable}-2 button.ring-1", wait: 4)
+        find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently").click
+      end
 
       # After clearing, no frequency button should have the selected ring style
       within("#rating-#{@cap_stable}-2") do

@@ -42,3 +42,4 @@
 # Devcontainer host-side env (contains the upstream OTLP bearer token).
 .devcontainer/.env
 
+.claude/scheduled_tasks.lock

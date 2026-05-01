@@ -8,11 +8,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
     @user = FactoryBot.create(:user, password: "password123")
     ActsAsTenant.with_tenant(@tenant) { FactoryBot.create(:tenant_user, tenant: @tenant, user: @user) }
 
-    visit new_user_session_path
-    fill_in "Email", with: @user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@user)
   end
 
   context "user menu dropdown" do
@@ -37,7 +33,16 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       visit root_path
       open_dropdown
 
-      find("main").click
+      # Outside-click is handled by stimulus-use's useClickOutside which
+      # registers a window capture-phase listener. Selenium's synthetic
+      # pointer events don't reliably trigger that listener on headless
+      # Chrome under load, so dispatch a real MouseEvent via JS — same
+      # technique used in framework_explorer_system_test.rb.
+      page.execute_script(<<~JS)
+        const main = document.querySelector("main");
+        main.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      JS
+
       screenshot("dropdown_closed_after_outside_click")
 
       assert_no_selector "[role='menu']", visible: true

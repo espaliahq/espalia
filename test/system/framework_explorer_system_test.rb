@@ -73,11 +73,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       FrameworkState::RoleFamily.find_by!(role_family_id: @fc_family_id).update!(department: "Finance")
     end
 
-    visit new_user_session_path
-    fill_in "Email", with: @user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(@user)
   end
 
   context "role filtering in columns and illustrations" do

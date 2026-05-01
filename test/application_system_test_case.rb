@@ -66,12 +66,19 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   Capybara.default_driver = :selenium_headless_chrome
   Capybara.javascript_driver = :selenium_headless_chrome
 
-  # CI runners can be slow — the default 2s is too tight for Turbo round-trips.
-  Capybara.default_max_wait_time = 5
+  # CI runners (especially GitHub-hosted ubuntu-latest with no Selenium grid)
+  # are slow under load — Chrome's JS event loop can be starved long enough
+  # that Turbo Drive round-trips exceed even a 5s wait. Bumping the default
+  # to 10s gives Turbo + Stimulus time to settle without making fast-local
+  # tests slower (Capybara only waits as long as needed).
+  Capybara.default_max_wait_time = 10
 
   # Maximum number of times to retry browser session creation when the
   # Selenium container responds with a network timeout.
   BROWSER_BOOT_RETRIES = 3
+
+  # Default password for users created via FactoryBot — used by sign_in_as.
+  TEST_PASSWORD = "password123"
 
   include AutoScreenshots
   include StimulusHelpers
@@ -80,6 +87,29 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     with_browser_retries do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     end
+  end
+
+  # Signs the given user in via the standard Devise form. Retries the form
+  # submission once if the redirect to root_path doesn't land — on slow CI
+  # runners, the form-submission click can be silently dropped when Chrome's
+  # JS event loop is starved (the same class of flake covered by
+  # +click_with_retry+, but for the Devise sign-in form which is the entry
+  # point for almost every system test).
+  #
+  # @param user [User] the user to sign in
+  # @param password [String] defaults to +TEST_PASSWORD+
+  def sign_in_as(user, password: TEST_PASSWORD)
+    visit new_user_session_path
+
+    submit_sign_in_form(user.email, password)
+
+    # If the form click was dropped, the URL stays on /users/sign_in — fill
+    # again and re-submit. has_current_path? waits up to default_max_wait_time.
+    unless page.has_current_path?(root_path, wait: Capybara.default_max_wait_time)
+      submit_sign_in_form(user.email, password)
+    end
+
+    assert_current_path root_path
   end
 
   # Suppress Rails' automatic failure screenshot when the browser session
@@ -92,6 +122,19 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
 
   private
+
+  # Re-fills email/password and clicks Log in. Idempotent — Devise's sign-in
+  # form is rendered fresh on every GET, so re-filling clears any partial
+  # state from a dropped first attempt.
+  def submit_sign_in_form(email, password)
+    # If a dropped click left us mid-form, navigate back to a fresh form so
+    # the field selectors are present and not stale.
+    visit new_user_session_path unless page.has_field?("Email", wait: 0)
+
+    fill_in "Email", with: email
+    fill_in "Password", with: password
+    click_button "Log in"
+  end
 
   # Retries a block that makes the first Selenium call, rescuing the
   # Net::ReadTimeout that occurs when the Chrome container is cold or

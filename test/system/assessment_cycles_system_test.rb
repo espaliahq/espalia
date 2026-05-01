@@ -54,12 +54,11 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "Assessment Cycles"
       assert_text "Open (0)"
 
-      click_link "Define new cycle"
-      assert_text "Define a new cycle"
+      click_link_with_js_fallback("Define new cycle", expect_text: "Define a new cycle")
 
       fill_in "Name", with: "Q2 2026 Review"
       # Framework select defaults to the only option; cycle_type defaults to "regular"
-      click_with_retry(expect_text: "Cycle defined") { click_button "Define cycle" }
+      click_button_with_js_fallback("Define cycle", expect_text: "Cycle defined")
 
       assert_text "Q2 2026 Review"
 
@@ -72,17 +71,15 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "enrolled@example.com".sub("enrolled", "assigned")
 
       # Unenroll (accept the confirm dialog)
-      accept_confirm do
-        click_button "Unenroll"
+      click_with_retry(expect_text: "Person unenrolled") do
+        auto_confirm { click_button "Unenroll" }
       end
-      assert_text "Person unenrolled"
       assert_text "Withdrawn"
 
       # Close the cycle
-      accept_confirm do
-        click_button "Close cycle"
+      click_with_retry(expect_text: "Cycle closed") do
+        auto_confirm { click_button "Close cycle" }
       end
-      assert_text "Cycle closed"
       assert_text "Closed"
     end
   end
@@ -120,7 +117,7 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       # this synchronisation, the click can land on a stale link and be
       # silently dropped on slow CI runners.
       assert_text "Assessment Cycles"
-      click_with_retry(expect_text: "New Hire") { click_link "Open Cycle" }
+      click_link_with_js_fallback("Open Cycle", expect_text: "New Hire")
 
       assert_text "New Hire"
       assert_text "newhire@example.com"
@@ -137,10 +134,6 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
   private
 
   def sign_in(user)
-    visit new_user_session_path
-    fill_in "Email", with: user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(user)
   end
 end

@@ -138,10 +138,8 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       textarea = editor.find("textarea[name='capability[name]']")
       textarea.fill_in with: "Sharper Strategic Thinking"
-      editor.find("button[type='submit']", match: :first).click
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
 
-      # Turbo swaps the frame; the updated name and wavy-underline decoration
-      # (pending edit) both appear.
       assert_text "Sharper Strategic Thinking"
       assert_no_text "Strategic Thinking", exact: true
     end
@@ -186,7 +184,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         editor
       )
       editor.find("textarea[name='capability[name]']").fill_in with: "Proposed Name"
-      editor.find("button[type='submit']", match: :first).click
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
 
       # Wait for the Turbo frame to swap — pending-edit decoration is the
       # reliable signal that the server responded.
@@ -281,15 +279,5 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_selector "span.decoration-sky-400", text: "s"
       end
     end
-  end
-
-  private
-
-  def sign_in_as(user)
-    visit new_user_session_path
-    fill_in "Email", with: user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
   end
 end

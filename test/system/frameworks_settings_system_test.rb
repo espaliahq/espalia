@@ -61,7 +61,7 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       fill_in "settings[deficit_threshold]", with: "0.50"
 
       # Retry the submit once if the first click was lost on slow CI.
-      click_with_retry(expect_text: "Scoring settings updated") { click_button "Save settings" }
+      click_button_with_js_fallback("Save settings", expect_text: "Scoring settings updated")
 
       assert_field "settings[mastery_threshold]", with: "1.25"
       assert_field "settings[meeting_expectation_threshold]", with: "0.9"
@@ -95,10 +95,6 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
   private
 
   def sign_in(user)
-    visit new_user_session_path
-    fill_in "Email", with: user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_current_path root_path
+    sign_in_as(user)
   end
 end
