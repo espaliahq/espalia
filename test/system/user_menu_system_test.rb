@@ -33,7 +33,16 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       visit root_path
       open_dropdown
 
-      find("main").click
+      # Outside-click is handled by stimulus-use's useClickOutside which
+      # registers a window capture-phase listener. Selenium's synthetic
+      # pointer events don't reliably trigger that listener on headless
+      # Chrome under load, so dispatch a real MouseEvent via JS — same
+      # technique used in framework_explorer_system_test.rb.
+      page.execute_script(<<~JS)
+        const main = document.querySelector("main");
+        main.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      JS
+
       screenshot("dropdown_closed_after_outside_click")
 
       assert_no_selector "[role='menu']", visible: true

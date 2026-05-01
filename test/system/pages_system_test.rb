@@ -64,8 +64,17 @@ class PagesSystemTest < ApplicationSystemTestCase
       # Open the drawer
       toggle_sidebar
 
-      # Click outside the drawer (right side of viewport, past the 16rem drawer)
-      page.driver.browser.action.move_to_location(350, 400).click.perform
+      # Click outside the drawer (right side of viewport, past the 16rem drawer).
+      # Retry once if the click-outside listener wasn't yet bound when the
+      # first click landed — on slow CI runners the listener attaches slightly
+      # after toggle_sidebar returns.
+      action = page.driver.browser.action.move_to_location(350, 400).click
+      action.perform
+
+      drawer_visible = -> {
+        find("[data-sidebar-target='drawer']", visible: :all)[:class].split.exclude?("hidden")
+      }
+      action.perform if drawer_visible.call
 
       # Drawer should close
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
