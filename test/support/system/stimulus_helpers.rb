@@ -189,6 +189,22 @@ module StimulusHelpers
     end
   end
 
+  # Clicks a rating frequency button and retries once if the expected
+  # ring-1 indicator never appears. Wraps the recurring pattern in
+  # rating-cell tests where a Capybara pointer click can be silently
+  # dropped on slow CI runners. Re-clicking is safe because the cell is
+  # still in its un-rated state when the first click was lost.
+  #
+  # @param cell_selector [String] e.g. "#rating-{stable}-{level}"
+  # @param frequency [String] button text — "Some" / "Most" / "Consistently"
+  def click_rating_frequency(cell_selector, frequency)
+    find("#{cell_selector} button", text: frequency).click
+
+    return if page.has_css?("#{cell_selector} button.ring-1", text: frequency, wait: 4)
+
+    find("#{cell_selector} button", text: frequency).click
+  end
+
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no
   # in-flight navigation. Use after a click that triggers Turbo navigation
   # and before reading state that depends on the destination DOM having

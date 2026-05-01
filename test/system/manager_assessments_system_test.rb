@@ -114,8 +114,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
-      # Click a frequency button to rate
-      find("#rating-#{@cap_stable}-2 button", text: "Consistently").click
+      # Click a frequency button to rate (retry-tolerant on slow CI)
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
 
       # Verify the Turbo Stream response re-rendered the cell with the button selected
       within("#rating-#{@cap_stable}-2") do
@@ -128,17 +128,12 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Manager Review"
       wait_for_stimulus "matrix"
 
-      # Rate as "Consistently"
-      find("#rating-#{@cap_stable}-2 button", text: "Consistently").click
-      # Wait for the rating to land — ring-1 marks the selected button. Without
-      # this, the untoggle click below can fire before the first POST's
-      # turbo-stream lands, leaving both actions racing on CI.
+      # Rate as "Consistently" (retry-tolerant on slow CI)
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
       assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently"
 
       # Click "Consistently" again to untoggle — rating should be cleared.
-      # On slow CI the click can be silently dropped; retry once if the ring
-      # is still present after a short wait. Re-clicking is safe because
-      # the rating hasn't moved off ring-1 yet.
+      # Same retry pattern in reverse: keep clicking until ring-1 is gone.
       find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently").click
 
       unless page.has_no_css?("#rating-#{@cap_stable}-2 button.ring-1", wait: 4)

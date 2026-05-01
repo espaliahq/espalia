@@ -163,7 +163,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
-      find("#rating-#{@cap_stable}-2 button", text: "Consistent").click
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistent")
 
       within("#rating-#{@cap_stable}-2") do
         assert_selector "button.ring-1", text: "Consistent"
