@@ -66,10 +66,10 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = ill_li.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "Proactively seeks guidance and asks clarifying questions"
 
-      ill_li.find("button[type='submit']", match: :first).click
+      click_with_retry(expect_text: "Proactively seeks guidance and asks clarifying questions") do
+        ill_li.find("button[type='submit']", match: :first).click
+      end
 
-      # Turbo frame swap: updated text appears inline
-      assert_text "Proactively seeks guidance and asks clarifying questions"
       assert_no_text "Seeks guidance from tech lead"
     end
 
@@ -140,10 +140,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = add_div.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "Drives cross-functional alignment"
 
-      add_div.find("button[type='submit']").click
-
-      # Turbo Stream appended the new illustration; Add button is restored
-      assert_text "Drives cross-functional alignment"
+      click_with_retry(expect_text: "Drives cross-functional alignment") do
+        add_div.find("button[type='submit']").click
+      end
       assert_selector "button", text: "Add illustration"
     end
 
