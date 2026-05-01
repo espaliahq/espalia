@@ -71,13 +71,15 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "enrolled@example.com".sub("enrolled", "assigned")
 
       # Unenroll (accept the confirm dialog)
-      auto_confirm { click_button "Unenroll" }
-      assert_text "Person unenrolled"
+      click_with_retry(expect_text: "Person unenrolled") do
+        auto_confirm { click_button "Unenroll" }
+      end
       assert_text "Withdrawn"
 
       # Close the cycle
-      auto_confirm { click_button "Close cycle" }
-      assert_text "Cycle closed"
+      click_with_retry(expect_text: "Cycle closed") do
+        auto_confirm { click_button "Close cycle" }
+      end
       assert_text "Closed"
     end
   end

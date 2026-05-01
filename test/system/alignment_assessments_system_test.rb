@@ -96,9 +96,10 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment)
       assert_text "Manager Review"
 
-      auto_confirm { click_button "Start alignment" }
+      click_with_retry(expect_text: "Aligning") do
+        auto_confirm { click_button "Start alignment" }
+      end
 
-      assert_text "Aligning"
       assert_link "Exit alignment"
     end
 
@@ -117,8 +118,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
 
       visit assessment_path(@report_assignment)
-      auto_confirm { click_button "Start alignment" }
-      assert_text "Aligning"
+      click_with_retry(expect_text: "Aligning") do
+        auto_confirm { click_button "Start alignment" }
+      end
 
       stream = "tenant-#{@tenant.id}/PersonDev-#{@report.id}-#{@framework_id}"
       events = Rails.configuration.event_store.read.stream(stream).to_a
@@ -290,9 +292,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
-      auto_confirm { click_button "Mark alignment complete" }
-
-      assert_text "Aligned"
+      click_with_retry(expect_text: "Aligned") do
+        auto_confirm { click_button "Mark alignment complete" }
+      end
       assert_no_button "Mark alignment complete"
 
       # The alignment cell selectors should now be read-only bars (no buttons).
