@@ -373,6 +373,12 @@ module StimulusHelpers
     scoped_visible = scope ? "#{scope} #{visible_selector}" : visible_selector
     scoped_verify = verify_selector && (scope ? "#{scope} #{verify_selector}" : verify_selector)
 
+    # Wait for any in-flight Turbo Frame fetches to land before clicking.
+    # Without this, a frame replacement after our click can detach the
+    # element we just toggled, so the visible-state assertion races against
+    # a fresh hidden DOM that the new frame just installed.
+    wait_for_turbo_idle(wait: 5)
+
     # Idempotent: if the target is already visible (e.g. the framework-explorer
     # context pane is open by default in edit mode), the caller asked for "make
     # it visible" and it already is — no click needed.
@@ -385,6 +391,11 @@ module StimulusHelpers
     assert_selector toggle_selector
 
     dispatch_js_click(toggle_selector)
+
+    # Wait for any Turbo Frame fetch the click might have triggered to
+    # settle before the visibility check — otherwise a mid-flight frame
+    # replacement can detach the element we just toggled.
+    wait_for_turbo_idle(wait: 3)
 
     # Short window for the synchronous handler to flip the visible state.
     # If it lands, we're done after the standard verify+visible asserts.
@@ -399,6 +410,7 @@ module StimulusHelpers
     # still in its un-toggled state — re-clicking a toggle that has already
     # moved to "visible" would undo the first click.
     dispatch_js_click(toggle_selector)
+    wait_for_turbo_idle(wait: 3)
 
     assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
     assert_selector scoped_visible, visible: true
