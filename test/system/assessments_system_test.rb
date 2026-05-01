@@ -196,13 +196,15 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("#capability-name-#{@cap1_stable}")
       assert_text "Asks 'why' before jumping into implementation"
 
-      # Click second row — first should collapse, second should expand. Wrapped
-      # in click_with_retry because expand_matrix_row's own retry can't help
-      # here: the expandedRow selector is still visible from row 1's expansion,
-      # so a dropped click on row 2 wouldn't be detected.
-      click_with_retry(expect_text: "Creates a checklist of sub-tasks before starting work") do
-        find("#capability-name-#{@cap2_stable}").click
+      # Click second row — first should collapse, second should expand.
+      # JS-dispatch the click because Capybara's pointer click is dropped
+      # on slow CI (and click_with_retry's retry uses the same mechanism).
+      page.execute_script("document.querySelector('#capability-name-#{@cap2_stable}').click();")
+      unless page.has_text?("Creates a checklist of sub-tasks before starting work", wait: 8)
+        page.execute_script("document.querySelector('#capability-name-#{@cap2_stable}').click();")
       end
+
+      assert_text "Creates a checklist of sub-tasks before starting work"
       assert_no_text "Asks 'why' before jumping into implementation"
     end
 
