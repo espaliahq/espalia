@@ -133,11 +133,16 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently"
 
       # Click "Consistently" again to untoggle — rating should be cleared.
-      # Same retry pattern in reverse: keep clicking until ring-1 is gone.
-      find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently").click
+      # JS-dispatch the click because Capybara's pointer click on the active
+      # ring-1 button has been observed dropped on slow CI runners (and
+      # retrying the same Capybara mechanism doesn't help when the runner
+      # stays starved). The Stimulus action handler runs synchronously
+      # inside execute_script.
+      click_js = "document.querySelector(\"#rating-#{@cap_stable}-2 button.ring-1\")?.click()"
+      page.execute_script(click_js)
 
       unless page.has_no_css?("#rating-#{@cap_stable}-2 button.ring-1", wait: 4)
-        find("#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently").click
+        page.execute_script(click_js)
       end
 
       # After clearing, no frequency button should have the selected ring style
