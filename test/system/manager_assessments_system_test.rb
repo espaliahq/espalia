@@ -88,9 +88,9 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     should "render manager review view after clicking through from index" do
       click_link_with_js_fallback("Assessments", expect_text: "Team Assessments")
 
-      click_link_with_js_fallback("Review Assessment", expect_text: "Manager Review")
+      click_link_with_js_fallback("Review Assessment", expect_text: "Report Alex")
 
-      assert_text "Report Alex"
+      assert_selector "h1", text: "Report Alex"
       assert_text "assessment-matrix" if false # DOM id, not visible text
       assert_text "Critical Thinking"
       assert_text "Synthesises information"
@@ -98,7 +98,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "show self-rating indicator and manager frequency selectors" do
       visit assessment_path(@report_assignment)
-      assert_text "Manager Review"
+      assert_selector "h1", text: "Report Alex"
 
       # The report's self-rating should appear as a read-only indicator
       assert_text "Self:"
@@ -111,7 +111,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "allow manager to submit a rating" do
       visit assessment_path(@report_assignment)
-      assert_text "Manager Review"
+      assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
       # Click a frequency button to rate (retry-tolerant on slow CI)
@@ -125,7 +125,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "allow manager to untoggle a rating by clicking the same frequency" do
       visit assessment_path(@report_assignment)
-      assert_text "Manager Review"
+      assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
       # Rate as "Consistently" (retry-tolerant on slow CI)
@@ -160,13 +160,11 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     should "show manager review matrix on mobile with scoring toggle visible" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@report_assignment)
-      assert_text "Manager Review"
+      assert_selector "h1", text: "Report Alex"
 
-      # Header elements should be visible — long names must not push scoring off-screen
-      assert_text "Report Alex"
-      assert_text "me&u 2025 Career Framework"
-      assert_text "Software Engineer"
+      # Header elements should remain visible on mobile without pushing scoring off-screen
       assert_text "Senior Software Engineer"
+      assert_text "E2"
 
       # Matrix content should be visible
       assert_text "Critical Thinking"
@@ -180,7 +178,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
   context "cross-session sync" do
     should "update manager view when report submits a new self-rating" do
       visit assessment_path(@report_assignment)
-      assert_text "Manager Review"
+      assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
       # Verify WebSocket subscription and sync controller are ready

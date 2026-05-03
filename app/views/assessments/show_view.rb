@@ -49,33 +49,40 @@ class Views::Assessments::ShowView < Views::Base
       end
 
       div(class: "flex flex-wrap items-start justify-between gap-2") do
-        div(class: "min-w-0") do
-          div(class: "flex flex-wrap items-center gap-2") do
-            h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @framework.name }
-            render Components::Kit::Badge.new("v#{@framework.current_published_version}", variant: :info)
-            if @context == :alignment
-              render Components::Kit::Badge.new("Aligning", variant: :warning)
-            end
+        div(class: "min-w-0 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
+          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
+            @matrix_data[:level].title
           end
-          div(class: "mt-1 flex flex-wrap items-center gap-2") do
-            render Components::Kit::Badge.new(@matrix_data[:role].name, variant: :info)
-            render Components::Kit::Badge.new(@matrix_data[:level].title, variant: :default)
-            if @matrix_data[:participant_status] == "aligning"
-              render Components::Kit::Badge.new("Aligning with manager", variant: :warning)
-            elsif @matrix_data[:participant_status] == "aligned"
-              render Components::Kit::Badge.new("Aligned", variant: :success)
-            elsif @assignment.current_open_cycle
-              render Components::Kit::Badge.new("In Progress", variant: :warning)
-            end
-          end
+          render_shortcode_chip
+          render_status_pill
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
           alignment_toggle if @can_align
-          # Mobile scoring toggle
           mobile_scoring_toggle
         end
       end
+    end
+  end
+
+  def render_shortcode_chip
+    span(
+      class: "inline-flex items-center px-1.5 py-0.5 rounded font-mono text-xs " \
+             "font-semibold tracking-wide bg-gray-100 dark:bg-gray-800 " \
+             "text-gray-600 dark:text-gray-300"
+    ) { shortcode }
+  end
+
+  def shortcode
+    "#{@matrix_data[:role].code}#{@matrix_data[:level].ordinal}"
+  end
+
+  def render_status_pill
+    case @matrix_data[:participant_status]
+    when "aligning" then render Components::Kit::Badge.new("Aligning", variant: :warning)
+    when "aligned"  then render Components::Kit::Badge.new("Aligned", variant: :success)
+    else
+      render Components::Kit::Badge.new("In Progress", variant: :warning) if @assignment.current_open_cycle
     end
   end
 

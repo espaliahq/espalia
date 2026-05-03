@@ -114,8 +114,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "display assessment matrix with frequency selectors" do
       visit assessment_path(@assignment)
 
-      assert_text "me&u 2025 Career Framework"
-      assert_text "Software Engineer"
+      assert_selector "h1", text: "Senior Software Engineer"
+      assert_text "E2"
       assert_text "Critical Thinking"
       assert_text "Problem Solving"
 
@@ -404,10 +404,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@assignment)
 
-      # Header badges with long names must wrap without pushing scoring off-screen
-      assert_text "me&u 2025 Career Framework"
-      assert_text "Software Engineer"
-      assert_text "Senior Software Engineer"
+      # Header H1 + shortcode chip + status pill must wrap without pushing scoring off-screen
+      assert_selector "h1", text: "Senior Software Engineer"
+      assert_text "E2"
+      assert_text "In Progress"
 
       # Scoring toggle must remain visible on-screen
       scoring_button = find_button("Scoring")
