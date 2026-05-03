@@ -5,6 +5,8 @@
 # The matrix uses dual-frequency cells (self read-only + manager interactive).
 #
 class Views::Assessments::ManagerShowView < Views::Base
+  include Views::Assessments::HeaderChrome
+
   # @param assignment [PersonFrameworkAssignment]
   # @param assessee [Person] the direct report being assessed
   # @param framework [FrameworkState::Framework]
@@ -68,8 +70,11 @@ class Views::Assessments::ManagerShowView < Views::Base
           span(class: "text-base text-gray-600 dark:text-gray-400") do
             @matrix_data[:level].title
           end
-          render_shortcode_chip
-          render_status_pill
+          render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
+          render_status_pill(
+            participant_status: @matrix_data[:participant_status],
+            has_open_cycle: @assignment.current_open_cycle.present?
+          )
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
@@ -78,27 +83,6 @@ class Views::Assessments::ManagerShowView < Views::Base
           mobile_scoring_toggle
         end
       end
-    end
-  end
-
-  def render_shortcode_chip
-    span(
-      class: "inline-flex items-center px-1.5 py-0.5 rounded font-mono text-xs " \
-             "font-semibold tracking-wide bg-gray-100 dark:bg-gray-800 " \
-             "text-gray-600 dark:text-gray-300"
-    ) { shortcode }
-  end
-
-  def shortcode
-    "#{@matrix_data[:role].code}#{@matrix_data[:level].ordinal}"
-  end
-
-  def render_status_pill
-    case @matrix_data[:participant_status]
-    when "aligning" then render Components::Kit::Badge.new("Aligning", variant: :warning)
-    when "aligned"  then render Components::Kit::Badge.new("Aligned", variant: :success)
-    else
-      render Components::Kit::Badge.new("In Progress", variant: :warning) if @assignment.current_open_cycle
     end
   end
 

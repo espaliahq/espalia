@@ -1,0 +1,25 @@
+# frozen_string_literal: true
+
+# Shared chrome (shortcode chip + status pill) for the self-assessment and
+# manager-review header rows. Kept in one place so the two views never drift
+# on chip styling or status badge variants.
+module Views::Assessments::HeaderChrome
+  private
+
+  def render_shortcode_chip(role:, level:)
+    span(
+      class: "inline-flex items-center px-1.5 py-0.5 rounded font-mono text-xs " \
+             "font-semibold tracking-wide bg-gray-100 dark:bg-gray-800 " \
+             "text-gray-600 dark:text-gray-300"
+    ) { "#{role.code}#{level.ordinal}" }
+  end
+
+  def render_status_pill(participant_status:, has_open_cycle:)
+    case participant_status
+    when "aligning" then render Components::Kit::Badge.new("Aligning", variant: :warning)
+    when "aligned"  then render Components::Kit::Badge.new("Aligned", variant: :success)
+    else
+      render Components::Kit::Badge.new("In Progress", variant: :warning) if has_open_cycle
+    end
+  end
+end

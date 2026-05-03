@@ -3,6 +3,8 @@
 # Two-pane self-assessment page: matrix (main) + scoring panel (sidebar).
 #
 class Views::Assessments::ShowView < Views::Base
+  include Views::Assessments::HeaderChrome
+
   # @param assignment [PersonFrameworkAssignment]
   # @param framework [FrameworkState::Framework]
   # @param matrix_data [Hash] output from Assessments::MatrixDataBuilder
@@ -53,8 +55,11 @@ class Views::Assessments::ShowView < Views::Base
           h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
             @matrix_data[:level].title
           end
-          render_shortcode_chip
-          render_status_pill
+          render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
+          render_status_pill(
+            participant_status: @matrix_data[:participant_status],
+            has_open_cycle: @assignment.current_open_cycle.present?
+          )
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
@@ -62,27 +67,6 @@ class Views::Assessments::ShowView < Views::Base
           mobile_scoring_toggle
         end
       end
-    end
-  end
-
-  def render_shortcode_chip
-    span(
-      class: "inline-flex items-center px-1.5 py-0.5 rounded font-mono text-xs " \
-             "font-semibold tracking-wide bg-gray-100 dark:bg-gray-800 " \
-             "text-gray-600 dark:text-gray-300"
-    ) { shortcode }
-  end
-
-  def shortcode
-    "#{@matrix_data[:role].code}#{@matrix_data[:level].ordinal}"
-  end
-
-  def render_status_pill
-    case @matrix_data[:participant_status]
-    when "aligning" then render Components::Kit::Badge.new("Aligning", variant: :warning)
-    when "aligned"  then render Components::Kit::Badge.new("Aligned", variant: :success)
-    else
-      render Components::Kit::Badge.new("In Progress", variant: :warning) if @assignment.current_open_cycle
     end
   end
 
