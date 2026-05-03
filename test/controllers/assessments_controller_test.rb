@@ -110,8 +110,8 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       get assessment_path(@assignment)
 
       assert_response :success
-      assert_includes response.body, "Mid"
-      assert_includes response.body, "E2"
+      assert_select "h1", text: "Mid"
+      assert_select "span.font-mono", text: "E2"
       assert_includes response.body, "Critical Thinking"
       assert_includes response.body, "assessment-matrix"
       assert_includes response.body, "scoring-panel"
