@@ -86,7 +86,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
   context "manager starts alignment" do
     should "show a Start alignment button on the manager view before alignment begins" do
       visit assessment_path(@report_assignment)
-      assert_text "Manager Review"
+      assert_selector "h1", text: "Report Alex"
       assert_button "Start alignment"
       assert_no_link "Continue alignment"
       assert_no_link "Exit alignment"
@@ -94,7 +94,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "POST to alignment_start when the button is clicked (auto-confirmed) and switch into Aligning" do
       visit assessment_path(@report_assignment)
-      assert_text "Manager Review"
+      assert_selector "h1", text: "Report Alex"
 
       click_with_retry(expect_text: "Aligning") do
         auto_confirm { click_button "Start alignment" }
@@ -204,9 +204,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       sign_in_as(@report_user)
     end
 
-    should "show 'Aligning with manager' badge and a Continue alignment link" do
+    should "show Aligning status pill and a Continue alignment link" do
       visit assessment_path(@report_assignment)
-      assert_text "Aligning with manager"
+      assert_text "Aligning"
       assert_link "Continue alignment"
       assert_no_button "Start alignment"
     end
@@ -266,11 +266,11 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
   context "exiting alignment mode" do
     setup { seed_alignment_started! }
 
-    should "return to Manager Review after clicking Exit alignment but keep Continue link" do
+    should "return to default manager view after clicking Exit alignment but keep Continue link" do
       visit assessment_path(@report_assignment, mode: "alignment")
       assert_text "Aligning"
 
-      click_link_with_js_fallback("Exit alignment", expect_text: "Manager Review")
+      click_link_with_js_fallback("Exit alignment", expect_text: "Continue alignment")
       assert_no_link "Exit alignment"
       assert_link "Continue alignment"
       assert_no_button "Start alignment"

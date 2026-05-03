@@ -3,6 +3,8 @@
 # Two-pane self-assessment page: matrix (main) + scoring panel (sidebar).
 #
 class Views::Assessments::ShowView < Views::Base
+  include Views::Assessments::HeaderChrome
+
   # @param assignment [PersonFrameworkAssignment]
   # @param framework [FrameworkState::Framework]
   # @param matrix_data [Hash] output from Assessments::MatrixDataBuilder
@@ -49,30 +51,19 @@ class Views::Assessments::ShowView < Views::Base
       end
 
       div(class: "flex flex-wrap items-start justify-between gap-2") do
-        div(class: "min-w-0") do
-          div(class: "flex flex-wrap items-center gap-2") do
-            h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @framework.name }
-            render Components::Kit::Badge.new("v#{@framework.current_published_version}", variant: :info)
-            if @context == :alignment
-              render Components::Kit::Badge.new("Aligning", variant: :warning)
-            end
+        div(class: "min-w-0 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
+          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
+            @matrix_data[:level].title
           end
-          div(class: "mt-1 flex flex-wrap items-center gap-2") do
-            render Components::Kit::Badge.new(@matrix_data[:role].name, variant: :info)
-            render Components::Kit::Badge.new(@matrix_data[:level].title, variant: :default)
-            if @matrix_data[:participant_status] == "aligning"
-              render Components::Kit::Badge.new("Aligning with manager", variant: :warning)
-            elsif @matrix_data[:participant_status] == "aligned"
-              render Components::Kit::Badge.new("Aligned", variant: :success)
-            elsif @assignment.current_open_cycle
-              render Components::Kit::Badge.new("In Progress", variant: :warning)
-            end
-          end
+          render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
+          render_status_pill(
+            participant_status: @matrix_data[:participant_status],
+            has_open_cycle: @assignment.current_open_cycle.present?
+          )
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
           alignment_toggle if @can_align
-          # Mobile scoring toggle
           mobile_scoring_toggle
         end
       end

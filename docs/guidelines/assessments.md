@@ -310,12 +310,18 @@ enrolled → started → aligning → aligned → withdrawn
 
 Both flags also flow through the rating controllers' Turbo Stream `respond_with_turbo_stream` paths so post-event re-renders pick the correct read-only / interactive shape.
 
-**Header pills.**
-- Manager view, status `started`: a "Start alignment" `<form>` with `data-turbo-confirm` warning that self + manager ratings will lock. Hidden on mobile (`hidden md:inline-block`) — the action is significant enough to warrant desktop confirmation; mobile pages still allow alignment after a manager opens it elsewhere.
-- Manager view, status `aligning` / `aligned`: a "Continue alignment" link to `?mode=alignment`.
+**Header layout.** Both views render a single-row header (`flex flex-wrap items-baseline gap-x-3 gap-y-1`) consisting of an H1, a monospace shortcode chip, a status pill, and a right-aligned action cluster:
+
+- **Self view** — H1 is the level title (e.g. "Senior Engineering Manager"); shortcode chip is `"#{role.code}#{level.ordinal}"` (e.g. `EM5`); status pill is one of `In Progress` / `Aligning` / `Aligned` (rendered only when `current_open_cycle` exists). The framework name and version badge are intentionally omitted — they live on the back link / index card. The role-name pill is also omitted (the level title already carries the role context, and the shortcode disambiguates).
+- **Manager view** — H1 is `assessee.name`; a secondary subtitle span renders the level title; same shortcode chip and status pill follow. The "Manager Review" badge is omitted — the assessee's name as H1 plus the back link to `Assessments` is sufficient context.
+
+**Status pill.** Single helper `render_status_pill` returns one badge based on `participant_status` (`aligning` → warning, `aligned` → success) or falls back to "In Progress" warning when an open cycle exists. Self view never duplicates this with an extra "Aligning with manager" badge.
+
+**Action cluster (right side, unchanged).**
+- Manager view, status `started`: "Start alignment" `<form>` with `data-turbo-confirm` warning that self + manager ratings will lock. Hidden on mobile (`hidden md:inline-block`).
+- Manager view, status `aligning` / `aligned`: "Continue alignment" link to `?mode=alignment`.
 - Manager view in `:alignment` context with status `aligning`: an extra green "Mark alignment complete" button (also `data-turbo-confirm`).
-- Self view, status `aligning`: an "Aligning with manager" warning badge in the second badge row (no edit pill).
-- Self view, status `aligned`: an "Aligned" success badge (no edit pill).
+- Both views in `:alignment` context: "Exit alignment" link replacing "Continue alignment".
 
 **`AlignmentStartsController` / `AlignmentCompletionsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment, mode: "alignment")` (start) or `assessment_path(@assignment)` (complete). Both rescue `RuntimeError` from the aggregate to surface a generic flash alert (the underlying message is logged via `Rails.logger.error` only).
 

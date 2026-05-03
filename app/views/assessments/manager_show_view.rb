@@ -5,6 +5,8 @@
 # The matrix uses dual-frequency cells (self read-only + manager interactive).
 #
 class Views::Assessments::ManagerShowView < Views::Base
+  include Views::Assessments::HeaderChrome
+
   # @param assignment [PersonFrameworkAssignment]
   # @param assessee [Person] the direct report being assessed
   # @param framework [FrameworkState::Framework]
@@ -61,25 +63,18 @@ class Views::Assessments::ManagerShowView < Views::Base
       end
 
       div(class: "flex flex-wrap items-start justify-between gap-2") do
-        div(class: "min-w-0") do
-          div(class: "flex flex-wrap items-center gap-2") do
-            h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
-              @assessee.name
-            end
-            render Components::Kit::Badge.new(header_badge_label, variant: header_badge_variant)
+        div(class: "min-w-0 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
+          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
+            @assessee.name
           end
-          div(class: "mt-1 flex flex-wrap items-center gap-2") do
-            render Components::Kit::Badge.new(@framework.name, variant: :default)
-            render Components::Kit::Badge.new(@matrix_data[:role].name, variant: :info)
-            render Components::Kit::Badge.new(@matrix_data[:level].title, variant: :default)
-            if @matrix_data[:participant_status] == "aligning"
-              render Components::Kit::Badge.new("Aligning", variant: :warning)
-            elsif @matrix_data[:participant_status] == "aligned"
-              render Components::Kit::Badge.new("Aligned", variant: :success)
-            elsif @assignment.current_open_cycle
-              render Components::Kit::Badge.new("In Progress", variant: :warning)
-            end
+          span(class: "text-base text-gray-600 dark:text-gray-400") do
+            @matrix_data[:level].title
           end
+          render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
+          render_status_pill(
+            participant_status: @matrix_data[:participant_status],
+            has_open_cycle: @assignment.current_open_cycle.present?
+          )
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
@@ -89,14 +84,6 @@ class Views::Assessments::ManagerShowView < Views::Base
         end
       end
     end
-  end
-
-  def header_badge_label
-    @context == :alignment ? "Aligning" : "Manager Review"
-  end
-
-  def header_badge_variant
-    @context == :alignment ? :warning : :info
   end
 
   def alignment_toggle
