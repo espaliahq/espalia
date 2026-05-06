@@ -19,6 +19,9 @@ class ExternalReference
   attribute :system, :string
   attribute :url, :string
   attribute :external_id, :string
+  # `metadata` is intentionally untyped — StoreModel does not register a
+  # `:json` attribute type, and the parent column is JSONB so the hash
+  # round-trips natively. Matches the convention used by `HrisRoleMapping`.
   attribute :metadata, default: -> { {} }
 
   validates :system, inclusion: { in: SYSTEMS }, allow_nil: true
