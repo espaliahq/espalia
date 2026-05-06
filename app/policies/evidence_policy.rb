@@ -38,9 +38,10 @@ class EvidencePolicy < ApplicationPolicy
   # @return [Boolean]
   def withdraw?
     return false unless person.present?
+    return false unless record.is_a?(EvidenceItem)
     return true if tenant_admin?
 
-    record.is_a?(EvidenceItem) && record.author_id == person.id
+    record.author_id == person.id
   end
 
   # @return [Boolean]

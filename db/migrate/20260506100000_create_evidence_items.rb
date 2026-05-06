@@ -20,6 +20,9 @@ class CreateEvidenceItems < ActiveRecord::Migration[8.1]
       t.uuid   :author_id,          null: false
 
       t.string :link_status, default: "active", null: false  # "active" | "withdrawn"
+      # Naming intentionally matches `assessment_cycle_participants.withdrawal_reason`
+      # — existing project convention pairs `withdrawn_at` / `withdrawn_by_id` /
+      # `withdrawal_reason` rather than the symmetric `withdrawn_*` triple.
       t.text   :withdrawal_reason
       t.uuid   :withdrawn_by_id
       t.datetime :withdrawn_at

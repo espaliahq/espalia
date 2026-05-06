@@ -59,9 +59,10 @@ class Views::Assessments::Evidence::Card < Views::Base
   private
 
   def source_dot
+    color = SOURCE_DOT[@item.source] || "bg-gray-400"
     span(
-      class: "mt-1 w-2 h-2 rounded-full shrink-0 #{SOURCE_DOT[@item.source]}",
-      title: @item.source.capitalize
+      class: "mt-1 w-2 h-2 rounded-full shrink-0 #{color}",
+      title: @item.source.to_s.capitalize
     ) { }
   end
 
@@ -88,7 +89,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     div(class: "mt-1 text-[10px] text-gray-400 dark:text-gray-500") do
       span { @item.author&.name || "Unknown" }
       plain " · "
-      span { time_ago_in_words(@item.recorded_at) + " ago" }
+      span { @item.recorded_at ? "#{time_ago_in_words(@item.recorded_at)} ago" : "—" }
     end
   end
 
