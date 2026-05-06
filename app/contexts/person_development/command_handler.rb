@@ -347,4 +347,70 @@ class PersonDevelopment::CommandHandler
 
     { seeded: seeded, skipped: skipped, seeded_by_id: seeded_by_id }
   end
+
+  # Records a new piece of evidence on the person's development stream.
+  #
+  # The caller supplies the evidence_id (UUID v7) so the controller can
+  # reference it in the response without an extra round-trip. Idempotency
+  # is the caller's responsibility — re-recording with the same id raises.
+  #
+  # @param person_id [String] UUID of the person being evidenced
+  # @param framework_id [String] UUID of the framework
+  # @param evidence_id [String] caller-supplied UUID v7
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being evidenced
+  # @param source [String] "self" | "manager" | "peer"
+  # @param evidence_type [String] one of EvidenceItem::EVIDENCE_TYPES
+  # @param content [String] body of the evidence (required)
+  # @param author_id [String] UUID of the Person recording
+  # @param custom_type_label [String, nil] only when evidence_type == "other"
+  # @param title [String, nil] optional one-line summary
+  # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
+  def record_evidence(person_id, framework_id, evidence_id,
+                      capability_stable_id:, level_ordinal:, source:, evidence_type:,
+                      content:, author_id:, custom_type_label: nil, title: nil,
+                      external_reference: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.record_evidence(evidence_id,
+        capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
+        source: source, evidence_type: evidence_type, content: content,
+        author_id: author_id, custom_type_label: custom_type_label,
+        title: title, external_reference: external_reference)
+    end
+  end
+
+  # Moves existing evidence to a new (capability, level) coordinate.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param evidence_id [String] UUID of the evidence to move
+  # @param new_capability_stable_id [String] target capability
+  # @param new_level_ordinal [Integer] target level
+  # @param relinked_by_id [String] UUID of the Person making the change
+  # @param rationale [String, nil] optional explanation
+  def relink_evidence(person_id, framework_id, evidence_id,
+                      new_capability_stable_id:, new_level_ordinal:,
+                      relinked_by_id:, rationale: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.relink_evidence(evidence_id,
+        new_capability_stable_id: new_capability_stable_id,
+        new_level_ordinal: new_level_ordinal,
+        relinked_by_id: relinked_by_id, rationale: rationale)
+    end
+  end
+
+  # Soft-deletes an evidence item.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param evidence_id [String] UUID of the evidence
+  # @param withdrawn_by_id [String] UUID of the Person withdrawing
+  # @param reason [String, nil] optional explanation
+  def withdraw_evidence(person_id, framework_id, evidence_id,
+                        withdrawn_by_id:, reason: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.withdraw_evidence(evidence_id,
+        withdrawn_by_id: withdrawn_by_id, reason: reason)
+    end
+  end
 end

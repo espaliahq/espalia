@@ -1,0 +1,47 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class ExternalReferenceTest < ActiveSupport::TestCase
+  context "validations" do
+    should "allow nil system" do
+      ref = ExternalReference.new(system: nil, url: "https://example.com")
+      assert ref.valid?
+    end
+
+    should "allow known systems" do
+      ExternalReference::SYSTEMS.each do |sys|
+        ref = ExternalReference.new(system: sys)
+        assert ref.valid?, "expected #{sys.inspect} to be valid"
+      end
+    end
+
+    should "reject unknown system" do
+      ref = ExternalReference.new(system: "unknown_system")
+      assert_not ref.valid?
+      assert ref.errors[:system].any?
+    end
+  end
+
+  context "#present?" do
+    should "be false when all fields blank" do
+      assert_not ExternalReference.new.present?
+    end
+
+    should "be true with just a url" do
+      assert ExternalReference.new(url: "https://example.com").present?
+    end
+
+    should "be true with just a system" do
+      assert ExternalReference.new(system: "github").present?
+    end
+
+    should "be true when metadata has entries" do
+      assert ExternalReference.new(metadata: { "pr_number" => "42" }).present?
+    end
+
+    should "be false when metadata is empty hash" do
+      assert_not ExternalReference.new(metadata: {}).present?
+    end
+  end
+end

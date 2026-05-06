@@ -39,4 +39,90 @@ class PersonTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "#manager_chain" do
+    setup do
+      @tenant = create(:tenant)
+    end
+
+    should "return empty array when person has no manager" do
+      ActsAsTenant.with_tenant(@tenant) do
+        person = create(:person)
+        assert_equal [], person.manager_chain
+      end
+    end
+
+    should "return direct manager only when there is no skip-level" do
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person)
+        person = create(:person, manager: manager)
+        assert_equal [ manager.id ], person.manager_chain.map(&:id)
+      end
+    end
+
+    should "return chain ordered closest-first across multiple levels" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ceo = create(:person)
+        skip = create(:person, manager: ceo)
+        manager = create(:person, manager: skip)
+        person = create(:person, manager: manager)
+
+        assert_equal [ manager.id, skip.id, ceo.id ], person.manager_chain.map(&:id)
+      end
+    end
+
+    should "stop walking when a cycle is detected" do
+      ActsAsTenant.with_tenant(@tenant) do
+        a = create(:person)
+        b = create(:person, manager: a)
+        # Inject a cycle: a now reports to b. The walk should stop instead of looping.
+        a.update!(manager: b)
+
+        chain = b.manager_chain.map(&:id)
+        # We don't assert exact order — only that the walk terminates and
+        # never includes b itself.
+        assert_not_includes chain, b.id
+        assert chain.length <= 2
+      end
+    end
+  end
+
+  context "#managed_by?" do
+    setup do
+      @tenant = create(:tenant)
+    end
+
+    should "return true for direct manager" do
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person)
+        person = create(:person, manager: manager)
+        assert person.managed_by?(manager)
+      end
+    end
+
+    should "return true for skip-level manager" do
+      ActsAsTenant.with_tenant(@tenant) do
+        skip = create(:person)
+        manager = create(:person, manager: skip)
+        person = create(:person, manager: manager)
+        assert person.managed_by?(skip)
+      end
+    end
+
+    should "return false for unrelated person" do
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person)
+        unrelated = create(:person)
+        person = create(:person, manager: manager)
+        assert_not person.managed_by?(unrelated)
+      end
+    end
+
+    should "return false when other is nil" do
+      ActsAsTenant.with_tenant(@tenant) do
+        person = create(:person)
+        assert_not person.managed_by?(nil)
+      end
+    end
+  end
 end

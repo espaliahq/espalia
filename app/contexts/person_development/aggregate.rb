@@ -20,6 +20,8 @@ class PersonDevelopment::Aggregate
   include AggregateRoot
 
   FREQUENCIES = %w[none some occasional consistent].freeze
+  EVIDENCE_SOURCES = EvidenceItem::SOURCES
+  EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
 
   def initialize
     @person_id = nil
@@ -32,6 +34,7 @@ class PersonDevelopment::Aggregate
     @alignment_completed = false
     @self_ratings = {}   # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
+    @evidence = {}       # evidence_id => { capability_stable_id:, level_ordinal:, status: }
   end
 
   # ── Assignment ──
@@ -390,6 +393,107 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # ── Evidence ──
+  #
+  # Evidence is qualitative context anchored to a (capability_stable_id,
+  # level_ordinal) coordinate — the same coordinate as the behavioural
+  # expectation it's evidence for. It does not feed scoring (see
+  # ADR-10 / scoring-model.md) and does not freeze during alignment:
+  # add / relink / withdraw remain available regardless of cycle status.
+  # The aggregate must be assigned to a framework, but does not need to
+  # be in a cycle.
+
+  # Records a new piece of evidence.
+  #
+  # @param evidence_id [String] caller-supplied UUID v7 (caller owns idempotency)
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being evidenced
+  # @param source [String] "self" | "manager" | "peer"
+  # @param evidence_type [String] one of EVIDENCE_TYPES
+  # @param content [String] the body of the evidence (required)
+  # @param author_id [String] UUID of the Person recording the evidence
+  # @param custom_type_label [String, nil] free text, only when evidence_type == "other"
+  # @param title [String, nil] optional one-line summary
+  # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
+  # @raise [RuntimeError] if not assigned, evidence_id already exists, or args are invalid
+  def record_evidence(evidence_id, capability_stable_id:, level_ordinal:, source:, evidence_type:,
+                      content:, author_id:, custom_type_label: nil, title: nil,
+                      external_reference: nil)
+    ensure_assigned!
+    raise "Evidence ID already exists" if @evidence.key?(evidence_id)
+    raise "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
+    raise "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)
+    raise "Custom type label required when evidence_type is 'other'" if
+      evidence_type == "other" && custom_type_label.to_s.strip.empty?
+    raise "Custom type label only allowed when evidence_type is 'other'" if
+      evidence_type != "other" && !custom_type_label.nil? && !custom_type_label.to_s.strip.empty?
+    raise "Evidence content cannot be blank" if content.to_s.strip.empty?
+
+    apply(PersonDevelopment::Events::EvidenceRecorded.new(data: {
+      evidence_id: evidence_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      source: source,
+      evidence_type: evidence_type,
+      custom_type_label: custom_type_label,
+      title: title,
+      content: content,
+      external_reference: external_reference,
+      author_id: author_id
+    }))
+  end
+
+  # Moves existing evidence to a different (capability, level) coordinate.
+  #
+  # @param evidence_id [String] UUID of the evidence to move
+  # @param new_capability_stable_id [String] target capability
+  # @param new_level_ordinal [Integer] target level
+  # @param relinked_by_id [String] UUID of the Person making the change
+  # @param rationale [String, nil] optional explanation of the move
+  # @raise [RuntimeError] if not assigned, evidence not found, withdrawn,
+  #   or target coordinate is unchanged
+  def relink_evidence(evidence_id, new_capability_stable_id:, new_level_ordinal:,
+                      relinked_by_id:, rationale: nil)
+    ensure_assigned!
+    state = @evidence[evidence_id]
+    raise "No evidence with id #{evidence_id}" unless state
+    raise "Cannot relink withdrawn evidence" if state[:status] == "withdrawn"
+    if state[:capability_stable_id] == new_capability_stable_id &&
+       state[:level_ordinal] == new_level_ordinal
+      raise "Evidence is already at that coordinate"
+    end
+
+    apply(PersonDevelopment::Events::EvidenceRelinked.new(data: {
+      evidence_id: evidence_id,
+      previous_capability_stable_id: state[:capability_stable_id],
+      previous_level_ordinal: state[:level_ordinal],
+      new_capability_stable_id: new_capability_stable_id,
+      new_level_ordinal: new_level_ordinal,
+      relinked_by_id: relinked_by_id,
+      rationale: rationale
+    }))
+  end
+
+  # Soft-deletes an evidence item. Original record stays in history;
+  # the read model flips `link_status` to "withdrawn".
+  #
+  # @param evidence_id [String] UUID of the evidence
+  # @param withdrawn_by_id [String] UUID of the Person withdrawing
+  # @param reason [String, nil] optional explanation
+  # @raise [RuntimeError] if not assigned, evidence not found, or already withdrawn
+  def withdraw_evidence(evidence_id, withdrawn_by_id:, reason: nil)
+    ensure_assigned!
+    state = @evidence[evidence_id]
+    raise "No evidence with id #{evidence_id}" unless state
+    raise "Evidence already withdrawn" if state[:status] == "withdrawn"
+
+    apply(PersonDevelopment::Events::EvidenceWithdrawn.new(data: {
+      evidence_id: evidence_id,
+      withdrawn_by_id: withdrawn_by_id,
+      reason: reason
+    }))
+  end
+
   private
 
   def ensure_assigned!
@@ -481,5 +585,28 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::AssessmentAligned do |_event|
     # Alignment is persisted via projection; no aggregate state needed
+  end
+
+  on PersonDevelopment::Events::EvidenceRecorded do |event|
+    @evidence[event.data[:evidence_id]] = {
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal],
+      status: "active"
+    }
+  end
+
+  on PersonDevelopment::Events::EvidenceRelinked do |event|
+    state = @evidence[event.data[:evidence_id]]
+    next unless state
+
+    state[:capability_stable_id] = event.data[:new_capability_stable_id]
+    state[:level_ordinal] = event.data[:new_level_ordinal]
+  end
+
+  on PersonDevelopment::Events::EvidenceWithdrawn do |event|
+    state = @evidence[event.data[:evidence_id]]
+    next unless state
+
+    state[:status] = "withdrawn"
   end
 end
