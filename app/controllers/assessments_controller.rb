@@ -52,6 +52,8 @@ class AssessmentsController < ApplicationController
         context: context,
         can_start_alignment: policy.start_alignment?,
         can_complete_alignment: policy.complete_alignment?,
+        viewer_person_id: current_person&.id,
+        can_create_evidence: viewer_can_create_evidence?,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -64,6 +66,8 @@ class AssessmentsController < ApplicationController
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
         context: context,
+        viewer_person_id: current_person&.id,
+        can_create_evidence: viewer_can_create_evidence?,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -81,7 +85,9 @@ class AssessmentsController < ApplicationController
       assignment: @assignment,
       context: assessment_context,
       active_category_id: resolve_active_category_id,
-      expanded_capability_id: params[:capability]
+      expanded_capability_id: params[:capability],
+      viewer_person_id: current_person&.id,
+      can_create_evidence: viewer_can_create_evidence?
     ), layout: false
   end
 
@@ -151,8 +157,32 @@ class AssessmentsController < ApplicationController
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories,
       participant_status: @assignment.current_open_cycle_participant&.status,
-      context: assessment_context
+      context: assessment_context,
+      viewer_person_id: current_person&.id,
+      viewer_sees_all_evidence: viewer_sees_all_evidence?
     ).build
+  end
+
+  # Whether the current viewer can see every active piece of evidence on the
+  # assessment, vs only their own peer-source contributions. Mirrors the
+  # gate inside {EvidencePolicy} — viewer is the assessee, anywhere in
+  # the assessee's manager chain, or a tenant admin.
+  def viewer_sees_all_evidence?
+    return false unless current_person
+    return true if current_user&.global_admin? || current_tenant_user&.admin?
+    return true if @assignment.person_id == current_person.id
+
+    assessee = Person.find_by(id: @assignment.person_id)
+    assessee&.managed_by?(current_person) || false
+  end
+
+  # Whether the current viewer is permitted to record evidence on this
+  # assessment. V1 allows any tenant member with a Person to record peer
+  # evidence — see {EvidencePolicy#create?}.
+  def viewer_can_create_evidence?
+    return false unless current_person
+
+    EvidencePolicy.new(pundit_user, @assignment).create?
   end
 
   # Loads framework assignments for the current person's direct reports.

@@ -10,11 +10,14 @@ class Views::Assessments::ShowView < Views::Base
   # @param matrix_data [Hash] output from Assessments::MatrixDataBuilder
   # @param active_category_id [String, nil] active tab category ID
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param viewer_person_id [String, nil] threaded into the evidence section
+  # @param can_create_evidence [Boolean] whether to render the "+ Add evidence" affordance
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(assignment:, framework:, matrix_data:, active_category_id: nil,
                  expanded_capability_id: nil, context: :self,
+                 viewer_person_id: nil, can_create_evidence: false,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @framework = framework
@@ -22,6 +25,8 @@ class Views::Assessments::ShowView < Views::Base
     @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
     @context = context
+    @viewer_person_id = viewer_person_id
+    @can_create_evidence = can_create_evidence
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -31,9 +36,17 @@ class Views::Assessments::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: { controller: "panel", panel_side_value: "left" }) do
+      # The evidence-form controller is hoisted onto the page wrapper so that
+      # Stimulus actions on hover-revealed buttons inside the matrix frame
+      # (which is OUTSIDE the modal element) can still fire. The Form view
+      # owns the targets; the controller owns the action listening.
+      controllers = [ "panel", ("evidence-form" if @can_create_evidence) ].compact.join(" ")
+      data = { controller: controllers, panel_side_value: "left",
+        action: ("keydown.esc->evidence-form#close" if @can_create_evidence) }.compact
+      div(data: data) do
         assessment_header
         assessment_layout
+        render Views::Assessments::Evidence::Form.new(assessment_id: @assignment.id) if @can_create_evidence
       end
     end
   end
@@ -126,7 +139,9 @@ class Views::Assessments::ShowView < Views::Base
           assessment_id: @assignment.id,
           context: @context,
           active_category_id: @active_category_id,
-          expanded_capability_id: @expanded_capability_id
+          expanded_capability_id: @expanded_capability_id,
+          viewer_person_id: @viewer_person_id,
+          can_create_evidence: @can_create_evidence
         )
       end
     end

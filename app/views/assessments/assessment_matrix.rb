@@ -13,8 +13,11 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param active_category_id [String, nil] selected category tab
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param viewer_person_id [String, nil] threaded into the evidence section
+  # @param can_create_evidence [Boolean] whether the viewer can record evidence
   def initialize(matrix_data:, assessment_id:, context: :self,
-                 active_category_id: nil, expanded_capability_id: nil)
+                 active_category_id: nil, expanded_capability_id: nil,
+                 viewer_person_id: nil, can_create_evidence: false)
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context
@@ -22,6 +25,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @expanded_capability_id = expanded_capability_id
     @frozen = matrix_data[:individual_ratings_frozen] || false
     @alignment_locked = matrix_data[:alignment_locked] || false
+    @viewer_person_id = viewer_person_id
+    @can_create_evidence = can_create_evidence
   end
 
   def view_template
@@ -59,7 +64,9 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                 expanded_capability_id: @expanded_capability_id,
                 show_header: false,
                 frozen: @frozen,
-                alignment_locked: @alignment_locked
+                alignment_locked: @alignment_locked,
+                viewer_person_id: @viewer_person_id,
+                can_create_evidence: @can_create_evidence
               )
             end
           end

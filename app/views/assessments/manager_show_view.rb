@@ -19,6 +19,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   def initialize(assignment:, assessee:, framework:, matrix_data:, active_category_id: nil,
                  expanded_capability_id: nil, context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
+                 viewer_person_id: nil, can_create_evidence: false,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @assessee = assessee
@@ -29,6 +30,8 @@ class Views::Assessments::ManagerShowView < Views::Base
     @context = context
     @can_start_alignment = can_start_alignment
     @can_complete_alignment = can_complete_alignment
+    @viewer_person_id = viewer_person_id
+    @can_create_evidence = can_create_evidence
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -43,9 +46,13 @@ class Views::Assessments::ManagerShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: { controller: "panel", panel_side_value: "left" }) do
+      controllers = [ "panel", ("evidence-form" if @can_create_evidence) ].compact.join(" ")
+      data = { controller: controllers, panel_side_value: "left",
+        action: ("keydown.esc->evidence-form#close" if @can_create_evidence) }.compact
+      div(data: data) do
         assessment_header
         assessment_layout
+        render Views::Assessments::Evidence::Form.new(assessment_id: @assignment.id) if @can_create_evidence
       end
     end
   end
@@ -187,7 +194,9 @@ class Views::Assessments::ManagerShowView < Views::Base
           assessment_id: @assignment.id,
           context: @context,
           active_category_id: @active_category_id,
-          expanded_capability_id: @expanded_capability_id
+          expanded_capability_id: @expanded_capability_id,
+          viewer_person_id: @viewer_person_id,
+          can_create_evidence: @can_create_evidence
         )
       end
     end

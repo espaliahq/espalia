@@ -167,4 +167,76 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       assert_not_nil @data[:aligned_scoring]
     end
   end
+
+  context "evidence loading" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee = create(:person, tenant: @tenant)
+        @manager = create(:person, tenant: @tenant)
+        @peer = create(:person, tenant: @tenant)
+        # Two pieces of evidence at the same coordinate; one elsewhere.
+        @ev_self = create(:evidence_item, tenant: @tenant,
+          person_id: @assessee.id, framework_id: @framework.framework_id,
+          capability_stable_id: @capability.stable_id, level_ordinal: 2,
+          author: @assessee, source: "self", evidence_type: "project_outcome",
+          content: "Shipped X")
+        @ev_mgr = create(:evidence_item, tenant: @tenant,
+          person_id: @assessee.id, framework_id: @framework.framework_id,
+          capability_stable_id: @capability.stable_id, level_ordinal: 2,
+          author: @manager, source: "manager", evidence_type: "code_review",
+          content: "Strong PR")
+        @ev_peer_other = create(:evidence_item, tenant: @tenant,
+          person_id: @assessee.id, framework_id: @framework.framework_id,
+          capability_stable_id: @capability.stable_id, level_ordinal: 3,
+          author: @peer, source: "peer", evidence_type: "peer_feedback",
+          content: "Helpful")
+        # Withdrawn evidence should be excluded.
+        create(:evidence_item, tenant: @tenant,
+          person_id: @assessee.id, framework_id: @framework.framework_id,
+          capability_stable_id: @capability.stable_id, level_ordinal: 2,
+          author: @manager, source: "manager", evidence_type: "code_review",
+          content: "Old", link_status: "withdrawn")
+      end
+    end
+
+    should "expose all active evidence to a viewer who sees all" do
+      data = build_for(viewer_person_id: @manager.id, viewer_sees_all_evidence: true)
+      cell = data[:categories].first[:capabilities].first[:cells][2]
+      assert_equal 2, cell[:evidence_count]
+      assert_equal [ @ev_self.id, @ev_mgr.id ].sort, cell[:evidence].map(&:id).sort
+    end
+
+    should "filter to viewer's own contributions when not in chain" do
+      data = build_for(viewer_person_id: @peer.id, viewer_sees_all_evidence: false)
+      cell = data[:categories].first[:capabilities].first[:cells][2]
+      assert_equal 0, cell[:evidence_count]
+      cell3 = data[:categories].first[:capabilities].first[:cells][3]
+      assert_equal 1, cell3[:evidence_count]
+      assert_equal @ev_peer_other.id, cell3[:evidence].first.id
+    end
+
+    should "return no evidence when viewer_person_id is nil" do
+      data = build_for(viewer_person_id: nil, viewer_sees_all_evidence: false)
+      cell = data[:categories].first[:capabilities].first[:cells][2]
+      assert_equal 0, cell[:evidence_count]
+    end
+
+    should "exclude withdrawn evidence" do
+      data = build_for(viewer_person_id: @manager.id, viewer_sees_all_evidence: true)
+      cell = data[:categories].first[:capabilities].first[:cells][2]
+      assert_not_includes cell[:evidence].map(&:link_status), "withdrawn"
+    end
+  end
+
+  private
+
+  def build_for(viewer_person_id:, viewer_sees_all_evidence:)
+    Assessments::MatrixDataBuilder.new(
+      framework: @framework, role: @role, level: @level,
+      person_id: @assessee.id,
+      cycle_id: @cycle_id, categories: @categories, context: :manager,
+      viewer_person_id: viewer_person_id,
+      viewer_sees_all_evidence: viewer_sees_all_evidence
+    ).build
+  end
 end
