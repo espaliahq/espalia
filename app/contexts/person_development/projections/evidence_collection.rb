@@ -41,8 +41,11 @@ class PersonDevelopment::Projections::EvidenceCollection
   end
 
   def handle_recorded(event)
-    EvidenceItem.create!(
-      id: event.data[:evidence_id],
+    # Idempotent for replay: keying by the event-supplied evidence_id means
+    # re-processing the same EvidenceRecorded event leaves the row in the
+    # same state rather than raising RecordNotUnique.
+    item = EvidenceItem.find_or_initialize_by(id: event.data[:evidence_id])
+    item.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
@@ -58,6 +61,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       link_status: "active",
       recorded_at: event.metadata[:timestamp] || Time.current
     )
+    item.save!
   end
 
   def handle_relinked(event)
