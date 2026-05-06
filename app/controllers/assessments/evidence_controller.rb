@@ -71,7 +71,10 @@ class Assessments::EvidenceController < ApplicationController
   private
 
   def require_person
-    head :forbidden unless current_person
+    return if current_person
+
+    head :forbidden
+    throw :abort
   end
 
   def set_assignment
@@ -94,13 +97,14 @@ class Assessments::EvidenceController < ApplicationController
   end
 
   def redirect_params(capability_stable_id)
-    params = {}
-    params[:capability] = capability_stable_id if capability_stable_id.present?
-    params
+    opts = {}
+    opts[:capability] = capability_stable_id if capability_stable_id.present?
+    opts
   end
 
   def user_not_authorized(_exception = nil)
-    redirect_back fallback_location: assessment_path(@assignment),
+    fallback = @assignment ? assessment_path(@assignment) : assessments_path
+    redirect_back fallback_location: fallback,
       alert: "You are not authorized to perform this action."
   end
 end

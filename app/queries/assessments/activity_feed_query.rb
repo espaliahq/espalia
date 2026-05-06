@@ -72,14 +72,15 @@ class Assessments::ActivityFeedQuery
       next unless kind
       next if hide_manager_rating?(kind)
 
+      data = event.data.with_indifferent_access
       Entry.new(
         id: event.event_id,
         kind: kind,
         occurred_at: event_timestamp(event),
-        payload: event.data.with_indifferent_access,
-        capability_stable_id: event.data[:capability_stable_id],
-        level_ordinal: event.data[:level_ordinal],
-        cycle_id: event.data[:cycle_id]
+        payload: data,
+        capability_stable_id: data[:capability_stable_id],
+        level_ordinal: data[:level_ordinal],
+        cycle_id: data[:cycle_id]
       )
     end
   end

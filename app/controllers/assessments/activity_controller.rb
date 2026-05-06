@@ -33,7 +33,12 @@ class Assessments::ActivityController < ApplicationController
   private
 
   def require_person
-    head :forbidden unless current_person
+    return if current_person
+
+    # `throw :abort` halts the before_action chain so subsequent callbacks
+    # (e.g. set_assignment) don't run and risk a DoubleRenderError.
+    head :forbidden
+    throw :abort
   end
 
   def set_assignment
