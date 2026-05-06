@@ -33,4 +33,9 @@ class ExternalReference
     [ system, url, external_id ].any? { |v| v.to_s.strip.present? } ||
       (metadata.is_a?(Hash) && metadata.any?)
   end
+
+  # @return [Boolean]
+  def blank?
+    !present?
+  end
 end

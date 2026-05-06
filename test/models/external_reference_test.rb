@@ -44,4 +44,18 @@ class ExternalReferenceTest < ActiveSupport::TestCase
       assert_not ExternalReference.new(metadata: {}).present?
     end
   end
+
+  context "#blank?" do
+    should "be the inverse of #present?" do
+      [
+        ExternalReference.new,
+        ExternalReference.new(metadata: {}),
+        ExternalReference.new(system: "github"),
+        ExternalReference.new(url: "https://example.com"),
+        ExternalReference.new(metadata: { "pr_number" => "42" })
+      ].each do |ref|
+        assert_equal !ref.present?, ref.blank?, "blank? mismatched present? for #{ref.inspect}"
+      end
+    end
+  end
 end
