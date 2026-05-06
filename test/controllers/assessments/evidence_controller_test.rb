@@ -66,6 +66,69 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "redirect with both capability and category so the matrix lands on the right tab" do
+      sign_in @assessee_user
+      post assessment_evidence_index_path(@assignment), params: {
+        evidence: {
+          capability_stable_id: @cap.stable_id,
+          level_ordinal: 2,
+          evidence_type: "project_outcome",
+          content: "Done."
+        }
+      }
+      assert_response :redirect
+      assert_match "capability=#{@cap.stable_id}", response.location
+      assert_match "category=#{@cat.category_id}", response.location
+    end
+
+    should "render the new evidence count in the matrix on the post-redirect page" do
+      sign_in @assessee_user
+      post assessment_evidence_index_path(@assignment), params: {
+        evidence: {
+          capability_stable_id: @cap.stable_id,
+          level_ordinal: 2,
+          evidence_type: "project_outcome",
+          content: "Done."
+        }
+      }
+      follow_redirect!
+      # The fresh page render runs the matrix data builder with the new
+      # evidence in the DB; the indicator string only appears when the
+      # cell has a positive evidence_count.
+      assert_match "1 evidence", response.body
+    end
+
+    should "render the new entry in the inline activity feed on the post-redirect page" do
+      sign_in @assessee_user
+      post assessment_evidence_index_path(@assignment), params: {
+        evidence: {
+          capability_stable_id: @cap.stable_id,
+          level_ordinal: 2,
+          evidence_type: "project_outcome",
+          title: "Cookie monster",
+          content: "Done."
+        }
+      }
+      follow_redirect!
+      # The Feed body is rendered inline inside the activity Turbo Frame
+      # on every page render — even when the pane is closed — so the new
+      # entry is server-side-present from the moment the redirect lands.
+      assert_match "Cookie monster", response.body
+    end
+
+    should "reject empty capability_stable_id" do
+      sign_in @assessee_user
+      post assessment_evidence_index_path(@assignment), params: {
+        evidence: {
+          capability_stable_id: "",
+          level_ordinal: 2,
+          evidence_type: "project_outcome",
+          content: "x"
+        }
+      }
+      assert_response :unprocessable_content
+    end
+
     should "infer source as 'manager' when manager records on a direct report" do
       sign_in @manager_user
       post assessment_evidence_index_path(@assignment), params: {

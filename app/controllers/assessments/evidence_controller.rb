@@ -64,7 +64,8 @@ class Assessments::EvidenceController < ApplicationController
   rescue ActiveRecord::RecordNotFound
     head :not_found
   rescue RuntimeError => e
-    redirect_back fallback_location: assessment_path(@assignment),
+    fallback = @assignment ? assessment_path(@assignment) : assessments_path
+    redirect_back fallback_location: fallback,
       alert: "Could not withdraw evidence: #{e.message}"
   end
 
@@ -96,10 +97,32 @@ class Assessments::EvidenceController < ApplicationController
     "peer"
   end
 
+  # Builds the query params for the post-action redirect back to the
+  # assessment page. Includes the focused capability AND its category so
+  # the matrix lands on the right tab and pre-expands the right row;
+  # without the category, `resolve_active_category_id` falls back to the
+  # first category and the user sees a tab where their just-recorded
+  # evidence isn't visible.
   def redirect_params(capability_stable_id)
     opts = {}
-    opts[:capability] = capability_stable_id if capability_stable_id.present?
+    return opts unless capability_stable_id.present?
+
+    opts[:capability] = capability_stable_id
+    if (category_id = category_id_for(capability_stable_id))
+      opts[:category] = category_id
+    end
     opts
+  end
+
+  # Looks up the category for a capability stable_id, scoped to the
+  # assignment's framework so cross-version stable_id collisions resolve
+  # to the right category.
+  def category_id_for(capability_stable_id)
+    FrameworkState::Capability
+      .joins(:category)
+      .where(stable_id: capability_stable_id)
+      .merge(FrameworkState::CapabilityCategory.where(framework_id: @assignment.framework_id))
+      .pick(:category_id)
   end
 
   def user_not_authorized(_exception = nil)
