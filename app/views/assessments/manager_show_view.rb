@@ -20,6 +20,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  expanded_capability_id: nil, context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
                  viewer_person_id: nil, can_create_evidence: false,
+                 activity_entries: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @assessee = assessee
@@ -32,6 +33,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @can_complete_alignment = can_complete_alignment
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @activity_entries = activity_entries
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -46,7 +48,8 @@ class Views::Assessments::ManagerShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      controllers = [ "panel", ("evidence-form" if @can_create_evidence) ].compact.join(" ")
+      controllers = [ "panel", "activity-pane",
+                      ("evidence-form" if @can_create_evidence) ].compact.join(" ")
       data = { controller: controllers, panel_side_value: "left",
         action: ("keydown.esc->evidence-form#close" if @can_create_evidence) }.compact
       div(data: data) do
@@ -86,6 +89,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         div(class: "flex items-center gap-2 shrink-0") do
           mark_complete_button if show_mark_complete?
           start_alignment_button if @can_start_alignment
+          render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
           mobile_scoring_toggle
         end
       end
@@ -179,6 +183,30 @@ class Views::Assessments::ManagerShowView < Views::Base
           data: { assessment_sync_target: "signal" }) { }
       scoring_sidebar
       main_pane
+      activity_sidebar
+    end
+  end
+
+  def activity_sidebar
+    aside(
+      id: "assessment-activity-pane",
+      class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
+             "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto hidden " \
+             "max-lg:fixed max-lg:right-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-30 " \
+             "max-lg:w-80 max-lg:shadow-xl",
+      data: { activity_pane_target: "pane", pane_state: "closed" }
+    ) do
+      turbo_frame_tag(
+        "assessment-activity",
+        src: assessment_activity_path(@assignment),
+        loading: "lazy",
+        data: { assessment_sync_target: "activityFrame" }
+      ) do
+        render Views::Assessments::Activity::Feed.new(
+          entries: @activity_entries,
+          assignment: @assignment
+        )
+      end
     end
   end
 

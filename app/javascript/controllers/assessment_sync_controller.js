@@ -16,7 +16,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["signal", "frame", "scoringFrame"]
+  static targets = ["signal", "frame", "scoringFrame", "activityFrame"]
 
   connect() {
     super.connect()
@@ -84,6 +84,17 @@ export default class extends BaseController {
         const updatedSrc = scoringUrl.toString()
         this.scoringFrameTarget.src = ""
         this.scoringFrameTarget.src = updatedSrc
+      }
+    }
+
+    // Reload the activity feed frame so newly-landed events surface
+    // without a page refresh. Lazy-loaded frames have no src until first
+    // load, so guard accordingly.
+    if (this.hasActivityFrameTarget) {
+      const src = this.activityFrameTarget.getAttribute("src")
+      if (src) {
+        this.activityFrameTarget.src = ""
+        this.activityFrameTarget.src = src
       }
     }
   }

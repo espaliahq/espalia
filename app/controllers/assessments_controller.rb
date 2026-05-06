@@ -41,6 +41,7 @@ class AssessmentsController < ApplicationController
     active_category_id = resolve_active_category_id
     context = assessment_context
     policy = AssessmentPolicy.new(pundit_user, @assignment)
+    activity_entries = load_activity_entries
     if manager_viewing?
       render Views::Assessments::ManagerShowView.new(
         assignment: @assignment,
@@ -54,6 +55,7 @@ class AssessmentsController < ApplicationController
         can_complete_alignment: policy.complete_alignment?,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
+        activity_entries: activity_entries,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -68,6 +70,7 @@ class AssessmentsController < ApplicationController
         context: context,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
+        activity_entries: activity_entries,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -183,6 +186,25 @@ class AssessmentsController < ApplicationController
     return false unless current_person
 
     EvidencePolicy.new(pundit_user, @assignment).create?
+  end
+
+  # Loads the activity feed entries the current viewer is permitted to
+  # see. Identical visibility rules to the matrix's evidence list +
+  # rating-event privacy gates from ActivityFeedQuery.
+  def load_activity_entries
+    return [] unless current_person
+
+    Assessments::ActivityFeedQuery.new(
+      assignment: @assignment,
+      context: assessment_context,
+      viewer_person_id: current_person.id,
+      viewer_sees_all: viewer_sees_all_evidence?,
+      alignment_started: alignment_started?
+    ).call
+  end
+
+  def alignment_started?
+    %w[aligning aligned].include?(@assignment.current_open_cycle_participant&.status)
   end
 
   # Loads framework assignments for the current person's direct reports.

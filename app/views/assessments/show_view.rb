@@ -12,12 +12,14 @@ class Views::Assessments::ShowView < Views::Base
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param viewer_person_id [String, nil] threaded into the evidence section
   # @param can_create_evidence [Boolean] whether to render the "+ Add evidence" affordance
+  # @param activity_entries [Array<Assessments::ActivityFeedQuery::Entry>]
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(assignment:, framework:, matrix_data:, active_category_id: nil,
                  expanded_capability_id: nil, context: :self,
                  viewer_person_id: nil, can_create_evidence: false,
+                 activity_entries: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @framework = framework
@@ -27,6 +29,7 @@ class Views::Assessments::ShowView < Views::Base
     @context = context
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @activity_entries = activity_entries
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -36,11 +39,13 @@ class Views::Assessments::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      # The evidence-form controller is hoisted onto the page wrapper so that
-      # Stimulus actions on hover-revealed buttons inside the matrix frame
-      # (which is OUTSIDE the modal element) can still fire. The Form view
-      # owns the targets; the controller owns the action listening.
-      controllers = [ "panel", ("evidence-form" if @can_create_evidence) ].compact.join(" ")
+      # `panel` controls the left scoring sidebar (mobile overlay).
+      # `evidence-form` is hoisted here so trigger buttons inside the
+      # matrix turbo-frame can drive the modal that lives outside it.
+      # `activity-pane` owns the right activity sidebar's open/closed state
+      # and is hoisted for the same reason — its toggle pill lives in the
+      # header.
+      controllers = [ "panel", "activity-pane", ("evidence-form" if @can_create_evidence) ].compact.join(" ")
       data = { controller: controllers, panel_side_value: "left",
         action: ("keydown.esc->evidence-form#close" if @can_create_evidence) }.compact
       div(data: data) do
@@ -75,6 +80,7 @@ class Views::Assessments::ShowView < Views::Base
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
+          render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
           mobile_scoring_toggle
         end
       end
@@ -124,6 +130,30 @@ class Views::Assessments::ShowView < Views::Base
           data: { assessment_sync_target: "signal" }) { }
       scoring_sidebar
       main_pane
+      activity_sidebar
+    end
+  end
+
+  def activity_sidebar
+    aside(
+      id: "assessment-activity-pane",
+      class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
+             "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto hidden " \
+             "max-lg:fixed max-lg:right-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-30 " \
+             "max-lg:w-80 max-lg:shadow-xl",
+      data: { activity_pane_target: "pane", pane_state: "closed" }
+    ) do
+      turbo_frame_tag(
+        "assessment-activity",
+        src: assessment_activity_path(@assignment),
+        loading: "lazy",
+        data: { assessment_sync_target: "activityFrame" }
+      ) do
+        render Views::Assessments::Activity::Feed.new(
+          entries: @activity_entries,
+          assignment: @assignment
+        )
+      end
     end
   end
 
