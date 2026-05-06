@@ -133,6 +133,105 @@ namespace :assessments do
         end
       end
 
+      # Seed a small mix of evidence items so the dev environment exercises
+      # the full evidence/activity-feed surface: in-cell badge counts, the
+      # expanded-cell list, source variety (self / manager), external links,
+      # and a withdrawn item for the activity feed's strikethrough state.
+      #
+      # The gate checks for the first seeded title (rather than "any evidence
+      # exists for this report") so manually-added evidence in dev doesn't
+      # block the rest of the seed from filling out the demo set.
+      seed_marker_title = "Owned the onboarding revamp"
+      already_seeded = EvidenceItem.for_person(report_person.id)
+        .for_framework(framework.framework_id)
+        .where(title: seed_marker_title)
+        .exists?
+      if already_seeded
+        puts "Seeded evidence already present for report. Skipping evidence seed."
+      else
+        evidence_seeds = [
+          {
+            binding_index: 0, level_offset: 0, source: "self", author: report_person,
+            type: "project_outcome", title: "Owned the onboarding revamp",
+            content: "Drove the new-hire onboarding redesign from spec to launch over Q4.",
+            external_reference: { system: "linear", url: "https://linear.example/PROJ-1024" }
+          },
+          {
+            binding_index: 0, level_offset: 0, source: "manager", author: manager_person,
+            type: "code_review", title: "PR feedback: payments refactor",
+            content: "Strong instinct for boundary placement. Pushed back on the ad-hoc " \
+                     "callbacks and proposed a clearer service object split.",
+            external_reference: { system: "github", url: "https://github.com/example/repo/pull/427" }
+          },
+          {
+            binding_index: 1, level_offset: 0, source: "manager", author: manager_person,
+            type: "customer_feedback", title: nil,
+            content: "Customer-facing demo went smoothly. Two design partners flagged " \
+                     "the migration story as the clearest they've seen this quarter.",
+            external_reference: nil
+          },
+          {
+            binding_index: 1, level_offset: -1, source: "self", author: report_person,
+            type: "incident_response", title: "Saturday outage triage",
+            content: "Took primary on the storage-tier outage, kept comms tight in #incidents, " \
+                     "shipped the rollback within the SLO window.",
+            external_reference: { system: "slack", url: "https://slack.example/archives/CINC/p123" }
+          },
+          {
+            binding_index: 2, level_offset: 0, source: "self", author: report_person,
+            type: "other", custom_type_label: "Internal tech talk",
+            title: "Brown bag: writing better tests for event-sourced aggregates",
+            content: "Hosted an internal session walking the team through aggregate testing " \
+                     "patterns, with a worked example from the assessments domain.",
+            external_reference: nil
+          },
+          {
+            binding_index: 2, level_offset: 0, source: "manager", author: manager_person,
+            type: "presentation", title: "Withdrawn: misattributed feedback",
+            content: "Initial peer-feedback note was actually about a different teammate; " \
+                     "withdrawing rather than relinking to keep the audit clean.",
+            external_reference: nil,
+            withdraw: true,
+            withdrawal_reason: "misattributed"
+          }
+        ]
+
+        evidence_seeds.each_with_index do |seed, i|
+          binding = bindings[seed[:binding_index]]
+          next unless binding
+
+          cap = binding.capability
+          target_level_ordinal = (level.ordinal + seed[:level_offset]).clamp(1, level.ordinal)
+          evidence_id = SecureRandom.uuid_v7
+
+          handler.record_evidence(
+            report_person.id, framework.framework_id, evidence_id,
+            capability_stable_id: cap.stable_id,
+            level_ordinal: target_level_ordinal,
+            source: seed[:source],
+            evidence_type: seed[:type],
+            custom_type_label: seed[:custom_type_label],
+            title: seed[:title],
+            content: seed[:content],
+            author_id: seed[:author].id,
+            external_reference: seed[:external_reference]
+          )
+
+          if seed[:withdraw]
+            handler.withdraw_evidence(
+              report_person.id, framework.framework_id, evidence_id,
+              withdrawn_by_id: seed[:author].id,
+              reason: seed[:withdrawal_reason]
+            )
+            puts "  Evidence (#{seed[:source]}, #{cap.name} L#{target_level_ordinal}): " \
+                 "recorded then withdrawn — #{seed[:title] || seed[:type]}"
+          else
+            puts "  Evidence (#{seed[:source]}, #{cap.name} L#{target_level_ordinal}): " \
+                 "#{seed[:title] || seed[:type]}"
+          end
+        end
+      end
+
       puts "Assessment seed complete."
       puts "  Manager: #{manager_person.name} (#{admin_tu.user.email})"
       puts "  Report:  #{report_person.name} (#{report_email} / password123)"
