@@ -24,6 +24,13 @@ class ExternalReference
   # round-trips natively. Matches the convention used by `HrisRoleMapping`.
   attribute :metadata, default: -> { {} }
 
+  # Normalise empty / whitespace-only strings to nil so an external
+  # reference left untouched in the form (the modal's inputs always
+  # submit, even when the user doesn't fill them in) round-trips as a
+  # blank reference rather than persisting `""` and tripping the
+  # inclusion validation below.
+  normalizes :system, :url, :external_id, with: ->(v) { v.to_s.strip.presence }
+
   validates :system, inclusion: { in: SYSTEMS }, allow_nil: true
 
   # Whether this reference carries any populated information.

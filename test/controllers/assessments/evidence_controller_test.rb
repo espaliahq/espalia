@@ -148,6 +148,46 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "render the new evidence in the assessee's matrix when manager submits" do
+      sign_in @manager_user
+      post assessment_evidence_index_path(@assignment), params: {
+        evidence: {
+          capability_stable_id: @cap.stable_id,
+          level_ordinal: 2,
+          evidence_type: "code_review",
+          title: "Code review note",
+          content: "Strong refactor."
+        }
+      }
+      assert_response :redirect
+      assert_match "capability=#{@cap.stable_id}", response.location
+      assert_match "category=#{@cat.category_id}", response.location
+
+      follow_redirect!
+      assert_response :success
+      assert_match "1 evidence", response.body
+      assert_match "Code review note", response.body
+    end
+
+    should "accept submission with an empty external_reference hash" do
+      sign_in @manager_user
+      post assessment_evidence_index_path(@assignment), params: {
+        evidence: {
+          capability_stable_id: @cap.stable_id,
+          level_ordinal: 2,
+          evidence_type: "code_review",
+          content: "x",
+          external_reference: { system: "", url: "" }
+        }
+      }
+      assert_response :redirect
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.last
+        assert_not_nil item
+      end
+    end
+
     should "infer source as 'peer' for an unrelated tenant member" do
       sign_in @peer_user
       post assessment_evidence_index_path(@assignment), params: {

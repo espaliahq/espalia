@@ -45,6 +45,28 @@ class ExternalReferenceTest < ActiveSupport::TestCase
     end
   end
 
+  context "normalisation" do
+    should "convert empty strings to nil for system, url, and external_id" do
+      ref = ExternalReference.new(system: "", url: "  ", external_id: "")
+      assert_nil ref.system
+      assert_nil ref.url
+      assert_nil ref.external_id
+    end
+
+    should "preserve non-blank values verbatim (apart from trim)" do
+      ref = ExternalReference.new(system: "github", url: " https://x ", external_id: "42")
+      assert_equal "github", ref.system
+      assert_equal "https://x", ref.url
+      assert_equal "42", ref.external_id
+    end
+
+    should "round-trip an all-empty form submission as a blank reference" do
+      ref = ExternalReference.new(system: "", url: "", external_id: "")
+      assert ref.valid?
+      assert_not ref.present?
+    end
+  end
+
   context "#blank?" do
     should "be the inverse of #present?" do
       [
