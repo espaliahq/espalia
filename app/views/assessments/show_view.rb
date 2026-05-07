@@ -77,7 +77,6 @@ class Views::Assessments::ShowView < Views::Base
         render Views::Assessments::Evidence::Form.new(assessment_id: @assignment.id) if @can_create_evidence
         if can_render_relink_modal?
           render Views::Assessments::Evidence::RelinkForm.new(
-            assessment_id: @assignment.id,
             categories: @matrix_data[:categories],
             merged_levels: @matrix_data[:merged_levels]
           )

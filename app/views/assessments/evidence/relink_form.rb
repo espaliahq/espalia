@@ -11,11 +11,15 @@
 # the assessee's role — the same set the matrix renders columns for.
 #
 class Views::Assessments::Evidence::RelinkForm < Views::Base
-  # @param assessment_id [String]
+  # The form's action URL is filled in dynamically by
+  # `evidence-relink-form` Stimulus controller per click — each evidence
+  # item has a different `:id` in the URL — so the assignment id only
+  # needs to live as `data-evidence-relink-form-assessment-id-value` on
+  # the controller's element (set by ShowView/ManagerShowView).
+  #
   # @param categories [Array<Hash>] from MatrixDataBuilder, [{ category:, capabilities: [...] }]
   # @param merged_levels [Array<Hash>] from MatrixDataBuilder
-  def initialize(assessment_id:, categories:, merged_levels:)
-    @assessment_id = assessment_id
+  def initialize(categories:, merged_levels:)
     @categories = categories
     @merged_levels = merged_levels
   end

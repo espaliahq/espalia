@@ -115,6 +115,7 @@ class Assessments::EvidenceController < ApplicationController
     @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
+    throw :abort
   end
 
   # Determines source from the viewer's relationship to the assessee.

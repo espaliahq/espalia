@@ -172,16 +172,21 @@ class Views::Assessments::Activity::Entry < Views::Base
     "Relinked evidence from #{prev_label} to #{capability_label}"
   end
 
-  # "<Capability name> · L<n>" when both are known, falls back to "L<n>"
-  # only (matches V1 behaviour for entries from a deleted capability).
+  # "<Capability name> · L<n>" when both are known. Falls back to a
+  # bare level when the capability name is missing (e.g. archived in a
+  # later framework version), and to a generic placeholder when both
+  # are missing — never produces a stray "L" or "Lnil" in copy.
   def capability_label
     cap_name = @entry.capability_name.to_s.strip.presence
-    if cap_name && @entry.level_ordinal
-      "#{cap_name} · L#{@entry.level_ordinal}"
+    level = @entry.level_ordinal
+    if cap_name && level
+      "#{cap_name} · L#{level}"
     elsif cap_name
       cap_name
+    elsif level
+      "L#{level}"
     else
-      "L#{@entry.level_ordinal}"
+      "an unknown coordinate"
     end
   end
 

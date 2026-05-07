@@ -45,6 +45,7 @@ class Assessments::ActivityController < ApplicationController
     @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
+    throw :abort
   end
 
   def assessment_context
