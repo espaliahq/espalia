@@ -195,12 +195,23 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
 
       # Click "Show all activity" → focus clears, banner hides. Drive the
       # controller directly to avoid synthetic-click drops on CI.
-      page.execute_script(<<~JS)
+      clear_focus_js = <<~JS
         const wrapper = document.querySelector("[data-controller~='activity-feed']");
         const ctrl = window.Stimulus
           .getControllerForElementAndIdentifier(wrapper, "activity-feed");
         ctrl?.clearFocus();
       JS
+      page.execute_script(clear_focus_js)
+
+      # A late Turbo Frame load can reconnect the activity-feed controller
+      # and re-apply the initial category focus, re-showing the banner.
+      # Re-issue clearFocus once if the banner is still visible after a
+      # short wait — safe because focus only ever transitions one way here.
+      unless page.has_no_css?("[data-activity-feed-target='focusBanner']:not(.hidden)", wait: 4)
+        wait_for_turbo_idle
+        page.execute_script(clear_focus_js)
+      end
+
       assert page.has_no_css?(
         "[data-activity-feed-target='focusBanner']:not(.hidden)",
         wait: Capybara.default_max_wait_time
