@@ -210,7 +210,7 @@ class Views::Assessments::ShowView < Views::Base
     aside(
       class: "w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
              "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto " \
-             "max-lg:hidden max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-30 " \
+             "max-lg:hidden max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:bottom-0 max-lg:z-40 " \
              "max-lg:w-72 max-lg:shadow-xl",
       data: { panel_target: "panel" }
     ) do
