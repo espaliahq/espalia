@@ -127,10 +127,20 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       # CI runners the click can fire before Turbo's confirm handler is
       # bound, silently dropping the submit and timing out the modal wait.
       assert_selector "form[data-turbo-confirm] button", text: "Withdraw"
-      click_with_retry(expect_text: "Suggestion withdrawn") do
-        auto_confirm { click_button "Withdraw" }
+
+      # Submit the form via requestSubmit() so a starved CI runner can't
+      # drop the click — same primitive used for the manager untoggle.
+      # Stub window.confirm first so Turbo's data-turbo-confirm handler
+      # resolves synchronously without showing a dialog.
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("form[data-turbo-confirm] button"))
+            .find(b => b.textContent.trim() === "Withdraw");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
 
+      assert_text "Suggestion withdrawn"
       assert_current_path framework_suggestions_path(@framework_id)
 
       ActsAsTenant.with_tenant(@tenant) do
