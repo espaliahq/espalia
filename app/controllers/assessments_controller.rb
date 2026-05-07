@@ -42,6 +42,7 @@ class AssessmentsController < ApplicationController
     context = assessment_context
     policy = AssessmentPolicy.new(pundit_user, @assignment)
     activity_entries = load_activity_entries
+    can_relink_others = viewer_can_relink_others_evidence?
     if manager_viewing?
       render Views::Assessments::ManagerShowView.new(
         assignment: @assignment,
@@ -55,6 +56,7 @@ class AssessmentsController < ApplicationController
         can_complete_alignment: policy.complete_alignment?,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
+        can_relink_others_evidence: can_relink_others,
         activity_entries: activity_entries,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
@@ -70,6 +72,7 @@ class AssessmentsController < ApplicationController
         context: context,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
+        can_relink_others_evidence: can_relink_others,
         activity_entries: activity_entries,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
@@ -90,7 +93,8 @@ class AssessmentsController < ApplicationController
       active_category_id: resolve_active_category_id,
       expanded_capability_id: params[:capability],
       viewer_person_id: current_person&.id,
-      can_create_evidence: viewer_can_create_evidence?
+      can_create_evidence: viewer_can_create_evidence?,
+      can_relink_others_evidence: viewer_can_relink_others_evidence?
     ), layout: false
   end
 
@@ -186,6 +190,17 @@ class AssessmentsController < ApplicationController
     return false unless current_person
 
     EvidencePolicy.new(pundit_user, @assignment).create?
+  end
+
+  # Whether the viewer may relink evidence they DIDN'T author. Mirrors
+  # {EvidencePolicy#relink?} for the non-author paths: assessee, or
+  # anywhere in their manager hierarchy. Authors always get relink on
+  # their own items via {Evidence::List#can_relink?}.
+  def viewer_can_relink_others_evidence?
+    return false unless current_person
+    return true if @assignment.person_id == current_person.id
+
+    Person.find_by(id: @assignment.person_id)&.managed_by?(current_person) || false
   end
 
   # Loads the activity feed entries the current viewer is permitted to

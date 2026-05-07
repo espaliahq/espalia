@@ -116,6 +116,42 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "relinked evidence" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @new_cap_stable = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.relink_evidence(
+          @assessee.id, @framework_id, @evidence_id,
+          new_capability_stable_id: @new_cap_stable,
+          new_level_ordinal: 4,
+          relinked_by_id: @assessee.id,
+          rationale: "Better fit at L4"
+        )
+      end
+      @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
+        alignment_started: true)
+    end
+
+    should "include an evidence_relinked entry on top of the original recorded entry" do
+      kinds = @entries.map(&:kind)
+      assert_includes kinds, "evidence_recorded"
+      assert_includes kinds, "evidence_relinked"
+    end
+
+    should "anchor the relink entry to the new (capability, level) coord" do
+      relink = @entries.find { |e| e.kind == "evidence_relinked" }
+      assert_equal @new_cap_stable, relink.capability_stable_id
+      assert_equal 4, relink.level_ordinal
+    end
+
+    should "carry the previous coords + rationale on the payload" do
+      relink = @entries.find { |e| e.kind == "evidence_relinked" }
+      assert_equal @cap_sid, relink.payload[:previous_capability_stable_id]
+      assert_equal 2, relink.payload[:previous_level_ordinal]
+      assert_equal "Better fit at L4", relink.payload[:rationale]
+    end
+  end
+
   context "withdrawn evidence" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

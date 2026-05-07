@@ -34,10 +34,12 @@ class Views::Assessments::Evidence::Card < Views::Base
   # @param item [EvidenceItem]
   # @param assessment_id [String] for routing the withdraw action
   # @param can_withdraw [Boolean] whether the current viewer may withdraw this item
-  def initialize(item:, assessment_id:, can_withdraw: false)
+  # @param can_relink [Boolean] whether the current viewer may relink this item
+  def initialize(item:, assessment_id:, can_withdraw: false, can_relink: false)
     @item = item
     @assessment_id = assessment_id
     @can_withdraw = can_withdraw
+    @can_relink = can_relink
   end
 
   def view_template
@@ -52,7 +54,7 @@ class Views::Assessments::Evidence::Card < Views::Base
         content_line
         footer_line
       end
-      withdraw_button if @can_withdraw
+      actions_menu if @can_withdraw || @can_relink
     end
   end
 
@@ -115,17 +117,77 @@ class Views::Assessments::Evidence::Card < Views::Base
     end
   end
 
-  def withdraw_button
+  # Hover-revealed kebab menu that hosts both Relink and Withdraw, plus
+  # any future actions (copy link, edit). Uses the shared `dropdown`
+  # Stimulus controller — same one the user menu and framework explorer
+  # use — so behaviour (click-outside close, transition, aria) is
+  # consistent across the app.
+  #
+  # The wrapper goes opacity-100 when the dropdown is open (driven by
+  # the `aria-expanded` Stimulus controller toggles on the trigger)
+  # via `has-[]` so the menu doesn't fade-out the moment the user
+  # clicks the kebab and the cursor leaves the hover area.
+  def actions_menu
+    div(
+      class: "absolute top-1 right-1 opacity-0 group-hover:opacity-100 " \
+             "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity",
+      data: { controller: "dropdown",
+              action: "keydown.esc@window->dropdown#close" }
+    ) do
+      kebab_trigger
+      kebab_menu
+    end
+  end
+
+  def kebab_trigger
+    button(
+      type: "button",
+      class: "rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
+             "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+      data: { dropdown_target: "trigger", action: "click->dropdown#toggle" },
+      aria: { label: "Evidence actions", haspopup: "menu", expanded: "false" }
+    ) do
+      # Vertical 3-dot kebab — kept inline so we don't depend on an icon set.
+      span(class: "block leading-none -mt-1 text-base", aria_hidden: "true") { "⋮" }
+    end
+  end
+
+  def kebab_menu
+    div(
+      class: "hidden absolute right-0 mt-1 w-36 rounded-md border border-gray-200 " \
+             "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-10 " \
+             "py-1 text-xs",
+      role: "menu",
+      data: { dropdown_target: "menu" }
+    ) do
+      relink_menu_item if @can_relink
+      withdraw_menu_item if @can_withdraw
+    end
+  end
+
+  def relink_menu_item
+    button(
+      type: "button",
+      class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
+             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      role: "menuitem",
+      data: {
+        action: "click->dropdown#close click->evidence-relink-form#open",
+        evidence_relink_form_evidence_id_param: @item.id,
+        evidence_relink_form_capability_stable_id_param: @item.capability_stable_id,
+        evidence_relink_form_level_ordinal_param: @item.level_ordinal
+      }
+    ) { "Relink" }
+  end
+
+  def withdraw_menu_item
     button_to(
       assessment_evidence_path(@assessment_id, @item.id),
       method: :delete,
-      class: "absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity " \
-             "rounded p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 " \
-             "dark:hover:bg-red-900/30",
-      form: { data: { turbo_confirm: "Withdraw this evidence?" } },
-      aria: { label: "Withdraw evidence" }
-    ) do
-      span(class: "block w-3 h-3", aria_hidden: "true") { "×" }
-    end
+      class: "block w-full text-left px-3 py-1.5 text-red-700 dark:text-red-300 " \
+             "hover:bg-red-50 dark:hover:bg-red-900/30",
+      role: "menuitem",
+      form: { data: { turbo_confirm: "Withdraw this evidence?" } }
+    ) { "Withdraw" }
   end
 end

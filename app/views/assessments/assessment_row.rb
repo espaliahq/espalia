@@ -27,10 +27,14 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param can_create_evidence [Boolean] whether to render the "+ Add evidence"
   #   affordance. Independent of `frozen`/`alignment_locked` — evidence is not
   #   frozen during alignment.
+  # @param can_relink_others_evidence [Boolean] whether the viewer is the
+  #   assessee or in their manager chain — gates the Relink kebab option for
+  #   evidence the viewer didn't author.
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self,
                  blocked: false, block_reason: nil, contribution: nil, secondary_contributions: [],
                  expanded: false, category_id: nil, frozen: false, alignment_locked: false,
-                 viewer_person_id: nil, can_create_evidence: false)
+                 viewer_person_id: nil, can_create_evidence: false,
+                 can_relink_others_evidence: false)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -54,6 +58,7 @@ class Views::Assessments::AssessmentRow < Views::Base
     @alignment_locked = alignment_locked
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_relink_others_evidence = can_relink_others_evidence
   end
 
   def view_template
@@ -134,6 +139,7 @@ class Views::Assessments::AssessmentRow < Views::Base
           assessment_id: @assessment_id,
           viewer_person_id: @viewer_person_id,
           can_create: @can_create_evidence,
+          can_relink_others: @can_relink_others_evidence,
           capability_stable_id: @capability.stable_id,
           level_ordinal: ordinal
         )

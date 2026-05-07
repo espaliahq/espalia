@@ -48,6 +48,37 @@ class Assessments::EvidenceController < ApplicationController
       alert: "Could not record evidence: #{e.message}"
   end
 
+  # POST /assessments/:assessment_id/evidence/:id/relink
+  def relink
+    item = EvidenceItem.find(params.expect(:id))
+    authorize item, :relink?, policy_class: EvidencePolicy
+
+    attrs = params.expect(evidence: [ :new_capability_stable_id, :new_level_ordinal, :rationale ])
+
+    new_level = Integer(attrs[:new_level_ordinal], exception: false)
+    unless new_level && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: new_level)
+      head :unprocessable_content
+      return
+    end
+
+    PersonDevelopment::CommandHandler.new.relink_evidence(
+      @assignment.person_id, @assignment.framework_id, item.id,
+      new_capability_stable_id: attrs[:new_capability_stable_id],
+      new_level_ordinal: new_level,
+      relinked_by_id: current_person.id,
+      rationale: attrs[:rationale].to_s.strip.presence
+    )
+
+    redirect_to assessment_path(@assignment, redirect_params(attrs[:new_capability_stable_id])),
+      status: :see_other, notice: "Evidence relinked."
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
+  rescue RuntimeError => e
+    fallback = @assignment ? assessment_path(@assignment) : assessments_path
+    redirect_back fallback_location: fallback,
+      alert: "Could not relink evidence: #{e.message}"
+  end
+
   # DELETE /assessments/:assessment_id/evidence/:id
   def destroy
     item = EvidenceItem.find(params.expect(:id))

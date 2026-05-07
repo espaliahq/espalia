@@ -19,6 +19,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "manager_rating_cleared"   => "bg-gray-400",
     "assessment_aligned"       => "bg-amber-500",
     "evidence_recorded"        => "bg-amber-500",
+    "evidence_relinked"        => "bg-sky-500",
     "evidence_withdrawn"       => "bg-gray-400",
     "alignment_started"        => "bg-amber-500",
     "alignment_completed"      => "bg-green-600"
@@ -37,6 +38,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "manager_rating_cleared"  => "ratings",
     "assessment_aligned"      => "ratings",
     "evidence_recorded"       => "evidence",
+    "evidence_relinked"       => "evidence",
     "evidence_withdrawn"      => "evidence",
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment"
@@ -144,11 +146,30 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "assessment_aligned"
       "Aligned on #{capability_label}"
     when "evidence_recorded"     then evidence_recorded_summary
+    when "evidence_relinked"     then evidence_relinked_summary
     when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
     else @entry.kind.humanize
     end
+  end
+
+  # "Relinked evidence from <prev cap · L<prev>> to <new cap · L<new>>"
+  # Falls back to bare ordinal when the previous capability name is
+  # unknown (e.g. it was archived in a later framework version).
+  def evidence_relinked_summary
+    prev_cap = payload_value(:previous_capability_name).to_s.strip.presence
+    prev_level = payload_value(:previous_level_ordinal)
+    prev_label = if prev_cap && prev_level
+      "#{prev_cap} · L#{prev_level}"
+    elsif prev_cap
+      prev_cap
+    elsif prev_level
+      "L#{prev_level}"
+    else
+      "previous coordinate"
+    end
+    "Relinked evidence from #{prev_label} to #{capability_label}"
   end
 
   # "<Capability name> · L<n>" when both are known, falls back to "L<n>"
@@ -176,8 +197,9 @@ class Views::Assessments::Activity::Entry < Views::Base
   end
 
   # Secondary line carries the rating frequency (with comment if present)
-  # for rating events, or the body content for evidence. Empty → no
-  # secondary line renders.
+  # for rating events, the body content for evidence-recorded, the
+  # rationale for evidence-relinked, or the withdrawal reason for
+  # withdraw. Empty → no secondary line renders.
   def secondary_text
     case @entry.kind
     when "self_rated", "self_rating_revised", "manager_rated", "manager_rating_revised", "assessment_aligned"
@@ -186,6 +208,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_recorded"
       content = @entry.payload.respond_to?(:content) ? @entry.payload.content.to_s : ""
       content.strip.presence
+    when "evidence_relinked"
+      payload_value(:rationale).to_s.strip.presence
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       reason.to_s.strip.presence

@@ -8,14 +8,18 @@ class Views::Assessments::Evidence::List < Views::Base
   # @param assessment_id [String]
   # @param viewer_person_id [String, nil]
   # @param can_create [Boolean]
+  # @param can_relink_others [Boolean] true when the viewer is the assessee
+  #   or anywhere in their manager hierarchy — these users may relink
+  #   any evidence on this assessment, not just items they authored.
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
   def initialize(items:, assessment_id:, viewer_person_id:, can_create:,
-                 capability_stable_id:, level_ordinal:)
+                 capability_stable_id:, level_ordinal:, can_relink_others: false)
     @items = items
     @assessment_id = assessment_id
     @viewer_person_id = viewer_person_id
     @can_create = can_create
+    @can_relink_others = can_relink_others
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
   end
@@ -31,7 +35,8 @@ class Views::Assessments::Evidence::List < Views::Base
           render Views::Assessments::Evidence::Card.new(
             item: item,
             assessment_id: @assessment_id,
-            can_withdraw: can_withdraw?(item)
+            can_withdraw: can_withdraw?(item),
+            can_relink: can_relink?(item)
           )
         end
       end
@@ -71,5 +76,11 @@ class Views::Assessments::Evidence::List < Views::Base
 
   def can_withdraw?(item)
     @viewer_person_id.present? && item.author_id == @viewer_person_id
+  end
+
+  def can_relink?(item)
+    return false unless @viewer_person_id.present?
+
+    item.author_id == @viewer_person_id || @can_relink_others
   end
 end

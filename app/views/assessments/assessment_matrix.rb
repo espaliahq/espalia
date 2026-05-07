@@ -15,9 +15,12 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param viewer_person_id [String, nil] threaded into the evidence section
   # @param can_create_evidence [Boolean] whether the viewer can record evidence
+  # @param can_relink_others_evidence [Boolean] whether the viewer can relink
+  #   evidence they didn't author (assessee or in their manager chain)
   def initialize(matrix_data:, assessment_id:, context: :self,
                  active_category_id: nil, expanded_capability_id: nil,
-                 viewer_person_id: nil, can_create_evidence: false)
+                 viewer_person_id: nil, can_create_evidence: false,
+                 can_relink_others_evidence: false)
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context
@@ -27,6 +30,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @alignment_locked = matrix_data[:alignment_locked] || false
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_relink_others_evidence = can_relink_others_evidence
   end
 
   def view_template
@@ -76,7 +80,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                 frozen: @frozen,
                 alignment_locked: @alignment_locked,
                 viewer_person_id: @viewer_person_id,
-                can_create_evidence: @can_create_evidence
+                can_create_evidence: @can_create_evidence,
+                can_relink_others_evidence: @can_relink_others_evidence
               )
             end
           end

@@ -253,6 +253,88 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "POST /assessments/:assessment_id/evidence/:id/relink" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @new_cap = create(:framework_capability, category_id: @cat.category_id, name: "New Capability")
+        create(:framework_capability_role_binding,
+          capability_id: @new_cap.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation,
+          capability_id: @new_cap.capability_id, level_ordinal: 2, description: "New L2")
+
+        @evidence_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @assessee.id, @assignment.framework_id, @evidence_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "manager", evidence_type: "code_review",
+          content: "Original.", author_id: @manager.id
+        )
+        @item = EvidenceItem.find(@evidence_id)
+      end
+    end
+
+    should "let the original author relink their own evidence" do
+      sign_in @manager_user
+      post relink_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          new_capability_stable_id: @new_cap.stable_id,
+          new_level_ordinal: 2,
+          rationale: "Better fit"
+        }
+      }
+      assert_response :redirect
+      assert_match "capability=#{@new_cap.stable_id}", response.location
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal @new_cap.stable_id, @item.capability_stable_id
+        assert_equal 2, @item.level_ordinal
+      end
+    end
+
+    should "let the assessee relink evidence they didn't author" do
+      sign_in @assessee_user
+      post relink_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          new_capability_stable_id: @new_cap.stable_id,
+          new_level_ordinal: 2
+        }
+      }
+      assert_response :redirect
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal @new_cap.stable_id, @item.capability_stable_id
+      end
+    end
+
+    should "deny an unrelated peer" do
+      sign_in @peer_user
+      post relink_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          new_capability_stable_id: @new_cap.stable_id,
+          new_level_ordinal: 2
+        }
+      }
+      assert_response :redirect
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal @cap.stable_id, @item.capability_stable_id, "evidence should be unchanged"
+      end
+    end
+
+    should "reject an invalid level_ordinal" do
+      sign_in @manager_user
+      post relink_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          new_capability_stable_id: @new_cap.stable_id,
+          new_level_ordinal: 99
+        }
+      }
+      assert_response :unprocessable_content
+    end
+  end
+
   context "DELETE /assessments/:assessment_id/evidence/:id" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

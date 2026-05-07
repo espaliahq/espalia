@@ -36,6 +36,13 @@ class Assessments::ActivityFeedQuery
     PersonDevelopment::Events::AssessmentAligned      => "assessment_aligned"
   }.freeze
 
+  # Evidence relinks live on the same RES stream as ratings — they're
+  # an event, not a column on the read model — so we read them from
+  # the stream alongside rating events. The feed renders them as their
+  # own entry kind (with from→to coords) rather than amending the
+  # original `evidence_recorded` entry.
+  RELINK_KIND = "evidence_relinked"
+
   MANAGER_KINDS = %w[manager_rated manager_rating_revised manager_rating_cleared].freeze
 
   # @param assignment [PersonFrameworkAssignment]
@@ -58,7 +65,7 @@ class Assessments::ActivityFeedQuery
 
   # @return [Array<Entry>] reverse-chronological entries the viewer may see
   def call
-    entries = rating_entries + evidence_entries + alignment_entries
+    entries = rating_entries + relink_entries + evidence_entries + alignment_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -85,11 +92,17 @@ class Assessments::ActivityFeedQuery
     capability_lookup.dig(stable_id, :category_id)
   end
 
+  def stream_events
+    @stream_events ||= begin
+      stream = EventStreamNaming.person_development_stream(
+        @assignment.person_id, @assignment.framework_id
+      )
+      @event_store.read.stream(stream).to_a
+    end
+  end
+
   def rating_entries
-    stream = EventStreamNaming.person_development_stream(
-      @assignment.person_id, @assignment.framework_id
-    )
-    @event_store.read.stream(stream).to_a.filter_map do |event|
+    stream_events.filter_map do |event|
       kind = RATING_KINDS[event.class]
       next unless kind
       next if hide_manager_rating?(kind)
@@ -106,6 +119,38 @@ class Assessments::ActivityFeedQuery
         cycle_id: data[:cycle_id],
         capability_name: capability_name_for(stable_id),
         category_id: category_id_for(stable_id)
+      )
+    end
+  end
+
+  # Reads EvidenceRelinked events and emits one feed entry each. The
+  # entry's `capability_stable_id` / `level_ordinal` / `category_id`
+  # point at the NEW location (so click-navigate goes there), while the
+  # PREVIOUS coords are stuffed into payload alongside the
+  # human-readable previous capability name for the summary line. Peers
+  # without sees_all are filtered to relinks they themselves performed,
+  # mirroring the same author gate as evidence_entries.
+  def relink_entries
+    stream_events.filter_map do |event|
+      next unless event.is_a?(PersonDevelopment::Events::EvidenceRelinked)
+
+      data = event.data.with_indifferent_access
+      next if !@viewer_sees_all && data[:relinked_by_id] != @viewer_person_id
+
+      new_stable_id = data[:new_capability_stable_id]
+      Entry.new(
+        id: event.event_id,
+        kind: RELINK_KIND,
+        occurred_at: event_timestamp(event),
+        payload: data.merge(
+          previous_capability_name: capability_name_for(data[:previous_capability_stable_id]),
+          new_capability_name: capability_name_for(new_stable_id)
+        ),
+        capability_stable_id: new_stable_id,
+        level_ordinal: data[:new_level_ordinal],
+        cycle_id: nil,
+        capability_name: capability_name_for(new_stable_id),
+        category_id: category_id_for(new_stable_id)
       )
     end
   end

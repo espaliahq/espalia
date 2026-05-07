@@ -12,6 +12,7 @@ class Views::Assessments::ShowView < Views::Base
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param viewer_person_id [String, nil] threaded into the evidence section
   # @param can_create_evidence [Boolean] whether to render the "+ Add evidence" affordance
+  # @param can_relink_others_evidence [Boolean] whether to render the relink kebab option
   # @param activity_entries [Array<Assessments::ActivityFeedQuery::Entry>]
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
@@ -19,6 +20,7 @@ class Views::Assessments::ShowView < Views::Base
   def initialize(assignment:, framework:, matrix_data:, active_category_id: nil,
                  expanded_capability_id: nil, context: :self,
                  viewer_person_id: nil, can_create_evidence: false,
+                 can_relink_others_evidence: false,
                  activity_entries: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
@@ -29,10 +31,19 @@ class Views::Assessments::ShowView < Views::Base
     @context = context
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_relink_others_evidence = can_relink_others_evidence
     @activity_entries = activity_entries
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
+  end
+
+  # The relink modal is rendered whenever the viewer might possibly use
+  # the kebab menu's Relink option — i.e. when they can author or are
+  # in the assessee's chain. Authoring + chain together cover the V1
+  # relink-permitted set.
+  def can_render_relink_modal?
+    @viewer_person_id.present? && (@can_create_evidence || @can_relink_others_evidence)
   end
 
   def view_template
@@ -40,18 +51,37 @@ class Views::Assessments::ShowView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       # `panel` controls the left scoring sidebar (mobile overlay).
-      # `evidence-form` is hoisted here so trigger buttons inside the
-      # matrix turbo-frame can drive the modal that lives outside it.
-      # `activity-pane` owns the right activity sidebar's open/closed state
-      # and is hoisted for the same reason — its toggle pill lives in the
-      # header.
-      controllers = [ "panel", "activity-pane", ("evidence-form" if @can_create_evidence) ].compact.join(" ")
-      data = { controller: controllers, panel_side_value: "left",
-        action: ("keydown.esc->evidence-form#close" if @can_create_evidence) }.compact
+      # `evidence-form` and `evidence-relink-form` are hoisted here so
+      # trigger buttons inside the matrix turbo-frame (the cell's
+      # "+ Add evidence" affordance and each evidence card's kebab menu)
+      # can drive their respective modals — the modals live outside the
+      # frame, so the controller has to enclose both. `activity-pane`
+      # owns the right sidebar's open/closed state, hoisted for the
+      # same reason.
+      controllers = [
+        "panel",
+        "activity-pane",
+        ("evidence-form" if @can_create_evidence),
+        ("evidence-relink-form" if can_render_relink_modal?)
+      ].compact.join(" ")
+      esc_actions = [
+        ("keydown.esc->evidence-form#close" if @can_create_evidence),
+        ("keydown.esc->evidence-relink-form#close" if can_render_relink_modal?)
+      ].compact.join(" ")
+      data = { controller: controllers, panel_side_value: "left" }
+      data[:action] = esc_actions if esc_actions.present?
+      data[:evidence_relink_form_assessment_id_value] = @assignment.id if can_render_relink_modal?
       div(data: data) do
         assessment_header
         assessment_layout
         render Views::Assessments::Evidence::Form.new(assessment_id: @assignment.id) if @can_create_evidence
+        if can_render_relink_modal?
+          render Views::Assessments::Evidence::RelinkForm.new(
+            assessment_id: @assignment.id,
+            categories: @matrix_data[:categories],
+            merged_levels: @matrix_data[:merged_levels]
+          )
+        end
       end
     end
   end
