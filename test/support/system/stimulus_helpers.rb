@@ -219,6 +219,21 @@ module StimulusHelpers
       if (btn) btn.click();
     JS
 
+    return if landed?(expect_text, expect_selector, wait: 8)
+
+    # JS click also dropped (or the synthetic click event bypassed Turbo's
+    # submit interceptor). Submit the button's form via requestSubmit() —
+    # invokes Turbo's submit-listener synchronously, the most reliable path.
+    page.execute_script(<<~JS, locator)
+      const text = arguments[0];
+      const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
+      const btn = buttons.find(b => {
+        const label = (b.textContent || b.value || "").trim();
+        return label === text || label.includes(text);
+      });
+      btn?.closest("form")?.requestSubmit(btn);
+    JS
+
     if expect_text
       assert_text expect_text, wait: Capybara.default_max_wait_time
     else
