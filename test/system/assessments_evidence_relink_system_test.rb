@@ -82,19 +82,20 @@ class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
       # The kebab is hover-revealed (its parent wrapper has opacity-0
-      # group-hover:opacity-100) so we can't use open_dropdown — its
-      # visibility precondition fails on the opacity-0 wrapper. Instead
-      # JS-dispatch the click directly, and retry once if Chrome's event
-      # loop drops it on a starved CI runner.
+      # group-hover:opacity-100) so we can't use open_dropdown. Even an
+      # execute_script .click() has been observed dropped twice in a row
+      # on a starved CI runner (see PR #77). Bypass the click event
+      # entirely and invoke the Stimulus controller's #toggle directly —
+      # synchronous, no event loop dependency.
       menu_selector = "#evidence-#{@evidence_id} [role='menu']"
-      2.times do
-        page.execute_script(<<~JS)
-          document.querySelector(
-            "#evidence-#{@evidence_id} [data-dropdown-target='trigger']"
-          ).click();
-        JS
-        break if page.has_css?(menu_selector, visible: true, wait: 3)
-      end
+      page.execute_script(<<~JS)
+        const wrapper = document.querySelector(
+          "#evidence-#{@evidence_id} [data-controller~='dropdown']"
+        );
+        const ctrl = window.Stimulus
+          .getControllerForElementAndIdentifier(wrapper, "dropdown");
+        ctrl.toggle();
+      JS
       assert_selector menu_selector, visible: true
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Relink"
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw"
