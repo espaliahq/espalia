@@ -30,9 +30,8 @@ class Person < ApplicationRecord
   validates :status, inclusion: { in: %w[active inactive] }
 
   # The transitive closure of `manager_id` upward — direct manager,
-  # skip-level, skip-skip, etc. Used by {AssessmentPolicy} and
-  # {EvidencePolicy} to gate access to anyone in the hierarchy above
-  # the assessee.
+  # skip-level, skip-skip, etc. Used by {EvidencePolicy} to gate
+  # access to anyone in the hierarchy above the assessee.
   #
   # Detects cycles defensively: if the graph contains a loop (data bug)
   # the walk stops at the first repeated person rather than spinning.
