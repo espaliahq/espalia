@@ -44,6 +44,12 @@ class EvidencePolicy < ApplicationPolicy
     record.author_id == person.id
   end
 
+  # Note the asymmetry with `withdraw?`: tenant admins can withdraw (treat
+  # as a content-neutral cleanup) but cannot relink — relinking reattributes
+  # evidence to a different capability/level, which is a domain judgement
+  # that requires familiarity with the assessee's work that admins generally
+  # lack. The author or someone in the assessee's chain should make that call.
+  #
   # @return [Boolean]
   def relink?
     return false unless person.present?
