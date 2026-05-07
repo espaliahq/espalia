@@ -186,16 +186,25 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       assert_selector "[data-activity-feed-target='focusBanner']", visible: true,
         text: "Show all activity"
 
+      # Wait for any in-flight Turbo Frame fetches (e.g. the lazy activity
+      # frame's initial load triggered by opening the pane) to settle.
+      # Without this, a frame load that lands between clearFocus and the
+      # assertion reconnects activity-feed and re-applies category focus,
+      # re-showing the banner.
+      wait_for_turbo_idle
+
       # Click "Show all activity" → focus clears, banner hides. Drive the
-      # controller directly — synthetic click events on the link have been
-      # observed dropped on starved CI runners.
+      # controller directly to avoid synthetic-click drops on CI.
       page.execute_script(<<~JS)
         const wrapper = document.querySelector("[data-controller~='activity-feed']");
         const ctrl = window.Stimulus
           .getControllerForElementAndIdentifier(wrapper, "activity-feed");
-        ctrl.clearFocus();
+        ctrl?.clearFocus();
       JS
-      assert_selector "[data-activity-feed-target='focusBanner']", visible: :hidden
+      assert page.has_no_css?(
+        "[data-activity-feed-target='focusBanner']:not(.hidden)",
+        wait: Capybara.default_max_wait_time
+      ), "expected focus banner to hide after clearFocus"
     end
   end
 end
