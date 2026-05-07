@@ -84,9 +84,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     should "narrow the visible entries to ratings only when Ratings is selected" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_selector "[data-activity-feed-target='entry']", count: 4, visible: :all
 
@@ -108,9 +106,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     should "amber-accent the entries that match the focused capability" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
 
       # Focus cap1 by expanding its row.
       expand_matrix_row("#capability-name-#{@cap1_stable}")
@@ -146,9 +142,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     should "hide non-matching entries when Filter mode is selected and focus is active" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
 
       # No focus yet (the matrix dispatches category focus on connect,
       # but Filter mode of category-level focus shouldn't hide anything
@@ -174,9 +168,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     should "include the capability name so each entry is readable at a glance" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
 
       assert_text "Self-rated Critical Thinking · L1"
       assert_text "Self-rated Problem Solving · L1"
@@ -187,9 +179,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     should "surface a Show all activity link whenever focus is active and clear focus when clicked" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
 
       # Initial connect dispatches category-level focus, so the banner
       # should be visible from page load.

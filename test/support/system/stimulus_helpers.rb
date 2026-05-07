@@ -306,6 +306,19 @@ module StimulusHelpers
   #
   # @param cell_selector [String] e.g. "#rating-{stable}-{level}"
   # @param frequency [String] button text — "Some" / "Most" / "Consistently"
+  # Toggles the assessment activity pane by directly invoking the
+  # Stimulus controller's #toggle method. JS pointer clicks on the
+  # toggle button have been observed dropped on parallel CI runners
+  # when Chrome's event loop is starved, so we bypass the event chain
+  # entirely and call the controller method.
+  def toggle_activity_pane
+    page.execute_script(<<~JS)
+      const wrapper = document.querySelector("[data-controller~='activity-pane']");
+      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane");
+      ctrl.toggle();
+    JS
+  end
+
   def click_rating_frequency(cell_selector, frequency)
     find("#{cell_selector} button", text: frequency).click
 

@@ -67,9 +67,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       # Default-closed: aside has the hidden class until the toggle fires.
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
 
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
 
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_selector "#assessment-activity-pane", text: "Activity", visible: true
@@ -79,9 +77,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
 
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
 
       # Navigate away and back; pane should still be open.
@@ -106,9 +102,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
 
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_selector "#assessment-activity-pane turbo-frame#assessment-activity[complete]",
         visible: :all
@@ -154,15 +148,11 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
 
       assert_no_match(/[?&]activity=/, page.current_url)
 
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_match(/[?&]activity=open/, page.current_url)
 
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
       assert_match(/[?&]activity=closed/, page.current_url)
 
@@ -192,9 +182,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
 
-      page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-pane#toggle']").click();
-      JS
+      toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
 
       # Clicking inside the pane keeps it open.
