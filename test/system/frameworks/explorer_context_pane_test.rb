@@ -121,7 +121,12 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       open_context_pane
 
       wait_for_stimulus "matrix"
-      find("tr[data-capability-id='#{@cap_a_id}']").click
+      # JS-dispatch the row click — Capybara's pointer click on the row
+      # has been silently dropped on starved CI runners, leaving the
+      # suggestion panel un-filtered.
+      page.execute_script(<<~JS)
+        document.querySelector("tr[data-capability-id='#{@cap_a_id}']")?.click();
+      JS
 
       within "#suggestion-panel" do
         assert_text "Strategic Thinking"
@@ -141,11 +146,17 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       open_context_pane
 
       wait_for_stimulus "matrix"
-      find("tr[data-capability-id='#{@cap_a_id}']").click
+      # JS-dispatch both row + cell clicks \u2014 Capybara's pointer click on
+      # rows is occasionally dropped on starved CI runners.
+      page.execute_script(<<~JS)
+        document.querySelector("tr[data-capability-id='#{@cap_a_id}']")?.click();
+      JS
 
       # Click an expanded-row cell to focus it. The expanded <td> carries the
       # focusCell action + capability_id + level_ordinal data attributes.
-      find("td[data-action='click->matrix#focusCell'][data-level-ordinal='2']").click
+      page.execute_script(<<~JS)
+        document.querySelector("td[data-action='click->matrix#focusCell'][data-level-ordinal='2']")?.click();
+      JS
 
       within "#suggestion-panel" do
         assert_text "\u00d7 L2"

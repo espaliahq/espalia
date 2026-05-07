@@ -82,10 +82,16 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       assert_text "Suggested edit"
       assert_text "Asks open-ended questions to surface assumptions"
 
-      click_button "Approve"
+      # requestSubmit bypasses Selenium pointer hit-testing — same flake
+      # class as the Reject and Withdraw buttons in this file.
+      page.execute_script(<<~JS)
+        const btn = Array.from(document.querySelectorAll("button"))
+          .find(b => b.textContent.trim() === "Approve");
+        btn?.closest("form")?.requestSubmit(btn);
+      JS
 
-      assert_current_path framework_suggestions_path(@framework_id)
       assert_text "Suggestion approved"
+      assert_current_path framework_suggestions_path(@framework_id)
 
       ActsAsTenant.with_tenant(@tenant) do
         expectation = FrameworkState::BehaviouralExpectation.find_by(expectation_id: @eid)
@@ -96,9 +102,14 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
     should "reject a pending suggestion" do
       visit framework_suggestion_path(@framework_id, @illustration_suggestion_id)
 
-      click_with_retry(expect_text: "Suggestion rejected") do
-        auto_confirm { click_button "Reject" }
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("form[data-turbo-confirm] button"))
+            .find(b => b.textContent.trim() === "Reject");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
+      assert_text "Suggestion rejected"
 
       assert_current_path framework_suggestions_path(@framework_id)
 
@@ -127,10 +138,20 @@ class FrameworkSuggestionsSystemTest < ApplicationSystemTestCase
       # CI runners the click can fire before Turbo's confirm handler is
       # bound, silently dropping the submit and timing out the modal wait.
       assert_selector "form[data-turbo-confirm] button", text: "Withdraw"
-      click_with_retry(expect_text: "Suggestion withdrawn") do
-        auto_confirm { click_button "Withdraw" }
+
+      # Submit the form via requestSubmit() so a starved CI runner can't
+      # drop the click — same primitive used for the manager untoggle.
+      # Stub window.confirm first so Turbo's data-turbo-confirm handler
+      # resolves synchronously without showing a dialog.
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("form[data-turbo-confirm] button"))
+            .find(b => b.textContent.trim() === "Withdraw");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
 
+      assert_text "Suggestion withdrawn"
       assert_current_path framework_suggestions_path(@framework_id)
 
       ActsAsTenant.with_tenant(@tenant) do

@@ -88,8 +88,11 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     should "render manager review view after clicking through from index" do
       click_link_with_js_fallback("Assessments", expect_text: "Team Assessments")
 
-      click_link_with_js_fallback("Review Assessment", expect_text: "Report Alex")
-
+      # "Critical Thinking" only renders on the manager-review (show) page —
+      # using the team-list's "Report Alex" as the wait target leads to a
+      # false-positive landed check, because that name is visible on both
+      # the index (team list) and the show (h1) pages.
+      click_link_with_js_fallback("Review Assessment", expect_text: "Critical Thinking")
       assert_selector "h1", text: "Report Alex"
       assert_text "assessment-matrix" if false # DOM id, not visible text
       assert_text "Critical Thinking"
@@ -137,10 +140,20 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # clicking the button: bypasses pointer hit-testing entirely so
       # Chrome's event loop can't drop the action on a starved CI runner.
       # Same primitive as the inline-editor pattern in CLAUDE.md.
-      page.execute_script(<<~JS)
+      #
+      # Retry once if the ring-1 is still visible after 5s — the first
+      # requestSubmit's submit event can race with Turbo's listener
+      # registration on a freshly-replaced cell. Re-dispatching is safe
+      # because the rating hasn't moved off ring-1 yet.
+      untoggle_js = <<~JS
         const btn = document.querySelector("#rating-#{@cap_stable}-2 button.ring-1");
         btn?.closest("form")?.requestSubmit(btn);
       JS
+      page.execute_script(untoggle_js)
+
+      page.execute_script(untoggle_js) unless page.has_no_css?(
+        "#rating-#{@cap_stable}-2 button.ring-1", wait: 5
+      )
 
       # After clearing, no frequency button should have the selected ring style
       within("#rating-#{@cap_stable}-2") do

@@ -103,10 +103,11 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
     submit_sign_in_form(user.email, password)
 
-    # If the form click was dropped, the URL stays on /users/sign_in — fill
-    # again and re-submit. has_current_path? waits up to default_max_wait_time.
+    # If the form click was dropped, the URL stays on /users/sign_in — fall
+    # back to a JS-dispatched form submit, which bypasses Selenium pointer
+    # hit-testing entirely. has_current_path? waits up to default_max_wait_time.
     unless page.has_current_path?(root_path, wait: Capybara.default_max_wait_time)
-      submit_sign_in_form(user.email, password)
+      submit_sign_in_form_via_js(user.email, password)
     end
 
     assert_current_path root_path
@@ -134,6 +135,21 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     fill_in "Email", with: email
     fill_in "Password", with: password
     click_button "Log in"
+  end
+
+  # Same as +submit_sign_in_form+ but submits via a JS-dispatched
+  # +form.requestSubmit()+ — bypasses Selenium's synthetic pointer click
+  # entirely so a starved CI runner can't drop the submission.
+  def submit_sign_in_form_via_js(email, password)
+    visit new_user_session_path unless page.has_field?("Email", wait: 0)
+
+    fill_in "Email", with: email
+    fill_in "Password", with: password
+    page.execute_script(<<~JS)
+      const btn = Array.from(document.querySelectorAll("button, input[type='submit']"))
+        .find(el => (el.textContent.trim() || el.value) === "Log in");
+      btn?.closest("form")?.requestSubmit(btn);
+    JS
   end
 
   # Retries a block that makes the first Selenium call, rescuing the

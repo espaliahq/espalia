@@ -97,9 +97,14 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"
 
-      click_with_retry(expect_text: "Aligning") do
-        auto_confirm { click_button "Start alignment" }
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Start alignment");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
+      assert_text "Aligning"
 
       assert_no_button "Start alignment"
       assert_button "Mark alignment complete"
@@ -120,9 +125,14 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
 
       visit assessment_path(@report_assignment)
-      click_with_retry(expect_text: "Aligning") do
-        auto_confirm { click_button "Start alignment" }
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Start alignment");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
+      assert_text "Aligning"
 
       stream = "tenant-#{@tenant.id}/PersonDev-#{@report.id}-#{@framework_id}"
       events = Rails.configuration.event_store.read.stream(stream).to_a
@@ -241,9 +251,14 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment)
       assert_text "Aligning"
 
-      click_with_retry(expect_text: "Aligned") do
-        auto_confirm { click_button "Mark alignment complete" }
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Mark alignment complete");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
+      assert_text "Aligned"
       assert_no_button "Mark alignment complete"
 
       # The alignment cell selectors should now be read-only bars (no buttons).

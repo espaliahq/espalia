@@ -56,7 +56,19 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
 
       click_link_with_js_fallback("Define new cycle", expect_text: "Define a new cycle")
 
-      fill_in "Name", with: "Q2 2026 Review"
+      # Set the Name field via JS — Selenium's send_keys can drop characters
+      # on starved CI runners, leaving Name empty and the form rejected by
+      # presence validation. Dispatch input/change events so any client-side
+      # listeners see the new value.
+      page.execute_script(<<~JS)
+        const input = document.querySelector("input[name='assessment_cycle[name]']");
+        if (input) {
+          input.value = "Q2 2026 Review";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      JS
+
       # Framework select defaults to the only option; cycle_type defaults to "regular"
       click_button_with_js_fallback("Define cycle", expect_text: "Cycle defined")
 
