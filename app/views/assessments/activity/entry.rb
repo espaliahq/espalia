@@ -24,6 +24,24 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_completed"      => "bg-green-600"
   }.freeze
 
+  # Maps each entry kind into one of the four user-facing groups that
+  # the filter chips switch between. Entries without a (capability, level)
+  # coordinate (alignment milestones) sit in the "alignment" group and
+  # never participate in capability/cell-level focus matching.
+  KIND_GROUP = {
+    "self_rated"              => "ratings",
+    "self_rating_revised"     => "ratings",
+    "self_rating_cleared"     => "ratings",
+    "manager_rated"           => "ratings",
+    "manager_rating_revised"  => "ratings",
+    "manager_rating_cleared"  => "ratings",
+    "assessment_aligned"      => "ratings",
+    "evidence_recorded"       => "evidence",
+    "evidence_withdrawn"      => "evidence",
+    "alignment_started"       => "alignment",
+    "alignment_completed"     => "alignment"
+  }.freeze
+
   FREQUENCY_LABEL = {
     "none"        => "None",
     "some"        => "Some",
@@ -39,7 +57,13 @@ class Views::Assessments::Activity::Entry < Views::Base
   def view_template
     li(
       id: "activity-entry-#{dom_safe_id}",
-      class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300"
+      class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 " \
+             "rounded -mx-2 px-2 py-1 transition-colors " \
+             "data-[match=true]:bg-amber-50/60 dark:data-[match=true]:bg-amber-900/15 " \
+             "data-[match=true]:border-l-2 data-[match=true]:border-amber-400 " \
+             "data-[hidden=true]:hidden " \
+             "#{'cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-700/40' if focusable?}",
+      data: entry_data
     ) do
       span(class: "mt-1 w-2 h-2 rounded-full shrink-0 #{dot_class}") { }
       div(class: "min-w-0 flex-1") do
@@ -58,6 +82,31 @@ class Views::Assessments::Activity::Entry < Views::Base
 
   def dot_class
     KIND_DOT[@entry.kind] || "bg-gray-400"
+  end
+
+  def kind_group
+    KIND_GROUP[@entry.kind] || "ratings"
+  end
+
+  # Rating + evidence entries are clickable — they navigate the matrix
+  # to the (capability, level) they're attached to. Alignment milestones
+  # have no matrix anchor and stay non-interactive.
+  def focusable?
+    @entry.capability_stable_id.present? && @entry.level_ordinal.present?
+  end
+
+  def entry_data
+    base = {
+      activity_feed_target: "entry",
+      kind: @entry.kind,
+      kind_group: kind_group
+    }
+    if focusable?
+      base[:capability_stable_id] = @entry.capability_stable_id
+      base[:level_ordinal] = @entry.level_ordinal
+      base[:action] = "click->activity-feed#focusEntry"
+    end
+    base
   end
 
   def summary

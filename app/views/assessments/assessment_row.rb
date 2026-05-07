@@ -70,7 +70,11 @@ class Views::Assessments::AssessmentRow < Views::Base
       data: @expandable ? {
         action: "click->matrix#toggleRow",
         matrix_target: "row",
-        capability_id: @capability.capability_id
+        capability_id: @capability.capability_id,
+        # stable_id is also stored so matrix:focus-changed events carry
+        # the cross-version identifier the activity feed entries use to
+        # match focus state.
+        capability_stable_id: @capability.stable_id
       } : {}
     ) do
       capability_name_cell
@@ -93,7 +97,9 @@ class Views::Assessments::AssessmentRow < Views::Base
   def expanded_row
     tr(
       class: @expanded ? "" : "hidden",
-      data: { matrix_target: "expandedRow", capability_id: @capability.capability_id }
+      data: { matrix_target: "expandedRow",
+              capability_id: @capability.capability_id,
+              capability_stable_id: @capability.stable_id }
     ) do
       td(class: "sticky left-0 z-[2] bg-blue-50/30 dark:bg-blue-900/10 " \
                 "border-b border-r border-gray-100 dark:border-gray-800") { }

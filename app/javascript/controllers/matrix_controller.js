@@ -139,6 +139,7 @@ export default class extends BaseController {
         level: "capability",
         categoryId: categoryId,
         capabilityId: capId,
+        capabilityStableId: row.dataset.capabilityStableId || null,
         levelOrdinal: null,
         expectationId: null
       })
@@ -193,6 +194,8 @@ export default class extends BaseController {
     const row = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
     const categoryId = row ? this.#categoryIdForRow(row) : null
 
+    const capabilityStableId = row?.dataset.capabilityStableId || cell.dataset.capabilityStableId || null
+
     // Toggle off if already focused on this cell
     if (this.currentFocus.level === "cell" &&
         this.currentFocus.capabilityId === capabilityId &&
@@ -201,6 +204,7 @@ export default class extends BaseController {
         level: "capability",
         categoryId: categoryId,
         capabilityId: capabilityId,
+        capabilityStableId: capabilityStableId,
         levelOrdinal: null,
         expectationId: null
       })
@@ -211,6 +215,7 @@ export default class extends BaseController {
       level: "cell",
       categoryId: categoryId,
       capabilityId: capabilityId,
+      capabilityStableId: capabilityStableId,
       levelOrdinal: levelOrdinal,
       expectationId: expectationId
     })
@@ -219,7 +224,9 @@ export default class extends BaseController {
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
 
   navigateToEntity(event) {
-    const { level, categoryId, capabilityId, levelOrdinal, expectationId } = event.detail || {}
+    const {
+      level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
+    } = event.detail || {}
     if (!level) return
 
     if (level === "framework") {
@@ -237,17 +244,23 @@ export default class extends BaseController {
       return
     }
 
-    // capability or cell — expand the row and scroll to it
-    if (!capabilityId) return
-
-    const row = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
+    // capability or cell — expand the row and scroll to it. Match by
+    // capability_id when present (framework explorer + same-version
+    // assessment) and fall back to capability_stable_id (activity feed
+    // entries are anchored to stable_id, never the per-version id).
+    const row = this.rowTargets.find(r =>
+      (capabilityId && r.dataset.capabilityId === capabilityId) ||
+      (capabilityStableId && r.dataset.capabilityStableId === capabilityStableId)
+    )
     if (!row) return
+    const resolvedCapabilityId = row.dataset.capabilityId
+    const resolvedStableId = row.dataset.capabilityStableId || capabilityStableId
 
     // If the target row's category is collapsed (navigating from the
     // suggestions pane), reveal it first — otherwise the expand + scroll
     // land on a still-hidden row.
     this.#revealCategoryForRow(row)
-    this.#expandRow(capabilityId)
+    this.#expandRow(resolvedCapabilityId)
 
     row.scrollIntoView({ behavior: "smooth", block: "center" })
 
@@ -255,7 +268,8 @@ export default class extends BaseController {
       this.#setFocus({
         level: "cell",
         categoryId: categoryId || this.#categoryIdForRow(row),
-        capabilityId,
+        capabilityId: resolvedCapabilityId,
+        capabilityStableId: resolvedStableId,
         levelOrdinal,
         expectationId: expectationId || null
       })
@@ -263,7 +277,8 @@ export default class extends BaseController {
       this.#setFocus({
         level: "capability",
         categoryId: categoryId || this.#categoryIdForRow(row),
-        capabilityId
+        capabilityId: resolvedCapabilityId,
+        capabilityStableId: resolvedStableId
       })
     }
   }
@@ -271,8 +286,11 @@ export default class extends BaseController {
   // ── Private ──
 
   // Dispatches matrix:focus-changed with a fully-specified detail payload.
-  #setFocus({ level, categoryId = null, capabilityId = null, levelOrdinal = null, expectationId = null }) {
-    this.currentFocus = { level, categoryId, capabilityId, levelOrdinal, expectationId }
+  #setFocus({ level, categoryId = null, capabilityId = null, capabilityStableId = null,
+              levelOrdinal = null, expectationId = null }) {
+    this.currentFocus = {
+      level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
+    }
     window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
       detail: { ...this.currentFocus }
     }))

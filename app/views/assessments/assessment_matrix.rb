@@ -30,7 +30,11 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   end
 
   def view_template
-    div(data: { controller: "matrix", matrix_url_sync_value: true }) do
+    div(data: {
+      controller: "matrix",
+      matrix_url_sync_value: true,
+      action: "activity:navigate@window->matrix#navigateToEntity"
+    }) do
       render Views::Assessments::CategoryTabs.new(
         categories: @matrix_data[:categories],
         scoring: primary_scoring,
