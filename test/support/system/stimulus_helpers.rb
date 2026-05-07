@@ -346,10 +346,13 @@ module StimulusHelpers
     # Both Capybara pointer clicks dropped on a starved CI runner. Submit the
     # button's form via requestSubmit() — invokes Turbo's submit interceptor
     # synchronously, bypassing pointer hit-testing entirely.
+    # Substring match (not ===) — callers pass "Consistent" to match the
+    # alignment-mode button labelled "Consistently"; Capybara's `text:`
+    # filter does the same.
     page.execute_script(<<~JS, cell_selector, frequency)
       const cell = document.querySelector(arguments[0]);
       const btn = Array.from(cell.querySelectorAll("button"))
-        .find(b => b.textContent.trim() === arguments[1]);
+        .find(b => b.textContent.trim().includes(arguments[1]));
       btn?.closest("form")?.requestSubmit(btn);
     JS
 
