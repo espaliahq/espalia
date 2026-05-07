@@ -23,7 +23,8 @@
 #
 class Assessments::ActivityFeedQuery
   Entry = Struct.new(:id, :kind, :occurred_at, :payload, :capability_stable_id,
-                     :level_ordinal, :cycle_id, keyword_init: true)
+                     :level_ordinal, :cycle_id, :capability_name, :category_id,
+                     keyword_init: true)
 
   RATING_KINDS = {
     PersonDevelopment::Events::SelfRated              => "self_rated",
@@ -63,6 +64,27 @@ class Assessments::ActivityFeedQuery
 
   private
 
+  # Cached lookup of {capability_stable_id => { name:, category_id: }}
+  # for the current framework. Used to enrich entries with the
+  # capability name (for human-readable summaries) and category_id
+  # (so the activity feed can match category-level matrix focus and
+  # navigate cross-tab).
+  def capability_lookup
+    @capability_lookup ||= FrameworkState::Capability
+      .joins(:category)
+      .merge(FrameworkState::CapabilityCategory.where(framework_id: @assignment.framework_id))
+      .pluck(:stable_id, :name, :category_id)
+      .to_h { |stable_id, name, category_id| [ stable_id, { name: name, category_id: category_id } ] }
+  end
+
+  def capability_name_for(stable_id)
+    capability_lookup.dig(stable_id, :name)
+  end
+
+  def category_id_for(stable_id)
+    capability_lookup.dig(stable_id, :category_id)
+  end
+
   def rating_entries
     stream = EventStreamNaming.person_development_stream(
       @assignment.person_id, @assignment.framework_id
@@ -73,14 +95,17 @@ class Assessments::ActivityFeedQuery
       next if hide_manager_rating?(kind)
 
       data = event.data.with_indifferent_access
+      stable_id = data[:capability_stable_id]
       Entry.new(
         id: event.event_id,
         kind: kind,
         occurred_at: event_timestamp(event),
         payload: data,
-        capability_stable_id: data[:capability_stable_id],
+        capability_stable_id: stable_id,
         level_ordinal: data[:level_ordinal],
-        cycle_id: data[:cycle_id]
+        cycle_id: data[:cycle_id],
+        capability_name: capability_name_for(stable_id),
+        category_id: category_id_for(stable_id)
       )
     end
   end
@@ -98,14 +123,20 @@ class Assessments::ActivityFeedQuery
     scope = scope.where(author_id: @viewer_person_id) unless @viewer_sees_all
 
     scope.flat_map do |item|
+      stable_id = item.capability_stable_id
+      base_attrs = {
+        capability_stable_id: stable_id,
+        level_ordinal: item.level_ordinal,
+        capability_name: capability_name_for(stable_id),
+        category_id: category_id_for(stable_id)
+      }
       entries = [
         Entry.new(
           id: "evidence_recorded:#{item.id}",
           kind: "evidence_recorded",
           occurred_at: item.recorded_at,
           payload: item,
-          capability_stable_id: item.capability_stable_id,
-          level_ordinal: item.level_ordinal
+          **base_attrs
         )
       ]
       if item.withdrawn? && item.withdrawn_at
@@ -114,8 +145,7 @@ class Assessments::ActivityFeedQuery
           kind: "evidence_withdrawn",
           occurred_at: item.withdrawn_at,
           payload: item,
-          capability_stable_id: item.capability_stable_id,
-          level_ordinal: item.level_ordinal
+          **base_attrs
         )
       end
       entries

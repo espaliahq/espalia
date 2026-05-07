@@ -33,6 +33,12 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     div(data: {
       controller: "matrix",
       matrix_url_sync_value: true,
+      # Stamping the active category here lets matrix_controller's
+      # connect dispatch initial focus on every frame load (tab switch,
+      # rating broadcast, etc.) so the activity feed picks up the
+      # implicit category narrowing without the user having to expand
+      # a row first.
+      matrix_active_category_id_value: @active_category_id,
       action: "activity:navigate@window->matrix#navigateToEntity"
     }) do
       render Views::Assessments::CategoryTabs.new(

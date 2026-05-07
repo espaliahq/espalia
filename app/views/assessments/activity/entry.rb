@@ -101,6 +101,7 @@ class Views::Assessments::Activity::Entry < Views::Base
       kind: @entry.kind,
       kind_group: kind_group
     }
+    base[:category_id] = @entry.category_id if @entry.category_id
     if focusable?
       base[:capability_stable_id] = @entry.capability_stable_id
       base[:level_ordinal] = @entry.level_ordinal
@@ -126,37 +127,62 @@ class Views::Assessments::Activity::Entry < Views::Base
     end
   end
 
+  # The summary line is the first thing the eye lands on, so it carries
+  # enough context to be readable WITHOUT the secondary line: actor +
+  # action + capability name + level. Frequency goes on the secondary
+  # line where there's room for the full word.
   def summary_text
     case @entry.kind
-    when "self_rated"            then "Self-rated #{frequency_label} at L#{@entry.level_ordinal}"
-    when "self_rating_revised"   then "Revised self rating to #{frequency_label} at L#{@entry.level_ordinal}"
-    when "self_rating_cleared"   then "Cleared self rating at L#{@entry.level_ordinal}"
-    when "manager_rated"         then "Manager rated #{frequency_label} at L#{@entry.level_ordinal}"
-    when "manager_rating_revised" then "Manager revised to #{frequency_label} at L#{@entry.level_ordinal}"
-    when "manager_rating_cleared" then "Manager cleared rating at L#{@entry.level_ordinal}"
-    when "assessment_aligned"    then "Aligned at #{frequency_label} for L#{@entry.level_ordinal}"
+    when "self_rated", "self_rating_revised"
+      "Self-rated #{capability_label}"
+    when "self_rating_cleared"
+      "Cleared self rating on #{capability_label}"
+    when "manager_rated", "manager_rating_revised"
+      "Manager rated #{capability_label}"
+    when "manager_rating_cleared"
+      "Manager cleared rating on #{capability_label}"
+    when "assessment_aligned"
+      "Aligned on #{capability_label}"
     when "evidence_recorded"     then evidence_recorded_summary
-    when "evidence_withdrawn"    then "Withdrew evidence at L#{@entry.level_ordinal}"
+    when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
     else @entry.kind.humanize
     end
   end
 
-  def evidence_recorded_summary
-    item = @entry.payload
-    title = item.respond_to?(:title) ? item.title.to_s : ""
-    if title.strip.empty?
-      "Recorded evidence at L#{@entry.level_ordinal}"
+  # "<Capability name> · L<n>" when both are known, falls back to "L<n>"
+  # only (matches V1 behaviour for entries from a deleted capability).
+  def capability_label
+    cap_name = @entry.capability_name.to_s.strip.presence
+    if cap_name && @entry.level_ordinal
+      "#{cap_name} · L#{@entry.level_ordinal}"
+    elsif cap_name
+      cap_name
     else
-      "Recorded “#{title}” at L#{@entry.level_ordinal}"
+      "L#{@entry.level_ordinal}"
     end
   end
 
+  def evidence_recorded_summary
+    item = @entry.payload
+    title = item.respond_to?(:title) ? item.title.to_s : ""
+    label = capability_label
+    if title.strip.empty?
+      "Recorded evidence on #{label}"
+    else
+      "Recorded “#{title}” on #{label}"
+    end
+  end
+
+  # Secondary line carries the rating frequency (with comment if present)
+  # for rating events, or the body content for evidence. Empty → no
+  # secondary line renders.
   def secondary_text
     case @entry.kind
     when "self_rated", "self_rating_revised", "manager_rated", "manager_rating_revised", "assessment_aligned"
-      payload_value(:comment)
+      bits = [ frequency_label_or_nil, payload_value(:comment).to_s.strip.presence ].compact
+      bits.any? ? bits.join(" · ") : nil
     when "evidence_recorded"
       content = @entry.payload.respond_to?(:content) ? @entry.payload.content.to_s : ""
       content.strip.presence
@@ -164,6 +190,11 @@ class Views::Assessments::Activity::Entry < Views::Base
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       reason.to_s.strip.presence
     end
+  end
+
+  def frequency_label_or_nil
+    label = frequency_label
+    label.to_s.strip.empty? ? nil : label
   end
 
   def frequency_label

@@ -150,19 +150,14 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
         document.querySelector("[data-action*='activity-pane#toggle']").click();
       JS
 
-      # Switch to Filter mode.
+      # No focus yet (the matrix dispatches category focus on connect,
+      # but Filter mode of category-level focus shouldn't hide anything
+      # since the category contains BOTH cap1 and cap2 here).
       page.execute_script(<<~JS)
         document.querySelector("[data-activity-feed-mode-param='filter']").click();
       JS
 
-      # No focus yet — feed shows all entries.
-      hidden_at_framework_focus = page.evaluate_script(<<~JS)
-        document.querySelectorAll("[data-activity-feed-target='entry'][data-hidden='true']").length
-      JS
-      assert_equal 0, hidden_at_framework_focus,
-        "with no focus, Filter mode shouldn't hide anything"
-
-      # Now focus cap1.
+      # Now focus cap1 — Filter mode should hide cap2 entries.
       expand_matrix_row("#capability-name-#{@cap1_stable}")
 
       cap2_hidden_count = page.evaluate_script(<<~JS)
@@ -172,6 +167,40 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       JS
       assert_operator cap2_hidden_count, :>, 0,
         "cap2 entries should be hidden when Filter mode + cap1 focused"
+    end
+  end
+
+  context "rating entry summary" do
+    should "include the capability name so each entry is readable at a glance" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action*='activity-pane#toggle']").click();
+      JS
+
+      assert_text "Self-rated Critical Thinking · L1"
+      assert_text "Self-rated Problem Solving · L1"
+    end
+  end
+
+  context "clear-focus banner" do
+    should "surface a Show all activity link whenever focus is active and clear focus when clicked" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action*='activity-pane#toggle']").click();
+      JS
+
+      # Initial connect dispatches category-level focus, so the banner
+      # should be visible from page load.
+      assert_selector "[data-activity-feed-target='focusBanner']", visible: true,
+        text: "Show all activity"
+
+      # Click "Show all activity" → focus clears, banner hides.
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action*='activity-feed#clearFocus']").click();
+      JS
+      assert_selector "[data-activity-feed-target='focusBanner']", visible: :hidden
     end
   end
 end

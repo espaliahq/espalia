@@ -57,6 +57,8 @@ class Views::Assessments::Activity::Feed < Views::Base
   # In Filter mode + an active focus, surface a small banner so the
   # narrowed list is obviously narrowed. Hidden by default; the
   # activity-feed Stimulus controller toggles `hidden` based on state.
+  # The "Show all activity" link inside dispatches activity-feed#clearFocus
+  # to reset the feed's internal focus without collapsing the matrix.
   def focus_banner
     div(
       class: "hidden mb-2 flex items-center justify-between gap-2 rounded-md " \
@@ -67,6 +69,11 @@ class Views::Assessments::Activity::Feed < Views::Base
         plain "Showing entries "
         span(data: { activity_feed_target: "focusBannerLabel" }) { "for the focused capability" }
       end
+      button(
+        type: "button",
+        class: "text-amber-900 dark:text-amber-200 hover:underline font-medium",
+        data: { action: "click->activity-feed#clearFocus" }
+      ) { "Show all activity" }
     end
   end
 

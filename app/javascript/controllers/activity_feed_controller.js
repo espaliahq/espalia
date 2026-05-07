@@ -23,7 +23,7 @@ export default class extends BaseController {
     super.connect()
     this.filter = "all"
     this.mode = this.#readCookieMode()
-    this.focus = { level: "framework", capabilityStableId: null, levelOrdinal: null }
+    this.focus = this.#readMatrixFocusFromDom()
     this.#paintFilterChips()
     this.#paintModeSegments()
     this.#applyState()
@@ -46,23 +46,36 @@ export default class extends BaseController {
     this.#applyState()
   }
 
-  // Listens for matrix:focus-changed — extracts capability_stable_id +
-  // level_ordinal from the event detail. Tolerates payloads that don't
-  // include the stable id (framework-level focus, framework explorer).
+  // Listens for matrix:focus-changed — extracts categoryId,
+  // capability_stable_id, and level_ordinal from the event detail.
+  // Tolerates payloads that don't include any/all (framework-level
+  // focus, framework explorer).
   onMatrixFocusChanged(event) {
-    const { level, capabilityStableId, levelOrdinal } = event.detail || {}
+    const { level, categoryId, capabilityStableId, levelOrdinal } = event.detail || {}
     this.focus = {
       level: level || "framework",
+      categoryId: categoryId || null,
       capabilityStableId: capabilityStableId || null,
       levelOrdinal: (typeof levelOrdinal === "number") ? levelOrdinal : null
     }
     this.#applyState()
   }
 
+  // Resets the feed's internal focus to "show all" without changing
+  // the matrix. Useful when the user wants a quick peek at every entry
+  // without collapsing the row they're working in. Subsequent matrix
+  // focus changes (row expand, tab switch, broadcast reload) will
+  // re-apply focus.
+  clearFocus() {
+    this.focus = { level: "framework", categoryId: null, capabilityStableId: null, levelOrdinal: null }
+    this.#applyState()
+  }
+
   // Click on a focusable entry — navigates the matrix to the entry's
   // (capability, level) coord. Reuses the matrix's #navigateToEntity
   // handler via the activity:navigate event the matrix wrapper listens
-  // for.
+  // for. Includes categoryId so the matrix can switch to the right
+  // tab if the entry's capability lives outside the active one.
   focusEntry(event) {
     const el = event.currentTarget
     const capabilityStableId = el.dataset.capabilityStableId
@@ -72,7 +85,7 @@ export default class extends BaseController {
     window.dispatchEvent(new CustomEvent("activity:navigate", {
       detail: {
         level: "cell",
-        categoryId: null,
+        categoryId: el.dataset.categoryId || null,
         capabilityId: null,
         capabilityStableId,
         levelOrdinal
@@ -93,8 +106,13 @@ export default class extends BaseController {
       entry.dataset.hidden = (filteredOut || filterModeHidden) ? "true" : "false"
     })
 
+    // The focus banner surfaces in BOTH modes whenever there's an active
+    // focus — it doubles as the "← Show all activity" breadcrumb. In
+    // Filter mode the wording reads more strongly ("Showing N entries
+    // for X"); in Highlight mode it's a quieter label since the rest
+    // of the feed is still visible.
     if (this.hasFocusBannerTarget) {
-      const show = this.mode === "filter" && this.#hasActiveFocus()
+      const show = this.#hasActiveFocus()
       this.focusBannerTarget.classList.toggle("hidden", !show)
       if (show && this.hasFocusBannerLabelTarget) {
         this.focusBannerLabelTarget.textContent = this.#focusBannerLabel()
@@ -107,10 +125,13 @@ export default class extends BaseController {
 
     const entryCapId = entry.dataset.capabilityStableId
     const entryLevel = parseInt(entry.dataset.levelOrdinal, 10)
-    if (!entryCapId) return false
+    const entryCategoryId = entry.dataset.categoryId
 
+    if (this.focus.level === "category") {
+      return entryCategoryId && entryCategoryId === this.focus.categoryId
+    }
     if (this.focus.level === "capability") {
-      return entryCapId === this.focus.capabilityStableId
+      return entryCapId && entryCapId === this.focus.capabilityStableId
     }
     if (this.focus.level === "cell") {
       return entryCapId === this.focus.capabilityStableId &&
@@ -120,8 +141,11 @@ export default class extends BaseController {
   }
 
   #hasActiveFocus() {
-    return ["capability", "cell"].includes(this.focus.level) &&
-           this.focus.capabilityStableId
+    if (this.focus.level === "category") return !!this.focus.categoryId
+    if (["capability", "cell"].includes(this.focus.level)) {
+      return !!this.focus.capabilityStableId
+    }
+    return false
   }
 
   #inFilter(entry) {
@@ -129,9 +153,43 @@ export default class extends BaseController {
     return entry.dataset.kindGroup === this.filter
   }
 
+  // Pulls the matrix's current focus state from the DOM. Solves the
+  // ordering problem where matrix#connect dispatches matrix:focus-changed
+  // before activity-feed has bound its listener — without this, the
+  // feed would miss the initial category focus on every page load and
+  // every Turbo Frame swap.
+  #readMatrixFocusFromDom() {
+    const blank = { level: "framework", categoryId: null, capabilityStableId: null, levelOrdinal: null }
+    const matrix = document.querySelector("[data-controller~='matrix']")
+    if (!matrix) return blank
+
+    const activeCategoryId = matrix.dataset.matrixActiveCategoryIdValue
+    if (!activeCategoryId) return blank
+
+    const expandedRow = matrix.querySelector(
+      "[data-matrix-target='expandedRow']:not(.hidden)"
+    )
+    if (expandedRow) {
+      return {
+        level: "capability",
+        categoryId: activeCategoryId,
+        capabilityStableId: expandedRow.dataset.capabilityStableId || null,
+        levelOrdinal: null
+      }
+    }
+    return {
+      level: "category",
+      categoryId: activeCategoryId,
+      capabilityStableId: null,
+      levelOrdinal: null
+    }
+  }
+
   #focusBannerLabel() {
-    if (this.focus.level === "cell") return `at L${this.focus.levelOrdinal}`
-    return "for the focused capability"
+    if (this.focus.level === "cell") return `for the focused cell (L${this.focus.levelOrdinal})`
+    if (this.focus.level === "capability") return "for the focused capability"
+    if (this.focus.level === "category") return "for the active category"
+    return "for the focused context"
   }
 
   #paintFilterChips() {
