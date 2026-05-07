@@ -157,7 +157,11 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       assert_match(/[?&]activity=closed/, page.current_url)
 
       # popstate: the back button should restore the prior open state.
+      # Wait for the controller to reconnect — on CI runners, Turbo's
+      # popstate handler can do a full Drive reload before our popstate
+      # listener applies state, replacing the controller instance.
       page.go_back
+      wait_for_stimulus "activity-pane"
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_match(/[?&]activity=open/, page.current_url)
     end
