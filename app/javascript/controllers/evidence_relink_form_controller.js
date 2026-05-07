@@ -85,8 +85,10 @@ export default class extends BaseController {
   }
 
   clickOutside(event) {
-    if (this.panelTarget.contains(event.target)) return
-    if (event.target.closest("[data-action*='evidence-relink-form#open']")) return
+    const target = event.target
+    if (!(target instanceof Element)) return
+    if (this.panelTarget.contains(target)) return
+    if (target.closest("[data-action*='evidence-relink-form#open']")) return
     this.hide()
   }
 
