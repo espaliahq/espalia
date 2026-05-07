@@ -323,16 +323,18 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # silently dropped on slow CI runners.
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
-      # Click the second tab. Wrapped in click_with_retry because Turbo Frame
-      # link clicks can also be silently dropped under CI load.
-      click_with_retry(expect_text: "Execution") do
-        within "#category-tabs" do
-          click_on "Delivering"
-        end
-      end
-      assert_text "Ships features reliably"
+      # JS-dispatch the click — Capybara's pointer click on the tab link
+      # has been dropped twice in a row by click_with_retry on starved CI.
+      # JS-dispatched click bubbles synchronously through Turbo's link
+      # interception so the frame fetch starts before the script returns.
+      page.execute_script(<<~JS)
+        const tab = Array.from(document.querySelectorAll("#category-tabs a"))
+          .find(a => a.textContent.trim() === "Delivering");
+        tab?.click();
+      JS
 
-      # First category capabilities should not be in the matrix rows
+      assert_text "Execution"
+      assert_text "Ships features reliably"
       assert_no_selector "#capability-name-#{@cap1_stable}"
     end
 
@@ -365,16 +367,16 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # replacement and the click is silently dropped on slow CI runners.
       assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
 
-      # Click the Delivering category name in the scoring panel. Wrapped in
-      # click_with_retry because Turbo Frame link clicks can also be silently
-      # dropped under CI load.
-      click_with_retry(expect_text: "Execution") do
-        within "#scoring-panel" do
-          click_on "Delivering"
-        end
-      end
+      # JS-dispatch the click — same flake class as the category-tab click
+      # above. Turbo intercepts the click synchronously and starts the
+      # frame fetch.
+      page.execute_script(<<~JS)
+        const link = Array.from(document.querySelectorAll("#scoring-panel a"))
+          .find(a => a.textContent.trim().includes("Delivering"));
+        link?.click();
+      JS
 
-      # First category capabilities should not be in the matrix rows
+      assert_text "Execution"
       assert_no_selector "#capability-name-#{@cap1_stable}"
     end
 
