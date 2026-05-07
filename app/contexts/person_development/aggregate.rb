@@ -19,6 +19,12 @@
 class PersonDevelopment::Aggregate
   include AggregateRoot
 
+  # Domain-specific error for command violations the controller layer
+  # is expected to surface as user-facing flash alerts. Distinguishes
+  # intentional command rejections from genuine programming bugs that
+  # should bubble up as 500s.
+  class CommandError < StandardError; end
+
   FREQUENCIES = %w[none some occasional consistent].freeze
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
@@ -415,19 +421,19 @@ class PersonDevelopment::Aggregate
   # @param custom_type_label [String, nil] free text, only when evidence_type == "other"
   # @param title [String, nil] optional one-line summary
   # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
-  # @raise [RuntimeError] if not assigned, evidence_id already exists, or args are invalid
+  # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
   def record_evidence(evidence_id, capability_stable_id:, level_ordinal:, source:, evidence_type:,
                       content:, author_id:, custom_type_label: nil, title: nil,
                       external_reference: nil)
     ensure_assigned!
-    raise "Evidence ID already exists" if @evidence.key?(evidence_id)
-    raise "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
-    raise "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)
-    raise "Custom type label required when evidence_type is 'other'" if
+    raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
+    raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
+    raise CommandError, "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)
+    raise CommandError, "Custom type label required when evidence_type is 'other'" if
       evidence_type == "other" && custom_type_label.to_s.strip.empty?
-    raise "Custom type label only allowed when evidence_type is 'other'" if
+    raise CommandError, "Custom type label only allowed when evidence_type is 'other'" if
       evidence_type != "other" && !custom_type_label.nil? && !custom_type_label.to_s.strip.empty?
-    raise "Evidence content cannot be blank" if content.to_s.strip.empty?
+    raise CommandError, "Evidence content cannot be blank" if content.to_s.strip.empty?
 
     apply(PersonDevelopment::Events::EvidenceRecorded.new(data: {
       evidence_id: evidence_id,
@@ -450,17 +456,17 @@ class PersonDevelopment::Aggregate
   # @param new_level_ordinal [Integer] target level
   # @param relinked_by_id [String] UUID of the Person making the change
   # @param rationale [String, nil] optional explanation of the move
-  # @raise [RuntimeError] if not assigned, evidence not found, withdrawn,
+  # @raise [CommandError] if not assigned, evidence not found, withdrawn,
   #   or target coordinate is unchanged
   def relink_evidence(evidence_id, new_capability_stable_id:, new_level_ordinal:,
                       relinked_by_id:, rationale: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
-    raise "No evidence with id #{evidence_id}" unless state
-    raise "Cannot relink withdrawn evidence" if state[:status] == "withdrawn"
+    raise CommandError, "No evidence with id #{evidence_id}" unless state
+    raise CommandError, "Cannot relink withdrawn evidence" if state[:status] == "withdrawn"
     if state[:capability_stable_id] == new_capability_stable_id &&
        state[:level_ordinal] == new_level_ordinal
-      raise "Evidence is already at that coordinate"
+      raise CommandError, "Evidence is already at that coordinate"
     end
 
     apply(PersonDevelopment::Events::EvidenceRelinked.new(data: {
@@ -480,12 +486,12 @@ class PersonDevelopment::Aggregate
   # @param evidence_id [String] UUID of the evidence
   # @param withdrawn_by_id [String] UUID of the Person withdrawing
   # @param reason [String, nil] optional explanation
-  # @raise [RuntimeError] if not assigned, evidence not found, or already withdrawn
+  # @raise [CommandError] if not assigned, evidence not found, or already withdrawn
   def withdraw_evidence(evidence_id, withdrawn_by_id:, reason: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
-    raise "No evidence with id #{evidence_id}" unless state
-    raise "Evidence already withdrawn" if state[:status] == "withdrawn"
+    raise CommandError, "No evidence with id #{evidence_id}" unless state
+    raise CommandError, "Evidence already withdrawn" if state[:status] == "withdrawn"
 
     apply(PersonDevelopment::Events::EvidenceWithdrawn.new(data: {
       evidence_id: evidence_id,

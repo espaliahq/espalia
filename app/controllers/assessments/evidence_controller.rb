@@ -43,7 +43,7 @@ class Assessments::EvidenceController < ApplicationController
 
     redirect_to assessment_path(@assignment, redirect_params(attrs[:capability_stable_id])),
       status: :see_other, notice: "Evidence recorded."
-  rescue RuntimeError => e
+  rescue PersonDevelopment::Aggregate::CommandError => e
     redirect_back fallback_location: assessment_path(@assignment),
       alert: "Could not record evidence: #{e.message}"
   end
@@ -73,7 +73,7 @@ class Assessments::EvidenceController < ApplicationController
       status: :see_other, notice: "Evidence relinked."
   rescue ActiveRecord::RecordNotFound
     head :not_found
-  rescue RuntimeError => e
+  rescue PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
       alert: "Could not relink evidence: #{e.message}"
@@ -84,17 +84,18 @@ class Assessments::EvidenceController < ApplicationController
     item = EvidenceItem.find(params.expect(:id))
     authorize item, :withdraw?, policy_class: EvidencePolicy
 
+    reason = params.fetch(:evidence, {}).permit(:reason)[:reason]
     PersonDevelopment::CommandHandler.new.withdraw_evidence(
       @assignment.person_id, @assignment.framework_id, item.id,
       withdrawn_by_id: current_person.id,
-      reason: params[:reason]
+      reason: reason
     )
 
     redirect_to assessment_path(@assignment, redirect_params(item.capability_stable_id)),
       status: :see_other, notice: "Evidence withdrawn."
   rescue ActiveRecord::RecordNotFound
     head :not_found
-  rescue RuntimeError => e
+  rescue PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
       alert: "Could not withdraw evidence: #{e.message}"
@@ -110,8 +111,6 @@ class Assessments::EvidenceController < ApplicationController
   end
 
   def set_assignment
-    return unless current_person
-
     @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found

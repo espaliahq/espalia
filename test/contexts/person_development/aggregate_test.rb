@@ -678,7 +678,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
         evidence_type: "project_outcome", content: "x", author_id: @author_id)
 
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
           evidence_type: "project_outcome", content: "y", author_id: @author_id)
@@ -687,7 +687,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise on invalid source" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "stranger",
           evidence_type: "project_outcome", content: "x", author_id: @author_id)
@@ -696,7 +696,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise on invalid evidence_type" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
           evidence_type: "garbage", content: "x", author_id: @author_id)
@@ -705,7 +705,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise when type is 'other' but custom_type_label is missing" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
           evidence_type: "other", content: "x", author_id: @author_id)
@@ -714,7 +714,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise when type is not 'other' but custom_type_label is given" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
           evidence_type: "code_review", content: "x", author_id: @author_id,
@@ -724,7 +724,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise on blank content" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
           evidence_type: "project_outcome", content: "   ", author_id: @author_id)
@@ -782,7 +782,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise on unknown evidence_id" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.relink_evidence(SecureRandom.uuid_v7,
           new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
           relinked_by_id: @author_id)
@@ -791,7 +791,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise when target coord is unchanged" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.relink_evidence(@evidence_id,
           new_capability_stable_id: @cap_sid, new_level_ordinal: 3,
           relinked_by_id: @author_id)
@@ -801,7 +801,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
 
     should "raise when evidence has been withdrawn" do
       @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.relink_evidence(@evidence_id,
           new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
           relinked_by_id: @author_id)
@@ -847,7 +847,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "raise on unknown evidence_id" do
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.withdraw_evidence(SecureRandom.uuid_v7, withdrawn_by_id: @author_id)
       end
       assert_match /No evidence with id/, err.message
@@ -855,7 +855,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
 
     should "raise when already withdrawn" do
       @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
-      err = assert_raises(RuntimeError) do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
       end
       assert_match /already withdrawn/, err.message
