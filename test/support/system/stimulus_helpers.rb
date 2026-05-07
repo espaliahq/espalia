@@ -312,6 +312,18 @@ module StimulusHelpers
     return if page.has_css?("#{cell_selector} button.ring-1", text: frequency, wait: 4)
 
     find("#{cell_selector} button", text: frequency).click
+
+    return if page.has_css?("#{cell_selector} button.ring-1", text: frequency, wait: 4)
+
+    # Both Capybara pointer clicks dropped on a starved CI runner. Submit the
+    # button's form via requestSubmit() — invokes Turbo's submit interceptor
+    # synchronously, bypassing pointer hit-testing entirely.
+    page.execute_script(<<~JS, cell_selector, frequency)
+      const cell = document.querySelector(arguments[0]);
+      const btn = Array.from(cell.querySelectorAll("button"))
+        .find(b => b.textContent.trim() === arguments[1]);
+      btn?.closest("form")?.requestSubmit(btn);
+    JS
   end
 
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no

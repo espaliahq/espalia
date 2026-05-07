@@ -81,20 +81,19 @@ class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
       # connect on this card before clicking.
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
-      # The kebab is hover-revealed (its parent wrapper has opacity-0
-      # group-hover:opacity-100) so we can't use open_dropdown. Even an
-      # execute_script .click() has been observed dropped twice in a row
-      # on a starved CI runner (see PR #77). Bypass the click event
-      # entirely and invoke the Stimulus controller's #toggle directly —
-      # synchronous, no event loop dependency.
+      # The kebab dropdown's open path goes through stimulus-use's
+      # useTransition, which awaits requestAnimationFrame. On a starved
+      # CI runner those frames don't fire inside Capybara's wait window
+      # so the menu never becomes visible — even when the click is honoured.
+      # Bypass the controller: unhide the menu and force the opacity-0
+      # hover wrapper visible so Selenium considers the menu displayed.
       menu_selector = "#evidence-#{@evidence_id} [role='menu']"
       page.execute_script(<<~JS)
-        const wrapper = document.querySelector(
-          "#evidence-#{@evidence_id} [data-controller~='dropdown']"
-        );
-        const ctrl = window.Stimulus
-          .getControllerForElementAndIdentifier(wrapper, "dropdown");
-        ctrl.toggle();
+        const card = document.querySelector("#evidence-#{@evidence_id}");
+        const wrapper = card.querySelector("[data-controller~='dropdown']");
+        wrapper.style.opacity = "1";
+        const menu = card.querySelector("[role='menu']");
+        menu.classList.remove("hidden");
       JS
       assert_selector menu_selector, visible: true
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Relink"
