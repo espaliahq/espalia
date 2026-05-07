@@ -39,7 +39,12 @@ class Components::Kit::Navbar < Components::Base
   def left_section
     div(class: "flex items-center gap-4") do
       hamburger_button
-      span(class: "text-sm font-bold tracking-tight") { "#{@current_tenant&.name} #{@app_name}" }
+      span(class: "text-sm font-bold tracking-tight") do
+        plain "#{@current_tenant&.name} #{@app_name}"
+        if Rails.env.development?
+          span(class: "ml-1 text-[10px] font-normal opacity-70") { "(#{Rails.root.basename})" }
+        end
+      end
       desktop_nav_links
     end
   end
