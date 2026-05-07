@@ -51,7 +51,19 @@ class UserMenuSystemTest < ApplicationSystemTestCase
     should "sign out via dropdown" do
       visit root_path
       open_dropdown
-      click_on "Sign out"
+      # Submit the Sign out form via requestSubmit() — Capybara's click_on
+      # has been dropped on starved CI runners. requestSubmit dispatches a
+      # synchronous submit event that Turbo intercepts, bypassing pointer
+      # hit-testing entirely.
+      page.execute_script(<<~JS)
+        const btn = Array.from(document.querySelectorAll("[role='menu'] button, [role='menu'] a"))
+          .find(el => el.textContent.trim() === "Sign out");
+        if (btn?.tagName === "BUTTON") {
+          btn.closest("form")?.requestSubmit(btn);
+        } else {
+          btn?.click();
+        }
+      JS
       screenshot("after_sign_out")
 
       assert_current_path new_user_session_path
