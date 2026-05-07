@@ -32,10 +32,14 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
       # Open menu and find which tenant is NOT current, then switch to it
       open_dropdown
 
-      # Click whichever tenant is a button (not the current one which is a div)
-      within("[role='menu']") do
-        find("button[type='submit']", match: :first).click
-      end
+      # Click whichever tenant is a button (not the current one which is a div).
+      # Submit the form via requestSubmit — Capybara's pointer click on the
+      # submit button has been observed dropped on starved CI runners.
+      page.execute_script(<<~JS)
+        const menu = document.querySelector("[role='menu']");
+        const btn = menu?.querySelector("button[type='submit']");
+        btn?.closest("form")?.requestSubmit(btn);
+      JS
       screenshot("after_switch")
 
       # The tenant switch is a form POST that re-renders the page with new

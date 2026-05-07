@@ -186,9 +186,14 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       assert_selector "[data-activity-feed-target='focusBanner']", visible: true,
         text: "Show all activity"
 
-      # Click "Show all activity" → focus clears, banner hides.
+      # Click "Show all activity" → focus clears, banner hides. Drive the
+      # controller directly — synthetic click events on the link have been
+      # observed dropped on starved CI runners.
       page.execute_script(<<~JS)
-        document.querySelector("[data-action*='activity-feed#clearFocus']").click();
+        const wrapper = document.querySelector("[data-controller~='activity-feed']");
+        const ctrl = window.Stimulus
+          .getControllerForElementAndIdentifier(wrapper, "activity-feed");
+        ctrl.clearFocus();
       JS
       assert_selector "[data-activity-feed-target='focusBanner']", visible: :hidden
     end
