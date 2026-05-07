@@ -110,15 +110,21 @@ namespace :assessments do
       end
 
       # Pre-rate a few capabilities as self-ratings (from the report's perspective)
+      # `bindings_by_name` is the authoritative lookup for the evidence seeds —
+      # keyed by capability name rather than position so DB ordering can't
+      # silently misalign demo content. `bindings_for_self_ratings` is the
+      # limited subset we self-rate for the demo.
       bindings = FrameworkState::CapabilityRoleBinding.where(role_id: role.role_id)
-        .includes(:capability).limit(3)
+        .includes(:capability)
+      bindings_by_name = bindings.index_by { |b| b.capability.name }
+      bindings_for_self_ratings = bindings.limit(3)
 
       existing_ratings = AssessmentLevelRating.for_person(report_person.id)
         .for_framework(framework.framework_id).for_cycle(cycle_id).self_rated
       if existing_ratings.exists?
         puts "Self-ratings already exist in cycle. Skipping."
       else
-        bindings.each_with_index do |binding, i|
+        bindings_for_self_ratings.each_with_index do |binding, i|
           cap = binding.capability
           frequency = %w[consistent occasional some][i % 3]
           puts "  Self-rating #{cap.name} at L#{level.ordinal}: #{frequency}"
@@ -147,19 +153,16 @@ namespace :assessments do
       # can see the link between an evidence card and the exact L2/L3
       # behaviour it's evidence for. The expectations being demonstrated
       # are noted alongside each seed for future maintainers.
-      seed_marker_title = "Auth migration RFC: weighed three approaches"
-      already_seeded = EvidenceItem.for_person(report_person.id)
-        .for_framework(framework.framework_id)
-        .where(title: seed_marker_title)
-        .exists?
-      if already_seeded
-        puts "Seeded evidence already present for report. Skipping evidence seed."
-      else
-        evidence_seeds = [
+      #
+      # Idempotency is enforced per seed inside the loop (by title) so a
+      # partial run that recorded some seeds and then failed can be re-run
+      # to backfill the rest.
+      evidence_seeds = [
           # Strategic & Critical Thinking — L3:
           # "Breaks down problems, weighs options, and explains reasoning."
           {
-            binding_index: 0, level_offset: 0, source: "self", author: report_person,
+            capability_name: "Strategic & Critical Thinking",
+            level_offset: 0, source: "self", author: report_person,
             type: "project_outcome",
             title: "Auth migration RFC: weighed three approaches",
             content: "Wrote a 4-page RFC breaking down the SAML vs OIDC vs hybrid migration paths. " \
@@ -172,7 +175,8 @@ namespace :assessments do
           # same expectation: breaks down problems, weighs options, explains
           # reasoning — surfaced in a code review).
           {
-            binding_index: 0, level_offset: 0, source: "manager", author: manager_person,
+            capability_name: "Strategic & Critical Thinking",
+            level_offset: 0, source: "manager", author: manager_person,
             type: "code_review",
             title: "PR review: identified hidden coupling and proposed alternatives",
             content: "On the payments refactor PR, broke down why the proposed callback chain " \
@@ -185,7 +189,8 @@ namespace :assessments do
           # "Combines insights and customer context to shape recommendations
           # and explain decisions."
           {
-            binding_index: 1, level_offset: 0, source: "manager", author: manager_person,
+            capability_name: "Data Informed & Customer Centric Decisions",
+            level_offset: 0, source: "manager", author: manager_person,
             type: "customer_feedback",
             title: "Migration UX recommendation backed by partner research",
             content: "At the venue partner sync, combined qualitative interviews from three " \
@@ -198,7 +203,8 @@ namespace :assessments do
           # "Seeks out data or feedback to inform choices and considers how
           # the customer will be impacted."
           {
-            binding_index: 1, level_offset: -1, source: "self", author: report_person,
+            capability_name: "Data Informed & Customer Centric Decisions",
+            level_offset: -1, source: "self", author: report_person,
             type: "other", custom_type_label: "Sprint planning input",
             title: "Pulled CS pain points before sprint sizing",
             content: "Before sizing the next sprint, reached out to Customer Success for the " \
@@ -211,7 +217,8 @@ namespace :assessments do
           # "Takes ownership of work (goals and projects etc) and proactively
           # clears blockers."
           {
-            binding_index: 2, level_offset: 0, source: "self", author: report_person,
+            capability_name: "Commit, Deliver, Celebrate: Accountability & Execution",
+            level_offset: 0, source: "self", author: report_person,
             type: "incident_response",
             title: "Saturday outage: rolled back inside SLO and ran the postmortem",
             content: "Took primary on-call for the storage-tier outage. Diagnosed the failure " \
@@ -225,7 +232,8 @@ namespace :assessments do
           # (withdrawn). Demonstrates the activity feed's strikethrough state
           # without polluting the active-evidence count for this cell.
           {
-            binding_index: 2, level_offset: 0, source: "manager", author: manager_person,
+            capability_name: "Commit, Deliver, Celebrate: Accountability & Execution",
+            level_offset: 0, source: "manager", author: manager_person,
             type: "presentation",
             title: "Withdrawn: misattributed work item",
             content: "Initial entry credited the Q4 reliability cleanup to Alex but the work " \
@@ -238,11 +246,24 @@ namespace :assessments do
         ]
 
         evidence_seeds.each_with_index do |seed, i|
-          binding = bindings[seed[:binding_index]]
-          next unless binding
+          binding = bindings_by_name.fetch(seed[:capability_name]) do
+            raise "Missing capability binding for #{seed[:capability_name].inspect} — " \
+                  "framework template likely changed; update the seed task."
+          end
 
           cap = binding.capability
           target_level_ordinal = (level.ordinal + seed[:level_offset]).clamp(1, level.ordinal)
+
+          # Per-seed idempotency: if a partial run already created this seed,
+          # skip it without blocking the rest of the seeds from running.
+          if EvidenceItem.for_person(report_person.id)
+              .for_framework(framework.framework_id)
+              .where(title: seed[:title]).exists?
+            puts "  Evidence (#{seed[:source]}, #{cap.name} L#{target_level_ordinal}): " \
+                 "already seeded — skipping."
+            next
+          end
+
           evidence_id = SecureRandom.uuid_v7
 
           handler.record_evidence(
@@ -271,7 +292,6 @@ namespace :assessments do
                  "#{seed[:title] || seed[:type]}"
           end
         end
-      end
 
       puts "Assessment seed complete."
       puts "  Manager: #{manager_person.name} (#{admin_tu.user.email})"
