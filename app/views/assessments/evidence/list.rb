@@ -61,9 +61,10 @@ class Views::Assessments::Evidence::List < Views::Base
   def add_button
     button(
       type: "button",
-      class: "mt-1 w-full opacity-0 group-hover/evidence:opacity-100 focus:opacity-100 " \
-             "transition-opacity text-[11px] text-primary border border-dashed " \
-             "border-gray-300 dark:border-gray-600 rounded px-2 py-1 hover:bg-primary/5",
+      class: "mt-1 w-full opacity-100 lg:opacity-0 lg:group-hover/evidence:opacity-100 " \
+             "lg:focus:opacity-100 lg:transition-opacity text-[11px] text-primary " \
+             "border border-dashed border-gray-300 dark:border-gray-600 rounded px-2 py-1 " \
+             "hover:bg-primary/5",
       data: {
         action: "click->evidence-form#open",
         evidence_form_capability_stable_id_param: @capability_stable_id,
