@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   # `author` (the recorder of the evidence) is materialised because it has an
   # FK constraint and a belongs_to validation. `person_id` (the SUBJECT of the
