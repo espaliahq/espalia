@@ -44,14 +44,14 @@ end
 This routes to different views:
 - **Self** (`context: :self`) → `ShowView` — person rates themselves. Manager and aligned ratings are hidden — see *Self-assessment privacy* below.
 - **Manager** (`context: :manager`) → `ManagerShowView` — manager rates their direct report
-- **Alignment** (`context: :alignment`) → opt-in via `?mode=alignment`. Both parties see all three rating perspectives. Gated by `AssessmentPolicy#enter_alignment?`, which requires the cycle to be in the `aligning` state (manager has called `start_alignment`).
+- **Alignment** (`context: :alignment`) → automatic once the manager has formally started alignment (cycle status `aligning` or `aligned`). Both parties see all three rating perspectives. Gated by `AssessmentPolicy#view_alignment?`. There is no opt-in URL param and no in-page toggle — being in an alignment-phase assessment **is** alignment mode.
 
 ### Self-assessment privacy
 
 The assessee must not see the manager's rating until alignment formally begins. This is enforced at two layers:
 
 1. **Data layer** — `Assessments::MatrixDataBuilder` accepts a `context:` kwarg. When `context == :self`, manager and aligned data are scrubbed from the result — `manager_frequency` / `aligned_frequency` per cell, plus `manager_scoring` / `aligned_scoring` at the top level. The primary scoring perspective is also forced to `:self_only` so the effective fallback chain (aligned → manager → self) cannot leak manager-derived numbers into the displayed totals.
-2. **Policy layer** — `AssessmentPolicy#enter_alignment?` requires `alignment_in_progress?`. Even if the assessee crafts `?mode=alignment`, they fall back to `:self` context until the manager has started alignment. (Note: `align?` remains looser — it gates whether the alignment-toggle UI wrapper is rendered at all, including the manager's "Start alignment" button.)
+2. **Policy layer** — `AssessmentPolicy#view_alignment?` requires the participant's cycle status to be `aligning` or `aligned`. Until the manager has formally started alignment, the assessee renders in `:self` context regardless of any URL params. The controller treats stale `?mode=alignment` query strings as no-ops.
 
 ## Component Hierarchy
 
@@ -317,13 +317,12 @@ Both flags also flow through the rating controllers' Turbo Stream `respond_with_
 
 **Status pill.** Single helper `render_status_pill` returns one badge based on `participant_status` (`aligning` → warning, `aligned` → success) or falls back to "In Progress" warning when an open cycle exists. Self view never duplicates this with an extra "Aligning with manager" badge.
 
-**Action cluster (right side, unchanged).**
+**Action cluster (right side).**
 - Manager view, status `started`: "Start alignment" `<form>` with `data-turbo-confirm` warning that self + manager ratings will lock. Hidden on mobile (`hidden md:inline-block`).
-- Manager view, status `aligning` / `aligned`: "Continue alignment" link to `?mode=alignment`.
-- Manager view in `:alignment` context with status `aligning`: an extra green "Mark alignment complete" button (also `data-turbo-confirm`).
-- Both views in `:alignment` context: "Exit alignment" link replacing "Continue alignment".
+- Manager view, status `aligning`: "Mark alignment complete" green button with `data-turbo-confirm` warning that aligned values will be frozen.
+- Status `aligning` or `aligned`: no toggle — the assessment renders in alignment mode automatically. Both parties see all three rating perspectives without any UI affordance to enter or exit alignment.
 
-**`AlignmentStartsController` / `AlignmentCompletionsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment, mode: "alignment")` (start) or `assessment_path(@assignment)` (complete). Both rescue `RuntimeError` from the aggregate to surface a generic flash alert (the underlying message is logged via `Rails.logger.error` only).
+**`AlignmentStartsController` / `AlignmentCompletionsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment)`. Both rescue `RuntimeError` from the aggregate to surface a generic flash alert (the underlying message is logged via `Rails.logger.error` only).
 
 **Auto-alignment on start.** Inside the same RES transaction as `AlignmentStarted`, `PersonDevelopment::CommandHandler#start_alignment` emits an `AssessmentAligned` event for every (capability × level) cell where both `self_rated_frequency` and `manager_rated_frequency` are explicitly recorded **and equal**. The conversation in alignment mode then focuses on disagreements and unrated cells. Default-fallback agreements (where one or both perspectives never recorded an explicit value) are NOT auto-aligned — an aligned event represents a positive act of agreement between two recorded positions, not an absence of dispute. Auto-aligned events carry the comment "Auto-aligned: self and manager already agreed" for forensic distinction.
 

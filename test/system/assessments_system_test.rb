@@ -189,10 +189,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_text "Mgr:"
     end
 
-    should "deny URL-hacked alignment mode before alignment is in progress" do
+    should "show self-only context before alignment is in progress" do
       # Cycle is in :enrolled state, manager has not started alignment.
-      # Even with explicit ?mode=alignment, the assessee falls back to :self
-      # context and must not see manager ratings.
+      # The assessment context is derived from participant status only —
+      # any stale ?mode=alignment param is ignored, and the assessee must
+      # not see manager ratings.
       visit assessment_path(@assignment, mode: "alignment")
       assert_text "Critical Thinking"
       assert_no_text "Mgr:"

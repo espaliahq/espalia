@@ -41,9 +41,6 @@ class AssessmentsController < ApplicationController
     active_category_id = resolve_active_category_id
     context = assessment_context
     policy = AssessmentPolicy.new(pundit_user, @assignment)
-    can_align = policy.align?
-    can_start_alignment = policy.start_alignment?
-    can_complete_alignment = policy.complete_alignment?
     if manager_viewing?
       render Views::Assessments::ManagerShowView.new(
         assignment: @assignment,
@@ -53,9 +50,8 @@ class AssessmentsController < ApplicationController
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
         context: context,
-        can_align: can_align,
-        can_start_alignment: can_start_alignment,
-        can_complete_alignment: can_complete_alignment,
+        can_start_alignment: policy.start_alignment?,
+        can_complete_alignment: policy.complete_alignment?,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -68,7 +64,6 @@ class AssessmentsController < ApplicationController
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
         context: context,
-        can_align: can_align,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -127,13 +122,14 @@ class AssessmentsController < ApplicationController
     @assignment.person_id != current_person.id
   end
 
-  # Returns the assessment context based on the viewer's relationship,
-  # honouring the explicit `?mode=alignment` opt-in when the viewer is
-  # permitted to align.
+  # Returns the assessment context based on the viewer's relationship and
+  # the cycle's lifecycle. Once the manager has formally started alignment
+  # (cycle status `aligning` or `aligned`), both parties view the assessment
+  # in alignment mode automatically — there is no opt-in/opt-out toggle.
   #
   # @return [Symbol] :self, :manager, or :alignment
   def assessment_context
-    if params[:mode] == "alignment" && AssessmentPolicy.new(pundit_user, @assignment).enter_alignment?
+    if AssessmentPolicy.new(pundit_user, @assignment).view_alignment?
       :alignment
     else
       manager_viewing? ? :manager : :self
