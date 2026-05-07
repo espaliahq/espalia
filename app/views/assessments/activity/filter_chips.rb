@@ -5,9 +5,10 @@
 # activity_feed Stimulus controller (purely client-side — DOM filter,
 # no server round-trip).
 #
-# Each chip's pressed-state is driven by `data-activity-feed-filter-value`
-# read by the controller on connect; the active chip carries the
-# `aria-pressed="true"` styling, others get the inactive styling.
+# Each chip's value lives in `data-activity-feed-filter-param`, which
+# the controller reads when the chip is clicked. The pressed state is
+# driven by `aria-pressed`, set initially in this view and re-painted
+# by the controller after every filter change.
 #
 class Views::Assessments::Activity::FilterChips < Views::Base
   CHIPS = [

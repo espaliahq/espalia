@@ -24,6 +24,7 @@ export default class extends BaseController {
     this.filter = "all"
     this.mode = this.#readCookieMode()
     this.focus = { level: "framework", capabilityStableId: null, levelOrdinal: null }
+    this.#paintFilterChips()
     this.#paintModeSegments()
     this.#applyState()
   }

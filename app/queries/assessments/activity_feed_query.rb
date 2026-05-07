@@ -86,6 +86,12 @@ class Assessments::ActivityFeedQuery
   end
 
   def evidence_entries
+    # When the viewer is a peer (sees_all=false) and the viewer's
+    # person is unknown, filtering by author_id would degrade to
+    # `WHERE author_id IS NULL` — which surfaces only orphaned items
+    # rather than nothing. Bail early instead.
+    return [] if !@viewer_sees_all && @viewer_person_id.nil?
+
     scope = EvidenceItem
       .for_person(@assignment.person_id)
       .for_framework(@assignment.framework_id)
