@@ -21,6 +21,44 @@ class ExternalReferenceTest < ActiveSupport::TestCase
       assert_not ref.valid?
       assert ref.errors[:system].any?
     end
+
+    should "reject javascript: URLs to prevent XSS when rendered as href" do
+      ref = ExternalReference.new(system: "github", url: "javascript:alert(1)")
+      assert_not ref.valid?
+      assert ref.errors[:url].any?
+    end
+
+    should "reject data: URLs" do
+      ref = ExternalReference.new(system: "github", url: "data:text/html,<script>alert(1)</script>")
+      assert_not ref.valid?
+    end
+
+    should "accept http and https URLs" do
+      assert ExternalReference.new(system: "github", url: "https://x.test/path").valid?
+      assert ExternalReference.new(system: "github", url: "http://x.test/path").valid?
+    end
+  end
+
+  context "#safe_url" do
+    should "return the URL when scheme is http(s)" do
+      assert_equal "https://x.test", ExternalReference.new(url: "https://x.test").safe_url
+      assert_equal "http://x.test", ExternalReference.new(url: "http://x.test").safe_url
+    end
+
+    should "return nil for javascript: and other interactive schemes" do
+      %w[javascript:alert(1) data:text/html,x vbscript:msgbox file:///etc/passwd].each do |bad|
+        assert_nil ExternalReference.new(url: bad).safe_url, "expected #{bad.inspect} to be unsafe"
+      end
+    end
+
+    should "return nil when url is blank" do
+      assert_nil ExternalReference.new(url: nil).safe_url
+      assert_nil ExternalReference.new.safe_url
+    end
+
+    should "return nil when url is malformed and unparseable" do
+      assert_nil ExternalReference.new(url: "https://[bad").safe_url
+    end
   end
 
   context "#present?" do

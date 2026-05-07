@@ -32,6 +32,21 @@ class ExternalReference
   normalizes :system, :url, :external_id, with: ->(v) { v.to_s.strip.presence }
 
   validates :system, inclusion: { in: SYSTEMS }, allow_nil: true
+  validate :url_scheme_must_be_http_or_https
+
+  # Returns the URL only if it has a safe http(s) scheme. Blocks
+  # `javascript:`, `data:`, `vbscript:`, and other interactive schemes
+  # that would execute on click when rendered as an <a href>.
+  #
+  # @return [String, nil]
+  def safe_url
+    return nil if url.blank?
+
+    parsed = URI.parse(url) rescue nil
+    return nil unless parsed && %w[http https].include?(parsed.scheme&.downcase)
+
+    url
+  end
 
   # Whether this reference carries any populated information.
   #
@@ -44,5 +59,14 @@ class ExternalReference
   # @return [Boolean]
   def blank?
     !present?
+  end
+
+  private
+
+  def url_scheme_must_be_http_or_https
+    return if url.blank?
+    return if safe_url
+
+    errors.add(:url, "must be an http or https URL")
   end
 end

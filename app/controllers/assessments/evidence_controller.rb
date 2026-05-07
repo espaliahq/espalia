@@ -27,6 +27,19 @@ class Assessments::EvidenceController < ApplicationController
       return
     end
 
+    # Validate the external reference upfront so a malicious URL can't
+    # land in the event stream. ExternalReference rejects non-http(s)
+    # schemes (XSS via `javascript:` etc); doing it here keeps bad data
+    # out of the projection rather than letting it fail on replay.
+    ext_attrs = attrs[:external_reference]&.to_h
+    if ext_attrs.present?
+      candidate = ExternalReference.new(ext_attrs)
+      unless candidate.valid?
+        head :unprocessable_content
+        return
+      end
+    end
+
     evidence_id = SecureRandom.uuid_v7
     PersonDevelopment::CommandHandler.new.record_evidence(
       @assignment.person_id, @assignment.framework_id, evidence_id,

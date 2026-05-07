@@ -106,8 +106,9 @@ class Views::Assessments::Evidence::Card < Views::Base
   def external_chip
     ref = @item.external_reference
     label = ref.system.presence || "link"
-    if ref.url.present?
-      a(href: ref.url, target: "_blank", rel: "noopener noreferrer",
+    safe_url = ref.safe_url
+    if safe_url
+      a(href: safe_url, target: "_blank", rel: "noopener noreferrer",
         class: "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
                "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300 hover:bg-gray-200 " \
                "dark:hover:bg-gray-600 hover:underline") { label }
