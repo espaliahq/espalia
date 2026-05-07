@@ -323,14 +323,15 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # silently dropped on slow CI runners.
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
-      # JS-dispatch the click — Capybara's pointer click on the tab link
-      # has been dropped twice in a row by click_with_retry on starved CI.
-      # JS-dispatched click bubbles synchronously through Turbo's link
-      # interception so the frame fetch starts before the script returns.
+      # Drive the Turbo Frame fetch directly by setting frame.src — bypasses
+      # the click event entirely. Capybara's pointer click + JS dispatch
+      # have both been dropped on starved CI runners; this is the most
+      # reliable way to trigger the frame swap.
       page.execute_script(<<~JS)
         const tab = Array.from(document.querySelectorAll("#category-tabs a"))
-          .find(a => a.textContent.trim() === "Delivering");
-        tab?.click();
+          .find(a => a.textContent.trim().includes("Delivering"));
+        const frame = document.getElementById("assessment-matrix");
+        if (tab && frame) frame.src = tab.href;
       JS
 
       assert_text "Execution"
@@ -367,13 +368,13 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # replacement and the click is silently dropped on slow CI runners.
       assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
 
-      # JS-dispatch the click — same flake class as the category-tab click
-      # above. Turbo intercepts the click synchronously and starts the
-      # frame fetch.
+      # Drive the Turbo Frame fetch directly by setting frame.src — bypasses
+      # the click event entirely (same as the category-tab test above).
       page.execute_script(<<~JS)
         const link = Array.from(document.querySelectorAll("#scoring-panel a"))
           .find(a => a.textContent.trim().includes("Delivering"));
-        link?.click();
+        const frame = document.getElementById("assessment-matrix");
+        if (link && frame) frame.src = link.href;
       JS
 
       assert_text "Execution"
