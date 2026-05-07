@@ -26,7 +26,7 @@ class Assessments::AlignmentStartsController < ApplicationController
       started_by_id: current_person.id
     )
 
-    redirect_to assessment_path(@assignment, mode: "alignment"),
+    redirect_to assessment_path(@assignment),
       notice: "Alignment started — self and manager ratings are now locked for this cycle."
   rescue RuntimeError => e
     redirect_to assessment_path(@assignment), alert: e.message

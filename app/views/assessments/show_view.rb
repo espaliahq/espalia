@@ -14,7 +14,7 @@ class Views::Assessments::ShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(assignment:, framework:, matrix_data:, active_category_id: nil,
-                 expanded_capability_id: nil, context: :self, can_align: false,
+                 expanded_capability_id: nil, context: :self,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @framework = framework
@@ -22,7 +22,6 @@ class Views::Assessments::ShowView < Views::Base
     @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
     @context = context
-    @can_align = can_align
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -63,41 +62,10 @@ class Views::Assessments::ShowView < Views::Base
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
-          alignment_toggle if @can_align
           mobile_scoring_toggle
         end
       end
     end
-  end
-
-  def alignment_toggle
-    if @context == :alignment
-      a(
-        href: assessment_path(@assignment, alignment_toggle_query_params(remove_mode: true)),
-        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-amber-300 " \
-               "dark:border-amber-600 text-amber-800 dark:text-amber-300 " \
-               "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-      ) { "Exit alignment" }
-    elsif alignment_in_progress?
-      a(
-        href: assessment_path(@assignment, alignment_toggle_query_params(remove_mode: false)),
-        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-amber-300 " \
-               "dark:border-amber-600 text-amber-800 dark:text-amber-300 " \
-               "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-      ) { "Continue alignment" }
-    end
-  end
-
-  def alignment_in_progress?
-    %w[aligning aligned].include?(@matrix_data[:participant_status])
-  end
-
-  def alignment_toggle_query_params(remove_mode:)
-    params = {}
-    params[:category] = @active_category_id if @active_category_id
-    params[:capability] = @expanded_capability_id if @expanded_capability_id
-    params[:mode] = "alignment" unless remove_mode
-    params
   end
 
   def mobile_scoring_toggle
@@ -198,14 +166,12 @@ class Views::Assessments::ShowView < Views::Base
     p = {}
     p[:category] = @active_category_id if @active_category_id
     p[:capability] = @expanded_capability_id if @expanded_capability_id
-    p[:mode] = "alignment" if @context == :alignment
     p
   end
 
   def scoring_frame_params
     p = {}
     p[:category] = @active_category_id if @active_category_id
-    p[:mode] = "alignment" if @context == :alignment
     p
   end
 

@@ -389,9 +389,7 @@ class Views::Assessments::ScoringPanel < Views::Base
   end
 
   def matrix_link_params(category_id)
-    params = { category: category_id }
-    params[:mode] = "alignment" if @context == :alignment
-    params
+    { category: category_id }
   end
 
   # ── Perspective helpers ──

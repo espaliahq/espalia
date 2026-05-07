@@ -165,9 +165,7 @@ class Views::Assessments::CategoryTabs < Views::Base
   end
 
   def matrix_link_params(cat_id)
-    params = { category: cat_id }
-    params[:mode] = "alignment" if @context == :alignment
-    params
+    { category: cat_id }
   end
 
   def tab_classes(active)

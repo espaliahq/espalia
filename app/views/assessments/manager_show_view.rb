@@ -17,7 +17,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(assignment:, assessee:, framework:, matrix_data:, active_category_id: nil,
-                 expanded_capability_id: nil, context: :manager, can_align: false,
+                 expanded_capability_id: nil, context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
@@ -27,7 +27,6 @@ class Views::Assessments::ManagerShowView < Views::Base
     @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
     @context = context
-    @can_align = can_align
     @can_start_alignment = can_start_alignment
     @can_complete_alignment = can_complete_alignment
     @user = user
@@ -79,30 +78,10 @@ class Views::Assessments::ManagerShowView < Views::Base
 
         div(class: "flex items-center gap-2 shrink-0") do
           mark_complete_button if show_mark_complete?
-          alignment_toggle if @can_align
+          start_alignment_button if @can_start_alignment
           mobile_scoring_toggle
         end
       end
-    end
-  end
-
-  def alignment_toggle
-    if @context == :alignment
-      a(
-        href: assessment_path(@assignment, alignment_toggle_query_params(remove_mode: true)),
-        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-amber-300 " \
-               "dark:border-amber-600 text-amber-800 dark:text-amber-300 " \
-               "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-      ) { "Exit alignment" }
-    elsif alignment_in_progress?
-      a(
-        href: assessment_path(@assignment, alignment_toggle_query_params(remove_mode: false)),
-        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-amber-300 " \
-               "dark:border-amber-600 text-amber-800 dark:text-amber-300 " \
-               "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-      ) { "Continue alignment" }
-    elsif @can_start_alignment
-      start_alignment_button
     end
   end
 
@@ -124,12 +103,8 @@ class Views::Assessments::ManagerShowView < Views::Base
     end
   end
 
-  def alignment_in_progress?
-    %w[aligning aligned].include?(@matrix_data[:participant_status])
-  end
-
   def show_mark_complete?
-    @can_complete_alignment && @context == :alignment
+    @can_complete_alignment
   end
 
   def mark_complete_confirm_message
@@ -152,14 +127,6 @@ class Views::Assessments::ManagerShowView < Views::Base
                "hover:bg-green-700 dark:hover:bg-green-600 cursor-pointer"
       ) { "Mark alignment complete" }
     end
-  end
-
-  def alignment_toggle_query_params(remove_mode:)
-    params = {}
-    params[:category] = @active_category_id if @active_category_id
-    params[:capability] = @expanded_capability_id if @expanded_capability_id
-    params[:mode] = "alignment" unless remove_mode
-    params
   end
 
   def mobile_scoring_toggle
@@ -260,14 +227,12 @@ class Views::Assessments::ManagerShowView < Views::Base
     p = {}
     p[:category] = @active_category_id if @active_category_id
     p[:capability] = @expanded_capability_id if @expanded_capability_id
-    p[:mode] = "alignment" if @context == :alignment
     p
   end
 
   def scoring_frame_params
     p = {}
     p[:category] = @active_category_id if @active_category_id
-    p[:mode] = "alignment" if @context == :alignment
     p
   end
 

@@ -45,7 +45,7 @@ class Assessments::AlignmentStartsControllerTest < ActionDispatch::IntegrationTe
       sign_in @manager_user
       post assessment_alignment_start_path(@report_assignment)
 
-      assert_redirected_to assessment_path(@report_assignment, mode: "alignment")
+      assert_redirected_to assessment_path(@report_assignment)
 
       ActsAsTenant.with_tenant(@tenant) do
         participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @report.id)
@@ -70,7 +70,7 @@ class Assessments::AlignmentStartsControllerTest < ActionDispatch::IntegrationTe
     should "deny a second start_alignment once alignment is in progress" do
       sign_in @manager_user
       post assessment_alignment_start_path(@report_assignment)
-      assert_redirected_to assessment_path(@report_assignment, mode: "alignment")
+      assert_redirected_to assessment_path(@report_assignment)
 
       post assessment_alignment_start_path(@report_assignment)
       assert_response :forbidden

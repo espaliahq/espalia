@@ -34,22 +34,20 @@ class AssessmentPolicy < ApplicationPolicy
     (owns_assessment? || manages_assessee?) && alignment_in_progress?
   end
 
-  # Whether the viewer may switch into alignment mode in the UI.
-  # Visible whenever either party can take part in alignment, OR the
-  # current viewer is the manager and could start alignment.
+  # Whether the assessment should render in alignment mode for the viewer.
+  # True once the manager has formally started alignment (cycle status
+  # `aligning` or `aligned`). Both parties see all three rating perspectives
+  # — self, manager, and aligned — with aligned values as the primary view.
+  #
+  # Before alignment starts, the assessee sees `:self` only and the manager
+  # sees `:manager` only; the manager's ratings are private to the manager
+  # until they choose to start alignment.
   #
   # @return [Boolean]
-  def align? = (owns_assessment? || manages_assessee?) && current_open_cycle_present?
+  def view_alignment?
+    return false unless owns_assessment? || manages_assessee?
 
-  # Whether the viewer may actually flip the assessment view into alignment
-  # mode right now. Stricter than {#align?}: the manager must have formally
-  # started alignment (cycle status `aligning`). This prevents the assessee
-  # from URL-hacking `?mode=alignment` to see the manager's ratings before
-  # the alignment phase has begun.
-  #
-  # @return [Boolean]
-  def enter_alignment?
-    (owns_assessment? || manages_assessee?) && alignment_in_progress?
+    %w[aligning aligned].include?(current_open_cycle_participant&.status)
   end
 
   # Only the assessee's current direct manager can formally start

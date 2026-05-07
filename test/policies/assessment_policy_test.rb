@@ -97,12 +97,8 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not policy.create_alignment_rating?
     end
 
-    should "deny align" do
-      assert_not policy.align?
-    end
-
-    should "deny enter_alignment" do
-      assert_not policy.enter_alignment?
+    should "deny view_alignment" do
+      assert_not policy.view_alignment?
     end
 
     should "deny start_alignment" do
@@ -125,7 +121,7 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not policy.create_self_rating?
       assert_not policy.create_manager_rating?
       assert_not policy.create_alignment_rating?
-      assert_not policy.align?
+      assert_not policy.view_alignment?
       assert_not policy.start_alignment?
     end
   end
@@ -133,8 +129,8 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
   # ── Cycle-state-aware predicates ──
   #
   # create_self_rating?, create_manager_rating?, create_alignment_rating?,
-  # align?, and start_alignment? all depend on the participant's status
-  # in the current open cycle. These contexts cover the lifecycle.
+  # view_alignment?, and start_alignment? all depend on the participant's
+  # status in the current open cycle. These contexts cover the lifecycle.
 
   context "with an open cycle in :enrolled state (no ratings yet)" do
     setup do
@@ -178,9 +174,9 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not AssessmentPolicy.new(assessee_context, @assignment).create_alignment_rating?
     end
 
-    should "deny enter_alignment for both parties before alignment starts" do
-      assert_not AssessmentPolicy.new(@manager_ctx, @assignment).enter_alignment?
-      assert_not AssessmentPolicy.new(assessee_context, @assignment).enter_alignment?
+    should "deny view_alignment for both parties before alignment starts" do
+      assert_not AssessmentPolicy.new(@manager_ctx, @assignment).view_alignment?
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).view_alignment?
     end
   end
 
@@ -219,9 +215,9 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not AssessmentPolicy.new(assessee_context, @assignment).complete_alignment?
     end
 
-    should "allow enter_alignment for both parties" do
-      assert AssessmentPolicy.new(manager_context, @assignment).enter_alignment?
-      assert AssessmentPolicy.new(assessee_context, @assignment).enter_alignment?
+    should "allow view_alignment for both parties" do
+      assert AssessmentPolicy.new(manager_context, @assignment).view_alignment?
+      assert AssessmentPolicy.new(assessee_context, @assignment).view_alignment?
     end
   end
 
@@ -245,9 +241,9 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not AssessmentPolicy.new(manager_context, @assignment).create_alignment_rating?
     end
 
-    should "deny enter_alignment after completion" do
-      assert_not AssessmentPolicy.new(assessee_context, @assignment).enter_alignment?
-      assert_not AssessmentPolicy.new(manager_context, @assignment).enter_alignment?
+    should "still view_alignment after completion (aligned values are the canonical view)" do
+      assert AssessmentPolicy.new(assessee_context, @assignment).view_alignment?
+      assert AssessmentPolicy.new(manager_context, @assignment).view_alignment?
     end
 
     should "deny start_alignment" do

@@ -3,8 +3,9 @@
 require "application_system_test_case"
 
 # Exercises the alignment flow: from a manager's view of a direct report's
-# assessment, the manager switches into alignment mode via the "Start alignment"
-# pill and records an agreed frequency per capability×level. Both parties should
+# assessment, the manager starts alignment via the "Start alignment" button.
+# Once started, the assessment view automatically renders in alignment mode
+# for both parties — there is no opt-in/opt-out toggle. Both parties should
 # be able to align (see policy tests); this system test focuses on the manager
 # path — mirrors manager_assessments_system_test.rb.
 class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
@@ -100,7 +101,8 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
         auto_confirm { click_button "Start alignment" }
       end
 
-      assert_link "Exit alignment"
+      assert_no_button "Start alignment"
+      assert_button "Mark alignment complete"
     end
 
     should "auto-align cells where self and manager already agree, leaving disagreements for the conversation" do
@@ -146,18 +148,19 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "render alignment frequency selectors once aligning" do
       seed_alignment_started!
-      visit assessment_path(@report_assignment, mode: "alignment")
+      visit assessment_path(@report_assignment)
       wait_for_stimulus "matrix"
 
       assert_text "Report Alex"
       assert_text "Critical Thinking"
       assert_selector "button", text: "Consistent"
-      assert_link "Exit alignment"
+      assert_no_link "Exit alignment"
+      assert_no_link "Continue alignment"
     end
 
     should "record an alignment when a frequency is clicked" do
       seed_alignment_started!
-      visit assessment_path(@report_assignment, mode: "alignment")
+      visit assessment_path(@report_assignment)
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
@@ -174,25 +177,28 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
-  context "freeze of self/manager ratings during alignment" do
+  context "manager view during alignment" do
     setup { seed_alignment_started! }
 
-    should "render manager-side cells as read-only frequency bars (no selector buttons)" do
+    should "render in alignment mode automatically (no Start button, no toggle links)" do
+      visit assessment_path(@report_assignment)
+      assert_text "Aligning"
+      assert_no_button "Start alignment"
+      assert_no_link "Continue alignment"
+      assert_no_link "Exit alignment"
+    end
+
+    should "render the alignment frequency selector as the interactive primary cell" do
       visit assessment_path(@report_assignment)
       wait_for_stimulus "matrix"
 
-      # The interactive selector buttons should NOT be present in the rating cell.
-      # FrequencyBar renders no <button>, only spans + a colored bar div.
+      # In alignment mode the primary cell is the aligned selector (buttons
+      # present). Self/manager remain frozen at the policy/aggregate layer —
+      # the assessee/manager simply no longer have any interactive control
+      # over those individual perspectives in the UI.
       within("#rating-#{@cap_stable}-2") do
-        assert_no_selector "button"
+        assert_selector "button", text: "Consistent"
       end
-    end
-
-    should "show 'Continue alignment' link instead of the Start button on the manager view" do
-      visit assessment_path(@report_assignment)
-      assert_text "Aligning"
-      assert_link "Continue alignment"
-      assert_no_button "Start alignment"
     end
   end
 
@@ -204,92 +210,35 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       sign_in_as(@report_user)
     end
 
-    should "show Aligning status pill and a Continue alignment link" do
+    should "render in alignment mode automatically with no toggle affordances" do
       visit assessment_path(@report_assignment)
       assert_text "Aligning"
-      assert_link "Continue alignment"
       assert_no_button "Start alignment"
+      assert_no_link "Continue alignment"
+      assert_no_link "Exit alignment"
     end
 
-    should "render self-side cells as read-only frequency bars" do
+    should "render the alignment frequency selector as the interactive primary cell" do
       visit assessment_path(@report_assignment)
       wait_for_stimulus "matrix"
 
       within("#rating-#{@cap_stable}-2") do
-        assert_no_selector "button"
+        assert_selector "button", text: "Consistent"
       end
-    end
-  end
-
-  context "in-frame navigation preserves alignment mode" do
-    setup { seed_alignment_started! }
-
-    should "render category tab links carrying mode=alignment" do
-      visit assessment_path(@report_assignment, mode: "alignment")
-      assert_text "Aligning"
-      wait_for_stimulus "matrix"
-
-      # Wait for the matrix Turbo Frame to finish its eager fetch before
-      # reading link hrefs — the inline fallback can briefly render <a>
-      # elements without href attributes during the initial fetch.
-      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
-      assert_selector "nav#category-tabs a[href]"
-
-      tab_links = page.all("nav#category-tabs a[href]", visible: :all)
-      assert tab_links.any?, "Expected at least one category tab link"
-      tab_links.each do |link|
-        assert_includes link[:href], "mode=alignment",
-          "Category tab link #{link[:href]} should preserve mode=alignment"
-      end
-    end
-
-    should "render scoring-panel category links carrying mode=alignment" do
-      visit assessment_path(@report_assignment, mode: "alignment")
-      assert_text "Aligning"
-      wait_for_stimulus "matrix"
-
-      # Wait for the scoring-panel Turbo Frame to finish its eager fetch
-      # before reading link hrefs — the inline fallback may render an
-      # interstitial without href attributes.
-      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
-      assert_selector "#scoring-panel a[href]"
-
-      panel_links = page.all("#scoring-panel a[href]", visible: :all)
-      assert panel_links.any?, "Expected at least one scoring-panel category link"
-      panel_links.each do |link|
-        assert_includes link[:href], "mode=alignment",
-          "Scoring-panel link #{link[:href]} should preserve mode=alignment"
-      end
-    end
-  end
-
-  context "exiting alignment mode" do
-    setup { seed_alignment_started! }
-
-    should "return to default manager view after clicking Exit alignment but keep Continue link" do
-      visit assessment_path(@report_assignment, mode: "alignment")
-      assert_text "Aligning"
-
-      click_link_with_js_fallback("Exit alignment", expect_text: "Continue alignment")
-      assert_no_link "Exit alignment"
-      assert_link "Continue alignment"
-      assert_no_button "Start alignment"
     end
   end
 
   context "manager marks alignment complete" do
     setup { seed_alignment_started! }
 
-    should "show 'Mark alignment complete' only in alignment mode" do
+    should "show 'Mark alignment complete' whenever alignment is in progress" do
       visit assessment_path(@report_assignment)
-      assert_no_button "Mark alignment complete"
-
-      visit assessment_path(@report_assignment, mode: "alignment")
+      assert_text "Aligning"
       assert_button "Mark alignment complete"
     end
 
     should "complete alignment, flip the badge to Aligned, and freeze alignment cells" do
-      visit assessment_path(@report_assignment, mode: "alignment")
+      visit assessment_path(@report_assignment)
       assert_text "Aligning"
 
       click_with_retry(expect_text: "Aligned") do
@@ -298,7 +247,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_button "Mark alignment complete"
 
       # The alignment cell selectors should now be read-only bars (no buttons).
-      visit assessment_path(@report_assignment, mode: "alignment")
+      visit assessment_path(@report_assignment)
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       wait_for_stimulus "matrix"
       within("#cell-#{@cap_stable}-2") do
@@ -312,7 +261,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "render alignment view with Scoring toggle visible on mobile" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit assessment_path(@report_assignment, mode: "alignment")
+      visit assessment_path(@report_assignment)
 
       assert_text "Aligning"
       assert_text "Critical Thinking"
