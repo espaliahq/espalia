@@ -58,10 +58,17 @@ export default class extends BaseController {
         this.#updateScoreBadge()
       })
     }
+
+    if (this.hasActivityFrameTarget) {
+      this.activityFrameTarget.addEventListener("turbo:frame-load", () => {
+        this.#restoreActivityScroll()
+      })
+    }
   }
 
   #reloadFrame() {
     this.#saveToggleState()
+    this.#saveActivityScroll()
 
     // Reload matrix frame
     if (this.hasFrameTarget) {
@@ -179,6 +186,19 @@ export default class extends BaseController {
       })
       this._collapsedCategories = null
     }
+  }
+
+  #saveActivityScroll() {
+    const pane = document.getElementById("assessment-activity-pane")
+    this._activityScrollTop = pane ? pane.scrollTop : null
+  }
+
+  #restoreActivityScroll() {
+    const pane = document.getElementById("assessment-activity-pane")
+    if (pane && this._activityScrollTop != null) {
+      pane.scrollTop = this._activityScrollTop
+    }
+    this._activityScrollTop = null
   }
 
   // Reloads the scoring frame with the active category from the matrix frame.

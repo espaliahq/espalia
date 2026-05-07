@@ -89,5 +89,62 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "activity-pane"
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
     end
+
+    should "preserve activity feed scroll position across broadcast reloads" do
+      # Pad the feed with enough evidence entries to make the pane scrollable.
+      ActsAsTenant.with_tenant(@tenant) do
+        pd_handler = PersonDevelopment::CommandHandler.new
+        40.times do |i|
+          pd_handler.record_evidence(@person.id, @framework_id, SecureRandom.uuid_v7,
+            capability_stable_id: @cap_stable, level_ordinal: 1, source: "self",
+            evidence_type: "project_outcome", title: "Entry #{i}",
+            content: "Body content for entry #{i}.", author_id: @person.id)
+        end
+      end
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action*='activity-pane#toggle']").click();
+      JS
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_selector "#assessment-activity-pane turbo-frame#assessment-activity[complete]",
+        visible: :all
+
+      # Scroll the pane down and capture the resulting scrollTop.
+      page.execute_script(<<~JS)
+        const pane = document.getElementById("assessment-activity-pane");
+        pane.scrollTop = 400;
+      JS
+      scrolled_to = page.evaluate_script(
+        "document.getElementById('assessment-activity-pane').scrollTop"
+      )
+      assert scrolled_to.to_i > 0, "expected pane to be scrolled, got #{scrolled_to.inspect}"
+
+      # Simulate a broadcast: replace the sync-signal element. The
+      # MutationObserver in assessment_sync_controller treats this as the
+      # cue to reload all three frames.
+      page.execute_script(<<~JS)
+        const parent = document.getElementById("assessment-sync-signal").parentElement;
+        const replacement = document.createElement("div");
+        replacement.id = "assessment-sync-signal";
+        replacement.className = "hidden";
+        replacement.dataset.assessmentSyncTarget = "signal";
+        replacement.dataset.updatedAt = String(Date.now() / 1000);
+        parent.replaceChild(replacement, document.getElementById("assessment-sync-signal"));
+      JS
+
+      # Wait for the activity frame to finish reloading.
+      assert_selector "#assessment-activity-pane turbo-frame#assessment-activity[complete]",
+        visible: :all
+
+      # Scroll position should be restored to (close to) where we left it.
+      restored = page.evaluate_script(
+        "document.getElementById('assessment-activity-pane').scrollTop"
+      )
+      assert_equal scrolled_to.to_i, restored.to_i,
+        "expected scrollTop preserved across broadcast reload; was #{scrolled_to}, now #{restored}"
+    end
   end
 end
