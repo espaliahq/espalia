@@ -81,14 +81,21 @@ class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
       # connect on this card before clicking.
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
-      # The kebab is hover-revealed (opacity-0). JS click bypasses the
-      # hover gate without changing the DOM contract.
-      page.execute_script(<<~JS)
-        document.querySelector(
-          "#evidence-#{@evidence_id} [data-dropdown-target='trigger']"
-        ).click();
-      JS
-      assert_selector "#evidence-#{@evidence_id} [role='menu']", visible: true
+      # The kebab is hover-revealed (its parent wrapper has opacity-0
+      # group-hover:opacity-100) so we can't use open_dropdown — its
+      # visibility precondition fails on the opacity-0 wrapper. Instead
+      # JS-dispatch the click directly, and retry once if Chrome's event
+      # loop drops it on a starved CI runner.
+      menu_selector = "#evidence-#{@evidence_id} [role='menu']"
+      2.times do
+        page.execute_script(<<~JS)
+          document.querySelector(
+            "#evidence-#{@evidence_id} [data-dropdown-target='trigger']"
+          ).click();
+        JS
+        break if page.has_css?(menu_selector, visible: true, wait: 3)
+      end
+      assert_selector menu_selector, visible: true
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Relink"
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw"
 

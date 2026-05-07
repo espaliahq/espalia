@@ -144,7 +144,7 @@ class Views::Assessments::Evidence::Card < Views::Base
       type: "button",
       class: "rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
              "dark:hover:bg-gray-700 dark:hover:text-gray-200",
-      data: { dropdown_target: "trigger", action: "click->dropdown#toggle" },
+      data: { dropdown_target: "trigger", action: "dropdown#toggle" },
       aria: { label: "Evidence actions", haspopup: "menu", expanded: "false" }
     ) do
       # Vertical 3-dot kebab — kept inline so we don't depend on an icon set.
