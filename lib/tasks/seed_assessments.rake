@@ -141,7 +141,13 @@ namespace :assessments do
       # The gate checks for the first seeded title (rather than "any evidence
       # exists for this report") so manually-added evidence in dev doesn't
       # block the rest of the seed from filling out the demo set.
-      seed_marker_title = "Owned the onboarding revamp"
+      # Seeded titles (and content) are written to clearly demonstrate the
+      # *behavioural expectation* for each (capability, level) — not just
+      # the capability label — so a reviewer browsing the dev assessment
+      # can see the link between an evidence card and the exact L2/L3
+      # behaviour it's evidence for. The expectations being demonstrated
+      # are noted alongside each seed for future maintainers.
+      seed_marker_title = "Auth migration RFC: weighed three approaches"
       already_seeded = EvidenceItem.for_person(report_person.id)
         .for_framework(framework.framework_id)
         .where(title: seed_marker_title)
@@ -150,46 +156,81 @@ namespace :assessments do
         puts "Seeded evidence already present for report. Skipping evidence seed."
       else
         evidence_seeds = [
+          # Strategic & Critical Thinking — L3:
+          # "Breaks down problems, weighs options, and explains reasoning."
           {
             binding_index: 0, level_offset: 0, source: "self", author: report_person,
-            type: "project_outcome", title: "Owned the onboarding revamp",
-            content: "Drove the new-hire onboarding redesign from spec to launch over Q4.",
-            external_reference: { system: "linear", url: "https://linear.example/PROJ-1024" }
+            type: "project_outcome",
+            title: "Auth migration RFC: weighed three approaches",
+            content: "Wrote a 4-page RFC breaking down the SAML vs OIDC vs hybrid migration paths. " \
+                     "Built a decision matrix on rollout risk, vendor lock-in, and ops cost, " \
+                     "walked the team through the trade-offs, and landed on phased OIDC with " \
+                     "a clear written rationale.",
+            external_reference: { system: "notion", url: "https://notion.example/auth-rfc" }
           },
+          # Strategic & Critical Thinking — L3 (manager perspective on the
+          # same expectation: breaks down problems, weighs options, explains
+          # reasoning — surfaced in a code review).
           {
             binding_index: 0, level_offset: 0, source: "manager", author: manager_person,
-            type: "code_review", title: "PR feedback: payments refactor",
-            content: "Strong instinct for boundary placement. Pushed back on the ad-hoc " \
-                     "callbacks and proposed a clearer service object split.",
+            type: "code_review",
+            title: "PR review: identified hidden coupling and proposed alternatives",
+            content: "On the payments refactor PR, broke down why the proposed callback chain " \
+                     "would create implicit ordering dependencies. Laid out two alternative " \
+                     "service-object splits with the trade-offs and explained which one fit " \
+                     "our existing module boundaries best.",
             external_reference: { system: "github", url: "https://github.com/example/repo/pull/427" }
           },
+          # Data Informed & Customer Centric Decisions — L3:
+          # "Combines insights and customer context to shape recommendations
+          # and explain decisions."
           {
             binding_index: 1, level_offset: 0, source: "manager", author: manager_person,
-            type: "customer_feedback", title: nil,
-            content: "Customer-facing demo went smoothly. Two design partners flagged " \
-                     "the migration story as the clearest they've seen this quarter.",
+            type: "customer_feedback",
+            title: "Migration UX recommendation backed by partner research",
+            content: "At the venue partner sync, combined qualitative interviews from three " \
+                     "design partners with weekly retention metrics to recommend the simplified " \
+                     "migration UX. Two partners said it was the clearest case they'd seen this " \
+                     "quarter, and the team adopted the recommendation for the Q1 plan.",
             external_reference: nil
           },
+          # Data Informed & Customer Centric Decisions — L2:
+          # "Seeks out data or feedback to inform choices and considers how
+          # the customer will be impacted."
           {
             binding_index: 1, level_offset: -1, source: "self", author: report_person,
-            type: "incident_response", title: "Saturday outage triage",
-            content: "Took primary on the storage-tier outage, kept comms tight in #incidents, " \
-                     "shipped the rollback within the SLO window.",
-            external_reference: { system: "slack", url: "https://slack.example/archives/CINC/p123" }
-          },
-          {
-            binding_index: 2, level_offset: 0, source: "self", author: report_person,
-            type: "other", custom_type_label: "Internal tech talk",
-            title: "Brown bag: writing better tests for event-sourced aggregates",
-            content: "Hosted an internal session walking the team through aggregate testing " \
-                     "patterns, with a worked example from the assessments domain.",
+            type: "other", custom_type_label: "Sprint planning input",
+            title: "Pulled CS pain points before sprint sizing",
+            content: "Before sizing the next sprint, reached out to Customer Success for the " \
+                     "top three pain points from the past quarter. Folded the feedback into " \
+                     "the priority ordering — bumped the import-failure log feature ahead of " \
+                     "export polish because it was hitting onboarding the hardest.",
             external_reference: nil
           },
+          # Commit, Deliver, Celebrate: Accountability & Execution — L3:
+          # "Takes ownership of work (goals and projects etc) and proactively
+          # clears blockers."
+          {
+            binding_index: 2, level_offset: 0, source: "self", author: report_person,
+            type: "incident_response",
+            title: "Saturday outage: rolled back inside SLO and ran the postmortem",
+            content: "Took primary on-call for the storage-tier outage. Diagnosed the failure " \
+                     "mode within 12 minutes, drove the rollback decision, kept stakeholders " \
+                     "updated in #incidents every five minutes, and shipped the rollback inside " \
+                     "the 30-minute SLO. Followed up Monday with a postmortem and three concrete " \
+                     "prevention items, then drove two of them to merge that same week.",
+            external_reference: { system: "slack", url: "https://slack.example/archives/CINC/p123" }
+          },
+          # Commit, Deliver, Celebrate: Accountability & Execution — L3
+          # (withdrawn). Demonstrates the activity feed's strikethrough state
+          # without polluting the active-evidence count for this cell.
           {
             binding_index: 2, level_offset: 0, source: "manager", author: manager_person,
-            type: "presentation", title: "Withdrawn: misattributed feedback",
-            content: "Initial peer-feedback note was actually about a different teammate; " \
-                     "withdrawing rather than relinking to keep the audit clean.",
+            type: "presentation",
+            title: "Withdrawn: misattributed work item",
+            content: "Initial entry credited the Q4 reliability cleanup to Alex but the work " \
+                     "was actually led by another teammate. Withdrawing rather than relinking " \
+                     "to keep the audit clean.",
             external_reference: nil,
             withdraw: true,
             withdrawal_reason: "misattributed"
