@@ -7,5 +7,8 @@ FROM ghcr.io/rails/devcontainer/images/ruby:$RUBY_VERSION
 ENV BINDING="0.0.0.0"
 
 # Install CodeRabbit CLI so the Claude plugin (`/coderabbit` review) works inside the devcontainer.
+# Installer drops the binary in /home/vscode/.local/bin, which isn't on PATH during the build shell,
+# so put it on PATH before verifying — this also makes `coderabbit` usable in the running container.
+ENV PATH="/home/vscode/.local/bin:${PATH}"
 RUN curl -fsSL https://cli.coderabbit.ai/install.sh | sh \
     && coderabbit --version
