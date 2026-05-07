@@ -37,6 +37,7 @@ export default class extends BaseController {
 
   open(event) {
     const trigger = event.currentTarget
+    this.returnFocusElement = trigger
     const evidenceId = trigger?.dataset?.evidenceRelinkFormEvidenceIdParam
     const capabilityStableId = trigger?.dataset?.evidenceRelinkFormCapabilityStableIdParam
     const levelOrdinal = trigger?.dataset?.evidenceRelinkFormLevelOrdinalParam
@@ -79,6 +80,8 @@ export default class extends BaseController {
     this.modalTarget.classList.remove("flex")
     document.body.style.overflow = ""
     document.removeEventListener("click", this.boundClickOutside, true)
+    this.returnFocusElement?.focus()
+    this.returnFocusElement = null
   }
 
   clickOutside(event) {
