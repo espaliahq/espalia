@@ -87,11 +87,24 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       toggle_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_selector "[data-activity-feed-target='entry']", count: 4, visible: :all
+      wait_for_stimulus "activity-feed"
+      wait_for_turbo_idle
 
-      # Click Ratings
-      page.execute_script(<<~JS)
-        document.querySelector("[data-activity-feed-filter-param='ratings']").click();
+      click_filter_chip = <<~JS
+        const chip = document.querySelector("[data-activity-feed-filter-param='ratings']");
+        chip?.click();
       JS
+      page.execute_script(click_filter_chip)
+
+      # On starved CI, the click can race a Turbo Frame reconnect of the
+      # activity-feed controller and miss the action handler. Retry once
+      # if the data-hidden attributes haven't flipped yet.
+      unless page.has_css?(
+        "[data-kind-group='evidence'][data-hidden='true']", visible: :all, count: 2, wait: 4
+      )
+        wait_for_turbo_idle
+        page.execute_script(click_filter_chip)
+      end
 
       # Both evidence entries get data-hidden="true"; both rating entries
       # stay visible.
