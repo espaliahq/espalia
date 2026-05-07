@@ -111,9 +111,10 @@ class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
         f.requestSubmit();
       JS
 
-      # Wait for the post-redirect rendering — the new capability is in
-      # the URL, the matrix pre-expands the new row.
-      assert_text "Problem Solving"
+      # Wait for the post-redirect rendering. Use the URL as the sentinel —
+      # both capability names render on the initial page so a text match
+      # would resolve before the relink completes, racing the DB assertion.
+      assert_current_path(/capability=#{@cap2_stable}/)
 
       ActsAsTenant.with_tenant(@tenant) do
         item = EvidenceItem.find(@evidence_id)
