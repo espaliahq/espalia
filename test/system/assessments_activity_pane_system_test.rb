@@ -4,6 +4,7 @@ require "application_system_test_case"
 
 class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE  = [ 375, 812 ].freeze
 
   setup do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
@@ -145,6 +146,72 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       )
       assert_equal scrolled_to.to_i, restored.to_i,
         "expected scrollTop preserved across broadcast reload; was #{scrolled_to}, now #{restored}"
+    end
+
+    should "push ?activity=open to the URL on toggle and revert on back" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+
+      assert_no_match(/[?&]activity=/, page.current_url)
+
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action*='activity-pane#toggle']").click();
+      JS
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action*='activity-pane#toggle']").click();
+      JS
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+      assert_match(/[?&]activity=closed/, page.current_url)
+
+      # popstate: the back button should restore the prior open state.
+      page.go_back
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_match(/[?&]activity=open/, page.current_url)
+    end
+
+    should "honour ?activity=open in the URL even when the cookie says closed" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+
+      visit "#{assessment_path(@assignment)}?activity=open"
+      wait_for_stimulus "activity-pane"
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+    end
+  end
+
+  context "activity pane on mobile" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    end
+
+    should "close on outside click but stay open when click lands inside the pane" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action*='activity-pane#toggle']").click();
+      JS
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      # Clicking inside the pane keeps it open.
+      page.execute_script(<<~JS)
+        document.getElementById("assessment-activity-pane").dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+        )
+      JS
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+
+      # Clicking outside (on <main>) closes the pane.
+      page.execute_script(<<~JS)
+        document.querySelector("main").dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+        )
+      JS
+      assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
     end
   end
 end
