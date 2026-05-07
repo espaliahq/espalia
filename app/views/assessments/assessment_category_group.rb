@@ -21,9 +21,14 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param show_header [Boolean] whether to render the sticky category header row
   # @param frozen [Boolean] whether self/manager rating cells are read-only (alignment in progress)
   # @param alignment_locked [Boolean] whether alignment cells are read-only (alignment completed)
+  # @param viewer_person_id [String, nil] threaded through to the evidence section
+  # @param can_create_evidence [Boolean] threaded through to the evidence section
+  # @param can_relink_others_evidence [Boolean] threaded through to the evidence section
   def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
-                 expanded_capability_id: nil, show_header: true, frozen: false, alignment_locked: false)
+                 expanded_capability_id: nil, show_header: true, frozen: false, alignment_locked: false,
+                 viewer_person_id: nil, can_create_evidence: false,
+                 can_relink_others_evidence: false)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -38,6 +43,9 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
     @show_header = show_header
     @frozen = frozen
     @alignment_locked = alignment_locked
+    @viewer_person_id = viewer_person_id
+    @can_create_evidence = can_create_evidence
+    @can_relink_others_evidence = can_relink_others_evidence
   end
 
   def view_template
@@ -82,7 +90,10 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         expanded: stable_id == @expanded_capability_id,
         category_id: @category.category_id,
         frozen: @frozen,
-        alignment_locked: @alignment_locked
+        alignment_locked: @alignment_locked,
+        viewer_person_id: @viewer_person_id,
+        can_create_evidence: @can_create_evidence,
+        can_relink_others_evidence: @can_relink_others_evidence
       )
     end
   end

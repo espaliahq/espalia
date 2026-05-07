@@ -102,7 +102,11 @@ class AssessmentPolicy < ApplicationPolicy
     person.present? && record.person_id == person.id
   end
 
-  # The current user's person is the manager of the assignment's person.
+  # The current user's person is the assessee's direct manager.
+  # Alignment-related actions intentionally remain direct-manager-only —
+  # alignment is a 1:1 conversation. Skip-level access is granted through
+  # {EvidencePolicy} for evidence-related actions, not through this
+  # policy.
   #
   # @return [Boolean]
   def manages_assessee?

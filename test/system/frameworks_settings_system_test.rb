@@ -55,10 +55,23 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       assert_selector "[data-controller~='setting-field'][data-connected]",
                       count: 4, visible: :all
 
-      fill_in "settings[mastery_threshold]", with: "1.25"
-      fill_in "settings[meeting_expectation_threshold]", with: "0.90"
-      fill_in "settings[overperformance_cap]", with: "2"
-      fill_in "settings[deficit_threshold]", with: "0.50"
+      # Set field values via JS rather than Capybara's fill_in. On slow CI
+      # runners Selenium has been observed dropping individual keystrokes
+      # mid-type, leaving the field with truncated content (e.g. "1.15"
+      # instead of "1.25"). JS value assignment is atomic.
+      page.execute_script(<<~JS)
+        const set = (name, val) => {
+          const input = document.querySelector(`[name='${name}']`);
+          if (!input) return;
+          input.value = val;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        set("settings[mastery_threshold]", "1.25");
+        set("settings[meeting_expectation_threshold]", "0.90");
+        set("settings[overperformance_cap]", "2");
+        set("settings[deficit_threshold]", "0.50");
+      JS
 
       # Retry the submit once if the first click was lost on slow CI.
       click_button_with_js_fallback("Save settings", expect_text: "Scoring settings updated")

@@ -49,7 +49,7 @@ export default class extends Controller {
         top: "0",
         bottom: "0",
         [side]: "0",
-        zIndex: "30",
+        zIndex: "40",
         width: "20rem"
       })
       useClickOutside(this, { element: this.panelTarget })

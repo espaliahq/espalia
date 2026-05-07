@@ -34,8 +34,15 @@ class Assessments::MatrixDataBuilder
   #   When `:self`, manager and aligned ratings are scrubbed from the result so
   #   the assessee never receives data they shouldn't see — even via HTML
   #   inspection — until the manager formally starts alignment.
+  # @param viewer_person_id [String, nil] UUID of the Person currently viewing.
+  #   When nil, evidence is omitted entirely (e.g. unauthenticated paths).
+  # @param viewer_sees_all_evidence [Boolean] true when the viewer is the
+  #   assessee, anywhere in their manager chain, or a tenant admin. False for
+  #   peers — in which case the builder only returns evidence the viewer
+  #   themselves authored.
   def initialize(framework:, role:, level:, person_id:, cycle_id:, categories:,
-                 context:, participant_status: nil)
+                 context:, participant_status: nil,
+                 viewer_person_id: nil, viewer_sees_all_evidence: false)
     @framework = framework
     @role = role
     @level = level
@@ -43,6 +50,8 @@ class Assessments::MatrixDataBuilder
     @cycle_id = cycle_id
     @categories = categories
     @participant_status = participant_status
+    @viewer_person_id = viewer_person_id
+    @viewer_sees_all_evidence = viewer_sees_all_evidence
     @context = context&.to_sym
     return if VALID_CONTEXTS.include?(@context)
 
@@ -55,6 +64,7 @@ class Assessments::MatrixDataBuilder
   # @return [Hash]
   def build
     @ratings_index = load_ratings
+    @evidence_index = load_evidence
     @bindings_by_cap = index_bindings
     levels = build_levels
     ordinals = levels.map { |l| l[:ordinal] }
@@ -150,14 +160,46 @@ class Assessments::MatrixDataBuilder
         .select { |ill| ill.role_id == @role.role_id }
         .sort_by(&:ordinal)
 
+      evidence = @evidence_index[[ capability.stable_id, ordinal ]] || []
+
       cells[ordinal] = {
         expectation: expectation,
         current_frequency: rating&.self_rated_frequency,
         manager_frequency: hide_others? ? nil : rating&.manager_rated_frequency,
         aligned_frequency: hide_others? ? nil : rating&.aligned_frequency,
         illustrations: illustrations,
-        illustration_count: illustrations.size
+        illustration_count: illustrations.size,
+        evidence: evidence,
+        evidence_count: evidence.size
       }
+    end
+  end
+
+  # Loads active evidence visible to the current viewer, indexed by
+  # (capability_stable_id, level_ordinal). Evidence has no cycle scope —
+  # it's framework-wide context anchored to the behavioural expectation.
+  #
+  # Visibility:
+  # - When `viewer_sees_all_evidence: true` (assessee, manager chain, or
+  #   tenant admin): returns every active item for the person + framework.
+  # - When `viewer_sees_all_evidence: false` (peer): returns only items
+  #   the viewer themselves authored — peers can see their own
+  #   contributions in context but not others'.
+  # - When `viewer_person_id` is nil: returns nothing.
+  #
+  # @return [Hash{[String, Integer] => Array<EvidenceItem>}]
+  def load_evidence
+    return {} if @viewer_person_id.nil?
+
+    scope = EvidenceItem
+      .active
+      .for_person(@person_id)
+      .for_framework(@framework.framework_id)
+    scope = scope.where(author_id: @viewer_person_id) unless @viewer_sees_all_evidence
+
+    scope.order(:recorded_at).each_with_object({}) do |item, h|
+      key = [ item.capability_stable_id, item.level_ordinal ]
+      (h[key] ||= []) << item
     end
   end
 

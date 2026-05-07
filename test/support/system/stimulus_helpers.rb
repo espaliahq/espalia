@@ -219,6 +219,21 @@ module StimulusHelpers
       if (btn) btn.click();
     JS
 
+    return if landed?(expect_text, expect_selector, wait: 8)
+
+    # JS click also dropped (or the synthetic click event bypassed Turbo's
+    # submit interceptor). Submit the button's form via requestSubmit() —
+    # invokes Turbo's submit-listener synchronously, the most reliable path.
+    page.execute_script(<<~JS, locator)
+      const text = arguments[0];
+      const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
+      const btn = buttons.find(b => {
+        const label = (b.textContent || b.value || "").trim();
+        return label === text || label.includes(text);
+      });
+      btn?.closest("form")?.requestSubmit(btn);
+    JS
+
     if expect_text
       assert_text expect_text, wait: Capybara.default_max_wait_time
     else
@@ -306,12 +321,46 @@ module StimulusHelpers
   #
   # @param cell_selector [String] e.g. "#rating-{stable}-{level}"
   # @param frequency [String] button text — "Some" / "Most" / "Consistently"
+  # Toggles the assessment activity pane by directly invoking the
+  # Stimulus controller's #toggle method. JS pointer clicks on the
+  # toggle button have been observed dropped on parallel CI runners
+  # when Chrome's event loop is starved, so we bypass the event chain
+  # entirely and call the controller method.
+  def toggle_activity_pane
+    page.execute_script(<<~JS)
+      const wrapper = document.querySelector("[data-controller~='activity-pane']");
+      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane");
+      ctrl.toggle();
+    JS
+  end
+
   def click_rating_frequency(cell_selector, frequency)
     find("#{cell_selector} button", text: frequency).click
 
     return if page.has_css?("#{cell_selector} button.ring-1", text: frequency, wait: 4)
 
     find("#{cell_selector} button", text: frequency).click
+
+    return if page.has_css?("#{cell_selector} button.ring-1", text: frequency, wait: 4)
+
+    # Both Capybara pointer clicks dropped on a starved CI runner. Submit the
+    # button's form via requestSubmit() — invokes Turbo's submit interceptor
+    # synchronously, bypassing pointer hit-testing entirely.
+    # Substring match (not ===) — callers pass "Consistent" to match the
+    # alignment-mode button labelled "Consistently"; Capybara's `text:`
+    # filter does the same.
+    page.execute_script(<<~JS, cell_selector, frequency)
+      const cell = document.querySelector(arguments[0]);
+      const btn = Array.from(cell.querySelectorAll("button"))
+        .find(b => b.textContent.trim().includes(arguments[1]));
+      btn?.closest("form")?.requestSubmit(btn);
+    JS
+
+    # Final assertion ensures we surface a real failure if the JS fallback
+    # also silently no-ops (selector wrong, button missing, etc) — without
+    # this the helper returns successfully and the caller asserts against
+    # stale UI state.
+    assert_selector "#{cell_selector} button.ring-1", text: frequency
   end
 
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no

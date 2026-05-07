@@ -28,4 +28,36 @@ class Person < ApplicationRecord
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
   validates :status, inclusion: { in: %w[active inactive] }
+
+  # The transitive closure of `manager_id` upward — direct manager,
+  # skip-level, skip-skip, etc. Used by {EvidencePolicy} to gate
+  # access to anyone in the hierarchy above the assessee.
+  #
+  # Detects cycles defensively: if the graph contains a loop (data bug)
+  # the walk stops at the first repeated person rather than spinning.
+  #
+  # @return [Array<Person>] managers ordered closest-first; empty when
+  #   the person has no manager set
+  def manager_chain
+    chain = []
+    seen = Set.new([ id ])
+    current = manager
+    while current && !seen.include?(current.id)
+      chain << current
+      seen << current.id
+      current = current.manager
+    end
+    chain
+  end
+
+  # Whether the given person is anywhere in this person's manager
+  # hierarchy (direct manager, skip-level, etc.).
+  #
+  # @param other [Person, nil]
+  # @return [Boolean]
+  def managed_by?(other)
+    return false if other.nil?
+
+    manager_chain.any? { |m| m.id == other.id }
+  end
 end

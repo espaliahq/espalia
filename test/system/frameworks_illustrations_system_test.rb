@@ -62,9 +62,16 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", ill_li)
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", ill_li)
 
-      # Fill in the textarea and submit
-      textarea = ill_li.find("textarea[name='illustration[description]']")
-      textarea.fill_in with: "Proactively seeks guidance and asks clarifying questions"
+      # Set the textarea value via JS rather than Capybara's fill_in —
+      # Selenium has been observed dropping characters on slow CI runners
+      # when typing into rapidly-rendered fields. JS assignment is atomic.
+      page.execute_script(<<~JS, ill_li, "Proactively seeks guidance and asks clarifying questions")
+        const li = arguments[0];
+        const ta = li.querySelector("textarea[name='illustration[description]']");
+        ta.value = arguments[1];
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
 
       # Submit via the form's requestSubmit() rather than a Capybara button
       # click — on slow CI runners the button click is silently dropped, but

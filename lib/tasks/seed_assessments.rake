@@ -110,15 +110,21 @@ namespace :assessments do
       end
 
       # Pre-rate a few capabilities as self-ratings (from the report's perspective)
+      # `bindings_by_name` is the authoritative lookup for the evidence seeds —
+      # keyed by capability name rather than position so DB ordering can't
+      # silently misalign demo content. `bindings_for_self_ratings` is the
+      # limited subset we self-rate for the demo.
       bindings = FrameworkState::CapabilityRoleBinding.where(role_id: role.role_id)
-        .includes(:capability).limit(3)
+        .includes(:capability)
+      bindings_by_name = bindings.index_by { |b| b.capability.name }
+      bindings_for_self_ratings = bindings.limit(3)
 
       existing_ratings = AssessmentLevelRating.for_person(report_person.id)
         .for_framework(framework.framework_id).for_cycle(cycle_id).self_rated
       if existing_ratings.exists?
         puts "Self-ratings already exist in cycle. Skipping."
       else
-        bindings.each_with_index do |binding, i|
+        bindings_for_self_ratings.each_with_index do |binding, i|
           cap = binding.capability
           frequency = %w[consistent occasional some][i % 3]
           puts "  Self-rating #{cap.name} at L#{level.ordinal}: #{frequency}"
@@ -132,6 +138,160 @@ namespace :assessments do
           )
         end
       end
+
+      # Seed a small mix of evidence items so the dev environment exercises
+      # the full evidence/activity-feed surface: in-cell badge counts, the
+      # expanded-cell list, source variety (self / manager), external links,
+      # and a withdrawn item for the activity feed's strikethrough state.
+      #
+      # The gate checks for the first seeded title (rather than "any evidence
+      # exists for this report") so manually-added evidence in dev doesn't
+      # block the rest of the seed from filling out the demo set.
+      # Seeded titles (and content) are written to clearly demonstrate the
+      # *behavioural expectation* for each (capability, level) — not just
+      # the capability label — so a reviewer browsing the dev assessment
+      # can see the link between an evidence card and the exact L2/L3
+      # behaviour it's evidence for. The expectations being demonstrated
+      # are noted alongside each seed for future maintainers.
+      #
+      # Idempotency is enforced per seed inside the loop (by title) so a
+      # partial run that recorded some seeds and then failed can be re-run
+      # to backfill the rest.
+      evidence_seeds = [
+          # Strategic & Critical Thinking — L3:
+          # "Breaks down problems, weighs options, and explains reasoning."
+          {
+            capability_name: "Strategic & Critical Thinking",
+            level_offset: 0, source: "self", author: report_person,
+            type: "project_outcome",
+            title: "Auth migration RFC: weighed three approaches",
+            content: "Wrote a 4-page RFC breaking down the SAML vs OIDC vs hybrid migration paths. " \
+                     "Built a decision matrix on rollout risk, vendor lock-in, and ops cost, " \
+                     "walked the team through the trade-offs, and landed on phased OIDC with " \
+                     "a clear written rationale.",
+            external_reference: { system: "notion", url: "https://notion.example/auth-rfc" }
+          },
+          # Strategic & Critical Thinking — L3 (manager perspective on the
+          # same expectation: breaks down problems, weighs options, explains
+          # reasoning — surfaced in a code review).
+          {
+            capability_name: "Strategic & Critical Thinking",
+            level_offset: 0, source: "manager", author: manager_person,
+            type: "code_review",
+            title: "PR review: identified hidden coupling and proposed alternatives",
+            content: "On the payments refactor PR, broke down why the proposed callback chain " \
+                     "would create implicit ordering dependencies. Laid out two alternative " \
+                     "service-object splits with the trade-offs and explained which one fit " \
+                     "our existing module boundaries best.",
+            external_reference: { system: "github", url: "https://github.com/example/repo/pull/427" }
+          },
+          # Data Informed & Customer Centric Decisions — L3:
+          # "Combines insights and customer context to shape recommendations
+          # and explain decisions."
+          {
+            capability_name: "Data Informed & Customer Centric Decisions",
+            level_offset: 0, source: "manager", author: manager_person,
+            type: "customer_feedback",
+            title: "Migration UX recommendation backed by partner research",
+            content: "At the venue partner sync, combined qualitative interviews from three " \
+                     "design partners with weekly retention metrics to recommend the simplified " \
+                     "migration UX. Two partners said it was the clearest case they'd seen this " \
+                     "quarter, and the team adopted the recommendation for the Q1 plan.",
+            external_reference: nil
+          },
+          # Data Informed & Customer Centric Decisions — L2:
+          # "Seeks out data or feedback to inform choices and considers how
+          # the customer will be impacted."
+          {
+            capability_name: "Data Informed & Customer Centric Decisions",
+            level_offset: -1, source: "self", author: report_person,
+            type: "other", custom_type_label: "Sprint planning input",
+            title: "Pulled CS pain points before sprint sizing",
+            content: "Before sizing the next sprint, reached out to Customer Success for the " \
+                     "top three pain points from the past quarter. Folded the feedback into " \
+                     "the priority ordering — bumped the import-failure log feature ahead of " \
+                     "export polish because it was hitting onboarding the hardest.",
+            external_reference: nil
+          },
+          # Commit, Deliver, Celebrate: Accountability & Execution — L3:
+          # "Takes ownership of work (goals and projects etc) and proactively
+          # clears blockers."
+          {
+            capability_name: "Commit, Deliver, Celebrate: Accountability & Execution",
+            level_offset: 0, source: "self", author: report_person,
+            type: "incident_response",
+            title: "Saturday outage: rolled back inside SLO and ran the postmortem",
+            content: "Took primary on-call for the storage-tier outage. Diagnosed the failure " \
+                     "mode within 12 minutes, drove the rollback decision, kept stakeholders " \
+                     "updated in #incidents every five minutes, and shipped the rollback inside " \
+                     "the 30-minute SLO. Followed up Monday with a postmortem and three concrete " \
+                     "prevention items, then drove two of them to merge that same week.",
+            external_reference: { system: "slack", url: "https://slack.example/archives/CINC/p123" }
+          },
+          # Commit, Deliver, Celebrate: Accountability & Execution — L3
+          # (withdrawn). Demonstrates the activity feed's strikethrough state
+          # without polluting the active-evidence count for this cell.
+          {
+            capability_name: "Commit, Deliver, Celebrate: Accountability & Execution",
+            level_offset: 0, source: "manager", author: manager_person,
+            type: "presentation",
+            title: "Withdrawn: misattributed work item",
+            content: "Initial entry credited the Q4 reliability cleanup to Alex but the work " \
+                     "was actually led by another teammate. Withdrawing rather than relinking " \
+                     "to keep the audit clean.",
+            external_reference: nil,
+            withdraw: true,
+            withdrawal_reason: "misattributed"
+          }
+        ]
+
+        evidence_seeds.each_with_index do |seed, i|
+          binding = bindings_by_name.fetch(seed[:capability_name]) do
+            raise "Missing capability binding for #{seed[:capability_name].inspect} — " \
+                  "framework template likely changed; update the seed task."
+          end
+
+          cap = binding.capability
+          target_level_ordinal = (level.ordinal + seed[:level_offset]).clamp(1, level.ordinal)
+
+          # Per-seed idempotency: if a partial run already created this seed,
+          # skip it without blocking the rest of the seeds from running.
+          if EvidenceItem.for_person(report_person.id)
+              .for_framework(framework.framework_id)
+              .where(title: seed[:title]).exists?
+            puts "  Evidence (#{seed[:source]}, #{cap.name} L#{target_level_ordinal}): " \
+                 "already seeded — skipping."
+            next
+          end
+
+          evidence_id = SecureRandom.uuid_v7
+
+          handler.record_evidence(
+            report_person.id, framework.framework_id, evidence_id,
+            capability_stable_id: cap.stable_id,
+            level_ordinal: target_level_ordinal,
+            source: seed[:source],
+            evidence_type: seed[:type],
+            custom_type_label: seed[:custom_type_label],
+            title: seed[:title],
+            content: seed[:content],
+            author_id: seed[:author].id,
+            external_reference: seed[:external_reference]
+          )
+
+          if seed[:withdraw]
+            handler.withdraw_evidence(
+              report_person.id, framework.framework_id, evidence_id,
+              withdrawn_by_id: seed[:author].id,
+              reason: seed[:withdrawal_reason]
+            )
+            puts "  Evidence (#{seed[:source]}, #{cap.name} L#{target_level_ordinal}): " \
+                 "recorded then withdrawn — #{seed[:title] || seed[:type]}"
+          else
+            puts "  Evidence (#{seed[:source]}, #{cap.name} L#{target_level_ordinal}): " \
+                 "#{seed[:title] || seed[:type]}"
+          end
+        end
 
       puts "Assessment seed complete."
       puts "  Manager: #{manager_person.name} (#{admin_tu.user.email})"

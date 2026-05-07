@@ -65,7 +65,18 @@ class Views::Assessments::AssessmentCell < Views::Base
       expectation_text
       secondary_bars
       primary_selector
+      indicators
+    end
+  end
+
+  # Compact-cell footer indicators: illustration count + evidence count.
+  # Hidden completely when both are zero so the cell stays dense.
+  def indicators
+    return if !@cell_data[:illustration_count]&.positive? && !@cell_data[:evidence_count]&.positive?
+
+    div(class: "mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5") do
       illustration_indicator if @cell_data[:illustration_count]&.positive?
+      evidence_indicator if @cell_data[:evidence_count]&.positive?
     end
   end
 
@@ -164,11 +175,22 @@ class Views::Assessments::AssessmentCell < Views::Base
   end
 
   def illustration_indicator
-    div(class: "mt-1.5 flex items-center gap-1") do
+    div(class: "flex items-center gap-1") do
       span(class: "w-1.5 h-1.5 rounded-full bg-primary") { }
       span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
         count = @cell_data[:illustration_count]
         "#{count} #{'example'.pluralize(count)}"
+      end
+    end
+  end
+
+  def evidence_indicator
+    div(class: "flex items-center gap-1") do
+      span(class: "w-1.5 h-1.5 rounded-full bg-amber-500") { }
+      # "evidence" is treated as uncountable here — matches the card's
+      # body copy and avoids "evidences"/"piece of evidence" awkwardness.
+      span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+        "#{@cell_data[:evidence_count]} evidence"
       end
     end
   end

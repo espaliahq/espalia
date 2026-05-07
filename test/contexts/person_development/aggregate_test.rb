@@ -628,4 +628,237 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       end
     end
   end
+
+  # ── Evidence ──
+
+  context "#record_evidence" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @evidence_id = SecureRandom.uuid_v7
+      @cap_sid = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+    end
+
+    should "apply EvidenceRecorded event with full payload" do
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid,
+        level_ordinal: 3,
+        source: "self",
+        evidence_type: "project_outcome",
+        content: "Shipped X",
+        author_id: @author_id,
+        title: "Migration done",
+        external_reference: { system: "github", url: "https://github.com/x/y/pull/1" })
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceRecorded, event
+      assert_equal @evidence_id, event.data[:evidence_id]
+      assert_equal @cap_sid, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal "self", event.data[:source]
+      assert_equal "project_outcome", event.data[:evidence_type]
+      assert_equal "Shipped X", event.data[:content]
+      assert_equal @author_id, event.data[:author_id]
+      assert_equal "Migration done", event.data[:title]
+      assert_equal "github", event.data[:external_reference][:system]
+    end
+
+    should "raise if not assigned to a framework" do
+      bare = PersonDevelopment::Aggregate.new
+      err = assert_raises(RuntimeError) do
+        bare.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
+          evidence_type: "project_outcome", content: "x", author_id: @author_id)
+      end
+      assert_match /not yet assigned/, err.message
+    end
+
+    should "raise on duplicate evidence_id" do
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+        evidence_type: "project_outcome", content: "x", author_id: @author_id)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+          evidence_type: "project_outcome", content: "y", author_id: @author_id)
+      end
+      assert_match /already exists/, err.message
+    end
+
+    should "raise on invalid source" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "stranger",
+          evidence_type: "project_outcome", content: "x", author_id: @author_id)
+      end
+      assert_match /Invalid evidence source/, err.message
+    end
+
+    should "raise on invalid evidence_type" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
+          evidence_type: "garbage", content: "x", author_id: @author_id)
+      end
+      assert_match /Invalid evidence type/, err.message
+    end
+
+    should "raise when type is 'other' but custom_type_label is missing" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
+          evidence_type: "other", content: "x", author_id: @author_id)
+      end
+      assert_match /Custom type label required/, err.message
+    end
+
+    should "raise when type is not 'other' but custom_type_label is given" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
+          evidence_type: "code_review", content: "x", author_id: @author_id,
+          custom_type_label: "Mislabeled")
+      end
+      assert_match /only allowed when evidence_type is 'other'/, err.message
+    end
+
+    should "raise on blank content" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
+          evidence_type: "project_outcome", content: "   ", author_id: @author_id)
+      end
+      assert_match /content cannot be blank/, err.message
+    end
+
+    should "be allowed without joining a cycle" do
+      assert_nothing_raised do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
+          evidence_type: "project_outcome", content: "x", author_id: @author_id)
+      end
+    end
+
+    should "be allowed during alignment (no freeze)" do
+      cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(cycle_id, 1)
+      @aggregate.rate_self(@cap_sid, level_ordinal: 3, frequency: "consistent", cycle_id: cycle_id)
+      @aggregate.start_alignment(cycle_id, started_by_id: @author_id)
+
+      assert_nothing_raised do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3, source: "manager",
+          evidence_type: "code_review", content: "Late evidence", author_id: @author_id)
+      end
+    end
+  end
+
+  context "#relink_evidence" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @evidence_id = SecureRandom.uuid_v7
+      @cap_sid = SecureRandom.uuid_v7
+      @new_cap_sid = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+        evidence_type: "project_outcome", content: "x", author_id: @author_id)
+    end
+
+    should "apply EvidenceRelinked with previous and new coords" do
+      @aggregate.relink_evidence(@evidence_id,
+        new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
+        relinked_by_id: @author_id, rationale: "Better fit")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceRelinked, event
+      assert_equal @evidence_id, event.data[:evidence_id]
+      assert_equal @cap_sid, event.data[:previous_capability_stable_id]
+      assert_equal 3, event.data[:previous_level_ordinal]
+      assert_equal @new_cap_sid, event.data[:new_capability_stable_id]
+      assert_equal 4, event.data[:new_level_ordinal]
+      assert_equal "Better fit", event.data[:rationale]
+    end
+
+    should "raise on unknown evidence_id" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.relink_evidence(SecureRandom.uuid_v7,
+          new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
+          relinked_by_id: @author_id)
+      end
+      assert_match /No evidence with id/, err.message
+    end
+
+    should "raise when target coord is unchanged" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.relink_evidence(@evidence_id,
+          new_capability_stable_id: @cap_sid, new_level_ordinal: 3,
+          relinked_by_id: @author_id)
+      end
+      assert_match /already at that coordinate/, err.message
+    end
+
+    should "raise when evidence has been withdrawn" do
+      @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.relink_evidence(@evidence_id,
+          new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
+          relinked_by_id: @author_id)
+      end
+      assert_match /withdrawn evidence/, err.message
+    end
+
+    should "track new coords for subsequent operations" do
+      @aggregate.relink_evidence(@evidence_id,
+        new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
+        relinked_by_id: @author_id)
+
+      # A second relink to a different coord should now compare against
+      # (@new_cap_sid, 4) rather than the original. Going back to the
+      # ORIGINAL coord is fine — it's a different target now.
+      assert_nothing_raised do
+        @aggregate.relink_evidence(@evidence_id,
+          new_capability_stable_id: @cap_sid, new_level_ordinal: 3,
+          relinked_by_id: @author_id)
+      end
+    end
+  end
+
+  context "#withdraw_evidence" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @evidence_id = SecureRandom.uuid_v7
+      @cap_sid = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+        evidence_type: "project_outcome", content: "x", author_id: @author_id)
+    end
+
+    should "apply EvidenceWithdrawn with reason" do
+      @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id, reason: "Wrong context")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceWithdrawn, event
+      assert_equal @evidence_id, event.data[:evidence_id]
+      assert_equal @author_id, event.data[:withdrawn_by_id]
+      assert_equal "Wrong context", event.data[:reason]
+    end
+
+    should "raise on unknown evidence_id" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.withdraw_evidence(SecureRandom.uuid_v7, withdrawn_by_id: @author_id)
+      end
+      assert_match /No evidence with id/, err.message
+    end
+
+    should "raise when already withdrawn" do
+      @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
+      end
+      assert_match /already withdrawn/, err.message
+    end
+  end
 end

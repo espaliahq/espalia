@@ -13,8 +13,14 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param active_category_id [String, nil] selected category tab
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param viewer_person_id [String, nil] threaded into the evidence section
+  # @param can_create_evidence [Boolean] whether the viewer can record evidence
+  # @param can_relink_others_evidence [Boolean] whether the viewer can relink
+  #   evidence they didn't author (assessee or in their manager chain)
   def initialize(matrix_data:, assessment_id:, context: :self,
-                 active_category_id: nil, expanded_capability_id: nil)
+                 active_category_id: nil, expanded_capability_id: nil,
+                 viewer_person_id: nil, can_create_evidence: false,
+                 can_relink_others_evidence: false)
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context
@@ -22,10 +28,23 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @expanded_capability_id = expanded_capability_id
     @frozen = matrix_data[:individual_ratings_frozen] || false
     @alignment_locked = matrix_data[:alignment_locked] || false
+    @viewer_person_id = viewer_person_id
+    @can_create_evidence = can_create_evidence
+    @can_relink_others_evidence = can_relink_others_evidence
   end
 
   def view_template
-    div(data: { controller: "matrix", matrix_url_sync_value: true }) do
+    div(data: {
+      controller: "matrix",
+      matrix_url_sync_value: true,
+      # Stamping the active category here lets matrix_controller's
+      # connect dispatch initial focus on every frame load (tab switch,
+      # rating broadcast, etc.) so the activity feed picks up the
+      # implicit category narrowing without the user having to expand
+      # a row first.
+      matrix_active_category_id_value: @active_category_id,
+      action: "activity:navigate@window->matrix#navigateToEntity"
+    }) do
       render Views::Assessments::CategoryTabs.new(
         categories: @matrix_data[:categories],
         scoring: primary_scoring,
@@ -59,7 +78,10 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                 expanded_capability_id: @expanded_capability_id,
                 show_header: false,
                 frozen: @frozen,
-                alignment_locked: @alignment_locked
+                alignment_locked: @alignment_locked,
+                viewer_person_id: @viewer_person_id,
+                can_create_evidence: @can_create_evidence,
+                can_relink_others_evidence: @can_relink_others_evidence
               )
             end
           end

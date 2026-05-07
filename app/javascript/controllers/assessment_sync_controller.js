@@ -16,7 +16,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["signal", "frame", "scoringFrame"]
+  static targets = ["signal", "frame", "scoringFrame", "activityFrame"]
 
   connect() {
     super.connect()
@@ -58,10 +58,17 @@ export default class extends BaseController {
         this.#updateScoreBadge()
       })
     }
+
+    if (this.hasActivityFrameTarget) {
+      this.activityFrameTarget.addEventListener("turbo:frame-load", () => {
+        this.#restoreActivityScroll()
+      })
+    }
   }
 
   #reloadFrame() {
     this.#saveToggleState()
+    this.#saveActivityScroll()
 
     // Reload matrix frame
     if (this.hasFrameTarget) {
@@ -84,6 +91,17 @@ export default class extends BaseController {
         const updatedSrc = scoringUrl.toString()
         this.scoringFrameTarget.src = ""
         this.scoringFrameTarget.src = updatedSrc
+      }
+    }
+
+    // Reload the activity feed frame so newly-landed events surface
+    // without a page refresh. Lazy-loaded frames have no src until first
+    // load, so guard accordingly.
+    if (this.hasActivityFrameTarget) {
+      const src = this.activityFrameTarget.getAttribute("src")
+      if (src) {
+        this.activityFrameTarget.src = ""
+        this.activityFrameTarget.src = src
       }
     }
   }
@@ -168,6 +186,19 @@ export default class extends BaseController {
       })
       this._collapsedCategories = null
     }
+  }
+
+  #saveActivityScroll() {
+    const pane = document.getElementById("assessment-activity-pane")
+    this._activityScrollTop = pane ? pane.scrollTop : null
+  }
+
+  #restoreActivityScroll() {
+    const pane = document.getElementById("assessment-activity-pane")
+    if (pane && this._activityScrollTop != null) {
+      pane.scrollTop = this._activityScrollTop
+    }
+    this._activityScrollTop = null
   }
 
   // Reloads the scoring frame with the active category from the matrix frame.

@@ -133,17 +133,14 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently"
 
       # Click "Consistently" again to untoggle — rating should be cleared.
-      # JS-dispatch the click because Capybara's pointer click on the active
-      # ring-1 button has been observed dropped on slow CI runners (and
-      # retrying the same Capybara mechanism doesn't help when the runner
-      # stays starved). The Stimulus action handler runs synchronously
-      # inside execute_script.
-      click_js = "document.querySelector(\"#rating-#{@cap_stable}-2 button.ring-1\")?.click()"
-      page.execute_script(click_js)
-
-      unless page.has_no_css?("#rating-#{@cap_stable}-2 button.ring-1", wait: 4)
-        page.execute_script(click_js)
-      end
+      # Submit the button's parent form via requestSubmit() instead of
+      # clicking the button: bypasses pointer hit-testing entirely so
+      # Chrome's event loop can't drop the action on a starved CI runner.
+      # Same primitive as the inline-editor pattern in CLAUDE.md.
+      page.execute_script(<<~JS)
+        const btn = document.querySelector("#rating-#{@cap_stable}-2 button.ring-1");
+        btn?.closest("form")?.requestSubmit(btn);
+      JS
 
       # After clearing, no frequency button should have the selected ring style
       within("#rating-#{@cap_stable}-2") do
