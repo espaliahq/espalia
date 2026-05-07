@@ -170,6 +170,12 @@ class AssessmentsController < ApplicationController
     ).build
   end
 
+  # Memoised assessee lookup — both `viewer_sees_all_evidence?` and
+  # `viewer_can_relink_others_evidence?` reach for it on the same request.
+  def assessee_person
+    @assessee_person ||= Person.find_by(id: @assignment.person_id)
+  end
+
   # Whether the current viewer can see every active piece of evidence on the
   # assessment, vs only their own peer-source contributions. Mirrors the
   # gate inside {EvidencePolicy} — viewer is the assessee, anywhere in
@@ -179,8 +185,7 @@ class AssessmentsController < ApplicationController
     return true if current_user&.global_admin? || current_tenant_user&.admin?
     return true if @assignment.person_id == current_person.id
 
-    assessee = Person.find_by(id: @assignment.person_id)
-    assessee&.managed_by?(current_person) || false
+    assessee_person&.managed_by?(current_person) || false
   end
 
   # Whether the current viewer is permitted to record evidence on this
@@ -200,7 +205,7 @@ class AssessmentsController < ApplicationController
     return false unless current_person
     return true if @assignment.person_id == current_person.id
 
-    Person.find_by(id: @assignment.person_id)&.managed_by?(current_person) || false
+    assessee_person&.managed_by?(current_person) || false
   end
 
   # Loads the activity feed entries the current viewer is permitted to
