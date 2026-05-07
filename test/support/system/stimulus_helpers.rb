@@ -337,6 +337,12 @@ module StimulusHelpers
         .find(b => b.textContent.trim() === arguments[1]);
       btn?.closest("form")?.requestSubmit(btn);
     JS
+
+    # Final assertion ensures we surface a real failure if the JS fallback
+    # also silently no-ops (selector wrong, button missing, etc) — without
+    # this the helper returns successfully and the caller asserts against
+    # stale UI state.
+    assert_selector "#{cell_selector} button.ring-1", text: frequency
   end
 
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no
