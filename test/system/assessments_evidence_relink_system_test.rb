@@ -74,7 +74,11 @@ class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
 
   context "kebab menu + relink" do
     should "open the kebab, show Relink + Withdraw, and persist a relink" do
-      visit assessment_path(@assignment, capability: @cap1_stable)
+      # Evidence rendering is gated on cell focus (`data-focused="true"`
+      # on the expanded `<td>`), so deep-link to the cell — capability
+      # alone gives capability focus, which collapses the expanded row
+      # to a near-zero strip and keeps the evidence list hidden.
+      visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
       wait_for_stimulus "evidence-relink-form"
       assert_selector "#evidence-#{@evidence_id}", visible: true
       # The kebab uses the `dropdown` Stimulus controller; wait for it to
