@@ -100,14 +100,16 @@ class Views::Assessments::AssessmentCell < Views::Base
         # find this compact cell when stamping `data-focus-compact` on
         # siblings of the focused column.
         level_ordinal: @ordinal,
-        # Compact-cell click (or Enter/Space when keyboard-focused)
-        # triggers cell focus AND expands the row. The
-        # `focus-on-button-click` flag tells focusCell to NOT bail
-        # when the click lands on a rating button — we want both the
-        # rating to submit AND the cell to focus.
+        # Compact-cell click (or Enter/Space when keyboard-focused on
+        # the cell ITSELF — `.self` keeps nested rating buttons free
+        # to handle their own keyboard activation) triggers cell
+        # focus AND expands the row. The `focus-on-button-click`
+        # flag tells focusCell to NOT bail when the click lands on a
+        # rating button — we want both the rating to submit AND the
+        # cell to focus.
         action: "click->matrix#focusCell " \
-                "keydown.enter->matrix#focusCell " \
-                "keydown.space->matrix#focusCell:prevent",
+                "keydown.enter.self->matrix#focusCell " \
+                "keydown.space.self->matrix#focusCell:prevent",
         capability_id: @capability_id,
         capability_stable_id: @capability_stable_id,
         expectation_id: @cell_data.dig(:expectation)&.expectation_id,
