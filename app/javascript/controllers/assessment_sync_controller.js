@@ -27,6 +27,11 @@ export default class extends BaseController {
 
   disconnect() {
     this._observer?.disconnect()
+    if (this._pointerListener) {
+      this.element.removeEventListener("pointerdown", this._pointerListener, true)
+      this.element.removeEventListener("mousedown", this._pointerListener, true)
+      this._pointerListener = null
+    }
     if (this._clickListener) {
       this.element.removeEventListener("click", this._clickListener, true)
       this._clickListener = null
@@ -81,16 +86,24 @@ export default class extends BaseController {
   //      through a button click (programmatic submits).
   #listenForOwnSubmits() {
     const arm = () => {
-      // 3s window covers a broadcast round-trip with generous CI
-      // headroom without holding off legitimate reloads from other
-      // users for long enough to be noticed.
-      this._suppressReloadUntil = performance.now() + 3000
+      // 5s covers a broadcast round-trip with generous CI headroom
+      // without holding off legitimate reloads from other users for
+      // long enough to be noticed.
+      this._suppressReloadUntil = performance.now() + 5000
     }
 
-    this._clickListener = (event) => {
-      if (!event.target?.closest("button, a, [role='button']")) return
-      arm()
-    }
+    // Arm on the EARLIEST possible signal of a user action. `pointerdown`
+    // and `mousedown` fire before `click`; `click` fires before
+    // `turbo:submit-start`; all four are wired so whichever lands
+    // first arms the suppress.
+    const isInteractiveTarget = (event) =>
+      !!event.target?.closest?.("button, a, [role='button'], input[type='submit']")
+
+    this._pointerListener = (event) => { if (isInteractiveTarget(event)) arm() }
+    this.element.addEventListener("pointerdown", this._pointerListener, true)
+    this.element.addEventListener("mousedown", this._pointerListener, true)
+
+    this._clickListener = (event) => { if (isInteractiveTarget(event)) arm() }
     this.element.addEventListener("click", this._clickListener, true)
 
     this._submitListener = (event) => {

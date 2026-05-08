@@ -655,6 +655,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
+      # Wait for the lazy-loaded matrix frame to finish its initial
+      # fetch — otherwise the initial src completion would fire
+      # turbo:frame-load AFTER we instrument and skew the count.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+
       # Instrument frame load events.
       page.execute_script(<<~JS)
         (() => {
