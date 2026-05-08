@@ -464,6 +464,11 @@ export default class extends BaseController {
       `tr[data-matrix-target="row"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"], ` +
       `tr[data-matrix-target="expandedRow"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"]`
     )
+    // A stale `level_ordinal` (e.g. an old deep link to a level the
+    // role no longer has) shouldn't short-circuit into cell focus
+    // with no real cell behind it. Bail so dispatchInitialFocus's
+    // capability/category fallback runs instead.
+    if (!cell) return null
 
     return {
       level: "cell",
@@ -471,7 +476,7 @@ export default class extends BaseController {
       capabilityId,
       capabilityStableId: stableId,
       levelOrdinal: ordinal,
-      expectationId: cell?.dataset.expectationId || null
+      expectationId: cell.dataset.expectationId || null
     }
   }
 
@@ -494,8 +499,8 @@ export default class extends BaseController {
       const capForUrl = (level === "cell" || level === "capability")
         ? capabilityStableId
         : null
-      this.#syncCapabilityToUrl(capForUrl)
-      this.#syncLevelOrdinalToUrl(level === "cell" ? levelOrdinal : null)
+      const ordForUrl = level === "cell" ? levelOrdinal : null
+      this.#syncFocusToUrl(capForUrl, ordForUrl)
     }
     window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
       detail: { ...this.currentFocus }
@@ -833,43 +838,27 @@ export default class extends BaseController {
     window.history.pushState({}, "", browserUrl)
   }
 
-  // Update capability param in browser URL on row toggle. Also clears
-  // level_ordinal — collapsing the row necessarily exits cell focus.
-  #syncCapabilityToUrl(capId) {
+  // Batched URL sync for focus state. Pushes capability + level_ordinal
+  // in a single history entry so Back/Forward maps 1:1 to visible
+  // focus changes. No-ops when the URL already matches — important on
+  // initial connect, which dispatches focus from already-correct URL
+  // state and would otherwise pile up duplicate back-stack entries.
+  #syncFocusToUrl(capId, levelOrdinal) {
     const url = new URL(window.location)
-    if (capId) {
-      url.searchParams.set("capability", capId)
-    } else {
-      url.searchParams.delete("capability")
-      url.searchParams.delete("level_ordinal")
-    }
-    window.history.pushState({}, "", url)
-    this.#syncFrameSrcParam("capability", capId)
-    if (!capId) this.#syncFrameSrcParam("level_ordinal", null)
-  }
+    const desiredCap = capId || null
+    const desiredOrd = levelOrdinal != null ? String(levelOrdinal) : null
 
-  // Update level_ordinal param on cell focus / unfocus. Called from
-  // #setFocus so every focus transition keeps the URL truthful. No-ops
-  // when the URL already matches — important for initial connect, which
-  // dispatches focus from already-correct URL state and would otherwise
-  // push a duplicate history entry.
-  #syncLevelOrdinalToUrl(levelOrdinal) {
-    const url = new URL(window.location)
-    const current = url.searchParams.get("level_ordinal")
-    const desired = levelOrdinal != null ? String(levelOrdinal) : null
-    if (current === desired) return
-    if (desired != null) url.searchParams.set("level_ordinal", desired)
+    if (url.searchParams.get("capability") === desiredCap &&
+        url.searchParams.get("level_ordinal") === desiredOrd) return
+
+    if (desiredCap) url.searchParams.set("capability", desiredCap)
+    else url.searchParams.delete("capability")
+
+    if (desiredOrd != null) url.searchParams.set("level_ordinal", desiredOrd)
     else url.searchParams.delete("level_ordinal")
-    window.history.pushState({}, "", url)
-    this.#syncFrameSrcParam("level_ordinal", desired)
-  }
 
-  // No-op: kept for future use. The frame `src` is intentionally NOT
-  // mutated on focus changes — `setAttribute("src", ...)` triggers a
-  // Turbo Frame fetch. Instead, `assessment_sync_controller` merges
-  // browser URL params (capability + level_ordinal) into the frame
-  // src at reload time so focus state survives broadcasts.
-  #syncFrameSrcParam(_name, _value) {}
+    window.history.pushState({}, "", url)
+  }
 
   // Dims sibling compact rows when a row is expanded for visual focus.
   #updateRowDimming(expandedCapId) {
