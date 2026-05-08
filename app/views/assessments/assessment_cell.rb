@@ -141,11 +141,17 @@ class Views::Assessments::AssessmentCell < Views::Base
   end
 
   # Compact-cell footer indicators: illustration count + evidence count.
-  # Hidden completely when both are zero so the cell stays dense.
+  # Hidden when both are zero so the cell stays dense, and hidden on
+  # the focused cell (the full illustration list and evidence section
+  # render in the expanded cell below — the badges would just repeat
+  # what's already visible). Sibling cells in the focused row, and
+  # every cell in non-focused rows, keep their badges so the user
+  # has situational awareness of which cells carry content.
   def indicators
     return if !@cell_data[:illustration_count]&.positive? && !@cell_data[:evidence_count]&.positive?
 
-    div(class: "mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5") do
+    div(class: "mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 " \
+               "group-data-[focused=true]/assess-cell:hidden") do
       illustration_indicator if @cell_data[:illustration_count]&.positive?
       evidence_indicator if @cell_data[:evidence_count]&.positive?
     end

@@ -154,16 +154,21 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "td.border-l-3"
     end
 
-    should "show illustration count and expand to reveal illustrations" do
+    should "show illustration count and reveal full illustrations on cell focus" do
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
-      # Illustration count indicators should be visible
+      # Illustration count indicators should be visible on the compact cells
       assert_text "2 examples"
       assert_text "1 example"
 
-      # Click the Critical Thinking capability name to expand illustrations
+      # Expanding the row alone surfaces only dot summaries — full
+      # illustrations are reserved for the focused cell. Focus the
+      # level-1 cell of the first capability to reveal them.
       expand_matrix_row("#capability-name-#{@cap1_stable}")
+      cap1_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap1_id, level_ordinal: 1)
+
       assert_text "Asks 'why' before jumping into implementation"
       assert_text "Rephrases the problem statement in their own words"
     end
@@ -206,7 +211,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # Click the capability name cell — avoids hitting rating form buttons
       expand_matrix_row("#capability-name-#{@cap1_stable}")
-      assert_text "Asks 'why' before jumping into implementation"
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
     end
 
     should "keep row expanded when clicking it again" do
@@ -217,25 +222,30 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # Click the same capability name again — should stay expanded
       find("#capability-name-#{@cap1_stable}").click
       assert_selector "[data-matrix-target='expandedRow']", visible: true
-      assert_text "Asks 'why' before jumping into implementation"
     end
 
     should "collapse expanded row and expand new row when clicking a different row" do
       visit assessment_path(@assignment)
 
-      # Expand first row
+      # Expand first row, then focus a cell so we can assert on the
+      # focused-cell-only illustration text as a "this row is expanded
+      # AND focused" signal.
       expand_matrix_row("#capability-name-#{@cap1_stable}")
+      cap1_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap1_id, level_ordinal: 1)
       assert_text "Asks 'why' before jumping into implementation"
 
       # Click second row — first should collapse, second should expand.
       # JS-dispatch the click because Capybara's pointer click is dropped
       # on slow CI (and click_with_retry's retry uses the same mechanism).
       page.execute_script("document.querySelector('#capability-name-#{@cap2_stable}').click();")
-      unless page.has_text?("Creates a checklist of sub-tasks before starting work", wait: 8)
+      cap2_id = capability_id_from_stable(@cap2_stable)
+      unless page.has_selector?("[data-matrix-target='expandedRow'][data-capability-id='#{cap2_id}']", visible: true, wait: 8)
         page.execute_script("document.querySelector('#capability-name-#{@cap2_stable}').click();")
       end
 
-      assert_text "Creates a checklist of sub-tasks before starting work"
+      assert_no_selector "[data-matrix-target='expandedRow'][data-capability-id='#{cap1_id}']", visible: true
+      assert_selector "[data-matrix-target='expandedRow'][data-capability-id='#{cap2_id}']", visible: true
       assert_no_text "Asks 'why' before jumping into implementation"
     end
 
@@ -254,15 +264,19 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "keep illustrations expanded when rating a capability in the same row" do
       visit assessment_path(@assignment)
 
-      # Expand the first row via capability name
+      # Expand the first row and focus a cell so its illustration is
+      # visible — illustrations only render in the focused cell.
       expand_matrix_row("#capability-name-#{@cap1_stable}")
+      cap1_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap1_id, level_ordinal: 1)
+      assert_text "Asks 'why' before jumping into implementation"
 
       # Click a rating button inside the same row.
       # Use the capability stable_id to build a precise selector, avoiding
       # stale element references from Turbo Stream replacements.
       click_rating_frequency("#rating-#{@cap1_stable}-1", "Consistently")
 
-      # Illustrations should still be visible
+      # Row should still be expanded with the same focused cell content visible
       assert_selector "[data-matrix-target='expandedRow']", visible: true
       assert_text "Asks 'why' before jumping into implementation"
     end
