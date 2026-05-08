@@ -129,10 +129,19 @@ class Views::Assessments::AssessmentRow < Views::Base
     evidence = cell_data&.dig(:evidence) || []
     expectation = cell_data&.dig(:expectation)
 
+    # Vertical padding is gated on this cell being focused. When the
+    # row is expanded but no cell is focused (chevron click, or after
+    # the × close button), the expanded `<td>` collapses to zero height
+    # so the row doesn't render an empty whitespace strip below the
+    # compact cells. `data-[focused=true]:py-2` targets the td's own
+    # `data-focused` attribute (group-* is parent-only — can't
+    # self-reference).
     td(
-      class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
+      class: "px-3 py-0 data-[focused=true]:py-2 " \
+             "border-b border-r border-gray-100 dark:border-gray-800 " \
              "bg-blue-50/30 dark:bg-blue-900/10 align-top cursor-pointer " \
-             "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors",
+             "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors " \
+             "group/assess-expanded",
       data: {
         action: "click->matrix#focusCell",
         capability_id: @capability.capability_id,
@@ -142,27 +151,37 @@ class Views::Assessments::AssessmentRow < Views::Base
         focus_on_button_click: "true"
       }
     ) do
-      if illustrations.any?
-        ul(class: "space-y-1") do
-          illustrations.each do |ill|
-            li(class: "flex items-start gap-1.5 text-xs text-gray-600 dark:text-gray-400") do
-              span(class: "mt-1 w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500 shrink-0") { }
-              span { ill.description }
+      # Full illustrations + evidence render only in the focused
+      # expanded cell (`data-focused="true"` stamped by
+      # matrix_controller#applyColumnFocus on the cell matching BOTH
+      # the focused level AND the focused capability). All other
+      # expanded cells render empty — the compact cell above already
+      # carries the dot badges (`N examples` / `N evidence`) for
+      # situational awareness, and the expanded cell repeating those
+      # badges would just double-up.
+      div(class: "hidden group-data-[focused=true]/assess-expanded:block") do
+        if illustrations.any?
+          ul(class: "space-y-1") do
+            illustrations.each do |ill|
+              li(class: "flex items-start gap-1.5 text-xs text-gray-600 dark:text-gray-400") do
+                span(class: "mt-1 w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500 shrink-0") { }
+                span { ill.description }
+              end
             end
           end
         end
-      end
 
-      if cell_data && @viewer_person_id && (evidence.any? || @can_create_evidence)
-        render Views::Assessments::Evidence::List.new(
-          items: evidence,
-          assessment_id: @assessment_id,
-          viewer_person_id: @viewer_person_id,
-          can_create: @can_create_evidence,
-          can_relink_others: @can_relink_others_evidence,
-          capability_stable_id: @capability.stable_id,
-          level_ordinal: ordinal
-        )
+        if cell_data && @viewer_person_id && (evidence.any? || @can_create_evidence)
+          render Views::Assessments::Evidence::List.new(
+            items: evidence,
+            assessment_id: @assessment_id,
+            viewer_person_id: @viewer_person_id,
+            can_create: @can_create_evidence,
+            can_relink_others: @can_relink_others_evidence,
+            capability_stable_id: @capability.stable_id,
+            level_ordinal: ordinal
+          )
+        end
       end
     end
   end

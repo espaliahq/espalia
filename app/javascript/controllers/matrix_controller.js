@@ -570,12 +570,34 @@ export default class extends BaseController {
 
     // Compact every level <td> in non-focused columns so AssessmentCell
     // can degrade text density via Tailwind data variants.
+    //
+    // `data-focus-compact="true"` lands on every cell whose level
+    // ordinal differs from the focused one — column-wide, regardless of
+    // capability — because col widths are global to the column and all
+    // cells in shrunken columns share the same density tweaks (see
+    // FrequencySelector wrap behaviour).
+    //
+    // `data-focused="true"` is narrower: it lands ONLY on cells that
+    // match BOTH the focused level ordinal AND the focused capability.
+    // The expanded-cell illustration + evidence reveal hangs off this
+    // attribute, so it must not leak to other rows' expanded cells —
+    // even though their `<tr>`s are hidden, keeping the attribute scoped
+    // to the visible focused cell keeps the semantics honest.
     this.element.querySelectorAll("td[data-level-ordinal]").forEach(td => {
       const ord = Number(td.dataset.levelOrdinal)
-      if (levelOrdinal != null && ord !== levelOrdinal) {
+      const sameLevel = levelOrdinal != null && ord === levelOrdinal
+      const sameCap = capabilityId != null && td.dataset.capabilityId === capabilityId
+
+      if (levelOrdinal != null && !sameLevel) {
         td.dataset.focusCompact = "true"
       } else {
         delete td.dataset.focusCompact
+      }
+
+      if (sameLevel && sameCap) {
+        td.dataset.focused = "true"
+      } else {
+        delete td.dataset.focused
       }
     })
 
