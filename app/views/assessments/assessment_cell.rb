@@ -29,10 +29,12 @@ class Views::Assessments::AssessmentCell < Views::Base
   # @param alignment_locked [Boolean] when true and context is :alignment, render
   #   the primary frequency as a read-only bar (alignment has been completed)
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self,
-                 capability_id: nil,
+                 capability_id: nil, capability_name: nil, level_label: nil,
                  category_id: nil, frozen: false, alignment_locked: false)
     @cell_data = cell_data
     @capability_id = capability_id
+    @capability_name = capability_name
+    @level_label = level_label
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
     @person_level = person_level
@@ -41,6 +43,18 @@ class Views::Assessments::AssessmentCell < Views::Base
     @category_id = category_id
     @frozen = frozen
     @alignment_locked = alignment_locked
+  end
+
+  # Accessible name for the focusable cell control. Includes
+  # capability name + level so screen-reader users hear "Focus cell:
+  # Critical Thinking · Level 2" rather than the same generic
+  # "Focus cell" for every cell in the matrix.
+  def focus_cell_aria_label
+    detail = [
+      @capability_name.presence,
+      @level_label.presence || "Level #{@ordinal}"
+    ].compact
+    "Focus cell: #{detail.join(' · ')}"
   end
 
   def view_template
@@ -73,7 +87,7 @@ class Views::Assessments::AssessmentCell < Views::Base
              "focus-visible:ring-2 focus-visible:ring-primary #{cell_background}",
       tabindex: "0",
       role: "button",
-      aria: { label: "Focus cell" },
+      aria: { label: focus_cell_aria_label },
       data: {
         # `data-level-ordinal` lets matrix_controller#applyColumnFocus
         # find this compact cell when stamping `data-focus-compact` on

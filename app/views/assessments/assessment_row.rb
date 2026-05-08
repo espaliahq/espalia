@@ -92,8 +92,10 @@ class Views::Assessments::AssessmentRow < Views::Base
         render Views::Assessments::AssessmentCell.new(
           cell_data: @cells[level[:ordinal]],
           capability_id: @capability.capability_id,
+          capability_name: @capability.name,
           capability_stable_id: @capability.stable_id,
           ordinal: level[:ordinal],
+          level_label: level[:level_title].presence || level[:level_code],
           person_level: @person_level,
           assessment_id: @assessment_id,
           context: @context,
