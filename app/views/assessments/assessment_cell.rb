@@ -69,17 +69,24 @@ class Views::Assessments::AssessmentCell < Views::Base
     td(
       id: "cell-#{@capability_stable_id}-#{@ordinal}",
       class: "relative px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top " \
-             "min-w-[180px] cursor-pointer group/assess-cell #{cell_background}",
+             "min-w-[180px] cursor-pointer group/assess-cell focus:outline-none " \
+             "focus-visible:ring-2 focus-visible:ring-primary #{cell_background}",
+      tabindex: "0",
+      role: "button",
+      aria: { label: "Focus cell" },
       data: {
         # `data-level-ordinal` lets matrix_controller#applyColumnFocus
         # find this compact cell when stamping `data-focus-compact` on
         # siblings of the focused column.
         level_ordinal: @ordinal,
-        # Compact-cell click triggers cell focus AND expands the row.
-        # The `focus-on-button-click` flag tells focusCell to NOT bail
+        # Compact-cell click (or Enter/Space when keyboard-focused)
+        # triggers cell focus AND expands the row. The
+        # `focus-on-button-click` flag tells focusCell to NOT bail
         # when the click lands on a rating button — we want both the
         # rating to submit AND the cell to focus.
-        action: "click->matrix#focusCell",
+        action: "click->matrix#focusCell " \
+                "keydown.enter->matrix#focusCell " \
+                "keydown.space->matrix#focusCell:prevent",
         capability_id: @capability_id,
         capability_stable_id: @capability_stable_id,
         expectation_id: @cell_data.dig(:expectation)&.expectation_id,
