@@ -37,8 +37,14 @@ class Views::Assessments::FrequencySelector < Views::Base
   end
 
   def view_template
+    # Default state: `flex` (no wrap) — buttons stay on one row at the
+    # default 240px col width. The sibling-of-focused-cell case (10rem
+    # cols) opts into wrapping via the parent <td>'s
+    # `data-focus-compact="true"` attribute, picked up by the variant
+    # `group-data-[focus-compact=true]/assess-cell:flex-wrap`. The cell
+    # carries the `group/assess-cell` class so the variant resolves.
     div(
-      class: "flex gap-1",
+      class: "flex gap-1 group-data-[focus-compact=true]/assess-cell:flex-wrap",
       data: { controller: "frequency-selector" }
     ) do
       FREQUENCIES.each { |freq| frequency_button(freq) }

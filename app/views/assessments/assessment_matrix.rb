@@ -13,12 +13,15 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param active_category_id [String, nil] selected category tab
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param expanded_level_ordinal [Integer, nil] level ordinal pre-focused
+  #   within the expanded row (cell-level deep link)
   # @param viewer_person_id [String, nil] threaded into the evidence section
   # @param can_create_evidence [Boolean] whether the viewer can record evidence
   # @param can_relink_others_evidence [Boolean] whether the viewer can relink
   #   evidence they didn't author (assessee or in their manager chain)
   def initialize(matrix_data:, assessment_id:, context: :self,
                  active_category_id: nil, expanded_capability_id: nil,
+                 expanded_level_ordinal: nil,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_relink_others_evidence: false)
     @matrix_data = matrix_data
@@ -26,6 +29,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @context = context
     @active_category_id = active_category_id || first_category_id
     @expanded_capability_id = expanded_capability_id
+    @expanded_level_ordinal = expanded_level_ordinal
     @frozen = matrix_data[:individual_ratings_frozen] || false
     @alignment_locked = matrix_data[:alignment_locked] || false
     @viewer_person_id = viewer_person_id
@@ -56,7 +60,23 @@ class Views::Assessments::AssessmentMatrix < Views::Base
         context: @context
       )
       div(class: "overflow-x-auto") do
+        # Default state: `table-auto` (no `table-fixed` class). Each
+        # level <col> gets a default 280px width so the
+        # FrequencySelector's four buttons (including "Consistently")
+        # fit on a single line at any framework size. With many levels,
+        # the table grows past the container's width and the parent's
+        # overflow-x-auto scrolls. matrix_controller#applyColumnFocus
+        # toggles `table-layout: fixed` and overrides each <col>'s
+        # width when a cell is focused.
         table(class: "w-full border-collapse") do
+          colgroup do
+            col(style: "width: 220px",
+                data: { matrix_target: "col", level_ordinal: "capability" })
+            @matrix_data[:merged_levels].each do |level|
+              col(style: "width: 280px",
+                  data: { matrix_target: "col", level_ordinal: level[:ordinal] })
+            end
+          end
           render Views::Assessments::MatrixHeader.new(
             merged_levels: @matrix_data[:merged_levels],
             person_level: @matrix_data[:person_level],
@@ -76,6 +96,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                 assessment_id: @assessment_id,
                 context: @context,
                 expanded_capability_id: @expanded_capability_id,
+                expanded_level_ordinal: @expanded_level_ordinal,
                 show_header: false,
                 frozen: @frozen,
                 alignment_locked: @alignment_locked,

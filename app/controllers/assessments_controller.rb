@@ -51,6 +51,7 @@ class AssessmentsController < ApplicationController
         matrix_data: @matrix_data,
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
+        expanded_level_ordinal: focused_level_ordinal_param,
         context: context,
         can_start_alignment: policy.start_alignment?,
         can_complete_alignment: policy.complete_alignment?,
@@ -69,6 +70,7 @@ class AssessmentsController < ApplicationController
         matrix_data: @matrix_data,
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
+        expanded_level_ordinal: focused_level_ordinal_param,
         context: context,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
@@ -92,6 +94,7 @@ class AssessmentsController < ApplicationController
       context: assessment_context,
       active_category_id: resolve_active_category_id,
       expanded_capability_id: params[:capability],
+      expanded_level_ordinal: focused_level_ordinal_param,
       viewer_person_id: current_person&.id,
       can_create_evidence: viewer_can_create_evidence?,
       can_relink_others_evidence: viewer_can_relink_others_evidence?
@@ -236,6 +239,21 @@ class AssessmentsController < ApplicationController
 
     PersonFrameworkAssignment.where(person_id: report_ids)
       .includes(:framework, :role, :level)
+  end
+
+  # Cell-level focus param. Only meaningful when paired with `?capability=`;
+  # the matrix view stamps it on the expanded `<tr>` so the matrix Stimulus
+  # controller can resurface cell focus on connect (deep-link / broadcast
+  # reload).
+  #
+  # @return [Integer, nil]
+  def focused_level_ordinal_param
+    raw = params[:level_ordinal]
+    return nil if raw.blank?
+
+    Integer(raw)
+  rescue ArgumentError
+    nil
   end
 
   # Resolves the active category ID from params, defaulting to the first category.

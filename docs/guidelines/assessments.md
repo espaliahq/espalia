@@ -12,17 +12,34 @@ The matrix pattern uses a **parallel view hierarchy** in `app/views/assessments/
 
 ### URL-Driven State
 
-The active category and expanded capability are encoded in query params for shareability:
+The active category, expanded capability, and focused cell-level are encoded in query params for shareability:
 
 ```text
-Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>
-Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>
+Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>&level_ordinal=<n>
+Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>&level_ordinal=<n>
 Scoring frame:/assessments/:id/scoring?category=<category_id>
 ```
 
 - `category` absent → defaults to first category (ordinal 1)
 - `capability` absent → no row pre-expanded
-- Tab clicks update both the Turbo Frame src and the browser URL via `history.pushState()`
+- `level_ordinal` only honoured when `capability` is also present (cell focus lives inside an expanded row)
+- Tab clicks, row-toggle clicks, and cell-focus clicks all update both the Turbo Frame src and the browser URL via `history.pushState()`. `matrix_controller#syncLevelOrdinalToUrl` no-ops when the value already matches so initial connect doesn't push a duplicate history entry.
+
+## Cell focus
+
+When a row is expanded, clicking an expanded-row `<td>` focuses that capability × level intersection. The focused level's matrix column widens (32rem) and sibling level columns shrink (8rem) so the focused cell — expectation, illustrations, evidence list, and "+ Add evidence" affordance — gets breathing room. Clicking the close button (`×`, top-right of the focused cell) returns to capability-level focus; the row stays expanded.
+
+**Implementation:**
+
+- `Views::Assessments::AssessmentMatrix` renders a `<colgroup>` with one `<col data-matrix-target="col">` per merged level (plus a 220px-fixed capability col). Default level cols use `width: 280px` — wide enough that the FrequencySelector's four buttons (including the long "Consistently" label) fit on a single row regardless of how many levels the framework has. The `<table>` keeps the browser's default `table-layout: auto` so cell `min-w-[180px]` still applies; the parent `overflow-x-auto` scrolls horizontally when the table grows past the container.
+- `matrix_controller#applyColumnFocus(levelOrdinal, capabilityId)` switches the table to `table-layout: fixed` via inline style, sets the focused col's width to `512px` (32rem) and siblings to `280px` (matching their default so the FrequencySelector still fits on one row), and pins the table's total width to the sum of col widths so browsers don't proportionally scale them when the sum exceeds the container. The "additive" widening (focused gets wider, siblings keep their default) means siblings remain fully usable while the user has a focused cell. Clearing the focus reverts every inline style and Tailwind reasserts.
+- After applying col widths, `#applyColumnFocus` calls `scrollIntoView({ block: "nearest", inline: "center" })` on the focused expanded `<tr>` (or the compact cell when no expanded row is present). The scroll is deferred via `requestAnimationFrame` so the browser computes scroll position against the post-resize layout. `toggleRow` does the same for plain row expansion. Without these calls, expanding/focusing near the bottom of the viewport leaves the expanded content cut off.
+- `unfocusCell` is a public Stimulus action wired on the close button: it returns to capability-level focus, leaving the row expanded.
+- The close button (`[data-focused-cell-close]`) is rendered inside the **compact cell**, top-right (absolute position). The compact cell is the user's anchor — placing the X next to where they clicked keeps the affordance discoverable without burying it in the illustration list below.
+- Both **compact** and **expanded** `<td>`s carry `data-action="click->matrix#focusCell"` plus `data-capability-id`, `data-capability-stable-id`, `data-level-ordinal`, and `data-expectation-id`. Both also carry `data-focus-on-button-click="true"` so a tap on a rating button or evidence affordance BOTH triggers its primary action AND focuses the cell — without that flag the focusCell guard would skip clicks that landed on interactive children. `focusCell` also calls `#expandRow(capabilityId)` so a click on a compact cell's expectation text or rating button expands the row in the same gesture.
+- The expanded `<tr>` carries `data-focused-level-ordinal="N"` when the page is rendered with a deep link. `matrix_controller#dispatchInitialFocus` reads it on connect and dispatches `level: "cell"` so the URL-driven state is the source of truth across page loads, post-broadcast frame swaps, and category tab switches.
+
+**Don't hide the FrequencySelector when shrinking sibling columns.** It's the primary rating affordance — making it disappear is a regression. The siblings keep their default 280px width specifically so the buttons remain on one row. Hang density tweaks off the `data-focus-compact="true"` attribute the controller stamps on sibling cells via `group-data-[focus-compact=true]/assess-cell:` Tailwind variants — never replace the selector with a read-only bar based on focus state alone.
 
 ## Context-Driven Rendering
 
@@ -237,7 +254,9 @@ ActionCable broadcast → Turbo Stream replaces signal element
 ### matrix_controller.js (shared with explorer)
 - **Category collapse** (sibling row walking) — not used in assessment view (single category)
 - **Row expansion** (toggle hidden expanded row by capability ID)
-- **URL sync** (assessment only, gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL via `pushState` after Turbo Frame loads and row toggles
+- **Cell focus** (`focusCell` action on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"` and resizes columns via `#applyColumnFocus`. **Assessment-only behaviour**: explorer's expanded cells emit the same focus event but render no `<colgroup>`, so the column-resize is a no-op there.
+- **Cell unfocus** (`unfocusCell` action on the per-cell `×` close button) — returns to capability-level focus, leaving the row expanded
+- **URL sync** (assessment only, gated behind `urlSyncValue`) — syncs `?category=`, `?capability=`, and `?level_ordinal=` to browser URL via `pushState` after Turbo Frame loads, row toggles, and cell-focus transitions
 - **Sibling dimming** — dims non-expanded rows (`opacity-40`) when a row is expanded for visual focus
 - See [framework-explorer.md](framework-explorer.md) for full responsibilities
 
@@ -287,6 +306,14 @@ When a rating changes, `assessment_sync_controller` reloads the matrix frame. Wi
 ### 5. Perspective scoring returns nil, not empty
 
 `build_perspective_scoring` returns `nil` (not an empty hash) when no ratings exist for a perspective. `ScoringPanel` checks this via `using_fallback?` and falls back to effective scoring, showing a "No ratings yet" badge. Returning an empty hash would display misleading zero scores.
+
+### 6. `table-fixed` ignores `min-w-*` on cells
+
+The cell-focus column resize requires `<colgroup>` + explicit `<col>` widths under `table-fixed`. Once `table-fixed` is on, every `min-w-[180px]` on a `<th>` or `<td>` becomes inert — column widths come solely from the `<col>` elements. The capability column needs an explicit `width: 220px` style to preserve the prior layout; level cols are unstyled by default so they auto-divide remaining width evenly. If you rely on cell-content-driven sizing anywhere in the matrix, it will silently stop working.
+
+### 7. `<col>` width transitions don't animate in WebKit
+
+When `matrix_controller#applyColumnFocus` sets `style.width` on a `<col>`, browsers do not animate the transition (Chromium/WebKit treat `<col>` as a layout primitive, not a transition source). Don't add `transition-[width]` and try to fight this — instant resize is the correct UX for cell focus and matches user expectation. Tested behaviour, accepted trade-off.
 
 ## Lifecycle
 

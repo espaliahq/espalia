@@ -16,6 +16,8 @@
 #
 class Views::Assessments::AssessmentCell < Views::Base
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
+  # @param capability_id [String, nil] per-version UUID — used by
+  #   matrix_controller to wire compact-cell click → focus
   # @param capability_stable_id [String]
   # @param ordinal [Integer] the level ordinal for this column
   # @param person_level [Integer] the person's assigned level ordinal
@@ -27,8 +29,10 @@ class Views::Assessments::AssessmentCell < Views::Base
   # @param alignment_locked [Boolean] when true and context is :alignment, render
   #   the primary frequency as a read-only bar (alignment has been completed)
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self,
+                 capability_id: nil,
                  category_id: nil, frozen: false, alignment_locked: false)
     @cell_data = cell_data
+    @capability_id = capability_id
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
     @person_level = person_level
@@ -57,16 +61,53 @@ class Views::Assessments::AssessmentCell < Views::Base
   end
 
   def filled_cell
+    # `group/assess-cell` lets descendant components (FrequencySelector,
+    # FrequencyBar) respond to this cell's `data-focus-compact` state
+    # via Tailwind's `group-data-[focus-compact=true]/assess-cell:*`
+    # variants — e.g. wrapping the rating buttons when the column
+    # shrinks under cell-focus.
     td(
       id: "cell-#{@capability_stable_id}-#{@ordinal}",
-      class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top " \
-             "min-w-[180px] #{cell_background}"
+      class: "relative px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top " \
+             "min-w-[180px] cursor-pointer group/assess-cell #{cell_background}",
+      data: {
+        # `data-level-ordinal` lets matrix_controller#applyColumnFocus
+        # find this compact cell when stamping `data-focus-compact` on
+        # siblings of the focused column.
+        level_ordinal: @ordinal,
+        # Compact-cell click triggers cell focus AND expands the row.
+        # The `focus-on-button-click` flag tells focusCell to NOT bail
+        # when the click lands on a rating button — we want both the
+        # rating to submit AND the cell to focus.
+        action: "click->matrix#focusCell",
+        capability_id: @capability_id,
+        capability_stable_id: @capability_stable_id,
+        expectation_id: @cell_data.dig(:expectation)&.expectation_id,
+        focus_on_button_click: "true"
+      }
     ) do
+      focus_close_button
       expectation_text
       secondary_bars
       primary_selector
       indicators
     end
+  end
+
+  # Close-focus button — top-right of the compact cell. Hidden by
+  # default; matrix_controller#applyColumnFocus reveals it inside the
+  # focused cell only.
+  def focus_close_button
+    button(
+      type: "button",
+      class: "hidden absolute top-1 right-1 z-[3] " \
+             "rounded-full bg-white/90 dark:bg-gray-700/90 shadow-sm " \
+             "w-6 h-6 items-center justify-center text-gray-500 " \
+             "hover:text-gray-900 dark:text-gray-300 dark:hover:text-white " \
+             "ring-1 ring-gray-200 dark:ring-gray-600 cursor-pointer text-sm",
+      aria: { label: "Exit focus" },
+      data: { action: "click->matrix#unfocusCell", focused_cell_close: true }
+    ) { plain "×" }
   end
 
   # Compact-cell footer indicators: illustration count + evidence count.

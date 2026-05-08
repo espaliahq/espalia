@@ -18,6 +18,8 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param expanded_level_ordinal [Integer, nil] level ordinal pre-focused
+  #   within the expanded row (cell-level deep link)
   # @param show_header [Boolean] whether to render the sticky category header row
   # @param frozen [Boolean] whether self/manager rating cells are read-only (alignment in progress)
   # @param alignment_locked [Boolean] whether alignment cells are read-only (alignment completed)
@@ -26,7 +28,8 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
   # @param can_relink_others_evidence [Boolean] threaded through to the evidence section
   def initialize(category_data:, merged_levels:, person_level:, scoring:, assessment_id:, context: :self,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
-                 expanded_capability_id: nil, show_header: true, frozen: false, alignment_locked: false,
+                 expanded_capability_id: nil, expanded_level_ordinal: nil,
+                 show_header: true, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_relink_others_evidence: false)
     @category_data = category_data
@@ -40,6 +43,7 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
     @assessment_id = assessment_id
     @context = context
     @expanded_capability_id = expanded_capability_id
+    @expanded_level_ordinal = expanded_level_ordinal
     @show_header = show_header
     @frozen = frozen
     @alignment_locked = alignment_locked
@@ -77,6 +81,7 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
       block_reason = primary_scoring.dig(:block_reasons, stable_id)
       contribution = primary_scoring.dig(:capability_contributions, stable_id) || cap_data[:contribution]
 
+      row_expanded = stable_id == @expanded_capability_id
       render Views::Assessments::AssessmentRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
@@ -87,7 +92,8 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         block_reason: block_reason,
         contribution: contribution,
         secondary_contributions: secondary_capability_contributions(stable_id),
-        expanded: stable_id == @expanded_capability_id,
+        expanded: row_expanded,
+        focused_level_ordinal: row_expanded ? @expanded_level_ordinal : nil,
         category_id: @category.category_id,
         frozen: @frozen,
         alignment_locked: @alignment_locked,
