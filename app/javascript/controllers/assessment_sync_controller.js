@@ -27,6 +27,10 @@ export default class extends BaseController {
 
   disconnect() {
     this._observer?.disconnect()
+    if (this._clickListener) {
+      this.element.removeEventListener("click", this._clickListener, true)
+      this._clickListener = null
+    }
     if (this._submitListener) {
       document.removeEventListener("turbo:submit-start", this._submitListener)
       this._submitListener = null
@@ -61,24 +65,37 @@ export default class extends BaseController {
   }
 
   // Suppress the next signal-triggered frame reload for a short window
-  // after any Turbo form submission originating from inside this
-  // controller's element. Ratings, alignment toggles, and evidence
-  // submissions all return targeted Turbo Stream responses that
-  // already update the matrix locally — the ActionCable broadcast that
-  // follows is meant for OTHER viewers, and re-fetching the whole
-  // frame for the user who just acted causes flicker + scroll loss.
+  // after any user action originating from inside this controller's
+  // element. Ratings, alignment toggles, and evidence submissions all
+  // return targeted Turbo Stream responses that already update the
+  // matrix locally — the ActionCable broadcast that follows is meant
+  // for OTHER viewers, and re-fetching the whole frame for the user
+  // who just acted causes flicker + scroll loss.
   //
-  // Hook on `turbo:submit-start` (fires BEFORE the network round-trip)
-  // not `turbo:submit-end` — the broadcast can race the response and
-  // arrive while the response is still being applied; setting the
-  // flag at submit-end would land too late.
+  // Two arming signals:
+  //   1. `click` (capture phase) on a button/anchor inside this
+  //      controller — set the flag the moment the user acts, before
+  //      the network round-trip starts. On slow CI runners the
+  //      broadcast can arrive faster than `turbo:submit-start` fires.
+  //   2. `turbo:submit-start` — covers form submissions that don't go
+  //      through a button click (programmatic submits).
   #listenForOwnSubmits() {
+    const arm = () => {
+      // 3s window covers a broadcast round-trip with generous CI
+      // headroom without holding off legitimate reloads from other
+      // users for long enough to be noticed.
+      this._suppressReloadUntil = performance.now() + 3000
+    }
+
+    this._clickListener = (event) => {
+      if (!event.target?.closest("button, a, [role='button']")) return
+      arm()
+    }
+    this.element.addEventListener("click", this._clickListener, true)
+
     this._submitListener = (event) => {
       if (!event.target || !this.element.contains(event.target)) return
-      // 2s window covers the broadcast round-trip with headroom on a
-      // slow runner without holding off legitimate reloads from other
-      // users for long enough to be noticed.
-      this._suppressReloadUntil = performance.now() + 2000
+      arm()
     }
     document.addEventListener("turbo:submit-start", this._submitListener)
   }
