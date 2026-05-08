@@ -92,18 +92,28 @@ export default class extends BaseController {
       this._suppressReloadUntil = performance.now() + 5000
     }
 
-    // Arm on the EARLIEST possible signal of a user action. `pointerdown`
-    // and `mousedown` fire before `click`; `click` fires before
-    // `turbo:submit-start`; all four are wired so whichever lands
-    // first arms the suppress.
-    const isInteractiveTarget = (event) =>
-      !!event.target?.closest?.("button, a, [role='button'], input[type='submit']")
+    // Arm on the EARLIEST possible signal of a user-initiated form
+    // SUBMIT — pointerdown/mousedown/click on a real submit control
+    // inside this controller's element, AND only when that control
+    // belongs to a form contained by this matrix layout. This
+    // narrowing prevents arming on plain links / nav buttons /
+    // dropdown toggles, which would otherwise hide unrelated
+    // ActionCable updates from other users.
+    const submitControlFor = (event) =>
+      event.target?.closest?.(
+        "button[type='submit'], button:not([type]), input[type='submit']"
+      )
 
-    this._pointerListener = (event) => { if (isInteractiveTarget(event)) arm() }
+    const armForOwnSubmit = (event) => {
+      const control = submitControlFor(event)
+      if (control?.form && this.element.contains(control.form)) arm()
+    }
+
+    this._pointerListener = armForOwnSubmit
     this.element.addEventListener("pointerdown", this._pointerListener, true)
     this.element.addEventListener("mousedown", this._pointerListener, true)
 
-    this._clickListener = (event) => { if (isInteractiveTarget(event)) arm() }
+    this._clickListener = armForOwnSubmit
     this.element.addEventListener("click", this._clickListener, true)
 
     this._submitListener = (event) => {
