@@ -395,10 +395,13 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
-  # Returns the inline `style.width` of the matrix `<col>` for the given
-  # level ordinal, as a string ("512px" for focused, "280px" for
-  # siblings, "" when default). `evaluate_script` evaluates an
-  # expression (not a block), so we wrap the lookup in an IIFE.
+  # Reads the inline `style.width` of the matrix `<col>` for the given
+  # level ordinal. `evaluate_script` evaluates an expression (not a
+  # block), so the lookup is wrapped in an IIFE.
+  #
+  # @param level_ordinal [Integer] level ordinal whose `<col>` to read
+  # @return [String] inline width — "512px" focused, "280px" sibling,
+  #   "" when no inline override is set
   def col_width_for(level_ordinal)
     page.evaluate_script(<<~JS)
       (() => {
@@ -410,6 +413,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  # Looks up the per-version `data-capability-id` for the expanded row
+  # rendered with the given `stable_id`.
+  #
+  # @param stable_id [String] capability stable_id (UUID)
+  # @return [String, nil] the row's per-version `capability_id`, or
+  #   nil when no expanded row matches
   def capability_id_from_stable(stable_id)
     page.evaluate_script(<<~JS)
       (() => {
@@ -422,10 +431,14 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   # Polls until the matrix `<col>` for the given level has been
-  # restored to its 512px focused width. The rating Turbo Stream + the
-  # async CurrentAssessment broadcast that triggers the matrix-frame
-  # reload settle out of order; this helper waits for the focus state
-  # to be re-applied after the reload completes.
+  # restored to its 512px focused width. The rating Turbo Stream and
+  # the async CurrentAssessment broadcast that triggers the matrix
+  # frame reload settle out of order; this helper waits for the focus
+  # state to be re-applied after the reload completes.
+  #
+  # @param level_ordinal [Integer] focused level ordinal
+  # @param wait [Integer] seconds to poll before giving up
+  # @return [void]
   def wait_for_focus_restored(level_ordinal:, wait: 5)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
     loop do
@@ -438,8 +451,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   # Returns the rendered width in pixels of the first matrix `<td>` at
-  # the given level ordinal. Reads `getBoundingClientRect().width` so
-  # we observe ACTUAL layout, not declared style.
+  # the given level ordinal. Reads `getBoundingClientRect().width`, so
+  # observes ACTUAL layout, not declared style.
+  #
+  # @param level_ordinal [Integer] level ordinal whose `<td>` to measure
+  # @return [Float, nil] rendered width in CSS pixels, or nil when no
+  #   matching `<td>` exists
   def rendered_col_width(level_ordinal)
     page.evaluate_script(<<~JS)
       (() => {
@@ -451,8 +468,13 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     JS
   end
 
-  # JS-dispatch click on an expanded cell — bypasses Selenium pointer
-  # hit-testing which can be lost on starved CI runners.
+  # JS-dispatches a click on the expanded `<td>` for the given
+  # capability + level. Bypasses Selenium's synthetic pointer hit-test,
+  # which is occasionally dropped on starved CI runners.
+  #
+  # @param capability_id [String] per-version capability_id
+  # @param level_ordinal [Integer] target level
+  # @return [void]
   def focus_expanded_cell(capability_id:, level_ordinal:)
     page.execute_script(<<~JS, capability_id, level_ordinal.to_s)
       const td = document.querySelector(
