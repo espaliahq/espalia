@@ -464,6 +464,11 @@ export default class extends BaseController {
       `tr[data-matrix-target="row"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"], ` +
       `tr[data-matrix-target="expandedRow"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"]`
     )
+    // A stale `level_ordinal` (e.g. an old deep link to a level the
+    // role no longer has) shouldn't short-circuit into cell focus
+    // with no real cell behind it. Bail so dispatchInitialFocus's
+    // capability/category fallback runs instead.
+    if (!cell) return null
 
     return {
       level: "cell",
@@ -471,7 +476,7 @@ export default class extends BaseController {
       capabilityId,
       capabilityStableId: stableId,
       levelOrdinal: ordinal,
-      expectationId: cell?.dataset.expectationId || null
+      expectationId: cell.dataset.expectationId || null
     }
   }
 
