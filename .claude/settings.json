@@ -30,7 +30,7 @@
       "Bash(bin/rails routes *)",
       "Bash(bin/rails test *)",
       "Bash(git add *)",
-      "Bash(SCREENSHOTS=1 bin/rails test test/system/alignment_assessments_system_test.rb:247)",
+      "Bash(SCREENSHOTS=1 bin/rails test *)",
       "Bash(bin/rails tailwindcss:build)",
       "Read(//home/vscode/.claude/plugins/**)",
       "Read(//home/vscode/.claude/skills/**)",
