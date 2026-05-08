@@ -27,7 +27,7 @@ Scoring frame:/assessments/:id/scoring?category=<category_id>
 
 ## Cell focus
 
-When a row is expanded, clicking an expanded-row `<td>` focuses that capability × level intersection. The focused level's matrix column widens (32rem) and sibling level columns shrink (8rem) so the focused cell — expectation, illustrations, evidence list, and "+ Add evidence" affordance — gets breathing room. Clicking the close button (`×`, top-right of the focused cell) returns to capability-level focus; the row stays expanded.
+When a row is expanded, clicking an expanded-row `<td>` focuses that capability × level intersection. The focused level's matrix column widens (32rem) and sibling level columns keep their default 240px width so the FrequencySelector still fits on a single row — the focused cell — expectation, illustrations, evidence list, and "+ Add evidence" affordance — gets breathing room. Clicking the close button (`×`, top-right of the focused cell) returns to capability-level focus; the row stays expanded.
 
 **Implementation:**
 
