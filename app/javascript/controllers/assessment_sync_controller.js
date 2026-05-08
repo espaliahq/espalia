@@ -22,10 +22,15 @@ export default class extends BaseController {
     super.connect()
     this.#observeSignal()
     this.#listenForFrameLoad()
+    this.#listenForOwnSubmits()
   }
 
   disconnect() {
     this._observer?.disconnect()
+    if (this._submitListener) {
+      document.removeEventListener("turbo:submit-start", this._submitListener)
+      this._submitListener = null
+    }
     super.disconnect()
   }
 
@@ -35,6 +40,16 @@ export default class extends BaseController {
     if (!this.hasSignalTarget) return
 
     this._observer = new MutationObserver(() => {
+      // Skip the full frame reload when the broadcast was triggered by
+      // THIS client's own form submit (e.g. a rating). The direct
+      // Turbo Stream response already updated the relevant cells —
+      // re-fetching the whole matrix frame would flicker and reset
+      // scroll position. The suppress window is set in
+      // #listenForOwnSubmits and expires shortly after the submit.
+      if (this._suppressReloadUntil &&
+          performance.now() < this._suppressReloadUntil) {
+        return
+      }
       this.#reloadFrame()
     })
 
@@ -43,6 +58,29 @@ export default class extends BaseController {
       childList: true,
       subtree: false
     })
+  }
+
+  // Suppress the next signal-triggered frame reload for a short window
+  // after any Turbo form submission originating from inside this
+  // controller's element. Ratings, alignment toggles, and evidence
+  // submissions all return targeted Turbo Stream responses that
+  // already update the matrix locally — the ActionCable broadcast that
+  // follows is meant for OTHER viewers, and re-fetching the whole
+  // frame for the user who just acted causes flicker + scroll loss.
+  //
+  // Hook on `turbo:submit-start` (fires BEFORE the network round-trip)
+  // not `turbo:submit-end` — the broadcast can race the response and
+  // arrive while the response is still being applied; setting the
+  // flag at submit-end would land too late.
+  #listenForOwnSubmits() {
+    this._submitListener = (event) => {
+      if (!event.target || !this.element.contains(event.target)) return
+      // 2s window covers the broadcast round-trip with headroom on a
+      // slow runner without holding off legitimate reloads from other
+      // users for long enough to be noticed.
+      this._suppressReloadUntil = performance.now() + 2000
+    }
+    document.addEventListener("turbo:submit-start", this._submitListener)
   }
 
   #listenForFrameLoad() {
@@ -70,12 +108,17 @@ export default class extends BaseController {
     this.#saveToggleState()
     this.#saveActivityScroll()
 
-    // Reload matrix frame
+    // Reload matrix frame. Merge in `capability` and `level_ordinal`
+    // params from the BROWSER URL (kept current by matrix_controller's
+    // URL sync) so focus state survives the reload — without this,
+    // the frame's stale `src` (initial server render) drops focus
+    // every time a rating triggers a CurrentAssessment broadcast.
     if (this.hasFrameTarget) {
       const src = this.frameTarget.getAttribute("src")
       if (src) {
+        const merged = this.#mergeFocusParams(src)
         this.frameTarget.src = ""
-        this.frameTarget.src = src
+        this.frameTarget.src = merged
       }
     }
 
@@ -222,6 +265,30 @@ export default class extends BaseController {
     } catch {
       // ignore invalid URLs
     }
+  }
+
+  // Merges focus-related params (capability, level_ordinal) from the
+  // browser URL into the given matrix frame src. The matrix controller
+  // pushes these params via history.pushState on focus changes, but
+  // does not (and cannot, without triggering a fetch) mutate the
+  // frame's src attribute — so on reload we re-merge them here.
+  #mergeFocusParams(src) {
+    let target
+    try {
+      target = new URL(src, window.location.origin)
+    } catch {
+      return src
+    }
+    const browser = new URL(window.location)
+    for (const name of ["capability", "level_ordinal"]) {
+      const value = browser.searchParams.get(name)
+      if (value) {
+        target.searchParams.set(name, value)
+      } else {
+        target.searchParams.delete(name)
+      }
+    }
+    return target.toString()
   }
 
   // Extracts the active category from the matrix frame's src URL.

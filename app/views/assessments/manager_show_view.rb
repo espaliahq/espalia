@@ -17,7 +17,8 @@ class Views::Assessments::ManagerShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(assignment:, assessee:, framework:, matrix_data:, active_category_id: nil,
-                 expanded_capability_id: nil, context: :manager,
+                 expanded_capability_id: nil, expanded_level_ordinal: nil,
+                 context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_relink_others_evidence: false,
@@ -29,6 +30,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @matrix_data = matrix_data
     @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
+    @expanded_level_ordinal = expanded_level_ordinal
     @context = context
     @can_start_alignment = can_start_alignment
     @can_complete_alignment = can_complete_alignment
@@ -244,6 +246,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           context: @context,
           active_category_id: @active_category_id,
           expanded_capability_id: @expanded_capability_id,
+          expanded_level_ordinal: @expanded_level_ordinal,
           viewer_person_id: @viewer_person_id,
           can_create_evidence: @can_create_evidence
         )
@@ -285,6 +288,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     p = {}
     p[:category] = @active_category_id if @active_category_id
     p[:capability] = @expanded_capability_id if @expanded_capability_id
+    p[:level_ordinal] = @expanded_level_ordinal if @expanded_level_ordinal && @expanded_capability_id
     p
   end
 

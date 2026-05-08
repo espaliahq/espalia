@@ -17,6 +17,9 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param contribution [Float, nil] perspective-specific contribution (falls back to effective from capability_data)
   # @param secondary_contributions [Array<Array(String, Float)>] [["Mgr", -0.5], ...]
   # @param expanded [Boolean] whether this row should be pre-expanded (URL-driven)
+  # @param focused_level_ordinal [Integer, nil] level ordinal that should arrive
+  #   already focused (cell-level deep link). Stamped on the expanded `<tr>` so
+  #   matrix_controller#dispatchInitialFocus can resurface it.
   # @param category_id [String, nil] active category for tab preservation on rating
   # @param frozen [Boolean] when true and context is :self/:manager, cells render
   #   primary frequency read-only (alignment in progress)
@@ -32,7 +35,8 @@ class Views::Assessments::AssessmentRow < Views::Base
   #   evidence the viewer didn't author.
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self,
                  blocked: false, block_reason: nil, contribution: nil, secondary_contributions: [],
-                 expanded: false, category_id: nil, frozen: false, alignment_locked: false,
+                 expanded: false, focused_level_ordinal: nil,
+                 category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_relink_others_evidence: false)
     @capability_data = capability_data
@@ -53,6 +57,7 @@ class Views::Assessments::AssessmentRow < Views::Base
     @has_evidence = @cells.any? { |_, c| c[:evidence_count]&.positive? }
     @expandable = @has_illustrations || @has_evidence || can_create_evidence
     @expanded = expanded && @expandable
+    @focused_level_ordinal = focused_level_ordinal
     @category_id = category_id
     @frozen = frozen
     @alignment_locked = alignment_locked
@@ -86,6 +91,7 @@ class Views::Assessments::AssessmentRow < Views::Base
       @merged_levels.each do |level|
         render Views::Assessments::AssessmentCell.new(
           cell_data: @cells[level[:ordinal]],
+          capability_id: @capability.capability_id,
           capability_stable_id: @capability.stable_id,
           ordinal: level[:ordinal],
           person_level: @person_level,
@@ -100,12 +106,12 @@ class Views::Assessments::AssessmentRow < Views::Base
   end
 
   def expanded_row
-    tr(
-      class: @expanded ? "" : "hidden",
-      data: { matrix_target: "expandedRow",
-              capability_id: @capability.capability_id,
-              capability_stable_id: @capability.stable_id }
-    ) do
+    expanded_data = { matrix_target: "expandedRow",
+                      capability_id: @capability.capability_id,
+                      capability_stable_id: @capability.stable_id }
+    expanded_data[:focused_level_ordinal] = @focused_level_ordinal if @focused_level_ordinal
+
+    tr(class: @expanded ? "" : "hidden", data: expanded_data) do
       td(class: "sticky left-0 z-[2] bg-blue-50/30 dark:bg-blue-900/10 " \
                 "border-b border-r border-gray-100 dark:border-gray-800") { }
 
@@ -119,9 +125,21 @@ class Views::Assessments::AssessmentRow < Views::Base
     cell_data = @cells[ordinal]
     illustrations = cell_data&.dig(:illustrations) || []
     evidence = cell_data&.dig(:evidence) || []
+    expectation = cell_data&.dig(:expectation)
 
-    td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
-              "bg-blue-50/30 dark:bg-blue-900/10 align-top") do
+    td(
+      class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
+             "bg-blue-50/30 dark:bg-blue-900/10 align-top cursor-pointer " \
+             "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors",
+      data: {
+        action: "click->matrix#focusCell",
+        capability_id: @capability.capability_id,
+        capability_stable_id: @capability.stable_id,
+        level_ordinal: ordinal,
+        expectation_id: expectation&.expectation_id,
+        focus_on_button_click: "true"
+      }
+    ) do
       if illustrations.any?
         ul(class: "space-y-1") do
           illustrations.each do |ill|

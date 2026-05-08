@@ -395,6 +395,556 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # Returns the inline `style.width` of the matrix `<col>` for the given
+  # level ordinal, as a string ("512px" for focused, "280px" for
+  # siblings, "" when default). `evaluate_script` evaluates an
+  # expression (not a block), so we wrap the lookup in an IIFE.
+  def col_width_for(level_ordinal)
+    page.evaluate_script(<<~JS)
+      (() => {
+        const col = document.querySelector(
+          `col[data-matrix-target="col"][data-level-ordinal="#{level_ordinal}"]`
+        );
+        return col ? col.style.width : null;
+      })()
+    JS
+  end
+
+  def capability_id_from_stable(stable_id)
+    page.evaluate_script(<<~JS)
+      (() => {
+        const row = document.querySelector(
+          `tr[data-matrix-target="expandedRow"][data-capability-stable-id="#{stable_id}"]`
+        );
+        return row ? row.dataset.capabilityId : null;
+      })()
+    JS
+  end
+
+  # Polls until the matrix `<col>` for the given level has been
+  # restored to its 512px focused width. The rating Turbo Stream + the
+  # async CurrentAssessment broadcast that triggers the matrix-frame
+  # reload settle out of order; this helper waits for the focus state
+  # to be re-applied after the reload completes.
+  def wait_for_focus_restored(level_ordinal:, wait: 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
+    loop do
+      width = col_width_for(level_ordinal)
+      return if width == "512px"
+      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep 0.1
+    end
+  end
+
+  # Returns the rendered width in pixels of the first matrix `<td>` at
+  # the given level ordinal. Reads `getBoundingClientRect().width` so
+  # we observe ACTUAL layout, not declared style.
+  def rendered_col_width(level_ordinal)
+    page.evaluate_script(<<~JS)
+      (() => {
+        const td = document.querySelector(
+          `td[data-level-ordinal="#{level_ordinal}"]`
+        );
+        return td ? td.getBoundingClientRect().width : null;
+      })()
+    JS
+  end
+
+  # JS-dispatch click on an expanded cell — bypasses Selenium pointer
+  # hit-testing which can be lost on starved CI runners.
+  def focus_expanded_cell(capability_id:, level_ordinal:)
+    page.execute_script(<<~JS, capability_id, level_ordinal.to_s)
+      const td = document.querySelector(
+        `tr[data-matrix-target="expandedRow"][data-capability-id="${arguments[0]}"] ` +
+        `td[data-level-ordinal="${arguments[1]}"]`
+      );
+      if (td) td.click();
+    JS
+  end
+
+  context "cell focus" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    end
+
+    should "widen focused column and show close button when an expanded cell is focused" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      screenshot("01_default_matrix")
+
+      # Defaults: no inline width on level cols.
+      assert_equal "", col_width_for(1)
+      assert_equal "", col_width_for(2)
+
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+      screenshot("02_row_expanded_no_focus")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      assert cap_id, "Expected to resolve the per-version capability_id from the expanded row"
+
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+
+      assert_equal "512px", col_width_for(1), "Focused column should widen (32rem == 512px)"
+      assert_equal "280px", col_width_for(2),
+        "Sibling columns keep their default width so the FrequencySelector fits on one line"
+
+      # The close button should be visible inside the focused expanded cell.
+      assert_selector(
+        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
+        "td[data-level-ordinal='1'] [data-focused-cell-close]",
+        visible: true
+      )
+      screenshot("03_cell_focused")
+    end
+
+    should "restore default column widths when the close button is clicked" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+      assert_equal "512px", col_width_for(1)
+      screenshot("01_focused")
+
+      # JS-dispatch close button click for CI determinism.
+      page.execute_script(<<~JS, cap_id)
+        const btn = document.querySelector(
+          `tr[data-matrix-target="row"][data-capability-id="${arguments[0]}"] ` +
+          `td[data-level-ordinal="1"] [data-focused-cell-close]`
+        );
+        if (btn) btn.click();
+      JS
+
+      # Use Capybara wait — the close path runs synchronously but we still
+      # poll for the post-state to give the URL pushState handler room.
+      assert col_width_for(1) == "", "Focused column width should reset"
+      assert col_width_for(2) == "", "Sibling column width should reset"
+      screenshot("02_after_unfocus")
+    end
+
+    should "deep link with capability + level_ordinal arrives focused" do
+      visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
+      wait_for_stimulus "matrix"
+
+      # Row should be pre-expanded
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+
+      # Column should be focus-widened
+      assert_equal "512px", col_width_for(1)
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      assert_selector(
+        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
+        "td[data-level-ordinal='1'] [data-focused-cell-close]",
+        visible: true
+      )
+      screenshot("01_deep_linked_focus")
+    end
+
+    should "focus the cell when clicking the compact-row expectation text" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # Click the compact cell's expectation text — should expand row AND
+      # focus the cell, not just expand.
+      page.execute_script(<<~JS)
+        (() => {
+          const td = document.querySelector(`#cell-#{@cap1_stable}-1`);
+          const text = td.querySelector("p");
+          if (text) text.click();
+        })()
+      JS
+
+      assert_selector "[data-matrix-target='expandedRow']", visible: true
+      assert_equal "512px", col_width_for(1), "Compact-cell click should focus level 1"
+
+      # Regression: URL must carry BOTH `capability` AND `level_ordinal`
+      # so a full page reload (or any frame reload that re-runs
+      # dispatchInitialFocus from URL params) restores focus. Pre-fix,
+      # focusCell only synced level_ordinal; capability was missing,
+      # which made the URL un-restorable on reload and led to
+      # level_ordinal getting cleaned away on next focus change.
+      params = URI.decode_www_form(
+        URI.parse(page.evaluate_script("window.location.href")).query.to_s
+      ).to_h
+      assert_equal @cap1_stable, params["capability"],
+        "Compact-cell click must push capability=stable_id to the URL"
+      assert_equal "1", params["level_ordinal"],
+        "Compact-cell click must push level_ordinal to the URL"
+    end
+
+    should "keep focus when clicking a rating button on an already-focused cell" do
+      # Regression: previously, clicking a rating button inside a
+      # focused cell hit focusCell's "click same cell to toggle off"
+      # branch and dropped focus immediately. Toggle-off must only
+      # fire on a BACKGROUND click of the same cell. Additionally, the
+      # rating Turbo Stream response replaces the compact cell `<td>`,
+      # which would otherwise drop the close-button visibility — we
+      # re-apply column focus after every Turbo Stream render.
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+      assert_equal "512px", col_width_for(1), "Pre-condition: cell is focused"
+
+      # Click "Some" inside the (already-focused) cell. The form posts
+      # a Turbo Stream response that replaces the compact cell, so we
+      # wait for the rating to land before re-checking focus.
+      page.execute_script(<<~JS)
+        (() => {
+          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
+          const btn = Array.from(cell.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Some");
+          if (btn) btn.click();
+        })()
+      JS
+      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
+
+      # The rating triggers an ActionCable broadcast (CurrentAssessment
+      # projection) → assessment_sync reloads the matrix frame
+      # asynchronously. Poll for focus state to settle.
+      wait_for_focus_restored(level_ordinal: 1)
+
+      assert_equal "512px", col_width_for(1),
+        "Clicking a rating button should NOT drop focus from an already-focused cell"
+
+      # The close button should still be visible after the Turbo
+      # Stream replaced the compact cell — focus state is whole.
+      assert_selector(
+        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
+        "td[data-level-ordinal='1'] [data-focused-cell-close]",
+        visible: true
+      )
+
+      # Click a SECOND rating button to make sure focus persists across
+      # multiple rating changes (the user's flow: rate, then change
+      # the rating).
+      page.execute_script(<<~JS)
+        (() => {
+          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
+          const btn = Array.from(cell.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Most");
+          if (btn) btn.click();
+        })()
+      JS
+      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Most"
+      wait_for_focus_restored(level_ordinal: 1)
+
+      assert_equal "512px", col_width_for(1),
+        "Focus should still be intact after a second rating change"
+      assert_selector(
+        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
+        "td[data-level-ordinal='1'] [data-focused-cell-close]",
+        visible: true
+      )
+    end
+
+    should "not reload the matrix frame when the rater clicks their own rating button" do
+      # Regression: previously, the rater's own rating triggered a
+      # CurrentAssessment ActionCable broadcast → the signal element
+      # was replaced → assessment_sync reloaded the entire matrix
+      # frame, causing visible flicker and resetting the scroll
+      # position. The direct Turbo Stream response already updates the
+      # affected cells locally — assessment_sync should suppress its
+      # broadcast-triggered reload for the rater's own action.
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # Instrument frame load events.
+      page.execute_script(<<~JS)
+        (() => {
+          window.__frameLoadCount = 0;
+          const f = document.querySelector("turbo-frame#assessment-matrix");
+          if (f) {
+            f.addEventListener("turbo:frame-load", () => {
+              window.__frameLoadCount++;
+            });
+          }
+        })()
+      JS
+
+      # Click the "Some" rating button.
+      page.execute_script(<<~JS)
+        (() => {
+          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
+          const btn = Array.from(cell.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Some");
+          if (btn) btn.click();
+        })()
+      JS
+      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
+
+      # Give the broadcast headroom — the suppress window is 2s, so
+      # 2.5s is enough for a rogue reload to fire if the suppression
+      # broke.
+      sleep 2.5
+      load_count = page.evaluate_script("window.__frameLoadCount")
+      assert_equal 0, load_count,
+        "The matrix frame should NOT reload on the rater's own click — " \
+        "got #{load_count} reload(s). Suppression in assessment_sync " \
+        "is broken."
+    end
+
+    should "preserve focus across a full page reload (F5)" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+      assert_equal "512px", col_width_for(1), "Pre-condition: focused"
+
+      # Capture the URL after focus — pushState should have written
+      # capability + level_ordinal.
+      current_url = page.evaluate_script("window.location.href")
+      url_obj = URI.parse(current_url)
+      params = URI.decode_www_form(url_obj.query.to_s).to_h
+      assert_equal @cap1_stable, params["capability"],
+        "Browser URL should have capability=stable_id after focus"
+      assert_equal "1", params["level_ordinal"],
+        "Browser URL should have level_ordinal=1 after focus"
+
+      # Full page reload — go to the same URL fresh. This bypasses
+      # Turbo Drive entirely.
+      page.execute_script("window.location.reload()")
+      wait_for_stimulus "matrix"
+
+      # Focus must be re-applied from the URL params after reload.
+      assert_equal "512px", col_width_for(1),
+        "Focus should be restored after a full page reload — URL has level_ordinal=1"
+    end
+
+    should "preserve focus after rating + full page reload" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+
+      # Rate the focused cell
+      page.execute_script(<<~JS)
+        (() => {
+          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
+          const btn = Array.from(cell.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Some");
+          if (btn) btn.click();
+        })()
+      JS
+      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
+      wait_for_focus_restored(level_ordinal: 1)
+
+      # Verify URL still has level_ordinal after rating
+      url_after_rating = page.evaluate_script("window.location.href")
+      params = URI.decode_www_form(URI.parse(url_after_rating).query.to_s).to_h
+      assert_equal "1", params["level_ordinal"],
+        "level_ordinal should still be in URL after rating"
+
+      # Full reload — should arrive focused
+      page.execute_script("window.location.reload()")
+      wait_for_stimulus "matrix"
+
+      assert_equal "512px", col_width_for(1),
+        "Focus should survive: rate → reload"
+    end
+
+    should "stay reachable on mobile viewport" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+      assert_equal "512px", col_width_for(1)
+
+      # Close button must still be in the DOM and visible at mobile width.
+      assert_selector(
+        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
+        "td[data-level-ordinal='1'] [data-focused-cell-close]",
+        visible: true
+      )
+      screenshot("01_mobile_focused")
+    end
+  end
+
+  context "cell focus with many levels" do
+    # Realistic frameworks have 5–8 levels; with `w-full` + `table-fixed`,
+    # browsers proportionally scale `<col>` widths down when their sum
+    # exceeds the table's container width — silently breaking the
+    # focused-column-wider behaviour. This context adds extra levels and
+    # asserts ACTUAL rendered widths (getBoundingClientRect) rather than
+    # declared style.width, so the test catches the layout issue.
+    setup do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.start_draft(@framework_id, 2, "test")
+
+        (3..7).each do |ord|
+          level_id = SecureRandom.uuid_v7
+          handler.add_level(@framework_id, level_id, @role_id, ord, "Level #{ord}", "E#{ord}")
+          handler.set_behavioural_expectation(
+            @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+            @cap1_id, ord, "Expectation for level #{ord}"
+          )
+        end
+        handler.publish_version(@framework_id, "test")
+
+        # Add an illustration on level 3 after publish so the focus target
+        # has content beyond the expectation text.
+        handler.add_role_illustration(
+          @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+          FrameworkState::BehaviouralExpectation.find_by!(capability_id: @cap1_id, level_ordinal: 3).expectation_id,
+          @role_id, 3, "Drives critical decisions in design reviews"
+        )
+      end
+    end
+
+    should "keep columns wide enough for the FrequencySelector in default unfocused state" do
+      # Regression: with many levels, the unfocused matrix must keep
+      # each column wide enough to show the FrequencySelector's four
+      # buttons without wrapping. Pre-fix, `w-full` + no col widths
+      # divided the matrix area equally and dropped each col below
+      # ~140px on realistic frameworks, stacking the buttons.
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      screenshot("01_default_unfocused_many_levels")
+
+      # Each level column should respect the cell's `min-w-[180px]`.
+      # We don't focus anything — pure default state.
+      width = rendered_col_width(1)
+      assert width >= 180,
+        "Default unfocused column rendered at #{width}px — expected " \
+        "min 180px so FrequencySelector buttons stay on one line"
+
+      # The FrequencySelector container should not wrap — buttons fit
+      # horizontally in a single row.
+      single_row = page.evaluate_script(<<~JS)
+        (() => {
+          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
+          if (!cell) return null;
+          const buttons = cell.querySelectorAll("[data-frequency-selector-target='button']");
+          if (buttons.length < 2) return null;
+          const firstTop = buttons[0].getBoundingClientRect().top;
+          // All buttons should share the same baseline (same row)
+          return Array.from(buttons).every(b =>
+            Math.abs(b.getBoundingClientRect().top - firstTop) < 1
+          );
+        })()
+      JS
+      assert_equal true, single_row,
+        "FrequencySelector buttons should all sit on one row in the default " \
+        "unfocused state (non-wrapped)"
+    end
+
+    should "focusing the first level keeps the cell out from behind the sticky capability column" do
+      # Regression: scrolling with `inline: "center"` (or "start") parks
+      # the focused cell directly under the sticky-left capability
+      # column so users see the cap column overlaying their selection.
+      # The fix manually scrolls so the focused cell's left edge sits
+      # at or past the cap column's right edge.
+      page.driver.browser.manage.window.resize_to(1024, 1000)
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+      screenshot("01_focused_first_level")
+
+      # Wait for smooth scroll to settle. Capybara doesn't have a
+      # native primitive for scroll completion — poll for stable
+      # scrollLeft over 2 frames.
+      stable = page.evaluate_script(<<~JS)
+        new Promise(resolve => {
+          const scroller = document.querySelector(".overflow-x-auto");
+          let last = scroller.scrollLeft;
+          let stableTicks = 0;
+          const check = () => {
+            const cur = scroller.scrollLeft;
+            if (cur === last) {
+              stableTicks++;
+              if (stableTicks >= 3) return resolve(true);
+            } else {
+              stableTicks = 0;
+            }
+            last = cur;
+            requestAnimationFrame(check);
+          };
+          check();
+          setTimeout(() => resolve(true), 2000);
+        })
+      JS
+      assert stable
+
+      positions = page.evaluate_script(<<~JS)
+        (() => {
+          const compactCell = document.querySelector(
+            `tr[data-matrix-target="row"][data-capability-id="#{cap_id}"] td[data-level-ordinal="1"]`
+          );
+          const capCol = document.querySelector(`col[data-level-ordinal="capability"]`);
+          const capCell = document.querySelector(
+            `tr[data-matrix-target="row"][data-capability-id="#{cap_id}"] td.sticky`
+          ) || document.querySelector(
+            `tr[data-matrix-target="row"][data-capability-id="#{cap_id}"] td:first-child`
+          );
+          return {
+            cellLeft: compactCell?.getBoundingClientRect().left,
+            cellRight: compactCell?.getBoundingClientRect().right,
+            capRight: capCell?.getBoundingClientRect().right
+          };
+        })()
+      JS
+
+      assert positions["cellLeft"] >= positions["capRight"] - 1,
+        "Focused cell's left edge (#{positions['cellLeft']}) should be at " \
+        "or past the sticky capability column's right edge (#{positions['capRight']}); " \
+        "otherwise the cap column overlays the cell"
+    end
+
+    should "render focused column visibly wider than siblings with many levels" do
+      # Use a narrower viewport so the table's container width is closer
+      # to the sum of declared col widths — exposes the `w-full` +
+      # `table-fixed` proportional-scaling bug. At 1400px (default
+      # DESKTOP_SIZE) the matrix area exceeds the col sum and the bug
+      # masks itself.
+      page.driver.browser.manage.window.resize_to(1024, 1000)
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 3)
+      screenshot("01_focused_with_many_levels")
+
+      focused_width = rendered_col_width(3)
+      sibling_width = rendered_col_width(5)
+
+      # Bug: with `w-full` + `table-fixed`, browsers proportionally
+      # scale the declared widths down when their sum exceeds the
+      # table's container width — focused and sibling cols ended up
+      # nearly equal in width and focus was visually indistinguishable.
+      # Fixed: focused col is 32rem (~512px), siblings keep their
+      # default 280px so the FrequencySelector still fits on one line.
+      assert focused_width.present?, "Expected to read focused col width"
+      assert sibling_width.present?, "Expected to read sibling col width"
+      assert focused_width >= sibling_width * 1.7,
+        "Focused column (#{focused_width}px) should be at least 1.7× sibling (#{sibling_width}px)"
+      assert focused_width >= 480,
+        "Focused col rendered #{focused_width}px — expected close to 32rem (≈512px)"
+      assert sibling_width >= 270,
+        "Sibling col rendered #{sibling_width}px — expected default ≈280px so " \
+        "FrequencySelector still fits on a single row"
+    end
+  end
+
   context "responsive behaviour" do
     should "show scoring panel as sidebar on desktop" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)

@@ -19,7 +19,7 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["frame", "row", "expandedRow",
                      "categoryHeader", "rowChevron", "categoryChevron",
-                     "scrollContainer"]
+                     "scrollContainer", "col"]
   static values = {
     basePath: String,
     urlSync: { type: Boolean, default: false },
@@ -35,6 +35,34 @@ export default class extends BaseController {
     // matrix:focus-changed event payload.
     this.currentFocus = { level: "framework", categoryId: null, capabilityId: null,
                           levelOrdinal: null, expectationId: null }
+
+    // Rating Turbo Stream responses replace the compact cell `<td>`
+    // and other sub-elements, which discards the close-button
+    // visibility / data-focus-compact state we stamped on focus. The
+    // col widths survive (col is in colgroup, not replaced), but
+    // visually the cell stops looking focused. Re-apply column focus
+    // after every Turbo Stream render so the focus state is whole.
+    // Rating Turbo Stream responses replace the compact cell `<td>`
+    // and other sub-elements, which discards the close-button
+    // visibility and the inline column widths we stamped on focus.
+    // (The col widths SHOULD survive — colgroup is separate from
+    // tbody — but in practice browsers reset col styles when the
+    // table's tbody is mutated mid-layout, and the close button is
+    // unconditionally re-rendered as `hidden` from the server.)
+    //
+    // Watch the matrix element for any child mutation (Turbo Stream
+    // replacements show up as childList changes inside our subtree)
+    // and re-apply focus when we still consider a cell focused.
+    this._mutationObserver = new MutationObserver(() => {
+      if (this.currentFocus?.level === "cell" &&
+          this.currentFocus.levelOrdinal != null &&
+          this.currentFocus.capabilityId != null) {
+        this.#applyColumnFocus(this.currentFocus.levelOrdinal,
+                                this.currentFocus.capabilityId)
+      }
+    })
+    this._mutationObserver.observe(this.element, { childList: true, subtree: true })
+
     this.#dispatchInitialFocus()
   }
 
@@ -43,6 +71,10 @@ export default class extends BaseController {
       this._frame.removeEventListener("turbo:frame-load", this._frameLoadHandler)
       this._frame = null
       this._frameLoadHandler = null
+    }
+    if (this._mutationObserver) {
+      this._mutationObserver.disconnect()
+      this._mutationObserver = null
     }
     super.disconnect()
   }
@@ -129,12 +161,8 @@ export default class extends BaseController {
     // Dim sibling rows when a row is expanded (visual focus)
     this.#updateRowDimming(isExpanding ? capId : null)
 
-    // Sync browser URL with expanded capability
-    if (this.urlSyncValue) {
-      this.#syncCapabilityToUrl(isExpanding ? capId : null)
-    }
-
-    // Dispatch focus change for the context pane
+    // Dispatch focus change. URL sync (capability + level_ordinal)
+    // happens centrally inside #setFocus.
     if (isExpanding) {
       const categoryId = this.#categoryIdForRow(row)
       this.#setFocus({
@@ -145,9 +173,28 @@ export default class extends BaseController {
         levelOrdinal: null,
         expectationId: null
       })
+      // Bring the freshly-expanded row + its expanded `<tr>` into
+      // view. With Stimulus accordions, a row near the bottom of the
+      // viewport can have its expanded content cut off — scroll the
+      // expanded `<tr>` so its bottom edge is visible.
+      this.#scrollExpandedRowIntoView(expandedRow)
     } else {
       this.#setFocus({ level: "framework" })
     }
+  }
+
+  // Smoothly scrolls so the expanded `<tr>` is fully visible. Uses
+  // `block: "nearest"` to avoid yanking the page when the row is
+  // already onscreen, but ensures the expanded content's bottom edge
+  // doesn't sit below the viewport.
+  #scrollExpandedRowIntoView(expandedRow) {
+    if (!expandedRow) return
+    // Defer to the next animation frame so the browser has a chance to
+    // apply the layout change (un-hide the row, set col widths, etc.)
+    // before computing scroll position.
+    requestAnimationFrame(() => {
+      expandedRow.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" })
+    })
   }
 
   // ── Category focus ── (framework explorer)
@@ -177,14 +224,25 @@ export default class extends BaseController {
   // ── Cell focus ── (framework explorer, expanded-row cells)
 
   focusCell(event) {
-    // Skip when the click lands on an interactive child (illustration editors,
-    // forms, links). Cell focus is triggered only by background clicks.
-    if (event.target.closest("button, a, input, textarea, form, [contenteditable]")) {
+    const cell = event.currentTarget
+    const allowOnButton = cell.dataset.focusOnButtonClick === "true"
+    const onInteractive = !!event.target.closest("button, a, input, textarea, form, [contenteditable]")
+
+    // The framework explorer's expanded cells contain inline-editor
+    // forms — focus must NOT fire when clicking the pencil/save/cancel
+    // controls. The assessment cells opt-in to "focus even when the
+    // click landed on the rating selector or evidence buttons" via
+    // `data-focus-on-button-click="true"`, so a tap on a frequency
+    // button both submits the rating AND focuses the cell.
+    //
+    // The unfocus close button always stops its own click first
+    // (data-action="click->matrix#unfocusCell"), so it doesn't reach
+    // here regardless of this guard.
+    if (!allowOnButton && onInteractive) {
       return
     }
 
     event.stopPropagation()
-    const cell = event.currentTarget
     const capabilityId = cell.dataset.capabilityId
     const levelOrdinal = parseInt(cell.dataset.levelOrdinal, 10)
     const expectationId = cell.dataset.expectationId || null
@@ -198,10 +256,17 @@ export default class extends BaseController {
 
     const capabilityStableId = row?.dataset.capabilityStableId || cell.dataset.capabilityStableId || null
 
-    // Toggle off if already focused on this cell
-    if (this.currentFocus.level === "cell" &&
-        this.currentFocus.capabilityId === capabilityId &&
-        this.currentFocus.levelOrdinal === levelOrdinal) {
+    const alreadyFocusedHere =
+      this.currentFocus.level === "cell" &&
+      this.currentFocus.capabilityId === capabilityId &&
+      this.currentFocus.levelOrdinal === levelOrdinal
+
+    // Toggle off only on a BACKGROUND click of the same cell. A click
+    // on a button (rating selector, evidence affordance) inside the
+    // focused cell must not toggle focus off — that path is reserved
+    // for the explicit close button. Otherwise rating a cell would
+    // immediately drop focus the moment the rating lands.
+    if (alreadyFocusedHere && !onInteractive) {
       this.#setFocus({
         level: "capability",
         categoryId: categoryId,
@@ -212,6 +277,16 @@ export default class extends BaseController {
       })
       return
     }
+
+    // Already focused here AND the click landed on an interactive
+    // child — do nothing. The button/form runs its own action; we
+    // don't need to re-dispatch the same focus state.
+    if (alreadyFocusedHere) return
+
+    // Compact-cell click: ensure the row is expanded so the focused
+    // content (illustrations, evidence) is visible. No-op when already
+    // expanded.
+    this.#expandRow(capabilityId)
 
     this.#setFocus({
       level: "cell",
@@ -310,15 +385,53 @@ export default class extends BaseController {
   #dispatchInitialFocus() {
     if (!this.activeCategoryIdValue) return
 
+    // Source of truth for cell focus on connect: prefer the URL params
+    // (capability + level_ordinal) when present, then fall back to the
+    // server-rendered `data-focused-level-ordinal` on the expanded row.
+    // This lets us restore focus even when the focused capability has
+    // no illustrations/evidence (and therefore no server-rendered
+    // expanded row to stamp the data attribute on).
+    if (this.urlSyncValue) {
+      const fromUrl = this.#focusFromUrl()
+      if (fromUrl) {
+        // Ensure the row is expanded so the focused content is
+        // visible alongside the widened column.
+        this.#expandRow(fromUrl.capabilityId)
+        this.#setFocus(fromUrl)
+        return
+      }
+    }
+
     const expandedRow = this.expandedRowTargets.find(r => !r.classList.contains("hidden"))
     if (expandedRow) {
       const capabilityId = expandedRow.dataset.capabilityId
       const row = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
+      const focusedOrdinal = expandedRow.dataset.focusedLevelOrdinal
+        ? parseInt(expandedRow.dataset.focusedLevelOrdinal, 10)
+        : null
+      const stableId = row?.dataset.capabilityStableId || expandedRow.dataset.capabilityStableId || null
+
+      if (focusedOrdinal != null && !isNaN(focusedOrdinal)) {
+        // Resolve expectation id from the matching <td> inside the
+        // expanded row so the focus payload is fully populated on
+        // initial connect (deep-link or post-broadcast reload).
+        const cell = expandedRow.querySelector(`td[data-level-ordinal="${focusedOrdinal}"]`)
+        this.#setFocus({
+          level: "cell",
+          categoryId: this.activeCategoryIdValue,
+          capabilityId,
+          capabilityStableId: stableId,
+          levelOrdinal: focusedOrdinal,
+          expectationId: cell?.dataset.expectationId || null
+        })
+        return
+      }
+
       this.#setFocus({
         level: "capability",
         categoryId: this.activeCategoryIdValue,
         capabilityId: capabilityId,
-        capabilityStableId: row?.dataset.capabilityStableId || expandedRow.dataset.capabilityStableId || null,
+        capabilityStableId: stableId,
         levelOrdinal: null,
         expectationId: null
       })
@@ -330,15 +443,230 @@ export default class extends BaseController {
     }
   }
 
+  // Builds a cell-focus payload from the browser URL when both
+  // `?capability=stable_id` and `?level_ordinal=N` are present AND we
+  // can resolve a row matching the stable_id in the current DOM.
+  // Returns null when the URL doesn't carry cell-focus params.
+  #focusFromUrl() {
+    const url = new URL(window.location)
+    const stableId = url.searchParams.get("capability")
+    const ordRaw = url.searchParams.get("level_ordinal")
+    if (!stableId || !ordRaw) return null
+
+    const ordinal = parseInt(ordRaw, 10)
+    if (isNaN(ordinal)) return null
+
+    const row = this.rowTargets.find(r => r.dataset.capabilityStableId === stableId)
+    if (!row) return null
+
+    const capabilityId = row.dataset.capabilityId
+    const cell = this.element.querySelector(
+      `tr[data-matrix-target="row"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"], ` +
+      `tr[data-matrix-target="expandedRow"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"]`
+    )
+
+    return {
+      level: "cell",
+      categoryId: this.activeCategoryIdValue || this.#categoryIdForRow(row),
+      capabilityId,
+      capabilityStableId: stableId,
+      levelOrdinal: ordinal,
+      expectationId: cell?.dataset.expectationId || null
+    }
+  }
+
   // Dispatches matrix:focus-changed with a fully-specified detail payload.
+  // Also resizes the table columns + toggles the per-cell close button when
+  // entering / leaving cell-level focus (assessment view only — explorer
+  // doesn't render <colgroup> so the col target list is empty there).
   #setFocus({ level, categoryId = null, capabilityId = null, capabilityStableId = null,
               levelOrdinal = null, expectationId = null }) {
     this.currentFocus = {
       level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
     }
+    this.#applyColumnFocus(level === "cell" ? levelOrdinal : null,
+                           level === "cell" ? capabilityId : null)
+    if (this.urlSyncValue) {
+      // Capability is part of the URL whenever a row is expanded — i.e.
+      // for cell AND capability focus levels. For framework/category
+      // focus, capability is cleared. Always use the stable_id so the
+      // server's `expanded_capability_id` comparison resolves correctly.
+      const capForUrl = (level === "cell" || level === "capability")
+        ? capabilityStableId
+        : null
+      this.#syncCapabilityToUrl(capForUrl)
+      this.#syncLevelOrdinalToUrl(level === "cell" ? levelOrdinal : null)
+    }
     window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
       detail: { ...this.currentFocus }
     }))
+  }
+
+  // ── Column focus (assessment cell-level) ──
+
+  // Widens the focused level's column, narrows siblings, stamps
+  // `data-focus-compact="true"` on every non-focused level cell so
+  // AssessmentCell can degrade text density, and reveals the per-cell
+  // close button only inside the focused expanded cell.
+  //
+  // Pass null for both args to reset everything to defaults.
+  #applyColumnFocus(levelOrdinal, capabilityId) {
+    if (!this.hasColTarget) return
+
+    // Pick widths in pixels. Focused col widens to 32rem; siblings keep
+    // the default 240px so the FrequencySelector's four buttons still
+    // fit on a single row in non-focused cells. The fix is "additive":
+    // focused gets wider, siblings stay the same width they had before
+    // any cell was focused.
+    //
+    // We pin the table's total width to the sum of all col widths and
+    // toggle table-layout: fixed so browsers honour each <col> exactly
+    // instead of proportionally scaling them; the parent's
+    // overflow-x-auto handles the horizontal scroll.
+    const focusedWidthPx = 512   // 32rem
+    const siblingWidthPx = 280   // matches default level col width
+    const capabilityWidthPx = 220
+
+    const levelCols = this.colTargets.filter(c => c.dataset.levelOrdinal !== "capability")
+
+    this.colTargets.forEach(col => {
+      const ord = col.dataset.levelOrdinal
+      if (ord === "capability") return
+      if (levelOrdinal == null) {
+        col.style.width = ""
+      } else if (Number(ord) === levelOrdinal) {
+        col.style.width = `${focusedWidthPx}px`
+      } else {
+        col.style.width = `${siblingWidthPx}px`
+      }
+    })
+
+    const table = this.colTargets[0]?.closest("table")
+    if (table) {
+      if (levelOrdinal == null) {
+        // Default state: clear inline overrides so Tailwind's `w-full`
+        // and the browser's default `table-layout: auto` drive sizing.
+        // Auto-layout uses the FrequencySelector's intrinsic width as
+        // each column's min, so cells stay wide enough for the rating
+        // buttons regardless of how many levels the role has.
+        table.style.width = ""
+        table.style.tableLayout = ""
+      } else {
+        // Focus state: switch to `table-layout: fixed` so the explicit
+        // <col> widths are honoured exactly, and pin the table's total
+        // width to the sum so browsers don't proportionally scale the
+        // cols when the sum overflows the container.
+        table.style.tableLayout = "fixed"
+        const tableWidth = capabilityWidthPx + focusedWidthPx +
+                            (levelCols.length - 1) * siblingWidthPx
+        table.style.width = `${tableWidth}px`
+      }
+    }
+
+    // Compact every level <td> in non-focused columns so AssessmentCell
+    // can degrade text density via Tailwind data variants.
+    this.element.querySelectorAll("td[data-level-ordinal]").forEach(td => {
+      const ord = Number(td.dataset.levelOrdinal)
+      if (levelOrdinal != null && ord !== levelOrdinal) {
+        td.dataset.focusCompact = "true"
+      } else {
+        delete td.dataset.focusCompact
+      }
+    })
+
+    // Toggle the per-cell close button. Hidden everywhere except
+    // inside the focused cell. The button lives in the COMPACT cell
+    // (top-right corner of the rating area) so it stays anchored
+    // where the user is looking, not buried in the illustration list.
+    this.element.querySelectorAll("[data-focused-cell-close]").forEach(btn => btn.classList.add("hidden"))
+    if (levelOrdinal != null && capabilityId != null) {
+      const compactRow = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
+      const focusedCompact = compactRow?.querySelector(`td[data-level-ordinal="${levelOrdinal}"]`)
+      if (focusedCompact) {
+        const closeBtn = focusedCompact.querySelector("[data-focused-cell-close]")
+        if (closeBtn) {
+          closeBtn.classList.remove("hidden")
+          closeBtn.classList.add("flex")
+        }
+      }
+
+      // Scroll so both the compact cell + its expanded row are visible.
+      // Vertical: bring the expanded row's bottom into view (or the
+      // compact cell when no row is expanded). Horizontal: scroll the
+      // matrix's overflow-x container so the focused cell sits to the
+      // right of the STICKY capability column — `inline: "center"`
+      // would land the cell behind the sticky cap when focusing the
+      // first level. Defer to the next animation frame so the browser
+      // computes positions against the post-resize layout.
+      const expandedRow = this.element.querySelector(
+        `tr[data-matrix-target="expandedRow"][data-capability-id="${capabilityId}"]`
+      )
+      const verticalAnchor = expandedRow && !expandedRow.classList.contains("hidden")
+        ? expandedRow
+        : focusedCompact
+      if (verticalAnchor && focusedCompact) {
+        requestAnimationFrame(() => {
+          this.#scrollVertically(verticalAnchor)
+          this.#scrollHorizontallyPastStickyCap(focusedCompact)
+        })
+      }
+    }
+  }
+
+  #scrollVertically(target) {
+    target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" })
+  }
+
+  // Scrolls the matrix's `overflow-x-auto` wrapper so the focused cell
+  // is fully visible AND not hidden behind the sticky-left capability
+  // column. The cap column overlays everything to its right with
+  // `position: sticky; left: 0`, so a naive `inline: "center"` (or
+  // `inline: "start"`) for the first-level cell parks it directly
+  // under the cap.
+  #scrollHorizontallyPastStickyCap(cell) {
+    const scroller = cell.closest(".overflow-x-auto")
+    if (!scroller) return
+
+    const cellRect = scroller.getBoundingClientRect && cell.getBoundingClientRect()
+    const containerRect = scroller.getBoundingClientRect()
+    const capCol = scroller.querySelector("col[data-level-ordinal='capability']")
+    const capWidth = capCol?.getBoundingClientRect().width || 0
+
+    const visibleLeft = containerRect.left + capWidth
+    const leftDelta = cellRect.left - visibleLeft        // <0: hidden behind sticky cap
+    const rightDelta = cellRect.right - containerRect.right // >0: extends past right edge
+
+    let dx = 0
+    if (leftDelta < 0) {
+      // Cell is to the left of the visible area — scroll left to
+      // expose it.
+      dx = leftDelta
+    } else if (rightDelta > 0) {
+      // Cell extends past the right edge — scroll right, but never
+      // far enough to push it back under the sticky cap (would
+      // require more scroll than we have left-room).
+      dx = Math.min(rightDelta, leftDelta)
+    }
+
+    if (dx !== 0) {
+      scroller.scrollBy({ left: dx, behavior: "smooth" })
+    }
+  }
+
+  // Public Stimulus action — explicit "exit focus" affordance rendered
+  // top-right inside every expanded assessment cell. Brings focus back to
+  // the capability level so the row stays expanded but the column resets.
+  unfocusCell(event) {
+    event.stopPropagation()
+    const { categoryId, capabilityId, capabilityStableId } = this.currentFocus
+    this.#setFocus({
+      level: "capability",
+      categoryId,
+      capabilityId,
+      capabilityStableId,
+      levelOrdinal: null,
+      expectationId: null
+    })
   }
 
   // Walks back from a capability row to its category header to find the category id.
@@ -490,6 +818,7 @@ export default class extends BaseController {
 
     const category = frameUrl.searchParams.get("category")
     const capability = frameUrl.searchParams.get("capability")
+    const levelOrdinal = frameUrl.searchParams.get("level_ordinal")
 
     if (category) {
       browserUrl.searchParams.set("category", category)
@@ -503,19 +832,52 @@ export default class extends BaseController {
       browserUrl.searchParams.delete("capability")
     }
 
+    if (levelOrdinal) {
+      browserUrl.searchParams.set("level_ordinal", levelOrdinal)
+    } else {
+      browserUrl.searchParams.delete("level_ordinal")
+    }
+
     window.history.pushState({}, "", browserUrl)
   }
 
-  // Update capability param in browser URL on row toggle.
+  // Update capability param in browser URL on row toggle. Also clears
+  // level_ordinal — collapsing the row necessarily exits cell focus.
   #syncCapabilityToUrl(capId) {
     const url = new URL(window.location)
     if (capId) {
       url.searchParams.set("capability", capId)
     } else {
       url.searchParams.delete("capability")
+      url.searchParams.delete("level_ordinal")
     }
     window.history.pushState({}, "", url)
+    this.#syncFrameSrcParam("capability", capId)
+    if (!capId) this.#syncFrameSrcParam("level_ordinal", null)
   }
+
+  // Update level_ordinal param on cell focus / unfocus. Called from
+  // #setFocus so every focus transition keeps the URL truthful. No-ops
+  // when the URL already matches — important for initial connect, which
+  // dispatches focus from already-correct URL state and would otherwise
+  // push a duplicate history entry.
+  #syncLevelOrdinalToUrl(levelOrdinal) {
+    const url = new URL(window.location)
+    const current = url.searchParams.get("level_ordinal")
+    const desired = levelOrdinal != null ? String(levelOrdinal) : null
+    if (current === desired) return
+    if (desired != null) url.searchParams.set("level_ordinal", desired)
+    else url.searchParams.delete("level_ordinal")
+    window.history.pushState({}, "", url)
+    this.#syncFrameSrcParam("level_ordinal", desired)
+  }
+
+  // No-op: kept for future use. The frame `src` is intentionally NOT
+  // mutated on focus changes — `setAttribute("src", ...)` triggers a
+  // Turbo Frame fetch. Instead, `assessment_sync_controller` merges
+  // browser URL params (capability + level_ordinal) into the frame
+  // src at reload time so focus state survives broadcasts.
+  #syncFrameSrcParam(_name, _value) {}
 
   // Dims sibling compact rows when a row is expanded for visual focus.
   #updateRowDimming(expandedCapId) {
