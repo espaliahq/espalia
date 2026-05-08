@@ -18,6 +18,11 @@ class Views::Assessments::AssessmentCell < Views::Base
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
   # @param capability_id [String, nil] per-version UUID — used by
   #   matrix_controller to wire compact-cell click → focus
+  # @param capability_name [String, nil] capability display name —
+  #   composed into the cell's accessible focus label
+  # @param level_label [String, nil] level title or code — composed
+  #   into the cell's accessible focus label; falls back to
+  #   "Level <ordinal>" when nil
   # @param capability_stable_id [String]
   # @param ordinal [Integer] the level ordinal for this column
   # @param person_level [Integer] the person's assigned level ordinal
@@ -49,6 +54,8 @@ class Views::Assessments::AssessmentCell < Views::Base
   # capability name + level so screen-reader users hear "Focus cell:
   # Critical Thinking · Level 2" rather than the same generic
   # "Focus cell" for every cell in the matrix.
+  #
+  # @return [String]
   def focus_cell_aria_label
     detail = [
       @capability_name.presence,
