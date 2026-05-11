@@ -278,14 +278,21 @@ Devise.setup do |config|
   # callback URL is http://localhost:3000/users/auth/google_oauth2/callback.
   #
   # Always register the strategy so the OmniAuth middleware is installed
-  # (Devise wires it up only when `config.omniauth` runs). When real
-  # credentials aren't configured (tests, fresh dev boxes), use placeholders
-  # — OmniAuth.config.test_mode bypasses the actual provider call, and a
-  # live attempt without credentials is a fast, obvious failure at Google
-  # rather than a confusing 404 from Devise's passthru.
+  # (Devise wires it up only when `config.omniauth` runs). In production a
+  # missing credential is a misconfiguration we want to surface at boot, not
+  # at the first user click — so we raise. In test and development a missing
+  # credential is normal (fresh checkouts, CI), and OmniAuth.config.test_mode
+  # bypasses the real provider call.
+  google_client_id = Rails.application.credentials.dig(:google, :client_id)
+  google_client_secret = Rails.application.credentials.dig(:google, :client_secret)
+
+  if Rails.env.production? && (google_client_id.blank? || google_client_secret.blank?)
+    raise "Missing Google OAuth credentials: set credentials.google.client_id and credentials.google.client_secret"
+  end
+
   config.omniauth :google_oauth2,
-    Rails.application.credentials.dig(:google, :client_id) || "missing-google-client-id",
-    Rails.application.credentials.dig(:google, :client_secret) || "missing-google-client-secret",
+    google_client_id || "missing-google-client-id",
+    google_client_secret || "missing-google-client-secret",
     scope: "email,profile",
     prompt: "select_account",
     access_type: "online"
