@@ -89,5 +89,21 @@ class UserTest < ActiveSupport::TestCase
       assert_nil user
       assert_equal :no_matching_account, reason
     end
+
+    should "recover by re-linking when a concurrent sign-in already created the User" do
+      tenant = create(:tenant)
+      ActsAsTenant.with_tenant(tenant) do
+        create(:person, tenant: tenant, email: "dana@example.com")
+      end
+
+      # Simulate the race: provision_from_person! raises RecordNotUnique
+      # because another request created the User mid-flight.
+      existing = create(:user, email: "dana@example.com", provider: "google_oauth2", uid: "uid-race")
+      User.stub(:provision_from_person!, ->(*) { raise ActiveRecord::RecordNotUnique }) do
+        result, reason = User.from_google_omniauth(build_auth(email: "dana@example.com", uid: "uid-race"))
+        assert_nil reason
+        assert_equal existing.id, result.id
+      end
+    end
   end
 end

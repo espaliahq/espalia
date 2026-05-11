@@ -61,8 +61,13 @@ class User < ApplicationRecord
     end
     return [ nil, :no_matching_account ] if person.nil?
 
-    user = provision_from_person!(person, auth)
-    [ user, nil ]
+    begin
+      [ provision_from_person!(person, auth), nil ]
+    rescue ActiveRecord::RecordNotUnique
+      # A concurrent Google sign-in for the same email won the race;
+      # re-resolve and link instead of failing.
+      from_google_omniauth(auth)
+    end
   end
 
   def self.google_email_verified?(auth)
