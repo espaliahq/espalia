@@ -97,13 +97,23 @@ class UserTest < ActiveSupport::TestCase
       end
 
       # Simulate the race: provision_from_person! raises RecordNotUnique
-      # because another request created the User mid-flight.
-      existing = create(:user, email: "dana@example.com", provider: "google_oauth2", uid: "uid-race")
-      User.stub(:provision_from_person!, ->(*) { raise ActiveRecord::RecordNotUnique }) do
+      # because another request created the User mid-flight. The winning
+      # User is created INSIDE the stub so the first lookups in
+      # from_google_omniauth miss and the rescue branch is exercised.
+      existing = nil
+      called = false
+      result = reason = nil
+      User.stub(:provision_from_person!, lambda { |*|
+        called = true
+        existing = create(:user, email: "dana@example.com", provider: "google_oauth2", uid: "uid-race")
+        raise ActiveRecord::RecordNotUnique
+      }) do
         result, reason = User.from_google_omniauth(build_auth(email: "dana@example.com", uid: "uid-race"))
-        assert_nil reason
-        assert_equal existing.id, result.id
       end
+
+      assert called, "expected provision_from_person! to be invoked"
+      assert_nil reason
+      assert_equal existing.id, result.id
     end
   end
 end
