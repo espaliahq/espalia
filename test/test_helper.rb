@@ -2,12 +2,19 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 
+OmniAuth.config.test_mode = true
+OmniAuth.config.logger = Rails.logger
+
 module ActiveSupport
   class TestCase
     # Run tests in parallel with specified workers
     parallelize(workers: :number_of_processors)
 
     include FactoryBot::Syntax::Methods
+
+    teardown do
+      OmniAuth.config.mock_auth.clear
+    end
 
     # Add more helper methods to be used by all tests here...
   end

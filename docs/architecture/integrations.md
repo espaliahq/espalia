@@ -173,6 +173,16 @@ Not yet implemented — subscriptions will be added to [config/initializers/rail
 
 Devise + OmniAuth. Tenant-level SSO config stored in `Tenant.sso_config` (planned, not yet implemented). Self-hosted mode supports local username/password. SaaS mode routes to tenant-specific IdP.
 
+### Google sign-in (global)
+
+Implemented today as a single global "Continue with Google" option on the sign-in page — not yet per-tenant SSO. The flow:
+
+1. `omniauth-google-oauth2` strategy registered in [config/initializers/devise.rb](../../config/initializers/devise.rb); callback is `/users/auth/google_oauth2/callback`.
+2. `User.from_google_omniauth(auth)` ([app/models/user.rb](../../app/models/user.rb)) refuses unverified emails, then resolves the identity in this order: `provider/uid` match → `email` match (backfills `provider`/`uid`) → cross-tenant `Person` lookup. When only a `Person` matches, a `User` AND its linking `TenantUser` are created in one transaction so the new identity lands in a usable tenant.
+3. [`Users::OmniauthCallbacksController#google_oauth2`](../../app/controllers/users/omniauth_callbacks_controller.rb) translates the result into a Devise session or a flash refusal.
+
+Credentials live under `google:` in `config/credentials.yml.enc`. The strategy is always registered (with placeholder values if credentials are absent) so the OmniAuth middleware is installed in test and fresh-dev environments.
+
 ### Auto-linking SSO users to Person records
 
-[`ApplicationController#current_tenant_user`](../../app/controllers/application_controller.rb) auto-links a `TenantUser` to a `Person` by matching email when `person_id` is nil. This complements the HRIS sync's Pass 4 auto-link and gives instant linking on first login rather than waiting for the next scheduled sync.
+[`ApplicationController#current_tenant_user`](../../app/controllers/application_controller.rb) auto-links a `TenantUser` to a `Person` by matching email when `person_id` is nil. This complements the HRIS sync's Pass 4 auto-link and gives instant linking on first login rather than waiting for the next scheduled sync. Google sign-in adds a third entry point: when a Google identity arrives for an email that exists as a `Person` but not yet as a `User`, the User+TenantUser are provisioned on the spot rather than waiting for either of the above.

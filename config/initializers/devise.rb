@@ -272,9 +272,23 @@ Devise.setup do |config|
   config.sign_out_via = :delete
 
   # ==> OmniAuth
-  # Add a new OmniAuth provider. Check the wiki for more information on setting
-  # up on your models and hooks.
-  # config.omniauth :github, 'APP_ID', 'APP_SECRET', scope: 'user,public_repo'
+  # Google OAuth 2.0. Credentials live under the `google:` key in
+  # config/credentials.yml.enc — set `client_id` and `client_secret` from
+  # Google Cloud Console (OAuth client type "Web application"). The dev
+  # callback URL is http://localhost:3000/users/auth/google_oauth2/callback.
+  #
+  # Always register the strategy so the OmniAuth middleware is installed
+  # (Devise wires it up only when `config.omniauth` runs). When real
+  # credentials aren't configured (tests, fresh dev boxes), use placeholders
+  # — OmniAuth.config.test_mode bypasses the actual provider call, and a
+  # live attempt without credentials is a fast, obvious failure at Google
+  # rather than a confusing 404 from Devise's passthru.
+  config.omniauth :google_oauth2,
+    Rails.application.credentials.dig(:google, :client_id) || "missing-google-client-id",
+    Rails.application.credentials.dig(:google, :client_secret) || "missing-google-client-secret",
+    scope: "email,profile",
+    prompt: "select_account",
+    access_type: "online"
 
   # ==> Warden configuration
   # If you want to use other strategies, that are not supported by Devise, or
