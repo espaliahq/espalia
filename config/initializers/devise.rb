@@ -272,9 +272,30 @@ Devise.setup do |config|
   config.sign_out_via = :delete
 
   # ==> OmniAuth
-  # Add a new OmniAuth provider. Check the wiki for more information on setting
-  # up on your models and hooks.
-  # config.omniauth :github, 'APP_ID', 'APP_SECRET', scope: 'user,public_repo'
+  # Google OAuth 2.0. Credentials live under the `google:` key in
+  # config/credentials.yml.enc — set `client_id` and `client_secret` from
+  # Google Cloud Console (OAuth client type "Web application"). The dev
+  # callback URL is http://localhost:3000/users/auth/google_oauth2/callback.
+  #
+  # Always register the strategy so the OmniAuth middleware is installed
+  # (Devise wires it up only when `config.omniauth` runs). In production a
+  # missing credential is a misconfiguration we want to surface at boot, not
+  # at the first user click — so we raise. In test and development a missing
+  # credential is normal (fresh checkouts, CI), and OmniAuth.config.test_mode
+  # bypasses the real provider call.
+  google_client_id = Rails.application.credentials.dig(:google, :client_id)
+  google_client_secret = Rails.application.credentials.dig(:google, :client_secret)
+
+  if Rails.env.production? && (google_client_id.blank? || google_client_secret.blank?)
+    raise "Missing Google OAuth credentials: set credentials.google.client_id and credentials.google.client_secret"
+  end
+
+  config.omniauth :google_oauth2,
+    google_client_id || "missing-google-client-id",
+    google_client_secret || "missing-google-client-secret",
+    scope: "email,profile",
+    prompt: "select_account",
+    access_type: "online"
 
   # ==> Warden configuration
   # If you want to use other strategies, that are not supported by Devise, or

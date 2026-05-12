@@ -60,4 +60,27 @@ class AuthSystemTest < ApplicationSystemTestCase
       assert_current_path new_user_session_path
     end
   end
+
+  context "Google sign in" do
+    setup do
+      OmniAuth.config.mock_auth[:google_oauth2] = OmniAuth::AuthHash.new(
+        provider: "google_oauth2",
+        uid: "google-uid-system",
+        info: { "email" => @user.email, "email_verified" => true, "name" => @user.email },
+        extra: { raw_info: { "email_verified" => true } }
+      )
+    end
+
+    teardown { OmniAuth.config.mock_auth[:google_oauth2] = nil }
+
+    should "sign in via the Continue with Google button" do
+      visit new_user_session_path
+      assert_selector "button[type='submit']", text: "Continue with Google"
+
+      click_button "Continue with Google"
+
+      assert_current_path root_path
+      assert_text "Welcome to GrowthOS"
+    end
+  end
 end
