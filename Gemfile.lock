@@ -218,7 +218,7 @@ GEM
       net-imap
       net-pop
       net-smtp
-    mailbin (1.1.1)
+    mailbin (1.1.2)
       importmap-rails
       rails (>= 7.1.0)
       turbo-rails
@@ -677,7 +677,7 @@ CHECKSUMS
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   loofah (2.25.1) sha256=d436c73dbd0c1147b16c4a41db097942d217303e1f7728704b37e4df9f6d2e04
   mail (2.9.0) sha256=6fa6673ecd71c60c2d996260f9ee3dd387d4673b8169b502134659ece6d34941
-  mailbin (1.1.1) sha256=c68e45ba050d4406fd1ae23df87160fac71f311b35b5348c4020a34be53f0f95
+  mailbin (1.1.2) sha256=52fe25e4623a1992b9105c915033e020b643db3c3b4b7f9937fb7b2125a296ac
   marcel (1.1.0) sha256=fdcfcfa33cc52e93c4308d40e4090a5d4ea279e160a7f6af988260fa970e0bee
   matrix (0.4.3) sha256=a0d5ab7ddcc1973ff690ab361b67f359acbb16958d1dc072b8b956a286564c5b
   mcp (0.10.0) sha256=09b9231eb16dff75cc7b8a95817c8acfcf4d1cab8d34f350671e43e765242b57
