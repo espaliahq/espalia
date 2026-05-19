@@ -90,15 +90,21 @@ class AssessmentCycleParticipation
   # you already have an enrollment scope (e.g. from a `cycle.enrollments`
   # association) and want the unified view.
   #
+  # Uses a tuple `IN ((cycle_id, person_id), …)` to fetch only the exact
+  # pairs we need — avoids the cross-product over-fetch that
+  # `where(cycle_id: [...], person_id: [...])` would produce when the
+  # enrollments span multiple cycles AND multiple people.
+  #
   # @param enrollment_scope [#to_a returning Array<AssessmentCycleEnrollment>]
   # @return [Array<AssessmentCycleParticipation>]
   def self.for_enrollments(enrollment_scope)
     enrollments = enrollment_scope.to_a
     return [] if enrollments.empty?
 
+    pairs = enrollments.map { |e| [ e.cycle_id, e.person_id ] }.uniq
+    placeholders = (Array.new(pairs.size, "(?, ?)")).join(", ")
     progress_by_pair = AssessmentCycleProgress
-      .where(cycle_id: enrollments.map(&:cycle_id),
-             person_id: enrollments.map(&:person_id))
+      .where("(cycle_id, person_id) IN (#{placeholders})", *pairs.flatten)
       .index_by { |p| [ p.cycle_id, p.person_id ] }
 
     enrollments.map do |enrollment|
