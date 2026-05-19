@@ -136,15 +136,11 @@ class AssessmentCycleParticipation
            :enrolled_at, :withdrawn_at, :withdrawal_reason,
            to: :enrollment
 
-  # Delegated readers — journey side (progress); safe-navigate via #_via_progress
-  # so callers don't have to nil-check the wrapper.
-  def started_at;             progress&.started_at;             end
-  def self_completed_at;      progress&.self_completed_at;      end
-  def manager_completed_at;   progress&.manager_completed_at;   end
-  def alignment_started_at;   progress&.alignment_started_at;   end
-  def alignment_started_by_id; progress&.alignment_started_by_id; end
-  def alignment_started_by;   progress&.alignment_started_by;   end
-  def aligned_at;             progress&.aligned_at;             end
-  def aligned_by_id;          progress&.aligned_by_id;          end
-  def aligned_by;             progress&.aligned_by;             end
+  # Delegated readers — journey side (progress). `allow_nil: true` returns
+  # nil from every reader when the progress row is absent, so callers don't
+  # have to nil-check the wrapper.
+  delegate :started_at, :self_completed_at, :manager_completed_at,
+           :alignment_started_at, :alignment_started_by_id, :alignment_started_by,
+           :aligned_at, :aligned_by_id, :aligned_by,
+           to: :progress, allow_nil: true
 end
