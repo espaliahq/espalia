@@ -132,7 +132,13 @@ class AssessmentCycleParticipation
   end
 
   # Delegated readers — membership side (enrollment).
-  delegate :cycle_id, :person_id, :tenant_id, :cycle, :person,
+  # `:id` / `:to_param` delegate so the wrapper round-trips through Rails
+  # URL helpers (e.g. `assessment_cycle_enrollment_path(@cycle, participation)`
+  # in the unenroll form) using the enrollment's UUID. Enrollment is the
+  # always-present side; routing for participant-targeted actions hits the
+  # enrollments controller.
+  delegate :id, :to_param,
+           :cycle_id, :person_id, :tenant_id, :cycle, :person,
            :enrolled_at, :withdrawn_at, :withdrawal_reason,
            to: :enrollment
 

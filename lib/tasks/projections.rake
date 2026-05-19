@@ -80,7 +80,7 @@ namespace :events do
       klass = Projections::Registry.fetch(name)
 
       single_tenant = args[:tenant_id].present?
-      tenants = single_tenant ? [Tenant.find(args[:tenant_id])] : Tenant.all.to_a
+      tenants = single_tenant ? [ Tenant.find(args[:tenant_id]) ] : Tenant.all.to_a
       abort "No tenants to rebuild." if tenants.empty?
 
       total_applied = 0
@@ -107,7 +107,7 @@ namespace :events do
     end
 
     desc "Manually stamp a projection at its current CODE_VERSION without rebuilding (escape valve)."
-    task :mark_rebuilt, [:name] => :environment do |_, args|
+    task :mark_rebuilt, [ :name ] => :environment do |_, args|
       name = args.fetch(:name) { abort "Usage: events:projections:mark_rebuilt[<name>]" }
       klass = Projections::Registry.fetch(name)
       row = ProjectionVersion.stamp!(klass)
