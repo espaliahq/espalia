@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "test_helper"
 
 class ProjectionVersionTest < ActiveSupport::TestCase
@@ -16,6 +18,12 @@ class ProjectionVersionTest < ActiveSupport::TestCase
       end)
       FakeProjection.const_set(:PROJECTION_NAME, "fake/projection")
       FakeProjection.const_set(:CODE_VERSION, 3)
+    end
+
+    teardown do
+      # stub_const writes to Object — clean up so the constant doesn't leak
+      # into other tests and create order-dependent pollution.
+      Object.send(:remove_const, :FakeProjection) if Object.const_defined?(:FakeProjection)
     end
 
     should "create a new row when none exists" do

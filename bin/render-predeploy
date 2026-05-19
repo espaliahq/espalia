@@ -26,6 +26,7 @@ if [ -n "$REBUILD_ON_DEPLOY" ]; then
   IFS=',' read -ra names <<< "$REBUILD_ON_DEPLOY"
   for name in "${names[@]}"; do
     name="${name// /}"  # strip whitespace
+    [ -z "$name" ] && continue  # skip empty entries from stray commas
     echo "Predeploy rebuild: $name"
     bundle exec bin/rails "events:projections:rebuild[$name]"
   done

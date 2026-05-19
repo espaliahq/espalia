@@ -149,8 +149,10 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         author_id: @author.id)
 
       append_and_project(PersonDevelopment::Events::EvidenceRelinked,
-        evidence_id: ev2_id, new_capability_stable_id: new_cap_sid, new_level_ordinal: 4,
-        author_id: @author.id)
+        evidence_id: ev2_id,
+        previous_capability_stable_id: cap_sid, previous_level_ordinal: 3,
+        new_capability_stable_id: new_cap_sid, new_level_ordinal: 4,
+        relinked_by_id: @author.id, rationale: nil)
 
       append_and_project(PersonDevelopment::Events::EvidenceWithdrawn,
         evidence_id: ev1_id, withdrawn_by_id: @author.id, reason: "Test")
