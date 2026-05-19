@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../support/projection_replay"
 
 class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::TestCase
+  include ProjectionReplayHelpers
+
   setup do
     @tenant = create(:tenant)
     @projection = PersonDevelopment::Projections::CurrentAssessment.new
@@ -10,12 +13,15 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     @framework_id = SecureRandom.uuid_v7
     @cycle_id = SecureRandom.uuid_v7
 
-    # Create a cycle + participant so touch_participant_started/mark_participant_aligned
+    # Create a cycle + enrollment row (CurrentState's responsibility, faked
+    # here via factory) and an empty progress row so the journey handlers
     # have something to update.
     ActsAsTenant.with_tenant(@tenant) do
       @cycle = create(:assessment_cycle,
         tenant: @tenant, cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1)
-      @participant = create(:assessment_cycle_participant,
+      @enrollment = create(:assessment_cycle_enrollment,
+        tenant: @tenant, cycle: @cycle, person_id: @person_id)
+      @progress = create(:assessment_cycle_progress,
         tenant: @tenant, cycle: @cycle, person_id: @person_id)
     end
   end
@@ -165,7 +171,7 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
-    should "set participant started_at + status on first rating" do
+    should "set progress started_at + status on first rating" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::SelfRated,
@@ -173,9 +179,9 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         cycle_id: @cycle_id, comment: nil)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_not_nil participant.started_at
-        assert_equal "started", participant.status
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_not_nil progress.started_at
+        assert_equal "started", progress.status
       end
     end
 
@@ -259,14 +265,14 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
-    should "update participant started_at on first rating of any kind" do
+    should "update progress started_at on first rating of any kind" do
       emit(PersonDevelopment::Events::ManagerRated,
         capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 3,
         frequency: "some", cycle_id: @cycle_id, comment: nil)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_equal "started", participant.status
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "started", progress.status
       end
     end
   end
@@ -311,16 +317,16 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
-    should "NOT touch participant.started_at on a seeded SelfRated" do
+    should "NOT touch progress.started_at on a seeded SelfRated" do
       cap_sid = SecureRandom.uuid_v7
       emit(PersonDevelopment::Events::SelfRated,
         capability_stable_id: cap_sid, level_ordinal: 2, frequency: "consistent",
         cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_equal "enrolled", participant.status
-        assert_nil participant.started_at
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "in_progress", progress.status
+        assert_nil progress.started_at
       end
     end
 
@@ -347,39 +353,39 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
   end
 
   context "AlignmentStarted" do
-    should "flip participant status to aligning and stamp the started_by_id" do
+    should "flip progress status to aligning and stamp the started_by_id" do
       manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
 
       emit(PersonDevelopment::Events::AlignmentStarted,
         cycle_id: @cycle_id, started_by_id: manager.id)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_equal "aligning", participant.status
-        assert_not_nil participant.alignment_started_at
-        assert_equal manager.id, participant.alignment_started_by_id
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligning", progress.status
+        assert_not_nil progress.alignment_started_at
+        assert_equal manager.id, progress.alignment_started_by_id
       end
     end
   end
 
   context "FullAlignmentCompleted" do
-    should "flip participant status to aligned and stamp completed_by_id" do
+    should "flip progress status to aligned and stamp completed_by_id" do
       manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
 
       emit(PersonDevelopment::Events::FullAlignmentCompleted,
         cycle_id: @cycle_id, completed_by_id: manager.id)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_equal "aligned", participant.status
-        assert_not_nil participant.aligned_at
-        assert_equal manager.id, participant.aligned_by_id
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligned", progress.status
+        assert_not_nil progress.aligned_at
+        assert_equal manager.id, progress.aligned_by_id
       end
     end
   end
 
   context "AssessmentAligned" do
-    should "set aligned_frequency on the row without changing participant status" do
+    should "set aligned_frequency on the row without changing progress status" do
       cap_sid = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::AssessmentAligned,
@@ -394,12 +400,60 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         assert_not_nil rating
         assert_equal "consistent", rating.aligned_frequency
 
-        # Status changes are now driven by AlignmentStarted (PR 1) and
-        # FullAlignmentCompleted (PR 3) — AssessmentAligned no longer
-        # touches participant lifecycle status.
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_not_equal "aligned", participant.status
+        # Status changes are driven by AlignmentStarted and
+        # FullAlignmentCompleted — AssessmentAligned no longer touches
+        # progress lifecycle status.
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_not_equal "aligned", progress.status
       end
+    end
+  end
+
+  context "rebuild contract" do
+    should "reset! + replay produces identical read-model state" do
+      role_id  = SecureRandom.uuid_v7
+      level_id = SecureRandom.uuid_v7
+      cap_sid  = SecureRandom.uuid_v7
+
+      append_and_project(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: role_id, level_id: level_id)
+
+      append_and_project(PersonDevelopment::Events::JoinedAssessmentCycle,
+        person_id: @person_id, framework_id: @framework_id,
+        cycle_id: @cycle_id, framework_version: 1)
+
+      append_and_project(PersonDevelopment::Events::SelfRated,
+        person_id: @person_id, framework_id: @framework_id,
+        cycle_id: @cycle_id, capability_stable_id: cap_sid,
+        level_ordinal: 2, frequency: "consistent", source: "human")
+
+      append_and_project(PersonDevelopment::Events::ManagerRated,
+        person_id: @person_id, framework_id: @framework_id,
+        cycle_id: @cycle_id, capability_stable_id: cap_sid,
+        level_ordinal: 2, frequency: "occasional", source: "human")
+
+      before_snapshot = snapshot_read_models(PersonDevelopment::Projections::CurrentAssessment, @tenant)
+      assert_equal 1, before_snapshot[:assignments].size
+      assert_equal 1, before_snapshot[:assessment_level_ratings].size
+
+      PersonDevelopment::Projections::CurrentAssessment.reset!(tenant: @tenant)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal 0, PersonFrameworkAssignment.count
+        assert_equal 0, AssessmentLevelRating.count
+        # Progress is owned by CurrentAssessment — truncated by its reset!
+        assert_equal 0, AssessmentCycleProgress.count
+        # Enrollment is owned by CurrentState — untouched by this reset!
+        assert_equal 1, AssessmentCycleEnrollment.count
+      end
+
+      Projections::Replayer.replay(
+        projection_class: PersonDevelopment::Projections::CurrentAssessment,
+        tenant: @tenant
+      )
+
+      after_snapshot = snapshot_read_models(PersonDevelopment::Projections::CurrentAssessment, @tenant)
+      assert_equal before_snapshot, after_snapshot
     end
   end
 
@@ -418,6 +472,24 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         framework_id: @framework_id
       }
     )
+    @projection.call(event)
+  end
+
+  # Appends an event to the real store AND calls the projection directly.
+  # Uses `append` rather than `publish` so subscribers (especially sync
+  # handlers that dispatch domain commands) don't fire. See the round-trip
+  # test pattern in `docs/guidelines/event-sourcing.md`.
+  def append_and_project(event_class, **data)
+    event = event_class.new(
+      data: data,
+      metadata: {
+        tenant_id: @tenant.id,
+        person_id: @person_id,
+        framework_id: @framework_id
+      }
+    )
+    stream = EventStreamNaming.person_development_stream(@person_id, @framework_id, tenant: @tenant)
+    Rails.configuration.event_store.append(event, stream_name: stream)
     @projection.call(event)
   end
 end

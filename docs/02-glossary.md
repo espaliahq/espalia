@@ -78,7 +78,7 @@ Three perspectives on a person's level for a capability. Aligned is the "officia
 Conversation to agree on capability ratings. Three modes: `async` (comment threads), `live` (real-time), `record_only` (outcome of offline conversation).
 
 ### Alignment Lifecycle
-Per-cycle state machine on `AssessmentCycleParticipant`: `enrolled → started → aligning → aligned → withdrawn`. The `aligning` state begins when the manager fires `AlignmentStarted` (manager-only); from that point self/manager rating commands are rejected by both the policy and the aggregate. `aligned` is reached only via `FullAlignmentCompleted` (also manager-only) and freezes all ratings, including the agreed values themselves.
+Per-cycle state machine surfaced via the `AssessmentCycleParticipation` wrapper (composing `AssessmentCycleEnrollment` for membership and `AssessmentCycleProgress` for journey): `enrolled → started → aligning → aligned → withdrawn`. The `aligning` state begins when the manager fires `AlignmentStarted` (manager-only); from that point self/manager rating commands are rejected by both the policy and the aggregate. `aligned` is reached only via `FullAlignmentCompleted` (also manager-only) and freezes all ratings, including the agreed values themselves.
 
 ### AlignmentStarted
 Manager-only event opening alignment for a cycle. Flips participant status to `aligning` and freezes individual self/manager edits. Required precondition for any `AssessmentAligned` event.

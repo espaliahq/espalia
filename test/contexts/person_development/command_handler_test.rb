@@ -171,15 +171,18 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
 
     should "reset the participant's alignment lifecycle columns on re-enrol" do
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(
+        participation = AssessmentCycleParticipation.find_by(
           cycle_id: @cycle_id, person_id: @person_id
         )
-        assert_equal "enrolled", participant.status
-        assert_nil participant.started_at
-        assert_nil participant.alignment_started_at
-        assert_nil participant.alignment_started_by_id
-        assert_nil participant.aligned_at
-        assert_nil participant.aligned_by_id
+        # Enrollment side: back to "enrolled"
+        assert_equal "enrolled", participation.enrollment.status
+        # Progress side: re-init to in_progress, all journey columns nil
+        assert_equal "in_progress", participation.progress.status
+        assert_nil participation.progress.started_at
+        assert_nil participation.progress.alignment_started_at
+        assert_nil participation.progress.alignment_started_by_id
+        assert_nil participation.progress.aligned_at
+        assert_nil participation.progress.aligned_by_id
       end
     end
   end
@@ -329,7 +332,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
         @cap = create(:framework_capability, category_id: cat.category_id,
           name: "Critical Thinking", stable_id: @cap_stable_id)
 
-        # Real Person records — required by FK on assessment_cycle_participants
+        # Real Person records — required by FK on assessment_cycle_progress
         # for alignment_started_by_id / aligned_by_id.
         @assessee = create(:person, tenant: @tenant, name: "Assessee")
         @manager = create(:person, tenant: @tenant, name: "Mgr")
@@ -377,11 +380,11 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
 
     should "leave participant status at :enrolled because seeded events do not start the cycle" do
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(
+        participation = AssessmentCycleParticipation.find_by(
           cycle_id: @new_cycle_id, person_id: @person_id
         )
-        assert_equal "enrolled", participant.status
-        assert_nil participant.started_at
+        assert_equal "enrolled", participation.status
+        assert_nil participation.started_at
       end
     end
 
@@ -411,7 +414,12 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         cycle = create(:assessment_cycle, tenant: @tenant, cycle_id: partial_cycle_id,
           framework_id: other_framework_id, framework_version: 1)
-        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+        # Aligning but never fully aligned — seed must refuse. Enrollment row
+        # marks them as still in the cycle; progress row carries the
+        # alignment_started_at without aligned_at.
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
+          person_id: @person_id, status: "enrolled")
+        create(:assessment_cycle_progress, tenant: @tenant, cycle: cycle,
           person_id: @person_id, status: "aligning",
           alignment_started_at: Time.current, alignment_started_by_id: @manager.id)
         AssessmentLevelRating.create!(tenant: @tenant, cycle_id: partial_cycle_id,

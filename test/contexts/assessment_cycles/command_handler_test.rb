@@ -50,8 +50,8 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal "open", cycle.status
       assert_equal "Q1 2026", cycle.name
       assert_equal 1, cycle.framework_version
-      assert_equal 1, cycle.participants.count
-      assert_equal "enrolled", cycle.participants.first.status
+      assert_equal 1, cycle.enrollments.count
+      assert_equal "enrolled", cycle.enrollments.first.status
     end
 
     should "propagate close event as leave_cycle on each person stream" do
@@ -73,7 +73,7 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
 
       cycle = AssessmentCycle.find_by(cycle_id: @cycle_id)
       assert_equal "closed", cycle.status
-      participant = cycle.participants.find_by(person_id: @person_id)
+      participant = cycle.enrollments.find_by(person_id: @person_id)
       assert_equal "withdrawn", participant.status
       assert_equal "cycle_closed", participant.withdrawal_reason
     end
@@ -86,7 +86,7 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
       @handler.unenroll(@cycle_id, @person_id, "manual")
 
       cycle = AssessmentCycle.find_by(cycle_id: @cycle_id)
-      participant = cycle.participants.find_by(person_id: @person_id)
+      participant = cycle.enrollments.find_by(person_id: @person_id)
       assert_equal "withdrawn", participant.status
       assert_equal "manual", participant.withdrawal_reason
 

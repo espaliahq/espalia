@@ -26,9 +26,12 @@ class AssessmentCycle < ApplicationRecord
              primary_key: :framework_id, foreign_key: :framework_id,
              inverse_of: false, optional: true
 
-  has_many :participants, class_name: "AssessmentCycleParticipant",
+  has_many :enrollments, class_name: "AssessmentCycleEnrollment",
            primary_key: :cycle_id, foreign_key: :cycle_id,
            inverse_of: :cycle, dependent: :destroy
+  has_many :progress_rows, class_name: "AssessmentCycleProgress",
+           primary_key: :cycle_id, foreign_key: :cycle_id,
+           inverse_of: false, dependent: :destroy
 
   validates :cycle_id, presence: true
   validates :framework_id, presence: true
@@ -47,7 +50,7 @@ class AssessmentCycle < ApplicationRecord
   # view rather than calling PersonFrameworkAssignment#current_open_cycle per row
   # (N+1 avoidance).
   #
-  # Pivots through AssessmentCycleParticipant so we can reuse its `.active`
+  # Pivots through AssessmentCycleEnrollment so we can reuse its `.active`
   # scope and eager-load the cycle in a single query.
   #
   # @param assignment_pairs [Array<Array(String, String)>] [framework_id, person_id] pairs
@@ -58,15 +61,24 @@ class AssessmentCycle < ApplicationRecord
     framework_ids = assignment_pairs.map(&:first).uniq
     person_ids = assignment_pairs.map(&:last).uniq
 
-    AssessmentCycleParticipant
+    AssessmentCycleEnrollment
       .active
       .where(person_id: person_ids)
       .eager_load(:cycle)
       .where(assessment_cycles: { framework_id: framework_ids, status: "open" })
-      .each_with_object({}) do |participant, map|
-        cycle = participant.cycle
-        map[[ cycle.framework_id, participant.person_id ]] = cycle
+      .each_with_object({}) do |enrollment, map|
+        cycle = enrollment.cycle
+        map[[ cycle.framework_id, enrollment.person_id ]] = cycle
       end
+  end
+
+  # Wrapper instances composing enrollment + (optional) progress per
+  # person in this cycle. Use this for views that render the unified
+  # participant lifecycle. Returns an Array (not a relation).
+  #
+  # @return [Array<AssessmentCycleParticipation>]
+  def participations
+    AssessmentCycleParticipation.for_enrollments(enrollments)
   end
 
   # Whether this cycle is currently open.
@@ -94,7 +106,7 @@ class AssessmentCycle < ApplicationRecord
     assigned_ids = PersonFrameworkAssignment
       .where(framework_id: framework_id)
       .pluck(:person_id)
-    active_participant_ids = participants.active.pluck(:person_id)
+    active_participant_ids = enrollments.active.pluck(:person_id)
 
     Person.where(id: assigned_ids - active_participant_ids).order(:name)
   end

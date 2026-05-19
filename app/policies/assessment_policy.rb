@@ -47,7 +47,7 @@ class AssessmentPolicy < ApplicationPolicy
   def view_alignment?
     return false unless owns_assessment? || manages_assessee?
 
-    %w[aligning aligned].include?(current_open_cycle_participant&.status)
+    %w[aligning aligned].include?(current_open_cycle_participation&.status)
   end
 
   # Only the assessee's current direct manager can formally start
@@ -58,7 +58,7 @@ class AssessmentPolicy < ApplicationPolicy
   def start_alignment?
     return false unless manages_assessee?
 
-    current_open_cycle_participant&.status == "started"
+    current_open_cycle_participation&.status == "started"
   end
 
   # Only the assessee's current direct manager can mark alignment
@@ -68,7 +68,7 @@ class AssessmentPolicy < ApplicationPolicy
   def complete_alignment?
     return false unless manages_assessee?
 
-    current_open_cycle_participant&.status == "aligning"
+    current_open_cycle_participation&.status == "aligning"
   end
 
   private
@@ -77,22 +77,22 @@ class AssessmentPolicy < ApplicationPolicy
   #
   # @return [Boolean]
   def individual_ratings_editable?
-    participant = current_open_cycle_participant
+    participant = current_open_cycle_participation
     return true if participant.nil? # no participant row yet — pre-cycle edits permitted
 
     participant.individual_ratings_editable?
   end
 
   def alignment_in_progress?
-    current_open_cycle_participant&.alignment_in_progress? || false
+    current_open_cycle_participation&.alignment_in_progress? || false
   end
 
   def current_open_cycle_present?
-    current_open_cycle_participant.present?
+    current_open_cycle_participation.present?
   end
 
-  def current_open_cycle_participant
-    record.current_open_cycle_participant
+  def current_open_cycle_participation
+    record.current_open_cycle_participation
   end
 
   # The current user's person matches the assignment's person.

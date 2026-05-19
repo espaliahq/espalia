@@ -94,7 +94,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       # The old N+1 pattern issued one `SELECT ... FROM "assessment_cycles" ...`
       # per rendered assignment card (via PersonFrameworkAssignment#current_open_cycle).
-      # The batch preload uses `FROM "assessment_cycle_participants" LEFT OUTER JOIN
+      # The batch preload uses `FROM "assessment_cycle_enrollments" LEFT OUTER JOIN
       # "assessment_cycles"`, so queries with `FROM "assessment_cycles"` as the primary
       # table should be zero. Policy scalar queries join THROUGH assessment_cycles but
       # SELECT FROM person_framework_assignments, so they don't match either.

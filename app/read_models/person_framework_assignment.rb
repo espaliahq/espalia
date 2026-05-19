@@ -6,11 +6,13 @@
 # Materialised from PersonDevelopment aggregate events by
 # {PersonDevelopment::Projections::CurrentAssessment}.
 #
-# Cycle participation is NOT stored here — it lives on
-# {AssessmentCycleParticipant} rows, queryable via {#current_open_cycle}.
+# Cycle participation is NOT stored here — enrollment lives on
+# {AssessmentCycleEnrollment}, journey progress on {AssessmentCycleProgress}.
+# Both are joined for read sites via {AssessmentCycleParticipation};
+# {#current_open_cycle_participation} returns the wrapper.
 #
 # @see PersonDevelopment::Projections::CurrentAssessment
-# @see AssessmentCycleParticipant
+# @see AssessmentCycleParticipation
 #
 class PersonFrameworkAssignment < ApplicationRecord
   # Pundit policy lookup: use AssessmentPolicy
@@ -40,29 +42,29 @@ class PersonFrameworkAssignment < ApplicationRecord
 
   # The currently open cycle for this (framework, person), if any.
   #
-  # Resolved by joining through the person's active participant row to
+  # Resolved by joining through the person's active enrollment row to
   # an open cycle for the same framework. Returns the {AssessmentCycle}
   # or nil.
   #
   # @return [AssessmentCycle, nil]
   def current_open_cycle
     AssessmentCycle
-      .joins(:participants)
+      .joins(:enrollments)
       .where(framework_id: framework_id, status: "open",
-             assessment_cycle_participants: { person_id: person_id })
-      .where.not(assessment_cycle_participants: { status: "withdrawn" })
+             assessment_cycle_enrollments: { person_id: person_id })
+      .where.not(assessment_cycle_enrollments: { status: "withdrawn" })
       .first
   end
 
-  # The participant row for this person on the current open cycle.
-  # Carries lifecycle status (enrolled/started/aligning/aligned), used by
+  # The participation wrapper (enrollment + optional progress) for this
+  # person on the current open cycle. Carries lifecycle status, used by
   # {AssessmentPolicy} to gate rating commands.
   #
-  # @return [AssessmentCycleParticipant, nil]
-  def current_open_cycle_participant
+  # @return [AssessmentCycleParticipation, nil]
+  def current_open_cycle_participation
     cycle = current_open_cycle
     return nil unless cycle
 
-    AssessmentCycleParticipant.find_by(cycle_id: cycle.cycle_id, person_id: person_id)
+    AssessmentCycleParticipation.find_by(cycle_id: cycle.cycle_id, person_id: person_id)
   end
 end

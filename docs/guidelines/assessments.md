@@ -334,7 +334,7 @@ When `matrix_controller#applyColumnFocus` sets `style.width` on a `<col>`, brows
 
 ## Lifecycle
 
-Each enrolled `AssessmentCycleParticipant` walks a lifecycle that the views render explicitly:
+Each enrolled `AssessmentCycleParticipation` (composing an `AssessmentCycleEnrollment` row with an optional `AssessmentCycleProgress` row) walks a lifecycle that the views render explicitly:
 
 ```text
 enrolled → started → aligning → aligned → withdrawn
@@ -348,7 +348,7 @@ enrolled → started → aligning → aligned → withdrawn
 | `aligned` | Manager fires `FullAlignmentCompleted` (manager-only) | Nothing — all ratings, including aligned values, are frozen |
 | `withdrawn` | Person unenrolled or cycle closed | Nothing |
 
-**Threading the status to the views.** `MatrixDataBuilder` reads `participant_status` (controller derives via `assignment.current_open_cycle_participant&.status`) and produces two boolean flags on the matrix data hash:
+**Threading the status to the views.** `MatrixDataBuilder` reads `participant_status` (controller derives via `assignment.current_open_cycle_participation&.status`) and produces two boolean flags on the matrix data hash:
 - `individual_ratings_frozen` — true for `aligning` / `aligned`. Threaded into `AssessmentRow` and `AssessmentCell` as `frozen:`. When the cell context is `:self` or `:manager`, the primary `FrequencySelector` is replaced with a read-only `FrequencyBar`.
 - `alignment_locked` — true only for `aligned`. Threaded in as `alignment_locked:`. When the cell context is `:alignment`, the alignment selector also becomes a read-only bar.
 

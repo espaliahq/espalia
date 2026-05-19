@@ -10,32 +10,44 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_06_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  create_table "assessment_cycle_participants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "assessment_cycle_enrollments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "cycle_id", null: false
+    t.datetime "enrolled_at", null: false
+    t.uuid "person_id", null: false
+    t.string "status", default: "enrolled", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.string "withdrawal_reason"
+    t.datetime "withdrawn_at"
+    t.index ["cycle_id", "person_id"], name: "idx_assessment_cycle_enrollments_unique", unique: true
+    t.index ["tenant_id", "person_id", "status"], name: "idx_assessment_cycle_enrollments_by_person_status"
+    t.index ["tenant_id"], name: "index_assessment_cycle_enrollments_on_tenant_id"
+  end
+
+  create_table "assessment_cycle_progress", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "aligned_at"
     t.uuid "aligned_by_id"
     t.datetime "alignment_started_at"
     t.uuid "alignment_started_by_id"
     t.datetime "created_at", null: false
     t.uuid "cycle_id", null: false
-    t.datetime "enrolled_at", null: false
     t.datetime "manager_completed_at"
     t.uuid "person_id", null: false
     t.datetime "self_completed_at"
     t.datetime "started_at"
-    t.string "status", default: "enrolled", null: false
+    t.string "status", default: "in_progress", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
-    t.string "withdrawal_reason"
-    t.datetime "withdrawn_at"
-    t.index ["aligned_by_id"], name: "idx_assessment_cycle_participants_aligned_by_id", where: "(aligned_by_id IS NOT NULL)"
-    t.index ["alignment_started_by_id"], name: "idx_assessment_cycle_participants_alignment_started_by_id", where: "(alignment_started_by_id IS NOT NULL)"
-    t.index ["cycle_id", "person_id"], name: "idx_assessment_cycle_participants_unique", unique: true
-    t.index ["tenant_id", "person_id", "status"], name: "idx_assessment_cycle_participants_by_person_status"
-    t.index ["tenant_id"], name: "index_assessment_cycle_participants_on_tenant_id"
+    t.index ["aligned_by_id"], name: "idx_assessment_cycle_progress_aligned_by_id", where: "(aligned_by_id IS NOT NULL)"
+    t.index ["alignment_started_by_id"], name: "idx_assessment_cycle_progress_alignment_started_by_id", where: "(alignment_started_by_id IS NOT NULL)"
+    t.index ["cycle_id", "person_id"], name: "idx_assessment_cycle_progress_unique", unique: true
+    t.index ["tenant_id", "person_id", "status"], name: "idx_assessment_cycle_progress_by_person_status"
+    t.index ["tenant_id"], name: "index_assessment_cycle_progress_on_tenant_id"
   end
 
   create_table "assessment_cycles", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -376,6 +388,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_100000) do
     t.index ["tenant_id"], name: "index_person_framework_assignments_on_tenant_id"
   end
 
+  create_table "projection_versions", primary_key: "name", id: :string, force: :cascade do |t|
+    t.datetime "applied_at", null: false
+    t.integer "version", null: false
+  end
+
   create_table "tenant_users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "person_id"
@@ -416,9 +433,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_100000) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
-  add_foreign_key "assessment_cycle_participants", "people", column: "aligned_by_id", on_delete: :nullify
-  add_foreign_key "assessment_cycle_participants", "people", column: "alignment_started_by_id", on_delete: :nullify
-  add_foreign_key "assessment_cycle_participants", "tenants"
+  add_foreign_key "assessment_cycle_enrollments", "tenants"
+  add_foreign_key "assessment_cycle_progress", "people", column: "aligned_by_id", on_delete: :nullify
+  add_foreign_key "assessment_cycle_progress", "people", column: "alignment_started_by_id", on_delete: :nullify
+  add_foreign_key "assessment_cycle_progress", "tenants"
   add_foreign_key "assessment_cycles", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"

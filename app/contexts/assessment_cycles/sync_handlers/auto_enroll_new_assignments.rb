@@ -51,13 +51,13 @@ class AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments
     cycle = AssessmentCycle.open_cycles.for_framework(framework_id).first
     return unless cycle
 
-    return if AssessmentCycleParticipant
+    return if AssessmentCycleEnrollment
               .where(cycle_id: cycle.cycle_id, person_id: person_id)
               .active.exists?
 
     # Wrap the dispatch in a transaction so the downstream
     # PersonEnrollmentSync -> join_cycle chain either commits fully or
-    # rolls back the AssessmentCycleParticipant projection write. RES
+    # rolls back the AssessmentCycleEnrollment projection write. RES
     # subscribers run synchronously but NOT in an implicit DB transaction.
     ActiveRecord::Base.transaction do
       AssessmentCycles::CommandHandler.new.enroll(

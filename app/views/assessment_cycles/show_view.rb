@@ -141,7 +141,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
     div(class: "mt-6") do
       render Components::Kit::Card.new(title: "Participants") do |card|
         card.body do
-          if @cycle.participants.any?
+          if @cycle.participations.any?
             participants_table
           else
             p(class: "text-sm text-gray-500 dark:text-gray-400") do
@@ -167,7 +167,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
           end
         end
         tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
-          @cycle.participants.each { |participant| participant_row(participant) }
+          @cycle.participations.each { |participant| participant_row(participant) }
         end
       end
     end

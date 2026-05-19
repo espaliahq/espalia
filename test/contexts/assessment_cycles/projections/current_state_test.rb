@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../support/projection_replay"
 
 class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
+  include ProjectionReplayHelpers
+
   setup do
     @tenant = create(:tenant)
     @projection = AssessmentCycles::Projections::CurrentState.new
@@ -45,10 +48,10 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
         framework_version: 1, enrolled_by: nil)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: person_id)
-        assert_not_nil participant
-        assert_equal "enrolled", participant.status
-        assert_not_nil participant.enrolled_at
+        enrollment = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: person_id)
+        assert_not_nil enrollment
+        assert_equal "enrolled", enrollment.status
+        assert_not_nil enrollment.enrolled_at
       end
     end
   end
@@ -64,16 +67,16 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
         framework_version: 1, enrolled_by: nil)
     end
 
-    should "mark the participant as withdrawn" do
+    should "mark the enrollment as withdrawn" do
       emit(AssessmentCycles::Events::PersonUnenrolled,
         cycle_id: @cycle_id, person_id: @person_id, framework_id: @framework_id,
         reason: "withdrew", unenrolled_by: nil)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @person_id)
-        assert_equal "withdrawn", participant.status
-        assert_equal "withdrew", participant.withdrawal_reason
-        assert_not_nil participant.withdrawn_at
+        enrollment = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "withdrawn", enrollment.status
+        assert_equal "withdrew", enrollment.withdrawal_reason
+        assert_not_nil enrollment.withdrawn_at
       end
     end
   end
@@ -92,7 +95,7 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
         reason: "accidental", unenrolled_by: nil)
     end
 
-    should "reset the existing participant row to enrolled state on re-enroll" do
+    should "reset the existing enrollment row to enrolled state on re-enroll" do
       assert_nothing_raised do
         emit(AssessmentCycles::Events::PersonEnrolled,
           cycle_id: @cycle_id, person_id: @person_id, framework_id: @framework_id,
@@ -100,16 +103,14 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
       end
 
       ActsAsTenant.with_tenant(@tenant) do
-        rows = AssessmentCycleParticipant.where(cycle_id: @cycle_id, person_id: @person_id)
+        rows = AssessmentCycleEnrollment.where(cycle_id: @cycle_id, person_id: @person_id)
         assert_equal 1, rows.count, "expected a single current-state row, not a duplicate"
 
-        participant = rows.first
-        assert_equal "enrolled", participant.status
-        assert_nil participant.withdrawn_at
-        assert_nil participant.withdrawal_reason
-        assert_nil participant.started_at
-        assert_nil participant.aligned_at
-        assert_not_nil participant.enrolled_at
+        enrollment = rows.first
+        assert_equal "enrolled", enrollment.status
+        assert_nil enrollment.withdrawn_at
+        assert_nil enrollment.withdrawal_reason
+        assert_not_nil enrollment.enrolled_at
       end
     end
   end
@@ -139,11 +140,47 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
         assert_not_nil cycle.closed_at
 
         [ @p1, @p2 ].each do |pid|
-          participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: pid)
-          assert_equal "withdrawn", participant.status
-          assert_equal "cycle_closed", participant.withdrawal_reason
+          enrollment = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: pid)
+          assert_equal "withdrawn", enrollment.status
+          assert_equal "cycle_closed", enrollment.withdrawal_reason
         end
       end
+    end
+  end
+
+  context "rebuild contract" do
+    should "reset! + replay produces identical read-model state" do
+      p1, p2 = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+
+      append_and_project(AssessmentCycles::Events::CycleDefined,
+        cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1,
+        name: "Q1", cycle_type: "regular", defined_by: nil)
+      append_and_project(AssessmentCycles::Events::PersonEnrolled,
+        cycle_id: @cycle_id, person_id: p1, framework_id: @framework_id,
+        framework_version: 1, enrolled_by: nil)
+      append_and_project(AssessmentCycles::Events::PersonEnrolled,
+        cycle_id: @cycle_id, person_id: p2, framework_id: @framework_id,
+        framework_version: 1, enrolled_by: nil)
+      append_and_project(AssessmentCycles::Events::PersonUnenrolled,
+        cycle_id: @cycle_id, person_id: p1, reason: "left team")
+
+      before_snapshot = snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
+      assert_equal 1, before_snapshot[:cycles].size
+      assert_equal 2, before_snapshot[:enrollments].size
+
+      AssessmentCycles::Projections::CurrentState.reset!(tenant: @tenant)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal 0, AssessmentCycle.count
+        assert_equal 0, AssessmentCycleEnrollment.count
+      end
+
+      Projections::Replayer.replay(
+        projection_class: AssessmentCycles::Projections::CurrentState,
+        tenant: @tenant
+      )
+
+      after_snapshot = snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
+      assert_equal before_snapshot, after_snapshot
     end
   end
 
@@ -154,6 +191,19 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
       data: data,
       metadata: { tenant_id: @tenant.id }
     )
+    @projection.call(event)
+  end
+
+  # Appends an event to the real store AND calls the projection directly.
+  # Uses `append` rather than `publish` so subscribers (especially sync
+  # handlers that dispatch domain commands) don't fire and create
+  # cascading state we didn't ask for. The projection-under-test still
+  # sees the event live via the direct call. Replay later reads the
+  # appended events back via `event_store.read.of_type(...)`.
+  def append_and_project(event_class, **data)
+    event = event_class.new(data: data, metadata: { tenant_id: @tenant.id })
+    stream = EventStreamNaming.assessment_cycle_stream(@cycle_id, tenant: @tenant)
+    Rails.configuration.event_store.append(event, stream_name: stream)
     @projection.call(event)
   end
 end

@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../support/projection_replay"
 
 class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
+  include ProjectionReplayHelpers
+
   setup do
     @tenant = create(:tenant)
     @projection = Frameworks::Projections::PublishedState.new
@@ -769,6 +772,65 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "rebuild contract" do
+    should "reset! + replay produces identical read-model state" do
+      rfid = SecureRandom.uuid_v7
+      rid  = SecureRandom.uuid_v7
+      lid  = SecureRandom.uuid_v7
+      cat_id = SecureRandom.uuid_v7
+      cap_id = SecureRandom.uuid_v7
+      bid  = SecureRandom.uuid_v7
+      eid  = SecureRandom.uuid_v7
+      iid  = SecureRandom.uuid_v7
+
+      append_and_project(Frameworks::Events::FrameworkCreated,
+        framework_id: @framework_id, name: "me&u 2025")
+      append_and_project(Frameworks::Events::RoleFamilyAdded,
+        framework_id: @framework_id, role_family_id: rfid, name: "Engineering")
+      append_and_project(Frameworks::Events::RoleAdded,
+        framework_id: @framework_id, role_id: rid, role_family_id: rfid,
+        name: "Software Engineer", code: "E", track: "ic")
+      append_and_project(Frameworks::Events::LevelAdded,
+        framework_id: @framework_id, level_id: lid, role_id: rid,
+        ordinal: 1, title: "Engineer I", code: "E1", is_entry: true)
+      append_and_project(Frameworks::Events::CapabilityCategoryAdded,
+        framework_id: @framework_id, category_id: cat_id, name: "Thinking", ordinal: 1)
+      append_and_project(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap_id,
+        stable_id: SecureRandom.uuid_v7, category_id: cat_id, name: "Strategic Thinking")
+      append_and_project(Frameworks::Events::CapabilityRoleBindingCreated,
+        framework_id: @framework_id, binding_id: bid, capability_id: cap_id,
+        role_id: rid, weight: 1.0, requirement_type: "must_have")
+      append_and_project(Frameworks::Events::BehaviouralExpectationSet,
+        framework_id: @framework_id, expectation_id: eid,
+        stable_id: SecureRandom.uuid_v7, capability_id: cap_id,
+        level_ordinal: 1, description: "Asks questions")
+      append_and_project(Frameworks::Events::RoleIllustrationAdded,
+        framework_id: @framework_id, illustration_id: iid,
+        stable_id: SecureRandom.uuid_v7, expectation_id: eid, role_id: rid,
+        ordinal: 1, description: "Seeks guidance from tech lead")
+
+      before_snapshot = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+      assert_equal 1, before_snapshot[:frameworks].size
+      assert_equal 1, before_snapshot[:illustrations].size
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      within_tenant do
+        assert_equal 0, FrameworkState::Framework.count
+        assert_equal 0, FrameworkState::RoleIllustration.count
+        assert_equal 0, FrameworkState::Collaborator.count
+      end
+
+      Projections::Replayer.replay(
+        projection_class: Frameworks::Projections::PublishedState,
+        tenant: @tenant
+      )
+
+      after_snapshot = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+      assert_equal before_snapshot, after_snapshot
+    end
+  end
+
   private
 
   # Emits an event through the projection.
@@ -795,5 +857,16 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       field: field,
       suggested_value: suggested_value,
       author_id: @author_id)
+  end
+
+  # Appends an event to the real store AND calls the projection directly.
+  # Uses `append` rather than `publish` so subscribers (especially sync
+  # handlers that dispatch domain commands) don't fire. See the round-trip
+  # test pattern in `docs/guidelines/event-sourcing.md`.
+  def append_and_project(event_class, **data)
+    event = event_class.new(data: data, metadata: { tenant_id: @tenant.id })
+    stream = EventStreamNaming.framework_stream(@framework_id, tenant: @tenant)
+    Rails.configuration.event_store.append(event, stream_name: stream)
+    @projection.call(event)
   end
 end

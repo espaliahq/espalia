@@ -10,7 +10,7 @@
 # - {EvidenceItem} rows for evidence-recorded and evidence-withdrawn
 #   entries (relinks are folded into the recorded entry — the activity
 #   feed shows where the evidence currently lives).
-# - {AssessmentCycleParticipant} rows for alignment milestones
+# - {AssessmentCycleProgress} rows for alignment milestones
 #   (`alignment_started_at`, `aligned_at`).
 #
 # Visibility:
@@ -198,31 +198,31 @@ class Assessments::ActivityFeedQuery
   end
 
   def alignment_entries
-    AssessmentCycleParticipant
+    AssessmentCycleProgress
       .joins("INNER JOIN assessment_cycles ac ON ac.cycle_id = " \
-             "assessment_cycle_participants.cycle_id")
+             "assessment_cycle_progress.cycle_id")
       .where(person_id: @assignment.person_id)
       .where("ac.framework_id = ?", @assignment.framework_id)
-      .flat_map do |participant|
+      .flat_map do |progress|
         out = []
-        if participant.alignment_started_at
+        if progress.alignment_started_at
           out << Entry.new(
-            id: "alignment_started:#{participant.id}",
+            id: "alignment_started:#{progress.id}",
             kind: "alignment_started",
-            occurred_at: participant.alignment_started_at,
-            payload: { cycle_id: participant.cycle_id,
-                       started_by_id: participant.alignment_started_by_id }.with_indifferent_access,
-            cycle_id: participant.cycle_id
+            occurred_at: progress.alignment_started_at,
+            payload: { cycle_id: progress.cycle_id,
+                       started_by_id: progress.alignment_started_by_id }.with_indifferent_access,
+            cycle_id: progress.cycle_id
           )
         end
-        if participant.aligned_at
+        if progress.aligned_at
           out << Entry.new(
-            id: "alignment_completed:#{participant.id}",
+            id: "alignment_completed:#{progress.id}",
             kind: "alignment_completed",
-            occurred_at: participant.aligned_at,
-            payload: { cycle_id: participant.cycle_id,
-                       completed_by_id: participant.aligned_by_id }.with_indifferent_access,
-            cycle_id: participant.cycle_id
+            occurred_at: progress.aligned_at,
+            payload: { cycle_id: progress.cycle_id,
+                       completed_by_id: progress.aligned_by_id }.with_indifferent_access,
+            cycle_id: progress.cycle_id
           )
         end
         out

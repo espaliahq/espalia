@@ -166,7 +166,7 @@ class AssessmentsController < ApplicationController
       person_id: @assignment.person_id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories,
-      participant_status: @assignment.current_open_cycle_participant&.status,
+      participant_status: @assignment.current_open_cycle_participation&.status,
       context: assessment_context,
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
@@ -227,7 +227,7 @@ class AssessmentsController < ApplicationController
   end
 
   def alignment_started?
-    %w[aligning aligned].include?(@assignment.current_open_cycle_participant&.status)
+    %w[aligning aligned].include?(@assignment.current_open_cycle_participation&.status)
   end
 
   # Loads framework assignments for the current person's direct reports.

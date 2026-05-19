@@ -1,22 +1,34 @@
 # frozen_string_literal: true
 
-# Synchronous projection that materialises per-level capability assessment ratings.
+# Synchronous projection that materialises per-level capability assessment ratings
+# and per-cycle journey progress.
 #
-# Subscribes to PersonDevelopment aggregate events and upserts
-# AssessmentLevelRating rows — one per (cycle_id, person, framework,
-# capability_stable_id, level_ordinal). Runs in the same transaction
-# as the event publish.
+# Subscribes to PersonDevelopment aggregate events and writes to three
+# read models, all owned exclusively by this projection:
+#
+# * `PersonFrameworkAssignment` — the person's role / level assignment.
+# * `AssessmentLevelRating` — one row per (cycle_id, person, framework,
+#   capability_stable_id, level_ordinal).
+# * `AssessmentCycleProgress` — per-cycle journey: started_at, alignment
+#   timestamps, terminal aligned state.
 #
 # Because rating rows are scoped by cycle, historical ratings across
-# cycles are preserved rather than overwritten. This lets both
-# "latest rating" and "rating in cycle X" queries be answered from
-# the read model.
+# cycles are preserved rather than overwritten.
 #
-# Also mirrors per-person progress into {AssessmentCycleParticipant}:
-# - First rating of any kind → `started_at`
-# - Alignment event → `aligned_at` + `status = "aligned"`
+# Membership in a cycle (enrolled / withdrawn) lives on the sibling
+# {AssessmentCycleEnrollment} table, owned by
+# {AssessmentCycles::Projections::CurrentState}. The two are joined for
+# read sites via {AssessmentCycleParticipation}.
 #
 class PersonDevelopment::Projections::CurrentAssessment
+  # Stable identifier used as the natural key in `projection_versions.name`.
+  # See `docs/guidelines/event-sourcing.md` for the projection contract.
+  PROJECTION_NAME = "person_development/current_assessment"
+
+  # Bump when `reset!` or any handler in this projection would write
+  # different state from the same event payload than before.
+  CODE_VERSION = 1
+
   # All event classes this projection handles.
   #
   # @return [Array<Class>] event classes
@@ -37,6 +49,16 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::AssessmentAligned,
       PersonDevelopment::Events::FullAlignmentCompleted
     ]
+  end
+
+  # Truncates every read model this projection writes, scoped to one tenant.
+  # Idempotent. Each table is owned exclusively by this projection.
+  #
+  # @param tenant [Tenant]
+  def self.reset!(tenant:)
+    PersonFrameworkAssignment.where(tenant_id: tenant.id).delete_all
+    AssessmentLevelRating.where(tenant_id: tenant.id).delete_all
+    AssessmentCycleProgress.where(tenant_id: tenant.id).delete_all
   end
 
   # @param event [RubyEventStore::Event]
@@ -95,27 +117,43 @@ class PersonDevelopment::Projections::CurrentAssessment
     assignment.update!(level_id: event.data[:new_level_id])
   end
 
-  # On (re-)joining a cycle, wipe any stale AssessmentLevelRating rows
-  # for this (cycle, person). The aggregate's `JoinedAssessmentCycle`
-  # on-handler resets `@self_ratings` / `@manager_ratings` / alignment
-  # flags to a fresh-cycle state, so the read model must mirror that.
-  # Without this, an unenroll → re-enroll within the same cycle leaves
-  # the prior cycle's frequencies on the row; the next rating attempt
-  # then routes through `revise_*` and the aggregate raises because no
-  # rating exists in its in-memory state.
-  #
-  # First-time enrolments are unaffected — there are no existing rows to
-  # delete. The authoritative participant lifecycle row is maintained by
-  # {AssessmentCycles::Projections::CurrentState}.
+  # On (re-)joining a cycle:
+  #   1. Wipe any stale AssessmentLevelRating rows for this (cycle, person).
+  #      The aggregate's `JoinedAssessmentCycle` on-handler resets in-memory
+  #      rating state to fresh, so the read model must mirror that.
+  #   2. Upsert the AssessmentCycleProgress row to a fresh state (status
+  #      `in_progress`, all journey columns nil). Re-joining clears any
+  #      historical progress from a prior enrollment in the same cycle —
+  #      a fresh enrollment is a fresh journey.
   def handle_joined_cycle(event)
     AssessmentLevelRating.where(
       cycle_id: event.data[:cycle_id],
       person_id: event.metadata[:person_id]
     ).delete_all
+
+    progress = AssessmentCycleProgress.find_or_initialize_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id]
+    )
+    progress.assign_attributes(
+      tenant_id: event.metadata[:tenant_id],
+      status: "in_progress",
+      started_at: nil,
+      self_completed_at: nil,
+      manager_completed_at: nil,
+      alignment_started_at: nil,
+      alignment_started_by_id: nil,
+      aligned_at: nil,
+      aligned_by_id: nil
+    )
+    progress.save!
   end
 
   def handle_left_cycle(_event)
-    # no-op
+    # Intentional no-op: keep the progress row as a historical record of
+    # how far the person got. Active-participant queries already filter
+    # via the enrollment row's status flipping to "withdrawn"; the orphaned
+    # progress row doesn't leak into active views.
   end
 
   def handle_self_rated(event)
@@ -125,7 +163,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     apply_source(rating, event)
     rating.save!
-    touch_participant_started(event) unless seeded_event?(event)
+    touch_progress_started(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -136,7 +174,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
     rating.save!
-    touch_participant_started(event)
+    touch_progress_started(event)
     broadcast_assessment_sync(event)
   end
 
@@ -155,7 +193,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     apply_source(rating, event)
     rating.save!
-    touch_participant_started(event) unless seeded_event?(event)
+    touch_progress_started(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -166,7 +204,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
     rating.save!
-    touch_participant_started(event)
+    touch_progress_started(event)
     broadcast_assessment_sync(event)
   end
 
@@ -179,18 +217,15 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   def handle_alignment_started(event)
-    participant = AssessmentCycleParticipant.find_by(
-      cycle_id: event.data[:cycle_id],
-      person_id: event.metadata[:person_id]
-    )
-    return unless participant
+    progress = find_progress(event)
+    return unless progress
 
     now = event.metadata[:timestamp] || Time.current
-    participant.update!(
+    progress.update!(
       status: "aligning",
       alignment_started_at: now,
       alignment_started_by_id: event.data[:started_by_id],
-      started_at: participant.started_at || now
+      started_at: progress.started_at || now
     )
     broadcast_assessment_sync(event)
   end
@@ -205,14 +240,11 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   def handle_full_alignment_completed(event)
-    participant = AssessmentCycleParticipant.find_by(
-      cycle_id: event.data[:cycle_id],
-      person_id: event.metadata[:person_id]
-    )
-    return unless participant
+    progress = find_progress(event)
+    return unless progress
 
     now = event.metadata[:timestamp] || Time.current
-    participant.update!(
+    progress.update!(
       status: "aligned",
       aligned_at: now,
       aligned_by_id: event.data[:completed_by_id]
@@ -270,19 +302,27 @@ class PersonDevelopment::Projections::CurrentAssessment
     )
   end
 
-  # Sets the participant's started_at if not already set.
+  # Finds the AssessmentCycleProgress row for the event's cycle and person.
   #
-  # @param event [RubyEventStore::Event] a rating event carrying cycle_id
-  def touch_participant_started(event)
-    participant = AssessmentCycleParticipant.find_by(
+  # @param event [RubyEventStore::Event]
+  # @return [AssessmentCycleProgress, nil]
+  def find_progress(event)
+    AssessmentCycleProgress.find_by(
       cycle_id: event.data[:cycle_id],
       person_id: event.metadata[:person_id]
     )
-    return unless participant
-    return if participant.started_at.present?
+  end
+
+  # Sets the progress row's started_at if not already set.
+  #
+  # @param event [RubyEventStore::Event] a rating event carrying cycle_id
+  def touch_progress_started(event)
+    progress = find_progress(event)
+    return unless progress
+    return if progress.started_at.present?
 
     now = event.metadata[:timestamp] || Time.current
-    participant.update_columns(
+    progress.update_columns(
       started_at: now,
       status: "started",
       updated_at: now
@@ -292,8 +332,13 @@ class PersonDevelopment::Projections::CurrentAssessment
   # Broadcasts a sync signal to all viewers of this assessment.
   # The signal triggers a matrix frame reload via the matrix Stimulus controller.
   #
+  # Suppressed during replay (see `Projections::Replayer.replay_mode?`) to
+  # avoid spamming live Turbo channels during a rebuild.
+  #
   # @param event [RubyEventStore::Event]
   def broadcast_assessment_sync(event)
+    return if Projections::Replayer.replay_mode?
+
     Turbo::StreamsChannel.broadcast_replace_to(
       "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
       target: "assessment-sync-signal",

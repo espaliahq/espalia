@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../support/projection_replay"
 
 class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::TestCase
+  include ProjectionReplayHelpers
+
   setup do
     @tenant = create(:tenant)
     @projection = PersonDevelopment::Projections::EvidenceCollection.new
@@ -125,6 +128,49 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
     end
   end
 
+  context "rebuild contract" do
+    should "reset! + replay produces identical read-model state" do
+      cap_sid     = SecureRandom.uuid_v7
+      new_cap_sid = SecureRandom.uuid_v7
+      ev1_id      = SecureRandom.uuid_v7
+      ev2_id      = SecureRandom.uuid_v7
+
+      append_and_project(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: ev1_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+        title: "Initial", content: "first", external_reference: nil,
+        author_id: @author.id)
+
+      append_and_project(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: ev2_id, capability_stable_id: cap_sid, level_ordinal: 3,
+        source: "manager", evidence_type: "code_review", custom_type_label: nil,
+        title: "Second", content: "follow up",
+        external_reference: { system: "github", url: "https://github.com/o/r/pull/2" },
+        author_id: @author.id)
+
+      append_and_project(PersonDevelopment::Events::EvidenceRelinked,
+        evidence_id: ev2_id, new_capability_stable_id: new_cap_sid, new_level_ordinal: 4,
+        author_id: @author.id)
+
+      append_and_project(PersonDevelopment::Events::EvidenceWithdrawn,
+        evidence_id: ev1_id, withdrawn_by_id: @author.id, reason: "Test")
+
+      before_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceCollection, @tenant)
+      assert_equal 2, before_snapshot[:evidence_items].size
+
+      PersonDevelopment::Projections::EvidenceCollection.reset!(tenant: @tenant)
+      ActsAsTenant.with_tenant(@tenant) { assert_equal 0, EvidenceItem.count }
+
+      Projections::Replayer.replay(
+        projection_class: PersonDevelopment::Projections::EvidenceCollection,
+        tenant: @tenant
+      )
+
+      after_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceCollection, @tenant)
+      assert_equal before_snapshot, after_snapshot
+    end
+  end
+
   private
 
   def emit(event_class, **data)
@@ -136,6 +182,26 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         framework_id: @framework_id
       }
     )
+    @projection.call(event)
+  end
+
+  # Appends an event to the real store AND calls the projection directly.
+  # Uses `append` rather than `publish` so subscribers (especially sync
+  # handlers that dispatch domain commands) don't fire and create
+  # cascading state we didn't ask for. The projection-under-test still
+  # sees the event live via the direct call. Replay later reads the
+  # appended events back via `event_store.read.of_type(...)`.
+  def append_and_project(event_class, **data)
+    event = event_class.new(
+      data: data,
+      metadata: {
+        tenant_id: @tenant.id,
+        person_id: @person_id,
+        framework_id: @framework_id
+      }
+    )
+    stream = EventStreamNaming.person_development_stream(@person_id, @framework_id, tenant: @tenant)
+    Rails.configuration.event_store.append(event, stream_name: stream)
     @projection.call(event)
   end
 end

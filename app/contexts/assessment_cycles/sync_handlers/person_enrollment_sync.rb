@@ -66,15 +66,15 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
 
   # Seeds the new cycle's ratings from the most recent prior cycle for
   # this (person, framework) that ever reached `aligned`. We look at
-  # `aligned_at IS NOT NULL` rather than current status because cycle
-  # closure flips participant status to `withdrawn` while preserving
-  # the `aligned_at` timestamp. No-op if there is no prior aligned
-  # cycle (first enrolment, or alignment never completed).
+  # `aligned_at IS NOT NULL` because the progress row is preserved on
+  # LeftAssessmentCycle (and on cycle closure) — the timestamp is the
+  # durable signal that alignment was completed at some point.
+  # No-op if there is no prior aligned cycle.
   def seed_from_prior_cycle(person_id, framework_id, current_cycle_id, enrolled_by)
     # Use the association join (not a raw SQL join) so ActsAsTenant adds
     # the assessment_cycles tenant filter — otherwise the lookup could
     # resolve against another tenant's cycle row.
-    prior_cycle_id = AssessmentCycleParticipant
+    prior_cycle_id = AssessmentCycleProgress
       .where(person_id: person_id)
       .where.not(aligned_at: nil)
       .where.not(cycle_id: current_cycle_id)

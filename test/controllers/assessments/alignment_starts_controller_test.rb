@@ -48,10 +48,10 @@ class Assessments::AlignmentStartsControllerTest < ActionDispatch::IntegrationTe
       assert_redirected_to assessment_path(@report_assignment)
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @report.id)
-        assert_equal "aligning", participant.status
-        assert_not_nil participant.alignment_started_at
-        assert_equal @manager.id, participant.alignment_started_by_id
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @report.id)
+        assert_equal "aligning", progress.status
+        assert_not_nil progress.alignment_started_at
+        assert_equal @manager.id, progress.alignment_started_by_id
       end
     end
 
@@ -62,8 +62,8 @@ class Assessments::AlignmentStartsControllerTest < ActionDispatch::IntegrationTe
       assert_response :forbidden
 
       ActsAsTenant.with_tenant(@tenant) do
-        participant = AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @report.id)
-        assert_not_equal "aligning", participant.status
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @report.id)
+        assert_not_equal "aligning", progress&.status
       end
     end
 

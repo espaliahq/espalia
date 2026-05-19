@@ -46,7 +46,7 @@ class PersonFrameworkAssignmentTest < ActiveSupport::TestCase
     should "return the cycle when the person is enrolled in an open cycle for this framework" do
       cycle = create(:assessment_cycle,
         tenant: @tenant, framework_id: @framework_id)
-      create(:assessment_cycle_participant,
+      create(:assessment_cycle_enrollment,
         tenant: @tenant, cycle: cycle, person_id: @person_id)
 
       assert_equal cycle.id, @assignment.current_open_cycle.id
@@ -55,7 +55,7 @@ class PersonFrameworkAssignmentTest < ActiveSupport::TestCase
     should "return nil when the cycle is closed" do
       cycle = create(:assessment_cycle, :closed,
         tenant: @tenant, framework_id: @framework_id)
-      create(:assessment_cycle_participant,
+      create(:assessment_cycle_enrollment,
         tenant: @tenant, cycle: cycle, person_id: @person_id)
 
       assert_nil @assignment.current_open_cycle
@@ -63,7 +63,7 @@ class PersonFrameworkAssignmentTest < ActiveSupport::TestCase
 
     should "return nil when the participant is withdrawn" do
       cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id)
-      create(:assessment_cycle_participant, :withdrawn,
+      create(:assessment_cycle_enrollment, :withdrawn,
         tenant: @tenant, cycle: cycle, person_id: @person_id)
 
       assert_nil @assignment.current_open_cycle
@@ -72,7 +72,7 @@ class PersonFrameworkAssignmentTest < ActiveSupport::TestCase
     should "return nil when the open cycle is for a different framework" do
       other_framework = SecureRandom.uuid_v7
       cycle = create(:assessment_cycle, tenant: @tenant, framework_id: other_framework)
-      create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle, person_id: @person_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle, person_id: @person_id)
 
       assert_nil @assignment.current_open_cycle
     end

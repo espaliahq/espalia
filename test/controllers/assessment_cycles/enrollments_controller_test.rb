@@ -50,7 +50,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
     context "POST enrollments" do
       should "enroll a person assigned to the framework" do
         sign_in @admin_user
-        assert_difference -> { AssessmentCycleParticipant.count }, 1 do
+        assert_difference -> { AssessmentCycleEnrollment.count }, 1 do
           post assessment_cycle_enrollments_path(@cycle), params: {
             enrollment: { person_id: @assigned_person.id }
           }
@@ -58,7 +58,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         assert_redirected_to assessment_cycle_path(@cycle)
 
         ActsAsTenant.with_tenant(@tenant) do
-          participant = AssessmentCycleParticipant.find_by(
+          participant = AssessmentCycleEnrollment.find_by(
             cycle_id: @cycle_id, person_id: @assigned_person.id
           )
           assert_not_nil participant
@@ -68,7 +68,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
 
       should "reject enrollment for a person not assigned to the framework" do
         sign_in @admin_user
-        assert_no_difference -> { AssessmentCycleParticipant.count } do
+        assert_no_difference -> { AssessmentCycleEnrollment.count } do
           post assessment_cycle_enrollments_path(@cycle), params: {
             enrollment: { person_id: @unassigned_person.id }
           }
@@ -96,7 +96,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         assert_match(/Person enrolled/, flash[:notice].to_s)
 
         ActsAsTenant.with_tenant(@tenant) do
-          rows = AssessmentCycleParticipant.where(
+          rows = AssessmentCycleEnrollment.where(
             cycle_id: @cycle_id, person_id: @assigned_person.id
           )
           assert_equal 1, rows.count
@@ -111,7 +111,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
     context "POST enrollments/bulk" do
       should "enroll every eligible person and report the count" do
         sign_in @admin_user
-        assert_difference -> { AssessmentCycleParticipant.where(cycle_id: @cycle_id).count }, 2 do
+        assert_difference -> { AssessmentCycleEnrollment.where(cycle_id: @cycle_id).count }, 2 do
           post bulk_assessment_cycle_enrollments_path(@cycle)
         end
         assert_redirected_to assessment_cycle_path(@cycle)
@@ -119,8 +119,8 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         assert_match(/Enrolled 2 people/, flash[:notice].to_s)
 
         ActsAsTenant.with_tenant(@tenant) do
-          assert AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @assigned_person.id)
-          assert AssessmentCycleParticipant.find_by(cycle_id: @cycle_id, person_id: @other_assigned.id)
+          assert AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @assigned_person.id)
+          assert AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @other_assigned.id)
         end
       end
 
@@ -130,7 +130,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         end
 
         sign_in @admin_user
-        assert_difference -> { AssessmentCycleParticipant.where(cycle_id: @cycle_id).count }, 1 do
+        assert_difference -> { AssessmentCycleEnrollment.where(cycle_id: @cycle_id).count }, 1 do
           post bulk_assessment_cycle_enrollments_path(@cycle)
         end
         follow_redirect!
@@ -144,7 +144,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         end
 
         sign_in @admin_user
-        assert_no_difference -> { AssessmentCycleParticipant.where(cycle_id: @cycle_id).count } do
+        assert_no_difference -> { AssessmentCycleEnrollment.where(cycle_id: @cycle_id).count } do
           post bulk_assessment_cycle_enrollments_path(@cycle)
         end
         follow_redirect!
@@ -156,7 +156,7 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
       setup do
         ActsAsTenant.with_tenant(@tenant) do
           AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @assigned_person.id)
-          @participant = AssessmentCycleParticipant.find_by!(
+          @participant = AssessmentCycleEnrollment.find_by!(
             cycle_id: @cycle_id, person_id: @assigned_person.id
           )
         end
@@ -188,13 +188,13 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
       sign_in @member_user
       post bulk_assessment_cycle_enrollments_path(@cycle)
       assert_redirected_to root_path
-      assert_equal 0, AssessmentCycleParticipant.where(cycle_id: @cycle_id).count
+      assert_equal 0, AssessmentCycleEnrollment.where(cycle_id: @cycle_id).count
     end
 
     should "deny DELETE enrollments" do
       ActsAsTenant.with_tenant(@tenant) do
         AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @assigned_person.id)
-        @participant = AssessmentCycleParticipant.find_by!(
+        @participant = AssessmentCycleEnrollment.find_by!(
           cycle_id: @cycle_id, person_id: @assigned_person.id
         )
       end

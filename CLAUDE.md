@@ -26,6 +26,8 @@ This project uses a layered guidance system. Standards are loaded contextually �
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
 | `app/policies/` | [authorization.md](docs/guidelines/authorization.md) |
 | `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md) |
+| `app/contexts/` | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
+| `app/read_models/` | [event-sourcing.md](docs/guidelines/event-sourcing.md), [rails-models.md](docs/guidelines/rails-models.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
 
 Each directory above has a `CLAUDE.md` that imports the relevant guideline. Root `CLAUDE.md` covers architecture and commands only.
@@ -46,6 +48,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Framework Explorer UX | @docs/guidelines/framework-explorer.md |
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
+| Events / aggregates / projections / read models | @docs/guidelines/event-sourcing.md + @docs/runbooks/projection-rebuild.md |
 
 Most features touch controllers + models + views + tests + authorization — read all five.
 
@@ -58,6 +61,10 @@ Four domain aggregates — two event-sourced via RES, two standard ActiveRecord:
 - **Framework** — The career path blueprint. One RES stream per framework (`tenant-{id}/Framework-{id}`). Contains roles, capabilities, expectations, illustrations, versioning, and collaborative editing via inline suggested edits. Produces two projections: a published view (what everyone sees) and a draft/editor view (includes pending structural changes and inline suggestions).
 
 - **Person Development** — One RES stream per person per framework (`tenant-{id}/PersonDev-{person_id}-{framework_id}`). The unified development journey — evidence, self-ratings, manager ratings, alignment conversations, growth plans, focus areas, and check-ins in one stream. An "assessment" is a projection. An "alignment agreement" is a formalising event.
+
+- **Assessment Cycles** — One RES stream per cycle (`tenant-{id}/AssessmentCycle-{cycle_id}`). Orchestrates cohort assessment: cycle defined / closed, plus per-person enrollment events that the explicit `PersonEnrollmentSync` handler translates into PD-side `JoinedAssessmentCycle` / `LeftAssessmentCycle` events on each participant's PersonDevelopment stream.
+
+**Read-model ownership invariant:** every table in `app/read_models/` has exactly one projection writer. Overlapping data across contexts is modelled as two tables joined at read time (e.g. enrollment + progress for a cycle participant, joined via `AssessmentCycleParticipation`) — never as a shared row. See [docs/guidelines/event-sourcing.md](docs/guidelines/event-sourcing.md).
 
 **State-based (standard ActiveRecord):**
 

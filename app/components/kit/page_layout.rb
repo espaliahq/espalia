@@ -122,10 +122,10 @@ class Components::Kit::PageLayout < Components::Base
       .for_person(person.id)
       .joins("INNER JOIN assessment_cycles ON assessment_cycles.framework_id = " \
              "person_framework_assignments.framework_id AND assessment_cycles.status = 'open'")
-      .joins("INNER JOIN assessment_cycle_participants " \
-             "ON assessment_cycle_participants.cycle_id = assessment_cycles.cycle_id " \
-             "AND assessment_cycle_participants.person_id = person_framework_assignments.person_id " \
-             "AND assessment_cycle_participants.status <> 'withdrawn'")
+      .joins("INNER JOIN assessment_cycle_enrollments " \
+             "ON assessment_cycle_enrollments.cycle_id = assessment_cycles.cycle_id " \
+             "AND assessment_cycle_enrollments.person_id = person_framework_assignments.person_id " \
+             "AND assessment_cycle_enrollments.status <> 'withdrawn'")
       .distinct
     has_report_assignments = person.direct_reports
       .where(id: PersonFrameworkAssignment.select(:person_id))

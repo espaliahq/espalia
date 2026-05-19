@@ -13,6 +13,14 @@
 # evidence changes.
 #
 class PersonDevelopment::Projections::EvidenceCollection
+  # Stable identifier used as the natural key in `projection_versions.name`.
+  # See `docs/guidelines/event-sourcing.md` for the projection contract.
+  PROJECTION_NAME = "person_development/evidence_collection"
+
+  # Bump when `reset!` or any handler in this projection would write
+  # different state from the same event payload than before.
+  CODE_VERSION = 1
+
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events
     [
@@ -20,6 +28,14 @@ class PersonDevelopment::Projections::EvidenceCollection
       PersonDevelopment::Events::EvidenceRelinked,
       PersonDevelopment::Events::EvidenceWithdrawn
     ]
+  end
+
+  # Truncates every read model this projection writes, scoped to one tenant.
+  # Idempotent. Called by `Projections::Replayer` before replay.
+  #
+  # @param tenant [Tenant]
+  def self.reset!(tenant:)
+    EvidenceItem.where(tenant_id: tenant.id).delete_all
   end
 
   # @param event [RubyEventStore::Event]
@@ -100,7 +116,12 @@ class PersonDevelopment::Projections::EvidenceCollection
   # Broadcasts a sync signal to all viewers of this assessment.
   # Mirrors the {CurrentAssessment#broadcast_assessment_sync} contract so
   # the same Stimulus controller can reload both frames.
+  #
+  # Suppressed during replay (see `Projections::Replayer.replay_mode?`) to
+  # avoid spamming live Turbo channels during a rebuild.
   def broadcast_assessment_sync(event)
+    return if Projections::Replayer.replay_mode?
+
     Turbo::StreamsChannel.broadcast_replace_to(
       "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
       target: "assessment-sync-signal",
