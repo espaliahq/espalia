@@ -90,10 +90,12 @@ class AssessmentCycleParticipation
   # you already have an enrollment scope (e.g. from a `cycle.enrollments`
   # association) and want the unified view.
   #
-  # Uses a tuple `IN ((cycle_id, person_id), …)` to fetch only the exact
-  # pairs we need — avoids the cross-product over-fetch that
-  # `where(cycle_id: [...], person_id: [...])` would produce when the
-  # enrollments span multiple cycles AND multiple people.
+  # Chains per-pair `WHERE`s with `.or` so we fetch only the exact
+  # `(cycle_id, person_id)` pairs we need — PostgreSQL turns this into
+  # a series of unique-index lookups. Avoids the cross-product over-fetch
+  # that `where(cycle_id: [...], person_id: [...])` would produce when
+  # the enrollments span multiple cycles AND multiple people, and uses
+  # fully parameterized AR scopes rather than dynamic SQL strings.
   #
   # @param enrollment_scope [#to_a returning Array<AssessmentCycleEnrollment>]
   # @return [Array<AssessmentCycleParticipation>]
@@ -102,10 +104,10 @@ class AssessmentCycleParticipation
     return [] if enrollments.empty?
 
     pairs = enrollments.map { |e| [ e.cycle_id, e.person_id ] }.uniq
-    placeholders = (Array.new(pairs.size, "(?, ?)")).join(", ")
-    progress_by_pair = AssessmentCycleProgress
-      .where("(cycle_id, person_id) IN (#{placeholders})", *pairs.flatten)
-      .index_by { |p| [ p.cycle_id, p.person_id ] }
+    scope = pairs.map do |cycle_id, person_id|
+      AssessmentCycleProgress.where(cycle_id: cycle_id, person_id: person_id)
+    end.reduce(:or)
+    progress_by_pair = scope.index_by { |p| [ p.cycle_id, p.person_id ] }
 
     enrollments.map do |enrollment|
       new(enrollment: enrollment,
