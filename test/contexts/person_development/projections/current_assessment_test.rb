@@ -146,6 +146,37 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         )
       end
     end
+
+    should "preserve the progress row as a historical record on LeftAssessmentCycle" do
+      # Establish journey state — joined, then started by recording a rating.
+      emit(PersonDevelopment::Events::JoinedAssessmentCycle,
+        cycle_id: @cycle_id, framework_version: 1)
+      emit(PersonDevelopment::Events::SelfRated,
+        cycle_id: @cycle_id, capability_stable_id: SecureRandom.uuid_v7,
+        level_ordinal: 2, frequency: "consistent", source: "human")
+
+      progress_before = ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+      end
+      assert_not_nil progress_before
+      assert_equal "started", progress_before.status
+      assert_not_nil progress_before.started_at
+
+      emit(PersonDevelopment::Events::LeftAssessmentCycle,
+        cycle_id: @cycle_id, reason: "manual")
+
+      # Row is retained; columns are untouched. CurrentState flips the
+      # enrollment side to `withdrawn`; CurrentAssessment intentionally
+      # leaves progress as a historical record of how far the person got.
+      ActsAsTenant.with_tenant(@tenant) do
+        progress_after = AssessmentCycleProgress.find_by(
+          cycle_id: @cycle_id, person_id: @person_id
+        )
+        assert_not_nil progress_after, "progress row must be preserved on LeftAssessmentCycle"
+        assert_equal "started", progress_after.status
+        assert_equal progress_before.started_at, progress_after.started_at
+      end
+    end
   end
 
   context "SelfRated" do
