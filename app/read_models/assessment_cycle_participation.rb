@@ -15,8 +15,11 @@
 # @example Look up one participation
 #   AssessmentCycleParticipation.find_by(cycle_id: cid, person_id: pid)
 #
-# @example Active participations for a person
-#   AssessmentCycleParticipation.for_person(person.id).active
+# @example All participations for a person
+#   AssessmentCycleParticipation.for_person(person.id)
+#
+# @example Active participations across all cycles
+#   AssessmentCycleParticipation.active
 #
 class AssessmentCycleParticipation
   # All possible derived statuses, drawn from the union of enrollment and progress
