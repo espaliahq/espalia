@@ -89,11 +89,15 @@ class Frameworks::Projections::PublishedState
   # are NOT associated to Framework via Rails associations and must be
   # deleted explicitly.
   #
+  # Wrapped in tenant context so callers don't have to remember.
+  #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
-    FrameworkState::Collaborator.where(tenant_id: tenant.id).delete_all
-    FrameworkState::MigrationMapping.where(tenant_id: tenant.id).delete_all
-    FrameworkState::Framework.where(tenant_id: tenant.id).destroy_all
+    ActsAsTenant.with_tenant(tenant) do
+      FrameworkState::Collaborator.where(tenant_id: tenant.id).delete_all
+      FrameworkState::MigrationMapping.where(tenant_id: tenant.id).delete_all
+      FrameworkState::Framework.where(tenant_id: tenant.id).destroy_all
+    end
   end
 
   # @param event [RubyEventStore::Event]

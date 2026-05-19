@@ -52,13 +52,16 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
-  # Idempotent. Each table is owned exclusively by this projection.
+  # Idempotent. Each table is owned exclusively by this projection. Wrapped
+  # in tenant context so callers don't have to remember.
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
-    PersonFrameworkAssignment.where(tenant_id: tenant.id).delete_all
-    AssessmentLevelRating.where(tenant_id: tenant.id).delete_all
-    AssessmentCycleProgress.where(tenant_id: tenant.id).delete_all
+    ActsAsTenant.with_tenant(tenant) do
+      PersonFrameworkAssignment.where(tenant_id: tenant.id).delete_all
+      AssessmentLevelRating.where(tenant_id: tenant.id).delete_all
+      AssessmentCycleProgress.where(tenant_id: tenant.id).delete_all
+    end
   end
 
   # @param event [RubyEventStore::Event]

@@ -31,11 +31,13 @@ class PersonDevelopment::Projections::EvidenceCollection
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
-  # Idempotent. Called by `Projections::Replayer` before replay.
+  # Idempotent. Wrapped in tenant context so callers don't have to remember.
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
-    EvidenceItem.where(tenant_id: tenant.id).delete_all
+    ActsAsTenant.with_tenant(tenant) do
+      EvidenceItem.where(tenant_id: tenant.id).delete_all
+    end
   end
 
   # @param event [RubyEventStore::Event]
