@@ -29,9 +29,15 @@ class AssessmentCycle < ApplicationRecord
   has_many :enrollments, class_name: "AssessmentCycleEnrollment",
            primary_key: :cycle_id, foreign_key: :cycle_id,
            inverse_of: :cycle, dependent: :destroy
+  # Progress rows are owned by `PersonDevelopment::Projections::CurrentAssessment`
+  # and intentionally lack a `dependent: :destroy` here — cross-projection
+  # cascades would cause a single-projection rebuild (e.g.
+  # `events:projections:rebuild[assessment_cycles/current_state]`) to wipe
+  # another projection's read model. Truncation of progress rows happens
+  # exclusively in `CurrentAssessment.reset!`.
   has_many :progress_rows, class_name: "AssessmentCycleProgress",
            primary_key: :cycle_id, foreign_key: :cycle_id,
-           inverse_of: false, dependent: :destroy
+           inverse_of: false
 
   validates :cycle_id, presence: true
   validates :framework_id, presence: true

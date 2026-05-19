@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "test_helper"
 
 class AssessmentCycleProgressTest < ActiveSupport::TestCase
@@ -24,9 +26,15 @@ class AssessmentCycleProgressTest < ActiveSupport::TestCase
   end
 
   context "cascade" do
-    should "be destroyed when the parent cycle is destroyed" do
+    # AssessmentCycleProgress is owned by PersonDevelopment::CurrentAssessment.
+    # AssessmentCycle deliberately does NOT cascade `dependent: :destroy` to
+    # progress rows — cross-context cascades would let a single-projection
+    # rebuild of `assessment_cycles/current_state` wipe another projection's
+    # read model. Truncation of progress rows happens exclusively in
+    # `CurrentAssessment.reset!`.
+    should "be retained when the parent cycle is destroyed" do
       create(:assessment_cycle_progress, tenant: @tenant, cycle: @cycle)
-      assert_difference "AssessmentCycleProgress.count", -1 do
+      assert_no_difference "AssessmentCycleProgress.count" do
         @cycle.destroy
       end
     end

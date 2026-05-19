@@ -33,19 +33,19 @@ class AssessmentCycles::Projections::CurrentState
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
-  # Idempotent.
+  # Idempotent. Wrapped in tenant context so callers don't have to remember.
   #
-  # `AssessmentCycle.destroy_all` cascades via `dependent: :destroy` through
-  # both `enrollments` AND `progress_rows`. Progress rows are owned by
-  # {PersonDevelopment::Projections::CurrentAssessment}, but the cascade is
-  # still triggered here because participants are anchored to the cycle:
-  # when the cycle is gone, both its enrollment side and its progress side
-  # are gone too. CurrentAssessment's own `reset!` independently truncates
-  # the progress table for completeness.
+  # `AssessmentCycle.destroy_all` cascades via `dependent: :destroy` to
+  # `enrollments` only. `assessment_cycle_progress` is owned by
+  # {PersonDevelopment::Projections::CurrentAssessment} and is NOT touched
+  # here — a single-projection rebuild of `assessment_cycles/current_state`
+  # must not wipe another projection's read model.
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
-    AssessmentCycle.where(tenant_id: tenant.id).destroy_all
+    ActsAsTenant.with_tenant(tenant) do
+      AssessmentCycle.where(tenant_id: tenant.id).destroy_all
+    end
   end
 
   # @param event [RubyEventStore::Event]
