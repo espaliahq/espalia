@@ -12,3 +12,18 @@ ENV BINDING="0.0.0.0"
 ENV PATH="/home/vscode/.local/bin:${PATH}"
 RUN curl -fsSL https://cli.coderabbit.ai/install.sh | sh \
     && coderabbit --version
+
+# Render CLI for managing deploys, logs, and the projection-rebuild predeploy gate.
+# xdg-utils is required so `render login` can advertise a launch URL (the actual
+# browser still has to be opened on the host — the CLI just prints the URL).
+ARG RENDER_CLI_VERSION=2.17.0
+RUN sudo apt-get update \
+    && sudo apt-get install -y --no-install-recommends xdg-utils unzip \
+    && sudo rm -rf /var/lib/apt/lists/* \
+    && ARCH="$(dpkg --print-architecture)" \
+    && curl -fsSL -o /tmp/render-cli.zip \
+       "https://github.com/render-oss/cli/releases/download/v${RENDER_CLI_VERSION}/cli_${RENDER_CLI_VERSION}_linux_${ARCH}.zip" \
+    && unzip -p /tmp/render-cli.zip "cli_v${RENDER_CLI_VERSION}" | sudo tee /usr/local/bin/render > /dev/null \
+    && sudo chmod 755 /usr/local/bin/render \
+    && rm -f /tmp/render-cli.zip \
+    && render --version
