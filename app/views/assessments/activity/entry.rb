@@ -36,7 +36,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "manager_rated"           => "ratings",
     "manager_rating_revised"  => "ratings",
     "manager_rating_cleared"  => "ratings",
-    "assessment_aligned"      => "ratings",
+    "assessment_aligned"      => "alignment",
     "evidence_recorded"       => "evidence",
     "evidence_relinked"       => "evidence",
     "evidence_withdrawn"      => "evidence",

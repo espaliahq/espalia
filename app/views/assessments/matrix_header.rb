@@ -11,10 +11,13 @@ class Views::Assessments::MatrixHeader < Views::Base
   # @param merged_levels [Array<Hash>] from MatrixDataBuilder (includes :level_verdict)
   # @param person_level [Integer] the person's assigned level ordinal
   # @param inferred_level [Integer, nil] highest ordinal meeting expectations
-  def initialize(merged_levels:, person_level:, inferred_level: nil)
+  # @param context [Symbol] :self, :manager, or :alignment — controls
+  #   whose perspective the current-level badge labels
+  def initialize(merged_levels:, person_level:, inferred_level: nil, context: :self)
     @merged_levels = merged_levels
     @person_level = person_level
     @inferred_level = inferred_level
+    @context = context
   end
 
   def view_template
@@ -43,7 +46,7 @@ class Views::Assessments::MatrixHeader < Views::Base
             div(class: "font-normal normal-case mt-0.5") { level[:level_title] }
             if current
               span(class: "inline-block mt-1 text-[10px] bg-primary/10 text-primary " \
-                          "rounded-full px-2 py-0.5") { "Your level" }
+                          "rounded-full px-2 py-0.5") { current_level_label }
             end
             if inferred && !current
               span(class: "inline-block mt-1 text-[10px] bg-cyan-100 text-cyan-700 " \
@@ -63,6 +66,14 @@ class Views::Assessments::MatrixHeader < Views::Base
   end
 
   private
+
+  # Label for the chip on the person's currently-assigned level column.
+  # Reads "Your level" for the assessee themselves; for a manager or
+  # alignment viewer (who is not the assessee in the manager case),
+  # reads "Current level".
+  def current_level_label
+    @context == :self ? "Your level" : "Current level"
+  end
 
   # Status chip rendered in each column header for levels up to person_level + 1.
   # Uses pre-computed verdict from Scoring#level_verdict (accounts for both

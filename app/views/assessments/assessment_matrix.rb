@@ -80,7 +80,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
           render Views::Assessments::MatrixHeader.new(
             merged_levels: @matrix_data[:merged_levels],
             person_level: @matrix_data[:person_level],
-            inferred_level: @matrix_data[:inferred_level]
+            inferred_level: @matrix_data[:inferred_level],
+            context: @context
           )
           tbody do
             active_category = find_active_category
