@@ -9,40 +9,36 @@ class PagesSystemTest < ApplicationSystemTestCase
     ActsAsTenant.with_tenant(@tenant) { FactoryBot.create(:tenant_user, tenant: @tenant, user: @user) }
 
     sign_in_as(@user)
-    assert_text "Welcome to GrowthOS"
   end
 
-  context "index page" do
-    should "render the dashboard shell" do
+  context "root redirect" do
+    should "redirect to frameworks when the user has no assessments" do
       visit root_path
 
-      assert_selector "nav", minimum: 1
-      assert_text "GrowthOS"
-      assert_text "Welcome to GrowthOS"
+      assert_current_path frameworks_path
     end
 
-    should "display stat cards" do
-      visit root_path
-
-      assert_text "Streak"
-      assert_text "Points"
-      assert_text "Goals"
-    end
-
-    should "show nav links in navbar on desktop" do
-      visit root_path
-
-      within "nav" do
-        assert_text "Home"
-        assert_text "Frameworks"
+    should "redirect to assessments when the user has at least one assignment" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # sign_in_as triggers a request that auto-links a Person to the
+        # tenant_user via email; reuse it rather than creating a duplicate.
+        person = Person.find_or_create_by!(tenant: @tenant, email: @user.email) do |p|
+          p.name = @user.email
+        end
+        FactoryBot.create(:person_framework_assignment, tenant: @tenant, person_id: person.id)
       end
-    end
 
+      visit root_path
+
+      assert_current_path assessments_path
+    end
+  end
+
+  context "page layout shell on /frameworks" do
     should "hide sidebar drawer by default on mobile and toggle it with hamburger" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit root_path
+      visit frameworks_path
 
-      # Drawer starts hidden on mobile (has "hidden" class)
       assert_selector "[data-sidebar-target='drawer']", visible: :all
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
       classes = drawer[:class].split
@@ -50,7 +46,6 @@ class PagesSystemTest < ApplicationSystemTestCase
 
       toggle_sidebar
 
-      # After toggle, "hidden" class should be removed (md:hidden still present but doesn't apply on mobile)
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
       classes = drawer[:class].split
       assert_not_includes classes, "hidden",
@@ -59,9 +54,8 @@ class PagesSystemTest < ApplicationSystemTestCase
 
     should "close mobile menu when clicking outside" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit root_path
+      visit frameworks_path
 
-      # Open the drawer
       toggle_sidebar
 
       # Click outside the drawer (right side of viewport, past the 16rem drawer).
@@ -76,16 +70,14 @@ class PagesSystemTest < ApplicationSystemTestCase
       }
       action.perform if drawer_visible.call
 
-      # Drawer should close
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
       assert_includes drawer[:class].split, "hidden",
         "sidebar drawer should close when clicking outside"
     end
 
     should "hide hamburger button on desktop" do
-      visit root_path
+      visit frameworks_path
 
-      # md:hidden applies display:none at md+ — button should not be visible
       assert_no_selector "[data-action='sidebar#toggle']"
     end
   end

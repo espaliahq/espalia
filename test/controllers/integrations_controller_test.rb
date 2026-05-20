@@ -94,6 +94,7 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
     should "deny GET /integrations" do
       get integrations_path
       assert_redirected_to root_path
+      follow_redirect!  # / → /frameworks (member with no assessments)
       follow_redirect!
       assert_includes response.body, "You are not authorized"
     end

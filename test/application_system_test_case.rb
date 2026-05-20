@@ -105,12 +105,15 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
     # If the form click was dropped, the URL stays on /users/sign_in — fall
     # back to a JS-dispatched form submit, which bypasses Selenium pointer
-    # hit-testing entirely. has_current_path? waits up to default_max_wait_time.
-    unless page.has_current_path?(root_path, wait: Capybara.default_max_wait_time)
+    # hit-testing entirely. We detect a dropped submit by the URL never
+    # moving away from the sign-in path within the wait window; we cannot
+    # pin on root_path because / itself redirects to /assessments or
+    # /frameworks.
+    unless page.has_no_current_path?(new_user_session_path, wait: Capybara.default_max_wait_time)
       submit_sign_in_form_via_js(user.email, password)
     end
 
-    assert_current_path root_path
+    assert_no_current_path new_user_session_path
   end
 
   # Suppress Rails' automatic failure screenshot when the browser session
