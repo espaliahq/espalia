@@ -24,7 +24,7 @@ gem "stimulus-rails"
 gem "acts_as_tenant", "~> 1.0"
 gem "devise", "~> 5.0.3"
 gem "omniauth-google-oauth2", "~> 1.2"
-gem "omniauth-rails_csrf_protection", "~> 1.0"
+gem "omniauth-rails_csrf_protection", "~> 2.0"
 gem "invisible_captcha", "~> 2.0"
 gem "local_time", "~> 3.0"
 gem "noticed", "~> 3.0"
@@ -103,7 +103,7 @@ end
 # gem "redis", "~> 5.1"
 
 # ActionText editor
-gem "lexxy", "~> 0.9.10.beta"
+gem "lexxy", "~> 0.9.11.beta"
 
 # Model attribute translations stored in JSONB columns
 gem "json_translate"
