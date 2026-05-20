@@ -20,7 +20,7 @@ class AssessmentCyclesController < ApplicationController
     closed_cycles = AssessmentCycle.closed_cycles.includes(:framework).order(opened_at: :desc)
 
     cycle_ids = (open_cycles + closed_cycles).map(&:cycle_id)
-    participant_counts = AssessmentCycleParticipant
+    participant_counts = AssessmentCycleEnrollment
       .where(cycle_id: cycle_ids)
       .group(:cycle_id, :status)
       .count
@@ -40,7 +40,8 @@ class AssessmentCyclesController < ApplicationController
   def show
     authorize @cycle
 
-    @cycle.participants.includes(:person).load
+    # Eager-load people for the enrollment join used by `#participations`.
+    @cycle.enrollments.includes(:person).load
     framework = FrameworkState::Framework.find_by(framework_id: @cycle.framework_id)
 
     render Views::AssessmentCycles::ShowView.new(

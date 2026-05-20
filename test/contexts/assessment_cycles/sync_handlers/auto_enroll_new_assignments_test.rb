@@ -55,11 +55,11 @@ class AssessmentCycles::SyncHandlers::AutoEnrollNewAssignmentsTest < ActiveSuppo
     should "enroll the person and emit JoinedAssessmentCycle on the PersonDev stream" do
       @handler.call(build_event)
 
-      participant = AssessmentCycleParticipant.find_by(
+      enrollment = AssessmentCycleEnrollment.find_by(
         cycle_id: @cycle_id, person_id: @person_id
       )
-      assert_not_nil participant
-      assert_equal "enrolled", participant.status
+      assert_not_nil enrollment
+      assert_equal "enrolled", enrollment.status
 
       stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
       events = Rails.configuration.event_store.read.stream(stream).to_a
@@ -74,7 +74,7 @@ class AssessmentCycles::SyncHandlers::AutoEnrollNewAssignmentsTest < ActiveSuppo
       # participant row.
       assert_nothing_raised { @handler.call(build_event) }
 
-      rows = AssessmentCycleParticipant.where(cycle_id: @cycle_id, person_id: @person_id)
+      rows = AssessmentCycleEnrollment.where(cycle_id: @cycle_id, person_id: @person_id)
       assert_equal 1, rows.count
     end
   end
@@ -83,7 +83,7 @@ class AssessmentCycles::SyncHandlers::AutoEnrollNewAssignmentsTest < ActiveSuppo
     should "silently no-op without raising or creating a participant" do
       assert_nothing_raised { @handler.call(build_event) }
 
-      assert_equal 0, AssessmentCycleParticipant.for_person(@person_id).count
+      assert_equal 0, AssessmentCycleEnrollment.for_person(@person_id).count
     end
   end
 
@@ -101,7 +101,7 @@ class AssessmentCycles::SyncHandlers::AutoEnrollNewAssignmentsTest < ActiveSuppo
       # The participant row (if any) from the closed cycle must be withdrawn,
       # and no new active participant row should appear.
       assert_equal 0,
-        AssessmentCycleParticipant.for_person(@person_id).active.count
+        AssessmentCycleEnrollment.for_person(@person_id).active.count
     end
   end
 

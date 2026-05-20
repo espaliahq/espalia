@@ -269,9 +269,10 @@ class PersonDevelopment::CommandHandler
     # lifecycle state — i.e. the manager fired FullAlignmentCompleted on it.
     # A cycle that is still merely `aligning` may have a few aligned cells
     # from a partial conversation, but those aren't a valid carry-forward
-    # baseline. The participant's `aligned_at` is set only by
-    # FullAlignmentCompleted and survives subsequent cycle closure.
-    prior_completed = AssessmentCycleParticipant
+    # baseline. The progress row's `aligned_at` is set only by
+    # FullAlignmentCompleted and survives subsequent cycle closure
+    # (the progress row is retained on LeftAssessmentCycle).
+    prior_completed = AssessmentCycleProgress
       .where(cycle_id: prior_cycle_id, person_id: person_id)
       .where.not(aligned_at: nil)
       .exists?

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -o errexit
+
+# 1. Render provisions only the primary database. Solid Cache / Queue / Cable each
+# want their own database on the same Postgres instance — create them here if
+# they don't already exist, then let db:prepare run migrations across all four.
+
+for db in growth_os_production_cache growth_os_production_queue growth_os_production_cable; do
+  exists=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USERNAME" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$db'")
+  if [ "$exists" != "1" ]; then
+    echo "Creating database $db"
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USERNAME" -d postgres -c "CREATE DATABASE \"$db\""
+  fi
+done
+
+# 2. Schema migrations across all four databases.
+bundle exec bin/rails db:prepare
+
+# 3. Optional inline projection rebuild — only when explicitly authorized for
+#    this deploy. REBUILD_ON_DEPLOY is a comma-separated list of projection
+#    names from `events:projections:list`. Runs the rebuild against the new
+#    image BEFORE the verify gate, so a version bump can ship in one deploy.
+#    Risk: rebuild duration becomes part of the predeploy window. For very
+#    large rebuilds, use the two-stage path documented in the runbook.
+if [ -n "$REBUILD_ON_DEPLOY" ]; then
+  IFS=',' read -ra names <<< "$REBUILD_ON_DEPLOY"
+  for name in "${names[@]}"; do
+    name="${name// /}"  # strip whitespace
+    [ -z "$name" ] && continue  # skip empty entries from stray commas
+    echo "Predeploy rebuild: $name"
+    bundle exec bin/rails "events:projections:rebuild[$name]"
+  done
+fi
+
+# 4. Hard fail if any projection's persisted version is older than its
+#    current CODE_VERSION constant. This is the predeploy guard — see
+#    `docs/runbooks/projection-rebuild.md` for the resolution flow.
+bundle exec bin/rails events:projections:verify

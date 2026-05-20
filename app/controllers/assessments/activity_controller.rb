@@ -65,7 +65,7 @@ class Assessments::ActivityController < ApplicationController
   end
 
   def alignment_started?
-    %w[aligning aligned].include?(@assignment.current_open_cycle_participant&.status)
+    %w[aligning aligned].include?(@assignment.current_open_cycle_participation&.status)
   end
 
   def user_not_authorized(_exception = nil)

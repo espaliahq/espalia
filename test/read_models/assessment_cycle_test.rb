@@ -21,7 +21,7 @@ class AssessmentCycleTest < ActiveSupport::TestCase
       fw_id = SecureRandom.uuid_v7
       person_id = SecureRandom.uuid_v7
       cycle = create(:assessment_cycle, tenant: @tenant, framework_id: fw_id)
-      create(:assessment_cycle_participant,
+      create(:assessment_cycle_enrollment,
         tenant: @tenant, cycle: cycle, person_id: person_id)
 
       result = AssessmentCycle.open_cycles_for([ [ fw_id, person_id ] ])
@@ -33,7 +33,7 @@ class AssessmentCycleTest < ActiveSupport::TestCase
       fw_id = SecureRandom.uuid_v7
       person_id = SecureRandom.uuid_v7
       cycle = create(:assessment_cycle, :closed, tenant: @tenant, framework_id: fw_id)
-      create(:assessment_cycle_participant,
+      create(:assessment_cycle_enrollment,
         tenant: @tenant, cycle: cycle, person_id: person_id)
 
       assert_equal({}, AssessmentCycle.open_cycles_for([ [ fw_id, person_id ] ]))
@@ -43,7 +43,7 @@ class AssessmentCycleTest < ActiveSupport::TestCase
       fw_id = SecureRandom.uuid_v7
       person_id = SecureRandom.uuid_v7
       cycle = create(:assessment_cycle, tenant: @tenant, framework_id: fw_id)
-      create(:assessment_cycle_participant, :withdrawn,
+      create(:assessment_cycle_enrollment, :withdrawn,
         tenant: @tenant, cycle: cycle, person_id: person_id)
 
       assert_equal({}, AssessmentCycle.open_cycles_for([ [ fw_id, person_id ] ]))
@@ -54,8 +54,8 @@ class AssessmentCycleTest < ActiveSupport::TestCase
       p1 = SecureRandom.uuid_v7
       p2 = SecureRandom.uuid_v7
       cycle = create(:assessment_cycle, tenant: @tenant, framework_id: fw_id)
-      create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle, person_id: p1)
-      create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle, person_id: p2)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle, person_id: p1)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle, person_id: p2)
 
       result = AssessmentCycle.open_cycles_for([ [ fw_id, p1 ], [ fw_id, p2 ] ])
 
@@ -69,8 +69,8 @@ class AssessmentCycleTest < ActiveSupport::TestCase
       fw2 = SecureRandom.uuid_v7
       cycle1 = create(:assessment_cycle, tenant: @tenant, framework_id: fw1)
       cycle2 = create(:assessment_cycle, tenant: @tenant, framework_id: fw2)
-      create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle1, person_id: p1)
-      create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle2, person_id: p1)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle1, person_id: p1)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle2, person_id: p1)
 
       result = AssessmentCycle.open_cycles_for([ [ fw1, p1 ] ])
 

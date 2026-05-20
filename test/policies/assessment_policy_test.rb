@@ -136,7 +136,7 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     setup do
       ActsAsTenant.with_tenant(@tenant) do
         cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
-        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
           person_id: @person.id, status: "enrolled")
       end
     end
@@ -150,7 +150,9 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     setup do
       @cycle = ActsAsTenant.with_tenant(@tenant) do
         cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
-        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
+          person_id: @person.id, status: "enrolled")
+        create(:assessment_cycle_progress, tenant: @tenant, cycle: cycle,
           person_id: @person.id, status: "started", started_at: Time.current)
         cycle
       end
@@ -184,7 +186,9 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     setup do
       ActsAsTenant.with_tenant(@tenant) do
         cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
-        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
+          person_id: @person.id, status: "enrolled")
+        create(:assessment_cycle_progress, tenant: @tenant, cycle: cycle,
           person_id: @person.id, status: "aligning", started_at: 1.day.ago,
           alignment_started_at: Time.current, alignment_started_by_id: @manager.id)
       end
@@ -225,7 +229,9 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     setup do
       ActsAsTenant.with_tenant(@tenant) do
         cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id)
-        create(:assessment_cycle_participant, tenant: @tenant, cycle: cycle,
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
+          person_id: @person.id, status: "enrolled")
+        create(:assessment_cycle_progress, tenant: @tenant, cycle: cycle,
           person_id: @person.id, status: "aligned", started_at: 1.day.ago,
           aligned_at: Time.current)
       end

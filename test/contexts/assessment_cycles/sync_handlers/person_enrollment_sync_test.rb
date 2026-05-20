@@ -14,6 +14,19 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSyncTest < ActiveSupport::
     @person_id = SecureRandom.uuid_v7
 
     @pd_handler.assign_to_framework(@person_id, @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+
+    # These tests call `@handler.call(event)` directly, bypassing the live
+    # publish-time fan-out where CurrentState would normally create the
+    # cycle read-model row first. Seed it here so downstream CurrentAssessment
+    # writes to `AssessmentCycleProgress` (`belongs_to :cycle`) succeed.
+    #
+    # The factory row is created as :closed so `AutoEnrollNewAssignments`
+    # (which fires on `assign_to_framework` below) doesn't try to load the
+    # empty cycle aggregate and raise "Cycle not defined" — it only
+    # auto-enrolls into open cycles. The sync handler under test doesn't
+    # care about cycle status; it dispatches `join_cycle` unconditionally.
+    create(:assessment_cycle, :closed,
+      tenant: @tenant, cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1)
   end
 
   teardown do

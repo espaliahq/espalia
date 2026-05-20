@@ -77,13 +77,13 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
   def destroy
     authorize @cycle, :unenroll?
 
-    participant = @cycle.participants.find(params.expect(:id))
+    enrollment = @cycle.enrollments.find(params.expect(:id))
     reason = params[:reason].presence || "manual"
 
     ActiveRecord::Base.transaction do
       AssessmentCycles::CommandHandler.new.unenroll(
         @cycle.cycle_id,
-        participant.person_id,
+        enrollment.person_id,
         reason,
         unenrolled_by: current_person&.id
       )

@@ -3,10 +3,23 @@
 # Synchronous projection that materialises assessment cycle state.
 #
 # Subscribes to AssessmentCycles aggregate events and maintains the
-# `assessment_cycles` and `assessment_cycle_participants` read models.
+# `assessment_cycles` and `assessment_cycle_enrollments` read models.
 # Runs in the same transaction as the event publish.
 #
+# Owns enrollment lifecycle (enrolled / withdrawn). Per-cycle journey
+# progress (started_at, alignment timestamps) lives on the sibling
+# `assessment_cycle_progress` table, owned by
+# {PersonDevelopment::Projections::CurrentAssessment}.
+#
 class AssessmentCycles::Projections::CurrentState
+  # Stable identifier used as the natural key in `projection_versions.name`.
+  # See `docs/guidelines/event-sourcing.md` for the projection contract.
+  PROJECTION_NAME = "assessment_cycles/current_state"
+
+  # Bump when `reset!` or any handler in this projection would write
+  # different state from the same event payload than before.
+  CODE_VERSION = 1
+
   # All event classes this projection handles.
   #
   # @return [Array<Class>]
@@ -17,6 +30,22 @@ class AssessmentCycles::Projections::CurrentState
       AssessmentCycles::Events::PersonUnenrolled,
       AssessmentCycles::Events::CycleClosed
     ]
+  end
+
+  # Truncates every read model this projection writes, scoped to one tenant.
+  # Idempotent. Wrapped in tenant context so callers don't have to remember.
+  #
+  # `AssessmentCycle.destroy_all` cascades via `dependent: :destroy` to
+  # `enrollments` only. `assessment_cycle_progress` is owned by
+  # {PersonDevelopment::Projections::CurrentAssessment} and is NOT touched
+  # here — a single-projection rebuild of `assessment_cycles/current_state`
+  # must not wipe another projection's read model.
+  #
+  # @param tenant [Tenant]
+  def self.reset!(tenant:)
+    ActsAsTenant.with_tenant(tenant) do
+      AssessmentCycle.where(tenant_id: tenant.id).destroy_all
+    end
   end
 
   # @param event [RubyEventStore::Event]
@@ -50,44 +79,35 @@ class AssessmentCycles::Projections::CurrentState
     )
   end
 
-  # Upserts the participant row rather than unconditionally creating one.
+  # Upserts the enrollment row rather than unconditionally creating one.
   #
-  # The `assessment_cycle_participants` table has a unique index on
+  # The `assessment_cycle_enrollments` table has a unique index on
   # `(cycle_id, person_id)`, and `handle_person_unenrolled` preserves
   # withdrawn rows by flipping `status` rather than deleting. Without the
   # upsert below, re-enrolling a previously-withdrawn participant collides
-  # with the stale row via `idx_assessment_cycle_participants_unique`.
-  #
-  # All lifecycle columns are reset because a re-enrolled person starts
-  # the cycle fresh — displaying their previous started_at/aligned_at
-  # would misrepresent progress on the current enrollment.
+  # with the stale row via `idx_assessment_cycle_enrollments_unique`.
   def handle_person_enrolled(event)
-    participant = AssessmentCycleParticipant.find_or_initialize_by(
+    enrollment = AssessmentCycleEnrollment.find_or_initialize_by(
       cycle_id: event.data[:cycle_id],
       person_id: event.data[:person_id]
     )
-    participant.assign_attributes(
+    enrollment.assign_attributes(
       status: "enrolled",
       enrolled_at: event.metadata[:timestamp] || Time.current,
-      started_at: nil,
-      alignment_started_at: nil,
-      alignment_started_by_id: nil,
-      aligned_at: nil,
-      aligned_by_id: nil,
       withdrawn_at: nil,
       withdrawal_reason: nil
     )
-    participant.save!
+    enrollment.save!
   end
 
   def handle_person_unenrolled(event)
-    participant = AssessmentCycleParticipant.find_by(
+    enrollment = AssessmentCycleEnrollment.find_by(
       cycle_id: event.data[:cycle_id],
       person_id: event.data[:person_id]
     )
-    return unless participant
+    return unless enrollment
 
-    participant.update!(
+    enrollment.update!(
       status: "withdrawn",
       withdrawn_at: event.metadata[:timestamp] || Time.current,
       withdrawal_reason: event.data[:reason]
@@ -102,8 +122,8 @@ class AssessmentCycles::Projections::CurrentState
     cycle.update!(status: "closed", closed_at: closed_at)
 
     # Mark any still-enrolled participants as withdrawn with cycle_closed reason
-    cycle.participants.where.not(status: "withdrawn").find_each do |participant|
-      participant.update!(
+    cycle.enrollments.where.not(status: "withdrawn").find_each do |enrollment|
+      enrollment.update!(
         status: "withdrawn",
         withdrawn_at: closed_at,
         withdrawal_reason: "cycle_closed"

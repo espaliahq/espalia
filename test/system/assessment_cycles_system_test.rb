@@ -137,8 +137,8 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
 
       # Assertion at the model layer too, in case the UI changes
       ActsAsTenant.with_tenant(@tenant) do
-        assert AssessmentCycleParticipant.for_person(new_person_id).active.exists?,
-          "expected auto-enrollment to create a participant row for the new hire"
+        assert AssessmentCycleEnrollment.for_person(new_person_id).active.exists?,
+          "expected auto-enrollment to create an enrollment row for the new hire"
       end
     end
   end

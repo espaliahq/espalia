@@ -21,6 +21,14 @@
 # See docs/architecture/framework-aggregate.md for the full classification.
 #
 class Frameworks::Projections::PublishedState
+  # Stable identifier used as the natural key in `projection_versions.name`.
+  # See `docs/guidelines/event-sourcing.md` for the projection contract.
+  PROJECTION_NAME = "frameworks/published_state"
+
+  # Bump when `reset!` or any handler in this projection would write
+  # different state from the same event payload than before.
+  CODE_VERSION = 1
+
   # All event classes this projection handles.
   #
   # @return [Array<Class>] event classes
@@ -64,6 +72,32 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::CollaboratorRoleChanged,
       Frameworks::Events::CollaboratorRemoved
     ]
+  end
+
+  # Truncates every read model this projection writes, scoped to one tenant.
+  # Idempotent.
+  #
+  # `FrameworkState::Framework.destroy_all` cascades through
+  # `role_families` → roles → levels/bindings/illustrations,
+  # `capability_categories` → capabilities → expectations,
+  # `suggested_edits`, and the `explorer_graph` snapshot — all via
+  # `dependent: :destroy`. The aggregate-side `FrameworkExplorerGraph`
+  # cache is cleared with the framework; live aggregate writes will
+  # rebuild it on next access.
+  #
+  # `FrameworkState::Collaborator` and `FrameworkState::MigrationMapping`
+  # are NOT associated to Framework via Rails associations and must be
+  # deleted explicitly.
+  #
+  # Wrapped in tenant context so callers don't have to remember.
+  #
+  # @param tenant [Tenant]
+  def self.reset!(tenant:)
+    ActsAsTenant.with_tenant(tenant) do
+      FrameworkState::Collaborator.where(tenant_id: tenant.id).delete_all
+      FrameworkState::MigrationMapping.where(tenant_id: tenant.id).delete_all
+      FrameworkState::Framework.where(tenant_id: tenant.id).destroy_all
+    end
   end
 
   # @param event [RubyEventStore::Event]
