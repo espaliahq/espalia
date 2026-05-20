@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 begin
   namespace :development do
     desc "run erblint"
