@@ -17,7 +17,7 @@ services:
     name: growthos-web
     runtime: ruby
     plan: starter
-    region: sydney
+    region: singapore
     branch: main
     autoDeploy: true
     healthCheckPath: /up
@@ -51,7 +51,7 @@ services:
     name: growthos-worker
     runtime: ruby
     plan: starter
-    region: sydney
+    region: singapore
     branch: main
     autoDeploy: true
     buildCommand: ./bin/render-build
@@ -79,6 +79,6 @@ databases:
   - name: growthos-postgres
     databaseName: growth_os_production
     plan: basic-256mb
-    region: sydney
+    region: singapore
     postgresMajorVersion: "16"
     ipAllowList: []
