@@ -2,7 +2,7 @@
 
 class CreateFrameworkStates < ActiveRecord::Migration[8.1]
   def change
-    create_table :framework_states, id: :uuid do |t|
+    create_table :framework_states, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, null: false, foreign_key: true
       t.uuid :framework_id, null: false
       t.string :name, null: false
@@ -22,10 +22,10 @@ class CreateFrameworkStates < ActiveRecord::Migration[8.1]
     # by FrameworksController#show/#edit. See
     # docs/architecture/framework-edit-mode-benchmarks.md for why the
     # explorer uses this snapshot rather than the FrameworkState AR tables.
-    # framework_id is the natural key — no auto-generated default, every
-    # insert must name the framework the snapshot belongs to. `id: false` +
-    # explicit primary_key column keeps Rails from giving `framework_id`
-    # the gen_random_uuid() default the :uuid id shortcut adds.
+    # framework_id is the natural key — every insert must name the framework
+    # the snapshot belongs to. `id: false` + explicit `t.uuid :framework_id,
+    # primary_key: true` keeps the framework_id as the PK without an
+    # auto-generated default; the snapshot writer always supplies it.
     create_table :framework_explorer_graphs, id: false do |t|
       t.uuid :framework_id, null: false, primary_key: true
       # Every framework read model is row-level tenant-scoped via

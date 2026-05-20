@@ -2,7 +2,7 @@
 
 class CreatePeople < ActiveRecord::Migration[8.1]
   def change
-    create_table :people, id: :uuid do |t|
+    create_table :people, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, null: false, foreign_key: true
       t.references :manager, type: :uuid, null: true, foreign_key: { to_table: :people }
 

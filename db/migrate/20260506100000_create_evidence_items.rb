@@ -2,7 +2,7 @@
 
 class CreateEvidenceItems < ActiveRecord::Migration[8.1]
   def change
-    create_table :evidence_items, id: :uuid do |t|
+    create_table :evidence_items, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, foreign_key: true, null: false
       t.uuid :person_id,            null: false
       t.uuid :framework_id,         null: false

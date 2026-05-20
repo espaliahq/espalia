@@ -16,7 +16,7 @@
 # one projection writer.
 class CreateAssessmentCycleEnrollmentsAndProgress < ActiveRecord::Migration[8.1]
   def change
-    create_table :assessment_cycle_enrollments, id: :uuid do |t|
+    create_table :assessment_cycle_enrollments, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, foreign_key: true, null: false
       t.uuid :cycle_id, null: false
       t.uuid :person_id, null: false
@@ -33,7 +33,7 @@ class CreateAssessmentCycleEnrollmentsAndProgress < ActiveRecord::Migration[8.1]
     add_index :assessment_cycle_enrollments, [ :tenant_id, :person_id, :status ],
               name: "idx_assessment_cycle_enrollments_by_person_status"
 
-    create_table :assessment_cycle_progress, id: :uuid do |t|
+    create_table :assessment_cycle_progress, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, foreign_key: true, null: false
       t.uuid :cycle_id, null: false
       t.uuid :person_id, null: false

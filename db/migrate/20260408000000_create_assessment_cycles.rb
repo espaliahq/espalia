@@ -2,7 +2,7 @@
 
 class CreateAssessmentCycles < ActiveRecord::Migration[8.1]
   def change
-    create_table :assessment_cycles, id: :uuid do |t|
+    create_table :assessment_cycles, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, foreign_key: true, null: false
       t.uuid :cycle_id, null: false
       t.uuid :framework_id, null: false
