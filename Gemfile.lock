@@ -79,8 +79,8 @@ GEM
       rails (>= 6.0)
     addressable (2.9.0)
       public_suffix (>= 2.0.2, < 8.0)
-    aggregate_root (2.18.0)
-      ruby_event_store (= 2.18.0)
+    aggregate_root (2.19.1)
+      ruby_event_store (= 2.19.1)
     arkency-command_bus (0.4.1)
       concurrent-ruby
     ast (2.4.3)
@@ -374,17 +374,17 @@ GEM
     rails-html-sanitizer (1.7.0)
       loofah (~> 2.25)
       nokogiri (>= 1.15.7, != 1.16.7, != 1.16.6, != 1.16.5, != 1.16.4, != 1.16.3, != 1.16.2, != 1.16.1, != 1.16.0.rc1, != 1.16.0)
-    rails_event_store (2.18.0)
+    rails_event_store (2.19.1)
       activejob (>= 6.0)
       activemodel (>= 6.0)
       activesupport (>= 6.0)
-      aggregate_root (= 2.18.0)
+      aggregate_root (= 2.19.1)
       arkency-command_bus (>= 0.4)
-      rails_event_store_active_record (= 2.18.0)
-      ruby_event_store (= 2.18.0)
-      ruby_event_store-browser (= 2.18.0)
-    rails_event_store_active_record (2.18.0)
-      ruby_event_store-active_record (= 2.18.0)
+      rails_event_store_active_record (= 2.19.1)
+      ruby_event_store (= 2.19.1)
+      ruby_event_store-browser (= 2.19.1)
+    rails_event_store_active_record (2.19.1)
+      ruby_event_store-active_record (= 2.19.1)
     railties (8.1.3)
       actionpack (= 8.1.3)
       activesupport (= 8.1.3)
@@ -443,14 +443,14 @@ GEM
     ruby-vips (2.3.0)
       ffi (~> 1.12)
       logger
-    ruby_event_store (2.18.0)
+    ruby_event_store (2.19.1)
       concurrent-ruby (~> 1.0, >= 1.1.6)
-    ruby_event_store-active_record (2.18.0)
+    ruby_event_store-active_record (2.19.1)
       activerecord (>= 6.0)
-      ruby_event_store (= 2.18.0)
-    ruby_event_store-browser (2.18.0)
+      ruby_event_store (= 2.19.1)
+    ruby_event_store-browser (2.19.1)
       rack
-      ruby_event_store (= 2.18.0)
+      ruby_event_store (= 2.19.1)
     rubyzip (3.3.0)
     securerandom (0.4.1)
     selenium-webdriver (4.44.0)
@@ -616,7 +616,7 @@ CHECKSUMS
   activesupport (8.1.3) sha256=21a5e0dfbd4c3ddd9e1317ec6a4d782fa226e7867dc70b0743acda81a1dca20e
   acts_as_tenant (1.0.1) sha256=6944e4d64533337938a8817a6b4ff9b11189c9dcc0b1333bb89f3821a4c14c53
   addressable (2.9.0) sha256=7fdf6ac3660f7f4e867a0838be3f6cf722ace541dd97767fa42bc6cfa980c7af
-  aggregate_root (2.18.0) sha256=e295e6808f138d5e729f8415bccf9dbfb33f68b35c7d26e9530a525a0c1f1056
+  aggregate_root (2.19.1) sha256=c387ee99a428944a08a96978e6ddf6ddb6ce93459d64955c0cb4f0766c110a2d
   arkency-command_bus (0.4.1) sha256=8acac50774080ecf6828ba2f953f1ae293e80878efd555267dbd61b2ee764bde
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
@@ -628,7 +628,6 @@ CHECKSUMS
   bootsnap (1.24.4) sha256=a4d939fc2cc5242a83d3a7cb4fb97743ac58475afe91e0600479a3df6f117541
   brakeman (8.0.4) sha256=7bf921fa9638544835df9aa7b3e720a9a72c0267f34f92135955edd80d4dcf6f
   builder (3.3.0) sha256=497918d2f9dca528fdca4b88d84e4ef4387256d984b8154e9d5d3fe5a9c8835f
-  bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
   bundler-audit (0.9.3) sha256=81c8766c71e47d0d28a0f98c7eed028539f21a6ea3cd8f685eb6f42333c9b4e9
   capybara (3.40.0) sha256=42dba720578ea1ca65fd7a41d163dd368502c191804558f6e0f71b391054aeef
   concurrent-ruby (1.3.6) sha256=6b56837e1e7e5292f9864f34b69c5a2cbc75c0cf5338f1ce9903d10fa762d5ab
@@ -746,8 +745,8 @@ CHECKSUMS
   rails (8.1.3) sha256=6d017ba5348c98fc909753a8169b21d44de14d2a0b92d140d1a966834c3c9cd3
   rails-dom-testing (2.3.0) sha256=8acc7953a7b911ca44588bf08737bc16719f431a1cc3091a292bca7317925c1d
   rails-html-sanitizer (1.7.0) sha256=28b145cceaf9cc214a9874feaa183c3acba036c9592b19886e0e45efc62b1e89
-  rails_event_store (2.18.0) sha256=44375ad7e2c48f83b6c48cad3e541bf41cc21e857c5b8b7366d4f9f762d3f79f
-  rails_event_store_active_record (2.18.0) sha256=628771ec04cf43daecda104a70efc68ccc0701aff8ceea9e17aed96907646276
+  rails_event_store (2.19.1) sha256=7e1d649958c65fee72cda4a50f271dc7e3e31503c9a48d1a15ad2ee5fdd84e10
+  rails_event_store_active_record (2.19.1) sha256=e5ad7fe661ee802bbb144f9c39eceb16c9cf09d314605e6ef75cd7afcb76dfbf
   railties (8.1.3) sha256=913eb0e0cb520aac687ffd74916bd726d48fa21f47833c6292576ef6a286de22
   rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
@@ -764,9 +763,9 @@ CHECKSUMS
   rubocop-rails-omakase (1.1.0) sha256=2af73ac8ee5852de2919abbd2618af9c15c19b512c4cfc1f9a5d3b6ef009109d
   ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
   ruby-vips (2.3.0) sha256=e685ec02c13969912debbd98019e50492e12989282da5f37d05f5471442f5374
-  ruby_event_store (2.18.0) sha256=ffda63232044e2cbb4c510bf59793eb248d2b4107a7b8af97dc2424591b1fa91
-  ruby_event_store-active_record (2.18.0) sha256=f9277b3cbf894c360de2bc578193e7922fa4f9e24a7abb10cadd8a20885253d4
-  ruby_event_store-browser (2.18.0) sha256=76fc40ce27bc038e9ac8dddb1375ea3e78b36f8565626cb1bdf0d2ae523b592d
+  ruby_event_store (2.19.1) sha256=2e5eb4da5dc822c7983d8b3346a92c0643f35825798bbdb8bdcebb78f5be76eb
+  ruby_event_store-active_record (2.19.1) sha256=f23b59183d4e310354bac53f83e7d165c22ab226503b88f313d491f39f727d3c
+  ruby_event_store-browser (2.19.1) sha256=8a0ccdb80c942a8abc4a2e872c3345fb98308a371f11b08dc73f4f1909bab694
   rubyzip (3.3.0) sha256=a372fc67892a4f8c0bc8ec906b720353d8e48807a64b2e63adf99b1e3583a034
   securerandom (0.4.1) sha256=cc5193d414a4341b6e225f0cb4446aceca8e50d5e1888743fac16987638ea0b1
   selenium-webdriver (4.44.0) sha256=6f1df072529af369589c46f0e01132952aabb250cfd683c274d74dc1eb5d8477
