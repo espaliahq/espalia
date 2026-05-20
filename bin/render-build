@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -o errexit
 
+# Diagnostic: confirm RAILS_MASTER_KEY reaches the build environment.
+# Prints the length only — never the value. Remove after first green deploy.
+echo "DIAG: RAILS_MASTER_KEY length=${#RAILS_MASTER_KEY}"
+
 bundle install
 bundle exec bootsnap precompile --gemfile app/ lib/
 bundle exec bin/rails assets:precompile
