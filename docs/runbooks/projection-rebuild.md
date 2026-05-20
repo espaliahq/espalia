@@ -11,7 +11,7 @@ Use this when a code change makes a projection's current read model state incons
 | Rule | What to do |
 |---|---|
 | **Snapshot first, always** | Take a manual Postgres snapshot via the Render dashboard before any `reset!` / `rebuild`. Verify the timestamp. The daily auto-backup may be up to 24h stale — do not rely on it as the sole line of defence. |
-| **Rehearse on staging** | Run the same rebuild on a staging environment seeded from a recent prod snapshot. Verify read-model state matches expectations. |
+| **Rehearse before running on prod** | If a staging environment exists, run the same rebuild there against a recent prod snapshot. Today there is no staging — instead, run the projection's round-trip test locally (`test/support/projection_replay.rb` helpers) and rely on the canary-tenant step below. Stand up staging before any high-risk rebuild. |
 | **Canary tenant first** | Run `events:projections:rebuild[<name>,<canary_tenant_id>]` against one low-impact tenant. Eyeball their UI / API surfaces. Only then run the global form. Single-tenant rebuild does **not** stamp `projection_versions`; the global form does. |
 | **Quiesce writes for high-churn projections** | For `PublishedState` / `CurrentAssessment` under load, pause command handlers or run during a quiet window. Live events arriving mid-replay get projected by the live subscriber *and* counted by the task — same event applied twice. |
 | **Rollback is restore-from-snapshot** | Events are immutable; the event store doesn't need rolling back. Read models do. Rollback = restore the snapshot you took in step 1. The round-trip test (per projection) guarantees a clean rebuild reproduces identical state. |
@@ -35,7 +35,7 @@ The version is a human-decided signal: bump it when handler logic or `reset!` se
 | Renamed an event field | No — add an upcaster |
 | New read-model index | No — DDL only, predeploy covers it |
 
-If you're not sure, rebuild on a staging tenant and diff before/after read models.
+If you're not sure, run the projection's round-trip test locally (`test/support/projection_replay.rb`) — it snapshots read-model state, replays, and diffs. When staging exists, prefer rebuilding there against a prod snapshot.
 
 ## When you must NOT rebuild
 
@@ -89,7 +89,7 @@ This does NOT stamp `projection_versions` — it's an operational fix, not a "pr
 
 ### Path D — rebuild everything (bulk recovery)
 
-For full recovery after a major event-store restore, a fresh staging seed, or a sweeping refactor that touches every projection:
+For full recovery after a major event-store restore, a fresh environment seed, or a sweeping refactor that touches every projection:
 
 ```bash
 bin/rails events:projections:rebuild_all

@@ -31,7 +31,6 @@ app/
 - **Namespace style.** Use `class Hris::Hibob::X` not nested modules (per [rails-controllers.md](rails-controllers.md) style). The `app/integrations/` directory is a Zeitwerk root — files map to `Hris::*` directly (no `Integrations::` prefix).
 - **Errors namespaced under `Errors` module.** Zeitwerk expects one constant per file; the errors module holds all error classes in a single `errors.rb`: `Hris::Hibob::Errors::AuthenticationError`.
 - **Tenant metadata on RES commands.** When dispatching PersonDevelopment commands (assign/change role/change level) from an adapter, wrap the loop in `Rails.configuration.event_store.with_metadata(tenant_id: tenant.id)`. The projection reads this to set `ActsAsTenant` context.
-- **Delete the schema, edit old migrations.** No production DB yet — when adding a column, retroactively edit the original `create_` migration and regenerate `db/schema.rb`. Do NOT add incremental migrations.
 
 ## Configuring role/level mappings
 
@@ -84,7 +83,7 @@ Silently skipped. Each unmapped title is added to `result[:unmapped_titles]` (a 
 
 To pull an additional field (e.g. employment type, cost center, location) through into `Person`:
 
-1. **Migration** — add column to `db/migrate/20260313042600_create_people.rb` retroactively, delete `db/schema.rb`, run `bin/rails db:drop db:create db:migrate`.
+1. **Migration** — generate a new migration (`bin/rails generate migration AddXyzToPeople xyz:string`), run `bin/rails db:migrate`.
 2. **Client** — add the field to `BASE_FIELDS` in `Hris::Hibob::Client`. For custom columns, add a constructor parameter like `level_field_id` and include it via `default_fields`.
 3. **ResponseMapper** — extract from the raw or humanReadable hash and add to the attrs hash returned by `#call`. Use `dig_human_readable_work` for list-type fields, `dig_work` for plain strings.
 4. **Tests** — add a case to `response_mapper_test.rb` with fixture data. Update `test/fixtures/files/hibob/people_search_response.json` if needed.

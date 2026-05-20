@@ -1,6 +1,6 @@
 # Event-Sourcing Standards
 
-**Production data is live as of 2026-05-13.** Past events are real history. Read this before modifying events, aggregates, projections, sync handlers, or read models.
+**Production data is live as of 2026-05-20.** Past events are real history. Read this before modifying events, aggregates, projections, sync handlers, or read models.
 
 > **See also:**
 > - [docs/runbooks/projection-rebuild.md](../runbooks/projection-rebuild.md) — operational steps for rebuilds
@@ -112,7 +112,7 @@ Whenever you touch an aggregate handler or an event payload, audit both ends.
 **Production data is live.** Any destructive operation requires:
 
 1. **Fresh Postgres snapshot** via Render dashboard. Verify the timestamp before proceeding. Do not rely on the daily auto-backup.
-2. **Rehearse on staging** seeded from a recent prod snapshot.
+2. **Round-trip test locally**, OR rehearse on staging seeded from a recent prod snapshot when staging is available. There is no staging environment today — until one exists, lean harder on the local round-trip helpers (`test/support/projection_replay.rb`) and the canary-tenant step below.
 3. **Canary tenant first** for projection rebuilds: `events:projections:rebuild[name,<canary_tenant_id>]`. Verify UI/API surfaces before global rebuild.
 4. **Operator sign-off** for any new `CODE_VERSION` bump that touches a high-volume projection (`PublishedState`, `CurrentAssessment`).
 
@@ -129,7 +129,7 @@ See [docs/runbooks/projection-rebuild.md](../runbooks/projection-rebuild.md) for
 | New event type, no past events | No | No (additive) |
 | Existing event's payload shape | Use an upcaster, not a rebuild | No |
 
-When in doubt, run the round-trip test for the affected projection on a snapshot of staging data and diff before/after read models.
+When in doubt, run the round-trip test for the affected projection locally and diff before/after read models. When staging exists, prefer rebuilding against a prod snapshot there.
 
 ## Anti-patterns
 
