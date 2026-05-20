@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class CreateFrameworkSuggestedEdits < ActiveRecord::Migration[8.1]
   def change
     create_table :framework_suggested_edits, id: :uuid, default: nil do |t|

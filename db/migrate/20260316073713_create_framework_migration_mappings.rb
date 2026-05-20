@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class CreateFrameworkMigrationMappings < ActiveRecord::Migration[8.1]
   def change
     create_table :framework_migration_mappings, id: :uuid, default: nil do |t|
