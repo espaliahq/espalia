@@ -110,7 +110,8 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       end
       screenshot("after_tenant_switch")
 
-      assert_current_path root_path
+      # Root redirects to /frameworks when the user has no assessments.
+      assert_current_path frameworks_path
     end
   end
 end

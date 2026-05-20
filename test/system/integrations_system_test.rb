@@ -106,7 +106,9 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       visit integrations_path
       screenshot("member_denied")
 
-      assert_current_path root_path
+      # / redirects to /frameworks for users without assessments; the
+      # not-authorized flash is preserved by PagesController#index.
+      assert_current_path frameworks_path
       assert_text "You are not authorized to perform this action"
     end
   end
