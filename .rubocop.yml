@@ -6,3 +6,10 @@ inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 # # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
 # Layout/SpaceInsideArrayLiteralBrackets:
 #   Enabled: false
+
+# Project guideline (docs/guidelines/rails-models.md) mandates the
+# frozen_string_literal magic comment on every Ruby file. Omakase disables
+# this cop — re-enable so precommit catches gaps.
+Style/FrozenStringLiteralComment:
+  Enabled: true
+  EnforcedStyle: always

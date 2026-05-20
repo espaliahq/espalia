@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 class CreateFrameworkSuggestedEdits < ActiveRecord::Migration[8.1]
   def change
-    create_table :framework_suggested_edits, id: :uuid do |t|
+    create_table :framework_suggested_edits, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, foreign_key: true, null: false
       t.uuid :framework_id, null: false
       t.uuid :suggestion_id, null: false

@@ -14,7 +14,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  create_table "assessment_cycle_enrollments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "assessment_cycle_enrollments", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "cycle_id", null: false
     t.datetime "enrolled_at", null: false
@@ -29,7 +29,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_assessment_cycle_enrollments_on_tenant_id"
   end
 
-  create_table "assessment_cycle_progress", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "assessment_cycle_progress", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "aligned_at"
     t.uuid "aligned_by_id"
     t.datetime "alignment_started_at"
@@ -50,7 +50,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_assessment_cycle_progress_on_tenant_id"
   end
 
-  create_table "assessment_cycles", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "assessment_cycles", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "closed_at"
     t.datetime "created_at", null: false
     t.uuid "cycle_id", null: false
@@ -69,7 +69,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_assessment_cycles_on_tenant_id"
   end
 
-  create_table "assessment_level_ratings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "assessment_level_ratings", id: :uuid, default: nil, force: :cascade do |t|
     t.text "aligned_comment"
     t.string "aligned_frequency"
     t.uuid "capability_stable_id", null: false
@@ -122,7 +122,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["stream", "position"], name: "index_event_store_events_in_streams_on_stream_and_position", unique: true
   end
 
-  create_table "evidence_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "evidence_items", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "author_id", null: false
     t.uuid "capability_stable_id", null: false
     t.text "content", null: false
@@ -149,7 +149,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["withdrawn_by_id"], name: "idx_evidence_items_withdrawn_by_id", where: "(withdrawn_by_id IS NOT NULL)"
   end
 
-  create_table "framework_behavioural_expectations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "capability_id", null: false
     t.datetime "created_at", null: false
     t.text "description", null: false
@@ -163,7 +163,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_behavioural_expectations_on_tenant_id"
   end
 
-  create_table "framework_capabilities", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_capabilities", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "capability_id", null: false
     t.uuid "category_id", null: false
     t.datetime "created_at", null: false
@@ -178,7 +178,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_capabilities_on_tenant_id"
   end
 
-  create_table "framework_capability_categories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_capability_categories", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "category_id", null: false
     t.datetime "created_at", null: false
     t.decimal "deficit_threshold", precision: 5, scale: 2
@@ -193,7 +193,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_capability_categories_on_tenant_id"
   end
 
-  create_table "framework_capability_role_bindings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_capability_role_bindings", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "binding_id", null: false
     t.uuid "capability_id", null: false
     t.datetime "created_at", null: false
@@ -208,7 +208,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_capability_role_bindings_on_tenant_id"
   end
 
-  create_table "framework_collaborators", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_collaborators", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "framework_id", null: false
     t.uuid "person_id", null: false
@@ -234,7 +234,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_explorer_graphs_on_tenant_id"
   end
 
-  create_table "framework_levels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_levels", id: :uuid, default: nil, force: :cascade do |t|
     t.string "code", null: false
     t.datetime "created_at", null: false
     t.boolean "is_entry", default: false, null: false
@@ -249,7 +249,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_levels_on_tenant_id"
   end
 
-  create_table "framework_migration_mappings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_migration_mappings", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "framework_id", null: false
     t.uuid "from_stable_id"
@@ -266,7 +266,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_migration_mappings_on_tenant_id"
   end
 
-  create_table "framework_role_families", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_role_families", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "department"
     t.text "description"
@@ -280,7 +280,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_role_families_on_tenant_id"
   end
 
-  create_table "framework_role_illustrations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_role_illustrations", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "description", null: false
     t.uuid "expectation_id", null: false
@@ -295,7 +295,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_role_illustrations_on_tenant_id"
   end
 
-  create_table "framework_roles", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_roles", id: :uuid, default: nil, force: :cascade do |t|
     t.string "code", null: false
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -308,7 +308,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_roles_on_tenant_id"
   end
 
-  create_table "framework_states", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_states", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "current_published_version", default: 0, null: false
     t.decimal "deficit_threshold", precision: 5, scale: 2, default: "1.0", null: false
@@ -325,7 +325,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_states_on_tenant_id"
   end
 
-  create_table "framework_suggested_edits", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "framework_suggested_edits", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "author_id", null: false
     t.datetime "created_at", null: false
     t.text "current_value"
@@ -352,7 +352,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_framework_suggested_edits_on_tenant_id"
   end
 
-  create_table "people", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "people", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "department"
     t.string "email", null: false
@@ -375,7 +375,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["tenant_id"], name: "index_people_on_tenant_id"
   end
 
-  create_table "person_framework_assignments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "person_framework_assignments", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "framework_id", null: false
     t.uuid "level_id", null: false
@@ -393,7 +393,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.integer "version", null: false
   end
 
-  create_table "tenant_users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "tenant_users", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "person_id"
     t.string "role", default: "member", null: false
@@ -406,7 +406,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["user_id"], name: "index_tenant_users_on_user_id"
   end
 
-  create_table "tenants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "tenants", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.jsonb "hris_config", default: {}, null: false
     t.string "hris_credentials"
@@ -417,7 +417,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.index ["slug"], name: "index_tenants_on_slug", unique: true
   end
 
-  create_table "users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "users", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false

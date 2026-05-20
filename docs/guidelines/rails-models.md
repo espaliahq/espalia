@@ -17,13 +17,15 @@
 
 ## UUID v7 Primary Keys
 
-All new models MUST use UUID v7 (RFC 9562) — time-ordered, better index performance than v4.
+All new models MUST use UUID v7 (RFC 9562) — time-ordered, better index performance than v4. v7 IDs land mostly-sequentially in the B-tree index; v4 inserts hit random leaf pages and bloat the working set.
+
+Use `id: :uuid, default: nil` on `create_table` — `default: nil` strips Rails' implicit `gen_random_uuid()` (v4) default. IDs are assigned in Ruby by an `ApplicationRecord` `before_create` callback that calls `SecureRandom.uuid_v7`. Render-managed Postgres 16 has neither the built-in `uuidv7()` (PG 17) nor the `pg_uuidv7` extension, so app-side generation is the portable choice.
 
 ```ruby
 # Migration
-class CreateWidgets < ActiveRecord::Migration[8.0]
+class CreateWidgets < ActiveRecord::Migration[8.1]
   def change
-    create_table :widgets, id: :uuid do |t|
+    create_table :widgets, id: :uuid, default: nil do |t|
       t.references :user, type: :uuid, foreign_key: true
       t.string :status, null: false
       t.timestamps
@@ -31,7 +33,7 @@ class CreateWidgets < ActiveRecord::Migration[8.0]
   end
 end
 
-# Model
+# Model — no extra config needed; ApplicationRecord assigns the id
 class Widget < ApplicationRecord
   has_prefix_id :wgt  # human-readable prefixed IDs for APIs
   belongs_to :user
@@ -39,7 +41,9 @@ class Widget < ApplicationRecord
 end
 ```
 
-Generate manually: `SecureRandom.uuid_v7`
+Generate manually when not using AR (raw SQL, `insert_all`, controller-side IDs for event payloads): `SecureRandom.uuid_v7`.
+
+`insert_all`/`upsert_all` bypass callbacks — supply `id:` explicitly. With the v4 default stripped at the DB layer, an `insert_all` that omits `id` will raise instead of silently writing a v4 — that's the intent.
 
 ## JSONB Storage Patterns
 

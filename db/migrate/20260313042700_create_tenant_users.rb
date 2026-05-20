@@ -2,7 +2,7 @@
 
 class CreateTenantUsers < ActiveRecord::Migration[8.1]
   def change
-    create_table :tenant_users, id: :uuid do |t|
+    create_table :tenant_users, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, null: false, foreign_key: true
       t.references :user, type: :uuid, null: false, foreign_key: true
       t.references :person, type: :uuid, null: true, foreign_key: true
