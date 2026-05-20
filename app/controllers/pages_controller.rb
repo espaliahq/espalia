@@ -3,6 +3,7 @@
 class PagesController < ApplicationController
   # GET /
   def index
+    authorize :pages, :index?
     # Preserve any incoming flash (e.g. Pundit's redirect_back fallback lands
     # here on its way to the actual destination).
     flash.keep
