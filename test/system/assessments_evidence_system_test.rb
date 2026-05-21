@@ -112,9 +112,12 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
       JS
 
       # The redirect carries capability + category but not level_ordinal,
-      # so the cell isn't focused. Use the URL as the sync sentinel for
-      # the PATCH landing.
-      assert_current_path(/capability=#{@cap_stable}/)
+      # so the cell isn't focused. Sync on `category=` — the initial visit
+      # did not pass it but the post-PATCH redirect always does, so this
+      # uniquely identifies "PATCH landed and the redirect happened" and
+      # cannot match the pre-submit URL (which is what the test was
+      # accidentally observing before).
+      assert_current_path(/category=#{@cat_id}/)
 
       ActsAsTenant.with_tenant(@tenant) do
         item = EvidenceItem.find(@evidence_id)
