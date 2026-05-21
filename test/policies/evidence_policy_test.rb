@@ -95,6 +95,21 @@ class EvidencePolicyTest < ActiveSupport::TestCase
         assert policy(item).withdraw?
       end
     end
+
+    should "allow update of own evidence" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
+        assert policy(item).update?
+      end
+    end
+
+    should "deny update once evidence is withdrawn" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
+                      author: @manager, link_status: "withdrawn", withdrawn_at: Time.current)
+        assert_not policy(item).update?
+      end
+    end
   end
 
   context "as an unrelated peer" do
@@ -122,6 +137,13 @@ class EvidencePolicyTest < ActiveSupport::TestCase
         assert_not policy(item).relink?
       end
     end
+
+    should "deny update of evidence they didn't author" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
+        assert_not policy(item).update?
+      end
+    end
   end
 
   context "as a tenant admin (not in chain)" do
@@ -140,6 +162,15 @@ class EvidencePolicyTest < ActiveSupport::TestCase
         assert policy(@assignment).show?
         assert policy(@assignment).create?
         assert policy(item).withdraw?
+      end
+    end
+
+    # Asymmetric: admins can withdraw (content cleanup) but cannot update
+    # (reframing the author's words is a domain judgement).
+    should "still NOT be allowed to update evidence they didn't author" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
+        assert_not policy(item).update?
       end
     end
   end

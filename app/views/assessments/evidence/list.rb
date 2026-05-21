@@ -36,7 +36,8 @@ class Views::Assessments::Evidence::List < Views::Base
             item: item,
             assessment_id: @assessment_id,
             can_withdraw: can_withdraw?(item),
-            can_relink: can_relink?(item)
+            can_relink: can_relink?(item),
+            can_update: can_update?(item)
           )
         end
       end
@@ -83,5 +84,14 @@ class Views::Assessments::Evidence::List < Views::Base
     return false unless @viewer_person_id.present?
 
     item.author_id == @viewer_person_id || @can_relink_others
+  end
+
+  # Author-only edit (matches {EvidencePolicy#update?}); withdrawn items
+  # are not editable.
+  def can_update?(item)
+    return false unless @viewer_person_id.present?
+    return false if item.withdrawn?
+
+    item.author_id == @viewer_person_id
   end
 end

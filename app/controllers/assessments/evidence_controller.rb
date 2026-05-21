@@ -61,6 +61,45 @@ class Assessments::EvidenceController < ApplicationController
       alert: "Could not record evidence: #{e.message}"
   end
 
+  # PATCH /assessments/:assessment_id/evidence/:id
+  def update
+    item = EvidenceItem.find(params.expect(:id))
+    authorize item, :update?, policy_class: EvidencePolicy
+
+    attrs = params.expect(evidence: [
+      :evidence_type, :custom_type_label, :title, :content,
+      external_reference: [ :system, :url, :external_id ]
+    ])
+
+    ext_attrs = attrs[:external_reference]&.to_h
+    if ext_attrs.present?
+      candidate = ExternalReference.new(ext_attrs)
+      unless candidate.valid?
+        head :unprocessable_content
+        return
+      end
+    end
+
+    PersonDevelopment::CommandHandler.new.update_evidence(
+      @assignment.person_id, @assignment.framework_id, item.id,
+      title: attrs[:title].presence,
+      content: attrs[:content].to_s,
+      evidence_type: attrs[:evidence_type],
+      custom_type_label: attrs[:custom_type_label].presence,
+      external_reference: ext_attrs,
+      edited_by_id: current_person.id
+    )
+
+    redirect_to assessment_path(@assignment, redirect_params(item.capability_stable_id)),
+      status: :see_other, notice: "Evidence updated."
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
+  rescue PersonDevelopment::Aggregate::CommandError => e
+    fallback = @assignment ? assessment_path(@assignment) : assessments_path
+    redirect_back fallback_location: fallback,
+      alert: "Could not update evidence: #{e.message}"
+  end
+
   # POST /assessments/:assessment_id/evidence/:id/relink
   def relink
     item = EvidenceItem.find(params.expect(:id))

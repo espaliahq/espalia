@@ -861,4 +861,105 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_match /already withdrawn/, err.message
     end
   end
+
+  context "#update_evidence" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @evidence_id = SecureRandom.uuid_v7
+      @cap_sid = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+        evidence_type: "project_outcome", content: "Original",
+        title: "Old title", author_id: @author_id)
+    end
+
+    should "apply EvidenceUpdated with the new field values" do
+      @aggregate.update_evidence(@evidence_id,
+        title: "New title",
+        content: "Updated content",
+        evidence_type: "code_review",
+        custom_type_label: nil,
+        external_reference: { system: "github", url: "https://github.com/x/y/pull/2" },
+        edited_by_id: @author_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceUpdated, event
+      assert_equal @evidence_id, event.data[:evidence_id]
+      assert_equal "New title", event.data[:title]
+      assert_equal "Updated content", event.data[:content]
+      assert_equal "code_review", event.data[:evidence_type]
+      assert_nil event.data[:custom_type_label]
+      assert_equal "github", event.data[:external_reference][:system]
+      assert_equal @author_id, event.data[:edited_by_id]
+    end
+
+    should "raise on unknown evidence_id" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.update_evidence(SecureRandom.uuid_v7,
+          title: nil, content: "x", evidence_type: "project_outcome",
+          custom_type_label: nil, external_reference: nil, edited_by_id: @author_id)
+      end
+      assert_match /No evidence with id/, err.message
+    end
+
+    should "raise when evidence has been withdrawn" do
+      @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.update_evidence(@evidence_id,
+          title: nil, content: "x", evidence_type: "project_outcome",
+          custom_type_label: nil, external_reference: nil, edited_by_id: @author_id)
+      end
+      assert_match /withdrawn/, err.message
+    end
+
+    should "raise on invalid evidence_type" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.update_evidence(@evidence_id,
+          title: nil, content: "x", evidence_type: "garbage",
+          custom_type_label: nil, external_reference: nil, edited_by_id: @author_id)
+      end
+      assert_match /Invalid evidence type/, err.message
+    end
+
+    should "raise when type is 'other' but custom_type_label is missing" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.update_evidence(@evidence_id,
+          title: nil, content: "x", evidence_type: "other",
+          custom_type_label: nil, external_reference: nil, edited_by_id: @author_id)
+      end
+      assert_match /Custom type label required/, err.message
+    end
+
+    should "raise when type is non-'other' but custom_type_label is given" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.update_evidence(@evidence_id,
+          title: nil, content: "x", evidence_type: "code_review",
+          custom_type_label: "stray", external_reference: nil, edited_by_id: @author_id)
+      end
+      assert_match /only allowed when evidence_type is 'other'/, err.message
+    end
+
+    should "raise on blank content" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.update_evidence(@evidence_id,
+          title: nil, content: "   ", evidence_type: "project_outcome",
+          custom_type_label: nil, external_reference: nil, edited_by_id: @author_id)
+      end
+      assert_match /content cannot be blank/, err.message
+    end
+
+    should "be allowed during alignment (no freeze)" do
+      cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(cycle_id, 1)
+      @aggregate.rate_self(@cap_sid, level_ordinal: 3, frequency: "consistent", cycle_id: cycle_id)
+      @aggregate.start_alignment(cycle_id, started_by_id: @author_id)
+
+      assert_nothing_raised do
+        @aggregate.update_evidence(@evidence_id,
+          title: nil, content: "Late edit", evidence_type: "code_review",
+          custom_type_label: nil, external_reference: nil, edited_by_id: @author_id)
+      end
+    end
+  end
 end

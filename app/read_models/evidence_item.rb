@@ -37,6 +37,7 @@ class EvidenceItem < ApplicationRecord
   belongs_to :tenant
   belongs_to :author, class_name: "Person", foreign_key: :author_id, inverse_of: false, optional: false
   belongs_to :withdrawn_by, class_name: "Person", foreign_key: :withdrawn_by_id, inverse_of: false, optional: true
+  belongs_to :edited_by, class_name: "Person", foreign_key: :edited_by_id, inverse_of: false, optional: true
 
   attribute :external_reference, ExternalReference.to_type, default: -> { ExternalReference.new }
 

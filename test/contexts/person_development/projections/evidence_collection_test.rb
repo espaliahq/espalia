@@ -128,6 +128,57 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
     end
   end
 
+  context "EvidenceUpdated" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @editor = create(:person, tenant: @tenant, name: "Editor")
+      end
+    end
+
+    should "update content fields and stamp edited_at + edited_by_id" do
+      evidence_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: SecureRandom.uuid_v7,
+        level_ordinal: 2, source: "self", evidence_type: "project_outcome",
+        custom_type_label: nil, title: "Old", content: "Old content",
+        external_reference: nil, author_id: @author.id)
+
+      emit(PersonDevelopment::Events::EvidenceUpdated,
+        evidence_id: evidence_id,
+        title: "New title",
+        content: "Improved content",
+        evidence_type: "code_review",
+        custom_type_label: nil,
+        external_reference: { system: "github", url: "https://github.com/o/r/pull/7" },
+        edited_by_id: @editor.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(evidence_id)
+        assert_equal "New title", item.title
+        assert_equal "Improved content", item.content
+        assert_equal "code_review", item.evidence_type
+        assert_nil item.custom_type_label
+        assert_equal "github", item.external_reference.system
+        assert_equal @editor.id, item.edited_by_id
+        assert_not_nil item.edited_at
+        # Identity invariants stay untouched.
+        assert_equal "self", item.source
+        assert_equal @author.id, item.author_id
+        assert_equal "active", item.link_status
+      end
+    end
+
+    should "be a no-op when the row is missing" do
+      assert_nothing_raised do
+        emit(PersonDevelopment::Events::EvidenceUpdated,
+          evidence_id: SecureRandom.uuid_v7,
+          title: nil, content: "x", evidence_type: "project_outcome",
+          custom_type_label: nil, external_reference: nil, edited_by_id: @editor.id)
+      end
+    end
+  end
+
   context "rebuild contract" do
     should "reset! + replay produces identical read-model state" do
       cap_sid     = SecureRandom.uuid_v7
@@ -153,6 +204,13 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         previous_capability_stable_id: cap_sid, previous_level_ordinal: 3,
         new_capability_stable_id: new_cap_sid, new_level_ordinal: 4,
         relinked_by_id: @author.id, rationale: nil)
+
+      append_and_project(PersonDevelopment::Events::EvidenceUpdated,
+        evidence_id: ev2_id,
+        title: "Second (edited)", content: "follow up, expanded",
+        evidence_type: "design_review", custom_type_label: nil,
+        external_reference: { system: "github", url: "https://github.com/o/r/pull/2" },
+        edited_by_id: @author.id)
 
       append_and_project(PersonDevelopment::Events::EvidenceWithdrawn,
         evidence_id: ev1_id, withdrawn_by_id: @author.id, reason: "Test")
