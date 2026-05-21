@@ -49,17 +49,19 @@ export default class extends BaseController {
     if (!this.hasSignalTarget) return
 
     this._observer = new MutationObserver(() => {
-      // Skip the full frame reload when the broadcast was triggered by
-      // THIS client's own form submit (e.g. a rating). The direct
-      // Turbo Stream response already updated the relevant cells —
+      // Skip the matrix + scoring frame reloads when the broadcast was
+      // triggered by THIS client's own form submit (e.g. a rating). The
+      // direct Turbo Stream response already updated those cells —
       // re-fetching the whole matrix frame would flicker and reset
       // scroll position. The suppress window is set in
       // #listenForOwnSubmits and expires shortly after the submit.
-      if (this._suppressReloadUntil &&
-          performance.now() < this._suppressReloadUntil) {
-        return
-      }
-      this.#reloadFrame()
+      //
+      // The activity frame is NOT part of the rating turbo-stream
+      // response, so we always reload it so the rater sees their own
+      // new entry appear in the sidebar.
+      const suppress = this._suppressReloadUntil &&
+        performance.now() < this._suppressReloadUntil
+      this.#reloadFrame({ skipMatrixAndScoring: suppress })
     })
 
     // Watch the signal's parent for childList changes (Turbo Stream replace swaps the element)
@@ -144,8 +146,10 @@ export default class extends BaseController {
     }
   }
 
-  #reloadFrame() {
-    this.#saveToggleState()
+  #reloadFrame({ skipMatrixAndScoring = false } = {}) {
+    if (!skipMatrixAndScoring) {
+      this.#saveToggleState()
+    }
     this.#saveActivityScroll()
 
     // Reload matrix frame. Merge in `capability` and `level_ordinal`
@@ -153,7 +157,7 @@ export default class extends BaseController {
     // URL sync) so focus state survives the reload — without this,
     // the frame's stale `src` (initial server render) drops focus
     // every time a rating triggers a CurrentAssessment broadcast.
-    if (this.hasFrameTarget) {
+    if (!skipMatrixAndScoring && this.hasFrameTarget) {
       const src = this.frameTarget.getAttribute("src")
       if (src) {
         const merged = this.#mergeFocusParams(src)
@@ -163,7 +167,7 @@ export default class extends BaseController {
     }
 
     // Reload scoring panel frame, syncing category from the matrix frame
-    if (this.hasScoringFrameTarget) {
+    if (!skipMatrixAndScoring && this.hasScoringFrameTarget) {
       const src = this.scoringFrameTarget.getAttribute("src")
       if (src) {
         const scoringUrl = new URL(src, window.location.origin)

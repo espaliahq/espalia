@@ -176,7 +176,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
           Views::Assessments::MatrixHeader.new(
             merged_levels: matrix_data[:merged_levels],
             person_level: matrix_data[:person_level],
-            inferred_level: matrix_data[:inferred_level]
+            inferred_level: matrix_data[:inferred_level],
+            context: :alignment
           ),
           layout: false
         )
