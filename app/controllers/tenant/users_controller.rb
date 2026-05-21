@@ -66,18 +66,18 @@ class Tenant::UsersController < ApplicationController
     new_role = params.expect(tenant_user: [ :role ])[:role]
 
     if demoting_last_admin?(@tenant_user, new_role)
-      return redirect_to tenant_user_path(@tenant_user.id),
+      return redirect_to tenant_user_path(@tenant_user),
                          alert: "Cannot remove the last tenant administrator."
     end
 
     @tenant_user.update!(role: new_role)
-    redirect_to tenant_user_path(@tenant_user.id), notice: "Tenant role updated."
+    redirect_to tenant_user_path(@tenant_user), notice: "Tenant role updated."
   end
 
   private
 
   def set_tenant_user
-    @tenant_user = TenantUser.find_by!(id: params.expect(:id))
+    @tenant_user = TenantUser.find(params.expect(:id))
   rescue ActiveRecord::RecordNotFound
     redirect_to tenant_users_path
   end

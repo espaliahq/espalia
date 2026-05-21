@@ -72,7 +72,7 @@ class Views::Tenant::Users::IndexView < Views::Base
   def table_row(tenant_user)
     tr(class: "hover:bg-gray-50 dark:hover:bg-gray-900/30") do
       cell do
-        a(href: tenant_user_path(tenant_user.id),
+        a(href: tenant_user_path(tenant_user),
           class: "font-medium text-primary hover:underline") { display_name(tenant_user) }
       end
       cell { tenant_user.user.email }

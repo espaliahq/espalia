@@ -29,7 +29,7 @@ class Tenant::UsersControllerTest < ActionDispatch::IntegrationTest
 
     context "GET /tenant/users/:id" do
       should "render the user detail page" do
-        get tenant_user_path(@member_tu.id)
+        get tenant_user_path(@member_tu)
         assert_response :success
         assert_includes response.body, @member_user.email
         assert_includes response.body, "Tenant role"
@@ -39,9 +39,9 @@ class Tenant::UsersControllerTest < ActionDispatch::IntegrationTest
 
     context "PATCH /tenant/users/:id" do
       should "promote a member to admin" do
-        patch tenant_user_path(@member_tu.id),
+        patch tenant_user_path(@member_tu),
               params: { tenant_user: { role: "admin" } }
-        assert_redirected_to tenant_user_path(@member_tu.id)
+        assert_redirected_to tenant_user_path(@member_tu)
         assert_equal "admin", @member_tu.reload.role
       end
 
@@ -49,16 +49,16 @@ class Tenant::UsersControllerTest < ActionDispatch::IntegrationTest
         ActsAsTenant.with_tenant(@tenant) do
           create(:tenant_user, tenant: @tenant, user: create(:user), role: :admin)
         end
-        patch tenant_user_path(@admin_tu.id),
+        patch tenant_user_path(@admin_tu),
               params: { tenant_user: { role: "member" } }
-        assert_redirected_to tenant_user_path(@admin_tu.id)
+        assert_redirected_to tenant_user_path(@admin_tu)
         assert_equal "member", @admin_tu.reload.role
       end
 
       should "refuse to demote the last admin" do
-        patch tenant_user_path(@admin_tu.id),
+        patch tenant_user_path(@admin_tu),
               params: { tenant_user: { role: "member" } }
-        assert_redirected_to tenant_user_path(@admin_tu.id)
+        assert_redirected_to tenant_user_path(@admin_tu)
         follow_redirect!
         assert_includes response.body, "last tenant administrator"
         assert_equal "admin", @admin_tu.reload.role
@@ -75,12 +75,12 @@ class Tenant::UsersControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "deny GET /tenant/users/:id" do
-      get tenant_user_path(@admin_tu.id)
+      get tenant_user_path(@admin_tu)
       assert_redirected_to root_path
     end
 
     should "deny PATCH /tenant/users/:id" do
-      patch tenant_user_path(@admin_tu.id),
+      patch tenant_user_path(@admin_tu),
             params: { tenant_user: { role: "member" } }
       assert_redirected_to root_path
       assert_equal "admin", @admin_tu.reload.role

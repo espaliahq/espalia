@@ -90,7 +90,7 @@ class Views::Tenant::Users::ShowView < Views::Base
     label = @tenant_user.admin? ? "Demote to member" : "Promote to admin"
     disabled = @tenant_user.admin? && @last_admin
 
-    form_with_url(tenant_user_path(@tenant_user.id), method: :patch) do
+    form_with_url(tenant_user_path(@tenant_user), method: :patch) do
       input(type: "hidden", name: "tenant_user[role]", value: target_role)
       button(
         type: "submit",
@@ -121,8 +121,8 @@ class Views::Tenant::Users::ShowView < Views::Base
         "Add a framework collaborator role"
       end
       render Views::Frameworks::Collaborators::AssignmentForm.new(
-        form_url: tenant_user_collaborators_path(@tenant_user.id),
-        scope_picker_url: collaborator_scope_picker_tenant_user_path(@tenant_user.id),
+        form_url: tenant_user_collaborators_path(@tenant_user),
+        scope_picker_url: collaborator_scope_picker_tenant_user_path(@tenant_user),
         framework: nil,
         frameworks: @frameworks,
         people: [],
@@ -160,7 +160,7 @@ class Views::Tenant::Users::ShowView < Views::Base
 
   def remove_collaborator_button(row)
     form_with_url(
-      tenant_user_collaborator_path(@tenant_user.id, row.destroy_id),
+      tenant_user_collaborator_path(@tenant_user, row.destroy_id),
       method: :delete
     ) do
       button(

@@ -36,12 +36,12 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
 
     context "POST /tenant/users/:user_id/collaborators" do
       should "add a framework-wide editor role" do
-        post tenant_user_collaborators_path(@member_tu.id),
+        post tenant_user_collaborators_path(@member_tu),
              params: {
                collaborator: { framework_id: @framework_id, role: "editor",
                                scope_type: "", scope_id: "" }
              }
-        assert_redirected_to tenant_user_path(@member_tu.id)
+        assert_redirected_to tenant_user_path(@member_tu)
         ActsAsTenant.with_tenant(@tenant) do
           assert FrameworkState::Collaborator.exists?(
             framework_id: @framework_id, person_id: @member_person.id, role: "editor"
@@ -50,12 +50,12 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
       end
 
       should "add a scoped role_lead with the chosen role scope" do
-        post tenant_user_collaborators_path(@member_tu.id),
+        post tenant_user_collaborators_path(@member_tu),
              params: {
                collaborator: { framework_id: @framework_id, role: "role_lead",
                                scope_type: "role", scope_id: @role_id }
              }
-        assert_redirected_to tenant_user_path(@member_tu.id)
+        assert_redirected_to tenant_user_path(@member_tu)
         ActsAsTenant.with_tenant(@tenant) do
           row = FrameworkState::Collaborator.find_by(
             framework_id: @framework_id, person_id: @member_person.id, role: "role_lead"
@@ -68,9 +68,9 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
 
       should "surface aggregate errors as a flash alert" do
         # Add the same role twice — aggregate raises "already has this role"
-        post tenant_user_collaborators_path(@member_tu.id),
+        post tenant_user_collaborators_path(@member_tu),
              params: { collaborator: { framework_id: @framework_id, role: "editor" } }
-        post tenant_user_collaborators_path(@member_tu.id),
+        post tenant_user_collaborators_path(@member_tu),
              params: { collaborator: { framework_id: @framework_id, role: "editor" } }
         follow_redirect!
         assert_includes response.body, "already has this role"
@@ -89,8 +89,8 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
 
       should "remove the assignment" do
         composite = [ @framework_id, "editor", "", "" ].join(":")
-        delete tenant_user_collaborator_path(@member_tu.id, composite)
-        assert_redirected_to tenant_user_path(@member_tu.id)
+        delete tenant_user_collaborator_path(@member_tu, composite)
+        assert_redirected_to tenant_user_path(@member_tu)
         ActsAsTenant.with_tenant(@tenant) do
           assert_not FrameworkState::Collaborator.exists?(
             framework_id: @framework_id, person_id: @member_person.id, role: "editor"
@@ -101,7 +101,7 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
 
     context "GET /tenant/users/:id/collaborator_scope_picker" do
       should "render the role-scope select for a scoped role" do
-        get collaborator_scope_picker_tenant_user_path(@member_tu.id),
+        get collaborator_scope_picker_tenant_user_path(@member_tu),
             params: { framework_id: @framework_id, role: "role_lead" }
         assert_response :success
         assert_includes response.body, "collaborator-scope-picker"
@@ -109,7 +109,7 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
       end
 
       should "render an empty fragment for framework-wide roles" do
-        get collaborator_scope_picker_tenant_user_path(@member_tu.id),
+        get collaborator_scope_picker_tenant_user_path(@member_tu),
             params: { framework_id: @framework_id, role: "editor" }
         assert_response :success
         # Empty fragment clears prior scope via hidden inputs — no <select> rendered
@@ -122,7 +122,7 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
     setup { sign_in @member_user }
 
     should "deny POST" do
-      post tenant_user_collaborators_path(@member_tu.id),
+      post tenant_user_collaborators_path(@member_tu),
            params: { collaborator: { framework_id: @framework_id, role: "editor" } }
       assert_redirected_to root_path
       ActsAsTenant.with_tenant(@tenant) do
@@ -133,7 +133,7 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
     end
 
     should "deny scope picker GET" do
-      get collaborator_scope_picker_tenant_user_path(@member_tu.id),
+      get collaborator_scope_picker_tenant_user_path(@member_tu),
           params: { framework_id: @framework_id, role: "role_lead" }
       assert_redirected_to root_path
     end

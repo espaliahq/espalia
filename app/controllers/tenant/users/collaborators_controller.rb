@@ -22,9 +22,9 @@ class Tenant::Users::CollaboratorsController < ApplicationController
       scope_id:   p[:scope_id].presence,
       added_by:   current_person&.id
     )
-    redirect_to tenant_user_path(@tenant_user.id), notice: "Collaborator added."
+    redirect_to tenant_user_path(@tenant_user), notice: "Collaborator added."
   rescue RuntimeError => e
-    redirect_to tenant_user_path(@tenant_user.id), alert: e.message
+    redirect_to tenant_user_path(@tenant_user), alert: e.message
   end
 
   # DELETE /tenant/users/:user_id/collaborators/:id
@@ -41,15 +41,15 @@ class Tenant::Users::CollaboratorsController < ApplicationController
       scope_id:   scope_id.presence,
       removed_by: current_person&.id
     )
-    redirect_to tenant_user_path(@tenant_user.id), notice: "Collaborator removed."
+    redirect_to tenant_user_path(@tenant_user), notice: "Collaborator removed."
   rescue RuntimeError => e
-    redirect_to tenant_user_path(@tenant_user.id), alert: e.message
+    redirect_to tenant_user_path(@tenant_user), alert: e.message
   end
 
   private
 
   def set_tenant_user
-    @tenant_user = TenantUser.find_by!(id: params.expect(:user_id))
+    @tenant_user = TenantUser.find(params.expect(:user_id))
   rescue ActiveRecord::RecordNotFound
     redirect_to tenant_users_path
   end

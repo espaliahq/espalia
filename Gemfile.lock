@@ -164,7 +164,6 @@ GEM
       raabro (~> 1.4)
     globalid (1.3.0)
       activesupport (>= 6.1)
-    hashids (1.0.6)
     hashie (5.1.0)
       logger
     i18n (1.14.8)
@@ -322,9 +321,6 @@ GEM
       zeitwerk (~> 2.7)
     pp (0.6.3)
       prettyprint
-    prefixed_ids (1.8.1)
-      hashids (>= 1.0.0, < 2.0.0)
-      rails (>= 6.0.0)
     prettyprint (0.2.0)
     prism (1.9.0)
     propshaft (1.3.2)
@@ -515,6 +511,8 @@ GEM
     turbo-rails (2.0.23)
       actionpack (>= 7.1.0)
       railties (>= 7.1.0)
+    typeid (0.2.2)
+      uuid7 (~> 0.2.0)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
     unicode-display_width (3.2.0)
@@ -522,6 +520,8 @@ GEM
     unicode-emoji (4.2.0)
     uri (1.1.1)
     useragent (0.16.11)
+    uuid7 (0.2.0)
+      zeitwerk (~> 2.4)
     version_gem (1.1.9)
     warden (1.2.9)
       rack (>= 2.0.9)
@@ -579,7 +579,6 @@ DEPENDENCIES
   pg
   phlex (~> 2.4.1)
   phlex-rails (~> 2.4.0)
-  prefixed_ids (~> 1.2)
   propshaft (~> 1.3)
   puma
   pundit (~> 2.4)
@@ -598,6 +597,7 @@ DEPENDENCIES
   tailwindcss-rails (~> 4.0)
   thruster
   turbo-rails
+  typeid (~> 0.2)
   tzinfo-data
   web-console
 
@@ -657,7 +657,6 @@ CHECKSUMS
   ffi (1.17.3-x86_64-linux-musl) sha256=086b221c3a68320b7564066f46fed23449a44f7a1935f1fe5a245bd89d9aea56
   fugit (1.12.1) sha256=5898f478ede9b415f0804e42b8f3fd53f814bd85eebffceebdbc34e1107aaf68
   globalid (1.3.0) sha256=05c639ad6eb4594522a0b07983022f04aa7254626ab69445a0e493aa3786ff11
-  hashids (1.0.6) sha256=a344c05f249417492bf48451a93770558834ff7a445e1b64ef112954a0293019
   hashie (5.1.0) sha256=c266471896f323c446ea8207f8ffac985d2718df0a0ba98651a3057096ca3870
   i18n (1.14.8) sha256=285778639134865c5e0f6269e0b818256017e8cde89993fdfcbfb64d088824a5
   image_processing (1.14.0) sha256=754cc169c9c262980889bec6bfd325ed1dafad34f85242b5a07b60af004742fb
@@ -727,7 +726,6 @@ CHECKSUMS
   phlex (2.4.1) sha256=e596717fbfe38b5271840266758779ebe75092e02629f0c170287e6290a70b12
   phlex-rails (2.4.0) sha256=2bcddbd488681acb25753bab1887d3ac150e644244ff8ba307f2171a4d0195f5
   pp (0.6.3) sha256=2951d514450b93ccfeb1df7d021cae0da16e0a7f95ee1e2273719669d0ab9df6
-  prefixed_ids (1.8.1) sha256=cc327f946a6fc6a610246aa957d6c3b170bfaa1170c8deb445fa466356a6adbb
   prettyprint (0.2.0) sha256=2bc9e15581a94742064a3cc8b0fb9d45aae3d03a1baa6ef80922627a0766f193
   prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
   propshaft (1.3.2) sha256=1d56a3e56a92c21bfc29caf07406b5386b00d4c47ddf357cf989a5a234b1389e
@@ -796,11 +794,13 @@ CHECKSUMS
   timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
   turbo-rails (2.0.23) sha256=ee0d90733aafff056cf51ff11e803d65e43cae258cc55f6492020ec1f9f9315f
+  typeid (0.2.2) sha256=3ab77f0891b218723110f3c2d530c16a4ba855dd550c26d08993e990a16e26ef
   tzinfo (2.0.6) sha256=8daf828cc77bcf7d63b0e3bdb6caa47e2272dcfaf4fbfe46f8c3a9df087a829b
   unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
   unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
   useragent (0.16.11) sha256=700e6413ad4bb954bb63547fa098dddf7b0ebe75b40cc6f93b8d54255b173844
+  uuid7 (0.2.0) sha256=7d61753c2c8eb79f60c60a5afa1a3ef181492d74b11d3067af88898704ddac43
   version_gem (1.1.9) sha256=0c1a0962ae543c84a00889bb018d9f14d8f8af6029d26b295d98774e3d2eb9a4
   warden (1.2.9) sha256=46684f885d35a69dbb883deabf85a222c8e427a957804719e143005df7a1efd0
   web-console (4.3.0) sha256=e13b71301cdfc2093f155b5aa3a622db80b4672d1f2f713119cc7ec7ac6a6da4
