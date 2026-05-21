@@ -35,11 +35,13 @@ class Views::Assessments::Evidence::Card < Views::Base
   # @param assessment_id [String] for routing the withdraw action
   # @param can_withdraw [Boolean] whether the current viewer may withdraw this item
   # @param can_relink [Boolean] whether the current viewer may relink this item
-  def initialize(item:, assessment_id:, can_withdraw: false, can_relink: false)
+  # @param can_update [Boolean] whether the current viewer may edit this item
+  def initialize(item:, assessment_id:, can_withdraw: false, can_relink: false, can_update: false)
     @item = item
     @assessment_id = assessment_id
     @can_withdraw = can_withdraw
     @can_relink = can_relink
+    @can_update = can_update
   end
 
   def view_template
@@ -54,7 +56,7 @@ class Views::Assessments::Evidence::Card < Views::Base
         content_line
         footer_line
       end
-      actions_menu if @can_withdraw || @can_relink
+      actions_menu if @can_withdraw || @can_relink || @can_update
     end
   end
 
@@ -92,6 +94,12 @@ class Views::Assessments::Evidence::Card < Views::Base
       span { @item.author&.name || "Unknown" }
       plain " · "
       span { @item.recorded_at ? "#{time_ago_in_words(@item.recorded_at)} ago" : "—" }
+      if @item.edited_at.present?
+        plain " · "
+        span(title: "Last edited #{@item.edited_at.utc.iso8601}") do
+          "edited #{time_ago_in_words(@item.edited_at)} ago"
+        end
+      end
     end
   end
 
@@ -161,9 +169,30 @@ class Views::Assessments::Evidence::Card < Views::Base
       role: "menu",
       data: { dropdown_target: "menu" }
     ) do
+      edit_menu_item if @can_update
       relink_menu_item if @can_relink
       withdraw_menu_item if @can_withdraw
     end
+  end
+
+  def edit_menu_item
+    ref = @item.external_reference
+    button(
+      type: "button",
+      class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
+             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      role: "menuitem",
+      data: {
+        action: "click->dropdown#close click->evidence-edit-form#open",
+        evidence_edit_form_evidence_id_param: @item.id,
+        evidence_edit_form_title_param: @item.title.to_s,
+        evidence_edit_form_content_param: @item.content.to_s,
+        evidence_edit_form_evidence_type_param: @item.evidence_type.to_s,
+        evidence_edit_form_custom_type_label_param: @item.custom_type_label.to_s,
+        evidence_edit_form_ref_system_param: ref&.system.to_s,
+        evidence_edit_form_ref_url_param: ref&.url.to_s
+      }
+    ) { "Edit" }
   end
 
   def relink_menu_item

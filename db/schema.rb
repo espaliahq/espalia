@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_21_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -128,6 +128,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.text "content", null: false
     t.datetime "created_at", null: false
     t.string "custom_type_label"
+    t.datetime "edited_at"
+    t.uuid "edited_by_id"
     t.string "evidence_type", null: false
     t.jsonb "external_reference", default: {}, null: false
     t.uuid "framework_id", null: false
@@ -143,6 +145,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
     t.datetime "withdrawn_at"
     t.uuid "withdrawn_by_id"
     t.index ["author_id"], name: "index_evidence_items_on_author_id"
+    t.index ["edited_by_id"], name: "idx_evidence_items_edited_by_id", where: "(edited_by_id IS NOT NULL)"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_items_anchor"
     t.index ["tenant_id", "person_id", "link_status"], name: "idx_evidence_items_tenant_person_status"
     t.index ["tenant_id"], name: "index_evidence_items_on_tenant_id"
@@ -441,6 +444,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_13_045311) do
   add_foreign_key "assessment_level_ratings", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
   add_foreign_key "evidence_items", "people", column: "author_id", on_delete: :restrict
+  add_foreign_key "evidence_items", "people", column: "edited_by_id", on_delete: :nullify
   add_foreign_key "evidence_items", "people", column: "withdrawn_by_id", on_delete: :nullify
   add_foreign_key "evidence_items", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"

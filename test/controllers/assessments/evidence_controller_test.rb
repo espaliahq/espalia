@@ -335,6 +335,109 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "PATCH /assessments/:assessment_id/evidence/:id" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @evidence_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @assessee.id, @assignment.framework_id, @evidence_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "manager", evidence_type: "code_review",
+          content: "Original content.", title: "Original title",
+          author_id: @manager.id
+        )
+        @item = EvidenceItem.find(@evidence_id)
+      end
+    end
+
+    should "let the author edit their own evidence" do
+      sign_in @manager_user
+      patch assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          evidence_type: "code_review",
+          title: "Updated title",
+          content: "Revised content."
+        }
+      }
+      assert_response :redirect
+      assert_match "capability=#{@cap.stable_id}", response.location
+      assert_match "category=#{@cat.category_id}", response.location
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal "Updated title", @item.title
+        assert_equal "Revised content.", @item.content
+        assert_equal @manager.id, @item.edited_by_id
+        assert_not_nil @item.edited_at
+      end
+    end
+
+    should "round-trip an updated external_reference" do
+      sign_in @manager_user
+      patch assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          evidence_type: "code_review",
+          content: "x",
+          external_reference: { system: "github", url: "https://github.com/o/r/pull/9" }
+        }
+      }
+      assert_response :redirect
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal "github", @item.external_reference.system
+        assert_equal "https://github.com/o/r/pull/9", @item.external_reference.url
+      end
+    end
+
+    should "reject a malicious external_reference URL upfront" do
+      sign_in @manager_user
+      patch assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          evidence_type: "code_review",
+          content: "x",
+          external_reference: { system: "github", url: "javascript:alert(1)" }
+        }
+      }
+      assert_response :unprocessable_content
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal "Original content.", @item.content
+      end
+    end
+
+    should "deny a non-author (assessee)" do
+      sign_in @assessee_user
+      patch assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          evidence_type: "code_review",
+          content: "Hijacked content."
+        }
+      }
+      assert_response :redirect
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal "Original content.", @item.content
+      end
+    end
+
+    should "deny an unrelated peer" do
+      sign_in @peer_user
+      patch assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: {
+          evidence_type: "code_review",
+          content: "Hijacked."
+        }
+      }
+      assert_response :redirect
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal "Original content.", @item.content
+      end
+    end
+  end
+
   context "DELETE /assessments/:assessment_id/evidence/:id" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
