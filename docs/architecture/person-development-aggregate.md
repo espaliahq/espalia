@@ -164,10 +164,13 @@ All evidence for a person. Updated synchronously.
 
 ```ruby
 # evidence_items table:
-#   id, tenant_id, person_id, framework_id, capability_stable_id, level_id,
+#   id, tenant_id, person_id, framework_id, capability_stable_id, level_ordinal,
 #   source, evidence_type, custom_type_label, title, content,
-#   external_ref_system, external_ref_url, external_ref_id, external_ref_metadata,
-#   author_id, link_status (active|superseded), created_at
+#   external_reference (jsonb: system, url?, external_id?, metadata?),
+#   author_id, link_status (active|withdrawn),
+#   withdrawn_at, withdrawn_by_id, withdrawal_reason,
+#   edited_at, edited_by_id,
+#   recorded_at, created_at, updated_at
 ```
 
 ### Point-in-Time Assessment
