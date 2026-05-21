@@ -63,7 +63,13 @@ class Tenant::UsersController < ApplicationController
   # PATCH /tenant/users/:id
   def update
     authorize @tenant_user
-    new_role = params.expect(tenant_user: [ :role ])[:role]
+    new_role = params.expect(tenant_user: [ :role ])[:role].to_s
+
+    unless TenantUser.roles.key?(new_role)
+      return redirect_to tenant_user_path(@tenant_user),
+                         alert: "Invalid tenant role.",
+                         status: :see_other
+    end
 
     if demoting_last_admin?(@tenant_user, new_role)
       return redirect_to tenant_user_path(@tenant_user),

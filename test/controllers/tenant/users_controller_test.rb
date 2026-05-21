@@ -55,6 +55,15 @@ class Tenant::UsersControllerTest < ActionDispatch::IntegrationTest
         assert_equal "member", @admin_tu.reload.role
       end
 
+      should "reject an unknown role without raising" do
+        patch tenant_user_path(@member_tu),
+              params: { tenant_user: { role: "supervisor" } }
+        assert_redirected_to tenant_user_path(@member_tu)
+        follow_redirect!
+        assert_includes response.body, "Invalid tenant role"
+        assert_equal "member", @member_tu.reload.role
+      end
+
       should "refuse to demote the last admin" do
         patch tenant_user_path(@admin_tu),
               params: { tenant_user: { role: "member" } }

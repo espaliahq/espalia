@@ -43,6 +43,10 @@ module HasTypeId
     # Looks up a record by either a TypeID string or a raw UUID. Mixed-form
     # arrays (`find([a, b])`) and any other shape fall through to the
     # default ActiveRecord behaviour.
+    #
+    # A string that looks like a TypeID (correct prefix) but fails to decode
+    # raises ActiveRecord::RecordNotFound, not TypeID::Error — callers using
+    # a generic rescue get the same not-found signal as a missing row.
     def find(*args)
       if args.length == 1 && args[0].is_a?(String) && typeid_prefix &&
          args[0].start_with?("#{typeid_prefix}_")
@@ -50,6 +54,8 @@ module HasTypeId
       else
         super
       end
+    rescue TypeID::Error
+      raise ActiveRecord::RecordNotFound, "Couldn't find #{name} with 'id'=#{args[0]}"
     end
 
     # Non-raising counterpart to find. Returns nil when the TypeID is

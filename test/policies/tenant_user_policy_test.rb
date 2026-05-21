@@ -73,6 +73,7 @@ class TenantUserPolicyTest < ActiveSupport::TestCase
       assert policy.show?
       assert policy.update?
       assert policy.manage_collaborators?
+      assert policy.collaborator_scope_picker?
     end
   end
 

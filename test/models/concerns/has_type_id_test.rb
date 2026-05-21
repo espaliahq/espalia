@@ -40,6 +40,10 @@ class HasTypeIdTest < ActiveSupport::TestCase
       assert_raises(ActiveRecord::RecordNotFound) { TenantUser.find(unknown) }
     end
 
+    should "raise RecordNotFound (not TypeID::Error) for a malformed TypeID with the right prefix" do
+      assert_raises(ActiveRecord::RecordNotFound) { TenantUser.find("tnu_not_valid_base32_!@#") }
+    end
+
     should "fall through to default behavior for arrays" do
       assert_equal [ @tu ], TenantUser.find([ @tu.id ])
     end
