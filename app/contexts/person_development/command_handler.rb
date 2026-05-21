@@ -400,6 +400,29 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Edits an existing piece of evidence.
+  #
+  # @param person_id [String] UUID of the person being evidenced
+  # @param framework_id [String] UUID of the framework
+  # @param evidence_id [String] UUID of the evidence to edit
+  # @param title [String, nil] post-edit title
+  # @param content [String] post-edit content (required)
+  # @param evidence_type [String] one of EvidenceItem::EVIDENCE_TYPES
+  # @param custom_type_label [String, nil] required iff evidence_type == "other"
+  # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
+  # @param edited_by_id [String] UUID of the Person performing the edit
+  def update_evidence(person_id, framework_id, evidence_id,
+                      title:, content:, evidence_type:, custom_type_label:,
+                      external_reference:, edited_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.update_evidence(evidence_id,
+        title: title, content: content, evidence_type: evidence_type,
+        custom_type_label: custom_type_label,
+        external_reference: external_reference,
+        edited_by_id: edited_by_id)
+    end
+  end
+
   # Soft-deletes an evidence item.
   #
   # @param person_id [String] UUID of the person

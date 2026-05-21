@@ -22,6 +22,15 @@ Evidence:
     external_reference: { system, url?, external_id?, metadata? }
   EvidenceRelinked { evidence_id, old_capability_stable_id, old_level_id,
                      new_capability_stable_id, new_level_id, relinked_by, rationale }
+  EvidenceUpdated { evidence_id, title?, content, evidence_type,
+                    custom_type_label?, external_reference?, edited_by_id }
+    ← Carries the FULL post-edit value of every mutable field (snapshot, not a
+      delta). Mutable scope is strictly the user-correctable content: title,
+      content, evidence_type, custom_type_label, external_reference. The
+      capability/level coordinate is owned by EvidenceRelinked; source,
+      author_id, and recorded_at are identity invariants and never change.
+      Authorization is strictly author-only — no admin override — see
+      EvidencePolicy#update?.
   EvidenceWithdrawn { evidence_id, reason, withdrawn_by }
 
 Assessment cycle:

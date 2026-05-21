@@ -47,6 +47,13 @@ class Views::Assessments::ManagerShowView < Views::Base
     @viewer_person_id.present? && (@can_create_evidence || @can_relink_others_evidence)
   end
 
+  # See {Views::Assessments::ShowView#can_render_edit_modal?} for the
+  # rationale — page-level modal exists when the viewer has a Person;
+  # per-card kebab Edit visibility is the actual gate.
+  def can_render_edit_modal?
+    @viewer_person_id.present?
+  end
+
   def confirm_message
     "Starting alignment will lock self and manager ratings for this cycle. " \
       "You and #{@assessee.name} can still record agreed values together. Continue?"
@@ -60,15 +67,18 @@ class Views::Assessments::ManagerShowView < Views::Base
         "panel",
         "activity-pane",
         ("evidence-form" if @can_create_evidence),
-        ("evidence-relink-form" if can_render_relink_modal?)
+        ("evidence-relink-form" if can_render_relink_modal?),
+        ("evidence-edit-form" if can_render_edit_modal?)
       ].compact.join(" ")
       esc_actions = [
         ("keydown.esc->evidence-form#close" if @can_create_evidence),
-        ("keydown.esc->evidence-relink-form#close" if can_render_relink_modal?)
+        ("keydown.esc->evidence-relink-form#close" if can_render_relink_modal?),
+        ("keydown.esc->evidence-edit-form#close" if can_render_edit_modal?)
       ].compact.join(" ")
       data = { controller: controllers, panel_side_value: "left" }
       data[:action] = esc_actions if esc_actions.present?
       data[:evidence_relink_form_assessment_id_value] = @assignment.id if can_render_relink_modal?
+      data[:evidence_edit_form_assessment_id_value] = @assignment.id if can_render_edit_modal?
       div(data: data) do
         assessment_header
         assessment_layout
@@ -79,6 +89,7 @@ class Views::Assessments::ManagerShowView < Views::Base
             merged_levels: @matrix_data[:merged_levels]
           )
         end
+        render Views::Assessments::Evidence::EditForm.new(assessment_id: @assignment.id) if can_render_edit_modal?
       end
     end
   end

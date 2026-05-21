@@ -26,6 +26,7 @@ class PersonDevelopment::Projections::EvidenceCollection
     [
       PersonDevelopment::Events::EvidenceRecorded,
       PersonDevelopment::Events::EvidenceRelinked,
+      PersonDevelopment::Events::EvidenceUpdated,
       PersonDevelopment::Events::EvidenceWithdrawn
     ]
   end
@@ -54,6 +55,7 @@ class PersonDevelopment::Projections::EvidenceCollection
     case event
     when PersonDevelopment::Events::EvidenceRecorded then handle_recorded(event)
     when PersonDevelopment::Events::EvidenceRelinked then handle_relinked(event)
+    when PersonDevelopment::Events::EvidenceUpdated then handle_updated(event)
     when PersonDevelopment::Events::EvidenceWithdrawn then handle_withdrawn(event)
     end
   end
@@ -89,6 +91,21 @@ class PersonDevelopment::Projections::EvidenceCollection
     item.update!(
       capability_stable_id: event.data[:new_capability_stable_id],
       level_ordinal: event.data[:new_level_ordinal]
+    )
+  end
+
+  def handle_updated(event)
+    item = EvidenceItem.find_by(id: event.data[:evidence_id])
+    return unless item
+
+    item.update!(
+      title: event.data[:title],
+      content: event.data[:content],
+      evidence_type: event.data[:evidence_type],
+      custom_type_label: event.data[:custom_type_label],
+      external_reference: external_reference_attrs(event.data[:external_reference]),
+      edited_at: event.metadata[:timestamp] || Time.current,
+      edited_by_id: event.data[:edited_by_id]
     )
   end
 

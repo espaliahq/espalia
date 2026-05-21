@@ -480,6 +480,47 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Edits the user-correctable fields of an existing evidence item.
+  #
+  # Mutable: `title`, `content`, `evidence_type` (+ `custom_type_label`),
+  # `external_reference`. Capability/level are owned by {#relink_evidence};
+  # `source`/`author_id`/`recorded_at` are identity invariants and never
+  # change. The full post-edit value of every mutable field is recorded
+  # on the event (snapshot, not a delta).
+  #
+  # @param evidence_id [String] UUID of the evidence being edited
+  # @param title [String, nil] post-edit title
+  # @param content [String] post-edit content (required, non-blank)
+  # @param evidence_type [String] one of EVIDENCE_TYPES
+  # @param custom_type_label [String, nil] required iff evidence_type == "other"
+  # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
+  # @param edited_by_id [String] UUID of the Person performing the edit
+  # @raise [CommandError] if not assigned, evidence not found, withdrawn,
+  #   or the new values are invalid
+  def update_evidence(evidence_id, title:, content:, evidence_type:,
+                      custom_type_label:, external_reference:, edited_by_id:)
+    ensure_assigned!
+    state = @evidence[evidence_id]
+    raise CommandError, "No evidence with id #{evidence_id}" unless state
+    raise CommandError, "Cannot update withdrawn evidence" if state[:status] == "withdrawn"
+    raise CommandError, "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)
+    raise CommandError, "Custom type label required when evidence_type is 'other'" if
+      evidence_type == "other" && custom_type_label.to_s.strip.empty?
+    raise CommandError, "Custom type label only allowed when evidence_type is 'other'" if
+      evidence_type != "other" && !custom_type_label.nil? && !custom_type_label.to_s.strip.empty?
+    raise CommandError, "Evidence content cannot be blank" if content.to_s.strip.empty?
+
+    apply(PersonDevelopment::Events::EvidenceUpdated.new(data: {
+      evidence_id: evidence_id,
+      title: title,
+      content: content,
+      evidence_type: evidence_type,
+      custom_type_label: custom_type_label,
+      external_reference: external_reference,
+      edited_by_id: edited_by_id
+    }))
+  end
+
   # Soft-deletes an evidence item. Original record stays in history;
   # the read model flips `link_status` to "withdrawn".
   #
@@ -614,5 +655,12 @@ class PersonDevelopment::Aggregate
     next unless state
 
     state[:status] = "withdrawn"
+  end
+
+  # No-op for aggregate state: `update_evidence` only touches content
+  # fields (title/content/type/external_reference) that the aggregate
+  # does not track. Handler is declared so the event has a registered
+  # applier on the aggregate.
+  on PersonDevelopment::Events::EvidenceUpdated do |_event|
   end
 end

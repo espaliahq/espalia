@@ -44,6 +44,21 @@ class EvidencePolicy < ApplicationPolicy
     record.author_id == person.id
   end
 
+  # Editing the user-correctable content of an evidence item is strictly
+  # author-only — narrower than `withdraw?`. Admins do NOT get an override
+  # because editing reframes the author's words, which is a domain judgement
+  # admins lack (matches `relink?`'s reasoning). Withdrawn items are not
+  # editable; relinks remain available for moving evidence around.
+  #
+  # @return [Boolean]
+  def update?
+    return false unless person.present?
+    return false unless record.is_a?(EvidenceItem)
+    return false if record.withdrawn?
+
+    record.author_id == person.id
+  end
+
   # Note the asymmetry with `withdraw?`: tenant admins can withdraw (treat
   # as a content-neutral cleanup) but cannot relink — relinking reattributes
   # evidence to a different capability/level, which is a domain judgement
