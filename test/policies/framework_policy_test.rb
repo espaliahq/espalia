@@ -211,6 +211,67 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "manage_collaborators?" do
+    setup do
+      @other_user = create(:user)
+      @other_person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @other_user.email)
+        create(:tenant_user, tenant: @tenant, user: @other_user, person: p, role: :member)
+        p
+      end
+    end
+
+    should "permit a tenant admin without an owner role" do
+      admin = create(:user)
+      tu = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: admin, role: :admin)
+      end
+      ctx = AuthorizationContext.new(user: admin, tenant_user: tu, person: nil)
+      assert FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+    end
+
+    should "permit a framework owner who is only a tenant member" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_collaborator,
+               tenant: @tenant,
+               framework_id: @framework.framework_id,
+               person_id: @other_person.id,
+               role: "owner")
+      end
+      ctx = AuthorizationContext.new(
+        user: @other_user,
+        tenant_user: @other_person.tenant_user,
+        person: @other_person
+      )
+      assert FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+    end
+
+    should "deny a framework collaborator with editor role only" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_collaborator,
+               tenant: @tenant,
+               framework_id: @framework.framework_id,
+               person_id: @other_person.id,
+               role: "editor")
+      end
+      ctx = AuthorizationContext.new(
+        user: @other_user,
+        tenant_user: @other_person.tenant_user,
+        person: @other_person
+      )
+      assert_not FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+    end
+
+    should "deny a tenant member with no collaborator role" do
+      ctx = AuthorizationContext.new(
+        user: @other_user,
+        tenant_user: @other_person.tenant_user,
+        person: @other_person
+      )
+      assert_not FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+    end
+  end
+
   context "with no tenant membership" do
     setup do
       @user = create(:user)

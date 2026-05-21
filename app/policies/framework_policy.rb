@@ -56,6 +56,16 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def admin? = tenant_admin?
 
+  # Manage framework collaborator assignments (add/remove).
+  # Open to tenant admins and to framework owners — the latter so a person
+  # who owns a framework can curate its collaborators without needing
+  # tenant-wide admin rights.
+  #
+  # @return [Boolean]
+  def manage_collaborators?
+    tenant_admin? || (person.present? && can_manage_collaborators?)
+  end
+
   private
 
   # Checks whether the current person holds a collaborator role that grants
