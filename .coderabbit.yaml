@@ -1,0 +1,59 @@
+# CodeRabbit configuration — https://docs.coderabbit.ai/guides/configure-coderabbit
+#
+# The path_instructions below steer CodeRabbit toward the project's hard-won
+# system-test conventions. They complement (not replace) the RuboCop cop
+# SystemTests/FlakeProneClick — the cop hard-fails CI on the two highest-signal
+# patterns (accept_confirm, find(data-action).click), while CodeRabbit catches
+# the fuzzier cases a static cop can't reliably detect without false positives.
+version: 2
+language: en-US
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_instructions:
+    - path: "test/system/**/*.rb"
+      instructions: |
+        These are Capybara + Selenium system tests that run on starved
+        GitHub-hosted CI runners where synthetic pointer events are
+        intermittently dropped. Flag interactions that are known to flake and
+        suggest the JS-dispatch remedy from docs/guidelines/testing.md:
+
+        1. `accept_confirm` — prefer `auto_confirm { ... }` unless the dialog
+           text itself is under test. accept_confirm races Capybara's
+           modal-handler registration on slow CI.
+        2. `find("...data-action...").click` or clicking any Stimulus-action
+           element — prefer `page.execute_script(".../click()")` or a helper
+           (`open_dropdown`, `expand_matrix_row`, `toggle_role_pane`, etc.).
+        3. `click_button` / `click_link` followed immediately by an assertion
+           on the destination, with no `click_with_retry`,
+           `click_button_with_js_fallback`, or `click_link_with_js_fallback`
+           wrapper — the navigation click can be silently dropped.
+        4. Submitting a `data-turbo-confirm` form via `click_button` — prefer
+           `form.requestSubmit(btn)` via execute_script.
+        5. `fill_in` of a field whose value the assertion depends on, where
+           Selenium `send_keys` could drop characters — prefer setting
+           `.value` via execute_script and dispatching input/change events.
+        6. Reading state immediately after a click without an intervening
+           Capybara wait (`assert_*` / `has_*?`) — flag the race.
+
+        When suggesting a fix, point to the specific helper in
+        docs/guidelines/testing.md rather than describing it from scratch.
+
+    - path: "test/support/system/**/*.rb"
+      instructions: |
+        Shared system-test helpers. New click/toggle helpers should dispatch
+        via JavaScript (execute_script with element.click(), form.requestSubmit(),
+        or frame.src=) rather than Capybara pointer clicks, and should assert
+        the resulting visible state. Mirror the existing helpers' retry/guard
+        structure (see stimulus_helpers.rb).
+
+chat:
+  auto_reply: true

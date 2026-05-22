@@ -174,7 +174,10 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       open_context_pane
 
       wait_for_stimulus "matrix"
-      find("[data-action='click->matrix#focusCategory'][data-category-id='#{@cat_a_id}']").click
+      # JS-dispatch to bypass Capybara pointer-click drops on starved CI.
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action='click->matrix#focusCategory'][data-category-id='#{@cat_a_id}']")?.click();
+      JS
 
       within "#suggestion-panel" do
         assert_text "Thinking \u2014 category"
@@ -195,11 +198,14 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
         "button[data-action='click->matrix#toggleCategory']"
       row_selector = "tr[data-capability-id='#{@cap_a_id}']"
 
-      # Collapse via the chevron button — retry once if the click is lost on
-      # slow CI runners (the row stays visible).
-      find(chevron_selector).click
+      # Collapse via the chevron button — JS-dispatch to bypass Capybara
+      # pointer-click drops on starved CI. Retry once if the row is still
+      # visible (the guard ensures we only re-click when the first click
+      # didn't collapse, so we never re-expand a collapsed category).
+      collapse_js = "document.querySelector(#{chevron_selector.to_json})?.click();"
+      page.execute_script(collapse_js)
       unless page.has_no_css?(row_selector, visible: true, wait: 5)
-        find(chevron_selector).click
+        page.execute_script(collapse_js)
       end
 
       # Capability rows for cat_a are now hidden
@@ -215,10 +221,11 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       open_context_pane
 
-      # Navigate to a capability via suggestion click to expand the row
-      within "#suggestion-panel" do
-        find("[data-nav-capability-id='#{@cap_a_id}']", match: :first).click
-      end
+      # Navigate to a capability via suggestion click — JS-dispatch to
+      # bypass Capybara pointer-click drops on starved CI.
+      page.execute_script(<<~JS)
+        document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
+      JS
 
       # Row should be expanded
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
@@ -298,10 +305,12 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       open_context_pane
 
-      within "#suggestion-panel" do
-        # Click the suggestion body (not the detail link) for an illustration
-        find("[data-nav-capability-id='#{@cap_a_id}']", match: :first).click
-      end
+      # JS-dispatch the click — Capybara's pointer click on the suggestion
+      # body can be silently dropped on starved CI runners, leaving the
+      # matrix without an expanded row.
+      page.execute_script(<<~JS)
+        document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
+      JS
 
       # The matrix should expand the matching capability row
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",

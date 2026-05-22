@@ -280,6 +280,15 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 **Capybara's `default_max_wait_time` is 10s in this project**, set in `ApplicationSystemTestCase`. GitHub-hosted ubuntu-latest runners (no Selenium grid, 2 cores) starve Chrome's JS event loop enough that Turbo Drive round-trips can exceed even 5s under load. 10s is the floor — don't lower it or pass shorter waits to assertions unless you have a specific reason.
 
+## Flake-Prone Click Guards (automated)
+
+The dropped-click flake class (Selenium's synthetic pointer click / modal-handler registration silently lost on starved CI) recurs often enough that two automated guards now steer new tests toward the JS-dispatch remedies documented in the sections below:
+
+- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the two highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), and `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
+- **CodeRabbit path instructions** (`.coderabbit.yaml`) catch the fuzzier cases a static cop can't reliably detect without false positives: navigation `click_button`/`click_link` without a retry/JS-fallback wrapper, `data-turbo-confirm` form submits via click, `fill_in` of an assertion-critical field, and read-after-click races.
+
+If you add a new JS-dispatch helper, update both the cop (if it introduces a new safe form) and the table in *Stimulus Toggle Helpers*.
+
 ## Sign-In Helper (NON-NEGOTIABLE)
 
 **Use `sign_in_as(user)` for Devise sign-in in system test setup.** Defined in `ApplicationSystemTestCase`, it visits the form, fills email/password, clicks Log in, and re-submits once if the redirect to `root_path` doesn't land within the wait window. The duplicated `visit new_user_session_path / fill_in / click_button "Log in" / assert_current_path root_path` pattern is forbidden — that exact pattern is the most common entry-point flake (the click is dropped on a starved CI runner and every subsequent assertion fails on the still-rendered sign-in form).

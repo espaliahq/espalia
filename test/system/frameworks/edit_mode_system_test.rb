@@ -162,7 +162,19 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
 
       wait_for_stimulus "edit-mode-toggle"
-      find("button[data-edit-mode-toggle-target='suggestingButton']").click
+      # JS-dispatch the click on the suggesting button — Capybara pointer
+      # clicks on this toggle have been silently dropped on starved CI,
+      # leaving the cookie unset and the reload landing back on Editing.
+      page.execute_script(<<~JS)
+        document.querySelector("button[data-edit-mode-toggle-target='suggestingButton']")?.click();
+      JS
+
+      # Wait for the controller to actually apply Suggesting before reload —
+      # the click handler writes the cookie synchronously, but aria-pressed
+      # is set inside the same handler, so it's our most reliable sentinel.
+      assert_selector(
+        "button[data-edit-mode-toggle-target='suggestingButton'][aria-pressed='true']"
+      )
 
       # Reload — the toggle should still show Suggesting as the active segment.
       visit edit_framework_path(@framework_id)

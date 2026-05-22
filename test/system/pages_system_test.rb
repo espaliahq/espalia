@@ -58,17 +58,26 @@ class PagesSystemTest < ApplicationSystemTestCase
 
       toggle_sidebar
 
-      # Click outside the drawer (right side of viewport, past the 16rem drawer).
-      # Retry once if the click-outside listener wasn't yet bound when the
-      # first click landed — on slow CI runners the listener attaches slightly
-      # after toggle_sidebar returns.
-      action = page.driver.browser.action.move_to_location(350, 400).click
-      action.perform
+      # JS-dispatched MouseEvent bubbles to the window capture-phase listener
+      # stimulus-use's useClickOutside registers. Selenium's synthetic pointer
+      # events (action.move_to_location.click) do not reliably trigger that
+      # listener on headless Chrome under load — same fix as the framework
+      # explorer outside-click test.
+      dispatch_outside_click = lambda do
+        page.execute_script(<<~JS)
+          const main = document.querySelector("main") || document.body;
+          main.dispatchEvent(new MouseEvent("click", {
+            bubbles: true, cancelable: true, view: window
+          }))
+        JS
+      end
+
+      dispatch_outside_click.call
 
       drawer_visible = -> {
         find("[data-sidebar-target='drawer']", visible: :all)[:class].split.exclude?("hidden")
       }
-      action.perform if drawer_visible.call
+      dispatch_outside_click.call if drawer_visible.call
 
       drawer = find("[data-sidebar-target='drawer']", visible: :all)
       assert_includes drawer[:class].split, "hidden",
