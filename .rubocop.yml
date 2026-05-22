@@ -1,6 +1,19 @@
 # Omakase Ruby styling for Rails
 inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 
+# Project-local custom cops (lib/rubocop/cop/**). Currently:
+# SystemTests/FlakeProneClick — guards against the recurring CI flake class
+# where Selenium's synthetic pointer click / modal-handler registration is
+# dropped on starved runners (see docs/guidelines/testing.md).
+require:
+  - ./lib/rubocop/cop/system_tests/flake_prone_click.rb
+
+SystemTests/FlakeProneClick:
+  Enabled: true
+  Include:
+    - "test/system/**/*.rb"
+    - "test/support/system/**/*.rb"
+
 # Overwrite or add rules to create your own house style
 #
 # # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`

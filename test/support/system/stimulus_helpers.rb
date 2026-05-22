@@ -288,7 +288,9 @@ module StimulusHelpers
     attempts = 0
     begin
       attempts += 1
-      accept_confirm(*args, wait: wait, &block)
+      # This is the canonical accept_confirm wrapper for tests that DO assert
+      # on dialog text — the FlakeProneClick cop's escape hatch lives here.
+      accept_confirm(*args, wait: wait, &block) # rubocop:disable SystemTests/FlakeProneClick
     rescue Capybara::ModalNotFound
       raise if attempts >= 3
 
