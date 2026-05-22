@@ -65,6 +65,31 @@ jobs:
       - name: Lint code for consistent style
         run: bin/rubocop -f github
 
+  # Boots the app with the PRODUCTION gem set (no development/test gems) and
+  # eager-loads every autoload path. Catches the class of bug from the #106/
+  # #108 incident: a file under lib/ (or an initializer/model) that references
+  # a constant only defined by a development/test-only gem — invisible to the
+  # test suite (where those gems ARE loaded), but crashes Render at boot.
+  # Eager-loading is DB-free, so no postgres service is needed.
+  production_boot:
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_WITHOUT: "development:test"
+      RAILS_ENV: production
+      SECRET_KEY_BASE: dummy-secret-key-base-for-eager-load-only
+      DISABLE_DATABASE_ENVIRONMENT_CHECK: "1"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby (production gem set only)
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Eager-load the app as production would
+        run: bin/rails zeitwerk:check
+
   test:
     runs-on: ubuntu-latest
 
