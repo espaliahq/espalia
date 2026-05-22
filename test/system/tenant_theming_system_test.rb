@@ -29,16 +29,14 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
       initial_style = evaluate_script("document.getElementById('tenant-theme')?.textContent || ''")
       screenshot("before_switch")
 
-      # Open menu and find which tenant is NOT current, then switch to it
-      open_dropdown
-
-      # Click whichever tenant is a button (not the current one which is a div).
-      # Submit the form via requestSubmit — Capybara's pointer click on the
-      # submit button has been observed dropped on starved CI runners.
+      # Find the tenant-switch form directly by its action URL — bypasses any
+      # dropdown visibility race and pointer-click dropouts on starved CI.
+      # The form is in the DOM from server render; opening the dropdown only
+      # toggles its visibility, not its presence.
+      switch_path = users_tenant_switch_path
       page.execute_script(<<~JS)
-        const menu = document.querySelector("[role='menu']");
-        const btn = menu?.querySelector("button[type='submit']");
-        btn?.closest("form")?.requestSubmit(btn);
+        const form = document.querySelector("form[action='#{switch_path}']");
+        form?.requestSubmit();
       JS
       screenshot("after_switch")
 

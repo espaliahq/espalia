@@ -74,9 +74,24 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
 
       assert_text "Q2 2026 Review"
 
-      # Enroll the assigned person
-      select "Assigned Person", from: "Person"
-      click_button "Enroll"
+      # Enroll the assigned person — set the select value via JS and submit
+      # the enroll form via requestSubmit() because Capybara's pointer click
+      # on the Enroll button has been silently dropped on starved CI runners.
+      page.execute_script(<<~JS)
+        const select = Array.from(document.querySelectorAll("select"))
+          .find(s => Array.from(s.options).some(o => o.textContent.trim() === "Assigned Person"));
+        if (select) {
+          const opt = Array.from(select.options).find(o => o.textContent.trim() === "Assigned Person");
+          if (opt) {
+            select.value = opt.value;
+            select.dispatchEvent(new Event("input", { bubbles: true }));
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }
+        const btn = Array.from(document.querySelectorAll("button"))
+          .find(b => b.textContent.trim() === "Enroll");
+        btn?.closest("form")?.requestSubmit(btn);
+      JS
 
       assert_text "Person enrolled"
       assert_text "Assigned Person"

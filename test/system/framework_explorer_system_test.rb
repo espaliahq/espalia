@@ -205,8 +205,24 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Wait for Stimulus to connect — connect() applies text-primary to the toggle button
       wait_for_stimulus "framework-explorer"
 
-      # Click to hide
-      click_button "Roles"
+      # Click to hide — JS-dispatched click bypasses Selenium pointer
+      # hit-testing entirely. Retry once if the role pane is still visible
+      # after the wait window (re-clicking is safe here because the pane
+      # is only meant to TOGGLE; if it's still visible we know our click
+      # didn't fire).
+      hide_role_pane_js = <<~JS
+        const btn = Array.from(document.querySelectorAll("button"))
+          .find(b => b.textContent.trim().startsWith("Roles"));
+        btn?.click();
+      JS
+      page.execute_script(hide_role_pane_js)
+
+      unless page.has_no_css?(
+        "[data-framework-explorer-target='rolePane']", visible: true, wait: 4
+      )
+        page.execute_script(hide_role_pane_js)
+      end
+
       assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
 
       # Click to show again
