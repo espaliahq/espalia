@@ -283,10 +283,16 @@ Devise.setup do |config|
   # at the first user click — so we raise. In test and development a missing
   # credential is normal (fresh checkouts, CI), and OmniAuth.config.test_mode
   # bypasses the real provider call.
+  #
+  # EAGER_LOAD_CHECK lets the CI `production_boot` job boot in RAILS_ENV=
+  # production purely to verify autoloading/eager-loading (it has no decrypted
+  # credentials). That smoke test isn't validating runtime secrets, so skip the
+  # credential fail-fast when it's set — real production never sets it.
   google_client_id = Rails.application.credentials.dig(:google, :client_id)
   google_client_secret = Rails.application.credentials.dig(:google, :client_secret)
 
-  if Rails.env.production? && (google_client_id.blank? || google_client_secret.blank?)
+  if Rails.env.production? && ENV["EAGER_LOAD_CHECK"].blank? &&
+      (google_client_id.blank? || google_client_secret.blank?)
     raise "Missing Google OAuth credentials: set credentials.google.client_id and credentials.google.client_secret"
   end
 

@@ -78,6 +78,9 @@ jobs:
       RAILS_ENV: production
       SECRET_KEY_BASE: dummy-secret-key-base-for-eager-load-only
       DISABLE_DATABASE_ENVIRONMENT_CHECK: "1"
+      # Boot purely to verify autoloading — CI has no decrypted credentials,
+      # so relax production's runtime-secret fail-fasts (e.g. Google OAuth).
+      EAGER_LOAD_CHECK: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
