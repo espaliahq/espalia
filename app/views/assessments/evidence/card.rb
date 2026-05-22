@@ -28,6 +28,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     "incident_response" => "Incident response",
     "presentation"      => "Presentation",
     "mentoring"         => "Mentoring",
+    "observation"       => "Observation",
     "other"             => nil
   }.freeze
 
@@ -83,8 +84,15 @@ class Views::Assessments::Evidence::Card < Views::Base
     p(class: "font-medium text-gray-900 dark:text-gray-100 mt-0.5") { @item.title }
   end
 
+  # The card only renders inside the focused expanded cell (see
+  # assessment_row.rb's `group-data-[focused=true]/assess-expanded:block`
+  # gate, and assessments.md "Full illustrations and evidence are
+  # reserved for the focused cell"). When the card is on screen the
+  # user has explicitly focused this cell, so render the full content —
+  # clamping to two lines hides the very text they came to read.
+  # `whitespace-pre-wrap` preserves any line breaks the author entered.
   def content_line
-    p(class: "mt-0.5 text-gray-700 dark:text-gray-300 line-clamp-2") do
+    p(class: "mt-0.5 text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words") do
       @item.content
     end
   end

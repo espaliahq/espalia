@@ -19,6 +19,7 @@ class Views::Assessments::Evidence::Form < Views::Base
     [ "Incident response", "incident_response" ],
     [ "Presentation",      "presentation" ],
     [ "Mentoring",         "mentoring" ],
+    [ "Observation",       "observation" ],
     [ "Other (describe)",  "other" ]
   ].freeze
 
