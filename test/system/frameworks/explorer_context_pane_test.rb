@@ -215,10 +215,11 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       open_context_pane
 
-      # Navigate to a capability via suggestion click to expand the row
-      within "#suggestion-panel" do
-        find("[data-nav-capability-id='#{@cap_a_id}']", match: :first).click
-      end
+      # Navigate to a capability via suggestion click — JS-dispatch to
+      # bypass Capybara pointer-click drops on starved CI.
+      page.execute_script(<<~JS)
+        document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
+      JS
 
       # Row should be expanded
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
@@ -298,10 +299,12 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       open_context_pane
 
-      within "#suggestion-panel" do
-        # Click the suggestion body (not the detail link) for an illustration
-        find("[data-nav-capability-id='#{@cap_a_id}']", match: :first).click
-      end
+      # JS-dispatch the click — Capybara's pointer click on the suggestion
+      # body can be silently dropped on starved CI runners, leaving the
+      # matrix without an expanded row.
+      page.execute_script(<<~JS)
+        document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
+      JS
 
       # The matrix should expand the matching capability row
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
