@@ -680,6 +680,48 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       )
     end
 
+    should "keep focus when clicking on content inside an already-focused expanded cell" do
+      # Regression: clicking on the expanded cell's body (expectation
+      # text, illustrations, evidence content — anything that isn't a
+      # button/link/input) was hitting focusCell's "background click of
+      # the same cell → toggle off" branch and dropping focus. Both the
+      # compact AND expanded assessment cells now carry
+      # `data-bg-unfocus="false"` to opt out of that branch — the ×
+      # close button is the canonical unfocus path.
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+
+      cap_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+      assert_equal "512px", col_width_for(1), "Pre-condition: cell is focused"
+
+      # Click on the expanded cell's expectation text — a non-interactive
+      # child of the focused `<td>`. Pre-fix, this would have toggled
+      # focus off; post-fix it must be a no-op.
+      page.execute_script(<<~JS, cap_id)
+        const td = document.querySelector(
+          `tr[data-matrix-target="expandedRow"][data-capability-id="${arguments[0]}"] ` +
+          `td[data-level-ordinal="1"]`
+        );
+        // Click on a descendant text node's parent — the illustration
+        // list or expectation paragraph, whichever the cell has. We use
+        // a non-button child so we exercise the background-click path
+        // explicitly.
+        const target = td.querySelector("p, li, span, div") || td;
+        target.click();
+      JS
+
+      # Focus must still be on level 1; close button must still be visible.
+      assert_equal "512px", col_width_for(1),
+        "Clicking inside the focused cell must NOT drop focus"
+      assert_selector(
+        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
+        "td[data-level-ordinal='1'] [data-focused-cell-close]",
+        visible: true
+      )
+    end
+
     should "not reload the matrix frame when the rater clicks their own rating button" do
       # Regression: previously, the rater's own rating triggered a
       # CurrentAssessment ActionCable broadcast → the signal element

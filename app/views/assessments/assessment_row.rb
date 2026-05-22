@@ -148,7 +148,11 @@ class Views::Assessments::AssessmentRow < Views::Base
         capability_stable_id: @capability.stable_id,
         level_ordinal: ordinal,
         expectation_id: expectation&.expectation_id,
-        focus_on_button_click: "true"
+        focus_on_button_click: "true",
+        # See AssessmentCell — clicks inside an already-focused cell
+        # must not toggle focus off. The × close button is the only
+        # path to capability-level focus from here.
+        bg_unfocus: "false"
       }
     ) do
       # Full illustrations + evidence render only in the focused
