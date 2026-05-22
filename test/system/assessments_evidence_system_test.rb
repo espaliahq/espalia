@@ -111,13 +111,16 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
         f.requestSubmit();
       JS
 
-      # The redirect carries capability + category but not level_ordinal,
-      # so the cell isn't focused. Sync on `category=` — the initial visit
-      # did not pass it but the post-PATCH redirect always does, so this
-      # uniquely identifies "PATCH landed and the redirect happened" and
-      # cannot match the pre-submit URL (which is what the test was
-      # accidentally observing before).
+      # The post-PATCH redirect carries capability + category + level_ordinal,
+      # which lands the page back in the focused-cell state the user
+      # triggered the edit from. Sync on `category=` — only the redirect
+      # adds it, so this can't match the pre-submit URL.
       assert_current_path(/category=#{@cat_id}/)
+      # Cell focus preserved — the updated content and "edited" footer
+      # are visible immediately without a second visit.
+      assert_selector "#evidence-#{@evidence_id}", visible: true
+      assert_text "Updated title"
+      assert_text "edited"
 
       ActsAsTenant.with_tenant(@tenant) do
         item = EvidenceItem.find(@evidence_id)
@@ -127,13 +130,6 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
         assert_equal @person.id, item.edited_by_id
         assert_not_nil item.edited_at
       end
-
-      # Deep-link back with level_ordinal to focus the cell — that's how
-      # the card renders, and where the "edited" footer becomes visible.
-      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
-      assert_selector "#evidence-#{@evidence_id}", visible: true
-      assert_text "Updated title"
-      assert_text "edited"
     end
 
     should "not render an Edit menu item for evidence the viewer did NOT author" do

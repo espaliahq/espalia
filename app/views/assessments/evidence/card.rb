@@ -28,6 +28,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     "incident_response" => "Incident response",
     "presentation"      => "Presentation",
     "mentoring"         => "Mentoring",
+    "observation"       => "Observation",
     "other"             => nil
   }.freeze
 

@@ -362,6 +362,10 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       assert_match "capability=#{@cap.stable_id}", response.location
       assert_match "category=#{@cat.category_id}", response.location
+      # Cell focus must be preserved across the PATCH so the user lands
+      # back in the focused state they triggered the edit from — without
+      # level_ordinal the cell unfocuses and the evidence list disappears.
+      assert_match "level_ordinal=2", response.location
 
       ActsAsTenant.with_tenant(@tenant) do
         @item.reload
