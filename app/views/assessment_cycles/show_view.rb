@@ -6,12 +6,6 @@
 # (for admins, when the cycle is open), and a close-cycle action.
 #
 class Views::AssessmentCycles::ShowView < Views::Base
-  CYCLE_TYPE_LABELS = {
-    "regular" => "Regular",
-    "performance_review" => "Performance Review",
-    "promotion_review" => "Promotion Review"
-  }.freeze
-
   STATUS_VARIANTS = {
     "enrolled" => :default,
     "started" => :info,
@@ -69,9 +63,6 @@ class Views::AssessmentCycles::ShowView < Views::Base
     div(class: "mt-4 mb-8 flex items-start justify-between gap-4") do
       div do
         render Views::AssessmentCycles::CycleNameFrame.new(cycle: @cycle, is_admin: @is_admin)
-        p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
-          plain CYCLE_TYPE_LABELS.fetch(@cycle.cycle_type, @cycle.cycle_type)
-        end
       end
       div(class: "flex items-center gap-3") do
         render Components::Kit::Badge.new(
