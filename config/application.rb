@@ -16,7 +16,13 @@ module GrowthOs
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    config.autoload_lib(ignore: %w[assets tasks])
+    #
+    # `rubocop` holds custom cops (lib/rubocop/cop/**) that subclass
+    # RuboCop::Cop::Base — a constant only present when the rubocop gem is
+    # loaded (development/test). They are loaded explicitly by RuboCop via the
+    # `require:` directive in .rubocop.yml, never by the app. Eager-loading
+    # them in production raises NameError and crashes boot, so exclude them.
+    config.autoload_lib(ignore: %w[assets tasks rubocop])
 
     # Configuration for the application, engines, and railties goes here.
     #
