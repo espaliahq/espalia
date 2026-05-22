@@ -26,6 +26,9 @@ class AssessmentCycles::Projections::CurrentState
   def self.handled_events
     [
       AssessmentCycles::Events::CycleDefined,
+      AssessmentCycles::Events::CycleRenamed,
+      AssessmentCycles::Events::CycleTypeChanged,
+      AssessmentCycles::Events::CyclePlannedEndSet,
       AssessmentCycles::Events::PersonEnrolled,
       AssessmentCycles::Events::PersonUnenrolled,
       AssessmentCycles::Events::CycleClosed
@@ -60,6 +63,9 @@ class AssessmentCycles::Projections::CurrentState
   def handle(event)
     case event
     when AssessmentCycles::Events::CycleDefined then handle_cycle_defined(event)
+    when AssessmentCycles::Events::CycleRenamed then handle_cycle_renamed(event)
+    when AssessmentCycles::Events::CycleTypeChanged then handle_cycle_type_changed(event)
+    when AssessmentCycles::Events::CyclePlannedEndSet then handle_cycle_planned_end_set(event)
     when AssessmentCycles::Events::PersonEnrolled then handle_person_enrolled(event)
     when AssessmentCycles::Events::PersonUnenrolled then handle_person_unenrolled(event)
     when AssessmentCycles::Events::CycleClosed then handle_cycle_closed(event)
@@ -75,8 +81,30 @@ class AssessmentCycles::Projections::CurrentState
       cycle_type: event.data[:cycle_type],
       status: "open",
       opened_at: event.metadata[:timestamp] || Time.current,
-      defined_by: event.data[:defined_by]
+      defined_by: event.data[:defined_by],
+      planned_end_at: event.data[:planned_end_at]
     )
+  end
+
+  def handle_cycle_renamed(event)
+    cycle = AssessmentCycle.find_by(cycle_id: event.data[:cycle_id])
+    return unless cycle
+
+    cycle.update!(name: event.data[:new_name])
+  end
+
+  def handle_cycle_type_changed(event)
+    cycle = AssessmentCycle.find_by(cycle_id: event.data[:cycle_id])
+    return unless cycle
+
+    cycle.update!(cycle_type: event.data[:new_cycle_type])
+  end
+
+  def handle_cycle_planned_end_set(event)
+    cycle = AssessmentCycle.find_by(cycle_id: event.data[:cycle_id])
+    return unless cycle
+
+    cycle.update!(planned_end_at: event.data[:planned_end_at])
   end
 
   # Upserts the enrollment row rather than unconditionally creating one.

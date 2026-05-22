@@ -6,12 +6,6 @@
 # (for admins, when the cycle is open), and a close-cycle action.
 #
 class Views::AssessmentCycles::ShowView < Views::Base
-  CYCLE_TYPE_LABELS = {
-    "regular" => "Regular",
-    "performance_review" => "Performance Review",
-    "promotion_review" => "Promotion Review"
-  }.freeze
-
   STATUS_VARIANTS = {
     "enrolled" => :default,
     "started" => :info,
@@ -68,10 +62,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
   def header
     div(class: "mt-4 mb-8 flex items-start justify-between gap-4") do
       div do
-        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @cycle.name }
-        p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
-          plain CYCLE_TYPE_LABELS.fetch(@cycle.cycle_type, @cycle.cycle_type)
-        end
+        render Views::AssessmentCycles::CycleNameFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
       div(class: "flex items-center gap-3") do
         render Components::Kit::Badge.new(
@@ -106,7 +97,8 @@ class Views::AssessmentCycles::ShowView < Views::Base
         dl(class: "grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm") do
           meta_row("Framework", framework_label)
           meta_row("Framework version", "v#{@cycle.framework_version}")
-          meta_row("Cycle type", CYCLE_TYPE_LABELS.fetch(@cycle.cycle_type, @cycle.cycle_type))
+          cycle_type_row
+          planned_end_row
           div do
             dt(class: "text-gray-500 dark:text-gray-400") { "Opened at" }
             dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
@@ -130,6 +122,24 @@ class Views::AssessmentCycles::ShowView < Views::Base
     div do
       dt(class: "text-gray-500 dark:text-gray-400") { label }
       dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") { value }
+    end
+  end
+
+  def cycle_type_row
+    div do
+      dt(class: "text-gray-500 dark:text-gray-400") { "Cycle type" }
+      dd(class: "mt-0.5") do
+        render Views::AssessmentCycles::CycleTypeFrame.new(cycle: @cycle, is_admin: @is_admin)
+      end
+    end
+  end
+
+  def planned_end_row
+    div do
+      dt(class: "text-gray-500 dark:text-gray-400") { "Target completion" }
+      dd(class: "mt-0.5") do
+        render Views::AssessmentCycles::CyclePlannedEndFrame.new(cycle: @cycle, is_admin: @is_admin)
+      end
     end
   end
 

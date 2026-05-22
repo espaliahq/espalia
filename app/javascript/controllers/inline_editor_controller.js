@@ -27,14 +27,31 @@ export default class extends Controller {
     this.displayTarget.classList.add("hidden")
     this.formTarget.classList.remove("hidden")
     this.inputTarget.focus()
-    // Place cursor at end of text
-    const len = this.inputTarget.value.length
-    this.inputTarget.setSelectionRange(len, len)
+    // Place cursor at end of text — but only for text-like inputs.
+    // <input type="date"> throws InvalidStateError; <select> has no
+    // setSelectionRange. Guard with a try/catch so the editor still
+    // works for non-text inputs (cycle type radio, planned end date).
+    if (typeof this.inputTarget.setSelectionRange === "function") {
+      try {
+        const len = this.inputTarget.value.length
+        this.inputTarget.setSelectionRange(len, len)
+      } catch (_e) {
+        // Input type doesn't support text-range selection; ignore.
+      }
+    }
   }
 
   cancel() {
-    // Reset textarea to original value before hiding
-    this.inputTarget.value = this.inputTarget.defaultValue
+    // Reset input/textarea to original value before hiding. defaultValue
+    // is the initial server-rendered value for text inputs and textareas;
+    // for selects we re-derive from each option's defaultSelected.
+    if (this.inputTarget.tagName === "SELECT") {
+      Array.from(this.inputTarget.options).forEach((opt) => {
+        opt.selected = opt.defaultSelected
+      })
+    } else if ("defaultValue" in this.inputTarget) {
+      this.inputTarget.value = this.inputTarget.defaultValue
+    }
     this.formTarget.classList.add("hidden")
     this.displayTarget.classList.remove("hidden")
   }

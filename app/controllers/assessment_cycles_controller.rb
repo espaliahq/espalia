@@ -10,7 +10,7 @@
 # projection materialises into the `assessment_cycles` read model.
 #
 class AssessmentCyclesController < ApplicationController
-  before_action :set_cycle, only: [ :show, :close ]
+  before_action :set_cycle, only: [ :show, :close, :rename, :change_type, :set_planned_end ]
 
   # GET /assessment_cycles
   def index
@@ -88,7 +88,8 @@ class AssessmentCyclesController < ApplicationController
         cycle_params[:name],
         cycle_params[:cycle_type],
         framework.current_published_version,
-        defined_by: current_person&.id
+        defined_by: current_person&.id,
+        planned_end_at: cycle_params[:planned_end_at]
       )
     end
 
@@ -119,6 +120,55 @@ class AssessmentCyclesController < ApplicationController
     redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: e.message
   end
 
+  # PATCH /assessment_cycles/:id/rename
+  def rename
+    authorize @cycle, :update?
+    return reject_closed_edit if @cycle.closed?
+
+    new_name = rename_params[:name].to_s.strip
+    return redirect_back_with_alert("Name can't be blank.") if new_name.empty?
+
+    AssessmentCycles::CommandHandler.new.rename_cycle(
+      @cycle.cycle_id, new_name, updated_by: current_person&.id
+    )
+    @cycle.reload
+    respond_with_edit_frame(:name)
+  rescue RuntimeError, ActiveRecord::RecordInvalid => e
+    redirect_back_with_alert(e.message)
+  end
+
+  # PATCH /assessment_cycles/:id/change_type
+  def change_type
+    authorize @cycle, :update?
+    return reject_closed_edit if @cycle.closed?
+
+    new_type = change_type_params[:cycle_type]
+    AssessmentCycles::CommandHandler.new.change_cycle_type(
+      @cycle.cycle_id, new_type, updated_by: current_person&.id
+    )
+    @cycle.reload
+    respond_with_edit_frame(:cycle_type)
+  rescue RuntimeError, ActiveRecord::RecordInvalid => e
+    redirect_back_with_alert(e.message)
+  end
+
+  # PATCH /assessment_cycles/:id/set_planned_end
+  #
+  # Accepts a blank value to clear the previously-set date.
+  def set_planned_end
+    authorize @cycle, :update?
+    return reject_closed_edit if @cycle.closed?
+
+    raw = set_planned_end_params[:planned_end_at]
+    AssessmentCycles::CommandHandler.new.set_cycle_planned_end(
+      @cycle.cycle_id, raw.presence, updated_by: current_person&.id
+    )
+    @cycle.reload
+    respond_with_edit_frame(:planned_end_at)
+  rescue RuntimeError, ActiveRecord::RecordInvalid, Date::Error => e
+    redirect_back_with_alert(e.message)
+  end
+
   private
 
   def set_cycle
@@ -128,7 +178,46 @@ class AssessmentCyclesController < ApplicationController
   end
 
   def cycle_params
-    params.expect(assessment_cycle: [ :framework_id, :name, :cycle_type ])
+    params.expect(assessment_cycle: [ :framework_id, :name, :cycle_type, :planned_end_at ])
+  end
+
+  def rename_params
+    params.expect(assessment_cycle: [ :name ])
+  end
+
+  def change_type_params
+    params.expect(assessment_cycle: [ :cycle_type ])
+  end
+
+  def set_planned_end_params
+    params.expect(assessment_cycle: [ :planned_end_at ])
+  end
+
+  def reject_closed_edit
+    redirect_to assessment_cycle_path(@cycle), status: :see_other,
+                alert: "Closed cycles can't be edited."
+  end
+
+  def redirect_back_with_alert(message)
+    redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: message
+  end
+
+  # Renders the Turbo frame for the just-edited field. The frame body is
+  # the post-edit display state — Turbo finds the matching `<turbo-frame>`
+  # in the response and swaps it in place.
+  def respond_with_edit_frame(field)
+    render frame_view_for(field), layout: false
+  end
+
+  def frame_view_for(field)
+    case field
+    when :name
+      Views::AssessmentCycles::CycleNameFrame.new(cycle: @cycle, is_admin: true)
+    when :cycle_type
+      Views::AssessmentCycles::CycleTypeFrame.new(cycle: @cycle, is_admin: true)
+    when :planned_end_at
+      Views::AssessmentCycles::CyclePlannedEndFrame.new(cycle: @cycle, is_admin: true)
+    end
   end
 
   # @return [ActiveRecord::Relation<FrameworkState::Framework>]

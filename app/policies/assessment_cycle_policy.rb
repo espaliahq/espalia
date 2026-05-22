@@ -2,13 +2,9 @@
 
 # Authorization for assessment cycle management.
 #
-# NOTE: V1 has no AssessmentCyclesController — cycles are created via the
-# seed task and (temporarily) rails console. This policy exists for unit
-# tests and in preparation for the admin UI; once that UI lands the policy
-# will be wired into controller actions.
-#
 # All mutations require tenant admin (or global admin). Non-admins cannot
-# define, enroll, unenroll, or close cycles.
+# define, edit, enroll, unenroll, or close cycles. `update?` is the single
+# predicate for in-place edits to cycle attributes (name, type, planned end).
 #
 class AssessmentCyclePolicy < ApplicationPolicy
   def index?
@@ -32,6 +28,10 @@ class AssessmentCyclePolicy < ApplicationPolicy
   end
 
   def close?
+    tenant_admin?
+  end
+
+  def update?
     tenant_admin?
   end
 end

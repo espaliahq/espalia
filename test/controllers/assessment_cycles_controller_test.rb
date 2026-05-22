@@ -135,6 +135,80 @@ class AssessmentCyclesControllerTest < ActionDispatch::IntegrationTest
         end
       end
     end
+
+    context "edit actions on an open cycle" do
+      setup do
+        @cycle_id = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          AssessmentCycles::CommandHandler.new.define_cycle(
+            @cycle_id, @framework.framework_id, "Q1 2026 Review", "regular", 1
+          )
+          @cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
+        end
+        sign_in @admin_user
+      end
+
+      should "rename the cycle" do
+        patch rename_assessment_cycle_path(@cycle),
+          params: { assessment_cycle: { name: "Renamed Review" } }
+
+        assert_response :success
+        ActsAsTenant.with_tenant(@tenant) { assert_equal "Renamed Review", @cycle.reload.name }
+      end
+
+      should "reject a blank name" do
+        patch rename_assessment_cycle_path(@cycle),
+          params: { assessment_cycle: { name: "  " } }
+
+        assert_redirected_to assessment_cycle_path(@cycle)
+        ActsAsTenant.with_tenant(@tenant) { assert_equal "Q1 2026 Review", @cycle.reload.name }
+      end
+
+      should "change the cycle type" do
+        patch change_type_assessment_cycle_path(@cycle),
+          params: { assessment_cycle: { cycle_type: "promotion_review" } }
+
+        assert_response :success
+        ActsAsTenant.with_tenant(@tenant) { assert_equal "promotion_review", @cycle.reload.cycle_type }
+      end
+
+      should "set and clear the planned end date" do
+        patch set_planned_end_assessment_cycle_path(@cycle),
+          params: { assessment_cycle: { planned_end_at: "2026-06-30" } }
+        assert_response :success
+        ActsAsTenant.with_tenant(@tenant) do
+          assert_equal Date.new(2026, 6, 30), @cycle.reload.planned_end_at
+        end
+
+        patch set_planned_end_assessment_cycle_path(@cycle),
+          params: { assessment_cycle: { planned_end_at: "" } }
+        assert_response :success
+        ActsAsTenant.with_tenant(@tenant) { assert_nil @cycle.reload.planned_end_at }
+      end
+    end
+
+    context "edit actions on a closed cycle" do
+      setup do
+        @cycle_id = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          handler = AssessmentCycles::CommandHandler.new
+          handler.define_cycle(@cycle_id, @framework.framework_id, "Q1 2026 Review", "regular", 1)
+          handler.close_cycle(@cycle_id)
+          @cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
+        end
+        sign_in @admin_user
+      end
+
+      should "refuse to rename a closed cycle" do
+        patch rename_assessment_cycle_path(@cycle),
+          params: { assessment_cycle: { name: "Too late" } }
+
+        assert_redirected_to assessment_cycle_path(@cycle)
+        follow_redirect!
+        assert_match(/closed cycles can't be edited/i, flash[:alert].to_s)
+        ActsAsTenant.with_tenant(@tenant) { assert_equal "Q1 2026 Review", @cycle.reload.name }
+      end
+    end
   end
 
   context "as tenant member" do
@@ -166,6 +240,23 @@ class AssessmentCyclesControllerTest < ActionDispatch::IntegrationTest
 
       assert_redirected_to root_path
       assert_equal 0, AssessmentCycle.count
+    end
+
+    should "deny PATCH rename" do
+      cycle_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycles::CommandHandler.new.define_cycle(
+          cycle_id, @framework.framework_id, "Q1 2026 Review", "regular", 1
+        )
+        @cycle = AssessmentCycle.find_by!(cycle_id: cycle_id)
+      end
+
+      sign_in @member_user
+      patch rename_assessment_cycle_path(@cycle),
+        params: { assessment_cycle: { name: "Hacked" } }
+
+      assert_redirected_to root_path
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "Q1 2026 Review", @cycle.reload.name }
     end
   end
 

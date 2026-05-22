@@ -71,6 +71,7 @@ class Views::AssessmentCycles::NewView < Views::Base
           framework_field
           name_field
           cycle_type_field
+          planned_end_field
           submit_section
         end
       end
@@ -140,6 +141,25 @@ class Views::AssessmentCycles::NewView < Views::Base
             ) { CYCLE_TYPE_LABELS.fetch(type, type.humanize) }
           end
         end
+      end
+    end
+  end
+
+  def planned_end_field
+    div do
+      label(
+        for: "assessment_cycle_planned_end_at",
+        class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+      ) { "Target completion date (optional)" }
+      input(
+        type: "date",
+        id: "assessment_cycle_planned_end_at",
+        name: "assessment_cycle[planned_end_at]",
+        class: "block w-full rounded-sm border border-gray-300 dark:border-gray-600 " \
+               "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+      )
+      p(class: "mt-1 text-xs text-gray-500 dark:text-gray-400") do
+        "Soft deadline shown to participants. The cycle remains open until you close it."
       end
     end
   end

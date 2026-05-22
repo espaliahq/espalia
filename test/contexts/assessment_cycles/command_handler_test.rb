@@ -96,6 +96,37 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "edit commands" do
+    setup do
+      @handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1)
+    end
+
+    should "rename the cycle and materialise the new name" do
+      @handler.rename_cycle(@cycle_id, "Q1 2026 Review")
+      assert_equal "Q1 2026 Review", AssessmentCycle.find_by(cycle_id: @cycle_id).name
+    end
+
+    should "change the cycle type" do
+      @handler.change_cycle_type(@cycle_id, "promotion_review")
+      assert_equal "promotion_review", AssessmentCycle.find_by(cycle_id: @cycle_id).cycle_type
+    end
+
+    should "set and clear the planned end date" do
+      @handler.set_cycle_planned_end(@cycle_id, "2026-06-30")
+      assert_equal Date.new(2026, 6, 30), AssessmentCycle.find_by(cycle_id: @cycle_id).planned_end_at
+
+      @handler.set_cycle_planned_end(@cycle_id, nil)
+      assert_nil AssessmentCycle.find_by(cycle_id: @cycle_id).planned_end_at
+    end
+
+    should "persist planned_end_at when defining a cycle" do
+      other = SecureRandom.uuid_v7
+      other_fw = SecureRandom.uuid_v7
+      @handler.define_cycle(other, other_fw, "Q3", "regular", 1, planned_end_at: "2026-12-01")
+      assert_equal Date.new(2026, 12, 1), AssessmentCycle.find_by(cycle_id: other).planned_end_at
+    end
+  end
+
   context "partial unique constraint" do
     should "reject a second open cycle for the same framework" do
       @handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1)
