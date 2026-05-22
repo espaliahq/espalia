@@ -28,6 +28,7 @@ class EvidenceItem < ApplicationRecord
     incident_response
     presentation
     mentoring
+    observation
     other
   ].freeze
   LINK_STATUSES = %w[active withdrawn].freeze

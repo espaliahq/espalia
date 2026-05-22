@@ -31,6 +31,13 @@ class EvidenceItemTest < ActiveSupport::TestCase
       end
     end
 
+    should "accept 'observation' as an evidence_type" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = build(:evidence_item, tenant: @tenant, evidence_type: "observation")
+        assert item.valid?, item.errors.full_messages.to_sentence
+      end
+    end
+
     should "require custom_type_label when type is 'other'" do
       ActsAsTenant.with_tenant(@tenant) do
         item = build(:evidence_item, tenant: @tenant, evidence_type: "other", custom_type_label: nil)

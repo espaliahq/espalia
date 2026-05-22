@@ -113,7 +113,15 @@ class Views::Assessments::AssessmentCell < Views::Base
         capability_id: @capability_id,
         capability_stable_id: @capability_stable_id,
         expectation_id: @cell_data.dig(:expectation)&.expectation_id,
-        focus_on_button_click: "true"
+        focus_on_button_click: "true",
+        # Once the user has focused this cell, clicking inside it again
+        # must not unfocus — the canonical way to exit focus is the ×
+        # close button (focus_close_button). Without this opt-out the
+        # user can toggle focus off by clicking on the evidence text /
+        # illustration body, which feels like a bug. The framework
+        # explorer keeps the bg-click-toggle behaviour by NOT setting
+        # this attribute.
+        bg_unfocus: "false"
       }
     ) do
       focus_close_button

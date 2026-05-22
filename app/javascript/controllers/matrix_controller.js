@@ -261,12 +261,20 @@ export default class extends BaseController {
       this.currentFocus.capabilityId === capabilityId &&
       this.currentFocus.levelOrdinal === levelOrdinal
 
-    // Toggle off only on a BACKGROUND click of the same cell. A click
-    // on a button (rating selector, evidence affordance) inside the
-    // focused cell must not toggle focus off — that path is reserved
-    // for the explicit close button. Otherwise rating a cell would
-    // immediately drop focus the moment the rating lands.
-    if (alreadyFocusedHere && !onInteractive) {
+    // Toggle off only on a BACKGROUND click of the same cell, AND only
+    // when the cell hasn't opted out via `data-bg-unfocus="false"`. The
+    // framework explorer relies on background-click as its only exit
+    // path (no per-cell close button exists there). Assessment cells
+    // opt out because they render an explicit × close button — the
+    // user expects clicking the evidence/illustration text inside an
+    // already-focused cell to be a no-op, not to drop focus.
+    //
+    // A click on a button (rating selector, evidence affordance) inside
+    // the focused cell never reaches this branch regardless — `onInteractive`
+    // is true. Otherwise rating a cell would drop focus the moment the
+    // rating lands.
+    const allowBgUnfocus = cell.dataset.bgUnfocus !== "false"
+    if (alreadyFocusedHere && !onInteractive && allowBgUnfocus) {
       this.#setFocus({
         level: "capability",
         categoryId: categoryId,
