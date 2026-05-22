@@ -29,8 +29,8 @@ gem "invisible_captcha", "~> 2.0"
 gem "local_time", "~> 3.0"
 gem "noticed", "~> 3.0"
 gem "pagy", "~> 43.5"
-gem "prefixed_ids", "~> 1.2"
 gem "pundit", "~> 2.4"
+gem "typeid", "~> 0.2"
 gem "tailwindcss-rails", "~> 4.0"
 
 # Phlex - Object-oriented views for semantic components

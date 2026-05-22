@@ -11,6 +11,17 @@ Rails.application.routes.draw do
       controller: "users/tenant_switches",
       as: :users_tenant_switch
   end
+
+  namespace :tenant do
+    resources :users, only: [ :index, :show, :update ] do
+      resources :collaborators,
+                only: [ :create, :destroy ],
+                controller: "users/collaborators"
+      member do
+        get :collaborator_scope_picker
+      end
+    end
+  end
   # RailsEventStore browser for debugging event streams (global admins only)
   authenticate :user, ->(u) { u.global_admin? } do
     mount RailsEventStore::Browser => "/res"
@@ -55,6 +66,13 @@ Rails.application.routes.draw do
     resources :categories,   only: [ :update ], controller: "frameworks/categories"
     resources :expectations, only: [ :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
+    resources :collaborators,
+              only: [ :index, :create, :destroy ],
+              controller: "frameworks/collaborators" do
+      collection do
+        get :scope_picker
+      end
+    end
     resources :suggestions, only: [ :index, :show, :create, :destroy ], controller: "frameworks/suggestions" do
       member do
         post :approve

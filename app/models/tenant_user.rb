@@ -14,7 +14,8 @@
 class TenantUser < ApplicationRecord
   acts_as_tenant :tenant
 
-  has_prefix_id :tnu
+  include HasTypeId
+  has_typeid :tnu
 
   ROLES = { member: "member", admin: "admin" }.freeze
 

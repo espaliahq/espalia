@@ -13,7 +13,8 @@
 class Person < ApplicationRecord
   acts_as_tenant :tenant
 
-  has_prefix_id :per
+  include HasTypeId
+  has_typeid :per
 
   belongs_to :tenant
   belongs_to :manager, class_name: "Person", optional: true

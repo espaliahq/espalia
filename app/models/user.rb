@@ -10,7 +10,8 @@
 #   user = User.new(email: "alice@example.com", password: "s3cr3t")
 #
 class User < ApplicationRecord
-  has_prefix_id :usr
+  include HasTypeId
+  has_typeid :usr
 
   has_many :tenant_users, dependent: :destroy
   has_many :tenants, through: :tenant_users
