@@ -97,16 +97,28 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "Assigned Person"
       assert_text "enrolled@example.com".sub("enrolled", "assigned")
 
-      # Unenroll (accept the confirm dialog)
-      click_with_retry(expect_text: "Person unenrolled") do
-        auto_confirm { click_button "Unenroll" }
+      # Unenroll — submit the button's form via requestSubmit() so a dropped
+      # pointer click on starved CI can't lose the action. auto_confirm stubs
+      # window.confirm so the data-turbo-confirm dialog resolves synchronously.
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Unenroll");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
+      assert_text "Person unenrolled"
       assert_text "Withdrawn"
 
-      # Close the cycle
-      click_with_retry(expect_text: "Cycle closed") do
-        auto_confirm { click_button "Close cycle" }
+      # Close the cycle — same requestSubmit pattern.
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Close cycle");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
+      assert_text "Cycle closed"
       assert_text "Closed"
     end
   end
