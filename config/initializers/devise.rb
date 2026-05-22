@@ -291,7 +291,8 @@ Devise.setup do |config|
   google_client_id = Rails.application.credentials.dig(:google, :client_id)
   google_client_secret = Rails.application.credentials.dig(:google, :client_secret)
 
-  if Rails.env.production? && ENV["EAGER_LOAD_CHECK"].blank? &&
+  eager_load_check = ENV["EAGER_LOAD_CHECK"] == "1"
+  if Rails.env.production? && !eager_load_check &&
       (google_client_id.blank? || google_client_secret.blank?)
     raise "Missing Google OAuth credentials: set credentials.google.client_id and credentials.google.client_secret"
   end

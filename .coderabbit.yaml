@@ -5,7 +5,6 @@
 # SystemTests/FlakeProneClick — the cop hard-fails CI on the two highest-signal
 # patterns (accept_confirm, find(data-action).click), while CodeRabbit catches
 # the fuzzier cases a static cop can't reliably detect without false positives.
-version: 2
 language: en-US
 
 reviews:

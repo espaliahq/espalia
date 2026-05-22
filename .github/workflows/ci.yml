@@ -5,6 +5,11 @@ on:
   push:
     branches: [ main ]
 
+# Every job here is read-only (no git push/commit, no releases). Grant the
+# workflow token least privilege rather than the repo default.
+permissions:
+  contents: read
+
 jobs:
   scan_ruby:
     runs-on: ubuntu-latest
