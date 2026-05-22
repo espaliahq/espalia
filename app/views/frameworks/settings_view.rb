@@ -66,9 +66,10 @@ class Views::Frameworks::SettingsView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(class: "max-w-3xl mx-auto px-4 py-8") do
+      div(class: "max-w-3xl mx-auto px-4 py-8 space-y-12") do
         page_header
         settings_form
+        collaborators_section
       end
     end
   end
@@ -103,6 +104,24 @@ class Views::Frameworks::SettingsView < Views::Base
 
       scoring_section
       submit_section
+    end
+  end
+
+  def collaborators_section
+    div do
+      render Components::Kit::SectionHeading.new(
+        "Collaborators",
+        subtitle: "People who can view, suggest, or directly edit this framework"
+      )
+
+      turbo_frame_tag(
+        "framework-collaborators",
+        src: framework_collaborators_path(@framework.framework_id),
+        loading: "lazy",
+        class: "block mt-6"
+      ) do
+        p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading collaborators…" }
+      end
     end
   end
 

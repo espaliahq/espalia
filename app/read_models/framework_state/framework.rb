@@ -14,7 +14,9 @@ class FrameworkState::Framework < ApplicationRecord
   end
 
   acts_as_tenant :tenant
-  has_prefix_id :frm
+
+  include HasTypeId
+  has_typeid :frm
 
   belongs_to :tenant
   has_many :role_families, class_name: "FrameworkState::RoleFamily",
