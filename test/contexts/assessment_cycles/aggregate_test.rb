@@ -49,6 +49,120 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#define with planned_end_at" do
+    should "store the normalized ISO date in the event" do
+      @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1, planned_end_at: "2026-06-30")
+
+      event = @aggregate.unpublished_events.to_a.first
+      assert_equal "2026-06-30", event.data[:planned_end_at]
+    end
+
+    should "store nil when planned_end_at is omitted" do
+      @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
+      assert_nil @aggregate.unpublished_events.to_a.first.data[:planned_end_at]
+    end
+  end
+
+  context "#rename" do
+    setup do
+      @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
+    end
+
+    should "apply CycleRenamed event" do
+      @aggregate.rename("Q1 2026 Review", updated_by: @defined_by)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CycleRenamed, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+      assert_equal "Q1 2026 Review", event.data[:new_name]
+      assert_equal @defined_by, event.data[:updated_by]
+    end
+
+    should "be a no-op when the name is unchanged" do
+      before = @aggregate.unpublished_events.to_a.length
+      @aggregate.rename("Q1")
+      assert_equal before, @aggregate.unpublished_events.to_a.length
+    end
+
+    should "raise on blank name" do
+      err = assert_raises(RuntimeError) { @aggregate.rename("   ") }
+      assert_match(/blank/i, err.message)
+    end
+
+    should "raise when the cycle is closed" do
+      @aggregate.close
+      err = assert_raises(RuntimeError) { @aggregate.rename("New name") }
+      assert_match(/closed/, err.message)
+    end
+  end
+
+  context "#change_type" do
+    setup do
+      @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
+    end
+
+    should "apply CycleTypeChanged event" do
+      @aggregate.change_type("promotion_review", updated_by: @defined_by)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CycleTypeChanged, event
+      assert_equal "promotion_review", event.data[:new_cycle_type]
+    end
+
+    should "be a no-op when the type is unchanged" do
+      before = @aggregate.unpublished_events.to_a.length
+      @aggregate.change_type("regular")
+      assert_equal before, @aggregate.unpublished_events.to_a.length
+    end
+
+    should "raise on invalid type" do
+      err = assert_raises(RuntimeError) { @aggregate.change_type("nonsense") }
+      assert_match(/Invalid cycle type/, err.message)
+    end
+
+    should "raise when the cycle is closed" do
+      @aggregate.close
+      err = assert_raises(RuntimeError) { @aggregate.change_type("promotion_review") }
+      assert_match(/closed/, err.message)
+    end
+  end
+
+  context "#set_planned_end" do
+    setup do
+      @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
+    end
+
+    should "apply CyclePlannedEndSet event with the normalized date" do
+      @aggregate.set_planned_end("2026-09-15", updated_by: @defined_by)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CyclePlannedEndSet, event
+      assert_equal "2026-09-15", event.data[:planned_end_at]
+    end
+
+    should "emit nil to clear a previously-set date" do
+      @aggregate.set_planned_end("2026-09-15")
+      @aggregate.set_planned_end(nil)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CyclePlannedEndSet, event
+      assert_nil event.data[:planned_end_at]
+    end
+
+    should "be a no-op when the date is unchanged" do
+      @aggregate.set_planned_end("2026-09-15")
+      before = @aggregate.unpublished_events.to_a.length
+      @aggregate.set_planned_end("2026-09-15")
+      assert_equal before, @aggregate.unpublished_events.to_a.length
+    end
+
+    should "raise when the cycle is closed" do
+      @aggregate.close
+      err = assert_raises(RuntimeError) { @aggregate.set_planned_end("2026-09-15") }
+      assert_match(/closed/, err.message)
+    end
+  end
+
   context "#enroll" do
     setup do
       @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)

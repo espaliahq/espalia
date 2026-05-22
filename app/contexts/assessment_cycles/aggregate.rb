@@ -24,6 +24,7 @@ class AssessmentCycles::Aggregate
     @framework_version = nil
     @name = nil
     @cycle_type = nil
+    @planned_end_at = nil
     @status = :new
     @enrolled_person_ids = Set.new
   end
@@ -36,8 +37,9 @@ class AssessmentCycles::Aggregate
   # @param cycle_type [String] one of: regular, performance_review, promotion_review
   # @param framework_version [Integer] the framework version to freeze against
   # @param defined_by [String, nil] optional person_id / tenant_user_id of the creator
+  # @param planned_end_at [String, Date, nil] soft target completion date
   # @raise [RuntimeError] if already defined or invalid cycle_type
-  def define(cycle_id, framework_id, name, cycle_type, framework_version, defined_by: nil)
+  def define(cycle_id, framework_id, name, cycle_type, framework_version, defined_by: nil, planned_end_at: nil)
     raise "Cycle already defined" unless @status == :new
     raise "Invalid cycle type: #{cycle_type}" unless CYCLE_TYPES.include?(cycle_type)
 
@@ -47,7 +49,60 @@ class AssessmentCycles::Aggregate
       framework_version: framework_version,
       name: name,
       cycle_type: cycle_type,
-      defined_by: defined_by
+      defined_by: defined_by,
+      planned_end_at: normalize_planned_end(planned_end_at)
+    }))
+  end
+
+  # Renames the cycle. No-op (no event emitted) if the new name matches
+  # the current name.
+  #
+  # @param new_name [String]
+  # @param updated_by [String, nil]
+  # @raise [RuntimeError] if cycle not open or new_name is blank
+  def rename(new_name, updated_by: nil)
+    ensure_open!
+    raise "Name can't be blank" if new_name.to_s.strip.empty?
+    return if @name == new_name
+
+    apply(AssessmentCycles::Events::CycleRenamed.new(data: {
+      cycle_id: @cycle_id,
+      new_name: new_name,
+      updated_by: updated_by
+    }))
+  end
+
+  # Changes the cycle type.
+  #
+  # @param new_cycle_type [String] one of {CYCLE_TYPES}
+  # @param updated_by [String, nil]
+  # @raise [RuntimeError] if cycle not open or invalid cycle_type
+  def change_type(new_cycle_type, updated_by: nil)
+    ensure_open!
+    raise "Invalid cycle type: #{new_cycle_type}" unless CYCLE_TYPES.include?(new_cycle_type)
+    return if @cycle_type == new_cycle_type
+
+    apply(AssessmentCycles::Events::CycleTypeChanged.new(data: {
+      cycle_id: @cycle_id,
+      new_cycle_type: new_cycle_type,
+      updated_by: updated_by
+    }))
+  end
+
+  # Sets, changes, or clears the planned end date. Pass `nil` to clear.
+  #
+  # @param planned_end_at [String, Date, nil]
+  # @param updated_by [String, nil]
+  # @raise [RuntimeError] if cycle not open
+  def set_planned_end(planned_end_at, updated_by: nil)
+    ensure_open!
+    normalized = normalize_planned_end(planned_end_at)
+    return if @planned_end_at == normalized
+
+    apply(AssessmentCycles::Events::CyclePlannedEndSet.new(data: {
+      cycle_id: @cycle_id,
+      planned_end_at: normalized,
+      updated_by: updated_by
     }))
   end
 
@@ -112,6 +167,19 @@ class AssessmentCycles::Aggregate
     raise "Cycle is closed" if @status == :closed
   end
 
+  # Coerce input to an ISO 8601 date string ("YYYY-MM-DD") for stable event
+  # payloads. Returns nil for blank input.
+  def normalize_planned_end(value)
+    return nil if value.nil?
+    return nil if value.respond_to?(:empty?) && value.empty?
+
+    case value
+    when Date then value.iso8601
+    when String then Date.parse(value).iso8601
+    else value.to_date.iso8601
+    end
+  end
+
   # ── Event handlers ──
 
   on AssessmentCycles::Events::CycleDefined do |event|
@@ -120,7 +188,20 @@ class AssessmentCycles::Aggregate
     @framework_version = event.data[:framework_version]
     @name = event.data[:name]
     @cycle_type = event.data[:cycle_type]
+    @planned_end_at = event.data[:planned_end_at]
     @status = :open
+  end
+
+  on AssessmentCycles::Events::CycleRenamed do |event|
+    @name = event.data[:new_name]
+  end
+
+  on AssessmentCycles::Events::CycleTypeChanged do |event|
+    @cycle_type = event.data[:new_cycle_type]
+  end
+
+  on AssessmentCycles::Events::CyclePlannedEndSet do |event|
+    @planned_end_at = event.data[:planned_end_at]
   end
 
   on AssessmentCycles::Events::PersonEnrolled do |event|

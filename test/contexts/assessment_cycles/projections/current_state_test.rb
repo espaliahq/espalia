@@ -34,6 +34,74 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "CycleDefined with planned_end_at" do
+    should "persist the planned end date" do
+      emit(AssessmentCycles::Events::CycleDefined,
+        cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1,
+        name: "Q1", cycle_type: "regular", defined_by: nil, planned_end_at: "2026-06-30")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal Date.new(2026, 6, 30), AssessmentCycle.find_by(cycle_id: @cycle_id).planned_end_at
+      end
+    end
+
+    should "leave planned_end_at nil when the key is absent (legacy event)" do
+      emit(AssessmentCycles::Events::CycleDefined,
+        cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1,
+        name: "Q1", cycle_type: "regular", defined_by: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil AssessmentCycle.find_by(cycle_id: @cycle_id).planned_end_at
+      end
+    end
+  end
+
+  context "edit events" do
+    setup do
+      emit(AssessmentCycles::Events::CycleDefined,
+        cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1,
+        name: "Q1", cycle_type: "regular", defined_by: nil)
+    end
+
+    should "rename only the name column on CycleRenamed" do
+      emit(AssessmentCycles::Events::CycleRenamed,
+        cycle_id: @cycle_id, new_name: "Q1 2026 Review", updated_by: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = AssessmentCycle.find_by(cycle_id: @cycle_id)
+        assert_equal "Q1 2026 Review", cycle.name
+        assert_equal "regular", cycle.cycle_type
+      end
+    end
+
+    should "change only the cycle_type column on CycleTypeChanged" do
+      emit(AssessmentCycles::Events::CycleTypeChanged,
+        cycle_id: @cycle_id, new_cycle_type: "promotion_review", updated_by: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = AssessmentCycle.find_by(cycle_id: @cycle_id)
+        assert_equal "promotion_review", cycle.cycle_type
+        assert_equal "Q1", cycle.name
+      end
+    end
+
+    should "set and clear planned_end_at on CyclePlannedEndSet" do
+      emit(AssessmentCycles::Events::CyclePlannedEndSet,
+        cycle_id: @cycle_id, planned_end_at: "2026-09-15", updated_by: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal Date.new(2026, 9, 15), AssessmentCycle.find_by(cycle_id: @cycle_id).planned_end_at
+      end
+
+      emit(AssessmentCycles::Events::CyclePlannedEndSet,
+        cycle_id: @cycle_id, planned_end_at: nil, updated_by: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil AssessmentCycle.find_by(cycle_id: @cycle_id).planned_end_at
+      end
+    end
+  end
+
   context "PersonEnrolled" do
     setup do
       emit(AssessmentCycles::Events::CycleDefined,

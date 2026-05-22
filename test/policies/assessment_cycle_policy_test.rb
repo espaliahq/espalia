@@ -24,6 +24,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       refute policy.enroll?
       refute policy.unenroll?
       refute policy.close?
+      refute policy.update?
     end
   end
 
@@ -45,6 +46,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       refute policy.enroll?
       refute policy.unenroll?
       refute policy.close?
+      refute policy.update?
     end
   end
 
@@ -63,6 +65,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.enroll?
       assert policy.unenroll?
       assert policy.close?
+      assert policy.update?
     end
   end
 
@@ -80,6 +83,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.enroll?
       assert policy.unenroll?
       assert policy.close?
+      assert policy.update?
     end
   end
 end

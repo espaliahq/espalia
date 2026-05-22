@@ -85,6 +85,9 @@ Rails.application.routes.draw do
   resources :assessment_cycles, only: [ :index, :show, :new, :create ] do
     member do
       post :close
+      patch :rename
+      patch :change_type
+      patch :set_planned_end
     end
     resources :enrollments, only: [ :create, :destroy ],
                             controller: "assessment_cycles/enrollments" do

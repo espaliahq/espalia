@@ -14,6 +14,9 @@
 #   @option data [String] :name display name (e.g. "Q1 2026 Review")
 #   @option data [String] :cycle_type one of: regular, performance_review, promotion_review
 #   @option data [String, nil] :defined_by person_id / tenant_user_id of the creator
+#   @option data [String, nil] :planned_end_at ISO 8601 date (YYYY-MM-DD) — soft target
+#     completion date. Optional; events emitted before this field was added have it
+#     absent (the projection treats absence and nil identically).
 #
 class AssessmentCycles::Events::CycleDefined < RubyEventStore::Event
 end

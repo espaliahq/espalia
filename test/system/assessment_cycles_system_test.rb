@@ -96,6 +96,62 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "inline cycle editing" do
+    setup do
+      @cycle_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycles::CommandHandler.new.define_cycle(
+          @cycle_id, @framework_id, "Q2 2026 Review", "regular", 1
+        )
+        @cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
+      end
+    end
+
+    should "rename, change type, and set the planned end date inline" do
+      sign_in @admin_user
+      visit assessment_cycle_path(@cycle)
+      assert_text "Q2 2026 Review"
+
+      # Rename via the name frame's inline editor.
+      reveal_inline_form("#cycle-name-#{@cycle_id} [data-controller='inline-editor']")
+      set_input_value("#cycle-name-#{@cycle_id} input[name='assessment_cycle[name]']", "Renamed H1 Review")
+      submit_inline_form("#cycle-name-#{@cycle_id} [data-controller='inline-editor']")
+      assert_text "Renamed H1 Review"
+
+      # Change the cycle type via the type frame's <select>.
+      reveal_inline_form("#cycle-type-#{@cycle_id} [data-controller='inline-editor']")
+      set_input_value("#cycle-type-#{@cycle_id} select[name='assessment_cycle[cycle_type]']", "promotion_review")
+      submit_inline_form("#cycle-type-#{@cycle_id} [data-controller='inline-editor']")
+      assert_text "Promotion Review"
+
+      # Set a planned end date.
+      reveal_inline_form("#cycle-planned-end-#{@cycle_id} [data-controller='inline-editor']")
+      set_input_value("#cycle-planned-end-#{@cycle_id} input[name='assessment_cycle[planned_end_at]']", "2026-06-30")
+      submit_inline_form("#cycle-planned-end-#{@cycle_id} [data-controller='inline-editor']")
+      assert_text "30 Jun 2026"
+
+      # Clear the planned end date.
+      reveal_inline_form("#cycle-planned-end-#{@cycle_id} [data-controller='inline-editor']")
+      set_input_value("#cycle-planned-end-#{@cycle_id} input[name='assessment_cycle[planned_end_at]']", "")
+      submit_inline_form("#cycle-planned-end-#{@cycle_id} [data-controller='inline-editor']")
+      assert_text "not set"
+    end
+
+    should "hide edit affordances once the cycle is closed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycles::CommandHandler.new.close_cycle(@cycle_id)
+      end
+
+      sign_in @admin_user
+      visit assessment_cycle_path(@cycle)
+      assert_text "Closed"
+
+      assert_no_selector "#cycle-name-#{@cycle_id} [data-controller='inline-editor']"
+      assert_no_selector "#cycle-type-#{@cycle_id} [data-controller='inline-editor']"
+      assert_no_selector "#cycle-planned-end-#{@cycle_id} [data-controller='inline-editor']"
+    end
+  end
+
   context "auto-enrollment on new assignment" do
     should "auto-enroll a newly-assigned person into the open cycle" do
       # Define a cycle first via the rails layer so the UI test stays focused
@@ -147,5 +203,40 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
 
   def sign_in(user)
     sign_in_as(user)
+  end
+
+  # Reveal the hidden inline-edit form for a given inline-editor scope by
+  # toggling the display/form targets via JS — mirrors the framework
+  # explorer pattern, which avoids dropped pointer clicks on the
+  # opacity-0 pencil on slow CI runners.
+  def reveal_inline_form(scope_selector)
+    # The inline-editor controller extends Stimulus' Controller directly (no
+    # `data-connected`), so wait_for_stimulus can't be used. We toggle the
+    # display/form targets and submit via JS, neither of which needs the
+    # controller connected — `find` waiting for the element is enough.
+    container = find(scope_selector)
+    page.execute_script(
+      "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", container
+    )
+    page.execute_script(
+      "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", container
+    )
+  end
+
+  # Atomically assign an input/select value via JS (Selenium send_keys can
+  # drop characters on starved CI runners) and fire input/change events.
+  def set_input_value(input_selector, value)
+    page.execute_script(<<~JS, find(input_selector), value)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
+  end
+
+  # Submit the inline form via requestSubmit() — synchronous, bypasses
+  # pointer hit-testing so the Turbo frame request always fires.
+  def submit_inline_form(scope_selector)
+    page.execute_script("arguments[0].querySelector('form').requestSubmit();", find(scope_selector))
   end
 end
