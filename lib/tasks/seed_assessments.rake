@@ -387,7 +387,16 @@ namespace :assessments do
           next
         end
 
-        parent_id = seed[:reply_to_index] ? seeded_comment_ids[seed[:reply_to_index]] : nil
+        # `reply_to_index` references a previously-seeded comment in this
+        # list. A silently-nil lookup would post a top-level comment
+        # instead of failing — masking demo-content bugs (e.g. a typo
+        # that breaks the reply chain). Raise loudly so re-runs catch it.
+        parent_id =
+          if (idx = seed[:reply_to_index])
+            seeded_comment_ids[idx] ||
+              raise("Invalid reply_to_index=#{idx} for comment seed #{i} " \
+                    "(parent not seeded/resolved)")
+          end
         comment_id = SecureRandom.uuid_v7
 
         handler.post_comment(
