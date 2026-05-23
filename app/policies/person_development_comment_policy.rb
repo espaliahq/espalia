@@ -45,6 +45,11 @@ class PersonDevelopmentCommentPolicy < ApplicationPolicy
   def destroy?
     return false unless person.present?
     return false unless record.is_a?(PersonDevelopmentComment)
+    # Reject redundant deletes on already-deleted comments. The aggregate
+    # would raise CommandError anyway, but rejecting at the policy keeps
+    # the controller's flash messaging consistent with `update?`, which
+    # mirrors the same guard.
+    return false if record.deleted?
     return true if tenant_admin?
 
     record.author_id == person.id

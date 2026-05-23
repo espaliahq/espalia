@@ -131,6 +131,14 @@ class PersonDevelopmentCommentPolicyTest < ActiveSupport::TestCase
         assert_not policy(c).update?
       end
     end
+
+    should "deny destroy once deleted (no redundant deletes)" do
+      ActsAsTenant.with_tenant(@tenant) do
+        c = create(:person_development_comment, tenant: @tenant,
+          person_id: @assessee.id, author: @assessee, status: "deleted")
+        assert_not policy(c).destroy?
+      end
+    end
   end
 
   private
