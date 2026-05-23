@@ -65,7 +65,8 @@ class Assessments::ActivityFeedQuery
 
   # @return [Array<Entry>] reverse-chronological entries the viewer may see
   def call
-    entries = rating_entries + relink_entries + evidence_entries + alignment_entries
+    entries = rating_entries + relink_entries + evidence_entries +
+              alignment_entries + comment_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -195,6 +196,39 @@ class Assessments::ActivityFeedQuery
       end
       entries
     end
+  end
+
+  # Reads the {PersonDevelopmentComment} read model and emits one feed
+  # entry per active comment. Threaded alongside ratings/evidence so the
+  # conversation context surrounding any cell is visible inline.
+  #
+  # Deleted comments are intentionally omitted from the activity feed —
+  # tombstones still render inside the focused cell's thread (so reply
+  # chains stay coherent), but the feed shouldn't surface noise from
+  # removed posts. Edited comments are NOT given a separate "edited"
+  # entry — the card itself shows an `(edited)` marker, and a feed
+  # entry per edit would be excessive for an informal conversation lane.
+  def comment_entries
+    PersonDevelopmentComment
+      .active
+      .for_person(@assignment.person_id)
+      .for_framework(@assignment.framework_id)
+      .where(commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL)
+      .includes(:author)
+      .map do |comment|
+        stable_id = comment.capability_stable_id
+        Entry.new(
+          id: "comment_posted:#{comment.id}",
+          kind: "comment_posted",
+          occurred_at: comment.posted_at,
+          payload: comment,
+          capability_stable_id: stable_id,
+          level_ordinal: comment.level_ordinal,
+          cycle_id: nil,
+          capability_name: capability_name_for(stable_id),
+          category_id: category_id_for(stable_id)
+        )
+      end
   end
 
   def alignment_entries

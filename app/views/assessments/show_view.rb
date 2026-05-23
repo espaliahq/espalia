@@ -22,6 +22,7 @@ class Views::Assessments::ShowView < Views::Base
                  context: :self,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_relink_others_evidence: false,
+                 can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
@@ -34,6 +35,8 @@ class Views::Assessments::ShowView < Views::Base
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
     @can_relink_others_evidence = can_relink_others_evidence
+    @can_comment = can_comment
+    @viewer_is_tenant_admin = viewer_is_tenant_admin
     @activity_entries = activity_entries
     @user = user
     @current_tenant = current_tenant
@@ -217,7 +220,10 @@ class Views::Assessments::ShowView < Views::Base
           expanded_capability_id: @expanded_capability_id,
           expanded_level_ordinal: @expanded_level_ordinal,
           viewer_person_id: @viewer_person_id,
-          can_create_evidence: @can_create_evidence
+          can_create_evidence: @can_create_evidence,
+          can_relink_others_evidence: @can_relink_others_evidence,
+          can_comment: @can_comment,
+          viewer_is_tenant_admin: @viewer_is_tenant_admin
         )
       end
     end

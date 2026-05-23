@@ -65,6 +65,7 @@ class Assessments::MatrixDataBuilder
   def build
     @ratings_index = load_ratings
     @evidence_index = load_evidence
+    @comments_index = load_comments
     @bindings_by_cap = index_bindings
     levels = build_levels
     ordinals = levels.map { |l| l[:ordinal] }
@@ -161,6 +162,8 @@ class Assessments::MatrixDataBuilder
         .sort_by(&:ordinal)
 
       evidence = @evidence_index[[ capability.stable_id, ordinal ]] || []
+      comments = @comments_index[[ capability.stable_id, ordinal ]] || []
+      visible_comment_count = comments.count { |c| !c.deleted? }
 
       cells[ordinal] = {
         expectation: expectation,
@@ -170,7 +173,9 @@ class Assessments::MatrixDataBuilder
         illustrations: illustrations,
         illustration_count: illustrations.size,
         evidence: evidence,
-        evidence_count: evidence.size
+        evidence_count: evidence.size,
+        comments: comments,
+        comment_count: visible_comment_count
       }
     end
   end
@@ -201,6 +206,36 @@ class Assessments::MatrixDataBuilder
       key = [ item.capability_stable_id, item.level_ordinal ]
       (h[key] ||= []) << item
     end
+  end
+
+  # Loads comments visible to the current viewer, indexed by
+  # (capability_stable_id, level_ordinal). Comments have no cycle scope —
+  # they are framework-wide conversation anchored to the cell.
+  #
+  # Returned set includes deleted comments so the thread view can
+  # render tombstones in place (reply chains stay coherent). The cell's
+  # `comment_count` only counts non-deleted entries.
+  #
+  # Comments are NOT subject to the evidence privacy gates — they are
+  # informal conversation, not official record-keeping. Any viewer who
+  # can see the assessment can see its comments. When `viewer_person_id`
+  # is nil, the matrix is rendered without a viewer (rare; system/
+  # unauthenticated paths) and we omit comments entirely.
+  #
+  # @return [Hash{[String, Integer] => Array<PersonDevelopmentComment>}]
+  def load_comments
+    return {} if @viewer_person_id.nil?
+
+    PersonDevelopmentComment
+      .for_person(@person_id)
+      .for_framework(@framework.framework_id)
+      .where(commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL)
+      .includes(:author)
+      .chronological
+      .each_with_object({}) do |comment, h|
+        key = [ comment.capability_stable_id, comment.level_ordinal ]
+        (h[key] ||= []) << comment
+      end
   end
 
   # Loads and indexes all AssessmentLevelRatings for this person + framework + cycle.

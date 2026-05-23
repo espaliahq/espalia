@@ -293,6 +293,118 @@ namespace :assessments do
           end
         end
 
+      # Seed comments threaded onto the same cells the evidence above
+      # was anchored to — informal conversation that READS like a
+      # response to the evidence already in context. Per-seed idempotency
+      # by body so a partial seed run can be re-invoked.
+      #
+      # Threading semantics: comments without `reply_to_index` are
+      # top-level; comments with one point at a previously-seeded
+      # comment in this list (by zero-based index) so the demo
+      # exercises the reply path.
+      comment_seeds = [
+        # On Strategic & Critical Thinking · L3 — alongside the auth-migration RFC
+        # and the payments-PR code review.
+        {
+          capability_name: "Strategic & Critical Thinking",
+          level_offset: 0, author: manager_person,
+          body: "Loved the RFC structure — the decision matrix made it really easy " \
+                "to follow the trade-offs. Worth pulling the template out for the rest " \
+                "of the team to reuse."
+        },
+        {
+          capability_name: "Strategic & Critical Thinking",
+          level_offset: 0, author: report_person,
+          reply_to_index: 0,
+          body: "Thanks! Happy to write up a short \"how I wrote the RFC\" doc next " \
+                "sprint if there's appetite."
+        },
+
+        # On Data Informed & Customer Centric Decisions · L3 — alongside the
+        # partner-research recommendation evidence.
+        {
+          capability_name: "Data Informed & Customer Centric Decisions",
+          level_offset: 0, author: report_person,
+          body: "One thing I want to push myself on next quarter: closing the loop " \
+                "with the partners after we ship the migration UX, so we can validate " \
+                "the recommendation actually held up."
+        },
+
+        # On Data Informed & Customer Centric Decisions · L2 — alongside the
+        # CS pain-points sprint-planning evidence.
+        {
+          capability_name: "Data Informed & Customer Centric Decisions",
+          level_offset: -1, author: manager_person,
+          body: "Nice instinct to pull the CS data in before sizing — that's the kind " \
+                "of habit that compounds. The next step at L3 is doing the same with " \
+                "quantitative data, not just CS pain points."
+        },
+
+        # On Commit, Deliver, Celebrate · L3 — alongside the Saturday outage
+        # incident response evidence.
+        {
+          capability_name: "Commit, Deliver, Celebrate: Accountability & Execution",
+          level_offset: 0, author: manager_person,
+          body: "The five-minute stakeholder updates during the outage were a standout — " \
+                "calm, factual, no speculation. That set the tone for the whole response."
+        },
+        {
+          capability_name: "Commit, Deliver, Celebrate: Accountability & Execution",
+          level_offset: 0, author: report_person,
+          reply_to_index: 4,
+          body: "Thanks. Lifted that playbook from the SRE on-call doc — happy to write " \
+                "up the cadence as part of the postmortem follow-ups so other on-calls " \
+                "have a default to start from."
+        }
+      ]
+
+      # `seeded_comment_ids` lets later seeds reference earlier ones by
+      # index for the reply path. Recorded in seed order — the same
+      # array index that authors supply via `reply_to_index`.
+      seeded_comment_ids = []
+
+      comment_seeds.each_with_index do |seed, i|
+        binding = bindings_by_name.fetch(seed[:capability_name]) do
+          raise "Missing capability binding for #{seed[:capability_name].inspect} — " \
+                "framework template likely changed; update the seed task."
+        end
+        cap = binding.capability
+        target_level_ordinal = (level.ordinal + seed[:level_offset]).clamp(1, level.ordinal)
+
+        # Per-seed idempotency by (person, framework, body) — the body
+        # is unique within this set and survives reruns. If the row
+        # already exists, remember its id so later replies that
+        # reference this seed by index still resolve.
+        existing = PersonDevelopmentComment
+          .for_person(report_person.id)
+          .for_framework(framework.framework_id)
+          .where(body: seed[:body]).first
+
+        if existing
+          seeded_comment_ids[i] = existing.id
+          puts "  Comment  (#{seed[:author].name}, #{cap.name} L#{target_level_ordinal}): " \
+               "already seeded — skipping."
+          next
+        end
+
+        parent_id = seed[:reply_to_index] ? seeded_comment_ids[seed[:reply_to_index]] : nil
+        comment_id = SecureRandom.uuid_v7
+
+        handler.post_comment(
+          report_person.id, framework.framework_id, comment_id,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          capability_stable_id: cap.stable_id,
+          level_ordinal: target_level_ordinal,
+          body: seed[:body],
+          author_id: seed[:author].id,
+          parent_id: parent_id
+        )
+        seeded_comment_ids[i] = comment_id
+
+        kind = parent_id ? "reply" : "top-level"
+        puts "  Comment  (#{seed[:author].name}, #{cap.name} L#{target_level_ordinal}, #{kind})"
+      end
+
       puts "Assessment seed complete."
       puts "  Manager: #{manager_person.name} (#{admin_tu.user.email})"
       puts "  Report:  #{report_person.name} (#{report_email} / password123)"

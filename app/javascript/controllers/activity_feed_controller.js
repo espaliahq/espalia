@@ -13,7 +13,7 @@ import BaseController from "controllers/base_controller"
 
 const COOKIE_NAME = "assessment_activity_focus_mode"
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
-const VALID_FILTERS = ["all", "ratings", "evidence", "alignment"]
+const VALID_FILTERS = ["all", "ratings", "evidence", "comments", "alignment"]
 const VALID_MODES = ["highlight", "filter"]
 
 export default class extends BaseController {

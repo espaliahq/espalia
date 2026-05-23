@@ -24,7 +24,8 @@ module Projections::Registry
     "frameworks/published_state"             => "Frameworks::Projections::PublishedState",
     "assessment_cycles/current_state"        => "AssessmentCycles::Projections::CurrentState",
     "person_development/current_assessment"  => "PersonDevelopment::Projections::CurrentAssessment",
-    "person_development/evidence_collection" => "PersonDevelopment::Projections::EvidenceCollection"
+    "person_development/evidence_collection" => "PersonDevelopment::Projections::EvidenceCollection",
+    "person_development/comment_thread"      => "PersonDevelopment::Projections::CommentThread"
   }.freeze
 
   # @return [Array<String>] the registered projection names
