@@ -9,41 +9,27 @@
 # `Class.new(Operations::Base) { ... }` doesn't pollute the production
 # tool surface.
 class Operations::Registry
+  # Guards the lazy eager-load in `ensure_loaded`. Puma serves dev requests
+  # on multiple threads, so two concurrent registry reads could otherwise
+  # both pass the `@loaded` check and re-trigger `eager_load_dir`. The
+  # work itself is idempotent in Zeitwerk, but doing it once is cleaner
+  # and the mutex eliminates a needless race on the `@loaded` flag.
+  @load_mutex = Mutex.new
+
   class << self
     # @param klass [Class<Operations::Base>]
     def register(klass)
       return if klass.name.nil? # anonymous test subclasses
-      return if all.include?(klass)
+      return if raw_list.include?(klass)
 
-      all << klass
+      raw_list << klass
     end
 
-    # @return [Array<Class<Operations::Base>>] every registered concrete operation,
-    #   alphabetised by class name for stable tool ordering.
+    # @return [Array<Class<Operations::Base>>] every registered concrete operation.
     def all
-      @all ||= []
       ensure_loaded
-      @all
+      raw_list
     end
-
-    private
-
-    # In production Rails eager-loads everything at boot, so every
-    # `Operations::Base` subclass has already run `inherited` by the time
-    # the MCP server takes a request. In development and (non-CI) test
-    # eager_load is off — so on the first registry read we eager-load the
-    # subtree under `app/operations/operations/` via Zeitwerk so the list
-    # is exhaustive.
-    def ensure_loaded
-      return if @loaded
-
-      Rails.autoloaders.main.eager_load_dir(
-        Rails.root.join("app/operations/operations").to_s
-      )
-      @loaded = true
-    end
-
-    public
 
     # Stable, snake_case identifier used as the MCP tool name.
     # e.g. `Operations::System::Whoami` → `"system_whoami"`.
@@ -68,6 +54,34 @@ class Operations::Registry
     # Test seam — wipe between test runs that load throwaway subclasses.
     def reset!
       @all = []
+    end
+
+    private
+
+    # Direct accessor for the in-memory list. Used by `register` so the
+    # `inherited` callback (which fires DURING `eager_load_dir`) doesn't
+    # re-enter `ensure_loaded` and deadlock the load mutex.
+    def raw_list
+      @all ||= []
+    end
+
+    # In production Rails eager-loads everything at boot, so every
+    # `Operations::Base` subclass has already run `inherited` by the time
+    # the MCP server takes a request. In development and (non-CI) test
+    # eager_load is off — so on the first registry read we eager-load the
+    # subtree under `app/operations/operations/` via Zeitwerk so the list
+    # is exhaustive.
+    def ensure_loaded
+      return if @loaded
+
+      @load_mutex.synchronize do
+        return if @loaded
+
+        Rails.autoloaders.main.eager_load_dir(
+          Rails.root.join("app/operations/operations").to_s
+        )
+        @loaded = true
+      end
     end
   end
 end
