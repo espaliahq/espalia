@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+  # MCP Streamable HTTP endpoint — single POST that handles all JSON-RPC
+  # methods (initialize / tools/list / tools/call). Bearer-token auth via
+  # Doorkeeper; see Mcp::ServerController.
+  post "/mcp", to: "mcp/server#create", as: :mcp_server
+
   # OAuth provider (Doorkeeper). PKCE-only, authorization-code only.
   # `controllers:` swaps the consent screen for our Phlex view with a
   # tenant picker. `skip_controllers:` drops surfaces we don't need yet

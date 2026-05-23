@@ -66,6 +66,14 @@ class Operations::Base
     end
   end
 
+  # Self-register every concrete subclass into Operations::Registry so the
+  # MCP server can list them without an explicit manifest. Anonymous test
+  # subclasses are filtered inside the registry.
+  def self.inherited(subclass)
+    super
+    Operations::Registry.register(subclass)
+  end
+
   class << self
     # @return [String, nil] human-readable description used by MCP tool listings.
     def description(text = nil)
