@@ -24,7 +24,10 @@ class Mcp::ServerController < ActionController::Base
       acting_via: :mcp,
       client_application_id: doorkeeper_token.application_id
     ) do
-      Mcp::RequestHandler.new(context: authorization_context).call(payload)
+      Mcp::RequestHandler.new(
+        context: authorization_context,
+        scopes: doorkeeper_token.scopes
+      ).call(payload)
     end
     render json: response_body
   rescue JSON::ParserError => e

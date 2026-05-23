@@ -168,6 +168,58 @@ class McpServerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "scope enforcement" do
+    setup do
+      @read_only_token = Mcp::AccessToken.create!(
+        application: @application,
+        resource_owner_id: @user.id,
+        tenant_id: @tenant.id,
+        scopes: "read",
+        expires_in: 3600
+      )
+    end
+
+    should "allow a read tool with a read-only token" do
+      post_mcp(
+        {
+          jsonrpc: "2.0", id: 10, method: "tools/call",
+          params: { name: "system_whoami", arguments: {} }
+        },
+        token: @read_only_token.token
+      )
+
+      assert_response :success
+      assert_nil json_body["error"]
+      assert json_body.dig("result", "content")
+    end
+
+    # Use a stubbed Operations subclass redefined inline so we don't need
+    # to ship a real write Operation purely to exercise the scope check.
+    should "reject a write tool with a read-only token" do
+      whoami = Operations::System::Whoami
+      original_category = whoami.instance_variable_get(:@category)
+      whoami.instance_variable_set(:@category, :write)
+
+      begin
+        post_mcp(
+          {
+            jsonrpc: "2.0", id: 11, method: "tools/call",
+            params: { name: "system_whoami", arguments: {} }
+          },
+          token: @read_only_token.token
+        )
+      ensure
+        whoami.instance_variable_set(:@category, original_category)
+      end
+
+      assert_response :success
+      err = json_body["error"]
+      assert_equal(-32603, err["code"])
+      assert_match(/insufficient scope/, err["message"])
+      assert_match(/write/, err["message"])
+    end
+  end
+
   context "protocol errors" do
     should "return JSON-RPC -32601 for an unknown method" do
       post_mcp({ jsonrpc: "2.0", id: 5, method: "does/not/exist" })

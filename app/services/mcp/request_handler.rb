@@ -22,8 +22,12 @@ class Mcp::RequestHandler
   SERVER_VERSION = "0.1.0"
 
   # @param context [AuthorizationContext]
-  def initialize(context:)
+  # @param scopes [Doorkeeper::OAuth::Scopes, Array<String>, nil] scopes granted
+  #   by the bearer token; used to gate write tools (read tools accept any
+  #   scope, write/destructive tools require `write`).
+  def initialize(context:, scopes: nil)
     @context = context
+    @scopes = Array(scopes).map(&:to_s)
   end
 
   # @param payload [Hash] a parsed JSON-RPC 2.0 request body
@@ -39,6 +43,8 @@ class Mcp::RequestHandler
     error(id, code: -32601, message: e.message)
   rescue Operations::Base::ParameterError => e
     error(id, code: -32602, message: e.message)
+  rescue InsufficientScope => e
+    error(id, code: -32603, message: "insufficient scope: #{e.message}")
   rescue Pundit::NotAuthorizedError => e
     error(id, code: -32603, message: "not authorized: #{e.message}")
   rescue StandardError => e
@@ -49,6 +55,7 @@ class Mcp::RequestHandler
   private
 
   class MethodNotFound < StandardError; end
+  class InsufficientScope < StandardError; end
 
   def dispatch(method, params)
     case method
@@ -82,11 +89,27 @@ class Mcp::RequestHandler
 
     raise MethodNotFound, "unknown tool: #{name}" if operation_class.nil?
 
+    enforce_scope!(operation_class)
+
     result = operation_class.call(context: @context, params: arguments)
     {
       content: [ { type: "text", text: JSON.generate(result) } ],
       isError: false
     }
+  end
+
+  # Read operations accept either `read` or `write` scope. Anything else
+  # (writes, destructive operations) requires `write` explicitly — clients
+  # must request it at consent time. The MCP spec leaves per-tool scope
+  # enforcement up to the server.
+  def enforce_scope!(operation_class)
+    required = (operation_class.category == :read) ? "read" : "write"
+    return if @scopes.include?(required)
+    # Read tools accept a `write` token too — escalation, not denial.
+    return if operation_class.category == :read && @scopes.include?("write")
+
+    raise InsufficientScope,
+      "tool '#{Operations::Registry.tool_name_for(operation_class)}' requires scope '#{required}'"
   end
 
   def success(id, result)
