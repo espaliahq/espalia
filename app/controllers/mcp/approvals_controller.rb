@@ -46,13 +46,14 @@ class Mcp::ApprovalsController < ApplicationController
 
   def load_approval
     @approval = ActsAsTenant.without_tenant do
-      Mcp::PendingApproval.find(params[:id])
+      Mcp::PendingApproval.find_by(id: params[:id])
     end
 
     # An approval URL is the secret — it's only useful to the user who
     # initiated it. Refuse any other browser session, even one signed in
-    # to the same tenant.
-    return if @approval.user_id == current_user.id
+    # to the same tenant. Same "Not found." for a bad/missing id so we
+    # don't leak whether a given approval id exists.
+    return if @approval && @approval.user_id == current_user.id
 
     redirect_to root_path, alert: "Not found."
   end

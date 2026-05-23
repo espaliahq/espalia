@@ -45,12 +45,11 @@ class Settings::ConnectedClientsControllerTest < ActionDispatch::IntegrationTest
 
     should "omit other users' tokens" do
       sign_in @user
-      @other_token.update!(scopes: "read") # already, just makes the assertion explicit
-
       get settings_connected_clients_path
+
       assert_response :success
-      assert_no_match(/scopes:\s*read\b(?!\s+write)/, response.body) || true
-      # And more directly:
+      # The page renders revoke links keyed by token id; assert the other
+      # user's id never appears in any of them.
       doc_token_ids = response.body.scan(/settings\/connected_clients\/([0-9a-f-]+)/).flatten
       refute_includes doc_token_ids, @other_token.id
     end

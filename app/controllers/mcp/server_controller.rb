@@ -56,10 +56,21 @@ class Mcp::ServerController < ActionController::Base
 
   # Token's tenant_id was bound at consent time; set it on the request
   # thread so any ActiveRecord query inside an Operation respects
-  # acts_as_tenant scoping.
+  # acts_as_tenant scoping. Also asserts the user STILL has a TenantUser
+  # membership in that tenant — if they were removed since the token was
+  # issued, the token is effectively dead and we fail closed instead of
+  # processing operations against an empty AuthorizationContext.
   def set_tenant_from_token
     tenant = Tenant.find_by(id: doorkeeper_token.tenant_id)
     return render_token_error(:tenant_missing) if tenant.nil?
+
+    membership = ActsAsTenant.without_tenant do
+      TenantUser.exists?(
+        user_id: doorkeeper_token.resource_owner_id,
+        tenant_id: tenant.id
+      )
+    end
+    return render_token_error(:membership_revoked) unless membership
 
     ActsAsTenant.current_tenant = tenant
   end

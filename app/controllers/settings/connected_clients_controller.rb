@@ -37,8 +37,11 @@ class Settings::ConnectedClientsController < ApplicationController
     end
 
     token.revoke
+    # FK guards against a missing application row, but a safe-nav fallback
+    # avoids surfacing a NoMethodError to the user if data ever diverges.
+    client_name = token.application&.name || "the client"
     redirect_to settings_connected_clients_path,
-      notice: "Revoked access for #{token.application.name}. The client must re-authorise to keep working.",
+      notice: "Revoked access for #{client_name}. The client must re-authorise to keep working.",
       status: :see_other
   end
 end
