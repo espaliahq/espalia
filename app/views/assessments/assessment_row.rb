@@ -58,9 +58,14 @@ class Views::Assessments::AssessmentRow < Views::Base
     @context = context
     @has_illustrations = @cells.any? { |_, c| c[:illustration_count]&.positive? }
     @has_evidence = @cells.any? { |_, c| c[:evidence_count]&.positive? }
-    @has_comments = @cells.any? { |_, c| c[:comment_count]&.positive? }
+    # Comment-driven expandability is gated by viewer identity — the
+    # comment thread/composer renders only when `viewer_person_id` is
+    # present (see `expanded_cell`). Without the gate, an anonymous
+    # viewer could open an empty expanded row on a comment-only cell.
+    @has_comments = viewer_person_id.present? &&
+      @cells.any? { |_, c| c[:comment_count]&.positive? }
     @expandable = @has_illustrations || @has_evidence || @has_comments ||
-      can_create_evidence || can_comment
+      can_create_evidence || (viewer_person_id.present? && can_comment)
     @expanded = expanded && @expandable
     @focused_level_ordinal = focused_level_ordinal
     @category_id = category_id
