@@ -1,6 +1,15 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+  # OAuth provider (Doorkeeper). PKCE-only, authorization-code only.
+  # `controllers:` swaps the consent screen for our Phlex view with a
+  # tenant picker. `skip_controllers:` drops surfaces we don't need yet
+  # (token info, user-facing authorized_applications — folded into
+  # the upcoming "Connected MCP clients" settings page instead).
+  use_doorkeeper do
+    controllers authorizations: "oauth/authorizations"
+    skip_controllers :authorized_applications, :token_info
+  end
   devise_for :users, controllers: {
     sessions: "users/sessions",
     omniauth_callbacks: "users/omniauth_callbacks"
