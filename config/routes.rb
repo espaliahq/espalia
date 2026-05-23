@@ -6,6 +6,19 @@ Rails.application.routes.draw do
   # Doorkeeper; see Mcp::ServerController.
   post "/mcp", to: "mcp/server#create", as: :mcp_server
 
+  # In-app approval surface for high-stakes MCP tools. The MCP server
+  # returns a URL routed here when a client invokes a tool declared
+  # `approval :in_app`; the user reviews and confirms here, not in the
+  # MCP client. See Mcp::ApprovalsController.
+  scope :mcp do
+    resources :approvals, only: [ :show ], controller: "mcp/approvals", as: :mcp_approval do
+      member do
+        post :approve
+        post :reject
+      end
+    end
+  end
+
   # OAuth provider (Doorkeeper). PKCE-only, authorization-code only.
   # `controllers:` swaps the consent screen for our Phlex view with a
   # tenant picker. `skip_controllers:` drops surfaces we don't need yet

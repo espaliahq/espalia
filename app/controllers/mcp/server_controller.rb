@@ -26,7 +26,9 @@ class Mcp::ServerController < ActionController::Base
     ) do
       Mcp::RequestHandler.new(
         context: authorization_context,
-        scopes: doorkeeper_token.scopes
+        scopes: doorkeeper_token.scopes,
+        client_application_id: doorkeeper_token.application_id,
+        base_url: request.base_url
       ).call(payload)
     end
     render json: response_body

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_23_093514) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_23_115303) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -356,6 +356,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_23_093514) do
     t.index ["tenant_id"], name: "index_framework_suggested_edits_on_tenant_id"
   end
 
+  create_table "mcp_pending_approvals", id: :uuid, default: nil, force: :cascade do |t|
+    t.jsonb "arguments", default: {}, null: false
+    t.uuid "client_application_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "executed_at"
+    t.datetime "expires_at", null: false
+    t.string "operation_class", null: false
+    t.jsonb "result_payload"
+    t.integer "status", default: 0, null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.uuid "user_id", null: false
+    t.index ["client_application_id"], name: "index_mcp_pending_approvals_on_client_application_id"
+    t.index ["tenant_id", "status", "expires_at"], name: "idx_on_tenant_id_status_expires_at_7ab622369a"
+    t.index ["tenant_id"], name: "index_mcp_pending_approvals_on_tenant_id"
+    t.index ["user_id"], name: "idx_mcp_pending_approvals_pending_by_user", where: "(status = 0)"
+    t.index ["user_id"], name: "index_mcp_pending_approvals_on_user_id"
+  end
+
   create_table "oauth_access_grants", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "application_id", null: false
     t.string "code_challenge"
@@ -537,6 +556,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_23_093514) do
   add_foreign_key "framework_suggested_edits", "people", column: "author_id", on_delete: :restrict
   add_foreign_key "framework_suggested_edits", "people", column: "reviewed_by", on_delete: :nullify
   add_foreign_key "framework_suggested_edits", "tenants"
+  add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"
+  add_foreign_key "mcp_pending_approvals", "tenants"
+  add_foreign_key "mcp_pending_approvals", "users"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_grants", "tenants"
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"

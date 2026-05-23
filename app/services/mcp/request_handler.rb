@@ -25,9 +25,15 @@ class Mcp::RequestHandler
   # @param scopes [Doorkeeper::OAuth::Scopes, Array<String>, nil] scopes granted
   #   by the bearer token; used to gate write tools (read tools accept any
   #   scope, write/destructive tools require `write`).
-  def initialize(context:, scopes: nil)
+  # @param client_application_id [String, nil] OAuth application id, recorded
+  #   on PendingApproval rows so we can attribute who asked for what.
+  # @param base_url [String, nil] root url of the server (e.g. "https://app.foo"),
+  #   used to build the approval-review link in in-app handoff responses.
+  def initialize(context:, scopes: nil, client_application_id: nil, base_url: nil)
     @context = context
     @scopes = Array(scopes).map(&:to_s)
+    @client_application_id = client_application_id
+    @base_url = base_url
   end
 
   # @param payload [Hash] a parsed JSON-RPC 2.0 request body
@@ -91,11 +97,52 @@ class Mcp::RequestHandler
 
     enforce_scope!(operation_class)
 
+    if operation_class.approval == :in_app
+      return defer_to_in_app_approval(operation_class, arguments)
+    end
+
     result = operation_class.call(context: @context, params: arguments)
     {
       content: [ { type: "text", text: JSON.generate(result) } ],
       isError: false
     }
+  end
+
+  # Persists a PendingApproval row instead of running the operation. The
+  # MCP client gets back a URL the user can open to confirm — execution
+  # happens in the web controller, never inside the MCP request.
+  def defer_to_in_app_approval(operation_class, arguments)
+    approval = Mcp::PendingApproval.create!(
+      user: @context.user,
+      tenant: @context.tenant_user&.tenant,
+      client_application_id: @client_application_id,
+      operation_class: operation_class.name,
+      arguments: arguments,
+      status: :pending,
+      expires_at: Time.current + Mcp::PendingApproval::EXPIRY_WINDOW
+    )
+
+    review_url = build_review_url(approval)
+    text = <<~MSG.strip
+      Approval required for "#{operation_class.description}".
+      Open #{review_url} to review and confirm.
+      Expires at #{approval.expires_at.iso8601}.
+    MSG
+
+    {
+      content: [ { type: "text", text: text } ],
+      isError: false,
+      meta: {
+        approvalId: approval.id,
+        approvalUrl: review_url,
+        expiresAt: approval.expires_at.iso8601
+      }
+    }
+  end
+
+  def build_review_url(approval)
+    path = Rails.application.routes.url_helpers.mcp_approval_path(approval)
+    @base_url ? "#{@base_url}#{path}" : path
   end
 
   # Read operations accept either `read` or `write` scope. Anything else
