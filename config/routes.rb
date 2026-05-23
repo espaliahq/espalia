@@ -53,7 +53,14 @@ Rails.application.routes.draw do
       end
     end
     resource :activity, only: [ :show ], controller: "assessments/activity"
+    resources :comments, only: [ :create, :update, :destroy ], controller: "assessments/comments"
   end
+
+  # Individually-addressable comments. Currently resolves
+  # assessment-cell comments to their assessment page with the
+  # relevant cell focused; future commentable types (growth plans,
+  # focus areas) will branch here too.
+  resources :comments, only: [ :show ]
 
   resources :frameworks, only: [ :index, :show ] do
     member do

@@ -27,6 +27,11 @@ module ProjectionReplayHelpers
       when "PersonDevelopment::Projections::EvidenceCollection"
         { evidence_items: rows(EvidenceItem, natural_key_is_id: true) }
 
+      when "PersonDevelopment::Projections::CommentThread"
+        {
+          person_development_comments: rows(PersonDevelopmentComment, natural_key_is_id: true)
+        }
+
       when "Frameworks::Projections::PublishedState"
         {
           frameworks:               rows(FrameworkState::Framework),

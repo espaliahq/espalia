@@ -15,6 +15,7 @@ class Views::Assessments::Activity::FilterChips < Views::Base
     { value: "all",       label: "All" },
     { value: "ratings",   label: "Ratings" },
     { value: "evidence",  label: "Evidence" },
+    { value: "comments",  label: "Comments" },
     { value: "alignment", label: "Alignment" }
   ].freeze
 

@@ -4,12 +4,13 @@ require "test_helper"
 
 class Projections::RegistryTest < ActiveSupport::TestCase
   context "#names" do
-    should "list the four replayable projections" do
+    should "list the replayable projections" do
       assert_equal(
         %w[
           frameworks/published_state
           person_development/current_assessment
           person_development/evidence_collection
+          person_development/comment_thread
           assessment_cycles/current_state
         ].sort,
         Projections::Registry.names.sort

@@ -31,7 +31,8 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
                  expanded_capability_id: nil, expanded_level_ordinal: nil,
                  show_header: true, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
-                 can_relink_others_evidence: false)
+                 can_relink_others_evidence: false,
+                 can_comment: false, viewer_is_tenant_admin: false)
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -50,6 +51,8 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
     @can_relink_others_evidence = can_relink_others_evidence
+    @can_comment = can_comment
+    @viewer_is_tenant_admin = viewer_is_tenant_admin
   end
 
   def view_template
@@ -99,7 +102,9 @@ class Views::Assessments::AssessmentCategoryGroup < Views::Base
         alignment_locked: @alignment_locked,
         viewer_person_id: @viewer_person_id,
         can_create_evidence: @can_create_evidence,
-        can_relink_others_evidence: @can_relink_others_evidence
+        can_relink_others_evidence: @can_relink_others_evidence,
+        can_comment: @can_comment,
+        viewer_is_tenant_admin: @viewer_is_tenant_admin
       )
     end
   end

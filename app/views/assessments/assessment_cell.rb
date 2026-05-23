@@ -156,12 +156,15 @@ class Views::Assessments::AssessmentCell < Views::Base
   # every cell in non-focused rows, keep their badges so the user
   # has situational awareness of which cells carry content.
   def indicators
-    return if !@cell_data[:illustration_count]&.positive? && !@cell_data[:evidence_count]&.positive?
+    return if !@cell_data[:illustration_count]&.positive? &&
+              !@cell_data[:evidence_count]&.positive? &&
+              !@cell_data[:comment_count]&.positive?
 
     div(class: "mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 " \
                "group-data-[focused=true]/assess-cell:hidden") do
       illustration_indicator if @cell_data[:illustration_count]&.positive?
       evidence_indicator if @cell_data[:evidence_count]&.positive?
+      comment_indicator if @cell_data[:comment_count]&.positive?
     end
   end
 
@@ -276,6 +279,20 @@ class Views::Assessments::AssessmentCell < Views::Base
       # body copy and avoids "evidences"/"piece of evidence" awkwardness.
       span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
         "#{@cell_data[:evidence_count]} evidence"
+      end
+    end
+  end
+
+  # Sky-blue dot matches the per-comment avatar dot and the activity
+  # feed's comment kind colour — same visual language across all three
+  # surfaces so a reader scanning the matrix can spot conversation
+  # the same way they spot examples (primary) and evidence (amber).
+  def comment_indicator
+    div(class: "flex items-center gap-1") do
+      span(class: "w-1.5 h-1.5 rounded-full bg-sky-500") { }
+      span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+        count = @cell_data[:comment_count]
+        "#{count} #{'comment'.pluralize(count)}"
       end
     end
   end

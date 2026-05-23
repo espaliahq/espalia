@@ -437,4 +437,57 @@ class PersonDevelopment::CommandHandler
         withdrawn_by_id: withdrawn_by_id, reason: reason)
     end
   end
+
+  # Posts a new comment on the person's development stream.
+  #
+  # Caller supplies the comment_id (UUID v7) so the controller can
+  # reference it in the response without an extra round-trip.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param comment_id [String] caller-supplied UUID v7
+  # @param commentable_type [String] "assessment_cell" (V1)
+  # @param body [String] comment body
+  # @param author_id [String] UUID of the Person posting
+  # @param capability_stable_id [String, nil] required for assessment_cell
+  # @param level_ordinal [Integer, nil] required for assessment_cell
+  # @param parent_id [String, nil] parent comment for threaded replies
+  def post_comment(person_id, framework_id, comment_id,
+                   commentable_type:, body:, author_id:,
+                   capability_stable_id: nil, level_ordinal: nil, parent_id: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.post_comment(comment_id,
+        commentable_type: commentable_type, body: body, author_id: author_id,
+        capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
+        parent_id: parent_id)
+    end
+  end
+
+  # Edits the body of an existing comment.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param comment_id [String] UUID of the comment
+  # @param body [String] post-edit body
+  # @param edited_by_id [String] UUID of the Person editing (must equal author)
+  def edit_comment(person_id, framework_id, comment_id, body:, edited_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.edit_comment(comment_id, body: body, edited_by_id: edited_by_id)
+    end
+  end
+
+  # Soft-deletes a comment.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param comment_id [String] UUID of the comment
+  # @param deleted_by_id [String] UUID of the Person deleting
+  # @param reason [String, nil] optional explanation
+  def delete_comment(person_id, framework_id, comment_id,
+                     deleted_by_id:, reason: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.delete_comment(comment_id,
+        deleted_by_id: deleted_by_id, reason: reason)
+    end
+  end
 end

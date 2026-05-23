@@ -33,12 +33,15 @@ class Views::Assessments::AssessmentRow < Views::Base
   # @param can_relink_others_evidence [Boolean] whether the viewer is the
   #   assessee or in their manager chain — gates the Relink kebab option for
   #   evidence the viewer didn't author.
+  # @param can_comment [Boolean] whether to render the inline comment composer
+  # @param viewer_is_tenant_admin [Boolean] tenant admins can delete others' comments
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, context: :self,
                  blocked: false, block_reason: nil, contribution: nil, secondary_contributions: [],
                  expanded: false, focused_level_ordinal: nil,
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
-                 can_relink_others_evidence: false)
+                 can_relink_others_evidence: false,
+                 can_comment: false, viewer_is_tenant_admin: false)
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @binding = capability_data[:binding]
@@ -55,7 +58,14 @@ class Views::Assessments::AssessmentRow < Views::Base
     @context = context
     @has_illustrations = @cells.any? { |_, c| c[:illustration_count]&.positive? }
     @has_evidence = @cells.any? { |_, c| c[:evidence_count]&.positive? }
-    @expandable = @has_illustrations || @has_evidence || can_create_evidence
+    # Comment-driven expandability is gated by viewer identity — the
+    # comment thread/composer renders only when `viewer_person_id` is
+    # present (see `expanded_cell`). Without the gate, an anonymous
+    # viewer could open an empty expanded row on a comment-only cell.
+    @has_comments = viewer_person_id.present? &&
+      @cells.any? { |_, c| c[:comment_count]&.positive? }
+    @expandable = @has_illustrations || @has_evidence || @has_comments ||
+      can_create_evidence || (viewer_person_id.present? && can_comment)
     @expanded = expanded && @expandable
     @focused_level_ordinal = focused_level_ordinal
     @category_id = category_id
@@ -64,6 +74,8 @@ class Views::Assessments::AssessmentRow < Views::Base
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
     @can_relink_others_evidence = can_relink_others_evidence
+    @can_comment = can_comment
+    @viewer_is_tenant_admin = viewer_is_tenant_admin
   end
 
   def view_template
@@ -182,6 +194,19 @@ class Views::Assessments::AssessmentRow < Views::Base
             viewer_person_id: @viewer_person_id,
             can_create: @can_create_evidence,
             can_relink_others: @can_relink_others_evidence,
+            capability_stable_id: @capability.stable_id,
+            level_ordinal: ordinal
+          )
+        end
+
+        comments = cell_data&.dig(:comments) || []
+        if cell_data && @viewer_person_id && (comments.any? || @can_comment)
+          render Views::Assessments::Comments::Thread.new(
+            comments: comments,
+            assessment_id: @assessment_id,
+            viewer_person_id: @viewer_person_id,
+            can_create: @can_comment,
+            tenant_admin: @viewer_is_tenant_admin,
             capability_stable_id: @capability.stable_id,
             level_ordinal: ordinal
           )

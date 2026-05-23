@@ -41,6 +41,7 @@ class PersonDevelopment::Aggregate
     @self_ratings = {}   # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     @evidence = {}       # evidence_id => { capability_stable_id:, level_ordinal:, status: }
+    @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
   end
 
   # ── Assignment ──
@@ -541,6 +542,118 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # ── Comments ──
+  #
+  # Comments are informal-conversation context. They do not feed scoring
+  # and do not freeze during alignment — posting / editing / deleting
+  # remain available regardless of cycle status. V1 anchors comments to
+  # (capability_stable_id, level_ordinal) cells (commentable_type
+  # "assessment_cell"); future commentable types (growth_plan,
+  # focus_area, check_in) will set their own identifier shape.
+
+  COMMENT_COMMENTABLE_TYPES = [ PersonDevelopmentComment::ASSESSMENT_CELL ].freeze
+
+  # Posts a new comment.
+  #
+  # @param comment_id [String] caller-supplied UUID v7 (caller owns idempotency)
+  # @param commentable_type [String] currently only "assessment_cell"
+  # @param body [String] comment body (required, non-blank)
+  # @param author_id [String] UUID of the Person posting the comment
+  # @param capability_stable_id [String, nil] required when commentable_type
+  #   is "assessment_cell"
+  # @param level_ordinal [Integer, nil] required when commentable_type
+  #   is "assessment_cell"
+  # @param parent_id [String, nil] UUID of the comment being replied to;
+  #   nil for a top-level comment
+  # @raise [CommandError] if not assigned, comment_id already exists, or
+  #   args are invalid
+  def post_comment(comment_id, commentable_type:, body:, author_id:,
+                   capability_stable_id: nil, level_ordinal: nil, parent_id: nil)
+    ensure_assigned!
+    raise CommandError, "Comment ID already exists" if @comments.key?(comment_id)
+    raise CommandError, "Invalid commentable type: #{commentable_type}" unless
+      COMMENT_COMMENTABLE_TYPES.include?(commentable_type)
+    raise CommandError, "Comment body cannot be blank" if body.to_s.strip.empty?
+
+    if commentable_type == PersonDevelopmentComment::ASSESSMENT_CELL
+      raise CommandError, "capability_stable_id required for assessment_cell comments" if
+        capability_stable_id.to_s.strip.empty?
+      raise CommandError, "level_ordinal required for assessment_cell comments" if level_ordinal.nil?
+    end
+
+    if parent_id
+      parent = @comments[parent_id]
+      raise CommandError, "No parent comment with id #{parent_id}" unless parent
+      raise CommandError, "Cannot reply to a deleted comment" if parent[:status] == "deleted"
+      # V1 thread depth is one level. The Reply UI affordance is hidden
+      # on reply cards (see Comments::Card), but the aggregate is the
+      # authoritative boundary — a hand-rolled API call must not be able
+      # to nest deeper than the projection's render layer expects.
+      raise CommandError, "Cannot reply to a reply (one-level threading)" if parent[:parent_id]
+      # Replies must share their parent's anchor. Without this, a reply
+      # could be posted on a different (capability, level) cell than its
+      # parent, and the projection's group-by-parent thread tree would
+      # show the reply orphaned from its parent's cell.
+      raise CommandError, "Reply must share parent's commentable type" unless
+        parent[:commentable_type] == commentable_type
+      if commentable_type == PersonDevelopmentComment::ASSESSMENT_CELL
+        raise CommandError, "Reply must stay on the parent's cell" unless
+          parent[:capability_stable_id] == capability_stable_id &&
+          parent[:level_ordinal] == level_ordinal
+      end
+    end
+
+    apply(PersonDevelopment::Events::CommentPosted.new(data: {
+      comment_id: comment_id,
+      parent_id: parent_id,
+      commentable_type: commentable_type,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      body: body,
+      author_id: author_id
+    }))
+  end
+
+  # Edits the body of an existing comment.
+  #
+  # @param comment_id [String] UUID of the comment
+  # @param body [String] post-edit body (required, non-blank)
+  # @param edited_by_id [String] UUID of the Person editing (must equal the author)
+  # @raise [CommandError] if not assigned, comment not found, deleted, or body blank
+  def edit_comment(comment_id, body:, edited_by_id:)
+    ensure_assigned!
+    state = @comments[comment_id]
+    raise CommandError, "No comment with id #{comment_id}" unless state
+    raise CommandError, "Cannot edit a deleted comment" if state[:status] == "deleted"
+    raise CommandError, "Comment body cannot be blank" if body.to_s.strip.empty?
+    raise CommandError, "Only the author can edit a comment" unless state[:author_id] == edited_by_id
+
+    apply(PersonDevelopment::Events::CommentEdited.new(data: {
+      comment_id: comment_id,
+      body: body,
+      edited_by_id: edited_by_id
+    }))
+  end
+
+  # Soft-deletes a comment.
+  #
+  # @param comment_id [String] UUID of the comment
+  # @param deleted_by_id [String] UUID of the Person deleting
+  # @param reason [String, nil] optional explanation
+  # @raise [CommandError] if not assigned, comment not found, or already deleted
+  def delete_comment(comment_id, deleted_by_id:, reason: nil)
+    ensure_assigned!
+    state = @comments[comment_id]
+    raise CommandError, "No comment with id #{comment_id}" unless state
+    raise CommandError, "Comment already deleted" if state[:status] == "deleted"
+
+    apply(PersonDevelopment::Events::CommentDeleted.new(data: {
+      comment_id: comment_id,
+      deleted_by_id: deleted_by_id,
+      reason: reason
+    }))
+  end
+
   private
 
   def ensure_assigned!
@@ -662,5 +775,28 @@ class PersonDevelopment::Aggregate
   # does not track. Handler is declared so the event has a registered
   # applier on the aggregate.
   on PersonDevelopment::Events::EvidenceUpdated do |_event|
+  end
+
+  on PersonDevelopment::Events::CommentPosted do |event|
+    @comments[event.data[:comment_id]] = {
+      commentable_type: event.data[:commentable_type],
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal],
+      parent_id: event.data[:parent_id],
+      author_id: event.data[:author_id],
+      status: "active"
+    }
+  end
+
+  # No body tracking on the aggregate — content lives in the projection.
+  # Handler is declared so the event has a registered applier.
+  on PersonDevelopment::Events::CommentEdited do |_event|
+  end
+
+  on PersonDevelopment::Events::CommentDeleted do |event|
+    state = @comments[event.data[:comment_id]]
+    next unless state
+
+    state[:status] = "deleted"
   end
 end

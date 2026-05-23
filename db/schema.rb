@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_22_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_23_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -379,6 +379,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_22_000000) do
     t.index ["tenant_id"], name: "index_people_on_tenant_id"
   end
 
+  create_table "person_development_comments", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "author_id", null: false
+    t.text "body", null: false
+    t.uuid "capability_stable_id"
+    t.string "commentable_type", null: false
+    t.datetime "created_at", null: false
+    t.datetime "deleted_at"
+    t.uuid "deleted_by_id"
+    t.text "deletion_reason"
+    t.datetime "edited_at"
+    t.uuid "edited_by_id"
+    t.uuid "framework_id", null: false
+    t.integer "level_ordinal"
+    t.uuid "parent_id"
+    t.uuid "person_id", null: false
+    t.datetime "posted_at", null: false
+    t.string "status", default: "active", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["author_id"], name: "index_person_development_comments_on_author_id"
+    t.index ["parent_id"], name: "idx_pdc_parent", where: "(parent_id IS NOT NULL)"
+    t.index ["person_id", "framework_id", "commentable_type", "capability_stable_id", "level_ordinal"], name: "idx_pdc_cell_anchor"
+    t.index ["tenant_id", "person_id", "status"], name: "idx_pdc_tenant_person_status"
+    t.index ["tenant_id"], name: "index_person_development_comments_on_tenant_id"
+  end
+
   create_table "person_framework_assignments", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "framework_id", null: false
@@ -465,6 +491,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_22_000000) do
   add_foreign_key "framework_suggested_edits", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
+  add_foreign_key "person_development_comments", "people", column: "author_id", on_delete: :restrict
+  add_foreign_key "person_development_comments", "people", column: "deleted_by_id", on_delete: :nullify
+  add_foreign_key "person_development_comments", "people", column: "edited_by_id", on_delete: :nullify
+  add_foreign_key "person_development_comments", "person_development_comments", column: "parent_id", on_delete: :restrict
+  add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"

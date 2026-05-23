@@ -23,7 +23,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                  active_category_id: nil, expanded_capability_id: nil,
                  expanded_level_ordinal: nil,
                  viewer_person_id: nil, can_create_evidence: false,
-                 can_relink_others_evidence: false)
+                 can_relink_others_evidence: false,
+                 can_comment: false, viewer_is_tenant_admin: false)
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context
@@ -35,6 +36,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
     @can_relink_others_evidence = can_relink_others_evidence
+    @can_comment = can_comment
+    @viewer_is_tenant_admin = viewer_is_tenant_admin
   end
 
   def view_template
@@ -103,7 +106,9 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                 alignment_locked: @alignment_locked,
                 viewer_person_id: @viewer_person_id,
                 can_create_evidence: @can_create_evidence,
-                can_relink_others_evidence: @can_relink_others_evidence
+                can_relink_others_evidence: @can_relink_others_evidence,
+                can_comment: @can_comment,
+                viewer_is_tenant_admin: @viewer_is_tenant_admin
               )
             end
           end

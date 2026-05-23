@@ -173,8 +173,17 @@ if meandu_tenant
   end
 end
 
-# Seed assessment data (person assignment + open cycle)
-Rake::Task["assessments:seed"].invoke
+# Seed assessment demo data (person assignment, open cycle, sample
+# evidence + comments). Dev/test only — production tenants must never
+# receive a demo "Alex Developer" report, demo ratings, or seeded
+# evidence/comments. The framework seed above runs in all environments
+# because it's the tenant's actual content; the assessment fixtures
+# below are demo scaffolding for local development and CI only.
+if Rails.env.development? || Rails.env.test?
+  Rake::Task["assessments:seed"].invoke
+else
+  puts "Skipping assessments:seed in #{Rails.env} (demo fixtures are dev/test-only)"
+end
 
 # Seed HRIS config for me&u tenant
 meandu = Tenant.find_by(slug: "meandu")

@@ -58,6 +58,8 @@ class AssessmentsController < ApplicationController
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_relink_others_evidence: can_relink_others,
+        can_comment: viewer_can_comment?,
+        viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
@@ -75,6 +77,8 @@ class AssessmentsController < ApplicationController
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_relink_others_evidence: can_relink_others,
+        can_comment: viewer_can_comment?,
+        viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
@@ -97,7 +101,9 @@ class AssessmentsController < ApplicationController
       expanded_level_ordinal: focused_level_ordinal_param,
       viewer_person_id: current_person&.id,
       can_create_evidence: viewer_can_create_evidence?,
-      can_relink_others_evidence: viewer_can_relink_others_evidence?
+      can_relink_others_evidence: viewer_can_relink_others_evidence?,
+      can_comment: viewer_can_comment?,
+      viewer_is_tenant_admin: viewer_is_tenant_admin?
     ), layout: false
   end
 
@@ -209,6 +215,22 @@ class AssessmentsController < ApplicationController
     return true if @assignment.person_id == current_person.id
 
     assessee_person&.managed_by?(current_person) || false
+  end
+
+  # Whether the current viewer is permitted to post comments on this
+  # assessment. V1 allows any tenant member with a Person to comment —
+  # the conversation lane is intentionally broader than the evidence
+  # lane. Authority for editing/deleting is gated per-card in the view.
+  def viewer_can_comment?
+    return false unless current_person
+
+    PersonDevelopmentCommentPolicy.new(pundit_user, @assignment).create?
+  end
+
+  # Tenant admins gain a delete-only override for moderation. Not a
+  # general edit override — only the author can rewrite their own words.
+  def viewer_is_tenant_admin?
+    current_user&.global_admin? || current_tenant_user&.admin? || false
   end
 
   # Loads the activity feed entries the current viewer is permitted to

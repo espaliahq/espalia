@@ -22,7 +22,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_relinked"        => "bg-sky-500",
     "evidence_withdrawn"       => "bg-gray-400",
     "alignment_started"        => "bg-amber-500",
-    "alignment_completed"      => "bg-green-600"
+    "alignment_completed"      => "bg-green-600",
+    "comment_posted"           => "bg-sky-500"
   }.freeze
 
   # Maps each entry kind into one of the four user-facing groups that
@@ -41,7 +42,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_relinked"       => "evidence",
     "evidence_withdrawn"      => "evidence",
     "alignment_started"       => "alignment",
-    "alignment_completed"     => "alignment"
+    "alignment_completed"     => "alignment",
+    "comment_posted"          => "comments"
   }.freeze
 
   FREQUENCY_LABEL = {
@@ -150,8 +152,20 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
+    when "comment_posted"        then comment_posted_summary
     else @entry.kind.humanize
     end
+  end
+
+  # "<Author name> commented on <Capability · Lx>" — anchors the entry
+  # to whose voice it is, since informal conversation makes voice
+  # primary in a way ratings don't.
+  def comment_posted_summary
+    author_name = if @entry.payload.respond_to?(:author)
+      @entry.payload.author&.name
+    end
+    name = author_name.to_s.strip.presence || "Someone"
+    "#{name} commented on #{capability_label}"
   end
 
   # "Relinked evidence from <prev cap · L<prev>> to <new cap · L<new>>"
@@ -218,6 +232,9 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       reason.to_s.strip.presence
+    when "comment_posted"
+      body = @entry.payload.respond_to?(:body) ? @entry.payload.body : nil
+      body.to_s.strip.presence
     end
   end
 
