@@ -12,8 +12,11 @@
 #   (IDs assigned in Ruby by ApplicationRecord's before_create callback).
 # - `resource_owner_id` is `:uuid` with FK to `users`.
 # - `application_id` is `:uuid` (matches the `:uuid` PK on `oauth_applications`).
-# - `tenant_id` is `:uuid` with FK to `tenants`; nullable on grants only
-#   for the brief window between consent submission and grant creation.
+# - `tenant_id` is `:uuid`, `null: false`, FK to `tenants`. The custom
+#   Oauth::AuthorizationsController validates membership and rejects the
+#   POST before it reaches strategy.authorize, so the grant is never
+#   inserted without a tenant — and the access token inherits the same
+#   tenant via Doorkeeper's custom_access_token_attributes plumbing.
 # - PKCE columns (`code_challenge`, `code_challenge_method`) are added so
 #   Doorkeeper's `force_pkce` enforcement has somewhere to write to.
 class CreateDoorkeeperTables < ActiveRecord::Migration[8.1]

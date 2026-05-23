@@ -23,9 +23,11 @@ gem "stimulus-rails"
 
 gem "acts_as_tenant", "~> 1.0"
 gem "devise", "~> 5.0.3"
-# OAuth 2.1 / PKCE provider — backs the MCP server's bearer-token auth.
-# Configured in config/initializers/doorkeeper.rb; see app/operations/base.rb
-# and the MCP design doc for how tokens carry the active tenant_id.
+# OAuth 2.0 + PKCE provider — backs the MCP server's bearer-token auth.
+# Doorkeeper is OAuth 2.0; we configure it with `force_pkce`, no refresh
+# tokens, and authorization_code-only grants to meet the MCP spec's
+# OAuth-2.1-aligned posture without needing a 2.1-native gem. See
+# config/initializers/doorkeeper.rb.
 gem "doorkeeper", "~> 5.7"
 gem "omniauth-google-oauth2", "~> 1.2"
 gem "omniauth-rails_csrf_protection", "~> 2.0"
