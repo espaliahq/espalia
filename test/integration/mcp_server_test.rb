@@ -131,13 +131,18 @@ class McpServerTest < ActionDispatch::IntegrationTest
   end
 
   context "audit metadata" do
-    should "wrap the dispatch with acting_via :mcp + the token's application_id" do
-      seen_args = nil
-      original = AuditMetadata.method(:with)
-
-      AuditMetadata.singleton_class.define_method(:with) do |**kwargs, &block|
-        seen_args = kwargs
-        block.call
+    # Replaces Whoami.perform with a probe that snapshots AuditMetadata.current
+    # at execution time, so we verify the actual thread-local set by the
+    # MCP controller — not just that `AuditMetadata.with` was called with
+    # the right kwargs (which could pass even if the seed never landed).
+    should "make acting_via :mcp + the token's application_id visible to the running tool" do
+      observed = nil
+      Operations::System::Whoami.class_eval do
+        alias_method :_original_perform, :perform
+        define_method(:perform) do
+          observed = AuditMetadata.current
+          { ok: true }
+        end
       end
 
       begin
@@ -146,12 +151,20 @@ class McpServerTest < ActionDispatch::IntegrationTest
           params: { name: "system_whoami", arguments: {} }
         })
       ensure
-        AuditMetadata.singleton_class.define_method(:with, original)
+        Operations::System::Whoami.class_eval do
+          alias_method :perform, :_original_perform
+          remove_method :_original_perform
+        end
       end
 
+      # Force the assertion to close over the observed binding the lambda
+      # writes into — this is the load-bearing check: the controller's
+      # `AuditMetadata.with` actually mutated the thread-local during the
+      # dispatch, not just that some kwargs got forwarded to a stub.
+      assert observed, "AuditMetadata.current was never observed"
+      assert_equal :mcp,            observed[:acting_via]
+      assert_equal @application.id, observed[:client_application_id]
       assert_response :success
-      assert_equal :mcp, seen_args[:acting_via]
-      assert_equal @application.id, seen_args[:client_application_id]
     end
   end
 

@@ -13,8 +13,7 @@ class ApplicationController < ActionController::Base
 
   before_action :authenticate_user!
   before_action :set_tenant
-  before_action :seed_audit_metadata
-  after_action  :clear_audit_metadata
+  around_action :wrap_with_audit_metadata
 
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
 
@@ -114,13 +113,13 @@ class ApplicationController < ActionController::Base
   # Tags every event published during this web request with `acting_via:
   # :web` via {AuditMetadata}. Operations and grandfathered controllers
   # that publish events inherit it through the thread-local without any
-  # per-handler wiring. The matching `clear_audit_metadata` after_action
-  # resets the slot so the next request on this Puma worker starts clean.
-  def seed_audit_metadata
+  # per-handler wiring. The `ensure` guarantees cleanup even on raised
+  # exceptions — an `after_action` would skip on raises and could leak
+  # context into the next request on the same Puma worker thread.
+  def wrap_with_audit_metadata
     AuditMetadata.seed!(acting_via: :web)
-  end
-
-  def clear_audit_metadata
+    yield
+  ensure
     AuditMetadata.clear!
   end
 
