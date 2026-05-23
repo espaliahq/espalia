@@ -585,6 +585,22 @@ class PersonDevelopment::Aggregate
       parent = @comments[parent_id]
       raise CommandError, "No parent comment with id #{parent_id}" unless parent
       raise CommandError, "Cannot reply to a deleted comment" if parent[:status] == "deleted"
+      # V1 thread depth is one level. The Reply UI affordance is hidden
+      # on reply cards (see Comments::Card), but the aggregate is the
+      # authoritative boundary — a hand-rolled API call must not be able
+      # to nest deeper than the projection's render layer expects.
+      raise CommandError, "Cannot reply to a reply (one-level threading)" if parent[:parent_id]
+      # Replies must share their parent's anchor. Without this, a reply
+      # could be posted on a different (capability, level) cell than its
+      # parent, and the projection's group-by-parent thread tree would
+      # show the reply orphaned from its parent's cell.
+      raise CommandError, "Reply must share parent's commentable type" unless
+        parent[:commentable_type] == commentable_type
+      if commentable_type == PersonDevelopmentComment::ASSESSMENT_CELL
+        raise CommandError, "Reply must stay on the parent's cell" unless
+          parent[:capability_stable_id] == capability_stable_id &&
+          parent[:level_ordinal] == level_ordinal
+      end
     end
 
     apply(PersonDevelopment::Events::CommentPosted.new(data: {

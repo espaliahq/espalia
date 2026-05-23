@@ -106,6 +106,55 @@ class PersonDevelopment::AggregateCommentsTest < ActiveSupport::TestCase
           parent_id: SecureRandom.uuid_v7)
       end
     end
+
+    should "reject reply to a reply (one-level threading invariant)" do
+      parent_id = SecureRandom.uuid_v7
+      reply_id = SecureRandom.uuid_v7
+      @aggregate.post_comment(parent_id,
+        commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+        body: "Top.", author_id: @author_id,
+        capability_stable_id: @capability_stable_id, level_ordinal: 3)
+      @aggregate.post_comment(reply_id,
+        commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+        body: "Reply.", author_id: @author_id,
+        capability_stable_id: @capability_stable_id, level_ordinal: 3,
+        parent_id: parent_id)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.post_comment(SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          body: "Reply to a reply.", author_id: @author_id,
+          capability_stable_id: @capability_stable_id, level_ordinal: 3,
+          parent_id: reply_id)
+      end
+      assert_match(/one-level threading/, err.message)
+    end
+
+    should "reject reply on a different cell than its parent" do
+      parent_id = SecureRandom.uuid_v7
+      @aggregate.post_comment(parent_id,
+        commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+        body: "Top.", author_id: @author_id,
+        capability_stable_id: @capability_stable_id, level_ordinal: 3)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.post_comment(SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          body: "Wrong-level reply.", author_id: @author_id,
+          capability_stable_id: @capability_stable_id, level_ordinal: 4,
+          parent_id: parent_id)
+      end
+      assert_match(/parent's cell/, err.message)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.post_comment(SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          body: "Wrong-cap reply.", author_id: @author_id,
+          capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 3,
+          parent_id: parent_id)
+      end
+      assert_match(/parent's cell/, err.message)
+    end
   end
 
   context "#edit_comment" do
