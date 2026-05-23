@@ -5,14 +5,44 @@ inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 # SystemTests/FlakeProneClick — guards against the recurring CI flake class
 # where Selenium's synthetic pointer click / modal-handler registration is
 # dropped on starved runners (see docs/guidelines/testing.md).
+# GrowthOs/ControllersMustUseOperations — enforces the Operations::* layer
+# as the single write surface shared by controllers and the MCP server
+# (see app/operations/base.rb).
 require:
   - ./lib/rubocop/cop/system_tests/flake_prone_click.rb
+  - ./lib/rubocop/cop/growth_os/controllers_must_use_operations.rb
 
 SystemTests/FlakeProneClick:
   Enabled: true
   Include:
     - "test/system/**/*.rb"
     - "test/support/system/**/*.rb"
+
+GrowthOs/ControllersMustUseOperations:
+  Enabled: true
+  Include:
+    - "app/controllers/**/*.rb"
+  # Grandfathered controllers — pre-date the Operations layer and will
+  # migrate one PR at a time. When you port a controller, remove its
+  # entry from this list in the same PR.
+  Exclude:
+    - "app/controllers/assessment_cycles_controller.rb"
+    - "app/controllers/assessment_cycles/enrollments_controller.rb"
+    - "app/controllers/assessments/alignment_completions_controller.rb"
+    - "app/controllers/assessments/alignment_ratings_controller.rb"
+    - "app/controllers/assessments/alignment_starts_controller.rb"
+    - "app/controllers/assessments/comments_controller.rb"
+    - "app/controllers/assessments/evidence_controller.rb"
+    - "app/controllers/assessments/manager_ratings_controller.rb"
+    - "app/controllers/assessments/ratings_controller.rb"
+    - "app/controllers/frameworks/capabilities_controller.rb"
+    - "app/controllers/frameworks/categories_controller.rb"
+    - "app/controllers/frameworks/collaborators_controller.rb"
+    - "app/controllers/frameworks/expectations_controller.rb"
+    - "app/controllers/frameworks/illustrations_controller.rb"
+    - "app/controllers/frameworks/settings_controller.rb"
+    - "app/controllers/frameworks/suggestions_controller.rb"
+    - "app/controllers/tenant/users/collaborators_controller.rb"
 
 # Overwrite or add rules to create your own house style
 #
