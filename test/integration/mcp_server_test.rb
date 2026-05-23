@@ -130,6 +130,31 @@ class McpServerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "audit metadata" do
+    should "wrap the dispatch with acting_via :mcp + the token's application_id" do
+      seen_args = nil
+      original = AuditMetadata.method(:with)
+
+      AuditMetadata.singleton_class.define_method(:with) do |**kwargs, &block|
+        seen_args = kwargs
+        block.call
+      end
+
+      begin
+        post_mcp({
+          jsonrpc: "2.0", id: 6, method: "tools/call",
+          params: { name: "system_whoami", arguments: {} }
+        })
+      ensure
+        AuditMetadata.singleton_class.define_method(:with, original)
+      end
+
+      assert_response :success
+      assert_equal :mcp, seen_args[:acting_via]
+      assert_equal @application.id, seen_args[:client_application_id]
+    end
+  end
+
   context "protocol errors" do
     should "return JSON-RPC -32601 for an unknown method" do
       post_mcp({ jsonrpc: "2.0", id: 5, method: "does/not/exist" })

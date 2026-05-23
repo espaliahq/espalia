@@ -20,7 +20,12 @@ class Mcp::ServerController < ActionController::Base
   # POST /mcp
   def create
     payload = JSON.parse(request.body.read)
-    response_body = Mcp::RequestHandler.new(context: authorization_context).call(payload)
+    response_body = AuditMetadata.with(
+      acting_via: :mcp,
+      client_application_id: doorkeeper_token.application_id
+    ) do
+      Mcp::RequestHandler.new(context: authorization_context).call(payload)
+    end
     render json: response_body
   rescue JSON::ParserError => e
     render json: parse_error(e), status: :bad_request

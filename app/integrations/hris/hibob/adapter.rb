@@ -197,7 +197,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # - `change_person_level` — only level differs
   #
   # The entire loop runs inside `event_store.with_metadata(tenant_id:)` so
-  # the CurrentAssessment projection can resolve tenant context.
+  # the CurrentAssessment projection can resolve tenant context, AND inside
+  # `AuditMetadata.with(:hris)` so every event is attributable to a sync run
+  # (vs a web request or MCP client) in the activity log.
   #
   # @param result [Hash] running tally of sync results
   # @param touched_person_ids [Array<String>] Person ids touched in Pass 1
@@ -211,18 +213,20 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     title_to_mapping = build_title_to_mapping
     roles_by_code = framework_roles_by_code
 
-    Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
-      command_handler = PersonDevelopment::CommandHandler.new
+    AuditMetadata.with(acting_via: :hris) do
+      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
+        command_handler = PersonDevelopment::CommandHandler.new
 
-      Person.where(id: touched_person_ids).find_each do |person|
-        dispatch_framework_assignment(
-          person: person,
-          framework: framework,
-          title_to_mapping: title_to_mapping,
-          roles_by_code: roles_by_code,
-          command_handler: command_handler,
-          result: result
-        )
+        Person.where(id: touched_person_ids).find_each do |person|
+          dispatch_framework_assignment(
+            person: person,
+            framework: framework,
+            title_to_mapping: title_to_mapping,
+            roles_by_code: roles_by_code,
+            command_handler: command_handler,
+            result: result
+          )
+        end
       end
     end
   end

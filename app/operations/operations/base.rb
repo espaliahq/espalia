@@ -143,6 +143,11 @@ class Operations::Base
   end
 
   # Run the operation: param-validated already, now policy_check → perform.
+  # `perform` is wrapped with {AuditMetadata.wrap_event_store} so any RES
+  # events the underlying command handlers publish inherit `acting_via`
+  # and (when present) `client_application_id` from the seeded request
+  # context — letting us attribute every write to web / MCP / HRIS without
+  # threading metadata args through every command handler.
   #
   # @return [Object] whatever `#perform` returns (typically the affected record
   #   id or read-model snapshot)
@@ -150,7 +155,7 @@ class Operations::Base
   # @raise [ParameterError] never reached here — params are validated in `#initialize`
   def call
     policy_check
-    perform
+    AuditMetadata.wrap_event_store { perform }
   end
 
   # Subclasses must implement.

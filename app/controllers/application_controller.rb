@@ -13,6 +13,8 @@ class ApplicationController < ActionController::Base
 
   before_action :authenticate_user!
   before_action :set_tenant
+  before_action :seed_audit_metadata
+  after_action  :clear_audit_metadata
 
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
 
@@ -107,6 +109,19 @@ class ApplicationController < ActionController::Base
     end
 
     set_current_tenant(tenant) if tenant
+  end
+
+  # Tags every event published during this web request with `acting_via:
+  # :web` via {AuditMetadata}. Operations and grandfathered controllers
+  # that publish events inherit it through the thread-local without any
+  # per-handler wiring. The matching `clear_audit_metadata` after_action
+  # resets the slot so the next request on this Puma worker starts clean.
+  def seed_audit_metadata
+    AuditMetadata.seed!(acting_via: :web)
+  end
+
+  def clear_audit_metadata
+    AuditMetadata.clear!
   end
 
   # Directs users to the right place after sign-in based on tenant membership.
