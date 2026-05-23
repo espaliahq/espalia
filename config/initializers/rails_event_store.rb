@@ -11,14 +11,14 @@ require "aggregate_root"
 #
 Rails.configuration.to_prepare do
   event_store = RailsEventStore::JSONClient.new(
-    repository: RailsEventStoreActiveRecord::EventRepository.new(serializer: JSON),
+    repository: RubyEventStore::ActiveRecord::EventRepository.new(serializer: JSON),
     message_broker: RubyEventStore::Broker.new(
       subscriptions: RubyEventStore::Subscriptions.new,
       dispatcher: RubyEventStore::ComposedDispatcher.new(
-        RailsEventStore::AfterCommitAsyncDispatcher.new(
+        RailsEventStore::AfterCommitDispatcher.new(
           scheduler: RailsEventStore::ActiveJobScheduler.new(serializer: JSON)
         ),
-        RubyEventStore::Dispatcher.new
+        RubyEventStore::SyncScheduler.new
       )
     ),
   )
