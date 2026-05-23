@@ -6,6 +6,12 @@ Rails.application.routes.draw do
   # Doorkeeper; see Mcp::ServerController.
   post "/mcp", to: "mcp/server#create", as: :mcp_server
 
+  # User-facing settings — for now just the connected MCP clients page;
+  # other settings live elsewhere historically.
+  namespace :settings do
+    resources :connected_clients, only: [ :index, :destroy ]
+  end
+
   # In-app approval surface for high-stakes MCP tools. The MCP server
   # returns a URL routed here when a client invokes a tool declared
   # `approval :in_app`; the user reviews and confirms here, not in the
