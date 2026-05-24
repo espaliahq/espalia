@@ -14,28 +14,47 @@ class Mcp::ApprovalsController < ApplicationController
 
   # GET /mcp/approvals/:id
   def show
+    authorize @approval
     render Views::Mcp::Approvals::ShowView.new(approval: @approval)
   end
 
   # POST /mcp/approvals/:id/approve
+  #
+  # Atomic transition: lock the row, re-check resolvability inside the
+  # transaction, then dispatch the operation. Without the row lock, two
+  # concurrent approve clicks could both pass the `resolvable?` check
+  # and execute the underlying operation twice.
   def approve
-    return redirect_to mcp_approval_path(@approval), alert: stale_alert unless @approval.resolvable?
+    authorize @approval
 
     Mcp::PendingApproval.transaction do
-      result = @approval.operation.call(context: pundit_user, params: @approval.arguments)
-      @approval.update!(status: :approved, executed_at: Time.current, result_payload: { value: result })
+      locked = ActsAsTenant.without_tenant { Mcp::PendingApproval.lock.find(@approval.id) }
+      unless locked.resolvable?
+        @approval = locked
+        return redirect_to mcp_approval_path(@approval), alert: stale_alert
+      end
+
+      ActsAsTenant.with_tenant(locked.tenant) do
+        result = locked.operation.call(context: approval_context(locked), params: locked.arguments)
+        locked.update!(status: :approved, executed_at: Time.current, result_payload: { value: result })
+      end
+      @approval = locked
     end
 
     redirect_to mcp_approval_path(@approval), notice: "Operation approved and executed."
   rescue Pundit::NotAuthorizedError
     redirect_to mcp_approval_path(@approval), alert: "You are not authorized to perform this operation."
   rescue StandardError => e
-    Rails.logger.error("[mcp_approval] #{e.class}: #{e.message}")
-    redirect_to mcp_approval_path(@approval), alert: "Could not execute operation: #{e.message}"
+    # Surface a generic alert — exception messages can leak internal
+    # state (record IDs, SQL fragments, etc) and the user has no way to
+    # act on them. Full detail goes to the logs for ops triage.
+    Rails.logger.error("[mcp_approval] #{e.class}: #{e.message}\n#{e.backtrace&.first(10)&.join("\n")}")
+    redirect_to mcp_approval_path(@approval), alert: "Could not execute operation. The error has been logged."
   end
 
   # POST /mcp/approvals/:id/reject
   def reject
+    authorize @approval
     return redirect_to mcp_approval_path(@approval), alert: stale_alert unless @approval.resolvable?
 
     @approval.update!(status: :rejected)
@@ -56,6 +75,20 @@ class Mcp::ApprovalsController < ApplicationController
     return if @approval && @approval.user_id == current_user.id
 
     redirect_to root_path, alert: "Not found."
+  end
+
+  # Rebuilds the AuthorizationContext against the approval's tenant — the
+  # tenant the MCP token was bound to at consent time, which may differ
+  # from the user's currently-active web session tenant.
+  def approval_context(approval)
+    tenant_user = ActsAsTenant.without_tenant do
+      TenantUser.find_by(tenant_id: approval.tenant_id, user_id: current_user.id)
+    end
+    AuthorizationContext.new(
+      user: current_user,
+      tenant_user: tenant_user,
+      person: tenant_user&.person
+    )
   end
 
   def stale_alert

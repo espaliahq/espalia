@@ -7,11 +7,13 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   include Phlex::Rails::Helpers::Routes
 
   # @param tokens [Array<Mcp::AccessToken>] non-revoked tokens for current_user
+  # @param tenant_map [Hash{String => Tenant}] id → Tenant preloaded by the controller
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Enumerable<Tenant>]
-  def initialize(tokens:, user: nil, current_tenant: nil, tenants: [])
+  def initialize(tokens:, tenant_map: {}, user: nil, current_tenant: nil, tenants: [])
     @tokens = tokens
+    @tenant_map = tenant_map
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants.to_a
@@ -71,7 +73,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   def token_row(token)
-    tenant = Tenant.unscoped.find_by(id: token.tenant_id)
+    tenant = @tenant_map[token.tenant_id]
     tr(class: "text-gray-900 dark:text-gray-100") do
       td(class: "px-4 py-3 font-medium") { plain token.application.name }
       td(class: "px-4 py-3") { plain(tenant&.name || "—") }

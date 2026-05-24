@@ -13,6 +13,17 @@
 # Inherits Doorkeeper's #create and #destroy unchanged; only #new is
 # overridden to render our Phlex consent view, and a small guard ensures
 # the chosen tenant actually belongs to the signed-in user.
+#
+# Pundit `authorize` is intentionally not called here. Authorization is
+# enforced by two complementary gates that Pundit would only duplicate:
+#
+#   1. Doorkeeper's `resource_owner_authenticator` (config/initializers/
+#      doorkeeper.rb) forces a signed-in `current_user` before any
+#      action runs — anonymous requests are bounced to sign-in.
+#   2. `tenant_valid?` ensures the chosen `tenant_id` is one the signed-
+#      in user actually belongs to (queried via the join table with
+#      tenant scoping disabled), which is the meaningful permission
+#      check for this controller.
 class Oauth::AuthorizationsController < Doorkeeper::AuthorizationsController
   def new
     render_consent_screen

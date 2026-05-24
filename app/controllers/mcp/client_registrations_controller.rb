@@ -16,6 +16,9 @@
 #     authentication (inherits ActionController::API for both).
 #   - No DCR management endpoints (no GET/PUT/DELETE on registered
 #     clients) — V1 keeps the surface tight.
+#   - Pundit is intentionally bypassed: the endpoint is anonymous by
+#     spec, and `config/initializers/rack_attack.rb` rate-limits DCR
+#     creates to 30/hr/IP in production to bound abuse.
 class Mcp::ClientRegistrationsController < ActionController::API
   # POST /oauth/register
   def create

@@ -9,6 +9,8 @@ class Settings::ConnectedClientsController < ApplicationController
 
   # GET /settings/connected_clients
   def index
+    authorize Mcp::AccessToken
+
     tokens = ActsAsTenant.without_tenant do
       Mcp::AccessToken
         .where(resource_owner_id: current_user.id, revoked_at: nil)
@@ -17,8 +19,15 @@ class Settings::ConnectedClientsController < ApplicationController
         .to_a
     end
 
+    # Pre-resolve tenants once so the view can render workspace names
+    # without an N+1 (`Tenant.unscoped.find_by(id: ...)` per token).
+    tenant_map = ActsAsTenant.without_tenant do
+      Tenant.where(id: tokens.map(&:tenant_id).uniq).index_by(&:id)
+    end
+
     render Views::Settings::ConnectedClients::IndexView.new(
       tokens: tokens,
+      tenant_map: tenant_map,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user.tenants
@@ -32,9 +41,14 @@ class Settings::ConnectedClientsController < ApplicationController
     end
 
     if token.nil?
+      # Skip authorize on the not-found path — there is no record to
+      # authorize against and the `resource_owner_id` filter above is
+      # the scoping that prevents revoking someone else's token.
       redirect_to settings_connected_clients_path, alert: "Token not found.", status: :see_other
       return
     end
+
+    authorize token
 
     token.revoke
     # FK guards against a missing application row, but a safe-nav fallback
