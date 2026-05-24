@@ -47,8 +47,13 @@ class Operations::Assessments::CapabilityGet < Operations::Base
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
   end
 
+  # Scope the lookup through the assignment's framework so a
+  # capability_id from a different framework in the same tenant can't
+  # be requested under this assignment's authorization.
   def capability
     @capability ||= FrameworkState::Capability
+      .joins(:category)
+      .where(framework_capability_categories: { framework_id: assignment.framework_id })
       .includes(:category)
       .find_by!(capability_id: params[:capability_id])
   end

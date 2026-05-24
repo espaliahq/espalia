@@ -30,8 +30,16 @@ class Operations::Frameworks::CapabilityGet < Operations::Base
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
   end
 
+  # Scope the lookup through the framework's categories so a
+  # capability_id belonging to a different framework in the same tenant
+  # can't be requested under this framework's authorization. Without
+  # this join, only the tenant boundary protects against cross-framework
+  # ID confusion — which is too weak when a tenant has multiple
+  # frameworks.
   def capability
     @capability ||= FrameworkState::Capability
+      .joins(:category)
+      .where(framework_capability_categories: { framework_id: framework.framework_id })
       .includes(:category)
       .find_by!(capability_id: params[:capability_id])
   end

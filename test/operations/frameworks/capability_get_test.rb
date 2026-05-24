@@ -49,6 +49,27 @@ class Operations::Frameworks::CapabilityGetTest < ActiveSupport::TestCase
     end
   end
 
+  context "framework scoping" do
+    should "refuse a capability_id from another framework in the same tenant" do
+      other_cap = nil
+      ActsAsTenant.with_tenant(@tenant) do
+        other_fw_id = SecureRandom.uuid_v7
+        create(:framework_state, framework_id: other_fw_id, name: "Other")
+        other_cat = create(:framework_capability_category, framework_id: other_fw_id, name: "X", ordinal: 1)
+        other_cap = create(:framework_capability, category_id: other_cat.category_id, name: "Other Cap")
+      end
+
+      assert_raises(ActiveRecord::RecordNotFound) do
+        ActsAsTenant.with_tenant(@tenant) do
+          Operations::Frameworks::CapabilityGet.call(
+            context: @context,
+            params: { framework_id: @framework_id, capability_id: other_cap.capability_id }
+          )
+        end
+      end
+    end
+  end
+
   context "structure" do
     should "return capability identity, description, status, category" do
       result = call_op
