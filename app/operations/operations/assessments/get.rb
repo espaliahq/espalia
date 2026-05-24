@@ -45,10 +45,21 @@ class Operations::Assessments::Get < Operations::Base
   def assignment_payload
     {
       id: assignment.id,
-      role: { id: assignment.role.role_id, code: assignment.role.code, name: assignment.role.name },
-      level: { id: assignment.level.level_id, ordinal: assignment.level.ordinal, title: assignment.level.title },
+      # role / level are optional belongs_to (the FrameworkState rows
+      # can be archived in a draft); safe-nav so the payload key set
+      # stays stable even when the linked rows are gone.
+      role: role_payload(assignment.role),
+      level: level_payload(assignment.level),
       assessee: { id: assignment.person_id }
     }
+  end
+
+  def role_payload(role)
+    role && { id: role.role_id, code: role.code, name: role.name }
+  end
+
+  def level_payload(level)
+    level && { id: level.level_id, ordinal: level.ordinal, title: level.title }
   end
 
   def cycle_payload(cycle)

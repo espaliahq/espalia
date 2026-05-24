@@ -56,10 +56,18 @@ class Mcp::ResourceRegistry
     def assessments(context)
       return [] if context.person.nil?
 
-      own_and_reports(context).map do |a|
+      assignments = own_and_reports(context)
+      # Single query for every report person referenced below — avoids
+      # an N+1 when iterating assignments to build display names.
+      report_person_ids = assignments
+        .reject { |a| a.person_id == context.person.id }
+        .map(&:person_id).uniq
+      report_people = report_person_ids.empty? ? {} : Person.where(id: report_person_ids).index_by(&:id)
+
+      assignments.map do |a|
         {
           uri: "#{ASSESSMENT_PREFIX}#{a.id}",
-          name: assessment_name(a, context),
+          name: assessment_name(a, context, report_people),
           description: "Assessment on #{a.framework&.name}",
           mimeType: "application/json"
         }
@@ -73,11 +81,11 @@ class Mcp::ResourceRegistry
       own + reports
     end
 
-    def assessment_name(assignment, context)
+    def assessment_name(assignment, context, report_people)
       if assignment.person_id == context.person.id
         "My assessment — #{assignment.framework&.name}"
       else
-        person = Person.find_by(id: assignment.person_id)
+        person = report_people[assignment.person_id]
         "#{person&.name || 'Direct report'} — #{assignment.framework&.name}"
       end
     end
