@@ -38,6 +38,21 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "frameworks_list",
+        "description" => "List frameworks visible to the caller in the active tenant.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "system_whoami",
         "description" => "Identify the user, tenant, and person the MCP token resolves to.",
         "inputSchema" => {

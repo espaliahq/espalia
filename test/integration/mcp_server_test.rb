@@ -117,6 +117,27 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_equal @person.id, payload.dig("person", "id")
     end
 
+    should "execute frameworks_list and return tenant-scoped framework rows" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_state, tenant: @tenant, framework_id: SecureRandom.uuid_v7,
+               name: "Engineering", current_published_version: 2)
+        create(:framework_state, tenant: @tenant, framework_id: SecureRandom.uuid_v7,
+               name: "Apprenticeship", current_published_version: 1)
+      end
+
+      post_mcp({
+        jsonrpc: "2.0", id: 100, method: "tools/call",
+        params: { name: "frameworks_list", arguments: {} }
+      })
+
+      assert_response :success
+      content = json_body.dig("result", "content")
+      assert content, "tools/call body was: #{response.body}"
+      payload = JSON.parse(content.first["text"])
+      assert_equal %w[Apprenticeship Engineering], payload.map { |r| r["name"] }
+      assert_equal [ 1, 2 ], payload.map { |r| r["current_published_version"] }
+    end
+
     should "return JSON-RPC -32601 for an unknown tool" do
       post_mcp({
         jsonrpc: "2.0", id: 4, method: "tools/call",
