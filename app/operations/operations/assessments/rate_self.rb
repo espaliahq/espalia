@@ -31,6 +31,11 @@ class Operations::Assessments::RateSelf < Operations::Base
     authorize assignment, :create_self_rating?
   end
 
+  # @return [Hash] uniform rating-tool payload —
+  #   `{ framework_id, capability_stable_id, level_ordinal, cycle_id, frequency }`.
+  #   `frequency` is nil on the untoggle path (rating cleared), otherwise the
+  #   value the projection settled on (always equal to `params[:frequency]`
+  #   for rate/revise paths).
   def perform
     cycle = assignment.current_open_cycle
     raise Operations::Base::ParameterError, "no open assessment cycle" if cycle.nil?

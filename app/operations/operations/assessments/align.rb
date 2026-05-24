@@ -31,6 +31,10 @@ class Operations::Assessments::Align < Operations::Base
     authorize assignment, :create_alignment_rating?
   end
 
+  # @return [Hash] same shape as {Operations::Assessments::RateSelf#perform} —
+  #   `{ framework_id, capability_stable_id, level_ordinal, cycle_id, frequency }`.
+  #   Unlike the other two rating ops, `frequency` is always the value the
+  #   caller submitted: alignment has no untoggle (re-aligning overwrites).
   def perform
     cycle = assignment.current_open_cycle
     raise Operations::Base::ParameterError, "no open assessment cycle" if cycle.nil?

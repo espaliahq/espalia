@@ -28,6 +28,9 @@ class Operations::Assessments::RateAsManager < Operations::Base
     authorize assignment, :create_manager_rating?
   end
 
+  # @return [Hash] same shape as {Operations::Assessments::RateSelf#perform} —
+  #   `{ framework_id, capability_stable_id, level_ordinal, cycle_id, frequency }`,
+  #   with `frequency` nil on the untoggle path.
   def perform
     cycle = assignment.current_open_cycle
     raise Operations::Base::ParameterError, "no open assessment cycle" if cycle.nil?
