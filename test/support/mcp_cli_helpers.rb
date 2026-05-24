@@ -75,10 +75,16 @@ module McpCliHelpers
     # trailing positional args — including the prompt. Put the prompt
     # first (right after the binary) and all flags afterwards so the
     # variadic only swallows tool patterns.
+    #
+    # `--no-session-persistence` prevents each test run from leaving a
+    # transient session on disk (otherwise they pile up in the
+    # /resume picker and the IDE's session list). Only works with
+    # --print, which we already use.
     cmd = [
       CLAUDE_CLI,
       prompt,
       "--print",
+      "--no-session-persistence",
       "--mcp-config", config_path,
       "--permission-mode", "acceptEdits",
       "--allowed-tools", "mcp__growth_os__*"
