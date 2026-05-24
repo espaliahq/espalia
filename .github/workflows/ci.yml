@@ -120,6 +120,17 @@ jobs:
         with:
           bundler-cache: true
 
+      # Required by test/integration/mcp_claude_cli_test.rb, which drives
+      # the real claude CLI as a subprocess to validate the MCP server
+      # end-to-end through the same transport a real client uses. The
+      # test fails (does not skip) when the binary is absent, so the
+      # install step is non-optional here.
+      - name: Set up Node + install claude CLI
+        uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+      - run: npm install -g @anthropic-ai/claude-code
+
       - name: Run tests
         env:
           RAILS_ENV: test

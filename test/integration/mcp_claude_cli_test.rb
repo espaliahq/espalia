@@ -8,10 +8,11 @@ require_relative "../support/mcp_cli_helpers"
 # MCP design: every tool gets exercised through the actual transport a
 # real client uses, not a simulated one.
 #
-# In CI the @anthropic-ai/claude-code package is expected to be installed
-# alongside Ruby; locally these tests skip cleanly when the binary isn't
-# on PATH so green local runs remain achievable. Set CLAUDE_CLI=<path>
-# to point at a non-default install.
+# CI installs @anthropic-ai/claude-code alongside Ruby
+# (.github/workflows/ci.yml); the devcontainer's postCreateCommand
+# installs it for local dev. The test fails (does NOT skip) when the
+# binary is absent — silent skips were hiding the case where parity
+# coverage was being lost. Set CLAUDE_CLI=<path> for a non-default install.
 #
 # Per-test workflow:
 #   1. Mint a Doorkeeper access token directly (the OAuth UI is covered
@@ -31,7 +32,14 @@ class McpClaudeCliTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 
   setup do
-    skip "claude CLI not on PATH (set CLAUDE_CLI=<path> or `npm i -g @anthropic-ai/claude-code`)" unless cli_available?
+    # Non-optional: CI installs the CLI (.github/workflows/ci.yml) and the
+    # devcontainer postCreateCommand installs it for local dev. If you
+    # hit this outside those environments, run:
+    #   npm install -g @anthropic-ai/claude-code
+    # or point CLAUDE_CLI at a non-default install path.
+    unless cli_available?
+      flunk "claude CLI not on PATH — install with `npm i -g @anthropic-ai/claude-code` or set CLAUDE_CLI=<path>"
+    end
 
     @user = create(:user, password: "password123")
     @tenant = create(:tenant, name: "Workspace A")

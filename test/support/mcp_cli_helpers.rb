@@ -10,9 +10,11 @@ require "open3"
 # the full chain — bearer auth → tools/list → tools/call → result —
 # against the same MCP transport a real client would speak.
 #
-# Skips with a clear message when the CLI binary isn't on PATH so
-# developers without it installed still get green local runs; CI is
-# expected to install @anthropic-ai/claude-code as a step.
+# `cli_available?` is a precondition check: the consuming test should
+# `flunk` (not `skip`) when it returns false. CI installs the CLI in
+# the test job and the devcontainer's postCreateCommand installs it
+# for local dev, so absence is treated as a setup failure, not a
+# legitimate run condition.
 module McpCliHelpers
   CLAUDE_CLI = ENV["CLAUDE_CLI"] || "claude"
   CLI_TIMEOUT_SECONDS = 60
@@ -69,13 +71,17 @@ module McpCliHelpers
   # @param config_path [String] path returned by `write_mcp_config`
   # @return [String] stdout
   def run_claude_cli(prompt, config_path:)
+    # `--allowed-tools <tools...>` is variadic and will consume any
+    # trailing positional args — including the prompt. Put the prompt
+    # first (right after the binary) and all flags afterwards so the
+    # variadic only swallows tool patterns.
     cmd = [
       CLAUDE_CLI,
+      prompt,
       "--print",
       "--mcp-config", config_path,
       "--permission-mode", "acceptEdits",
-      "--allowed-tools", "mcp__growth_os__*",
-      prompt
+      "--allowed-tools", "mcp__growth_os__*"
     ]
     stdout, stderr, status = Open3.capture3(*cmd, stdin_data: "")
     unless status.success?
