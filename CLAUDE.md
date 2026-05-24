@@ -28,6 +28,8 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md) |
 | `app/contexts/` | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
 | `app/read_models/` | [event-sourcing.md](docs/guidelines/event-sourcing.md), [rails-models.md](docs/guidelines/rails-models.md) |
+| `app/operations/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
+| `app/services/mcp/`, `app/controllers/mcp/`, `app/controllers/oauth/`, `app/models/mcp/`, `app/jobs/mcp/`, `app/views/mcp/`, `app/views/oauth/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
 
 Each directory above has a `CLAUDE.md` that imports the relevant guideline. Root `CLAUDE.md` covers architecture and commands only.
@@ -49,6 +51,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
 | Events / aggregates / projections / read models | @docs/guidelines/event-sourcing.md + @docs/runbooks/projection-rebuild.md |
+| MCP server / Operations / OAuth / DCR | @docs/guidelines/mcp-server.md |
 
 Most features touch controllers + models + views + tests + authorization â€” read all five.
 
