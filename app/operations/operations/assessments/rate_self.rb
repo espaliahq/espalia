@@ -19,7 +19,8 @@ class Operations::Assessments::RateSelf < Operations::Base
   parameter :level_ordinal,        Integer, required: true
   parameter :frequency, String, required: true,
                                 allowed: %w[none some occasional consistent]
-  parameter :comment, String
+  parameter :comment,   String
+  parameter :rationale, String
 
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
@@ -56,7 +57,7 @@ class Operations::Assessments::RateSelf < Operations::Base
       handler.revise_self_rating(
         context.person.id, params[:framework_id], params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
-        rationale: "Updated via MCP", cycle_id: cycle_id, comment: params[:comment]
+        rationale: rationale_for_revision, cycle_id: cycle_id, comment: params[:comment]
       )
     else
       handler.rate_self(
@@ -89,5 +90,15 @@ class Operations::Assessments::RateSelf < Operations::Base
       person_id: context.person.id,
       framework_id: params[:framework_id]
     )
+  end
+
+  # Caller-supplied rationale wins; otherwise we record a value specific
+  # enough to be useful in the activity log (which client_application_id
+  # the revision came from) without being a generic placeholder.
+  def rationale_for_revision
+    return params[:rationale] if params[:rationale].present?
+
+    app_id = AuditMetadata.current[:client_application_id]
+    app_id.present? ? "MCP revision (client #{app_id})" : "MCP revision"
   end
 end

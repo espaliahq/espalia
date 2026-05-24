@@ -91,8 +91,9 @@ class AuditMetadataTest < ActiveSupport::TestCase
       # The thread-local API still uses Symbols (see the seed! tests above).
       assert_equal "mcp",     seen_during_block[:acting_via]
       assert_equal "app-xyz", seen_during_block[:client_application_id]
-      # And it's restored on exit.
-      refute_equal "mcp", Rails.configuration.event_store.metadata[:acting_via]
+      # And it's fully cleared on exit (not just "different from mcp" —
+      # that'd pass for any other surprise value).
+      assert_nil Rails.configuration.event_store.metadata[:acting_via]
     end
   end
 end

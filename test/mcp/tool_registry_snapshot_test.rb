@@ -47,7 +47,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
-            "comment"              => { "type" => "string" }
+            "comment"              => { "type" => "string" },
+            "rationale"            => { "type" => "string" }
           },
           "required" => %w[framework_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
