@@ -76,6 +76,8 @@ class McpDiscoveryTest < ActionDispatch::IntegrationTest
       app = Mcp::Application.find_by(uid: body["client_id"])
       assert app
       refute app.confidential?, "DCR-registered clients must be public (no secret)"
+      assert app.dynamically_registered_at.present?,
+        "must mark DCR registrations so Mcp::PruneStaleClientsJob can clean them up"
     end
 
     should "reject a registration with no redirect_uris" do

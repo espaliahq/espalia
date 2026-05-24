@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_23_115303) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_24_051203) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -414,12 +414,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_23_115303) do
   create_table "oauth_applications", id: :uuid, default: nil, force: :cascade do |t|
     t.boolean "confidential", default: true, null: false
     t.datetime "created_at", null: false
+    t.datetime "dynamically_registered_at"
     t.string "name", null: false
     t.text "redirect_uri", null: false
     t.string "scopes", default: "", null: false
     t.string "secret", null: false
     t.string "uid", null: false
     t.datetime "updated_at", null: false
+    t.index ["dynamically_registered_at"], name: "idx_oauth_applications_dcr_registered", where: "(dynamically_registered_at IS NOT NULL)"
     t.index ["uid"], name: "index_oauth_applications_on_uid", unique: true
   end
 

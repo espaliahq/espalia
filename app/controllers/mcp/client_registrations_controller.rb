@@ -32,7 +32,11 @@ class Mcp::ClientRegistrationsController < ActionController::API
       name: name,
       redirect_uri: redirect_uris.join("\n"),
       scopes: requested_scopes,
-      confidential: false
+      confidential: false,
+      # Marks this row as a DCR registration so Mcp::PruneStaleClientsJob
+      # can clean it up if it goes unused. Admin-registered apps stay nil
+      # and are never auto-pruned.
+      dynamically_registered_at: Time.current
     )
 
     if application.save
