@@ -53,12 +53,15 @@ class Mcp::ServerController < ActionController::Base
   # POST /mcp
   def create
     payload = JSON.parse(request.body.read)
+    context = authorization_context
+    return render_token_error(:user_missing) if context.nil?
+
     response_body = AuditMetadata.with(
       acting_via: :mcp,
       client_application_id: doorkeeper_token.application_id
     ) do
       Mcp::RequestHandler.new(
-        context: authorization_context,
+        context: context,
         scopes: doorkeeper_token.scopes,
         client_application_id: doorkeeper_token.application_id,
         base_url: request.base_url
@@ -74,8 +77,14 @@ class Mcp::ServerController < ActionController::Base
   # Pulls the User off the access token, builds a per-request
   # AuthorizationContext. The TenantUser link is the same row the web
   # session would resolve; the Person follows from that.
+  #
+  # If the user has been deleted since the token was issued, returns nil
+  # so `set_tenant_from_token` can surface an auth failure instead of
+  # raising RecordNotFound (which would 500 the request).
   def authorization_context
-    user = User.find(doorkeeper_token.resource_owner_id)
+    user = User.find_by(id: doorkeeper_token.resource_owner_id)
+    return nil if user.nil?
+
     tenant_user = ActsAsTenant.without_tenant do
       TenantUser.find_by(user_id: user.id, tenant_id: doorkeeper_token.tenant_id)
     end

@@ -10,7 +10,10 @@
 #   - GET /.well-known/oauth-protected-resource   (RFC 9728)
 #   - GET /.well-known/oauth-authorization-server (RFC 8414)
 #
-# Both endpoints are unauthenticated — they're public discovery docs.
+# Both endpoints are unauthenticated public discovery documents — the
+# specs require them to be reachable without any credentials so a fresh
+# MCP client can self-configure. Pundit is intentionally bypassed; the
+# only "authorization" is that the contents are non-sensitive metadata.
 class Mcp::WellKnownController < ActionController::Base
   # GET /.well-known/oauth-protected-resource
   def oauth_protected_resource
@@ -49,6 +52,16 @@ class Mcp::WellKnownController < ActionController::Base
   # value; only fall back to `request.base_url` in development where the
   # canonical URL is the dev server itself.
   def issuer
-    Rails.application.config.x.oauth_issuer.presence || request.base_url
+    configured = Rails.application.config.x.oauth_issuer.presence
+    return configured if configured
+
+    # In production a proxy-derived issuer is dangerous: tokens are bound
+    # to the issuer string at consent time, so any drift breaks every
+    # subsequent client. Fail loud rather than hand out unstable metadata.
+    if Rails.env.production?
+      raise "OAUTH_ISSUER is not configured — set the env var to the canonical https URL"
+    end
+
+    request.base_url
   end
 end
