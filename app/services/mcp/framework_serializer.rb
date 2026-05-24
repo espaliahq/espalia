@@ -21,6 +21,16 @@ class Mcp::FrameworkSerializer
     new(framework).framework
   end
 
+  # @param framework [FrameworkState::Framework]
+  # @param capability [FrameworkState::Capability]
+  # @return [Hash] capability detail — description, status, category,
+  #   bindings (role + weight), and expectations per level (each with
+  #   its illustrations grouped by role). This IS the drill-in payload;
+  #   both framework_capability_get and assessment_capability_get use it.
+  def self.capability(framework, capability)
+    new(framework).capability(capability)
+  end
+
   def initialize(framework)
     @framework = framework
   end
@@ -36,7 +46,65 @@ class Mcp::FrameworkSerializer
     }
   end
 
+  def capability(capability)
+    expectations = FrameworkState::BehaviouralExpectation
+      .where(capability_id: capability.capability_id)
+      .includes(:illustrations)
+      .order(:level_ordinal)
+
+    bindings = FrameworkState::CapabilityRoleBinding
+      .where(capability_id: capability.capability_id)
+      .includes(:role)
+
+    {
+      id: capability.capability_id,
+      stable_id: capability.stable_id,
+      name: capability.name,
+      description: capability.description,
+      status: capability.status,
+      category: capability.category && {
+        id: capability.category.category_id,
+        name: capability.category.name
+      },
+      bindings: bindings.map { |b| binding_payload(b) }.sort_by { |b| b.dig(:role, :code).to_s },
+      expectations: expectations.map { |e| expectation_payload(e) }
+    }
+  end
+
   private
+
+  def binding_payload(binding)
+    role = binding.role
+    {
+      role: role && { id: role.role_id, code: role.code, name: role.name },
+      weight: binding.weight.to_f
+    }
+  end
+
+  def expectation_payload(expectation)
+    {
+      id: expectation.expectation_id,
+      stable_id: expectation.stable_id,
+      level_ordinal: expectation.level_ordinal,
+      description: expectation.description,
+      illustrations: expectation.illustrations.sort_by(&:ordinal).map { |i|
+        role = role_for(i.role_id)
+        {
+          id: i.illustration_id,
+          role: role && { id: role.role_id, code: role.code, name: role.name },
+          description: i.description
+        }
+      }
+    }
+  end
+
+  def role_for(role_id)
+    @roles_by_id ||= FrameworkState::Role
+      .joins(:role_family)
+      .where(framework_role_families: { framework_id: @framework.framework_id })
+      .index_by(&:role_id)
+    @roles_by_id[role_id]
+  end
 
   def role_families
     families = FrameworkState::RoleFamily

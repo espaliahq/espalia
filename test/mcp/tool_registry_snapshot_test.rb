@@ -38,6 +38,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_capability_get",
+        "description" => "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "capability_id" => { "type" => "string" }
+          },
+          "required" => %w[assignment_id capability_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "assessments_get",
         "description" => "Fetch one assessment's framework structure and the assessee's current role/level/cycle status.",
         "inputSchema" => {
@@ -87,6 +105,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => false,
           "destructiveHint" => false,
           "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_capability_get",
+        "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "capability_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id capability_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
         }
       },
       {
