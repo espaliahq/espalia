@@ -133,6 +133,7 @@ class Assessments::RatingsController < ApplicationController
         render_to_string(
           Views::Assessments::AssessmentCell.new(
             cell_data: cell_data,
+            capability_id: cap_data[:capability].capability_id,
             capability_stable_id: capability_stable_id,
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
@@ -140,7 +141,8 @@ class Assessments::RatingsController < ApplicationController
             context: :self,
             category_id: active_category_id || category_id,
             frozen: matrix_data[:individual_ratings_frozen],
-            alignment_locked: matrix_data[:alignment_locked]
+            alignment_locked: matrix_data[:alignment_locked],
+            focused: true
           ),
           layout: false
         )

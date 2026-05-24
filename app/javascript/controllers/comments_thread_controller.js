@@ -16,7 +16,20 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["composerBody", "displayBody", "editForm", "replyForm", "replyBody"]
+  static targets = ["composer", "composerBody", "displayBody", "editForm", "replyForm", "replyBody"]
+
+  // Toggles the comment composer's visibility. The composer starts
+  // hidden so the focused cell isn't dominated by an empty textarea —
+  // the `+` icon next to the COMMENTS header opens it on demand.
+  toggleComposer() {
+    if (!this.hasComposerTarget) return
+    const form = this.composerTarget
+    const willOpen = form.classList.contains("hidden")
+    form.classList.toggle("hidden")
+    if (willOpen && this.hasComposerBodyTarget) {
+      this.composerBodyTarget.focus()
+    }
+  }
 
   // Cmd/Ctrl+Enter submits the nearest form. Bound on textarea
   // keydown so it works for both the composer and the inline edit
@@ -103,6 +116,12 @@ export default class extends BaseController {
     if (!event.detail?.success) return
     if (this.hasComposerBodyTarget) {
       this.composerBodyTarget.value = ""
+    }
+    // Re-hide the composer after a successful post so the cell returns
+    // to its compact state. Users open it again via the `+` icon when
+    // they want to add another comment.
+    if (this.hasComposerTarget) {
+      this.composerTarget.classList.add("hidden")
     }
   }
 }

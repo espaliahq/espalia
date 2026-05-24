@@ -27,7 +27,7 @@ class Views::Assessments::Evidence::List < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 group/evidence"
+      class: "mt-2 pt-2 border-t border-gray-200 dark:border-gray-700"
     ) do
       header
       ul(class: "space-y-0.5") do
@@ -41,7 +41,6 @@ class Views::Assessments::Evidence::List < Views::Base
           )
         end
       end
-      add_button if @can_create
     end
   end
 
@@ -51,28 +50,31 @@ class Views::Assessments::Evidence::List < Views::Base
     "evidence-list-#{@capability_stable_id}-#{@level_ordinal}"
   end
 
+  # Header pairs the section label with a small `+` affordance that
+  # opens the evidence form. Replaces the previous full-width dashed
+  # button — same target action, far less vertical space.
   def header
     div(class: "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
                "text-gray-500 dark:text-gray-400 mb-1") do
       span { "Evidence" }
       span(class: "font-mono") { "(#{@items.size})" } if @items.any?
+      add_icon if @can_create
     end
   end
 
-  def add_button
+  def add_icon
     button(
       type: "button",
-      class: "mt-1 w-full opacity-100 lg:opacity-0 lg:group-hover/evidence:opacity-100 " \
-             "lg:focus:opacity-100 lg:transition-opacity text-[11px] text-primary " \
-             "border border-dashed border-gray-300 dark:border-gray-600 rounded px-2 py-1 " \
-             "hover:bg-primary/5",
+      class: "ml-auto rounded p-0.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
+             "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+      aria: { label: "Add evidence" },
       data: {
         action: "click->evidence-form#open",
         evidence_form_capability_stable_id_param: @capability_stable_id,
         evidence_form_level_ordinal_param: @level_ordinal
       }
     ) do
-      plain "+ Add evidence"
+      span(class: "block text-sm leading-none", aria_hidden: "true") { "+" }
     end
   end
 

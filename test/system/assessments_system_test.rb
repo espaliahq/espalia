@@ -680,6 +680,54 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       )
     end
 
+    should "not flash indicator badges when rating the focused cell" do
+      # Regression: the rating controllers' Turbo Stream response
+      # replaces the cell `<td>`. The server-rendered HTML must carry
+      # `data-focused="true"` so the new cell paints with indicators
+      # hidden (group-data-[focused=true]/assess-cell:hidden). Without
+      # the server-side stamp, the browser paints the new cell with
+      # badges visible while matrix_controller's MutationObserver
+      # waits to re-stamp focus — the user sees "2 examples" reappear.
+      #
+      # cap1 L1 has 2 illustrations → "2 examples" indicator badge.
+      # When the cell is focused, the badge MUST stay hidden. The
+      # capability-name cell has its own "2× / 1×" indicators that
+      # aren't related — assert against the cell's td directly.
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      expand_matrix_row("#capability-name-#{@cap1_stable}")
+      cap_id = capability_id_from_stable(@cap1_stable)
+      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
+      assert_equal "512px", col_width_for(1), "Pre-condition: cell is focused"
+
+      # Pre-condition: focused cell's "2 examples" badge is hidden.
+      assert_no_selector "#cell-#{@cap1_stable}-1", text: "2 examples"
+
+      # Click "Some" on the focused cell — fires a Turbo Stream that
+      # replaces the cell `<td>`.
+      page.execute_script(<<~JS)
+        (() => {
+          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
+          const btn = Array.from(cell.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Some");
+          if (btn) btn.click();
+        })()
+      JS
+      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
+
+      # The cell must have `data-focused="true"` after the rating
+      # lands. Two failure modes the regression hits:
+      # 1. Server doesn't stamp data-focused → first paint shows badges.
+      # 2. Server stamps it but omits data-capability-id → matrix_controller's
+      #    MutationObserver re-runs applyColumnFocus, doesn't find a
+      #    capability match for the new cell, and `delete`s data-focused.
+      assert_selector "#cell-#{@cap1_stable}-1[data-focused='true']", visible: :all
+
+      # And no indicator badge text leaks through.
+      assert_no_selector "#cell-#{@cap1_stable}-1", text: "2 examples"
+    end
+
     should "keep focus when clicking on content inside an already-focused expanded cell" do
       # Regression: clicking on the expanded cell's body (expectation
       # text, illustrations, evidence content — anything that isn't a
