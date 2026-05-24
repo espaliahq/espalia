@@ -85,10 +85,14 @@ class AuditMetadataTest < ActiveSupport::TestCase
         seen_during_block = Rails.configuration.event_store.metadata
       end
 
-      assert_equal :mcp,      seen_during_block[:acting_via]
+      # Stringified at the event-store boundary because
+      # ruby_event_store::Metadata only accepts a fixed set of value types
+      # (String/Integer/Float/Date/Time/Bool/nil/Hash/Array — no Symbol).
+      # The thread-local API still uses Symbols (see the seed! tests above).
+      assert_equal "mcp",     seen_during_block[:acting_via]
       assert_equal "app-xyz", seen_during_block[:client_application_id]
       # And it's restored on exit.
-      refute_equal :mcp, Rails.configuration.event_store.metadata[:acting_via]
+      refute_equal "mcp", Rails.configuration.event_store.metadata[:acting_via]
     end
   end
 end

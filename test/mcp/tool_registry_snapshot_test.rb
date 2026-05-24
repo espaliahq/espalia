@@ -38,6 +38,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_rate_self",
+        "description" => "Record or update your own rating for one capability × level.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"         => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
+            "comment"              => { "type" => "string" }
+          },
+          "required" => %w[framework_id capability_stable_id level_ordinal frequency],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_list",
         "description" => "List frameworks visible to the caller in the active tenant.",
         "inputSchema" => {

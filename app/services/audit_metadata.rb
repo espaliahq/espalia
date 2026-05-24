@@ -60,7 +60,16 @@ module AuditMetadata
     metadata = current
     return yield if metadata.empty?
 
-    Rails.configuration.event_store.with_metadata(metadata, &block)
+    Rails.configuration.event_store.with_metadata(serialize(metadata), &block)
+  end
+
+  # ruby_event_store::Metadata only accepts String / Integer / Float /
+  # Date / Time / Bool / nil / Hash / Array values — Symbols would raise
+  # ArgumentError at publish time. We keep `acting_via` as a Symbol in
+  # the thread-local for caller ergonomics and stringify just before
+  # handing it to the event store.
+  def serialize(metadata)
+    metadata.transform_values { |v| v.is_a?(Symbol) ? v.to_s : v }
   end
 
   def build(acting_via, client_application_id)
