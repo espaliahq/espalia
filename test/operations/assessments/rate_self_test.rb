@@ -106,11 +106,15 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       event_store = Rails.configuration.event_store
       observed_metadata = nil
       subscriber = ->(event) { observed_metadata = event.metadata.to_h }
-      event_store.subscribe(subscriber, to: [ PersonDevelopment::Events::SelfRated ])
 
-      AuditMetadata.with(acting_via: :mcp, client_application_id: "app-xyz") do
-        call_op(frequency: "consistent")
-      end
+      event_store
+        .within do
+          AuditMetadata.with(acting_via: :mcp, client_application_id: "app-xyz") do
+            call_op(frequency: "consistent")
+          end
+        end
+        .subscribe(subscriber, to: [ PersonDevelopment::Events::SelfRated ])
+        .call
 
       assert observed_metadata, "expected SelfRated event to be published"
       # acting_via is stringified at the event-store boundary because

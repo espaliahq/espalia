@@ -4,6 +4,7 @@ require "capybara"
 require "shellwords"
 require "tempfile"
 require "open3"
+require "timeout"
 
 # Drives the real `claude` CLI as a subprocess against a Puma server
 # booted inside the test process. Used by McpClaudeCliTest to validate
@@ -96,11 +97,31 @@ module McpCliHelpers
       "--permission-mode", "acceptEdits",
       "--allowed-tools", "mcp__growth_os__*"
     ]
-    stdout, stderr, status = Open3.capture3(*cmd, stdin_data: "")
+    # Bound the subprocess — a stuck CLI process must not hang the whole
+    # test job. We spawn in its own process group so we can SIGKILL the
+    # whole tree on timeout (`Timeout.timeout` alone wouldn't reach the
+    # child process).
+    stdout, stderr, status = run_with_timeout(cmd, CLI_TIMEOUT_SECONDS)
     unless status.success?
       raise "claude CLI failed (#{status.exitstatus}): #{stderr}\nstdout: #{stdout}"
     end
 
     stdout
+  end
+
+  private
+
+  def run_with_timeout(cmd, timeout_seconds)
+    Open3.popen3(*cmd, pgroup: true) do |stdin, stdout_io, stderr_io, wait_thr|
+      stdin.close
+      begin
+        Timeout.timeout(timeout_seconds) { wait_thr.value }
+      rescue Timeout::Error
+        Process.kill("KILL", -wait_thr.pid) rescue nil
+        wait_thr.value
+        raise "claude CLI exceeded #{timeout_seconds}s — aborted"
+      end
+      [ stdout_io.read, stderr_io.read, wait_thr.value ]
+    end
   end
 end

@@ -62,16 +62,19 @@ class McpClaudeCliTest < ActiveSupport::TestCase
   end
 
   teardown do
-    # Manual cleanup — no transactional fixtures here, so we tear down
-    # what setup produced (and any approval rows the CLI may have created).
-    Mcp::PendingApproval.delete_all
-    Mcp::AccessToken.delete_all
-    Mcp::AccessGrant.delete_all
-    Mcp::Application.delete_all
-    TenantUser.delete_all
-    ActsAsTenant.with_tenant(@tenant) { Person.delete_all } if @tenant
-    Tenant.delete_all
-    User.delete_all
+    # Tear down ONLY the records this test instance created. The earlier
+    # `delete_all` pattern corrupted parallel test runs because every CLI
+    # test would wipe the other parallel worker's User/Tenant rows.
+    ActsAsTenant.without_tenant do
+      Mcp::PendingApproval.where(user_id: @user&.id).delete_all if @user
+      Mcp::AccessToken.where(application_id: @application&.id).delete_all if @application
+      Mcp::AccessGrant.where(application_id: @application&.id).delete_all if @application
+      @application&.destroy
+      TenantUser.where(tenant_id: @tenant&.id).delete_all if @tenant
+      Person.where(tenant_id: @tenant&.id).delete_all if @tenant
+      @tenant&.destroy
+      @user&.destroy
+    end
     File.unlink(@config_path) if @config_path && File.exist?(@config_path)
   end
 

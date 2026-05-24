@@ -15,6 +15,13 @@ require "test_helper"
 class McpInAppApprovalTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
+  # Serializes the Whoami category/approval override within a single
+  # process. Rails 8's default parallel test runner forks workers (each
+  # has isolated class constants), so cross-process leakage isn't an
+  # issue — but if anyone switches to thread-based parallelization later
+  # this guard prevents tests reading half-mutated Whoami metadata.
+  WHOAMI_OVERRIDE_MUTEX = Mutex.new
+
   setup do
     @user = create(:user, password: "password123")
     @tenant = create(:tenant, name: "Workspace A")
@@ -42,6 +49,7 @@ class McpInAppApprovalTest < ActionDispatch::IntegrationTest
     # Re-tag Whoami as a write op that requires in-app approval for the
     # duration of this test class. perform stays read-only — we just want
     # to exercise the routing.
+    WHOAMI_OVERRIDE_MUTEX.lock
     @whoami = Operations::System::Whoami
     @original_category = @whoami.instance_variable_get(:@category)
     @original_approval = @whoami.instance_variable_get(:@approval)
@@ -52,6 +60,8 @@ class McpInAppApprovalTest < ActionDispatch::IntegrationTest
   teardown do
     @whoami.instance_variable_set(:@category, @original_category)
     @whoami.instance_variable_set(:@approval, @original_approval)
+  ensure
+    WHOAMI_OVERRIDE_MUTEX.unlock if WHOAMI_OVERRIDE_MUTEX.owned?
   end
 
   def post_mcp(body, token: @token.token)

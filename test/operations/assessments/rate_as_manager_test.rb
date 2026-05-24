@@ -120,14 +120,16 @@ class Operations::Assessments::RateAsManagerTest < ActiveSupport::TestCase
   context "audit metadata" do
     should "stamp acting_via on the ManagerRated event" do
       observed = nil
-      Rails.configuration.event_store.subscribe(
-        ->(e) { observed = e.metadata.to_h },
-        to: [ PersonDevelopment::Events::ManagerRated ]
-      )
+      handler = ->(e) { observed = e.metadata.to_h }
 
-      AuditMetadata.with(acting_via: :mcp, client_application_id: "app-xyz") do
-        call_op(frequency: "consistent")
-      end
+      Rails.configuration.event_store
+        .within do
+          AuditMetadata.with(acting_via: :mcp, client_application_id: "app-xyz") do
+            call_op(frequency: "consistent")
+          end
+        end
+        .subscribe(handler, to: [ PersonDevelopment::Events::ManagerRated ])
+        .call
 
       assert observed, "expected ManagerRated event to be published"
       assert_equal "mcp",     observed[:acting_via]

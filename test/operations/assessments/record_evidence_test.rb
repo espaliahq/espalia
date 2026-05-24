@@ -153,14 +153,16 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
   context "audit metadata" do
     should "stamp acting_via on the EvidenceRecorded event" do
       observed = nil
-      Rails.configuration.event_store.subscribe(
-        ->(e) { observed = e.metadata.to_h },
-        to: [ PersonDevelopment::Events::EvidenceRecorded ]
-      )
+      handler = ->(e) { observed = e.metadata.to_h }
 
-      AuditMetadata.with(acting_via: :mcp, client_application_id: "app-xyz") do
-        call_op(ctx: @report_ctx)
-      end
+      Rails.configuration.event_store
+        .within do
+          AuditMetadata.with(acting_via: :mcp, client_application_id: "app-xyz") do
+            call_op(ctx: @report_ctx)
+          end
+        end
+        .subscribe(handler, to: [ PersonDevelopment::Events::EvidenceRecorded ])
+        .call
 
       assert observed, "expected EvidenceRecorded event to be published"
       assert_equal "mcp",     observed[:acting_via]
