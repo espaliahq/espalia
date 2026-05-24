@@ -42,7 +42,11 @@ class Mcp::ResourceRegistry
 
     private
 
-    def frameworks(_context)
+    def frameworks(context)
+      # Mirror Operations::Frameworks::List authorization so the resource
+      # surface can't be a Pundit bypass for the equivalent tool.
+      return [] unless FrameworkPolicy.new(context, FrameworkState::Framework).index?
+
       FrameworkState::Framework.all.order(:name).map do |fw|
         {
           uri: "#{FRAMEWORK_PREFIX}#{fw.framework_id}",

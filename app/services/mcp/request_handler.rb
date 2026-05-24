@@ -41,12 +41,14 @@ class Mcp::RequestHandler
   def call(payload)
     id = payload["id"]
     method = payload["method"]
-    params = payload["params"] || {}
+    params = coerce_params(payload["params"])
 
     result = dispatch(method, params)
     success(id, result)
   rescue MethodNotFound => e
     error(id, code: -32601, message: e.message)
+  rescue InvalidParams => e
+    error(id, code: -32602, message: e.message)
   rescue Operations::Base::ParameterError => e
     error(id, code: -32602, message: e.message)
   rescue InsufficientScope => e
@@ -62,6 +64,17 @@ class Mcp::RequestHandler
 
   class MethodNotFound < StandardError; end
   class InsufficientScope < StandardError; end
+  class InvalidParams < StandardError; end
+
+  # JSON-RPC `params` MAY be omitted or be an object/array. We treat
+  # missing as `{}`; anything that isn't a Hash is a client bug and
+  # earns -32602 (invalid params), not -32603 (internal error).
+  def coerce_params(raw)
+    return {} if raw.nil?
+    return raw if raw.is_a?(Hash)
+
+    raise InvalidParams, "params must be a JSON object"
+  end
 
   def dispatch(method, params)
     case method
@@ -110,7 +123,9 @@ class Mcp::RequestHandler
 
   def handle_tools_call(params)
     name = params["name"]
-    arguments = params["arguments"] || {}
+    arguments = params["arguments"]
+    arguments = {} if arguments.nil?
+    raise InvalidParams, "arguments must be a JSON object" unless arguments.is_a?(Hash)
     operation_class = Operations::Registry.find_by_tool_name(name)
 
     raise MethodNotFound, "unknown tool: #{name}" if operation_class.nil?

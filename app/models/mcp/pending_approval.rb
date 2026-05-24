@@ -17,8 +17,15 @@ class Mcp::PendingApproval < ApplicationRecord
   # match the rest of the Mcp:: ActiveRecord models.
   self.table_name = "mcp_pending_approvals"
 
+  # Belt-and-braces tenant scoping. The controller uses
+  # `ActsAsTenant.without_tenant` to look up an approval by its secret id
+  # (which may be opened in a browser session bound to a different
+  # tenant). Declaring acts_as_tenant means any future read path that
+  # forgets the explicit `without_tenant` will still be scoped, never
+  # silently leaking cross-tenant.
+  acts_as_tenant :tenant
+
   belongs_to :user
-  belongs_to :tenant
   belongs_to :client_application, class_name: "Mcp::Application"
 
   EXPIRY_WINDOW = 24.hours
