@@ -38,6 +38,21 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_mine",
+        "description" => "List the caller's own assessment assignments and those of their direct reports.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "assessments_rate_self",
         "description" => "Record or update your own rating for one capability × level.",
         "inputSchema" => {

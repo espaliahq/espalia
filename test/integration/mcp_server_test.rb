@@ -138,6 +138,34 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_equal [ 1, 2 ], payload.map { |r| r["current_published_version"] }
     end
 
+    should "execute assessments_mine and return the caller's own + report rows" do
+      framework_id = nil
+      report_person = nil
+      ActsAsTenant.with_tenant(@tenant) do
+        report_person = create(:person, tenant: @tenant, manager_id: @person.id, name: "Bob")
+        framework_id = SecureRandom.uuid_v7
+        create(:framework_state, framework_id: framework_id, name: "Engineering")
+        rf = create(:framework_role_family, framework_id: framework_id, name: "Eng")
+        role  = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
+        level = create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Mid", code: "E2")
+
+        handler = PersonDevelopment::CommandHandler.new
+        handler.assign_to_framework(@person.id,       framework_id, role.role_id, level.level_id)
+        handler.assign_to_framework(report_person.id, framework_id, role.role_id, level.level_id)
+      end
+
+      post_mcp({
+        jsonrpc: "2.0", id: 200, method: "tools/call",
+        params: { name: "assessments_mine", arguments: {} }
+      })
+
+      assert_response :success
+      payload = JSON.parse(json_body.dig("result", "content", 0, "text"))
+      assert_equal 1, payload["own"].size
+      assert_equal "Engineering", payload.dig("own", 0, "framework", "name")
+      assert_equal [ "Bob" ], payload["direct_reports"].map { |r| r.dig("assessee", "name") }
+    end
+
     should "return JSON-RPC -32601 for an unknown tool" do
       post_mcp({
         jsonrpc: "2.0", id: 4, method: "tools/call",
