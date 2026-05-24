@@ -24,6 +24,18 @@ module GrowthOs
     # them in production raises NameError and crashes boot, so exclude them.
     config.autoload_lib(ignore: %w[assets tasks rubocop])
 
+    # Stable OAuth issuer for the MCP server's discovery doc (RFC 8414
+    # requires exact-match validation by clients). Behind a proxy or LB
+    # the `request.base_url` Rails sees varies with X-Forwarded-* headers,
+    # which would silently break token validation; set OAUTH_ISSUER to the
+    # canonical public URL in production. In dev/test we fall back to
+    # `request.base_url` so contributors don't have to configure anything.
+    config.x.oauth_issuer = ENV.fetch("OAUTH_ISSUER", nil)
+
+    # Throttling for abuse-prone endpoints — currently only OAuth Dynamic
+    # Client Registration. Disabled in test/dev via the initializer.
+    config.middleware.use Rack::Attack
+
     # Configuration for the application, engines, and railties goes here.
     #
     # These settings can be overridden in specific environments using the files

@@ -28,6 +28,8 @@ This project uses a layered guidance system. Standards are loaded contextually �
 | `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md) |
 | `app/contexts/` | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
 | `app/read_models/` | [event-sourcing.md](docs/guidelines/event-sourcing.md), [rails-models.md](docs/guidelines/rails-models.md) |
+| `app/operations/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
+| `app/services/mcp/`, `app/controllers/mcp/`, `app/controllers/oauth/`, `app/models/mcp/`, `app/jobs/mcp/`, `app/views/mcp/`, `app/views/oauth/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
 
 Each directory above has a `CLAUDE.md` that imports the relevant guideline. Root `CLAUDE.md` covers architecture and commands only.
@@ -49,8 +51,11 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
 | Events / aggregates / projections / read models | @docs/guidelines/event-sourcing.md + @docs/runbooks/projection-rebuild.md |
+| MCP server / Operations / OAuth / DCR | @docs/guidelines/mcp-server.md |
 
 Most features touch controllers + models + views + tests + authorization — read all five.
+
+Any new user-facing read or write surface must consider MCP coverage during planning. Default to building through `Operations::*` so the web and the MCP server share one implementation (see [mcp-server.md](docs/guidelines/mcp-server.md)); explicitly justify in the PR if MCP exposure is being skipped or deferred.
 
 ## Architecture
 
@@ -306,8 +311,9 @@ test/
 
 - Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
 - Always update relevant documentation if functionality diverges from what is documented.
-- `/coderabbit:review --base main` - Use CodeRabbit to review the change code vs main branch before commit
+- `/coderabbit:review --base main` - Use CodeRabbit to review the change code vs main branch before commit, if using CodeRabbit CLI use the `--agent` flag
 - When creating PR, always track CI, always investigate code review and CodeRabbit suggestions and commit each fix as a separate commit in the PR.
+- **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
 
 ## Learnings
 

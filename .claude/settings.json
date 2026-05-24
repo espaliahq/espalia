@@ -32,9 +32,6 @@
       "Bash(git add *)",
       "Bash(SCREENSHOTS=1 bin/rails test *)",
       "Bash(bin/rails tailwindcss:build)",
-      "Read(//home/vscode/.claude/plugins/**)",
-      "Read(//home/vscode/.claude/skills/**)",
-      "Read(//home/vscode/.claude/**)",
       "Bash(coderabbit --version)",
       "Bash(coderabbit auth *)",
       "Bash(coderabbit review *)"

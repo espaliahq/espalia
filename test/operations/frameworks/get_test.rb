@@ -1,0 +1,73 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+# Confirms the top-level disclosure shape: a framework returns its role
+# families and capability categories with one level of ID+name recursion
+# inside each (roles inside families, capabilities inside categories) —
+# and no further (no expectations, no illustrations). That's the
+# load-bearing contract for context-budget management.
+class Operations::Frameworks::GetTest < ActiveSupport::TestCase
+  setup do
+    @tenant = create(:tenant)
+    @user = create(:user)
+    ActsAsTenant.with_tenant(@tenant) do
+      @person = create(:person, tenant: @tenant, email: @user.email)
+      @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: @person, role: :member)
+
+      @framework_id = SecureRandom.uuid_v7
+      @framework = create(:framework_state, framework_id: @framework_id, name: "Engineering",
+                          current_published_version: 2)
+      rf = create(:framework_role_family, framework_id: @framework_id, name: "Eng")
+      @role  = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
+      create(:framework_role, role_family_id: rf.role_family_id, name: "Manager", code: "EM", track: "management")
+
+      cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
+      @cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
+      create(:framework_capability, category_id: cat.category_id, name: "Strategic Thinking")
+    end
+    @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
+  end
+
+  def call_op
+    ActsAsTenant.with_tenant(@tenant) do
+      Operations::Frameworks::Get.call(context: @context, params: { framework_id: @framework_id })
+    end
+  end
+
+  context "structure" do
+    should "return the framework summary + role families + categories" do
+      result = call_op
+
+      assert_equal "Engineering", result[:name]
+      assert_equal 2, result[:current_published_version]
+      assert_equal [ "Eng" ], result[:role_families].map { |f| f[:name] }
+      assert_equal [ "SWE", "Manager" ].sort, result[:role_families].first[:roles].map { |r| r[:name] }.sort
+      assert_equal [ "Thinking" ], result[:categories].map { |c| c[:name] }
+      assert_equal [ "Critical Thinking", "Strategic Thinking" ].sort,
+        result[:categories].first[:capabilities].map { |c| c[:name] }.sort
+    end
+
+    should "stop at one level of recursion — no inline expectations or illustrations" do
+      result = call_op
+      capability = result[:categories].first[:capabilities].first
+
+      # Capability rows expose just identity — no expectations / illustrations
+      # / bindings. Deeper drill-in lives behind a separate tool.
+      assert_equal %i[id stable_id name].sort, capability.keys.sort
+    end
+  end
+
+  context "policy" do
+    should "deny callers without tenant membership" do
+      stranger = create(:user)
+      ctx = AuthorizationContext.new(user: stranger, tenant_user: nil, person: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_raises(Pundit::NotAuthorizedError) do
+          Operations::Frameworks::Get.call(context: ctx, params: { framework_id: @framework_id })
+        end
+      end
+    end
+  end
+end

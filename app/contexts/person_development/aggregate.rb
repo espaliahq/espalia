@@ -578,7 +578,8 @@ class PersonDevelopment::Aggregate
     if commentable_type == PersonDevelopmentComment::ASSESSMENT_CELL
       raise CommandError, "capability_stable_id required for assessment_cell comments" if
         capability_stable_id.to_s.strip.empty?
-      raise CommandError, "level_ordinal required for assessment_cell comments" if level_ordinal.nil?
+      raise CommandError, "level_ordinal required for assessment_cell comments" if
+        level_ordinal.to_s.strip.empty?
     end
 
     if parent_id
