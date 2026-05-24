@@ -33,7 +33,7 @@ class Views::Assessments::Comments::Thread < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 group/comments",
+      class: "mt-3 pt-2 border-t border-gray-200 dark:border-gray-700",
       data: { controller: "comments-thread" }
     ) do
       header
@@ -52,11 +52,28 @@ class Views::Assessments::Comments::Thread < Views::Base
     "comments-thread-#{@capability_stable_id}-#{@level_ordinal}"
   end
 
+  # Header pairs the section label with a small `+` affordance that
+  # toggles the composer. Composer is hidden by default to reclaim
+  # vertical space — the textarea no longer sits empty under every
+  # focused cell.
   def header
     div(class: "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
                "text-gray-500 dark:text-gray-400 mb-1") do
       span { "Comments" }
       span(class: "font-mono") { "(#{visible_count})" } if visible_count.positive?
+      add_icon if @can_create
+    end
+  end
+
+  def add_icon
+    button(
+      type: "button",
+      class: "ml-auto rounded p-0.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
+             "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+      aria: { label: "Add a comment" },
+      data: { action: "click->comments-thread#toggleComposer" }
+    ) do
+      span(class: "block text-sm leading-none", aria_hidden: "true") { "+" }
     end
   end
 
@@ -119,17 +136,19 @@ class Views::Assessments::Comments::Thread < Views::Base
     comment.author_id == @viewer_person_id || @tenant_admin
   end
 
-  # Inline composer at the bottom of the thread. Submitting posts a new
-  # top-level comment scoped to this cell. The form is always visible
-  # (no hover-reveal) because the focused cell is itself an explicit
-  # focus — once the user is in the cell, the affordance to comment
-  # should be obvious.
+  # Inline composer at the bottom of the thread. Hidden by default;
+  # the `+` icon in the header toggles it open. Once posted the
+  # `submitted` Stimulus action clears the textarea and re-hides the
+  # composer so the next interaction returns to the compact state.
   def composer
     form(
       action: assessment_comments_path(@assessment_id),
       method: "post",
-      class: "mt-2",
-      data: { action: "turbo:submit-end->comments-thread#submitted" }
+      class: "hidden mt-2",
+      data: {
+        comments_thread_target: "composer",
+        action: "turbo:submit-end->comments-thread#submitted"
+      }
     ) do
       input(type: "hidden", name: "authenticity_token",
             value: view_context.form_authenticity_token)

@@ -33,9 +33,15 @@ class Views::Assessments::AssessmentCell < Views::Base
   #   primary frequency as a read-only bar (alignment has been started)
   # @param alignment_locked [Boolean] when true and context is :alignment, render
   #   the primary frequency as a read-only bar (alignment has been completed)
+  # @param focused [Boolean] when true, render the `<td>` with
+  #   `data-focused="true"` already stamped. Used by the rating
+  #   controllers' Turbo Stream responses — the rated cell is always
+  #   the focused cell (focusCell runs before form submit), so baking
+  #   the attribute in avoids a flash of un-focused state while
+  #   MutationObserver waits to re-stamp.
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:, assessment_id:, context: :self,
                  capability_id: nil, capability_name: nil, level_label: nil,
-                 category_id: nil, frozen: false, alignment_locked: false)
+                 category_id: nil, frozen: false, alignment_locked: false, focused: false)
     @cell_data = cell_data
     @capability_id = capability_id
     @capability_name = capability_name
@@ -48,6 +54,7 @@ class Views::Assessments::AssessmentCell < Views::Base
     @category_id = category_id
     @frozen = frozen
     @alignment_locked = alignment_locked
+    @focused = focused
   end
 
   # Accessible name for the focusable cell control. Includes
@@ -87,42 +94,18 @@ class Views::Assessments::AssessmentCell < Views::Base
     # via Tailwind's `group-data-[focus-compact=true]/assess-cell:*`
     # variants — e.g. wrapping the rating buttons when the column
     # shrinks under cell-focus.
+    # When focused, drop the bottom border so the compact cell flows
+    # visually into the expanded `<td>` below it.
     td(
       id: "cell-#{@capability_stable_id}-#{@ordinal}",
       class: "relative px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top " \
+             "data-[focused=true]:border-b-0 " \
              "min-w-[180px] cursor-pointer group/assess-cell focus:outline-none " \
              "focus-visible:ring-2 focus-visible:ring-primary #{cell_background}",
       tabindex: "0",
       role: "button",
       aria: { label: focus_cell_aria_label },
-      data: {
-        # `data-level-ordinal` lets matrix_controller#applyColumnFocus
-        # find this compact cell when stamping `data-focus-compact` on
-        # siblings of the focused column.
-        level_ordinal: @ordinal,
-        # Compact-cell click (or Enter/Space when keyboard-focused on
-        # the cell ITSELF — `.self` keeps nested rating buttons free
-        # to handle their own keyboard activation) triggers cell
-        # focus AND expands the row. The `focus-on-button-click`
-        # flag tells focusCell to NOT bail when the click lands on a
-        # rating button — we want both the rating to submit AND the
-        # cell to focus.
-        action: "click->matrix#focusCell " \
-                "keydown.enter.self->matrix#focusCell " \
-                "keydown.space.self->matrix#focusCell:prevent",
-        capability_id: @capability_id,
-        capability_stable_id: @capability_stable_id,
-        expectation_id: @cell_data.dig(:expectation)&.expectation_id,
-        focus_on_button_click: "true",
-        # Once the user has focused this cell, clicking inside it again
-        # must not unfocus — the canonical way to exit focus is the ×
-        # close button (focus_close_button). Without this opt-out the
-        # user can toggle focus off by clicking on the evidence text /
-        # illustration body, which feels like a bug. The framework
-        # explorer keeps the bg-click-toggle behaviour by NOT setting
-        # this attribute.
-        bg_unfocus: "false"
-      }
+      data: data_attrs
     ) do
       focus_close_button
       expectation_text
@@ -130,6 +113,44 @@ class Views::Assessments::AssessmentCell < Views::Base
       primary_selector
       indicators
     end
+  end
+
+  def data_attrs
+    attrs = {
+      # `data-level-ordinal` lets matrix_controller#applyColumnFocus
+      # find this compact cell when stamping `data-focus-compact` on
+      # siblings of the focused column.
+      level_ordinal: @ordinal,
+      # Compact-cell click (or Enter/Space when keyboard-focused on
+      # the cell ITSELF — `.self` keeps nested rating buttons free
+      # to handle their own keyboard activation) triggers cell
+      # focus AND expands the row. The `focus-on-button-click`
+      # flag tells focusCell to NOT bail when the click lands on a
+      # rating button — we want both the rating to submit AND the
+      # cell to focus.
+      action: "click->matrix#focusCell " \
+              "keydown.enter.self->matrix#focusCell " \
+              "keydown.space.self->matrix#focusCell:prevent",
+      capability_id: @capability_id,
+      capability_stable_id: @capability_stable_id,
+      expectation_id: @cell_data.dig(:expectation)&.expectation_id,
+      focus_on_button_click: "true",
+      # Once the user has focused this cell, clicking inside it again
+      # must not unfocus — the canonical way to exit focus is the ×
+      # close button (focus_close_button). Without this opt-out the
+      # user can toggle focus off by clicking on the evidence text /
+      # illustration body, which feels like a bug. The framework
+      # explorer keeps the bg-click-toggle behaviour by NOT setting
+      # this attribute.
+      bg_unfocus: "false"
+    }
+    # Server-side stamp of `data-focused="true"` for the rating
+    # controllers' Turbo Stream re-renders — the rated cell is always
+    # the focused cell (focusCell runs before form submit), so without
+    # this the user sees a brief flash of indicator badges between
+    # paint and matrix_controller's MutationObserver re-stamp.
+    attrs[:focused] = "true" if @focused
+    attrs
   end
 
   # Close-focus button — top-right of the compact cell. Hidden by
@@ -149,19 +170,27 @@ class Views::Assessments::AssessmentCell < Views::Base
   end
 
   # Compact-cell footer indicators: illustration count + evidence count.
-  # Hidden when both are zero so the cell stays dense, and hidden on
-  # the focused cell (the full illustration list and evidence section
-  # render in the expanded cell below — the badges would just repeat
-  # what's already visible). Sibling cells in the focused row, and
-  # every cell in non-focused rows, keep their badges so the user
-  # has situational awareness of which cells carry content.
+  # Hidden when all are zero so the cell stays dense.
+  #
+  # Hidden on the focused cell — the full illustration list and
+  # evidence section render in the expanded cell below, so the badges
+  # would just repeat what's already visible.
+  #
+  # Hidden on non-focused cells when ANY cell is focused
+  # (`group-data-[focus-compact=true]/assess-cell:hidden`) so sibling
+  # cells in the focused row don't push the row height above the
+  # focused cell's natural content height — the focused column widens
+  # to 512px and its buttons fit on one row, while sibling columns
+  # stay at 280px and wrap; without this, the focused cell would
+  # render visible wasted space above/below its content.
   def indicators
     return if !@cell_data[:illustration_count]&.positive? &&
               !@cell_data[:evidence_count]&.positive? &&
               !@cell_data[:comment_count]&.positive?
 
     div(class: "mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 " \
-               "group-data-[focused=true]/assess-cell:hidden") do
+               "group-data-[focused=true]/assess-cell:hidden " \
+               "group-data-[focus-compact=true]/assess-cell:hidden") do
       illustration_indicator if @cell_data[:illustration_count]&.positive?
       evidence_indicator if @cell_data[:evidence_count]&.positive?
       comment_indicator if @cell_data[:comment_count]&.positive?
@@ -214,11 +243,17 @@ class Views::Assessments::AssessmentCell < Views::Base
   end
 
   # Read-only bars for secondary rating perspectives.
+  #
+  # Hidden on non-focused cells when any cell is focused — same
+  # row-height-collapse rationale as {#indicators}. Secondary
+  # perspectives are contextual; during focus mode the focused cell's
+  # bars (which stay visible — only `data-focus-compact` siblings
+  # hide) carry the comparative info the user came for.
   def secondary_bars
     bars = secondary_rating_entries
     return if bars.empty?
 
-    div(class: "mt-1.5") do
+    div(class: "mt-1.5 group-data-[focus-compact=true]/assess-cell:hidden") do
       bars.each do |entry|
         render Views::Assessments::FrequencyBar.new(
           label: entry[:label],

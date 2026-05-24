@@ -158,8 +158,8 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
   context "evidence modal" do
     # The full create flow is covered end-to-end by the integration test in
     # test/controllers/assessments/evidence_controller_test.rb. The system
-    # test's unique value is asserting the Stimulus wiring: the
-    # hover-revealed "+ Add evidence" trigger inside the matrix turbo-frame
+    # test's unique value is asserting the Stimulus wiring: the `+` Add
+    # affordance next to the EVIDENCE header inside the matrix turbo-frame
     # actually opens the modal hosted on the page wrapper, and the
     # capability + level coords are primed correctly.
     should "open with the cell's capability and level pre-populated" do
