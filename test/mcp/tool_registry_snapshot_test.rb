@@ -38,6 +38,21 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_get",
+        "description" => "Fetch one assessment's framework structure and the assessee's current role/level/cycle status.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "assignment_id" => { "type" => "string" } },
+          "required" => [ "assignment_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "assessments_mine",
         "description" => "List the caller's own assessment assignments and those of their direct reports.",
         "inputSchema" => {
@@ -72,6 +87,21 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => false,
           "destructiveHint" => false,
           "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_get",
+        "description" => "Fetch one framework's top-level structure (role families, categories, child IDs and names).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "framework_id" => { "type" => "string" } },
+          "required" => [ "framework_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
         }
       },
       {

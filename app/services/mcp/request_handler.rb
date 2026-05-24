@@ -65,9 +65,11 @@ class Mcp::RequestHandler
 
   def dispatch(method, params)
     case method
-    when "initialize"  then handle_initialize(params)
-    when "tools/list"  then handle_tools_list
-    when "tools/call"  then handle_tools_call(params)
+    when "initialize"     then handle_initialize(params)
+    when "tools/list"     then handle_tools_list
+    when "tools/call"     then handle_tools_call(params)
+    when "resources/list" then handle_resources_list
+    when "resources/read" then handle_resources_read(params)
     else raise MethodNotFound, "unknown method: #{method}"
     end
   end
@@ -75,8 +77,26 @@ class Mcp::RequestHandler
   def handle_initialize(_params)
     {
       protocolVersion: PROTOCOL_VERSION,
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, resources: {} },
       serverInfo: { name: SERVER_NAME, version: SERVER_VERSION }
+    }
+  end
+
+  def handle_resources_list
+    { resources: Mcp::ResourceRegistry.list(context: @context) }
+  end
+
+  def handle_resources_read(params)
+    uri = params["uri"].to_s
+    payload = Mcp::ResourceRegistry.read(uri: uri, context: @context)
+    {
+      contents: [
+        {
+          uri: uri,
+          mimeType: "application/json",
+          text: JSON.generate(payload)
+        }
+      ]
     }
   end
 

@@ -76,12 +76,25 @@ class McpClaudeCliTest < ActiveSupport::TestCase
   end
 
   should "list and invoke the system_whoami tool end to end" do
+    # The tenant id is a freshly-minted UUID v7, so it cannot be in the
+    # CLI's auto-memory or training context. Asserting on it proves the
+    # tool was actually invoked (a previous version asked for the email
+    # and the CLI answered from auto-memory without calling the tool).
     stdout = run_claude_cli(
-      "Use the system_whoami tool and report back the user's email exactly as it appears.",
+      "You MUST call the mcp__growth_os__system_whoami tool right now. " \
+      "Do NOT answer from your own knowledge, memory, or context — only the " \
+      "tool can answer this. After receiving the tool's response, return ONLY " \
+      "the value of result.tenant.id, with no other text.",
       config_path: @config_path
     )
 
-    assert_match(/#{Regexp.escape(@user.email)}/, stdout,
-      "claude CLI output should mention the user's email after calling system_whoami")
+    # The tenant UUID is freshly minted per test run, so it can't appear
+    # in the CLI's auto-memory or training data. Matching it in stdout
+    # is a strong signal the tool was actually invoked. An earlier
+    # weaker version of this test asked for the email and the CLI
+    # answered from memory without calling the tool — keep the prompt
+    # explicit AND the asserted value test-local-only.
+    assert_match(/#{Regexp.escape(@tenant.id)}/, stdout,
+      "claude CLI output should contain the tenant id from system_whoami's response")
   end
 end

@@ -269,6 +269,83 @@ class McpServerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "resources/list + resources/read" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        framework_id = SecureRandom.uuid_v7
+        create(:framework_state, framework_id: framework_id, name: "Engineering")
+        rf = create(:framework_role_family, framework_id: framework_id, name: "Eng")
+        role  = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
+        level = create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Mid", code: "E2")
+        create(:framework_capability_category, framework_id: framework_id, name: "Thinking", ordinal: 1)
+
+        PersonDevelopment::CommandHandler.new
+          .assign_to_framework(@person.id, framework_id, role.role_id, level.level_id)
+        @resource_framework_id = framework_id
+        @resource_assignment   = PersonFrameworkAssignment.for_person(@person.id).first
+      end
+    end
+
+    should "list framework:// and assessment:// resources visible to the caller" do
+      post_mcp({ jsonrpc: "2.0", id: 300, method: "resources/list" })
+
+      assert_response :success
+      resources = json_body.dig("result", "resources")
+      uris = resources.map { |r| r["uri"] }
+      assert_includes uris, "framework://#{@resource_framework_id}"
+      assert_includes uris, "assessment://#{@resource_assignment.id}"
+    end
+
+    should "read a framework:// resource and return the Frameworks::Get payload" do
+      post_mcp({
+        jsonrpc: "2.0", id: 301, method: "resources/read",
+        params: { uri: "framework://#{@resource_framework_id}" }
+      })
+
+      assert_response :success
+      contents = json_body.dig("result", "contents")
+      assert_equal 1, contents.size
+      assert_equal "application/json", contents.first["mimeType"]
+      payload = JSON.parse(contents.first["text"])
+      assert_equal "Engineering", payload["name"]
+      assert_equal [ "Thinking" ], payload["categories"].map { |c| c["name"] }
+    end
+
+    should "read an assessment:// resource and return the Assessments::Get payload" do
+      post_mcp({
+        jsonrpc: "2.0", id: 302, method: "resources/read",
+        params: { uri: "assessment://#{@resource_assignment.id}" }
+      })
+
+      assert_response :success
+      payload = JSON.parse(json_body.dig("result", "contents", 0, "text"))
+      assert_equal "Engineering", payload.dig("framework", "name")
+      assert_equal @resource_assignment.id, payload.dig("assignment", "id")
+    end
+
+    should "return JSON-RPC -32601 for an unknown resource URI" do
+      post_mcp({
+        jsonrpc: "2.0", id: 303, method: "resources/read",
+        params: { uri: "junk://nope" }
+      })
+
+      assert_response :success
+      err = json_body["error"]
+      assert_equal(-32601, err["code"])
+    end
+  end
+
+  context "initialize advertises resources capability" do
+    should "include resources alongside tools in capabilities" do
+      post_mcp({ jsonrpc: "2.0", id: 400, method: "initialize" })
+
+      assert_response :success
+      caps = json_body.dig("result", "capabilities")
+      assert caps["tools"].is_a?(Hash)
+      assert caps["resources"].is_a?(Hash)
+    end
+  end
+
   context "protocol errors" do
     should "return JSON-RPC -32601 for an unknown method" do
       post_mcp({ jsonrpc: "2.0", id: 5, method: "does/not/exist" })
