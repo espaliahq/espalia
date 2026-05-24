@@ -55,6 +55,12 @@ class Mcp::ServerController < ActionController::Base
     payload = JSON.parse(request.body.read)
     context = authorization_context
     return render_token_error(:user_missing) if context.nil?
+    # set_tenant_from_token already verified the membership exists; this
+    # closes the TOCTOU window where the TenantUser was deleted between
+    # the before_action's `exists?` check and `authorization_context`'s
+    # `find_by`. If it disappeared, fail closed rather than dispatching
+    # against a half-populated AuthorizationContext.
+    return render_token_error(:membership_revoked) if context.tenant_user.nil?
 
     response_body = AuditMetadata.with(
       acting_via: :mcp,

@@ -53,11 +53,25 @@ class Mcp::ApprovalsController < ApplicationController
   end
 
   # POST /mcp/approvals/:id/reject
+  #
+  # Same row-lock + re-check pattern as #approve. Without it, an approve
+  # racing a reject on the same row could let both succeed (the second
+  # write silently overwriting the first), leaving the operation
+  # executed but the row marked rejected.
   def reject
     authorize @approval
-    return redirect_to mcp_approval_path(@approval), alert: stale_alert unless @approval.resolvable?
 
-    @approval.update!(status: :rejected)
+    Mcp::PendingApproval.transaction do
+      locked = ActsAsTenant.without_tenant { Mcp::PendingApproval.lock.find(@approval.id) }
+      unless locked.resolvable?
+        @approval = locked
+        return redirect_to mcp_approval_path(@approval), alert: stale_alert
+      end
+
+      locked.update!(status: :rejected)
+      @approval = locked
+    end
+
     redirect_to mcp_approval_path(@approval), notice: "Operation rejected."
   end
 
