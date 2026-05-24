@@ -6,6 +6,18 @@ Rails.application.routes.draw do
   # Doorkeeper; see Mcp::ServerController.
   post "/mcp", to: "mcp/server#create", as: :mcp_server
 
+  # OAuth discovery — public, unauthenticated. Lets MCP clients hit /mcp
+  # cold and follow the WWW-Authenticate pointer all the way to a token
+  # without any manual config beyond the bare server url.
+  get "/.well-known/oauth-protected-resource",
+    to: "mcp/well_known#oauth_protected_resource", as: :oauth_protected_resource
+  get "/.well-known/oauth-authorization-server",
+    to: "mcp/well_known#oauth_authorization_server", as: :oauth_authorization_server
+
+  # OAuth 2.0 Dynamic Client Registration (RFC 7591). Public; MCP clients
+  # register themselves so users don't paste client ids around.
+  post "/oauth/register", to: "mcp/client_registrations#create", as: :oauth_register
+
   # User-facing settings — for now just the connected MCP clients page;
   # other settings live elsewhere historically.
   namespace :settings do

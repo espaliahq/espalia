@@ -51,6 +51,14 @@ Doorkeeper.configure do
   # Bearer-only — the MCP server consumes tokens from the Authorization header.
   access_token_methods :from_bearer_authorization
 
+  # MCP CLI clients register with a loopback redirect_uri (e.g.
+  # `http://localhost:<random_port>/callback`). Doorkeeper's default
+  # `force_ssl_in_redirect_uri` rejects http in any non-development env;
+  # opt out so DCR works in test too, and in production keep it on for
+  # everyone EXCEPT localhost. Localhost-with-http is explicitly permitted
+  # by the OAuth 2.1 BCP for native and CLI clients.
+  force_ssl_in_redirect_uri { |uri| !%w[localhost 127.0.0.1].include?(uri.host) }
+
   # `tenant_id` is declared as a custom token attribute so Doorkeeper:
   #   - slices it from the consent-form POST into PreAuthorization
   #   - merges it into the AccessGrant when the authorisation code is issued

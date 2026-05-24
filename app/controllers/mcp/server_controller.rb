@@ -14,8 +14,41 @@
 # session-authenticated, and the user identity comes from the token's
 # resource_owner_id.
 class Mcp::ServerController < ActionController::Base
+  # API endpoint authenticated by Bearer token, not session — CSRF
+  # protection would 422 every POST before Doorkeeper sees the token
+  # and decides whether to 401.
+  skip_forgery_protection
+
   before_action :doorkeeper_authorize!
   before_action :set_tenant_from_token
+
+  # Override Doorkeeper's default 401 response so the WWW-Authenticate
+  # header points MCP clients at our OAuth discovery doc (RFC 9728). Without
+  # this an unauth'd client gets `WWW-Authenticate: Bearer realm="..."`
+  # which tells them nothing about WHERE to authenticate. Claude Code (and
+  # MCP clients in general) follow the `resource_metadata=` pointer to
+  # discover the auth server, kick off PKCE, and dynamically register
+  # themselves — all without any manual config in .mcp.json beyond `url`.
+  def doorkeeper_render_error_with(error)
+    headers.merge!(error.headers)
+    headers["WWW-Authenticate"] = www_authenticate_header
+    render json: error.body, status: error.status
+  end
+
+  private
+
+  def www_authenticate_header
+    resource_metadata = url_for(
+      controller: "mcp/well_known",
+      action: "oauth_protected_resource",
+      only_path: false,
+      host: request.host_with_port,
+      protocol: request.protocol
+    )
+    %(Bearer realm="MCP", resource_metadata="#{resource_metadata}")
+  end
+
+  public
 
   # POST /mcp
   def create
