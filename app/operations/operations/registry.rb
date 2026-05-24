@@ -52,8 +52,12 @@ class Operations::Registry
     end
 
     # Test seam — wipe between test runs that load throwaway subclasses.
+    # Also resets `@loaded` so the next read re-eager-loads the operations
+    # subtree; otherwise the registry would stay empty for the rest of the
+    # process after `reset!`.
     def reset!
       @all = []
+      @loaded = false
     end
 
     private
