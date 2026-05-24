@@ -42,6 +42,7 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       cycles_handler.enroll(@cycle_id, @person.id, enrolled_by: @person.id)
 
       @framework_id = framework_id
+      @assignment = PersonFrameworkAssignment.for_person(@person.id).first
     end
 
     @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
@@ -52,7 +53,7 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       Operations::Assessments::RateSelf.call(
         context: @context,
         params: {
-          framework_id: @framework_id,
+          assignment_id: @assignment.id,
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           frequency: frequency,
@@ -136,7 +137,7 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
         Operations::Assessments::RateSelf.call(
           context: @context,
           params: {
-            framework_id: @framework_id,
+            assignment_id: @assignment.id,
             capability_stable_id: @cap.stable_id,
             level_ordinal: 2,
             frequency: "always"

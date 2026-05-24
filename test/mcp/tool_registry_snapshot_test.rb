@@ -38,6 +38,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_align",
+        "description" => "Record the aligned (agreed) frequency for one capability × level.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
+            "comment"              => { "type" => "string" }
+          },
+          "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_capability_get",
         "description" => "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned).",
         "inputSchema" => {
@@ -86,19 +107,41 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
-        "name" => "assessments_rate_self",
-        "description" => "Record or update your own rating for one capability × level.",
+        "name" => "assessments_rate_as_manager",
+        "description" => "Record or update a manager rating for one of your direct reports' capability × level.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "framework_id"         => { "type" => "string" },
+            "assignment_id"        => { "type" => "string" },
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" }
           },
-          "required" => %w[framework_id capability_stable_id level_ordinal frequency],
+          "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_rate_self",
+        "description" => "Record or update your own rating for one capability × level.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
+            "comment"              => { "type" => "string" },
+            "rationale"            => { "type" => "string" }
+          },
+          "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
         },
         "annotations" => {

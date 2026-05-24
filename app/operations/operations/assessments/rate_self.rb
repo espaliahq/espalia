@@ -1,20 +1,25 @@
 # frozen_string_literal: true
 
-# Records a self-rating for one capability × level. Mirrors the web
-# RatingsController behaviour: setting the same frequency twice clears
-# the rating (untoggle), an existing-but-different value is a revise,
-# and a fresh value is a new rate.
+# Records a self-rating for one capability × level on the named
+# assignment. Mirrors the web RatingsController behaviour: setting the
+# same frequency twice clears the rating (untoggle), an existing-but-
+# different value is a revise, and a fresh value is a new rate.
 #
 # Write — :mcp_client approval. Users can rate themselves without any
 # extra in-app handoff because no permissions or other users are
 # affected; the MCP client's own write-approval prompt is the right
 # friction.
+#
+# Input shape is shared with {Operations::Assessments::RateAsManager}
+# and {Operations::Assessments::Align}: all three take `assignment_id`
+# (uniformly identifying whose assessment is being touched) plus the
+# capability/level/frequency triple. Pundit decides who can do what.
 class Operations::Assessments::RateSelf < Operations::Base
   description "Record or update your own rating for one capability × level."
   category :write
   approval :mcp_client
 
-  parameter :framework_id,         String, required: true
+  parameter :assignment_id,        String, required: true
   parameter :capability_stable_id, String, required: true
   parameter :level_ordinal,        Integer, required: true
   parameter :frequency, String, required: true,
@@ -23,8 +28,6 @@ class Operations::Assessments::RateSelf < Operations::Base
   parameter :rationale, String
 
   def policy_check
-    raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
-
     authorize assignment, :create_self_rating?
   end
 
@@ -34,11 +37,11 @@ class Operations::Assessments::RateSelf < Operations::Base
 
     dispatch(cycle.cycle_id)
     {
-      framework_id: params[:framework_id],
+      framework_id: assignment.framework_id,
       capability_stable_id: params[:capability_stable_id],
       level_ordinal: params[:level_ordinal],
       cycle_id: cycle.cycle_id,
-      frequency: resulting_frequency(cycle)
+      frequency: resulting_frequency(cycle.cycle_id)
     }
   end
 
@@ -50,18 +53,18 @@ class Operations::Assessments::RateSelf < Operations::Base
 
     if existing_freq == params[:frequency]
       handler.clear_self_rating(
-        context.person.id, params[:framework_id], params[:capability_stable_id],
+        assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], cycle_id: cycle_id
       )
     elsif existing_freq.present?
       handler.revise_self_rating(
-        context.person.id, params[:framework_id], params[:capability_stable_id],
+        assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
         rationale: rationale_for_revision, cycle_id: cycle_id, comment: params[:comment]
       )
     else
       handler.rate_self(
-        context.person.id, params[:framework_id], params[:capability_stable_id],
+        assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
         cycle_id: cycle_id, comment: params[:comment]
       )
@@ -71,25 +74,22 @@ class Operations::Assessments::RateSelf < Operations::Base
   def existing_rating(cycle_id)
     AssessmentLevelRating.find_by(
       cycle_id: cycle_id,
-      person_id: context.person.id,
-      framework_id: params[:framework_id],
+      person_id: assignment.person_id,
+      framework_id: assignment.framework_id,
       capability_stable_id: params[:capability_stable_id],
       level_ordinal: params[:level_ordinal]
     )
   end
 
-  def resulting_frequency(cycle)
+  def resulting_frequency(cycle_id)
     # Untoggle path returns nil; otherwise the value the caller submitted
     # IS what will be persisted. Re-read once to confirm what the
     # projection settled on.
-    existing_rating(cycle.cycle_id)&.self_rated_frequency
+    existing_rating(cycle_id)&.self_rated_frequency
   end
 
   def assignment
-    @assignment ||= PersonFrameworkAssignment.find_by!(
-      person_id: context.person.id,
-      framework_id: params[:framework_id]
-    )
+    @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
   end
 
   # Caller-supplied rationale wins; otherwise we record a value specific
