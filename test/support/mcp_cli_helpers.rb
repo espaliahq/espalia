@@ -20,6 +20,9 @@ module McpCliHelpers
   CLI_TIMEOUT_SECONDS = 60
 
   # Lazily memoised — `which` is cheap but we do it per-process not per-test.
+  # Auth is intentionally NOT checked here: local devs rely on an interactive
+  # `claude login` session (no env var present) and the CLI picks that up
+  # automatically. CI sets CLAUDE_CODE_OAUTH_TOKEN via repo secret instead.
   def self.cli_available?
     return @cli_available if defined?(@cli_available)
 
@@ -80,11 +83,15 @@ module McpCliHelpers
     # transient session on disk (otherwise they pile up in the
     # /resume picker and the IDE's session list). Only works with
     # --print, which we already use.
+    # Pin to Sonnet — these tests just need a model capable enough to
+    # follow a forceful tool-use prompt; spending Opus tokens on parity
+    # checks is wasteful. Override with CLAUDE_TEST_MODEL when debugging.
     cmd = [
       CLAUDE_CLI,
       prompt,
       "--print",
       "--no-session-persistence",
+      "--model", ENV.fetch("CLAUDE_TEST_MODEL", "sonnet"),
       "--mcp-config", config_path,
       "--permission-mode", "acceptEdits",
       "--allowed-tools", "mcp__growth_os__*"
