@@ -20,6 +20,12 @@ class Operations::Assessments::Mine < Operations::Base
     authorize PersonFrameworkAssignment, :index?
   end
 
+  # @return [Hash{Symbol=>Array<Hash>}] two-key payload:
+  #   - `:own` — assignments where the caller is the assessee. Each row has
+  #     `:id, :framework{id,name,current_published_version}, :role{id,code,name},
+  #     :level{id,ordinal,title}, :current_cycle{id,name,status,planned_end_at}|nil`.
+  #   - `:direct_reports` — same shape, plus `:assessee{id,name,email}` for
+  #     the person being assessed.
   def perform
     own = preload(PersonFrameworkAssignment.for_person(context.person.id)).to_a
     reports = report_assignments
