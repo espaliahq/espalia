@@ -14,11 +14,13 @@
 class Mcp::OperationToTool
   # Map Ruby parameter types to JSON Schema primitive types.
   TYPE_MAPPING = {
-    String   => "string",
-    Integer  => "integer",
-    Float    => "number",
-    TrueClass => "boolean",
-    FalseClass => "boolean"
+    String     => "string",
+    Integer    => "integer",
+    Float      => "number",
+    TrueClass  => "boolean",
+    FalseClass => "boolean",
+    Hash       => "object",
+    Array      => "array"
   }.freeze
 
   # @param operation_class [Class<Operations::Base>]

@@ -178,9 +178,13 @@ class Operations::Base
   #
   # @param record [Object] the resource being authorized
   # @param query [Symbol] policy method (e.g. `:show?`)
+  # @param policy_class [Class, nil] overrides the inferred policy class —
+  #   matches the controller-side `authorize record, query, policy_class: X`
+  #   call shape (used e.g. when EvidencePolicy authorizes an
+  #   PersonFrameworkAssignment record).
   # @raise [Pundit::NotAuthorizedError]
-  def authorize(record, query)
-    Pundit.authorize(context, record, query)
+  def authorize(record, query, policy_class: nil)
+    Pundit.authorize(context, record, query, policy_class: policy_class)
   end
 
   private

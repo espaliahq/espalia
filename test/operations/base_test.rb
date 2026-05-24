@@ -139,11 +139,14 @@ class Operations::BaseTest < ActiveSupport::TestCase
       end
     end
 
-    should "forward authorize to Pundit with the context" do
+    should "forward authorize to Pundit with the context (+ optional policy_class)" do
       record = Object.new
       seen = nil
-      authorize_stub = lambda do |user, rec, query|
-        seen = { user: user, record: rec, query: query }
+      # Matches Pundit.authorize's controller-side signature including
+      # the policy_class: kwarg — Operations::Base#authorize now passes
+      # it through so callers can override the inferred policy class.
+      authorize_stub = lambda do |user, rec, query, policy_class: nil|
+        seen = { user: user, record: rec, query: query, policy_class: policy_class }
         rec
       end
 
@@ -161,6 +164,28 @@ class Operations::BaseTest < ActiveSupport::TestCase
       assert_same ctx, seen[:user]
       assert_same record, seen[:record]
       assert_equal :show?, seen[:query]
+      assert_nil seen[:policy_class]
+    end
+
+    should "forward an explicit policy_class to Pundit when supplied" do
+      record = Object.new
+      seen_class = nil
+      custom_policy = Class.new
+      authorize_stub = lambda do |_user, rec, _query, policy_class: nil|
+        seen_class = policy_class
+        rec
+      end
+
+      op_class = Class.new(Operations::Base) do
+        define_method(:policy_check) { authorize(record, :show?, policy_class: custom_policy) }
+        define_method(:perform) { :ok }
+      end
+
+      Pundit.stub(:authorize, authorize_stub) do
+        op_class.call(context: build_context, params: {})
+      end
+
+      assert_same custom_policy, seen_class
     end
 
     should "propagate Pundit::NotAuthorizedError raised by authorize" do

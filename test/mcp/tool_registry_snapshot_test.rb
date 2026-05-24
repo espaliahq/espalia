@@ -151,6 +151,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_record_evidence",
+        "description" => "Record a piece of evidence against a capability × level on an assessment.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "evidence_type"        => { "type" => "string", "enum" => EvidenceItem::EVIDENCE_TYPES },
+            "custom_type_label"    => { "type" => "string" },
+            "title"                => { "type" => "string" },
+            "content"              => { "type" => "string" },
+            "external_reference"   => { "type" => "object" }
+          },
+          "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_capability_get",
         "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations.",
         "inputSchema" => {
