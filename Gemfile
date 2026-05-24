@@ -29,6 +29,12 @@ gem "devise", "~> 5.0.3"
 # OAuth-2.1-aligned posture without needing a 2.1-native gem. See
 # config/initializers/doorkeeper.rb.
 gem "doorkeeper", "~> 5.7"
+
+# Throttles abuse-prone endpoints (specifically MCP Dynamic Client
+# Registration at POST /oauth/register, which is public and DB-writing).
+# See config/initializers/rack_attack.rb.
+gem "rack-attack", "~> 6.7"
+
 gem "omniauth-google-oauth2", "~> 1.2"
 gem "omniauth-rails_csrf_protection", "~> 2.0"
 gem "invisible_captcha", "~> 2.0"

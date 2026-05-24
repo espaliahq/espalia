@@ -41,7 +41,14 @@ class Mcp::WellKnownController < ActionController::Base
 
   private
 
+  # OAuth 2.0 issuer must be a STABLE long-lived identifier — RFC 8414 §2
+  # and RFC 9207 require clients to do exact-match validation. Behind a
+  # proxy / load balancer, `request.base_url` flips based on
+  # X-Forwarded-Host / X-Forwarded-Proto and would silently break token
+  # validation on any deploy with an LB in front. Prefer the configured
+  # value; only fall back to `request.base_url` in development where the
+  # canonical URL is the dev server itself.
   def issuer
-    request.base_url
+    Rails.application.config.x.oauth_issuer.presence || request.base_url
   end
 end
