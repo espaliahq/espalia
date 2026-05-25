@@ -33,7 +33,7 @@ $stdout.sync = true
 
   [
     { slug: "meandu", name: "me&u", primary_color: "#00362F", secondary_color: "#001814",
-      nav_bg_color: "#DBFC45", nav_fg_color: "#001814", font_family: "Syne",
+      nav_bg_color: "#DBFC45", nav_fg_color: "#001814", font_family: "Zalando Sans Regular",
       primary_color_dark: "#5ee0a0", secondary_color_dark: "#3a9a6a",
       nav_bg_color_dark: "#0a1f1a", nav_fg_color_dark: "#DBFC45" },
     { slug: "testco", name: "Testco", primary_color: "#6366f1", secondary_color: "#4f46e5",

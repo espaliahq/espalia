@@ -20,10 +20,11 @@ class Views::Integrations::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Kit::TenantAdminLayout.new(
+      active_section: :integrations,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(class: "max-w-5xl mx-auto px-4 py-8") do
+      div(class: "max-w-5xl mx-auto") do
         page_header
         integration_grid
       end
@@ -46,7 +47,7 @@ class Views::Integrations::IndexView < Views::Base
   end
 
   def hris_card
-    a(href: integration_path("hris"), class: "block group") do
+    a(href: tenant_integration_path("hris"), class: "block group") do
       render Components::Kit::Card.new do |card|
         card.body do
           div(class: "flex items-start justify-between") do

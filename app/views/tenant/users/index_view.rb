@@ -21,7 +21,8 @@ class Views::Tenant::Users::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Kit::TenantAdminLayout.new(
+      active_section: :users,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       page_header

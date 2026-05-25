@@ -58,12 +58,22 @@ Rails.application.routes.draw do
   end
 
   namespace :tenant do
+    root to: "dashboard#show", as: :root
+
+    resource :theme, only: [ :show, :update ], controller: "themes"
+
     resources :users, only: [ :index, :show, :update ] do
       resources :collaborators,
                 only: [ :create, :destroy ],
                 controller: "users/collaborators"
       member do
         get :collaborator_scope_picker
+      end
+    end
+
+    resources :integrations, only: [ :index, :show ] do
+      member do
+        post :sync
       end
     end
   end
@@ -146,12 +156,6 @@ Rails.application.routes.draw do
       collection do
         post :bulk
       end
-    end
-  end
-
-  resources :integrations, only: [ :index, :show ] do
-    member do
-      post :sync
     end
   end
 

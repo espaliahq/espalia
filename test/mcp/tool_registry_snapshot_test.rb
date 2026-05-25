@@ -236,6 +236,31 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "destructiveHint" => false,
           "idempotentHint" => true
         }
+      },
+      {
+        "name" => "tenants_update_theme",
+        "description" => "Update the active tenant's theme (brand colors and font).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "primary_color"        => { "type" => "string" },
+            "primary_color_dark"   => { "type" => "string" },
+            "secondary_color"      => { "type" => "string" },
+            "secondary_color_dark" => { "type" => "string" },
+            "nav_bg_color"         => { "type" => "string" },
+            "nav_bg_color_dark"    => { "type" => "string" },
+            "nav_fg_color"         => { "type" => "string" },
+            "nav_fg_color_dark"    => { "type" => "string" },
+            "font_family"          => { "type" => "string" }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
       }
     ]
   end

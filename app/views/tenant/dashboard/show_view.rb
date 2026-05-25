@@ -1,0 +1,66 @@
+# frozen_string_literal: true
+
+# Tenant administration dashboard. Three tiles linking to each admin
+# section. Sidebar navigation lives in {Components::Kit::TenantAdminLayout}.
+#
+class Views::Tenant::Dashboard::ShowView < Views::Base
+  TILES = [
+    {
+      label: "Theme",
+      href: "/tenant/theme",
+      description: "Brand colors and typography for this tenant."
+    },
+    {
+      label: "Users",
+      href: "/tenant/users",
+      description: "Manage tenant memberships and framework collaborator roles."
+    },
+    {
+      label: "Integrations",
+      href: "/tenant/integrations",
+      description: "HRIS sync and other external systems."
+    }
+  ].freeze
+
+  # @param user [User]
+  # @param current_tenant [Tenant]
+  # @param tenants [Array<Tenant>]
+  def initialize(user:, current_tenant:, tenants: [])
+    @user = user
+    @current_tenant = current_tenant
+    @tenants = tenants
+  end
+
+  def view_template
+    render Components::Kit::TenantAdminLayout.new(
+      active_section: :dashboard,
+      user: @user, current_tenant: @current_tenant, tenants: @tenants
+    ) do
+      render Components::Kit::SectionHeading.new(
+        "Tenant administration",
+        subtitle: "Manage settings for #{@current_tenant.name}."
+      )
+      tile_grid
+    end
+  end
+
+  private
+
+  def tile_grid
+    div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
+      TILES.each { |tile| tile_card(tile) }
+    end
+  end
+
+  def tile_card(tile)
+    a(
+      href: tile[:href],
+      class: "block bg-white dark:bg-gray-800 rounded-lg shadow-xs border " \
+             "border-gray-200 dark:border-gray-700 p-5 " \
+             "hover:border-primary hover:shadow-sm transition"
+    ) do
+      h3(class: "text-base font-semibold text-gray-900 dark:text-white") { tile[:label] }
+      p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") { tile[:description] }
+    end
+  end
+end
