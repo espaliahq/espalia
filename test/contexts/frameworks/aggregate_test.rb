@@ -243,6 +243,74 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#archive_capability_category" do
+    setup do
+      @cat_id = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, @cat_id, "Engineering Capabilities")
+    end
+
+    should "apply CapabilityCategoryArchived event when the category is empty" do
+      @aggregate.archive_capability_category(@framework_id, @cat_id, reason: "Merged into Role Specific")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityCategoryArchived, event
+      assert_equal @cat_id, event.data[:category_id]
+      assert_equal "Merged into Role Specific", event.data[:reason]
+    end
+
+    should "raise if the category still holds active capabilities" do
+      cap_id = SecureRandom.uuid_v7
+      @aggregate.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, @cat_id, "Lingering Cap")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.archive_capability_category(@framework_id, @cat_id, reason: "Too soon")
+      end
+      assert_match /active capabilit/i, err.message
+    end
+
+    should "allow archive once all capabilities have been archived first" do
+      cap_id = SecureRandom.uuid_v7
+      cap_stable_id = SecureRandom.uuid_v7
+      @aggregate.add_capability(@framework_id, cap_id, cap_stable_id, @cat_id, "Doomed Cap")
+      @aggregate.archive_capability(@framework_id, cap_id, reason: "Superseded")
+
+      @aggregate.archive_capability_category(@framework_id, @cat_id, reason: "Now empty")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityCategoryArchived, event
+    end
+
+    should "raise if already archived" do
+      @aggregate.archive_capability_category(@framework_id, @cat_id, reason: "First")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.archive_capability_category(@framework_id, @cat_id, reason: "Again")
+      end
+      assert_match /already archived/, err.message
+    end
+
+    should "raise if category does not exist" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.archive_capability_category(@framework_id, SecureRandom.uuid_v7, reason: "test")
+      end
+      assert_match /not found/, err.message
+    end
+
+    should "raise outside a draft" do
+      fresh = Frameworks::Aggregate.new
+      fid = SecureRandom.uuid_v7
+      fresh.create(fid, "Demo")
+      cat_id = SecureRandom.uuid_v7
+      fresh.add_capability_category(fid, cat_id, "Empty")
+      fresh.publish_version(fid, "tester")
+
+      err = assert_raises(RuntimeError) do
+        fresh.archive_capability_category(fid, cat_id, reason: "test")
+      end
+      assert_match /No draft in progress/, err.message
+    end
+  end
+
   context "#archive_capability" do
     setup do
       @cat_id = SecureRandom.uuid_v7

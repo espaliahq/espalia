@@ -80,6 +80,7 @@ class Frameworks::ExplorerGraph::ArBuilder
           ordinal: cat.ordinal,
           deficit_threshold: cat.try(:deficit_threshold),
           overperformance_cap: cat.try(:overperformance_cap),
+          status: cat.try(:status) || "active",
           capabilities: cat.capabilities.map { |c| build_capability(c) }
         )
       end
