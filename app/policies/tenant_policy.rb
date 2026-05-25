@@ -6,6 +6,9 @@
 # admins (User#global_admin?) can view or update.
 #
 class TenantPolicy < ApplicationPolicy
+  # @return [Boolean] whether the viewer can see the tenant admin hub
   def show? = tenant_admin?
+
+  # @return [Boolean] whether the viewer can edit the tenant theme
   def update_theme? = tenant_admin?
 end
