@@ -211,11 +211,26 @@ end
 # `destroy_framework_children`, so a naive re-emit would add a second row
 # pointing at the same from_stable_id and make subsequent lookups
 # nondeterministic.
+#
+# Aborts rather than emits a second mapping when an existing row points
+# somewhere else — two mappings for the same from_stable_id would leave
+# rating migration ambiguous. The operator has to reconcile by hand.
 def define_mapping_if_missing(handler, framework_id, archive_cap, survivor_cap)
-  existing = FrameworkState::MigrationMapping.find_by(from_stable_id: archive_cap.stable_id)
-  if existing && existing.to_stable_id == survivor_cap.stable_id && existing.mapping_type == "same"
-    puts "  mapping exists: #{archive_cap.name.inspect} -> #{survivor_cap.name.inspect} (same) — skipping"
-    return
+  existing = FrameworkState::MigrationMapping.find_by(
+    framework_id: framework_id, from_stable_id: archive_cap.stable_id
+  )
+
+  if existing
+    if existing.to_stable_id == survivor_cap.stable_id && existing.mapping_type == "same"
+      puts "  mapping exists: #{archive_cap.name.inspect} -> #{survivor_cap.name.inspect} (same) — skipping"
+      return
+    end
+
+    abort(
+      "Conflicting migration mapping for from_stable_id=#{archive_cap.stable_id}: " \
+      "existing to=#{existing.to_stable_id} (#{existing.mapping_type}), " \
+      "expected to=#{survivor_cap.stable_id} (same). Resolve manually before re-running."
+    )
   end
 
   handler.define_migration_mapping(

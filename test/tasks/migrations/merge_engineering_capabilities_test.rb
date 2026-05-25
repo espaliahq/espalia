@@ -94,6 +94,26 @@ class MergeEngineeringCapabilitiesTaskTest < ActiveSupport::TestCase
     end
   end
 
+  should "abort when an existing mapping for the same archive points elsewhere" do
+    pair = @ids[:pairs].first
+    bogus_target_stable_id = SecureRandom.uuid_v7
+
+    ActsAsTenant.with_tenant(@tenant) do
+      FrameworkState::MigrationMapping.create!(
+        mapping_id: SecureRandom.uuid_v7,
+        framework_id: @framework_id,
+        from_stable_id: pair[:archive_cap_stable_id],
+        to_stable_id: bogus_target_stable_id,
+        mapping_type: "evolved",
+        published_version: 1,
+        reason: "pre-existing conflicting mapping"
+      )
+    end
+
+    err = assert_raises(SystemExit) { Rake::Task[@task_name].invoke("test-merge") }
+    assert_equal 1, err.status
+  end
+
   should "refuse when a draft is already in progress" do
     ActsAsTenant.with_tenant(@tenant) do
       Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
