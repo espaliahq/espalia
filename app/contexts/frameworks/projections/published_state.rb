@@ -27,7 +27,11 @@ class Frameworks::Projections::PublishedState
 
   # Bump when `reset!` or any handler in this projection would write
   # different state from the same event payload than before.
-  CODE_VERSION = 1
+  #
+  # 2 — categories now carry a `status` column populated from
+  #     CapabilityCategoryArchived events. Replay re-stamps every category
+  #     at "active" (default) and applies any archive events that follow.
+  CODE_VERSION = 2
 
   # All event classes this projection handles.
   #
@@ -44,6 +48,7 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::LevelOrdinalChanged,
       Frameworks::Events::CapabilityCategoryAdded,
       Frameworks::Events::CapabilityCategoryUpdated,
+      Frameworks::Events::CapabilityCategoryArchived,
       Frameworks::Events::CapabilityAdded,
       Frameworks::Events::CapabilityUpdated,
       Frameworks::Events::CapabilityArchived,
@@ -203,6 +208,7 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::LevelOrdinalChanged then handle_level_ordinal_changed(event)
     when Frameworks::Events::CapabilityAdded then handle_capability_added(event)
     when Frameworks::Events::CapabilityArchived then handle_capability_archived(event)
+    when Frameworks::Events::CapabilityCategoryArchived then handle_capability_category_archived(event)
     when Frameworks::Events::CapabilityRoleBindingCreated then handle_binding_created(event)
     when Frameworks::Events::CapabilityRoleBindingRemoved then handle_binding_removed(event)
     when Frameworks::Events::BehaviouralExpectationSet then handle_expectation_set(event)
@@ -396,6 +402,11 @@ class Frameworks::Projections::PublishedState
     record = FrameworkState::CapabilityCategory.find_by!(category_id: event.data[:category_id])
     attrs = event.data.slice(:name, :description, :ordinal).compact
     record.update!(attrs) if attrs.any?
+  end
+
+  def handle_capability_category_archived(event)
+    record = FrameworkState::CapabilityCategory.find_by!(category_id: event.data[:category_id])
+    record.update!(status: "archived")
   end
 
   def handle_capability_added(event)

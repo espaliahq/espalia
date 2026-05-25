@@ -105,6 +105,7 @@ class Frameworks::ExplorerGraphBuilder
           ordinal: data[:ordinal],
           deficit_threshold: data[:deficit_threshold],
           overperformance_cap: data[:overperformance_cap],
+          status: (data[:status] || :active).to_s,
           capabilities: build_capabilities_for(cat_id)
         )
       end

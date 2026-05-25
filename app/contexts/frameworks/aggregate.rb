@@ -281,6 +281,36 @@ class Frameworks::Aggregate
     }.compact))
   end
 
+  # Archives a capability category. Shape-changing — requires a draft.
+  #
+  # Refuses if the category still holds any active capabilities. Archive
+  # those first (which themselves require migration mappings per ADR-17).
+  # Categories carry no ratings, so no migration mapping is required for
+  # the category itself.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param reason [String] reason for archiving
+  # @raise [RuntimeError] if no draft in progress, category not found,
+  #   already archived, or active capabilities remain in the category
+  def archive_capability_category(framework_id, category_id, reason:)
+    ensure_draft_in_progress!
+    raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
+    raise "Category #{category_id} already archived" if @capability_categories[category_id][:status] == :archived
+
+    active_caps = @capabilities.select { |_cid, cap| cap[:category_id] == category_id && cap[:status] != :archived }
+    if active_caps.any?
+      raise "Cannot archive category #{category_id}: #{active_caps.size} active " \
+            "capability/capabilities remain. Archive them first."
+    end
+
+    apply(Frameworks::Events::CapabilityCategoryArchived.new(data: {
+      framework_id: framework_id,
+      category_id: category_id,
+      reason: reason
+    }))
+  end
+
   # Updates a capability's name or description. Shape-preserving — editorial (applies live).
   #
   # @param framework_id [String] UUID of the framework
@@ -312,6 +342,7 @@ class Frameworks::Aggregate
   def add_capability(framework_id, capability_id, stable_id, category_id, name, description: nil)
     ensure_draft_in_progress!
     raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
+    raise "Category #{category_id} is archived" if @capability_categories[category_id][:status] == :archived
     raise "Capability #{capability_id} already exists" if @capabilities.key?(capability_id)
 
     apply(Frameworks::Events::CapabilityAdded.new(data: {
@@ -1039,7 +1070,8 @@ class Frameworks::Aggregate
     @capability_categories[event.data[:category_id]] = {
       name: event.data[:name],
       description: event.data[:description],
-      ordinal: event.data[:ordinal]
+      ordinal: event.data[:ordinal],
+      status: :active
     }
   end
 
@@ -1048,6 +1080,11 @@ class Frameworks::Aggregate
     cat[:name] = event.data[:name] if event.data.key?(:name)
     cat[:description] = event.data[:description] if event.data.key?(:description)
     cat[:ordinal] = event.data[:ordinal] if event.data.key?(:ordinal)
+  end
+
+  on Frameworks::Events::CapabilityCategoryArchived do |event|
+    cat = @capability_categories[event.data[:category_id]]
+    cat[:status] = :archived
   end
 
   on Frameworks::Events::CapabilityAdded do |event|

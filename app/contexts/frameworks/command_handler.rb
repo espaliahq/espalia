@@ -149,6 +149,18 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Archives a capability category. Shape-changing — requires a draft and
+  # an empty category (no active capabilities remaining).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param reason [String] reason for archiving
+  def archive_capability_category(framework_id, category_id, reason:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.archive_capability_category(framework_id, category_id, reason: reason)
+    end
+  end
+
   # Updates a capability's name or description.
   #
   # @param framework_id [String] UUID of the framework

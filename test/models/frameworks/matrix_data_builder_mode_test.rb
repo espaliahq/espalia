@@ -78,7 +78,7 @@ class Frameworks::MatrixDataBuilderModeTest < ActiveSupport::TestCase
     @category = CapabilityCategory.new(
       category_id: @live_cap.category_id, name: "Thinking",
       description: nil, ordinal: 1, deficit_threshold: nil,
-      overperformance_cap: nil,
+      overperformance_cap: nil, status: "active",
       capabilities: [ @live_cap, @draft_cap ]
     )
   end

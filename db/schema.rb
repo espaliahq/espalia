@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_24_051203) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_25_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -191,6 +191,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_24_051203) do
     t.string "name", null: false
     t.integer "ordinal"
     t.integer "overperformance_cap"
+    t.string "status", default: "active", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "category_id"], name: "idx_fw_cap_categories_on_tenant_and_category", unique: true
