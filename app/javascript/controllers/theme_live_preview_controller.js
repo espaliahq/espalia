@@ -4,6 +4,13 @@
 // Revert restores each field to its server-rendered default and
 // re-applies, so unsaved changes can be discarded.
 //
+// On disconnect (Turbo navigation away from the editor without
+// pressing Save), every preview variable this controller wrote is
+// removed from documentElement.style, so the persisted
+// `<style id="tenant-theme">` takes back over. Without this cleanup,
+// inline overrides would persist across the rest of the user's
+// session, defeating Cancel.
+//
 // Dark-mode caveat: dark color variables are scoped under a
 // `@media (prefers-color-scheme: dark)` rule by the layout's
 // <style id="tenant-theme">. Writing to documentElement.style applies
@@ -28,6 +35,21 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["field"]
 
+  connect() {
+    super.connect()
+    this._previewVars = new Set()
+  }
+
+  disconnect() {
+    if (this._previewVars) {
+      this._previewVars.forEach((varName) => {
+        document.documentElement.style.removeProperty(varName)
+      })
+      this._previewVars.clear()
+    }
+    super.disconnect()
+  }
+
   apply(event) {
     const el = event.currentTarget
     const varName = el.dataset.themeLivePreviewVarParam
@@ -46,10 +68,7 @@ export default class extends BaseController {
       ? `"${rawValue}", ui-sans-serif, system-ui, sans-serif`
       : rawValue
     document.documentElement.style.setProperty(varName, finalValue)
-  }
-
-  get prefersDark() {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
+    this._previewVars.add(varName)
   }
 
   revert(event) {
@@ -59,5 +78,9 @@ export default class extends BaseController {
       field.value = defaultValue
       field.dispatchEvent(new Event("input", { bubbles: true }))
     })
+  }
+
+  get prefersDark() {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
   }
 }
