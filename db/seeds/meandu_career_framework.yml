@@ -3782,153 +3782,6 @@ framework:
       - level: 8
         description: Shapes the organisation-wide approach to planning and delivery
           for finance initiatives, embedding best practices into how the company operates.
-  - name: Engineering Capabilities
-    description:
-    capabilities:
-    - name: Quality First Mindset
-      description: Writes clean, testable code and builds in ways that reduce risk
-        and improve reliability. Aligns to our testing pyramid and contributes to
-        knowledge quality through clear documentation and communicable code.
-      scope:
-      - Analytics Engineer
-      - Data Engineer
-      sheet: Data
-      expectations:
-      - level: 1
-        description: Follows team standards for testing and documentation. Seeks feedback
-          on quality.
-      - level: 2
-        description: "Writes well-structured, readable code and unit tests. Writes
-          code and docs others can build on. \n\nExample:"
-      - level: 3
-        description: |-
-          Takes ownership of test coverage and failure recovery. Begins contributing to shared testing patterns.
-
-          Example: Proactively identifies and advocates for solutions to address gaps in testing patterns.
-      - level: 4
-        description: |-
-          Improves reliability and testing discipline by actively identifying and reducing risk areas.
-
-          Example: Leads risk reduction initiatives within custodianship to resolution with measurable impact on health metrics.
-      - level: 5
-        description: |-
-          Leads on quality strategy across a stream. Aligns team on test coverage expectations, rollout and rollback strategies.
-
-          Example: Sets and maintains custodianship quality standards e.g PR requirements.
-      - level: 6
-        description: Shapes quality assurance practices across engineering. Uplifts
-          others in writing resilient, maintainable code.
-      - level: 7
-        description: Drives a quality culture across functions. Embeds continuous
-          improvement in how we build and release software.
-      - level: 8
-        description: Sets engineering-wide standards for code quality and test strategy.
-          Embeds long-term quality thinking into our delivery culture.
-    - name: System Design & Architecture
-      description: Designs components and systems that are scalable, maintainable,
-        cost-effective, and aligned with long-term product direction, engineering
-        principles, and technical vision.
-      scope: Data Engineer
-      sheet: Data
-      expectations:
-      - level: 1
-        description: Builds within existing patterns and guidance. Understands how
-          components fit into the broader system.
-      - level: 2
-        description: |-
-          Contributes to solution design discussions. Can implement features with guidance and clear expectations.
-
-          Example: Provides feedback and comments on design documentation.
-      - level: 3
-        description: |-
-          Designs moderately complex features or systems. Considers performance, reusability, and long-term maintainability.
-
-          Example: Independently researches, proposes and writes design documentation and proactively seeking feedback.
-      - level: 4
-        description: |-
-          Owns the solution design for an initiative. Evaluates trade-offs and aligns design with product and technical goals.
-
-          Example: Proactively engages stakeholders (both technical and cross functional) to validate ideas, evolve designs and make necessary trade off decisions.
-      - level: 5
-        description: |-
-          Leads system-level design across multiple components or domains. Champions alignment with engineering principles.
-
-          Example: Leveraging knowledge and experience working across the product to identify opportunities ............
-      - level: 6
-        description: Connects system architecture to business value. Guides teams
-          in designing scalable, future-fit systems.
-      - level: 7
-        description: Shapes technical direction across platforms or domains. Solves
-          cross-cutting system design challenges.
-      - level: 8
-        description: Drives architectural strategy for the organisation. Ensures scalable,
-          coherent systems that enable product and business growth.
-    - name: DevSecOps (Development, Security & Operations) Mindset
-      description: Takes ownership of the operational health and security of the systems
-        they build. Supports delivery through tooling, observability, and automation.
-      scope: Data Engineer
-      sheet: Data
-      expectations:
-      - level: 1
-        description: Follows established operational and security practices. Flags
-          concerns or incidents promptly.
-      - level: 2
-        description: |-
-          Implements logging, tracing, and alerting based on team standards. Begins contributing to infrastructure or pipelines.
-
-          Example: Accurately capture events (e.g failure scenarios) with playbook on how to diagnose and fix.
-      - level: 3
-        description: |-
-          Understands and applies secure coding practices. Supports basic debugging, monitoring, and recovery efforts.
-
-          Example: Proactively identifying production incidents and contributing to resolution through captured data (e.g logs) analysis.
-      - level: 4
-        description: |-
-          Owns operational readiness and playbook completeness for their services. Contributes to CI/CD, on-call rotations, and system observability.
-
-          Example: Has deep understanding of technologies used to enable CI/CD to ensure your stream is leveraging this to its full extent.
-      - level: 5
-        description: Improves team velocity by leading operational improvements. Manages
-          system reliability and security for a product area.
-      - level: 6
-        description: Drives automation, incident response, and tooling across a stream.
-          Champions operational maturity.
-      - level: 7
-        description: Shapes DevSecOps practices across the engineering organisation.
-          Embeds operational excellence into team culture and delivery systems.
-      - level: 8
-        description: Leads organisational strategy for secure, scalable, and automated
-          operations. Integrates delivery and ops for long-term business resilience.
-    - name: 'Technical Expertise: Cloud Architecture & Infrastructure'
-      description: Designs, implements, and manages scalable, secure, and cost-effective
-        cloud solutions that support continuous innovation and operational efficiency.
-      scope: Data Engineer
-      sheet: Data
-      expectations:
-      - level: 1
-        description: Understands basic concepts of cloud-hosted environments. Can
-          deploy or test features in cloud staging environments.
-      - level: 2
-        description: Uses cloud services within documented patterns. Flags reliability,
-          cost, or deployment concerns when needed.
-      - level: 3
-        description: Designs simple infrastructure-as-code deployments and configurations.
-          Understands platform trade-offs.
-      - level: 4
-        description: Implements cloud solutions that are secure, reliable, and observable.
-          Considers scaling, cost, and maintenance.
-      - level: 5
-        description: Designs and optimises infrastructure for business-critical systems.
-          Advises others on cloud choices and architecture.
-      - level: 6
-        description: Leads platform evolution across teams. Anticipates cloud risks
-          and plans for growth, compliance, and cost-efficiency.
-      - level: 7
-        description: Shapes our long-term cloud architecture strategy. Aligns platform
-          design with company-wide technology goals.
-      - level: 8
-        description: Drives innovation and resilience through infrastructure leadership.
-          Future-proofs our systems and delivery platform at scale.
   - name: Data Capabilities
     description:
     capabilities:
@@ -4106,6 +3959,8 @@ framework:
       scope:
       - Software Engineer
       - Engineering Manager
+      - Data Engineer
+      - Analytics Engineer
       individual_tolerance: 2.0
       sheet: Software Engineering
       expectations:
@@ -4385,6 +4240,8 @@ framework:
       scope:
       - Software Engineer
       - Engineering Manager
+      - Data Engineer
+      - Analytics Engineer
       sheet: Software Engineering
       expectations:
       - level: 1
@@ -4446,6 +4303,8 @@ framework:
       scope:
       - Software Engineer
       - Engineering Manager
+      - Data Engineer
+      - Analytics Engineer
       sheet: Software Engineering
       expectations:
       - level: 1
@@ -4510,6 +4369,8 @@ framework:
       scope:
       - Software Engineer
       - Engineering Manager
+      - Data Engineer
+      - Analytics Engineer
       sheet: Software Engineering
       expectations:
       - level: 1
