@@ -16,7 +16,7 @@ services:
   - type: web
     name: growthos-web
     runtime: ruby
-    plan: starter
+    plan: standard
     region: singapore
     branch: main
     autoDeploy: true
@@ -50,7 +50,7 @@ services:
   - type: worker
     name: growthos-worker
     runtime: ruby
-    plan: starter
+    plan: standard
     region: singapore
     branch: main
     autoDeploy: true
@@ -78,7 +78,7 @@ services:
 databases:
   - name: growthos-postgres
     databaseName: growth_os_production
-    plan: basic-256mb
+    plan: basic-1gb
     region: singapore
     postgresMajorVersion: "16"
     ipAllowList: []
