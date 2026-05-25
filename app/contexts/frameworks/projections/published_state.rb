@@ -673,8 +673,14 @@ class Frameworks::Projections::PublishedState
 
   # ── Collaborator handlers ──
 
+  # Idempotent: replay tolerates streams that contain two CollaboratorAdded
+  # events for the same (framework_id, person_id, role, scope_type, scope_id)
+  # triple without an intervening CollaboratorRemoved. The aggregate's
+  # write-side guard rejects this today, but older streams (pre-guard, or
+  # from a race) carry the duplicate forever, and `create!` would trip the
+  # `idx_framework_collaborators_(un)scoped_unique` index on rebuild.
   def handle_collaborator_added(event)
-    FrameworkState::Collaborator.create!(
+    FrameworkState::Collaborator.find_or_create_by!(
       framework_id: event.data[:framework_id],
       person_id: event.data[:person_id],
       role: event.data[:collaborator_role],

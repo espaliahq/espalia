@@ -829,6 +829,41 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       after_snapshot = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
       assert_equal before_snapshot, after_snapshot
     end
+
+    should "tolerate duplicate CollaboratorAdded events in the stream during replay" do
+      person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
+
+      append_and_project(Frameworks::Events::FrameworkCreated,
+        framework_id: @framework_id, name: "me&u 2025")
+      append_and_project(Frameworks::Events::CollaboratorAdded,
+        framework_id: @framework_id, person_id: person.id,
+        collaborator_role: "editor", scope_type: nil, scope_id: nil, added_by: "tester")
+      # Bypass the projection's live call for the duplicate — it would
+      # have raised before this fix. Append straight to the stream so
+      # replay sees both events.
+      duplicate = Frameworks::Events::CollaboratorAdded.new(
+        data: {
+          framework_id: @framework_id, person_id: person.id,
+          collaborator_role: "editor", scope_type: nil, scope_id: nil, added_by: "tester"
+        },
+        metadata: { tenant_id: @tenant.id }
+      )
+      stream = EventStreamNaming.framework_stream(@framework_id, tenant: @tenant)
+      Rails.configuration.event_store.append(duplicate, stream_name: stream)
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      within_tenant { assert_equal 0, FrameworkState::Collaborator.count }
+
+      Projections::Replayer.replay(
+        projection_class: Frameworks::Projections::PublishedState,
+        tenant: @tenant
+      )
+
+      within_tenant do
+        assert_equal 1, FrameworkState::Collaborator.where(person_id: person.id, role: "editor").count,
+          "replay should produce exactly one collaborator row regardless of duplicate events"
+      end
+    end
   end
 
   private
