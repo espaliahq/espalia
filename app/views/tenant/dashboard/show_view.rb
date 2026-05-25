@@ -4,20 +4,25 @@
 # section. Sidebar navigation lives in {Components::Kit::TenantAdminLayout}.
 #
 class Views::Tenant::Dashboard::ShowView < Views::Base
+  include Phlex::Rails::Helpers::Routes
+
+  # Each tile resolves its href via the corresponding Rails route helper
+  # at render time so changes to `config/routes.rb` flow through without
+  # touching this list.
   TILES = [
     {
       label: "Theme",
-      href: "/tenant/theme",
+      path: :tenant_theme_path,
       description: "Brand colors and typography for this tenant."
     },
     {
       label: "Users",
-      href: "/tenant/users",
+      path: :tenant_users_path,
       description: "Manage tenant memberships and framework collaborator roles."
     },
     {
       label: "Integrations",
-      href: "/tenant/integrations",
+      path: :tenant_integrations_path,
       description: "HRIS sync and other external systems."
     }
   ].freeze
@@ -54,7 +59,7 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
 
   def tile_card(tile)
     a(
-      href: tile[:href],
+      href: public_send(tile[:path]),
       class: "block bg-white dark:bg-gray-800 rounded-lg shadow-xs border " \
              "border-gray-200 dark:border-gray-700 p-5 " \
              "hover:border-primary hover:shadow-sm transition"
