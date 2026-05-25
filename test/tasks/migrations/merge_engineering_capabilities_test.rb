@@ -73,6 +73,27 @@ class MergeEngineeringCapabilitiesTaskTest < ActiveSupport::TestCase
     end
   end
 
+  should "be a near-no-op on a full re-run with no duplicate MigrationMapping rows" do
+    Rake::Task[@task_name].invoke("test-merge")
+    Rake::Task[@task_name].reenable
+
+    initial_mapping_count = ActsAsTenant.with_tenant(@tenant) { FrameworkState::MigrationMapping.count }
+    assert_equal @ids[:pairs].size, initial_mapping_count, "first run should create one mapping per pair"
+
+    Rake::Task[@task_name].invoke("test-merge")
+
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal initial_mapping_count, FrameworkState::MigrationMapping.count,
+        "second run should not duplicate migration mappings"
+
+      @ids[:pairs].each do |pair|
+        mappings = FrameworkState::MigrationMapping.where(from_stable_id: pair[:archive_cap_stable_id])
+        assert_equal 1, mappings.size,
+          "expected exactly one mapping per archived stable_id, even after re-run"
+      end
+    end
+  end
+
   should "refuse when a draft is already in progress" do
     ActsAsTenant.with_tenant(@tenant) do
       Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do

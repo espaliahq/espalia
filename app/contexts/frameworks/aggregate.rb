@@ -342,6 +342,7 @@ class Frameworks::Aggregate
   def add_capability(framework_id, capability_id, stable_id, category_id, name, description: nil)
     ensure_draft_in_progress!
     raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
+    raise "Category #{category_id} is archived" if @capability_categories[category_id][:status] == :archived
     raise "Capability #{capability_id} already exists" if @capabilities.key?(capability_id)
 
     apply(Frameworks::Events::CapabilityAdded.new(data: {

@@ -309,6 +309,16 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       end
       assert_match /No draft in progress/, err.message
     end
+
+    should "block subsequent add_capability calls in the archived category" do
+      @aggregate.archive_capability_category(@framework_id, @cat_id, reason: "Empty")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.add_capability(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+          @cat_id, "Sneaky new cap")
+      end
+      assert_match /archived/, err.message
+    end
   end
 
   context "#archive_capability" do

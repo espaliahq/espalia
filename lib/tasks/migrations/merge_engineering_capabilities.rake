@@ -47,7 +47,12 @@ namespace :frameworks do
       puts
 
       ActsAsTenant.with_tenant(tenant) do
-        framework = FrameworkState::Framework.first!
+        frameworks = FrameworkState::Framework.all.to_a
+        if frameworks.size != 1
+          abort "Expected exactly 1 framework for tenant #{tenant.slug}, found #{frameworks.size}. " \
+                "Pass an explicit framework selector if/when this tenant holds multiple frameworks."
+        end
+        framework = frameworks.first
         puts "Framework: #{framework.name} (id=#{framework.framework_id}, v#{framework.current_published_version})"
 
         if framework.draft_in_progress
@@ -155,23 +160,25 @@ def execute_plan(framework, plan)
   puts "\nArchiving Cat 8 duplicates and defining migration mappings..."
   plan[:pairs].each do |pair|
     archive_capability_if_active(handler, framework_id, pair[:archive])
-    handler.define_migration_mapping(
-      framework_id,
-      SecureRandom.uuid_v7,
-      pair[:archive].stable_id,
-      pair[:survivor].stable_id,
-      "same",
-      reason: "Merged duplicate engineering capability"
-    )
-    puts "  mapping: #{pair[:archive].name.inspect} -> #{pair[:survivor].name.inspect} (same)"
+    define_mapping_if_missing(handler, framework_id, pair[:archive], pair[:survivor])
   end
 
   puts "\nArchiving now-empty category #{plan[:source_category].name.inspect}..."
-  handler.archive_capability_category(framework_id, plan[:source_category].category_id,
-    reason: "All capabilities merged into Technical Expertise / Role Specific")
+  archive_category_if_active(handler, framework_id, plan[:source_category])
 
   puts "\nPublishing v#{target_version}..."
   handler.publish_version(framework_id, "merge-engineering-capabilities")
+end
+
+def archive_category_if_active(handler, framework_id, category)
+  if category.status == "archived"
+    puts "  already archived: #{category.name.inspect} — skipping"
+    return
+  end
+
+  handler.archive_capability_category(framework_id, category.category_id,
+    reason: "All capabilities merged into Technical Expertise / Role Specific")
+  puts "  archived: #{category.name.inspect}"
 end
 
 def add_binding_if_missing(handler, framework_id, capability_id, role_id)
@@ -188,13 +195,38 @@ end
 
 def archive_capability_if_active(handler, framework_id, capability)
   if capability.status == "archived"
-    puts "  already archived: #{capability.name.inspect} — skipping (mapping will still be defined)"
+    puts "  already archived: #{capability.name.inspect} — skipping archive (mapping will be checked separately)"
     return
   end
 
   handler.archive_capability(framework_id, capability.capability_id,
     reason: "Merged with #{capability.category&.name || 'sibling'} survivor")
   puts "  archived: #{capability.name.inspect}"
+end
+
+# Avoids accumulating duplicate FrameworkState::MigrationMapping rows on
+# reruns. The events table is the source of truth, but
+# `MigrationMappingDefined` is in PublishedState's `skip_during_rebuild?`
+# list and the read-model rows are not destroyed by
+# `destroy_framework_children`, so a naive re-emit would add a second row
+# pointing at the same from_stable_id and make subsequent lookups
+# nondeterministic.
+def define_mapping_if_missing(handler, framework_id, archive_cap, survivor_cap)
+  existing = FrameworkState::MigrationMapping.find_by(from_stable_id: archive_cap.stable_id)
+  if existing && existing.to_stable_id == survivor_cap.stable_id && existing.mapping_type == "same"
+    puts "  mapping exists: #{archive_cap.name.inspect} -> #{survivor_cap.name.inspect} (same) — skipping"
+    return
+  end
+
+  handler.define_migration_mapping(
+    framework_id,
+    SecureRandom.uuid_v7,
+    archive_cap.stable_id,
+    survivor_cap.stable_id,
+    "same",
+    reason: "Merged duplicate engineering capability"
+  )
+  puts "  mapping defined: #{archive_cap.name.inspect} -> #{survivor_cap.name.inspect} (same)"
 end
 
 def find_category!(framework, name)
