@@ -243,17 +243,17 @@ class Views::Assessments::ScoringPanel < Views::Base
     alt_results = secondary_category_results(category.category_id)
     divergent = alt_results.any? { |_, alt| alt && result && alt[:pass] != result[:pass] }
     active = category.category_id == @active_category_id
-    row_classes = "block py-1.5 px-2 rounded-md transition-colors cursor-pointer " \
-                  "#{active ? 'bg-primary/5 ring-1 ring-primary/20 dark:bg-primary/10 dark:ring-primary/30' : 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800'}"
+    base_classes = "block py-1.5 px-2 rounded-md transition-colors " \
+                   "#{active ? 'bg-primary/5 ring-1 ring-primary/20 dark:bg-primary/10 dark:ring-primary/30' : 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800'}"
 
     if @assessment_id
       a(
         href: matrix_assessment_path(@assessment_id, matrix_link_params(category.category_id)),
         data: { turbo_frame: "assessment-matrix" },
-        class: row_classes
+        class: "#{base_classes} cursor-pointer"
       ) { category_result_content(cat_data, result, divergent, alt_results) }
     else
-      div(class: row_classes) do
+      div(class: base_classes) do
         category_result_content(cat_data, result, divergent, alt_results)
       end
     end
