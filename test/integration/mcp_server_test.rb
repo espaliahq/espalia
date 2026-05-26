@@ -177,6 +177,26 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_equal(-32601, err["code"])
       assert_match(/unknown tool/, err["message"])
     end
+
+    # Regression: pre-fix this returned -32603 "internal error" with the
+    # full SQL fragment in the log + on the wire. The classification is
+    # important so Datadog error monitors scoped to MCP only fire on
+    # genuine server bugs.
+    should "return JSON-RPC -32602 (not -32603) when a client-supplied id doesn't resolve" do
+      post_mcp({
+        jsonrpc: "2.0", id: 5, method: "tools/call",
+        params: {
+          name: "frameworks_capability_get",
+          arguments: { framework_id: SecureRandom.uuid_v7, capability_id: SecureRandom.uuid_v7 }
+        }
+      })
+
+      assert_response :success
+      err = json_body["error"]
+      assert_equal(-32602, err["code"])
+      assert_match(/not found/, err["message"])
+      assert_no_match(/WHERE/, err["message"], "should not leak the SQL fragment in the response")
+    end
   end
 
   context "audit metadata" do

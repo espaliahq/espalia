@@ -60,7 +60,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_capability_get",
-        "description" => "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned).",
+        "description" => "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned). Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -176,7 +176,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_capability_get",
-        "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations.",
+        "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
