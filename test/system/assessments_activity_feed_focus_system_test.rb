@@ -165,6 +165,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
       toggle_activity_pane
+      wait_for_stimulus "activity-feed"
 
       # No focus yet (the matrix dispatches category focus on connect,
       # but Filter mode of category-level focus shouldn't hide anything
