@@ -29,10 +29,11 @@ class Views::Integrations::HrisView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Kit::TenantAdminLayout.new(
+      active_section: :integrations,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(class: "max-w-6xl mx-auto px-4 py-8 space-y-10") do
+      div(class: "max-w-6xl mx-auto space-y-10") do
         page_header
         configuration_section
         role_mappings_section
@@ -48,7 +49,7 @@ class Views::Integrations::HrisView < Views::Base
   def page_header
     div(class: "mb-6") do
       a(
-        href: integrations_path,
+        href: tenant_integrations_path,
         class: "text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 " \
                "dark:hover:text-gray-200 transition-colors"
       ) { plain "\u2190 Back to Integrations" }
@@ -95,7 +96,7 @@ class Views::Integrations::HrisView < Views::Base
   def sync_form
     div(class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
       form(
-        action: sync_integration_path("hris"),
+        action: sync_tenant_integration_path("hris"),
         method: "post",
         class: "flex items-center gap-4"
       ) do

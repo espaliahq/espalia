@@ -36,20 +36,20 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
   end
 
   context "as a tenant admin" do
-    should "show Integrations link in the navbar" do
+    should "show Admin link in the navbar" do
       sign_in @admin_user
       visit root_path
       screenshot("admin_navbar")
 
-      assert_link "Integrations"
+      assert_link "Admin"
+      assert_no_link "Integrations" # surfaced inside /tenant, not the top nav
     end
 
     should "render the integrations index page" do
       sign_in @admin_user
-      visit integrations_path
+      visit tenant_integrations_path
       screenshot("integrations_index")
 
-      assert_text "Integrations"
       assert_text "HRIS"
       assert_text "Hibob"
       assert_text "Active"
@@ -57,7 +57,7 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
 
     should "render the HRIS detail page with config, mappings, and people" do
       sign_in @admin_user
-      visit integration_path("hris")
+      visit tenant_integration_path("hris")
       screenshot("integrations_hris_show")
 
       assert_text "HRIS Integration"
@@ -86,24 +86,25 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
 
     should "show Sync now button" do
       sign_in @admin_user
-      visit integration_path("hris")
+      visit tenant_integration_path("hris")
 
       assert_button "Sync now"
     end
   end
 
   context "as a tenant member" do
-    should "not show Integrations link in the navbar" do
+    should "not show Admin link in the navbar" do
       sign_in @member_user
       visit root_path
       screenshot("member_navbar")
 
+      assert_no_link "Admin"
       assert_no_link "Integrations"
     end
 
-    should "redirect away from /integrations with unauthorized flash" do
+    should "redirect away from /tenant/integrations with unauthorized flash" do
       sign_in @member_user
-      visit integrations_path
+      visit tenant_integrations_path
       screenshot("member_denied")
 
       # / redirects to /frameworks for users without assessments; the
@@ -116,22 +117,22 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
   context "mobile viewport" do
     setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
 
-    should "expose Integrations link via the mobile sidebar for admins" do
+    should "expose Admin link via the mobile sidebar for admins" do
       sign_in @admin_user
       visit root_path
       toggle_sidebar
       screenshot("mobile_sidebar_admin")
 
-      assert_link "Integrations"
+      assert_link "Admin"
     end
 
-    should "not expose Integrations link via the mobile sidebar for members" do
+    should "not expose Admin link via the mobile sidebar for members" do
       sign_in @member_user
       visit root_path
       toggle_sidebar
       screenshot("mobile_sidebar_member")
 
-      assert_no_link "Integrations"
+      assert_no_link "Admin"
     end
   end
 

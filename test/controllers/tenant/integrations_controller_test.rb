@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class IntegrationsControllerTest < ActionDispatch::IntegrationTest
+class Tenant::IntegrationsControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   setup do
@@ -30,7 +30,7 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
 
     context "GET /integrations" do
       should "render the integrations index" do
-        get integrations_path
+        get tenant_integrations_path
 
         assert_response :success
         assert_includes response.body, "Integrations"
@@ -40,7 +40,7 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
 
     context "GET /integrations/hris" do
       should "render the HRIS detail page" do
-        get integration_path("hris")
+        get tenant_integration_path("hris")
 
         assert_response :success
         assert_includes response.body, "HRIS Integration"
@@ -54,9 +54,9 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
 
     context "GET /integrations/unknown" do
       should "redirect to index with alert" do
-        get integration_path("unknown")
+        get tenant_integration_path("unknown")
 
-        assert_redirected_to integrations_path
+        assert_redirected_to tenant_integrations_path
         follow_redirect!
         assert_includes response.body, "Unknown integration"
       end
@@ -65,10 +65,10 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
     context "POST /integrations/hris/sync" do
       should "enqueue HrisSyncJob and redirect with notice" do
         assert_enqueued_with(job: HrisSyncJob) do
-          post sync_integration_path("hris")
+          post sync_tenant_integration_path("hris")
         end
 
-        assert_redirected_to integration_path("hris")
+        assert_redirected_to tenant_integration_path("hris")
         follow_redirect!
         assert_includes response.body, "HRIS sync queued"
       end
@@ -78,10 +78,10 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
         @tenant.save!
 
         assert_no_enqueued_jobs only: HrisSyncJob do
-          post sync_integration_path("hris")
+          post sync_tenant_integration_path("hris")
         end
 
-        assert_redirected_to integration_path("hris")
+        assert_redirected_to tenant_integration_path("hris")
         follow_redirect!
         assert_includes response.body, "not fully configured"
       end
@@ -92,7 +92,7 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
     setup { sign_in @member_user }
 
     should "deny GET /integrations" do
-      get integrations_path
+      get tenant_integrations_path
       assert_redirected_to root_path
       follow_redirect!  # / → /frameworks (member with no assessments)
       follow_redirect!
@@ -100,13 +100,13 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "deny GET /integrations/hris" do
-      get integration_path("hris")
+      get tenant_integration_path("hris")
       assert_redirected_to root_path
     end
 
     should "deny POST /integrations/hris/sync and not enqueue the job" do
       assert_no_enqueued_jobs only: HrisSyncJob do
-        post sync_integration_path("hris")
+        post sync_tenant_integration_path("hris")
       end
       assert_redirected_to root_path
     end
@@ -114,12 +114,12 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
 
   context "unauthenticated" do
     should "redirect /integrations to sign in" do
-      get integrations_path
+      get tenant_integrations_path
       assert_redirected_to new_user_session_path
     end
 
     should "redirect POST /integrations/hris/sync to sign in" do
-      post sync_integration_path("hris")
+      post sync_tenant_integration_path("hris")
       assert_redirected_to new_user_session_path
     end
   end

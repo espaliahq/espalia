@@ -9,7 +9,7 @@
 # Designed to be extended with additional integration types (Slack,
 # notifications, SSO) by adding new branches in {#show}.
 #
-class IntegrationsController < ApplicationController
+class Tenant::IntegrationsController < ApplicationController
   KNOWN_INTEGRATIONS = %w[hris].freeze
 
   # GET /integrations
@@ -33,7 +33,7 @@ class IntegrationsController < ApplicationController
     when "hris"
       render_hris
     else
-      redirect_to integrations_path, alert: "Unknown integration."
+      redirect_to tenant_integrations_path, alert: "Unknown integration."
     end
   end
 
@@ -45,7 +45,7 @@ class IntegrationsController < ApplicationController
     when "hris"
       enqueue_hris_sync
     else
-      redirect_to integrations_path, alert: "Unknown integration."
+      redirect_to tenant_integrations_path, alert: "Unknown integration."
     end
   end
 
@@ -69,9 +69,9 @@ class IntegrationsController < ApplicationController
   def enqueue_hris_sync
     if current_tenant.hris_config.configured?(current_tenant)
       HrisSyncJob.perform_later(current_tenant)
-      redirect_to integration_path("hris"), notice: "HRIS sync queued. Refresh shortly to see updated results."
+      redirect_to tenant_integration_path("hris"), notice: "HRIS sync queued. Refresh shortly to see updated results."
     else
-      redirect_to integration_path("hris"),
+      redirect_to tenant_integration_path("hris"),
                   alert: "HRIS integration is not fully configured — set provider, credentials, and enable sync."
     end
   end

@@ -56,8 +56,7 @@ class Components::Kit::PageLayout < Components::Base
       assessment_link = assessment_nav_link
       links << assessment_link if assessment_link
       links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
-      links << { label: "Integrations", href: "/integrations" } if show_integrations_link?
-      links << { label: "Users", href: "/tenant/users" } if show_users_link?
+      links << { label: "Admin", href: "/tenant" } if show_admin_link?
       links
     end
   end
@@ -73,22 +72,12 @@ class Components::Kit::PageLayout < Components::Base
     resolve_tenant_user&.admin?
   end
 
-  # Whether the current viewer can manage tenant integrations.
-  # Visible to global admins and tenant admins only.
+  # Whether the current viewer can reach the tenant administration
+  # hub (theme, users, integrations). Visible to global admins and
+  # tenant admins only.
   #
   # @return [Boolean]
-  def show_integrations_link?
-    return false unless @user && @current_tenant
-    return true if @user.global_admin?
-
-    resolve_tenant_user&.admin?
-  end
-
-  # Whether the current viewer can manage tenant users.
-  # Visible to global admins and tenant admins only.
-  #
-  # @return [Boolean]
-  def show_users_link?
+  def show_admin_link?
     return false unless @user && @current_tenant
     return true if @user.global_admin?
 

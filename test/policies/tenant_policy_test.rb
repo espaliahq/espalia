@@ -1,0 +1,69 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class TenantPolicyTest < ActiveSupport::TestCase
+  setup do
+    @tenant = create(:tenant)
+  end
+
+  context "with no tenant membership" do
+    setup do
+      @user = create(:user)
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: nil, person: nil)
+    end
+
+    should "deny everything" do
+      assert_not policy.show?
+      assert_not policy.update_theme?
+    end
+  end
+
+  context "as a tenant member" do
+    setup do
+      @user = create(:user)
+      @tu = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: @user, role: :member)
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tu, person: nil)
+    end
+
+    should "deny everything" do
+      assert_not policy.show?
+      assert_not policy.update_theme?
+    end
+  end
+
+  context "as a tenant admin" do
+    setup do
+      @user = create(:user)
+      @tu = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: @user, role: :admin)
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tu, person: nil)
+    end
+
+    should "permit everything" do
+      assert policy.show?
+      assert policy.update_theme?
+    end
+  end
+
+  context "as a global admin with no tenant_user" do
+    setup do
+      @user = create(:user, global_admin: true)
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: nil, person: nil)
+    end
+
+    should "permit everything" do
+      assert policy.show?
+      assert policy.update_theme?
+    end
+  end
+
+  private
+
+  def policy
+    TenantPolicy.new(@ctx, @tenant)
+  end
+end
