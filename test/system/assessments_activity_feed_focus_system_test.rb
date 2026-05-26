@@ -121,7 +121,11 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "activity-pane"
       toggle_activity_pane
 
-      # Default mode is Filter; switch to Highlight for this test.
+      # Default mode is Filter; switch to Highlight for this test. Wait
+      # for the activity-feed controller to connect first — without it
+      # the click can land before the action handler is registered and
+      # the mode never flips, flaking the assertions below.
+      wait_for_stimulus "activity-feed"
       page.execute_script(<<~JS)
         document.querySelector("[data-activity-feed-mode-param='highlight']").click();
       JS
