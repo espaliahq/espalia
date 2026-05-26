@@ -99,6 +99,44 @@ class PersonDevelopment::Projections::CommentThreadTest < ActiveSupport::TestCas
     end
   end
 
+  context "FrameworkVersionMigrated" do
+    setup do
+      @from_stable_id = SecureRandom.uuid_v7
+      @to_stable_id   = SecureRandom.uuid_v7
+      @comment_id = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::CommentPosted,
+        comment_id: @comment_id, parent_id: nil,
+        commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+        capability_stable_id: @from_stable_id, level_ordinal: 3,
+        body: "Before migration.", author_id: @author.id)
+    end
+
+    should "re-key comment rows for a same mapping" do
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "same", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        c = PersonDevelopmentComment.find(@comment_id)
+        assert_equal @to_stable_id, c.capability_stable_id
+      end
+    end
+
+    should "leave archived-mapping comments where they are" do
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: nil,
+                      mapping_type: "archived", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        c = PersonDevelopmentComment.find(@comment_id)
+        assert_equal @from_stable_id, c.capability_stable_id
+        assert_equal "active", c.status
+      end
+    end
+  end
+
   context "rebuild contract" do
     should "reset! + replay produces identical read-model state" do
       cap_sid = SecureRandom.uuid_v7

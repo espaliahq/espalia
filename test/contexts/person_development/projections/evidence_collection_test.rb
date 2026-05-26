@@ -179,6 +179,47 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
     end
   end
 
+  context "FrameworkVersionMigrated" do
+    setup do
+      @from_stable_id = SecureRandom.uuid_v7
+      @to_stable_id   = SecureRandom.uuid_v7
+      @ev_id = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: @ev_id, capability_stable_id: @from_stable_id, level_ordinal: 3,
+        source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+        title: "Before migration", content: "x", external_reference: nil,
+        author_id: @author.id)
+    end
+
+    should "re-key evidence rows for a same mapping" do
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "same", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@ev_id)
+        assert_equal @to_stable_id, item.capability_stable_id
+        assert_equal "active", item.link_status
+      end
+    end
+
+    should "withdraw evidence rows for an archived mapping" do
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: nil,
+                      mapping_type: "archived", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@ev_id)
+        assert_equal @from_stable_id, item.capability_stable_id
+        assert_equal "withdrawn", item.link_status
+        assert_equal "framework_migration_archived", item.withdrawal_reason
+        assert_not_nil item.withdrawn_at
+      end
+    end
+  end
+
   context "rebuild contract" do
     should "reset! + replay produces identical read-model state" do
       cap_sid     = SecureRandom.uuid_v7

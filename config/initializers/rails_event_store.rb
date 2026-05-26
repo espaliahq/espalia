@@ -66,6 +66,16 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments.handled_events
   )
 
+  # FrameworkVersionMigrationSync dispatches PersonDevelopment commands
+  # per affected person whenever a framework version publishes. Same
+  # projection-rebuild hazard — MUST NOT be registered as a projection.
+  # Subscribed AFTER PublishedState so it reads the freshly-rebuilt
+  # FrameworkState::Capability rows (with the new survivors).
+  event_store.subscribe(
+    Frameworks::SyncHandlers::FrameworkVersionMigrationSync.new,
+    to: Frameworks::SyncHandlers::FrameworkVersionMigrationSync.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Subscriptions will be added here as integrations are implemented.
   # Example:

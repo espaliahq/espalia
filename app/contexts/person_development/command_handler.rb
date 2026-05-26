@@ -63,6 +63,24 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Migrates this person's stream onto a newly published framework version.
+  #
+  # Called ONLY by {Frameworks::SyncHandlers::FrameworkVersionMigrationSync}
+  # in the same transaction as the originating
+  # {Frameworks::Events::FrameworkVersionPublished}.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param old_version [Integer] previous published version
+  # @param new_version [Integer] newly published version
+  # @param mappings [Array<Hash>] migration mappings; see
+  #   {PersonDevelopment::Events::FrameworkVersionMigrated} for shape
+  def migrate_framework_version(person_id, framework_id, old_version, new_version, mappings)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.migrate_framework_version(framework_id, old_version, new_version, mappings)
+    end
+  end
+
   # Removes the person from their current assessment cycle.
   #
   # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}

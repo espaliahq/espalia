@@ -27,7 +27,11 @@ class PersonDevelopment::Projections::CurrentAssessment
 
   # Bump when `reset!` or any handler in this projection would write
   # different state from the same event payload than before.
-  CODE_VERSION = 1
+  #
+  # 2 — handles `FrameworkVersionMigrated`: rewrites `capability_stable_id`
+  #     on rating rows for `same`/`evolved` mappings and stamps
+  #     `migration_status`/`reassessment_reason` for the rest.
+  CODE_VERSION = 2
 
   # All event classes this projection handles.
   #
@@ -47,7 +51,8 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::ManagerRatingCleared,
       PersonDevelopment::Events::AlignmentStarted,
       PersonDevelopment::Events::AssessmentAligned,
-      PersonDevelopment::Events::FullAlignmentCompleted
+      PersonDevelopment::Events::FullAlignmentCompleted,
+      PersonDevelopment::Events::FrameworkVersionMigrated
     ]
   end
 
@@ -89,6 +94,59 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::AlignmentStarted then handle_alignment_started(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
     when PersonDevelopment::Events::FullAlignmentCompleted then handle_full_alignment_completed(event)
+    when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
+    end
+  end
+
+  # Applies the migration mappings carried on `FrameworkVersionMigrated`
+  # to this person's rating rows for the migrated framework.
+  #
+  # * `same` / `evolved` → re-key the row to the survivor's `to_stable_id`.
+  #   `evolved` with `requires_reassessment: true` also gets the
+  #   `migration_status` flag.
+  # * `archived` / `split` → leave the row pointing at the archived
+  #   `from_stable_id` and flag it via `migration_status`. The matrix
+  #   builder filters archived capabilities, so the row is invisible
+  #   until the future relink/dismiss UI surfaces it.
+  # * `new` → no predecessor row to touch.
+  #
+  # Idempotent: never downgrades an existing flag (the
+  # `WHERE migration_status = 'not_flagged'` clause). Re-keying an
+  # already-re-keyed row is a no-op (the WHERE clause won't match).
+  def handle_framework_version_migrated(event)
+    person_id = event.metadata[:person_id]
+    framework_id = event.data[:framework_id]
+
+    event.data[:mappings].each do |mapping|
+      scope = AssessmentLevelRating.where(
+        person_id: person_id, framework_id: framework_id,
+        capability_stable_id: mapping[:from_stable_id]
+      )
+
+      case mapping[:mapping_type]
+      when "same"
+        scope.update_all(capability_stable_id: mapping[:to_stable_id])
+      when "evolved"
+        scope.update_all(capability_stable_id: mapping[:to_stable_id])
+        if mapping[:requires_reassessment]
+          AssessmentLevelRating
+            .where(person_id: person_id, framework_id: framework_id,
+                   capability_stable_id: mapping[:to_stable_id],
+                   migration_status: "not_flagged")
+            .update_all(migration_status: "flagged",
+                        reassessment_reason: "expectations_evolved")
+        end
+      when "archived"
+        scope.where(migration_status: "not_flagged")
+          .update_all(migration_status: "flagged",
+                      reassessment_reason: "capability_archived")
+      when "split"
+        scope.where(migration_status: "not_flagged")
+          .update_all(migration_status: "flagged",
+                      reassessment_reason: "capability_split")
+      when "new"
+        # No predecessor data on this stream — nothing to migrate.
+      end
     end
   end
 

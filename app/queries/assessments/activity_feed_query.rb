@@ -43,6 +43,19 @@ class Assessments::ActivityFeedQuery
   # original `evidence_recorded` entry.
   RELINK_KIND = "evidence_relinked"
 
+  # Per-capability re-keying entry — emitted for every mapping in a
+  # `FrameworkVersionMigrated` event that has a survivor `to_stable_id`.
+  # Anchored to the SURVIVOR's stable_id so the per-cap focus filter on
+  # the assessment matrix surfaces the entry beside ratings/evidence/
+  # comments that now live under the survivor.
+  CAPABILITY_MIGRATED_KIND = "capability_migrated"
+
+  # Orphan-envelope entry — emitted once per `FrameworkVersionMigrated`
+  # event when there is at least one archived/split mapping. Framework-
+  # scoped (no `capability_stable_id`) because there's no survivor cell
+  # to anchor it to.
+  CAPABILITIES_ORPHANED_KIND = "capabilities_orphaned"
+
   MANAGER_KINDS = %w[manager_rated manager_rating_revised manager_rating_cleared].freeze
 
   # @param assignment [PersonFrameworkAssignment]
@@ -66,7 +79,7 @@ class Assessments::ActivityFeedQuery
   # @return [Array<Entry>] reverse-chronological entries the viewer may see
   def call
     entries = rating_entries + relink_entries + evidence_entries +
-              alignment_entries + comment_entries
+              alignment_entries + comment_entries + migration_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -261,6 +274,67 @@ class Assessments::ActivityFeedQuery
         end
         out
       end
+  end
+
+  # Expands every `FrameworkVersionMigrated` event on this person's
+  # stream into per-capability entries (anchored to each survivor) plus
+  # at most one orphan envelope per event listing the archived/split
+  # capabilities that have no survivor. Counts are baked into the event
+  # payload at emit time so no extra joins are needed here.
+  def migration_entries
+    stream_events.flat_map do |event|
+      next [] unless event.is_a?(PersonDevelopment::Events::FrameworkVersionMigrated)
+
+      data = event.data.with_indifferent_access
+      occurred_at = event_timestamp(event)
+      mappings = Array(data[:mappings])
+
+      per_cap = mappings.filter_map do |mapping|
+        m = mapping.with_indifferent_access
+        next if m[:to_stable_id].nil?
+        next unless %w[same evolved].include?(m[:mapping_type])
+
+        to_stable_id = m[:to_stable_id]
+        Entry.new(
+          id: "capability_migrated:#{event.event_id}:#{m[:from_stable_id]}",
+          kind: CAPABILITY_MIGRATED_KIND,
+          occurred_at: occurred_at,
+          payload: m.merge(old_version: data[:old_version], new_version: data[:new_version]),
+          capability_stable_id: to_stable_id,
+          level_ordinal: nil,
+          cycle_id: nil,
+          capability_name: capability_name_for(to_stable_id),
+          category_id: category_id_for(to_stable_id)
+        )
+      end
+
+      orphaned = mappings.select do |m|
+        kind = m.with_indifferent_access[:mapping_type]
+        %w[archived split].include?(kind)
+      end
+
+      envelope = if orphaned.any?
+        [
+          Entry.new(
+            id: "capabilities_orphaned:#{event.event_id}",
+            kind: CAPABILITIES_ORPHANED_KIND,
+            occurred_at: occurred_at,
+            payload: { old_version: data[:old_version],
+                       new_version: data[:new_version],
+                       orphaned: orphaned }.with_indifferent_access,
+            capability_stable_id: nil,
+            level_ordinal: nil,
+            cycle_id: nil,
+            capability_name: nil,
+            category_id: nil
+          )
+        ]
+      else
+        []
+      end
+
+      per_cap + envelope
+    end
   end
 
   def hide_manager_rating?(kind)

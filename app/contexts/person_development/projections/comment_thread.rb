@@ -10,14 +10,20 @@
 #
 class PersonDevelopment::Projections::CommentThread
   PROJECTION_NAME = "person_development/comment_thread"
-  CODE_VERSION = 1
+  # 2 — handles `FrameworkVersionMigrated`: re-keys assessment-cell
+  #     comments onto the survivor `to_stable_id` for same/evolved
+  #     mappings. archived/split leave the comment in place as
+  #     historical context (no UI surfaces it because the archived
+  #     capability doesn't render in the matrix).
+  CODE_VERSION = 2
 
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events
     [
       PersonDevelopment::Events::CommentPosted,
       PersonDevelopment::Events::CommentEdited,
-      PersonDevelopment::Events::CommentDeleted
+      PersonDevelopment::Events::CommentDeleted,
+      PersonDevelopment::Events::FrameworkVersionMigrated
     ]
   end
 
@@ -40,6 +46,7 @@ class PersonDevelopment::Projections::CommentThread
 
   def handle(event)
     case event
+    when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
     when PersonDevelopment::Events::CommentPosted  then handle_posted(event)
     when PersonDevelopment::Events::CommentEdited  then handle_edited(event)
     when PersonDevelopment::Events::CommentDeleted then handle_deleted(event)
@@ -88,6 +95,26 @@ class PersonDevelopment::Projections::CommentThread
       deleted_by_id: event.data[:deleted_by_id],
       deletion_reason: event.data[:reason]
     )
+  end
+
+  # Re-keys comments onto the survivor `to_stable_id` for `same`/`evolved`
+  # mappings. `archived`/`split` comments are left in place as historical
+  # context — they're invisible in the matrix because the parent
+  # capability no longer renders, but they still exist for forensic
+  # lookup. `new` is a no-op.
+  def handle_framework_version_migrated(event)
+    person_id = event.metadata[:person_id]
+    framework_id = event.data[:framework_id]
+
+    event.data[:mappings].each do |mapping|
+      next unless %w[same evolved].include?(mapping[:mapping_type])
+      next if mapping[:to_stable_id].nil?
+
+      PersonDevelopmentComment.where(
+        person_id: person_id, framework_id: framework_id,
+        capability_stable_id: mapping[:from_stable_id]
+      ).update_all(capability_stable_id: mapping[:to_stable_id])
+    end
   end
 
   # Suppressed during replay (see `Projections::Replayer.replay_mode?`).
