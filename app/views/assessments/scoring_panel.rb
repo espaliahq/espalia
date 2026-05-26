@@ -231,39 +231,42 @@ class Views::Assessments::ScoringPanel < Views::Base
 
       div(class: "space-y-2") do
         @categories.each do |cat_data|
-          category = cat_data[:category]
-          result = results[category.category_id]
-          category_result_row(category, result)
+          result = results[cat_data[:category].category_id]
+          category_result_row(cat_data, result)
         end
       end
     end
   end
 
-  def category_result_row(category, result)
+  def category_result_row(cat_data, result)
+    category = cat_data[:category]
     alt_results = secondary_category_results(category.category_id)
     divergent = alt_results.any? { |_, alt| alt && result && alt[:pass] != result[:pass] }
     active = category.category_id == @active_category_id
-    row_classes = "block py-1.5 px-2 rounded-md transition-colors cursor-pointer " \
-                  "#{active ? 'bg-primary/5 ring-1 ring-primary/20 dark:bg-primary/10 dark:ring-primary/30' : 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800'}"
+    base_classes = "block py-1.5 px-2 rounded-md transition-colors " \
+                   "#{active ? 'bg-primary/5 ring-1 ring-primary/20 dark:bg-primary/10 dark:ring-primary/30' : 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800'}"
 
     if @assessment_id
       a(
         href: matrix_assessment_path(@assessment_id, matrix_link_params(category.category_id)),
         data: { turbo_frame: "assessment-matrix" },
-        class: row_classes
-      ) { category_result_content(category, result, divergent, alt_results) }
+        class: "#{base_classes} cursor-pointer"
+      ) { category_result_content(cat_data, result, divergent, alt_results) }
     else
-      div(class: row_classes) do
-        category_result_content(category, result, divergent, alt_results)
+      div(class: base_classes) do
+        category_result_content(cat_data, result, divergent, alt_results)
       end
     end
   end
 
-  def category_result_content(category, result, divergent, alt_results)
-    div(class: "flex items-center justify-between") do
-      span(class: "text-sm text-gray-700 dark:text-gray-300 truncate mr-2") { category.name }
+  def category_result_content(cat_data, result, divergent, alt_results)
+    category = cat_data[:category]
+    progress = category_progress(cat_data)
 
-      div(class: "flex items-center gap-1") do
+    div(class: "flex items-center justify-between gap-2") do
+      span(class: "text-sm text-gray-700 dark:text-gray-300 truncate") { category.name }
+
+      div(class: "flex items-center gap-1 shrink-0") do
         if divergent
           span(
             class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0",
@@ -274,6 +277,16 @@ class Views::Assessments::ScoringPanel < Views::Base
           category_id: category.category_id,
           category_result: result
         )
+      end
+    end
+
+    div(class: "flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5") do
+      pool_label(result)
+      render Components::Kit::CategoryToleranceIndicator.new(
+        threshold: cat_data[:deficit_threshold]
+      )
+      span(class: "text-[10px] text-gray-500 dark:text-gray-400") do
+        "#{progress[:rated]}/#{progress[:total]} rated"
       end
     end
 
@@ -289,6 +302,50 @@ class Views::Assessments::ScoringPanel < Views::Base
         span(class: "text-[10px] font-medium #{alt_color}") { alt_text }
       end
     end
+  end
+
+  # Inline pool score (+/-N) for a category. Mirrors CategoryTabs#pool_label
+  # so the left-hand nav carries the same scoring detail the top tabs used
+  # to surface in the active tab.
+  def pool_label(result)
+    return unless result&.dig(:pool)
+
+    score = result[:pool].round(2)
+    label = score >= 0 ? "+#{score}" : score.to_s
+    color = if score > 0
+              "text-green-600 dark:text-green-400"
+    elsif score < 0
+              "text-red-600 dark:text-red-400"
+    else
+              "text-gray-400 dark:text-gray-500"
+    end
+    span(class: "text-[10px] font-mono #{color}") { label }
+  end
+
+  # Counts rated and total cells for a category against the active
+  # perspective. Same shape as CategoryTabs#tab_progress — kept local
+  # because the two views diverge often enough that the indirection
+  # of a shared helper would obscure intent.
+  #
+  # @param cat_data [Hash] from MatrixDataBuilder
+  # @return [Hash{Symbol => Integer}] :rated and :total
+  def category_progress(cat_data)
+    total = 0
+    rated = 0
+
+    cat_data[:capabilities].each do |cap_data|
+      cap_data[:cells].each_value do |cell|
+        total += 1
+        freq = case @context
+        when :manager then cell[:manager_frequency]
+        when :alignment then cell[:aligned_frequency]
+        else cell[:current_frequency]
+        end
+        rated += 1 if freq.present?
+      end
+    end
+
+    { rated: rated, total: total }
   end
 
   # ── Promotion ──
