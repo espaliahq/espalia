@@ -42,7 +42,7 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     )
 
     set_color_field("tenant[primary_color]", "#ff8800")
-    click_button "Cancel"
+    click_cancel
 
     applied = page.evaluate_script(
       "document.documentElement.style.getPropertyValue('--color-primary').trim()"
@@ -55,13 +55,11 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     wait_for_stimulus "theme-live-preview"
 
     set_color_field("tenant[primary_color]", "#abcdef")
-    click_button "Save"
-
     # Land back on the editor; the persisted value rendered next to
     # the input is a stable signal that the round-trip completed,
     # without racing the 5s flash auto-dismiss.
+    click_button_with_js_fallback "Save", expect_text: "#abcdef"
     assert_current_path tenant_theme_path
-    assert_text "#abcdef"
 
     @tenant.reload
     assert_equal "#abcdef", @tenant.primary_color
@@ -84,5 +82,15 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
       el.value = "#{hex}";
       el.dispatchEvent(new Event("input", { bubbles: true }));
     JS
+  end
+
+  # JS-dispatch click on the Cancel button (Stimulus-action element).
+  # Synthetic pointer clicks on Stimulus controls drop silently on
+  # starved CI runners; an `element.click()` via execute_script runs
+  # the handler synchronously.
+  def click_cancel
+    page.execute_script(
+      "document.querySelector('[data-action~=\"theme-live-preview#revert\"]').click()"
+    )
   end
 end

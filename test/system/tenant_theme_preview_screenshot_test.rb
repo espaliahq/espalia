@@ -38,13 +38,12 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
     set_color_field("tenant[nav_bg_color]", "#101820")
     screenshot("03_nav_bg_changed_to_navy")
 
-    click_button "Cancel"
+    click_cancel
     screenshot("04_after_cancel_restored")
 
     set_color_field("tenant[primary_color]", "#7c3aed")
-    click_button "Save"
+    click_button_with_js_fallback "Save", expect_text: "#7c3aed"
     assert_current_path tenant_theme_path
-    assert_text "#7c3aed"
     screenshot("05_after_save")
 
     visit tenant_root_path
@@ -59,5 +58,12 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
       el.value = "#{hex}";
       el.dispatchEvent(new Event("input", { bubbles: true }));
     JS
+  end
+
+  # JS-dispatch click on the Cancel button (Stimulus-action element).
+  def click_cancel
+    page.execute_script(
+      "document.querySelector('[data-action~=\"theme-live-preview#revert\"]').click()"
+    )
   end
 end
