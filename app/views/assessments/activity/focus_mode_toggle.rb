@@ -8,7 +8,7 @@
 #
 # Mode is sticky in `assessment_activity_focus_mode` cookie (1-year,
 # SameSite=Lax) so the user's last preference carries across sessions.
-# Default is "highlight".
+# Default is "filter".
 #
 class Views::Assessments::Activity::FocusModeToggle < Views::Base
   MODES = [
@@ -41,7 +41,7 @@ class Views::Assessments::Activity::FocusModeToggle < Views::Base
         activity_feed_mode_param: mode[:value],
         action: "click->activity-feed#setMode"
       },
-      aria: { pressed: mode[:value] == "highlight" ? "true" : "false" }
+      aria: { pressed: mode[:value] == "filter" ? "true" : "false" }
     ) { mode[:label] }
   end
 end

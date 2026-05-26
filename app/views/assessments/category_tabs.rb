@@ -10,6 +10,11 @@
 # divergence annotations) — the same information previously in the category header.
 # Inactive tabs show a compact view with status dot, name, and progress.
 #
+# Hidden at `lg:` and above. On desktop the left-hand ScoringPanel's "Categories"
+# section carries the same information and is the primary nav — keeping both
+# visible duplicates the affordance. Mobile keeps the top tabs since the scoring
+# panel is collapsed by default there.
+#
 class Views::Assessments::CategoryTabs < Views::Base
   # @param categories [Array<Hash>] all category data from MatrixDataBuilder
   # @param scoring [Hash] primary scoring perspective output
@@ -34,7 +39,7 @@ class Views::Assessments::CategoryTabs < Views::Base
   def view_template
     nav(
       id: "category-tabs",
-      class: "flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700 " \
+      class: "lg:hidden flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 px-3 py-1 sticky top-0 z-30",
       aria_label: "Category tabs"
     ) do

@@ -115,11 +115,16 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
-  context "focus highlight (default mode)" do
+  context "focus highlight mode" do
     should "amber-accent the entries that match the focused capability" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
       toggle_activity_pane
+
+      # Default mode is Filter; switch to Highlight for this test.
+      page.execute_script(<<~JS)
+        document.querySelector("[data-activity-feed-mode-param='highlight']").click();
+      JS
 
       # Focus cap1 by expanding its row.
       expand_matrix_row("#capability-name-#{@cap1_stable}")

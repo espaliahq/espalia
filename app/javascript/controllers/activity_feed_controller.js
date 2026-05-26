@@ -27,6 +27,7 @@ export default class extends BaseController {
     this.#paintFilterChips()
     this.#paintModeSegments()
     this.#applyState()
+    this.#scrollFirstMatchIntoView()
   }
 
   setFilter(event) {
@@ -44,6 +45,7 @@ export default class extends BaseController {
     this.#writeCookieMode(next)
     this.#paintModeSegments()
     this.#applyState()
+    this.#scrollFirstMatchIntoView()
   }
 
   // Listens for matrix:focus-changed — extracts categoryId,
@@ -59,6 +61,7 @@ export default class extends BaseController {
       levelOrdinal: (typeof levelOrdinal === "number") ? levelOrdinal : null
     }
     this.#applyState()
+    this.#scrollFirstMatchIntoView()
   }
 
   // Resets the feed's internal focus to "show all" without changing
@@ -206,10 +209,23 @@ export default class extends BaseController {
     })
   }
 
+  // In highlight mode, the rest of the feed stays visible, so a matching
+  // entry further down the list would otherwise sit off-screen until the
+  // user scrolls. Bring the first match into the visible band after every
+  // state apply that could have changed which entry matches. `nearest`
+  // avoids disrupting position when the match is already on screen.
+  #scrollFirstMatchIntoView() {
+    if (this.mode !== "highlight") return
+    if (!this.#hasActiveFocus()) return
+    const first = this.entryTargets.find(e => e.dataset.match === "true")
+    if (!first) return
+    first.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }
+
   #readCookieMode() {
     const match = document.cookie.match(new RegExp("(?:^|; )" + COOKIE_NAME + "=([^;]+)"))
     const value = match ? decodeURIComponent(match[1]) : null
-    return VALID_MODES.includes(value) ? value : "highlight"
+    return VALID_MODES.includes(value) ? value : "filter"
   }
 
   #writeCookieMode(value) {

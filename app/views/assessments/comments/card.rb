@@ -67,13 +67,23 @@ class Views::Assessments::Comments::Card < Views::Base
       # Timestamp doubles as the comment's permalink — comments are
       # individually addressable and the "time ago" line is the most
       # natural anchor for that, freeing the footer for actions that
-      # actually need their own row.
+      # actually need their own row. Affordance is two-layered: a small
+      # chain-link icon next to the time, plus an always-on dotted
+      # underline that solidifies on hover (Wikipedia-style "this is a
+      # link" cue). The plain hover-only underline tested poorly — users
+      # didn't realise the time was clickable.
       if @comment.posted_at
         a(
           href: comment_path(@comment),
-          class: "text-gray-400 dark:text-gray-500 hover:underline",
+          class: "inline-flex items-center gap-1 text-gray-400 dark:text-gray-500 " \
+                 "underline decoration-dotted decoration-gray-300 dark:decoration-gray-600 " \
+                 "underline-offset-2 hover:decoration-solid hover:text-gray-600 " \
+                 "dark:hover:text-gray-300",
           title: "Link to this comment · posted #{@comment.posted_at.utc.iso8601}"
-        ) { "#{time_ago_in_words(@comment.posted_at)} ago" }
+        ) do
+          permalink_icon
+          plain "#{time_ago_in_words(@comment.posted_at)} ago"
+        end
       else
         span(class: "text-gray-400 dark:text-gray-500") { "—" }
       end
@@ -83,6 +93,26 @@ class Views::Assessments::Comments::Card < Views::Base
           title: "Last edited #{@comment.edited_at.utc.iso8601}"
         ) { "(edited)" }
       end
+    end
+  end
+
+  # Tiny chain-link icon used inside the timestamp permalink. Heroicons
+  # "link" outline path, sized to sit on the 11px text baseline.
+  def permalink_icon
+    svg(
+      class: "w-3 h-3 shrink-0",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      stroke_width: "2",
+      aria_hidden: "true"
+    ) do |s|
+      s.path(
+        stroke_linecap: "round",
+        stroke_linejoin: "round",
+        d: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" \
+           "m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+      )
     end
   end
 

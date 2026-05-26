@@ -312,65 +312,75 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "display category tabs and default to first category" do
-      visit assessment_path(@assignment)
-
-      # Both tabs should be visible
-      assert_selector "#category-tabs"
-      assert_text "Thinking"
-      assert_text "Delivering"
-
-      # First category content should be visible
-      assert_text "Critical Thinking"
-      assert_text "Problem Solving"
-
-      # Second category content should NOT be visible (only one category rendered)
-      assert_no_text "Execution"
-    end
-
-    should "switch categories when clicking a tab" do
-      visit assessment_path(@assignment)
-
-      # Wait for the lazy-loaded matrix frame to finish its eager fetch.
-      # The category-tabs nav lives INSIDE the assessment-matrix turbo frame,
-      # so a click on a tab can race the eager-fetch replacement and be
-      # silently dropped on slow CI runners.
-      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
-
-      # Drive the Turbo Frame fetch directly by setting frame.src — bypasses
-      # the click event entirely. Capybara's pointer click + JS dispatch
-      # have both been dropped on starved CI runners; this is the most
-      # reliable way to trigger the frame swap.
-      page.execute_script(<<~JS)
-        const tab = Array.from(document.querySelectorAll("#category-tabs a"))
-          .find(a => a.textContent.trim().includes("Delivering"));
-        const frame = document.getElementById("assessment-matrix");
-        if (tab && frame) frame.src = tab.href;
-      JS
-
-      assert_text "Execution"
-      assert_text "Ships features reliably"
-      assert_no_selector "#capability-name-#{@cap1_stable}"
-    end
-
-    should "show progress counts on tabs" do
-      visit assessment_path(@assignment)
-
-      # Tabs should show rated/total counts (0 rated initially)
-      within "#category-tabs" do
-        assert_text "0/"
+    # Top category-tabs nav is hidden at `lg:` and above (the left-hand
+    # scoring panel is the primary nav on desktop — see assessments.md).
+    # The next four tests target the tab bar itself, so they run at a
+    # mobile viewport where the nav is visible.
+    context "at mobile viewport" do
+      setup do
+        page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       end
-    end
 
-    should "update tab progress after rating" do
-      visit assessment_path(@assignment)
+      should "display category tabs and default to first category" do
+        visit assessment_path(@assignment)
 
-      # Rate a capability in the first tab
-      click_rating_frequency("#rating-#{@cap1_stable}-1", "Consistently")
+        # Both tabs should be visible
+        assert_selector "#category-tabs"
+        assert_text "Thinking"
+        assert_text "Delivering"
 
-      # Tab progress should update
-      within "#category-tabs" do
-        assert_text "1/"
+        # First category content should be visible
+        assert_text "Critical Thinking"
+        assert_text "Problem Solving"
+
+        # Second category content should NOT be visible (only one category rendered)
+        assert_no_text "Execution"
+      end
+
+      should "switch categories when clicking a tab" do
+        visit assessment_path(@assignment)
+
+        # Wait for the lazy-loaded matrix frame to finish its eager fetch.
+        # The category-tabs nav lives INSIDE the assessment-matrix turbo frame,
+        # so a click on a tab can race the eager-fetch replacement and be
+        # silently dropped on slow CI runners.
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+
+        # Drive the Turbo Frame fetch directly by setting frame.src — bypasses
+        # the click event entirely. Capybara's pointer click + JS dispatch
+        # have both been dropped on starved CI runners; this is the most
+        # reliable way to trigger the frame swap.
+        page.execute_script(<<~JS)
+          const tab = Array.from(document.querySelectorAll("#category-tabs a"))
+            .find(a => a.textContent.trim().includes("Delivering"));
+          const frame = document.getElementById("assessment-matrix");
+          if (tab && frame) frame.src = tab.href;
+        JS
+
+        assert_text "Execution"
+        assert_text "Ships features reliably"
+        assert_no_selector "#capability-name-#{@cap1_stable}"
+      end
+
+      should "show progress counts on tabs" do
+        visit assessment_path(@assignment)
+
+        # Tabs should show rated/total counts (0 rated initially)
+        within "#category-tabs" do
+          assert_text "0/"
+        end
+      end
+
+      should "update tab progress after rating" do
+        visit assessment_path(@assignment)
+
+        # Rate a capability in the first tab
+        click_rating_frequency("#rating-#{@cap1_stable}-1", "Consistently")
+
+        # Tab progress should update
+        within "#category-tabs" do
+          assert_text "1/"
+        end
       end
     end
 

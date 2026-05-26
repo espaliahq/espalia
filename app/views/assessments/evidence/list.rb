@@ -50,23 +50,26 @@ class Views::Assessments::Evidence::List < Views::Base
     "evidence-list-#{@capability_stable_id}-#{@level_ordinal}"
   end
 
-  # Header pairs the section label with a small `+` affordance that
-  # opens the evidence form. Replaces the previous full-width dashed
-  # button — same target action, far less vertical space.
+  # Header pairs the section label with a `+` affordance that opens the
+  # evidence form. When the viewer can create, the whole header line is
+  # the click target — a 1px-tall row of microtype was a hard-to-hit
+  # affordance on touch.
   def header
-    div(class: "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-               "text-gray-500 dark:text-gray-400 mb-1") do
-      span { "Evidence" }
-      span(class: "font-mono") { "(#{@items.size})" } if @items.any?
-      add_icon if @can_create
+    if @can_create
+      add_button
+    else
+      div(class: header_label_classes) do
+        header_label_content
+      end
     end
   end
 
-  def add_icon
+  def add_button
     button(
       type: "button",
-      class: "ml-auto rounded p-0.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
-             "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 " \
+             "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
+             "dark:hover:text-gray-200 transition-colors",
       aria: { label: "Add evidence" },
       data: {
         action: "click->evidence-form#open",
@@ -74,8 +77,19 @@ class Views::Assessments::Evidence::List < Views::Base
         evidence_form_level_ordinal_param: @level_ordinal
       }
     ) do
-      span(class: "block text-sm leading-none", aria_hidden: "true") { "+" }
+      header_label_content
+      span(class: "ml-auto block text-sm leading-none", aria_hidden: "true") { "+" }
     end
+  end
+
+  def header_label_classes
+    "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
+      "text-gray-500 dark:text-gray-400 mb-1"
+  end
+
+  def header_label_content
+    span { "Evidence" }
+    span(class: "font-mono") { "(#{@items.size})" } if @items.any?
   end
 
   def can_withdraw?(item)
