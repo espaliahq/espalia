@@ -70,6 +70,32 @@ class Operations::Frameworks::CapabilityGetTest < ActiveSupport::TestCase
     end
   end
 
+  context "identifier resolution" do
+    should "look up by stable_id when the caller passes that instead of capability_id" do
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Frameworks::CapabilityGet.call(
+          context: @context,
+          params: { framework_id: @framework_id, capability_id: @cap.stable_id }
+        )
+      end
+
+      assert_equal @cap.capability_id, result[:id]
+      assert_equal @cap.stable_id, result[:stable_id]
+      assert_equal "Critical Thinking", result[:name]
+    end
+
+    should "still raise when neither capability_id nor stable_id matches in the framework" do
+      assert_raises(ActiveRecord::RecordNotFound) do
+        ActsAsTenant.with_tenant(@tenant) do
+          Operations::Frameworks::CapabilityGet.call(
+            context: @context,
+            params: { framework_id: @framework_id, capability_id: SecureRandom.uuid_v7 }
+          )
+        end
+      end
+    end
+  end
+
   context "structure" do
     should "return capability identity, description, status, category" do
       result = call_op

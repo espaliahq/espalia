@@ -106,6 +106,35 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
     end
   end
 
+  context "identifier resolution" do
+    should "look up by stable_id when the caller passes that instead of capability_id" do
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::CapabilityGet.call(
+          context: @context,
+          params: { assignment_id: @assignment.id, capability_id: @cap.stable_id }
+        )
+      end
+
+      assert_equal @cap.capability_id, result[:id]
+      assert_equal @cap.stable_id, result[:stable_id]
+      assert_equal "Critical Thinking", result[:name]
+      l2 = result[:expectations].find { |e| e[:level_ordinal] == 2 }
+      assert_equal "consistent", l2.dig(:ratings, :self),
+        "ratings overlay must work the same way whether the LLM passes capability_id or stable_id"
+    end
+
+    should "still raise when neither capability_id nor stable_id matches in the framework" do
+      assert_raises(ActiveRecord::RecordNotFound) do
+        ActsAsTenant.with_tenant(@tenant) do
+          Operations::Assessments::CapabilityGet.call(
+            context: @context,
+            params: { assignment_id: @assignment.id, capability_id: SecureRandom.uuid_v7 }
+          )
+        end
+      end
+    end
+  end
+
   context "policy" do
     should "deny callers who don't own or manage the assessment" do
       other_user = create(:user)

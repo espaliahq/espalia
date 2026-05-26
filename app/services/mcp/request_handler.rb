@@ -38,6 +38,20 @@ class Mcp::RequestHandler
 
   # @param payload [Hash] a parsed JSON-RPC 2.0 request body
   # @return [Hash] a JSON-RPC 2.0 response body
+  #
+  # Error handling policy:
+  #
+  # - Client-side errors (bad method, bad params, denial, not-found-by-id)
+  #   log at WARN with a one-line "[mcp] <label>" prefix. They map to the
+  #   appropriate JSON-RPC code per the spec.
+  # - Server-side errors (anything else falling through) log at ERROR
+  #   with the exception class + first 10 backtrace frames so Datadog /
+  #   Render alarms scoped to `level:error AND [mcp]` only fire on real
+  #   bugs, not on misuse.
+  #
+  # Every error response gets a log line — auth denials and parameter
+  # validation failures previously emitted nothing, which made root-cause
+  # work harder than it needed to be.
   def call(payload)
     id = payload["id"]
     method = payload["method"]
@@ -46,17 +60,26 @@ class Mcp::RequestHandler
     result = dispatch(method, params)
     success(id, result)
   rescue MethodNotFound => e
+    log_client_error("method not found", e, code: -32601)
     error(id, code: -32601, message: e.message)
   rescue InvalidParams => e
+    log_client_error("invalid params", e, code: -32602)
     error(id, code: -32602, message: e.message)
   rescue Operations::Base::ParameterError => e
+    log_client_error("invalid params", e, code: -32602)
     error(id, code: -32602, message: e.message)
+  rescue ActiveRecord::RecordNotFound => e
+    # Bad id from the client. -32602 invalid params, not -32603 internal error.
+    log_client_error("not found", e, code: -32602)
+    error(id, code: -32602, message: format_not_found(e))
   rescue InsufficientScope => e
+    log_client_error("insufficient scope", e, code: -32603)
     error(id, code: -32603, message: "insufficient scope: #{e.message}")
   rescue Pundit::NotAuthorizedError => e
+    log_client_error("not authorized", e, code: -32603)
     error(id, code: -32603, message: "not authorized: #{e.message}")
   rescue StandardError => e
-    Rails.logger.error("[mcp] #{e.class}: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
+    Rails.logger.error("[mcp] internal error: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
     error(id, code: -32603, message: "internal error")
   end
 
@@ -200,5 +223,21 @@ class Mcp::RequestHandler
 
   def error(id, code:, message:)
     { jsonrpc: "2.0", id: id, error: { code: code, message: message } }
+  end
+
+  # One-line log entry for client-attributable failures. WARN level so it
+  # doesn't trip error alarms but stays searchable by `[mcp]` and by code.
+  def log_client_error(label, exception, code:)
+    summary = exception.message.to_s.gsub(/\s+/, " ").strip
+    Rails.logger.warn("[mcp] #{label} (code=#{code}): #{exception.class}: #{summary[0, 300]}")
+  end
+
+  # ActiveRecord::RecordNotFound messages look like
+  # `Couldn't find Foo with [WHERE foo.id = $1 AND ...]`. Strip the
+  # SQL fragment for the public response (don't leak query shape) but
+  # keep the model name so the client can self-correct.
+  def format_not_found(exception)
+    model = exception.message.scan(/Couldn't find (\S+)/).flatten.first
+    model ? "not found: #{model}" : "not found"
   end
 end

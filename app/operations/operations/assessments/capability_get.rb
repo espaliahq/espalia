@@ -14,7 +14,8 @@
 # row gains a `ratings:` key with the assessee's self / manager / aligned
 # values for that level (nil when not yet rated).
 class Operations::Assessments::CapabilityGet < Operations::Base
-  description "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned)."
+  description "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned). " \
+              "Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument."
   category :read
   approval :none
 
@@ -50,12 +51,21 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   # Scope the lookup through the assignment's framework so a
   # capability_id from a different framework in the same tenant can't
   # be requested under this assignment's authorization.
+  #
+  # LLM clients regularly pass `stable_id` (the cross-version handle
+  # also returned by parent calls like assessments_get) into the
+  # `capability_id` argument — both are UUID-shaped and the LLM picks
+  # whichever feels more semantically stable. We look up by either,
+  # within the framework's category scope.
   def capability
-    @capability ||= FrameworkState::Capability
-      .joins(:category)
-      .where(framework_capability_categories: { framework_id: assignment.framework_id })
-      .includes(:category)
-      .find_by!(capability_id: params[:capability_id])
+    @capability ||= begin
+      scope = FrameworkState::Capability
+        .joins(:category)
+        .where(framework_capability_categories: { framework_id: assignment.framework_id })
+        .includes(:category)
+      identifier = params[:capability_id]
+      scope.find_by(capability_id: identifier) || scope.find_by!(stable_id: identifier)
+    end
   end
 
   EMPTY_RATING = { self: nil, manager: nil, aligned: nil }.freeze

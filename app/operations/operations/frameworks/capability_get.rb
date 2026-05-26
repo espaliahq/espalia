@@ -8,7 +8,8 @@
 #
 # Read-only; scoped by acts_as_tenant and FrameworkPolicy#show?.
 class Operations::Frameworks::CapabilityGet < Operations::Base
-  description "Fetch one capability's full detail: bindings, expectations per level, illustrations."
+  description "Fetch one capability's full detail: bindings, expectations per level, illustrations. " \
+              "Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument."
   category :read
   approval :none
 
@@ -36,11 +37,19 @@ class Operations::Frameworks::CapabilityGet < Operations::Base
   # this join, only the tenant boundary protects against cross-framework
   # ID confusion — which is too weak when a tenant has multiple
   # frameworks.
+  #
+  # Accepts the value as either a capability_id (per-version) or a
+  # stable_id (cross-version). LLM clients regularly pass stable_id —
+  # the cross-version handle also returned by parent calls like
+  # frameworks_get — into the capability_id argument. Look up by either.
   def capability
-    @capability ||= FrameworkState::Capability
-      .joins(:category)
-      .where(framework_capability_categories: { framework_id: framework.framework_id })
-      .includes(:category)
-      .find_by!(capability_id: params[:capability_id])
+    @capability ||= begin
+      scope = FrameworkState::Capability
+        .joins(:category)
+        .where(framework_capability_categories: { framework_id: framework.framework_id })
+        .includes(:category)
+      identifier = params[:capability_id]
+      scope.find_by(capability_id: identifier) || scope.find_by!(stable_id: identifier)
+    end
   end
 end
