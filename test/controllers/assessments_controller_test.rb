@@ -253,6 +253,19 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, 'aria-current="page"'
     end
+
+    should "omit archived categories from the rendered matrix" do
+      ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::CapabilityCategory.find_by!(category_id: @cat2_id).update!(status: "archived")
+      end
+
+      sign_in @user
+      get matrix_assessment_path(@assignment)
+
+      assert_response :success
+      assert_not_includes response.body, "Delivering",
+        "archived category name should not appear in the matrix"
+    end
   end
 
   private

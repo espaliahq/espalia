@@ -56,6 +56,17 @@ class Operations::Frameworks::GetTest < ActiveSupport::TestCase
       # / bindings. Deeper drill-in lives behind a separate tool.
       assert_equal %i[id stable_id name].sort, capability.keys.sort
     end
+
+    should "omit archived categories from the payload" do
+      ActsAsTenant.with_tenant(@tenant) do
+        archived = create(:framework_capability_category, framework_id: @framework_id,
+                                                          name: "Retired", ordinal: 2)
+        archived.update!(status: "archived")
+      end
+
+      result = call_op
+      assert_not_includes result[:categories].map { |c| c[:name] }, "Retired"
+    end
   end
 
   context "policy" do

@@ -50,7 +50,8 @@ class Frameworks::CategoriesController < ApplicationController
   def set_category
     @category = FrameworkState::CapabilityCategory.find_by!(
       framework_id: @framework.framework_id,
-      category_id: params.expect(:id)
+      category_id: params.expect(:id),
+      status: "active"
     )
   rescue ActiveRecord::RecordNotFound
     head :not_found
