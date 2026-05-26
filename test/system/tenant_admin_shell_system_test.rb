@@ -35,16 +35,13 @@ class TenantAdminShellSystemTest < ApplicationSystemTestCase
     visit tenant_root_path
     assert_text "Tenant administration"
 
-    click_link "Theme"
+    click_link_with_js_fallback "Theme", expect_text: "Brand colors"
     assert_current_path tenant_theme_path
-    assert_text "Brand colors"
 
-    click_link "Users"
+    click_link_with_js_fallback "Users", expect_text: "Tenant users"
     assert_current_path tenant_users_path
-    assert_text "Tenant users"
 
-    click_link "Integrations"
+    click_link_with_js_fallback "Integrations", expect_text: "HRIS"
     assert_current_path tenant_integrations_path
-    assert_text "HRIS"
   end
 end
