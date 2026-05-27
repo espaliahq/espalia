@@ -78,6 +78,18 @@ FactoryBot.define do
     description { "Seeks guidance from a tech lead on requirements." }
   end
 
+  factory :framework_migration_mapping, class: "FrameworkState::MigrationMapping" do
+    tenant
+    framework_id { SecureRandom.uuid_v7 }
+    mapping_id { SecureRandom.uuid_v7 }
+    from_stable_id { SecureRandom.uuid_v7 }
+    to_stable_id { SecureRandom.uuid_v7 }
+    mapping_type { "same" }
+    requires_reassessment { false }
+    published_version { 1 }
+    reason { "factory default" }
+  end
+
   factory :framework_suggested_edit, class: "FrameworkState::SuggestedEdit" do
     tenant
     framework_id { SecureRandom.uuid_v7 }

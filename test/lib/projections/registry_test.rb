@@ -35,7 +35,8 @@ class Projections::RegistryTest < ActiveSupport::TestCase
     should "not include sync handlers that dispatch commands" do
       forbidden = [
         AssessmentCycles::SyncHandlers::PersonEnrollmentSync,
-        AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments
+        AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments,
+        Frameworks::SyncHandlers::FrameworkVersionMigrationSync
       ]
       assert_empty(Projections::Registry.classes & forbidden)
     end

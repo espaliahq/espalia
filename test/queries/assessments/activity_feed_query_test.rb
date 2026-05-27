@@ -152,6 +152,66 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "framework version migration" do
+    setup do
+      # Inject a FrameworkVersionMigrated event on the assessee's PD stream
+      # — two mappings, one survivor + one archived.
+      survivor_stable_id = SecureRandom.uuid_v7
+      orphan_stable_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        # The activity feed query looks up capability names via the
+        # FrameworkState read model — seed both stable_ids so the entries
+        # render with names.
+        cat = create(:framework_capability_category, framework_id: @framework_id, name: "Eng")
+        create(:framework_capability, category_id: cat.category_id,
+          stable_id: survivor_stable_id, name: "Survivor")
+        create(:framework_capability, category_id: cat.category_id,
+          stable_id: orphan_stable_id, name: "Old Cap", status: "archived")
+      end
+
+      event = PersonDevelopment::Events::FrameworkVersionMigrated.new(
+        data: {
+          framework_id: @framework_id, old_version: 1, new_version: 2,
+          mappings: [
+            { from_stable_id: SecureRandom.uuid_v7, to_stable_id: survivor_stable_id,
+              mapping_type: "same", requires_reassessment: false,
+              from_capability_name: "Old Survivor Sibling", to_capability_name: "Survivor",
+              counts: { ratings: 1, evidence: 0, comments: 0 } },
+            { from_stable_id: orphan_stable_id, to_stable_id: nil,
+              mapping_type: "archived", requires_reassessment: false,
+              from_capability_name: "Old Cap", to_capability_name: nil,
+              counts: { ratings: 1, evidence: 0, comments: 0 } }
+          ]
+        },
+        metadata: { tenant_id: @tenant.id, person_id: @assessee.id, framework_id: @framework_id }
+      )
+      ActsAsTenant.with_tenant(@tenant) do
+        stream = EventStreamNaming.person_development_stream(@assessee.id, @framework_id)
+        Rails.configuration.event_store.append(event, stream_name: stream)
+      end
+
+      @survivor_stable_id = survivor_stable_id
+      @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
+        alignment_started: false)
+    end
+
+    should "emit a capability_migrated entry anchored to the survivor stable_id" do
+      cap_migrated = @entries.find { |e| e.kind == "capability_migrated" }
+      assert_not_nil cap_migrated
+      assert_equal @survivor_stable_id, cap_migrated.capability_stable_id
+      assert_equal "Survivor", cap_migrated.capability_name
+      assert_equal "same", cap_migrated.payload[:mapping_type]
+    end
+
+    should "emit a capabilities_orphaned envelope listing archived/split mappings" do
+      orphan = @entries.find { |e| e.kind == "capabilities_orphaned" }
+      assert_not_nil orphan
+      assert_equal 1, orphan.payload[:orphaned].size
+      assert_equal "archived", orphan.payload[:orphaned].first[:mapping_type]
+    end
+  end
+
   context "withdrawn evidence" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

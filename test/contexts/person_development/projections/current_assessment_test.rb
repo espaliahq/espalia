@@ -488,6 +488,78 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "FrameworkVersionMigrated" do
+    setup do
+      @from_stable_id = SecureRandom.uuid_v7
+      @to_stable_id   = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: SecureRandom.uuid_v7, level_id: SecureRandom.uuid_v7)
+      emit(PersonDevelopment::Events::JoinedAssessmentCycle,
+        cycle_id: @cycle_id, framework_version: 1)
+    end
+
+    should "re-key rating rows for a same mapping" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 3,
+          self_rated_frequency: "consistent")
+      end
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "same", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil AssessmentLevelRating.find_by(capability_stable_id: @from_stable_id)
+        assert_not_nil AssessmentLevelRating.find_by(capability_stable_id: @to_stable_id)
+      end
+    end
+
+    should "flag rating rows as evolved when requires_reassessment is true" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 3,
+          self_rated_frequency: "consistent")
+      end
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "evolved", requires_reassessment: true } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(capability_stable_id: @to_stable_id)
+        assert_equal "flagged", rating.migration_status
+        assert_equal "expectations_evolved", rating.reassessment_reason
+      end
+    end
+
+    should "flag archived rating rows without moving them" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 3,
+          self_rated_frequency: "consistent")
+      end
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: nil,
+                      mapping_type: "archived", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(capability_stable_id: @from_stable_id)
+        assert_not_nil rating
+        assert_equal "flagged", rating.migration_status
+        assert_equal "capability_archived", rating.reassessment_reason
+      end
+    end
+  end
+
   private
 
   # Emits an event through the projection with person/framework metadata.

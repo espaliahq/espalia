@@ -19,7 +19,11 @@ class PersonDevelopment::Projections::EvidenceCollection
 
   # Bump when `reset!` or any handler in this projection would write
   # different state from the same event payload than before.
-  CODE_VERSION = 1
+  #
+  # 2 — handles `FrameworkVersionMigrated`: re-keys evidence rows onto
+  #     the survivor `to_stable_id` for same/evolved mappings, and
+  #     withdraws orphans for archived/split.
+  CODE_VERSION = 2
 
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events
@@ -27,7 +31,8 @@ class PersonDevelopment::Projections::EvidenceCollection
       PersonDevelopment::Events::EvidenceRecorded,
       PersonDevelopment::Events::EvidenceRelinked,
       PersonDevelopment::Events::EvidenceUpdated,
-      PersonDevelopment::Events::EvidenceWithdrawn
+      PersonDevelopment::Events::EvidenceWithdrawn,
+      PersonDevelopment::Events::FrameworkVersionMigrated
     ]
   end
 
@@ -57,6 +62,38 @@ class PersonDevelopment::Projections::EvidenceCollection
     when PersonDevelopment::Events::EvidenceRelinked then handle_relinked(event)
     when PersonDevelopment::Events::EvidenceUpdated then handle_updated(event)
     when PersonDevelopment::Events::EvidenceWithdrawn then handle_withdrawn(event)
+    when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
+    end
+  end
+
+  # Applies the migration mappings to this person's evidence rows.
+  # `same`/`evolved` re-key onto the survivor; `archived`/`split`
+  # withdraw the row (the underlying capability no longer exists in
+  # the published framework, so the evidence has nowhere to live).
+  # `new` is a no-op (no predecessor evidence).
+  def handle_framework_version_migrated(event)
+    person_id = event.metadata[:person_id]
+    framework_id = event.data[:framework_id]
+    timestamp = event.metadata[:timestamp] || Time.current
+
+    event.data[:mappings].each do |mapping|
+      scope = EvidenceItem.where(
+        person_id: person_id, framework_id: framework_id,
+        capability_stable_id: mapping[:from_stable_id]
+      )
+
+      case mapping[:mapping_type]
+      when "same", "evolved"
+        scope.update_all(capability_stable_id: mapping[:to_stable_id])
+      when "archived", "split"
+        scope.where(link_status: "active").update_all(
+          link_status: "withdrawn",
+          withdrawn_at: timestamp,
+          withdrawal_reason: "framework_migration_#{mapping[:mapping_type]}"
+        )
+      when "new"
+        # No predecessor evidence to touch.
+      end
     end
   end
 

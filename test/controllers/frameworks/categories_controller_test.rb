@@ -67,6 +67,18 @@ class Frameworks::CategoriesControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       assert_match(/not authorized/i, flash[:alert])
     end
+
+    should "404 when the category has been archived" do
+      ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::CapabilityCategory.find_by!(category_id: @cat_id).update!(status: "archived")
+      end
+
+      sign_in @user
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { name: "Cannot edit" } }
+
+      assert_response :not_found
+    end
   end
 
   private

@@ -24,7 +24,12 @@ class Views::Tenant::Users::ScopePickerFrame < Views::Base
     ],
     "capability_category_lead" => [
       "capability_category", "Capability category",
-      ->(fw) { FrameworkState::CapabilityCategory.where(framework_id: fw.framework_id).order(:name).pluck(:category_id, :name) }
+      lambda do |fw|
+        FrameworkState::CapabilityCategory
+          .where(framework_id: fw.framework_id, status: "active")
+          .order(:name)
+          .pluck(:category_id, :name)
+      end
     ],
     "capability_lead" => [
       "capability", "Capability",
@@ -32,6 +37,8 @@ class Views::Tenant::Users::ScopePickerFrame < Views::Base
         FrameworkState::Capability
           .joins("INNER JOIN framework_capability_categories ON framework_capability_categories.category_id = framework_capabilities.category_id")
           .where("framework_capability_categories.framework_id = ?", fw.framework_id)
+          .where("framework_capability_categories.status = ?", "active")
+          .where(status: "active")
           .order("framework_capabilities.name")
           .pluck(:capability_id, :name)
       end

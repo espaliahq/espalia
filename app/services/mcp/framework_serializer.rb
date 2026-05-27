@@ -124,12 +124,7 @@ class Mcp::FrameworkSerializer
   end
 
   def categories
-    cats = FrameworkState::CapabilityCategory
-      .where(framework_id: @framework.framework_id)
-      .includes(:capabilities)
-      .order(:ordinal)
-
-    cats.map do |category|
+    active_categories.map do |category|
       {
         id: category.category_id,
         name: category.name,
@@ -139,6 +134,13 @@ class Mcp::FrameworkSerializer
         }
       }
     end
+  end
+
+  def active_categories
+    FrameworkState::CapabilityCategory
+      .where(framework_id: @framework.framework_id, status: "active")
+      .includes(:capabilities)
+      .order(:ordinal)
   end
 
   def active_capabilities(category)

@@ -42,6 +42,7 @@ class PersonDevelopment::Aggregate
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     @evidence = {}       # evidence_id => { capability_stable_id:, level_ordinal:, status: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
+    @last_migrated_to_version = nil # highest framework version this stream has been migrated to
   end
 
   # ── Assignment ──
@@ -106,6 +107,36 @@ class PersonDevelopment::Aggregate
   #
   # These commands are invoked ONLY by
   # {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}, never by user code.
+
+  # Migrates the person's stream onto a new framework version.
+  #
+  # Called by {Frameworks::SyncHandlers::FrameworkVersionMigrationSync}
+  # in the same transaction as the originating
+  # {Frameworks::Events::FrameworkVersionPublished}. Self-describing —
+  # the mappings payload is everything the projections need.
+  #
+  # Idempotent: if this stream has already been migrated to a version
+  # at or beyond `new_version` (e.g. during predeploy replay), the
+  # command silently no-ops rather than emitting a duplicate event.
+  #
+  # @param framework_id [String] UUID of the framework being republished
+  # @param old_version [Integer] previous published version
+  # @param new_version [Integer] newly published version
+  # @param mappings [Array<Hash>] one entry per archived capability
+  #   (see {PersonDevelopment::Events::FrameworkVersionMigrated} for shape)
+  # @raise [RuntimeError] if not assigned to this framework
+  def migrate_framework_version(framework_id, old_version, new_version, mappings)
+    ensure_assigned!
+    raise "Framework_id #{framework_id} does not match assignment" unless @framework_id == framework_id
+    return if @last_migrated_to_version && @last_migrated_to_version >= new_version
+
+    apply(PersonDevelopment::Events::FrameworkVersionMigrated.new(data: {
+      framework_id: framework_id,
+      old_version: old_version,
+      new_version: new_version,
+      mappings: mappings
+    }))
+  end
 
   # Joins the given assessment cycle.
   #
@@ -688,6 +719,10 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::PersonLevelChanged do |event|
     @level_id = event.data[:new_level_id]
+  end
+
+  on PersonDevelopment::Events::FrameworkVersionMigrated do |event|
+    @last_migrated_to_version = event.data[:new_version]
   end
 
   on PersonDevelopment::Events::JoinedAssessmentCycle do |event|

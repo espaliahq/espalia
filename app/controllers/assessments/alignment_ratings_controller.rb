@@ -80,7 +80,7 @@ class Assessments::AlignmentRatingsController < ApplicationController
     role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
     level = FrameworkState::Level.find_by!(level_id: @assignment.level_id)
     categories = FrameworkState::CapabilityCategory
-      .where(framework_id: @assignment.framework_id)
+      .where(framework_id: @assignment.framework_id, status: "active")
       .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
       .order(:ordinal)
 

@@ -36,6 +36,56 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  # ── Framework Version Migration ──
+
+  context "#migrate_framework_version" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @mappings = [
+        { from_stable_id: SecureRandom.uuid_v7, to_stable_id: SecureRandom.uuid_v7,
+          mapping_type: "same", requires_reassessment: false,
+          counts: { ratings: 0, evidence: 0, comments: 0 } }
+      ]
+    end
+
+    should "apply FrameworkVersionMigrated with the mappings payload" do
+      @aggregate.migrate_framework_version(@framework_id, 1, 2, @mappings)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::FrameworkVersionMigrated, event
+      assert_equal 1, event.data[:old_version]
+      assert_equal 2, event.data[:new_version]
+      assert_equal @mappings, event.data[:mappings]
+    end
+
+    should "raise when not assigned to the framework" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.migrate_framework_version(SecureRandom.uuid_v7, 1, 2, @mappings)
+      end
+      assert_match /does not match assignment/, err.message
+    end
+
+    should "no-op when stream has already been migrated to the same version" do
+      @aggregate.migrate_framework_version(@framework_id, 1, 2, @mappings)
+      events_before = @aggregate.unpublished_events.to_a.size
+
+      @aggregate.migrate_framework_version(@framework_id, 1, 2, @mappings)
+      events_after = @aggregate.unpublished_events.to_a.size
+
+      assert_equal events_before, events_after, "should not emit a second event for the same version"
+    end
+
+    should "no-op when stream has already been migrated past the requested version" do
+      @aggregate.migrate_framework_version(@framework_id, 1, 3, @mappings)
+      events_before = @aggregate.unpublished_events.to_a.size
+
+      @aggregate.migrate_framework_version(@framework_id, 2, 3, @mappings)
+      events_after = @aggregate.unpublished_events.to_a.size
+
+      assert_equal events_before, events_after
+    end
+  end
+
   # ── Role Change ──
 
   context "#change_role" do
