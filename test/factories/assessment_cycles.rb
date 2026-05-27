@@ -6,6 +6,7 @@ FactoryBot.define do
     cycle_id { SecureRandom.uuid_v7 }
     framework_id { SecureRandom.uuid_v7 }
     framework_version { 1 }
+    latest_framework_version { framework_version }
     sequence(:name) { |n| "Cycle ##{n}" }
     cycle_type { "regular" }
     status { "open" }

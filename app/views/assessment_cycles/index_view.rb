@@ -114,7 +114,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
 
           div(class: "mt-4 flex flex-wrap gap-2 text-xs") do
             render Components::Kit::Badge.new(
-              "v#{cycle.framework_version}", variant: :default
+              framework_version_range(cycle), variant: :default
             )
             render Components::Kit::Badge.new(
               "#{active_participant_count(cycle)} participants", variant: :default
@@ -140,6 +140,18 @@ class Views::AssessmentCycles::IndexView < Views::Base
 
   def cycle_type_label(cycle)
     CYCLE_TYPE_LABELS.fetch(cycle.cycle_type, cycle.cycle_type)
+  end
+
+  # `v1` when the cycle has only ever been open against one framework
+  # version; `v1–v2` when it has rolled forward. `latest_framework_version`
+  # defaults to `framework_version` at define time, so the equality check
+  # also covers fresh cycles defined before this column existed.
+  def framework_version_range(cycle)
+    if cycle.latest_framework_version && cycle.latest_framework_version > cycle.framework_version
+      "v#{cycle.framework_version}–v#{cycle.latest_framework_version}"
+    else
+      "v#{cycle.framework_version}"
+    end
   end
 
   def active_participant_count(cycle)

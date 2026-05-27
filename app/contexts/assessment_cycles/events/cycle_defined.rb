@@ -2,9 +2,14 @@
 
 # Event emitted when a new assessment cycle is defined.
 #
-# The first event in the AssessmentCycle stream. Sets the framework and
-# framework_version that the cycle assesses against — both are immutable
-# for the lifetime of the cycle.
+# The first event in the AssessmentCycle stream. Sets the framework_id
+# (immutable for the cycle's life) and the framework_version at
+# define-time. The version is the lower bound of the range this cycle
+# may be open across — when the framework republishes while the cycle
+# is still open, {AssessmentCycles::Events::FrameworkVersionRolled}
+# advances the upper bound on the read model. See PR #119 for the
+# accompanying cross-stream rating/evidence/comment migration that
+# carries the data across versions.
 #
 # @!attribute [r] data
 #   @return [Hash] event data

@@ -96,7 +96,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
       card.body do
         dl(class: "grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm") do
           meta_row("Framework", framework_label)
-          meta_row("Framework version", "v#{@cycle.framework_version}")
+          meta_row(framework_version_label, framework_version_value)
           cycle_type_row
           planned_end_row
           div do
@@ -145,6 +145,27 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def framework_label
     @framework&.name || "Framework unavailable"
+  end
+
+  # Singular "Framework version" when the cycle has only spanned one
+  # version; "Framework versions" when it has rolled forward across
+  # multiple publishes (`v1–v3`). The label change cues the reader
+  # that what follows is a range, not a single integer.
+  def framework_version_label
+    rolled_forward? ? "Framework versions" : "Framework version"
+  end
+
+  def framework_version_value
+    if rolled_forward?
+      "v#{@cycle.framework_version}–v#{@cycle.latest_framework_version}"
+    else
+      "v#{@cycle.framework_version}"
+    end
+  end
+
+  def rolled_forward?
+    @cycle.latest_framework_version &&
+      @cycle.latest_framework_version > @cycle.framework_version
   end
 
   def participants_card

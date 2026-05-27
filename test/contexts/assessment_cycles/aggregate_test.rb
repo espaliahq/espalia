@@ -276,4 +276,42 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
       assert_match /closed/, err.message
     end
   end
+
+  context "#roll_framework_version" do
+    setup do
+      @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
+    end
+
+    should "apply FrameworkVersionRolled with the new version" do
+      @aggregate.roll_framework_version(2)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::FrameworkVersionRolled, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+      assert_equal @framework_id, event.data[:framework_id]
+      assert_equal 2, event.data[:new_version]
+    end
+
+    should "be a no-op when the new version is not greater than the current" do
+      @aggregate.roll_framework_version(2)
+      events_before = @aggregate.unpublished_events.to_a.size
+
+      @aggregate.roll_framework_version(2)
+      assert_equal events_before, @aggregate.unpublished_events.to_a.size,
+        "rolling to the same version should not emit a duplicate event"
+
+      @aggregate.roll_framework_version(1)
+      assert_equal events_before, @aggregate.unpublished_events.to_a.size,
+        "rolling backwards should not emit an event"
+    end
+
+    should "be a no-op on a closed cycle" do
+      @aggregate.close
+      events_before = @aggregate.unpublished_events.to_a.size
+
+      @aggregate.roll_framework_version(3)
+      assert_equal events_before, @aggregate.unpublished_events.to_a.size,
+        "closed cycles freeze the version range"
+    end
+  end
 end
