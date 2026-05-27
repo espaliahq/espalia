@@ -76,6 +76,14 @@ Rails.configuration.to_prepare do
     to: Frameworks::SyncHandlers::FrameworkVersionMigrationSync.handled_events
   )
 
+  # FrameworkVersionRollSync advances the upper-bound framework version
+  # on every open AssessmentCycle scoped to the framework. Same
+  # projection-rebuild hazard — MUST NOT be registered as a projection.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::FrameworkVersionRollSync.new,
+    to: AssessmentCycles::SyncHandlers::FrameworkVersionRollSync.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Subscriptions will be added here as integrations are implemented.
   # Example:

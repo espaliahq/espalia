@@ -36,6 +36,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
       forbidden = [
         AssessmentCycles::SyncHandlers::PersonEnrollmentSync,
         AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments,
+        AssessmentCycles::SyncHandlers::FrameworkVersionRollSync,
         Frameworks::SyncHandlers::FrameworkVersionMigrationSync
       ]
       assert_empty(Projections::Registry.classes & forbidden)

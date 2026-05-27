@@ -21,7 +21,8 @@ class AssessmentCycles::Aggregate
   def initialize
     @cycle_id = nil
     @framework_id = nil
-    @framework_version = nil
+    @framework_version = nil          # version at define time (lower bound)
+    @latest_framework_version = nil   # highest version this cycle has been rolled through
     @name = nil
     @cycle_type = nil
     @planned_end_at = nil
@@ -143,6 +144,30 @@ class AssessmentCycles::Aggregate
     }))
   end
 
+  # Rolls the cycle forward to a newly-published framework version.
+  #
+  # Called by {AssessmentCycles::SyncHandlers::FrameworkVersionRollSync}
+  # in the same transaction as the originating
+  # {Frameworks::Events::FrameworkVersionPublished}. Records the upper
+  # bound of the version range this cycle has been open across, so
+  # views and reports can express the full span.
+  #
+  # No-op (no event emitted) when the cycle is closed (range is
+  # frozen) or when `new_version` is at or below the highest version
+  # already recorded — making predeploy replay safe.
+  #
+  # @param new_version [Integer] the newly published framework version
+  def roll_framework_version(new_version)
+    return if @status != :open
+    return if @latest_framework_version && @latest_framework_version >= new_version
+
+    apply(AssessmentCycles::Events::FrameworkVersionRolled.new(data: {
+      cycle_id: @cycle_id,
+      framework_id: @framework_id,
+      new_version: new_version
+    }))
+  end
+
   # Closes the cycle. All currently-enrolled persons are implicitly removed
   # from the cycle via {LeftAssessmentCycle} events on their PersonDev streams
   # (handled by the cross-stream sync handler).
@@ -186,10 +211,15 @@ class AssessmentCycles::Aggregate
     @cycle_id = event.data[:cycle_id]
     @framework_id = event.data[:framework_id]
     @framework_version = event.data[:framework_version]
+    @latest_framework_version = event.data[:framework_version]
     @name = event.data[:name]
     @cycle_type = event.data[:cycle_type]
     @planned_end_at = event.data[:planned_end_at]
     @status = :open
+  end
+
+  on AssessmentCycles::Events::FrameworkVersionRolled do |event|
+    @latest_framework_version = event.data[:new_version]
   end
 
   on AssessmentCycles::Events::CycleRenamed do |event|

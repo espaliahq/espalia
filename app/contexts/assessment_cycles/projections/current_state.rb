@@ -18,7 +18,13 @@ class AssessmentCycles::Projections::CurrentState
 
   # Bump when `reset!` or any handler in this projection would write
   # different state from the same event payload than before.
-  CODE_VERSION = 1
+  #
+  # 2 — handles `FrameworkVersionRolled`: advances the
+  #     `latest_framework_version` column on open cycles when a
+  #     framework version publishes, expressing the full version range.
+  #     `CycleDefined` also now initialises the new column to
+  #     `framework_version` (replay reconstructs it).
+  CODE_VERSION = 2
 
   # All event classes this projection handles.
   #
@@ -31,7 +37,8 @@ class AssessmentCycles::Projections::CurrentState
       AssessmentCycles::Events::CyclePlannedEndSet,
       AssessmentCycles::Events::PersonEnrolled,
       AssessmentCycles::Events::PersonUnenrolled,
-      AssessmentCycles::Events::CycleClosed
+      AssessmentCycles::Events::CycleClosed,
+      AssessmentCycles::Events::FrameworkVersionRolled
     ]
   end
 
@@ -69,6 +76,7 @@ class AssessmentCycles::Projections::CurrentState
     when AssessmentCycles::Events::PersonEnrolled then handle_person_enrolled(event)
     when AssessmentCycles::Events::PersonUnenrolled then handle_person_unenrolled(event)
     when AssessmentCycles::Events::CycleClosed then handle_cycle_closed(event)
+    when AssessmentCycles::Events::FrameworkVersionRolled then handle_framework_version_rolled(event)
     end
   end
 
@@ -77,6 +85,7 @@ class AssessmentCycles::Projections::CurrentState
       cycle_id: event.data[:cycle_id],
       framework_id: event.data[:framework_id],
       framework_version: event.data[:framework_version],
+      latest_framework_version: event.data[:framework_version],
       name: event.data[:name],
       cycle_type: event.data[:cycle_type],
       status: "open",
@@ -84,6 +93,18 @@ class AssessmentCycles::Projections::CurrentState
       defined_by: event.data[:defined_by],
       planned_end_at: event.data[:planned_end_at]
     )
+  end
+
+  # Advances the cycle's upper-bound framework version. Idempotent on
+  # replay because the aggregate's `roll_framework_version` guard
+  # ensures the event only fires when the new version is strictly
+  # greater than the current, and the update is unconditional but
+  # converges to the same value.
+  def handle_framework_version_rolled(event)
+    cycle = AssessmentCycle.find_by(cycle_id: event.data[:cycle_id])
+    return unless cycle
+
+    cycle.update!(latest_framework_version: event.data[:new_version])
   end
 
   def handle_cycle_renamed(event)

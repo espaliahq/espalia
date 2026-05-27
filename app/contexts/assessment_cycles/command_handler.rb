@@ -93,4 +93,20 @@ class AssessmentCycles::CommandHandler
       cycle.close(closed_by: closed_by)
     end
   end
+
+  # Rolls the cycle forward to a newly-published framework version.
+  #
+  # Called ONLY by
+  # {AssessmentCycles::SyncHandlers::FrameworkVersionRollSync} in the
+  # same transaction as the originating
+  # {Frameworks::Events::FrameworkVersionPublished} — never by
+  # controllers.
+  #
+  # @param cycle_id [String] UUID of the cycle to roll
+  # @param new_version [Integer] newly published framework version
+  def roll_framework_version(cycle_id, new_version)
+    @repository.with_cycle(cycle_id) do |cycle|
+      cycle.roll_framework_version(new_version)
+    end
+  end
 end

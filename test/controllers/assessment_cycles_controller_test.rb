@@ -36,6 +36,20 @@ class AssessmentCyclesControllerTest < ActionDispatch::IntegrationTest
         assert_response :success
         assert_includes response.body, "Assessment Cycles"
       end
+
+      should "render the framework version range when the cycle has rolled forward" do
+        ActsAsTenant.with_tenant(@tenant) do
+          create(:assessment_cycle, tenant: @tenant, framework_id: @framework.framework_id,
+            framework_version: 1, latest_framework_version: 3, name: "Spans v1–v3")
+        end
+
+        sign_in @admin_user
+        get assessment_cycles_path
+
+        assert_response :success
+        assert_includes response.body, "v1–v3"
+        assert_not_includes response.body, "v1 v3" # sanity: no stray entity for the dash
+      end
     end
 
     context "GET /assessment_cycles/new" do

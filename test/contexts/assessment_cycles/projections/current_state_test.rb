@@ -29,7 +29,28 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
         assert_equal "Q1 2026 Review", cycle.name
         assert_equal "open", cycle.status
         assert_equal 2, cycle.framework_version
+        assert_equal 2, cycle.latest_framework_version,
+          "latest_framework_version should initialise to the define-time version"
         assert_not_nil cycle.opened_at
+      end
+    end
+  end
+
+  context "FrameworkVersionRolled" do
+    setup do
+      emit(AssessmentCycles::Events::CycleDefined,
+        cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1,
+        name: "Q1", cycle_type: "regular", defined_by: nil)
+    end
+
+    should "advance latest_framework_version on an open cycle" do
+      emit(AssessmentCycles::Events::FrameworkVersionRolled,
+        cycle_id: @cycle_id, framework_id: @framework_id, new_version: 2)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = AssessmentCycle.find_by(cycle_id: @cycle_id)
+        assert_equal 1, cycle.framework_version, "lower bound stays at define-time version"
+        assert_equal 2, cycle.latest_framework_version, "upper bound advances"
       end
     end
   end
