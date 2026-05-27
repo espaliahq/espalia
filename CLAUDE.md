@@ -107,7 +107,7 @@ end
 
 **Suggested edits:** Atomic, inline suggestions (Google Docs style). Three review tiers: illustrations (light), capability descriptions (moderate), canonical expectations (high). Applied immediately on approval.
 
-**Assessment migration:** On new version publish, person development streams receive `FrameworkVersionMigrated`. Ratings migrate per mapping rules. Nothing silently dropped — archived capabilities surface for relink/dismiss.
+**Assessment migration:** On new version publish, person development streams receive `FrameworkVersionMigrated` (ratings, evidence, comments follow the migration mappings to the survivor capability), and open assessment cycles receive `FrameworkVersionRolled` (the cycle's `latest_framework_version` advances so views render the full version range, e.g. `v1–v2`). Both are dispatched by sync handlers subscribed to `FrameworkVersionPublished`. Ratings/evidence/comments on `archived`/`split` capabilities are flagged via `migration_status` for later relink/dismiss (UI deferred).
 
 ## Project Structure
 

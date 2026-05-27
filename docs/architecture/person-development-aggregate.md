@@ -110,11 +110,23 @@ Quarterly reviews:
   GrowthPlanSuperseded { superseded_by_reason }
 
 Framework migration:
-  FrameworkVersionMigrated { old_version_id, new_version_id, capability_mappings }
+  FrameworkVersionMigrated { framework_id, old_version, new_version, mappings: [
+    { from_stable_id, to_stable_id, mapping_type, requires_reassessment,
+      from_capability_name, to_capability_name,
+      counts: { ratings, evidence, comments } }, ... ] }
+    — implemented in PR #119. Versions are integers (not UUIDs);
+      `mappings` (not `capability_mappings`) carries per-mapping counts
+      so projections and the activity feed need no extra joins.
   ReassessmentFlagged { capability_stable_id, reason }
+    — not yet emitted; flagging is currently done in-place via
+      `AssessmentLevelRating.migration_status = "flagged"` on the
+      handler. A dedicated event may be introduced when the
+      relink/dismiss UI ships.
   ReassessmentResolved { capability_stable_id, resolution, resolved_by }
+    — deferred; resolution UI not implemented.
   ArchivedCapabilityAcknowledged { capability_stable_id, action, relinked_to_stable_id? }
     action: relinked | dismissed
+    — deferred; UI not implemented.
 ```
 
 ---

@@ -261,7 +261,8 @@ Eight roles with scoped permissions. A person can hold multiple roles; permissio
 3. Issue any `define_migration_mapping(...)` calls for capabilities you're archiving
 4. Call `publish_version(published_by)` — raises if archived capabilities lack mappings (see ADR-17); otherwise emits `FrameworkVersionPublished` and triggers a published-projection rebuild that replays every event in stream order
 5. Completed assessments: preserved via event replay to prior `FullAlignmentCompleted`
-6. In-progress assessments: `FrameworkVersionMigrated` in each affected person stream (not yet implemented — see follow-up)
+6. In-progress assessments: `Frameworks::SyncHandlers::FrameworkVersionMigrationSync` emits `PersonDevelopment::Events::FrameworkVersionMigrated` on each affected person stream — ratings/evidence/comments follow the migration mappings to the survivor capabilities. See PR #119 and the per-mapping-type table below. UI for flagged ratings (relink/dismiss) remains follow-up.
+7. Open cycles: `AssessmentCycles::SyncHandlers::FrameworkVersionRollSync` emits `AssessmentCycles::Events::FrameworkVersionRolled` on each open cycle's stream — the cycle's `latest_framework_version` advances so views and reports can express the full version range (`v1–v2`) the cycle was open across. Closed cycles are skipped; their range freezes at close time.
 
 **Migration mapping types:**
 
