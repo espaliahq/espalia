@@ -68,16 +68,25 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSync
 
     return if mappings.empty?
 
-    # Resolve capability names once for every from/to stable_id appearing
-    # in this batch, then drop them into per-person payloads as we go.
-    name_by_stable_id = capability_names_for(mappings)
-
     assignments = PersonFrameworkAssignment
       .where(framework_id: framework_id)
       .pluck(:person_id)
+    return if assignments.empty?
+
+    name_by_stable_id = capability_names_for(mappings)
+    from_ids = mappings.map(&:from_stable_id).uniq
+
+    # Three batched GROUP BY queries instead of 3 × N people × M mappings
+    # individual COUNTs. Critical because the sync handler runs in the
+    # same transaction as the publish — slow queries here block every
+    # publish of every framework.
+    ratings_by_person  = grouped_counts(AssessmentLevelRating,    assignments, framework_id, from_ids)
+    evidence_by_person = grouped_counts(EvidenceItem,             assignments, framework_id, from_ids)
+    comments_by_person = grouped_counts(PersonDevelopmentComment, assignments, framework_id, from_ids)
 
     assignments.each do |person_id|
-      payload = build_payload(person_id, framework_id, mappings, name_by_stable_id)
+      payload = build_payload(person_id, mappings, name_by_stable_id,
+                              ratings_by_person, evidence_by_person, comments_by_person)
       command_handler.migrate_framework_version(
         person_id, framework_id, old_version, new_version, payload
       )
@@ -88,9 +97,10 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSync
   # `PersonDevelopment::Events::FrameworkVersionMigrated`: one entry per
   # mapping, with per-person counts so the activity feed entries and
   # projection updates need no extra DB joins.
-  def build_payload(person_id, framework_id, mappings, name_by_stable_id)
+  def build_payload(person_id, mappings, name_by_stable_id,
+                    ratings_by_person, evidence_by_person, comments_by_person)
     mappings.map do |mapping|
-      counts = counts_for(person_id, framework_id, mapping.from_stable_id)
+      key = [ person_id, mapping.from_stable_id ]
       {
         from_stable_id: mapping.from_stable_id,
         to_stable_id: mapping.to_stable_id,
@@ -98,26 +108,23 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSync
         requires_reassessment: mapping.requires_reassessment,
         from_capability_name: name_by_stable_id[mapping.from_stable_id],
         to_capability_name: mapping.to_stable_id && name_by_stable_id[mapping.to_stable_id],
-        counts: counts
+        counts: {
+          ratings:  ratings_by_person.fetch(key, 0),
+          evidence: evidence_by_person.fetch(key, 0),
+          comments: comments_by_person.fetch(key, 0)
+        }
       }
     end
   end
 
-  def counts_for(person_id, framework_id, from_stable_id)
-    {
-      ratings: AssessmentLevelRating.where(
-        person_id: person_id, framework_id: framework_id,
-        capability_stable_id: from_stable_id
-      ).count,
-      evidence: EvidenceItem.where(
-        person_id: person_id, framework_id: framework_id,
-        capability_stable_id: from_stable_id
-      ).count,
-      comments: PersonDevelopmentComment.where(
-        person_id: person_id, framework_id: framework_id,
-        capability_stable_id: from_stable_id
-      ).count
-    }
+  # Returns `{ [person_id, capability_stable_id] => count }` via a single
+  # GROUP BY query. Persons with no rows for any from_stable_id are
+  # absent — the caller defaults missing keys to 0.
+  def grouped_counts(model, person_ids, framework_id, from_ids)
+    model
+      .where(person_id: person_ids, framework_id: framework_id, capability_stable_id: from_ids)
+      .group(:person_id, :capability_stable_id)
+      .count
   end
 
   def capability_names_for(mappings)

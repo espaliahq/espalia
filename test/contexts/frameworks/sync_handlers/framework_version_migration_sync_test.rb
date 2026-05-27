@@ -110,6 +110,35 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSyncTest < ActiveSuppor
       end
     end
 
+    should "compute counts via a bounded number of grouped queries regardless of person count" do
+      extra_people = 5.times.map { SecureRandom.uuid_v7 }
+      extra_people.each do |pid|
+        PersonDevelopment::CommandHandler.new
+          .assign_to_framework(pid, @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+      end
+
+      count_queries = lambda do |&block|
+        events = 0
+        sub = ActiveSupport::Notifications.subscribe("sql.active_record") do |_, _, _, _, payload|
+          next if payload[:cached]
+          next if %w[SCHEMA TRANSACTION].include?(payload[:name])
+          sql = payload[:sql].to_s
+          next unless sql.start_with?("SELECT")
+          next unless sql.include?("assessment_level_ratings") ||
+                      sql.include?("evidence_items") ||
+                      sql.include?("person_development_comments")
+          events += 1
+        end
+        block.call
+        ActiveSupport::Notifications.unsubscribe(sub)
+        events
+      end
+
+      observed = count_queries.call { @handler.call(publish_event) }
+      assert_equal 3, observed,
+        "expected exactly 3 grouped count queries (ratings + evidence + comments); got #{observed}"
+    end
+
     should "be idempotent — second call is a no-op via the aggregate guard" do
       @handler.call(publish_event)
       @handler.call(publish_event)
