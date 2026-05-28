@@ -11,12 +11,6 @@
 # via an `[data-compact]` attribute.
 #
 class Views::Assessments::HeroSummary < Views::Base
-  CONTEXT_LABELS = {
-    self: "Self Assessment",
-    manager: "Manager Assessment",
-    alignment: "Agreed Assessment"
-  }.freeze
-
   # @param scoring [Hash] effective scoring
   # @param self_scoring [Hash, nil]
   # @param manager_scoring [Hash, nil]
@@ -89,11 +83,7 @@ class Views::Assessments::HeroSummary < Views::Base
 
     div(class: "flex items-start justify-between gap-4") do
       div do
-        span(class: "text-xs font-medium text-gray-400 dark:text-gray-500 " \
-                    "uppercase tracking-wide") do
-          CONTEXT_LABELS[@context] || CONTEXT_LABELS[:self]
-        end
-        h2(class: "text-xl font-bold text-gray-900 dark:text-white mt-1") do
+        h2(class: "text-xl font-bold text-gray-900 dark:text-white") do
           verdict_headline
         end
         p(class: "text-sm text-gray-500 dark:text-gray-400 mt-1") do

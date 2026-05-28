@@ -88,8 +88,10 @@ class Views::Assessments::ManagerShowView < Views::Base
           data: { assessment_sync_target: "signal" }) { }
 
       sticky_header
-      main_section
-      activity_sidebar
+      div(class: "flex gap-6 items-start") do
+        div(class: "flex-1 min-w-0") { main_section }
+        activity_sidebar
+      end
     end
   end
 
@@ -241,9 +243,11 @@ class Views::Assessments::ManagerShowView < Views::Base
   def activity_sidebar
     aside(
       id: "assessment-activity-pane",
-      class: "fixed right-0 top-0 bottom-0 z-30 w-80 " \
-             "border-l border-gray-200 dark:border-gray-700 " \
-             "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto hidden shadow-xl",
+      class: "shrink-0 w-80 hidden " \
+             "border border-gray-200 dark:border-gray-700 rounded-xl " \
+             "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto " \
+             "sticky self-start max-h-[calc(100vh-2rem)]",
+      style: "top: calc(var(--sticky-header-h, 0px) + 1rem)",
       data: { activity_pane_target: "pane", pane_state: "closed" }
     ) do
       activity_sidebar_header

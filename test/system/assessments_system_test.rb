@@ -321,6 +321,70 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "hero refinements" do
+    should "not render a context-label eyebrow above the verdict" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      within("#scoring-panel") do
+        assert_no_text "SELF ASSESSMENT"
+        assert_no_text "Self Assessment"
+      end
+    end
+
+    should "compress the hero when the user scrolls past it" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Add tall spacer so we can scroll
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Strengths / Lift should be visible at the top
+      assert_text "LIFT TOWARD E2"
+
+      # Scroll past the hero
+      page.execute_script("window.scrollTo(0, 500)")
+      sleep 0.6
+
+      # Strengths / Lift columns should be hidden in compact mode
+      lift_visible = page.evaluate_script(
+        "(function() { " \
+        "var nodes = document.querySelectorAll('#scoring-panel *'); " \
+        "for (var i = 0; i < nodes.length; i++) { " \
+        "  var t = nodes[i].textContent || ''; " \
+        "  if (t.indexOf('LIFT TOWARD') === 0 && nodes[i].offsetParent !== null) return true; " \
+        "} return false; })()"
+      )
+      assert_not lift_visible,
+        "Lift column should be hidden once the hero compacts on scroll"
+    end
+  end
+
+  context "activity sidebar layout" do
+    should "expand inline and compress the main pane when open" do
+      visit assessment_path(@assignment)
+
+      main_width_before = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getBoundingClientRect().width"
+      )
+
+      # Open the sidebar
+      page.execute_script(
+        "document.querySelector('[data-action*=\"activity-pane#toggle\"]').click()"
+      )
+      sleep 0.5
+
+      main_width_after = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getBoundingClientRect().width"
+      )
+
+      assert main_width_after < main_width_before - 100,
+        "Main pane should compress when sidebar opens (was #{main_width_before}, now #{main_width_after})"
+    end
+  end
+
   context "activity sidebar" do
     should "be closable when open" do
       visit assessment_path(@assignment)
