@@ -32,11 +32,19 @@ export default class extends BaseController {
   connect() {
     super.connect()
     this._isCompact = false
+    // First state apply (after connect) must not compensate scroll —
+    // the user hasn't scrolled; they (or a Turbo Stream) just landed
+    // on the page in a scrolled state. Compensating would jump them
+    // back to the top of the document.
+    this._compensateScroll = false
 
     this._onScroll = () => this.#scheduleUpdate()
     window.addEventListener("scroll", this._onScroll, { passive: true })
 
-    requestAnimationFrame(() => this.#updateState())
+    requestAnimationFrame(() => {
+      this.#updateState()
+      this._compensateScroll = true
+    })
   }
 
   disconnect() {
@@ -78,7 +86,7 @@ export default class extends BaseController {
     this._isCompact = nextState
     this.#applyVisual()
 
-    if (this.hasHeroTarget) {
+    if (this.hasHeroTarget && this._compensateScroll) {
       const heightAfter = this.heroTarget.offsetHeight
       const diff = heightBefore - heightAfter
       // Positive when shrinking (compact) → scroll down to keep visible

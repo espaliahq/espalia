@@ -328,16 +328,65 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "level chip colors" do
-    should "not auto-color unrated below-level chips as green" do
+    should "tint unrated below-level chips with assumed-consistent green" do
       visit assessment_path(@assignment)
-      # The unrated E1 chip (below person_level=2) should NOT carry the
-      # assumed-consistent green tint. It should be neutral, like other
-      # unrated chips.
+      # The unrated E1 chip (below person_level=2) should carry the
+      # assumed-consistent green tint — the person is at E2, so we
+      # assume they've cleared E1.
       chip_classes = page.evaluate_script(
         "document.getElementById('cell-#{@cap1_stable}-1').className"
       )
+      assert_match(/bg-green/, chip_classes,
+        "Unrated below-level chip should carry assumed-consistent green tint. Classes: #{chip_classes}")
+    end
+
+    should "leave the at-person-level unrated chip neutral grey" do
+      visit assessment_path(@assignment)
+      # E2 is the person's level; with no rating it should be grey,
+      # not green (only BELOW-level cells get the mint tint).
+      chip_classes = page.evaluate_script(
+        "document.getElementById('cell-#{@cap1_stable}-2').className"
+      )
       assert_no_match(/bg-green/, chip_classes,
-        "Unrated below-level chip should not be tinted green. Classes: #{chip_classes}")
+        "Unrated at-person-level chip should be grey. Classes: #{chip_classes}")
+    end
+  end
+
+  context "scroll stability on rating" do
+    should "not jump scroll position when a rating is submitted" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Add tall spacer + scroll into the page so a later capability's
+      # rating button is visible without Capybara needing to scroll to
+      # it. The third (Execution) card under "Delivering" sits well
+      # below the hero.
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script(<<~JS)
+        var btn = document.querySelector('#rating-#{@cap3_stable}-2 button');
+        btn.scrollIntoView({ block: 'center' });
+      JS
+      sleep 0.5
+
+      scroll_before = page.evaluate_script("window.scrollY")
+      assert scroll_before > 200,
+        "Setup: should be scrolled into the page (scrollY=#{scroll_before})"
+
+      # JS-dispatch the click so Capybara's "scroll element into view"
+      # doesn't reset scroll. This mirrors what a user clicking a
+      # naturally-visible button experiences.
+      page.execute_script(<<~JS)
+        var btn = Array.from(document.querySelectorAll('#rating-#{@cap3_stable}-2 button'))
+          .find(b => b.textContent.trim() === 'Consistently');
+        btn.click();
+      JS
+      sleep 1.0
+
+      scroll_after = page.evaluate_script("window.scrollY")
+      assert_in_delta scroll_before, scroll_after, 50,
+        "Scroll should remain stable when rating (was #{scroll_before}, now #{scroll_after})"
     end
   end
 
@@ -364,25 +413,31 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "(main=#{main_visible_width}, viewport=#{viewport_width})"
     end
 
-    should "allow chip strip to scroll horizontally instead of overflowing" do
+    should "contain capability cards within the viewport on narrow screens with many levels" do
+      # Frameworks with many levels (E1-E8) produce a chip strip far
+      # wider than mobile viewports — the card must contain that strip
+      # in a scrollable region instead of letting it bulge the card off
+      # the viewport. Add extra levels to this test's framework.
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.start_draft(@framework_id, 2, @person.id)
+        (3..8).each do |ord|
+          handler.add_level(@framework_id, SecureRandom.uuid_v7, @role_id, ord, "L#{ord}", "E#{ord}")
+        end
+        handler.publish_version(@framework_id, "many-levels")
+      end
+
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@assignment)
 
-      # The chip strip's parent should be scrollable (overflow-x-auto)
-      # OR the chips should be contained, never extending past the card edge.
+      viewport_width = page.evaluate_script("window.innerWidth")
       card_right = page.evaluate_script(
         "document.querySelector('[data-matrix-target=\"card\"]').getBoundingClientRect().right"
       )
-      last_chip_right = page.evaluate_script(
-        "(function() { var card = document.querySelector('[data-matrix-target=\"card\"]'); " \
-        "var chips = card.querySelectorAll('[id^=\"cell-\"]'); " \
-        "if (!chips.length) return 0; " \
-        "return chips[chips.length-1].getBoundingClientRect().right; })()"
-      )
 
-      assert last_chip_right <= card_right + 5,
-        "Last chip should not extend past the card's right edge " \
-        "(last chip right=#{last_chip_right}, card right=#{card_right})"
+      assert card_right <= viewport_width + 5,
+        "Card right edge (#{card_right}) should not extend past viewport (#{viewport_width}) " \
+        "even with many levels"
     end
   end
 
