@@ -327,6 +327,65 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "level chip colors" do
+    should "not auto-color unrated below-level chips as green" do
+      visit assessment_path(@assignment)
+      # The unrated E1 chip (below person_level=2) should NOT carry the
+      # assumed-consistent green tint. It should be neutral, like other
+      # unrated chips.
+      chip_classes = page.evaluate_script(
+        "document.getElementById('cell-#{@cap1_stable}-1').className"
+      )
+      assert_no_match(/bg-green/, chip_classes,
+        "Unrated below-level chip should not be tinted green. Classes: #{chip_classes}")
+    end
+  end
+
+  context "responsive layout" do
+    should "hide the activity sidebar on narrow viewports" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+
+      # Open the sidebar — on narrow viewports it should overlay rather
+      # than steal width from the main content
+      page.execute_script(
+        "document.querySelector('[data-action*=\"activity-pane#toggle\"]').click()"
+      )
+      sleep 0.3
+
+      main_visible_width = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getBoundingClientRect().width"
+      )
+      viewport_width = page.evaluate_script("window.innerWidth")
+
+      # Main pane should be at least 80% of viewport (sidebar overlays, not pushes)
+      assert main_visible_width >= viewport_width * 0.8,
+        "On narrow viewport sidebar should overlay, not compress main pane " \
+        "(main=#{main_visible_width}, viewport=#{viewport_width})"
+    end
+
+    should "allow chip strip to scroll horizontally instead of overflowing" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+
+      # The chip strip's parent should be scrollable (overflow-x-auto)
+      # OR the chips should be contained, never extending past the card edge.
+      card_right = page.evaluate_script(
+        "document.querySelector('[data-matrix-target=\"card\"]').getBoundingClientRect().right"
+      )
+      last_chip_right = page.evaluate_script(
+        "(function() { var card = document.querySelector('[data-matrix-target=\"card\"]'); " \
+        "var chips = card.querySelectorAll('[id^=\"cell-\"]'); " \
+        "if (!chips.length) return 0; " \
+        "return chips[chips.length-1].getBoundingClientRect().right; })()"
+      )
+
+      assert last_chip_right <= card_right + 5,
+        "Last chip should not extend past the card's right edge " \
+        "(last chip right=#{last_chip_right}, card right=#{card_right})"
+    end
+  end
+
   context "hero refinements" do
     should "not render a context-label eyebrow above the verdict" do
       visit assessment_path(@assignment)

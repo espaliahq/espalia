@@ -59,27 +59,19 @@ class Views::Assessments::LevelChip < Views::Base
     "border-gray-900 dark:border-white"
   end
 
+  # Single colour scheme keyed by what the user has actually rated:
+  # green = consistent, amber = most/occasional, red = some/none.
+  # Unrated cells are neutral grey regardless of whether they sit
+  # below or above the person's level — the YOU badge alone marks the
+  # current level. Avoids the previous "assumed-consistent green tint"
+  # for below-level cells that confused readers.
   def chip_bg
-    freq = primary_frequency
-    below = @ordinal < @person_level
-    at_or_below = @ordinal <= @person_level
-
-    if freq.nil?
-      below ? "bg-green-100/60 dark:bg-green-900/20" : "bg-gray-100 dark:bg-gray-800"
-    elsif at_or_below
-      case freq
-      when "consistent" then "bg-green-200 dark:bg-green-900/40"
-      when "occasional" then "bg-amber-200 dark:bg-amber-900/40"
-      when "some"       then "bg-red-200 dark:bg-red-900/40"
-      when "none"       then "bg-red-100 dark:bg-red-900/20"
-      else "bg-gray-100 dark:bg-gray-800"
-      end
-    else
-      case freq
-      when "consistent" then "bg-green-200 dark:bg-green-900/40"
-      when "none"       then "bg-red-100 dark:bg-red-900/20"
-      else "bg-blue-100 dark:bg-blue-900/20"
-      end
+    case primary_frequency
+    when "consistent" then "bg-green-200 dark:bg-green-900/40"
+    when "occasional" then "bg-amber-200 dark:bg-amber-900/40"
+    when "some"       then "bg-red-200 dark:bg-red-900/40"
+    when "none"       then "bg-red-100 dark:bg-red-900/20"
+    else                   "bg-gray-100 dark:bg-gray-800"
     end
   end
 

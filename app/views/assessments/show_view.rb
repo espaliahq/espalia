@@ -209,12 +209,17 @@ class Views::Assessments::ShowView < Views::Base
   end
 
   def activity_sidebar
+    # On lg+ viewports, the sidebar sits inline next to the matrix and
+    # compresses it when open. On smaller viewports it overlays (fixed)
+    # so the matrix gets the full width and isn't squeezed to nothing.
     aside(
       id: "assessment-activity-pane",
-      class: "shrink-0 w-80 hidden " \
-             "border border-gray-200 dark:border-gray-700 rounded-xl " \
-             "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto " \
-             "sticky self-start max-h-[calc(100vh-2rem)]",
+      class: "hidden bg-gray-50 dark:bg-gray-800/50 overflow-y-auto " \
+             "border border-gray-200 dark:border-gray-700 " \
+             "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
+             "max-lg:w-80 max-lg:shadow-xl max-lg:border-l max-lg:rounded-none " \
+             "lg:shrink-0 lg:w-80 lg:rounded-xl " \
+             "lg:sticky lg:self-start lg:max-h-[calc(100vh-2rem)]",
       style: "top: calc(var(--sticky-header-h, 0px) + 1rem)",
       data: { activity_pane_target: "pane", pane_state: "closed" }
     ) do
