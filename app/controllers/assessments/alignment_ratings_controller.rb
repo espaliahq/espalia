@@ -142,7 +142,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             mastery_threshold: matrix_data[:mastery_threshold],
             meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
             assessment_id: @assignment.id,
-            context: :alignment
+            context: :alignment,
+            assessee_name: assessee_name_if_not_self
           ),
           layout: false
         )
@@ -237,6 +238,15 @@ class Assessments::AlignmentRatingsController < ApplicationController
 
       [ label, contribution ]
     end
+  end
+
+  # In alignment context, both the assessee and their manager can submit
+  # ratings. Use the assessee's name in the verdict only when the viewer
+  # is NOT the assessee themselves.
+  def assessee_name_if_not_self
+    return nil if @assignment.person_id == current_person&.id
+
+    @assessee_name_if_not_self ||= Person.find_by(id: @assignment.person_id)&.name
   end
 
   def capability_name_html(cap_data, blocked, block_reason, contribution)

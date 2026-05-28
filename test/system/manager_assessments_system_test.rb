@@ -98,6 +98,28 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Synthesises information"
     end
 
+    should "address the assessee by name in the hero verdict" do
+      # Pre-rate as manager so the verdict triggers an "On target" headline,
+      # which is where the second-person wording leaks through.
+      ActsAsTenant.with_tenant(@tenant) do
+        pd_handler = PersonDevelopment::CommandHandler.new
+        pd_handler.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+      within("#scoring-panel") do
+        # The hero verdict should refer to the assessee in third person
+        # (first name), not "You're tracking on target"
+        assert_no_text "You're"
+        assert_no_text "you're"
+        assert_text "Report is tracking on target."
+      end
+    end
+
     should "show self-rating indicator and manager frequency selectors" do
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"

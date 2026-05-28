@@ -381,17 +381,20 @@ export default class extends BaseController {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  focusFirstUnrated(event) {
+  // Targeted jump to a specific capability + level chip. The server
+  // embeds the target capability_stable_id + level_ordinal on the
+  // Continue Assessing button when an unrated current-level cell
+  // exists.
+  focusUnrated(event) {
     event.preventDefault()
-    const chips = this.element.querySelectorAll("[data-level-ordinal][data-capability-stable-id]")
-    for (const chip of chips) {
-      const freq = chip.querySelector("[data-frequency]")
-      if (!freq) {
-        chip.click()
-        chip.scrollIntoView({ behavior: "smooth", block: "center" })
-        return
-      }
-    }
+    const trigger = event.currentTarget
+    const stableId = trigger.dataset.capabilityStableId
+    const ordinal = parseInt(trigger.dataset.levelOrdinal, 10)
+    if (!stableId || isNaN(ordinal)) return
+
+    const chip = document.getElementById(`cell-${stableId}-${ordinal}`)
+    if (chip) chip.scrollIntoView({ behavior: "smooth", block: "center" })
+    this.#reloadMatrixWithFocus(stableId, ordinal)
   }
 
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)

@@ -164,7 +164,8 @@ class Assessments::ManagerRatingsController < ApplicationController
             mastery_threshold: matrix_data[:mastery_threshold],
             meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
             assessment_id: @assignment.id,
-            context: :manager
+            context: :manager,
+            assessee_name: assessee_name
           ),
           layout: false
         )
@@ -259,6 +260,10 @@ class Assessments::ManagerRatingsController < ApplicationController
 
       [ label, contribution ]
     end
+  end
+
+  def assessee_name
+    @assessee_name ||= Person.find_by(id: @assignment.person_id)&.name
   end
 
   def capability_name_html(cap_data, blocked, block_reason, contribution)

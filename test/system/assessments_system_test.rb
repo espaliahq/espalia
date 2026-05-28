@@ -110,6 +110,50 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "hero summary" do
+    should "show lift toward CURRENT level when below expectations" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Person is at E2 with no ratings yet → below expectations.
+      # The lift column should target the current level (E2), not E3.
+      # (Label is CSS-uppercased, so Capybara sees it as "LIFT TOWARD E2".)
+      within("#scoring-panel") do
+        assert_text "LIFT TOWARD E2"
+        assert_no_text "LIFT TOWARD E3"
+      end
+    end
+
+    should "hide Continue assessing button when all current-level cells are rated" do
+      # Rate both capabilities at level 2 (person's current level) as the user
+      ActsAsTenant.with_tenant(@tenant) do
+        pd_handler = PersonDevelopment::CommandHandler.new
+        pd_handler.rate_self(
+          @person.id, @framework_id, @cap1_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+        pd_handler.rate_self(
+          @person.id, @framework_id, @cap2_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      within("#scoring-panel") do
+        assert_no_text "Continue assessing"
+      end
+    end
+
+    should "show Continue assessing button when some current-level cells are unrated" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      within("#scoring-panel") do
+        assert_text "Continue assessing"
+      end
+    end
+  end
+
   context "sticky header" do
     should "keep header, hero, and category chips visible when scrolled" do
       visit assessment_path(@assignment)

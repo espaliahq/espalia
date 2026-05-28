@@ -136,13 +136,19 @@ class Views::Assessments::HeroSummary < Views::Base
                        "border-green-200 dark:border-green-800")
       end
       if lift.any?
-        next_level = @person_level + 1
-        next_code = @merged_levels.find { |l| l[:ordinal] == next_level }&.dig(:level_code)
-        label = next_code ? "! Lift toward #{next_code}" : "! Areas to grow"
-        insight_column(label, lift, caps_by_name,
+        insight_column(lift_label, lift, caps_by_name,
                        "border-amber-200 dark:border-amber-800")
       end
     end
+  end
+
+  # When below current expectations, the lift target is the current
+  # level (close the gap first). When meeting/mastering, the lift
+  # target is the next level (growth focus).
+  def lift_label
+    target_ordinal = primary_scoring[:meeting_expectations] ? @person_level + 1 : @person_level
+    target_code = @merged_levels.find { |l| l[:ordinal] == target_ordinal }&.dig(:level_code)
+    target_code ? "! Lift toward #{target_code}" : "! Areas to grow"
   end
 
   def insight_column(title, items, caps_by_name, border_class)
@@ -191,10 +197,40 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def promotion_and_ctas
+    target = next_unrated_capability
+    return unless target || promotion_readiness_visible?
+
     div(class: "flex flex-wrap items-center gap-3") do
       promotion_pill
-      continue_assessing_cta
+      continue_assessing_cta(target) if target
     end
+  end
+
+  # The first capability at the person's current level whose primary
+  # frequency hasn't been recorded yet. Used to gate the Continue CTA
+  # and to embed the target capability for the JS jump.
+  def next_unrated_capability
+    @next_unrated_capability ||= @categories
+      .flat_map { |cat| cat[:capabilities] }
+      .find do |cap_data|
+        cell = cap_data[:cells][@person_level]
+        cell && primary_cell_frequency(cell).blank?
+      end
+  end
+
+  def primary_cell_frequency(cell)
+    case @context
+    when :self      then cell[:current_frequency]
+    when :manager   then cell[:manager_frequency]
+    when :alignment then cell[:aligned_frequency]
+    end
+  end
+
+  def promotion_readiness_visible?
+    readiness = primary_scoring[:promotion_readiness]
+    return false unless readiness
+
+    readiness[:eligible] || (readiness[:blocked_at_next_level] || []).any?
   end
 
   def promotion_pill
@@ -217,13 +253,18 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  def continue_assessing_cta
+  def continue_assessing_cta(target)
+    stable_id = target[:capability].stable_id
     a(
-      href: "#",
+      href: "#cell-#{stable_id}-#{@person_level}",
       class: "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium " \
              "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
              "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors",
-      data: { action: "click->matrix#focusFirstUnrated" }
+      data: {
+        action: "click->matrix#focusUnrated",
+        capability_stable_id: stable_id,
+        level_ordinal: @person_level
+      }
     ) do
       plain "Continue assessing"
       span { "→" }
@@ -281,13 +322,13 @@ class Views::Assessments::HeroSummary < Views::Base
   def verdict_headline
     ratio = primary_scoring[:performance_ratio] || 0.0
     if primary_scoring[:mastering]
-      "You're exceeding expectations."
+      "#{subject} exceeding expectations."
     elsif primary_scoring[:meeting_expectations]
-      "You're tracking on target."
+      "#{subject} tracking on target."
     elsif ratio >= 0.8
-      "Almost there — close to meeting expectations."
+      "#{subject} almost there — close to meeting expectations."
     else
-      "Below expectations — let's focus on the gaps."
+      "Below expectations — focus areas highlighted below."
     end
   end
 
@@ -306,6 +347,18 @@ class Views::Assessments::HeroSummary < Views::Base
     pct = (ratio * 100).round(0)
     level_code = @merged_levels.find { |l| l[:ordinal] == @person_level }&.dig(:level_code) || "L#{@person_level}"
     "Baseline coverage at #{pct}% of #{level_code} expectations."
+  end
+
+  # Self view → "You're". Manager / alignment views → "<First name> is",
+  # falling back to "They're" when no assessee name is present.
+  def subject
+    if @context == :self
+      "You're"
+    elsif @assessee_name.present?
+      "#{@assessee_name.split.first} is"
+    else
+      "They're"
+    end
   end
 
   # ── Perspective helpers ──
