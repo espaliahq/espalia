@@ -255,15 +255,20 @@ class Views::Assessments::HeroSummary < Views::Base
 
   def continue_assessing_cta(target)
     stable_id = target[:capability].stable_id
+    # data-controller="continue-assessing" wires a click handler that
+    # dispatches a window event — the matrix controller lives in a
+    # different turbo-frame and can't be reached by a `click->matrix#`
+    # action from this scope.
     a(
       href: "#cell-#{stable_id}-#{@person_level}",
       class: "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium " \
              "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
              "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors",
       data: {
-        action: "click->matrix#focusUnrated",
-        capability_stable_id: stable_id,
-        level_ordinal: @person_level
+        controller: "continue-assessing",
+        action: "click->continue-assessing#focus",
+        continue_assessing_capability_stable_id_value: stable_id,
+        continue_assessing_level_ordinal_value: @person_level
       }
     ) do
       plain "Continue assessing"

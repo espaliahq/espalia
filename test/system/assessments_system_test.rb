@@ -152,6 +152,46 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         assert_text "Continue assessing"
       end
     end
+
+    should "navigate to the unrated capability when Continue assessing is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('a[data-controller~=\"continue-assessing\"]').click()"
+      )
+
+      # The matrix turbo frame should reload with the capability + level
+      # focus params in its src.
+      sleep 0.5
+      frame_src = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getAttribute('src')"
+      )
+      assert_match(/capability=#{@cap1_stable}/, frame_src,
+        "Expected matrix frame to reload with capability=#{@cap1_stable}, got #{frame_src}")
+      assert_match(/level_ordinal=2/, frame_src,
+        "Expected matrix frame to reload with level_ordinal=2, got #{frame_src}")
+    end
+  end
+
+  context "activity feed focus sync" do
+    should "narrow the activity feed to the capability x level when a chip is focused" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Click a chip to focus it (cell-level focus)
+      page.execute_script("document.getElementById('cell-#{@cap1_stable}-2').click()")
+      sleep 1.0
+
+      # The activity feed banner label should report cell-level focus,
+      # not category-level focus.
+      banner_label = page.evaluate_script(
+        "(document.querySelector('[data-activity-feed-target=\"focusBannerLabel\"]') || {}).textContent || ''"
+      )
+      # Cell-level focus narrows to "for the focused cell (L<n>)"
+      assert_match(/focused cell|focused capability/, banner_label,
+        "Activity feed banner should narrow to capability/cell focus, got: #{banner_label.inspect}")
+    end
   end
 
   context "sticky header" do

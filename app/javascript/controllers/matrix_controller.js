@@ -322,11 +322,34 @@ export default class extends BaseController {
 
     if (alreadyFocused) return
 
+    const card = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
+    const categoryId = card?.closest("[data-category-id]")?.dataset.categoryId || null
+    const capabilityId = card?.dataset.capabilityId || null
+
+    // Dispatch focus immediately so the activity feed updates without
+    // waiting for the matrix frame to round-trip.
+    this.currentFocus = {
+      level: "cell",
+      categoryId,
+      capabilityId,
+      capabilityStableId: stableId,
+      levelOrdinal: ordinal,
+      expectationId: null
+    }
+    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
+      detail: { ...this.currentFocus }
+    }))
+
     this.#reloadMatrixWithFocus(stableId, ordinal)
   }
 
   unfocusChip(event) {
     event.stopPropagation()
+    this.currentFocus = { level: "framework", categoryId: null, capabilityId: null,
+                          capabilityStableId: null, levelOrdinal: null, expectationId: null }
+    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
+      detail: { ...this.currentFocus }
+    }))
     this.#reloadMatrixWithFocus(null, null)
   }
 
@@ -381,20 +404,29 @@ export default class extends BaseController {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  // Targeted jump to a specific capability + level chip. The server
-  // embeds the target capability_stable_id + level_ordinal on the
-  // Continue Assessing button when an unrated current-level cell
-  // exists.
+  // Window-scoped handler for the assessment:focus-unrated event
+  // dispatched by the Continue Assessing button. The hero lives in
+  // a different turbo frame so direct click->matrix actions can't
+  // reach this controller.
   focusUnrated(event) {
-    event.preventDefault()
-    const trigger = event.currentTarget
-    const stableId = trigger.dataset.capabilityStableId
-    const ordinal = parseInt(trigger.dataset.levelOrdinal, 10)
-    if (!stableId || isNaN(ordinal)) return
+    const { capabilityStableId, levelOrdinal } = event.detail || {}
+    if (!capabilityStableId || typeof levelOrdinal !== "number") return
 
-    const chip = document.getElementById(`cell-${stableId}-${ordinal}`)
+    const chip = document.getElementById(`cell-${capabilityStableId}-${levelOrdinal}`)
     if (chip) chip.scrollIntoView({ behavior: "smooth", block: "center" })
-    this.#reloadMatrixWithFocus(stableId, ordinal)
+
+    this.currentFocus = {
+      level: "cell",
+      categoryId: null,
+      capabilityId: null,
+      capabilityStableId,
+      levelOrdinal,
+      expectationId: null
+    }
+    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
+      detail: { ...this.currentFocus }
+    }))
+    this.#reloadMatrixWithFocus(capabilityStableId, levelOrdinal)
   }
 
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
@@ -544,7 +576,7 @@ export default class extends BaseController {
 
   // Builds a cell-focus payload from the browser URL when both
   // `?capability=stable_id` and `?level_ordinal=N` are present AND we
-  // can resolve a row matching the stable_id in the current DOM.
+  // can resolve a row OR card matching the stable_id in the current DOM.
   // Returns null when the URL doesn't carry cell-focus params.
   #focusFromUrl() {
     const url = new URL(window.location)
@@ -555,6 +587,22 @@ export default class extends BaseController {
     const ordinal = parseInt(ordRaw, 10)
     if (isNaN(ordinal)) return null
 
+    // Card layout (assessment view) — chip element by ID; capability_id
+    // comes from the wrapping card.
+    const chip = document.getElementById(`cell-${stableId}-${ordinal}`)
+    if (chip) {
+      const card = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
+      return {
+        level: "cell",
+        categoryId: card?.closest("[data-category-id]")?.dataset.categoryId || this.activeCategoryIdValue,
+        capabilityId: card?.dataset.capabilityId || null,
+        capabilityStableId: stableId,
+        levelOrdinal: ordinal,
+        expectationId: null
+      }
+    }
+
+    // Table layout (framework explorer) — fall back to row/<td> lookup.
     const row = this.rowTargets.find(r => r.dataset.capabilityStableId === stableId)
     if (!row) return null
 
@@ -563,10 +611,6 @@ export default class extends BaseController {
       `tr[data-matrix-target="row"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"], ` +
       `tr[data-matrix-target="expandedRow"][data-capability-id="${capabilityId}"] td[data-level-ordinal="${ordinal}"]`
     )
-    // A stale `level_ordinal` (e.g. an old deep link to a level the
-    // role no longer has) shouldn't short-circuit into cell focus
-    // with no real cell behind it. Bail so dispatchInitialFocus's
-    // capability/category fallback runs instead.
     if (!cell) return null
 
     return {

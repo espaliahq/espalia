@@ -46,7 +46,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
       controller: "matrix",
       matrix_url_sync_value: true,
       matrix_active_category_id_value: first_category_id,
-      action: "activity:navigate@window->matrix#navigateToEntity"
+      action: "activity:navigate@window->matrix#navigateToEntity " \
+              "assessment:focus-unrated@window->matrix#focusUnrated"
     }) do
       div(id: "matrix-header", class: "hidden") { }
 
