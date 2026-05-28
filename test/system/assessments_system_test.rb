@@ -328,6 +328,38 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "level strip" do
+    should "smooth scroll the capability card into view when a chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Set up: scroll far past the second capability card so it's well
+      # below the visible viewport.
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script("window.scrollTo(0, 1200)")
+      sleep 0.4
+
+      # Click a chip on cap2 (Problem Solving) — JS-dispatch so
+      # Capybara doesn't scroll it for us.
+      page.execute_script(<<~JS)
+        document.getElementById('cell-#{@cap2_stable}-1').click();
+      JS
+      sleep 1.0
+
+      # After the chip click, the cap2 CARD should be in view, with its
+      # top at or just below the unified sticky header.
+      offset = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
+          var header = document.getElementById('assessment-sticky-header');
+          return card.getBoundingClientRect().top - header.getBoundingClientRect().bottom;
+        })()
+      JS
+      assert offset.between?(-20, 80),
+        "Capability card top should land just under the sticky header (offset=#{offset})"
+    end
+
     should "render each level code only once (no duplicated labels under the chips)" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"

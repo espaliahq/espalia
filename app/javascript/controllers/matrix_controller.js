@@ -341,6 +341,32 @@ export default class extends BaseController {
     }))
 
     this.#reloadMatrixWithFocus(stableId, ordinal)
+    this.#scrollCardUnderHeader(stableId)
+  }
+
+  // After a chip click reloads the matrix frame, smooth-scroll the
+  // capability card so its top sits just under the sticky header. The
+  // expansion panel renders below the strip and grows the card; without
+  // this, a user who clicks a chip far down the page sees the new
+  // expansion content appear below the fold.
+  #scrollCardUnderHeader(stableId) {
+    const frame = this.element.closest("turbo-frame") ||
+                  this.element.querySelector("turbo-frame")
+
+    const scroll = () => {
+      const card = document.querySelector(`[data-capability-stable-id="${stableId}"]`)
+      if (!card) return
+      const header = document.getElementById("assessment-sticky-header")
+      const headerH = header ? header.offsetHeight : 0
+      const top = card.getBoundingClientRect().top + window.scrollY - headerH - 12
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" })
+    }
+
+    if (frame) {
+      frame.addEventListener("turbo:frame-load", scroll, { once: true })
+    } else {
+      requestAnimationFrame(scroll)
+    }
   }
 
   unfocusChip(event) {
