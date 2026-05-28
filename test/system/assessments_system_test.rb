@@ -221,13 +221,19 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
       )
 
-      # Scroll so the second category section is at the top of the viewport
+      # First, scroll enough that the hero compacts and the document
+      # finishes reflowing.
+      page.execute_script("window.scrollTo(0, 300)")
+      sleep 0.4
+      # Then scroll Delivering's heading just below the sticky header,
+      # measured AFTER compaction so the math is correct.
       page.execute_script(<<~JS)
         var s = document.getElementById('category-#{@cat2_id}');
         var h = document.getElementById('assessment-sticky-header');
-        window.scrollTo(0, s.offsetTop - h.offsetHeight - 4);
+        var sTop = s.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo(0, sTop - h.offsetHeight - 4);
       JS
-      sleep 0.8
+      sleep 0.6
 
       # The chip for the second category should be the active one
       active = page.evaluate_script(
@@ -341,24 +347,29 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
       )
 
-      # Strengths / Lift should be visible at the top
-      assert_text "LIFT TOWARD E2"
+      # Confirm expanded body visible at the top (lift column is rendered)
+      expanded_height_before = page.evaluate_script(
+        "document.querySelector('[data-sticky-hero-target=\"expandedBody\"]').offsetHeight"
+      )
+      assert expanded_height_before > 0,
+        "Expanded body should be visible at the top"
 
       # Scroll past the hero
       page.execute_script("window.scrollTo(0, 500)")
-      sleep 0.6
+      sleep 0.5
 
-      # Strengths / Lift columns should be hidden in compact mode
-      lift_visible = page.evaluate_script(
-        "(function() { " \
-        "var nodes = document.querySelectorAll('#scoring-panel *'); " \
-        "for (var i = 0; i < nodes.length; i++) { " \
-        "  var t = nodes[i].textContent || ''; " \
-        "  if (t.indexOf('LIFT TOWARD') === 0 && nodes[i].offsetParent !== null) return true; " \
-        "} return false; })()"
+      # The expanded body should be hidden in compact mode (height = 0)
+      expanded_visible = page.evaluate_script(
+        "document.querySelector('[data-sticky-hero-target=\"expandedBody\"]').offsetParent !== null"
       )
-      assert_not lift_visible,
-        "Lift column should be hidden once the hero compacts on scroll"
+      assert_not expanded_visible,
+        "Expanded body should be hidden once the hero compacts on scroll"
+
+      # And the compact body should be visible
+      compact_visible = page.evaluate_script(
+        "document.querySelector('[data-sticky-hero-target=\"compactBody\"]').offsetParent !== null"
+      )
+      assert compact_visible, "Compact body should be visible after scroll"
     end
   end
 

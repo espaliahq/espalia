@@ -52,7 +52,6 @@ class Views::Assessments::HeroSummary < Views::Base
   def view_template
     ratio = primary_scoring[:performance_ratio] || 0.0
     div(data: { controller: "sticky-hero" }) do
-      div(data: { sticky_hero_target: "sentinel" }, class: "h-0") { }
       div(id: "scoring-panel",
           class: "mb-6 rounded-xl border border-gray-200 dark:border-gray-700 " \
                  "bg-white dark:bg-gray-900 overflow-hidden",

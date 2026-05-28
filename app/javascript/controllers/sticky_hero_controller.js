@@ -1,15 +1,12 @@
 // Sticky hero summary controller.
 //
-// The hero element is always `sticky top-0 z-20` (set server-side).
-// This controller only toggles the compact/expanded visual state.
-//
-// The sentinel sits ABOVE the hero as a sibling. When it scrolls out
-// of view, the hero is visually sticking and we switch to compact mode.
-// When it scrolls back into view, we switch back to expanded mode.
+// The hero lives inside the unified sticky header so the old
+// IntersectionObserver-on-a-sentinel approach can't work — the sentinel
+// pins along with the header. Instead, listen to window scroll and
+// toggle compact mode once the user has scrolled past a small threshold.
 //
 // <div data-controller="sticky-hero">
-//   <div data-sticky-hero-target="sentinel"></div>
-//   <div data-sticky-hero-target="hero" class="sticky top-0 z-20">
+//   <div data-sticky-hero-target="hero">
 //     <div data-sticky-hero-target="expandedBody">...</div>
 //     <div data-sticky-hero-target="compactBody">...</div>
 //   </div>
@@ -17,32 +14,30 @@
 
 import BaseController from "controllers/base_controller"
 
+const COMPACT_SCROLL_THRESHOLD = 80
+
 export default class extends BaseController {
-  static targets = ["hero", "sentinel", "expandedBody", "compactBody"]
+  static targets = ["hero", "expandedBody", "compactBody"]
 
   connect() {
     super.connect()
     this._isCompact = false
 
-    this._observer = new IntersectionObserver(
-      (entries) => {
-        const shouldCompact = !entries[0].isIntersecting
-        if (shouldCompact === this._isCompact) return
-        this._isCompact = shouldCompact
-        this.#applyVisual()
-      },
-      { threshold: 0 }
-    )
+    this._onScroll = () => this.#scheduleUpdate()
+    window.addEventListener("scroll", this._onScroll, { passive: true })
 
-    if (this.hasSentinelTarget) {
-      this._observer.observe(this.sentinelTarget)
-    }
+    // Apply initial state in case the user lands mid-scroll (e.g. back/forward).
+    requestAnimationFrame(() => this.#updateState())
   }
 
   disconnect() {
-    if (this._observer) {
-      this._observer.disconnect()
-      this._observer = null
+    if (this._onScroll) {
+      window.removeEventListener("scroll", this._onScroll)
+      this._onScroll = null
+    }
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId)
+      this._rafId = null
     }
     super.disconnect()
   }
@@ -50,6 +45,21 @@ export default class extends BaseController {
   scrollToTop(event) {
     event.preventDefault()
     window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  #scheduleUpdate() {
+    if (this._rafId) return
+    this._rafId = requestAnimationFrame(() => {
+      this._rafId = null
+      this.#updateState()
+    })
+  }
+
+  #updateState() {
+    const shouldCompact = window.scrollY > COMPACT_SCROLL_THRESHOLD
+    if (shouldCompact === this._isCompact) return
+    this._isCompact = shouldCompact
+    this.#applyVisual()
   }
 
   #applyVisual() {
