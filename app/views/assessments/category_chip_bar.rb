@@ -43,7 +43,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
       href: "#",
       class: "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
              "#{@active_category_id.nil? ? active_chip_classes : inactive_chip_classes}",
-      data: { action: "click->category-nav#scrollToTop" }
+      data: { all_chip: "true", action: "click->category-nav#scrollToTop" }
     ) do
       plain "All"
       span(class: "text-xs font-mono opacity-70") { total.to_s }

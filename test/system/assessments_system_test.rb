@@ -232,6 +232,37 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_equal @cat2_id, payload["categoryId"]
     end
 
+    should "mark the clicked category chip as active after the scroll settles" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Click the SECOND category chip after first parking on the first
+      # (so the click triggers a real scroll). The bug was that the
+      # final scroll event of the smooth animation could fire BEFORE the
+      # target was reached, marking the previous section active and
+      # leaving the chip mismatched with the visible section.
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat_id}\"]').click()"
+      )
+      sleep 0.6
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]').click()"
+      )
+      sleep 1.0
+
+      active_category_id = page.evaluate_script(
+        "(function() { var el = document.querySelector('nav#category-tabs a[aria-current=\"page\"]'); " \
+        "return el ? el.dataset.categoryId : null; })()"
+      )
+      assert_equal @cat2_id, active_category_id,
+        "Clicked category chip should remain active after the scroll settles, " \
+        "got #{active_category_id.inspect}"
+    end
+
     should "scroll the second category section under the sticky header when its chip is clicked" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"

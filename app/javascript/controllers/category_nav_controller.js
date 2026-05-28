@@ -85,12 +85,23 @@ export default class extends BaseController {
       }
     }, 600)
 
+    // Lock the clicked chip as active and suppress scroll-based detection
+    // for the animation window. Otherwise the last scroll event of the
+    // smooth animation (slightly short of the target) measures the
+    // section as still below the threshold and marks the previous
+    // section active — leaving the clicked chip mismatched with the
+    // visible section.
+    this.#setActiveCategory(categoryId)
+    this._suppressActiveUpdateUntil = Date.now() + 900
+
     this.#pushFocusState({ level: "category", categoryId })
   }
 
   scrollToTop(event) {
     event.preventDefault()
     window.scrollTo({ top: 0, behavior: "smooth" })
+    this.#setActiveCategory(null)
+    this._suppressActiveUpdateUntil = Date.now() + 900
     this.#pushFocusState({ level: "framework", categoryId: null })
   }
 
@@ -129,8 +140,14 @@ export default class extends BaseController {
   // On every scroll, find the section whose top has scrolled just past
   // the bottom of the sticky header — that's the category "in view"
   // and gets its chip activated.
+  //
+  // Suppressed for ~900ms after a programmatic chip click so the
+  // explicitly-clicked active state survives the smooth-scroll animation
+  // (whose final scroll events fire before the layout fully settles).
   #scheduleActiveCategoryUpdate() {
     if (this._rafId) return
+    if (this._suppressActiveUpdateUntil &&
+        Date.now() < this._suppressActiveUpdateUntil) return
     this._rafId = requestAnimationFrame(() => {
       this._rafId = null
       this.#updateActiveCategory()
@@ -153,16 +170,22 @@ export default class extends BaseController {
   #setActiveCategory(categoryId) {
     const chips = this.element.querySelectorAll("nav#category-tabs a[data-category-id]")
     chips.forEach(chip => {
-      const isActive = chip.dataset.categoryId === categoryId
-      if (isActive) {
-        chip.setAttribute("aria-current", "page")
-        chip.classList.remove(...INACTIVE_CHIP_CLASSES)
-        chip.classList.add(...ACTIVE_CHIP_CLASSES)
-      } else {
-        chip.removeAttribute("aria-current")
-        chip.classList.remove(...ACTIVE_CHIP_CLASSES)
-        chip.classList.add(...INACTIVE_CHIP_CLASSES)
-      }
+      this.#toggleChipActive(chip, chip.dataset.categoryId === categoryId)
     })
+    // "All" chip is only active when no category is in focus.
+    const allChip = this.element.querySelector("nav#category-tabs a[data-all-chip]")
+    if (allChip) this.#toggleChipActive(allChip, categoryId == null)
+  }
+
+  #toggleChipActive(chip, isActive) {
+    if (isActive) {
+      chip.setAttribute("aria-current", "page")
+      chip.classList.remove(...INACTIVE_CHIP_CLASSES)
+      chip.classList.add(...ACTIVE_CHIP_CLASSES)
+    } else {
+      chip.removeAttribute("aria-current")
+      chip.classList.remove(...ACTIVE_CHIP_CLASSES)
+      chip.classList.add(...INACTIVE_CHIP_CLASSES)
+    }
   }
 }
