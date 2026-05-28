@@ -158,7 +158,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "render alignment frequency selectors once aligning" do
       seed_alignment_started!
-      visit assessment_path(@report_assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector — without it the card is just header + level strip.
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       wait_for_stimulus "matrix"
 
       assert_text "Report Alex"
@@ -170,7 +172,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
     should "record an alignment when a frequency is clicked" do
       seed_alignment_started!
-      visit assessment_path(@report_assignment)
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_text "Aligning"
       wait_for_stimulus "matrix"
 
@@ -199,7 +201,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "render the alignment frequency selector as the interactive primary cell" do
-      visit assessment_path(@report_assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector for the person's level.
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       wait_for_stimulus "matrix"
 
       # In alignment mode the primary cell is the aligned selector (buttons
@@ -229,7 +233,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "render the alignment frequency selector as the interactive primary cell" do
-      visit assessment_path(@report_assignment)
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       wait_for_stimulus "matrix"
 
       within("#rating-#{@cap_stable}-2") do

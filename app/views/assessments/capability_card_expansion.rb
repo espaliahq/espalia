@@ -66,26 +66,11 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   private
 
   def expansion_header
-    div(class: "flex items-center justify-between mb-3") do
-      div(class: "flex items-center gap-2") do
-        span(class: "text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide") do
-          "#{@level[:level_code]} · #{@level[:level_title]}"
-        end
+    div(class: "flex items-center gap-2 mb-3") do
+      span(class: "text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide") do
+        "#{@level[:level_code]} · #{@level[:level_title]}"
       end
-      close_button
     end
-  end
-
-  def close_button
-    button(
-      type: "button",
-      class: "w-6 h-6 flex items-center justify-center rounded-full " \
-             "text-gray-400 hover:text-gray-600 dark:text-gray-500 " \
-             "dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 " \
-             "transition-colors cursor-pointer",
-      aria: { label: "Close expansion" },
-      data: { action: "click->matrix#unfocusChip" }
-    ) { plain "×" }
   end
 
   def expectation_text

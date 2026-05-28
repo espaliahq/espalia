@@ -345,21 +345,18 @@ export default class extends BaseController {
   }
 
   // After a chip click reloads the matrix frame, smooth-scroll the
-  // capability card so its top sits just under the sticky header. The
-  // expansion panel renders below the strip and grows the card; without
-  // this, a user who clicks a chip far down the page sees the new
-  // expansion content appear below the fold.
+  // capability card into view. Uses scrollIntoView so the browser
+  // honours the card's `scroll-margin-top` (= unified sticky header
+  // height + 12px), which is more reliable than manual measurements
+  // that can race a re-mounting sticky header.
   #scrollCardUnderHeader(stableId) {
     const frame = this.element.closest("turbo-frame") ||
                   this.element.querySelector("turbo-frame")
 
     const scroll = () => {
-      const card = document.querySelector(`[data-capability-stable-id="${stableId}"]`)
+      const card = document.querySelector(`[data-matrix-target="card"][data-capability-stable-id="${stableId}"]`)
       if (!card) return
-      const header = document.getElementById("assessment-sticky-header")
-      const headerH = header ? header.offsetHeight : 0
-      const top = card.getBoundingClientRect().top + window.scrollY - headerH - 12
-      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" })
+      card.scrollIntoView({ behavior: "smooth", block: "start" })
     }
 
     if (frame) {
@@ -367,16 +364,6 @@ export default class extends BaseController {
     } else {
       requestAnimationFrame(scroll)
     }
-  }
-
-  unfocusChip(event) {
-    event.stopPropagation()
-    this.currentFocus = { level: "framework", categoryId: null, capabilityId: null,
-                          capabilityStableId: null, levelOrdinal: null, expectationId: null }
-    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
-      detail: { ...this.currentFocus }
-    }))
-    this.#reloadMatrixWithFocus(null, null)
   }
 
   #reloadMatrixWithFocus(stableId, ordinal) {

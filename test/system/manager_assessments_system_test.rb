@@ -95,6 +95,9 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       click_link_with_js_fallback("Review Assessment", expect_text: "Critical Thinking")
       assert_selector "h1", text: "Report Alex"
       assert_text "Critical Thinking"
+
+      # Every card auto-focuses on the person's current level, so the
+      # level-2 expectation renders without any extra navigation.
       assert_text "Synthesises information"
     end
 
@@ -121,31 +124,41 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "not render a redundant secondary sub-strip below the chip row" do
+      # The old design rendered a "Self:" sub-strip of tiny dots under
+      # the manager's chip row. That sub-strip is gone — the per-chip
+      # divergence marker covers the signal at strip level. Secondary
+      # bars still appear INSIDE the auto-focused expansion panel, so
+      # we assert there's no stray sub-strip *between* the chip row and
+      # the expansion (i.e. the chip strip's parent has no sibling
+      # ".self-sub-strip" / ".mgr-sub-strip" element).
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"
 
-      # The previous design rendered a "Self:" sub-strip of tiny dots
-      # under the manager's chip row. It duplicated the divergence signal
-      # already on the primary chip. Drop it; the per-chip divergence
-      # marker + the expansion panel cover both roles.
-      assert_no_text(/^Self:$/)
-      assert_no_text(/^Mgr:$/)
-      assert_no_text(/^Agreed:$/)
+      assert_no_selector "[data-self-sub-strip]"
+      assert_no_selector "[data-mgr-sub-strip]"
+      assert_no_selector "[data-agreed-sub-strip]"
+    end
 
-      # Manager frequency selector buttons should still render in the
-      # default rating area.
+    should "render frequency selector buttons in the focused card's expansion panel" do
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector buttons.
+      visit assessment_path(@report_assignment, capability: @cap_stable)
+      assert_selector "h1", text: "Report Alex"
+
       assert_selector "button", text: "Some"
       assert_selector "button", text: "Most"
       assert_selector "button", text: "Consistently"
     end
 
     should "allow manager to submit a rating" do
-      visit assessment_path(@report_assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector for the person's level (level 2 here).
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
       # Click a frequency button to rate. Person is at level 2, so the
-      # default rating area has #rating-#{stable}-2.
+      # expansion panel renders #rating-#{stable}-2.
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
 
       # Verify the Turbo Stream response re-rendered with the button selected
@@ -155,7 +168,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "allow manager to untoggle a rating by clicking the same frequency" do
-      visit assessment_path(@report_assignment)
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 

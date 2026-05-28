@@ -328,6 +328,51 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "level strip" do
+    should "auto-focus every card on the person's current level by default" do
+      visit assessment_path(@assignment)
+      # No ?capability= in URL — every card still auto-focuses on the
+      # person's level (E2). The level-2 expectation text renders inside
+      # each card's expansion panel.
+      assert_text "Synthesises information from multiple sources"
+    end
+
+    should "honour an explicit ?capability= focus on the matching card" do
+      visit assessment_path(@assignment, capability: @cap1_stable)
+      # ?capability= present but no ?level_ordinal=. The expansion
+      # should default to the person's level (E2), and only one
+      # expansion shows on this capability.
+      assert_text "Synthesises information from multiple sources"
+    end
+
+    should "fully reveal the capability name and eyebrow under the sticky header after chip click" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script("window.scrollTo(0, 1200)")
+      sleep 0.4
+
+      page.execute_script(<<~JS)
+        document.getElementById('cell-#{@cap2_stable}-1').click();
+      JS
+      sleep 1.0
+
+      # The eyebrow ("THINKING") and capability name ("Problem Solving")
+      # must be in view, not pushed under the sticky header. Check the
+      # entire card-header box is visible below the header bottom.
+      header_offset = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
+          var header = document.getElementById('assessment-sticky-header');
+          return card.getBoundingClientRect().top - header.getBoundingClientRect().bottom;
+        })()
+      JS
+      assert header_offset >= -5,
+        "Top of capability card should sit at or below the sticky header bottom (offset=#{header_offset})"
+    end
+
     should "smooth scroll the capability card into view when a chip is clicked" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
@@ -409,7 +454,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
   context "scroll stability on rating" do
     should "not jump scroll position when a rating is submitted" do
-      visit assessment_path(@assignment)
+      # ?capability= focuses the third (Execution) card so the
+      # expansion panel renders the FrequencySelector buttons.
+      visit assessment_path(@assignment, capability: @cap3_stable)
       assert_selector "#scoring-panel"
 
       # Add tall spacer + scroll into the page so a later capability's
@@ -617,14 +664,16 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
   context "self-assessment flow" do
     should "display assessment with frequency selectors" do
-      visit assessment_path(@assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector buttons we want to assert on.
+      visit assessment_path(@assignment, capability: @cap1_stable)
 
       assert_selector "h1", text: "Senior Software Engineer"
       assert_text "E2"
       assert_text "Critical Thinking"
       assert_text "Problem Solving"
 
-      # Frequency selector buttons visible in the default rating area
+      # Frequency selector buttons visible in the focused card's expansion panel
       assert_button "Some"
       assert_button "Most"
       assert_button "Consistently"
@@ -635,10 +684,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "rate a capability and see scoring update" do
-      visit assessment_path(@assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector for the person's level (level 2 here).
+      visit assessment_path(@assignment, capability: @cap1_stable)
 
-      # The default rating area shows the FrequencySelector for the person's level.
-      # Person is at level 2, so rating-#{stable}-2 is in the default area.
+      # The expansion panel shows the FrequencySelector for the person's level.
+      # Person is at level 2, so rating-#{stable}-2 is in the expansion panel.
       click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
 
       # Scoring panel should update (performance ratio changes)
@@ -696,7 +747,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "update capability contribution when rating a frequency" do
-      visit assessment_path(@assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector for the person's level (level 2 here).
+      visit assessment_path(@assignment, capability: @cap1_stable)
       assert_selector "#scoring-panel"
 
       # Rate level 2 of first capability
@@ -1395,7 +1448,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "not reload the matrix frame when the rater clicks their own rating button" do
-      visit assessment_path(@assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector buttons we're going to click.
+      visit assessment_path(@assignment, capability: @cap1_stable)
       wait_for_stimulus "matrix"
 
       # Wait for the lazy-loaded matrix frame to finish its initial

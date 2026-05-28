@@ -55,8 +55,10 @@ class Views::Assessments::CapabilityCard < Views::Base
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
 
-    @is_expanded = expanded_capability_id == @capability.stable_id
-    @focused_ordinal = @is_expanded ? focused_level_ordinal : nil
+    @is_url_focused = expanded_capability_id == @capability.stable_id
+    # Every card auto-focuses the person's current level by default. When
+    # the URL specifies a different level for this capability, honour that.
+    @focused_ordinal = @is_url_focused ? (focused_level_ordinal || @person_level) : @person_level
     @category_id = category_id
   end
 
@@ -64,7 +66,12 @@ class Views::Assessments::CapabilityCard < Views::Base
     div(
       class: "rounded-xl border border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 p-4 transition-shadow " \
-             "#{@is_expanded ? 'shadow-sm ring-1 ring-primary/10' : 'hover:shadow-sm'}",
+             "#{@is_url_focused ? 'shadow-sm ring-1 ring-primary/10' : 'hover:shadow-sm'}",
+      # scroll-margin-top accounts for the unified sticky header so
+      # `scrollIntoView({ block: 'start' })` lands the card just under
+      # it instead of behind it. The CSS var is published by
+      # category_nav_controller.
+      style: "scroll-margin-top: calc(var(--sticky-header-h, 0px) + 12px)",
       data: {
         matrix_target: "card",
         capability_id: @capability.capability_id,
@@ -78,13 +85,11 @@ class Views::Assessments::CapabilityCard < Views::Base
         capability_stable_id: @capability.stable_id,
         person_level: @person_level,
         context: @context,
-        focused_ordinal: active_ordinal
+        focused_ordinal: @focused_ordinal
       )
-      if @is_expanded && @focused_ordinal
-        expansion_panel
-      else
-        default_rating_area
-      end
+      # Expansion always renders — every card auto-focuses the person's
+      # current level (or the URL-specified level when present).
+      expansion_panel
     end
   end
 
@@ -167,69 +172,6 @@ class Views::Assessments::CapabilityCard < Views::Base
              "bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded",
       title: @block_reason
     ) { "Blocked" }
-  end
-
-  def active_ordinal
-    @focused_ordinal || @person_level
-  end
-
-  def default_rating_area
-    cell_data = @cells[@person_level]
-    return unless cell_data
-
-    level = @merged_levels.find { |l| l[:ordinal] == @person_level }
-    return unless level
-
-    div(class: "mt-3 p-3 rounded-lg bg-gray-50/50 dark:bg-gray-800/30") do
-      div(class: "flex items-center gap-2 mb-2") do
-        span(class: "text-xs text-gray-500 dark:text-gray-400") do
-          "#{level[:level_code]} · #{level[:level_title]}"
-        end
-      end
-      p(class: "text-sm text-gray-700 dark:text-gray-300 mb-2") do
-        cell_data[:expectation]&.description
-      end
-      div(id: "rating-#{@capability.stable_id}-#{@person_level}") do
-        if primary_perspective_frozen?
-          render Views::Assessments::FrequencyBar.new(
-            label: primary_label,
-            frequency: primary_frequency_for(@person_level)
-          )
-        else
-          render Views::Assessments::FrequencySelector.new(
-            capability_stable_id: @capability.stable_id,
-            level_ordinal: @person_level,
-            current_frequency: primary_frequency_for(@person_level),
-            assessment_id: @assessment_id,
-            context: @context,
-            category_id: @category_id
-          )
-        end
-      end
-    end
-  end
-
-  def primary_perspective_frozen?
-    @context == :alignment ? @alignment_locked : @frozen
-  end
-
-  def primary_label
-    case @context
-    when :self    then "Self"
-    when :manager then "Mgr"
-    else "Agreed"
-    end
-  end
-
-  def primary_frequency_for(ordinal)
-    cell = @cells[ordinal]
-    return nil unless cell
-
-    case @context
-    when :self      then cell[:current_frequency]
-    when :manager   then cell[:manager_frequency]
-    when :alignment then cell[:aligned_frequency]
-    end
   end
 
   def expansion_panel
