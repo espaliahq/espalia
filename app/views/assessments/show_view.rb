@@ -2,8 +2,8 @@
 
 # Self-assessment page with card-based layout.
 #
-# Single-column scroll: hero summary (sticky) → category chip bar →
-# capability cards grouped by category. Activity feed as a right
+# Unified sticky header: back link + title + hero summary + category
+# chips all pin together when scrolled. Activity feed as a right
 # slide-over pane.
 #
 class Views::Assessments::ShowView < Views::Base
@@ -75,7 +75,6 @@ class Views::Assessments::ShowView < Views::Base
       data[:evidence_relink_form_assessment_id_value] = @assignment.id if can_render_relink_modal?
       data[:evidence_edit_form_assessment_id_value] = @assignment.id if can_render_edit_modal?
       div(data: data) do
-        assessment_header
         assessment_layout
         render Views::Assessments::Evidence::Form.new(assessment_id: @assignment.id) if @can_create_evidence
         if can_render_relink_modal?
@@ -91,12 +90,32 @@ class Views::Assessments::ShowView < Views::Base
 
   private
 
-  # ── Header ──
+  # ── Layout ──
+
+  def assessment_layout
+    div(data: { controller: "assessment-sync" }) do
+      turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
+      div(id: "assessment-sync-signal", class: "hidden",
+          data: { assessment_sync_target: "signal" }) { }
+
+      sticky_header
+      main_section
+      activity_sidebar
+    end
+  end
+
+  def sticky_header
+    div(class: "sticky top-0 z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2") do
+      assessment_header
+      hero_frame
+      category_chips
+    end
+  end
 
   def assessment_header
-    div(class: "mb-4") do
+    div(class: "pt-4 pb-2") do
       a(href: assessments_path,
-        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary mb-2 inline-block") do
+        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary mb-1 inline-block") do
         plain "← My Assessments"
       end
 
@@ -119,42 +138,44 @@ class Views::Assessments::ShowView < Views::Base
     end
   end
 
-  # ── Layout ──
-
-  def assessment_layout
-    div(data: { controller: "assessment-sync" }) do
-      turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
-      div(id: "assessment-sync-signal", class: "hidden",
-          data: { assessment_sync_target: "signal" }) { }
-
-      hero_section
-      main_section
-      activity_sidebar
+  def hero_frame
+    turbo_frame_tag(
+      "assessment-scoring",
+      src: scoring_assessment_path(@assignment),
+      data: { assessment_sync_target: "scoringFrame" }
+    ) do
+      render Views::Assessments::HeroSummary.new(
+        scoring: @matrix_data[:scoring],
+        self_scoring: @matrix_data[:self_scoring],
+        manager_scoring: @matrix_data[:manager_scoring],
+        aligned_scoring: @matrix_data[:aligned_scoring],
+        categories: @matrix_data[:categories],
+        person_level: @matrix_data[:person_level],
+        merged_levels: @matrix_data[:merged_levels],
+        mastery_threshold: @matrix_data[:mastery_threshold],
+        meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
+        assessment_id: @assignment.id,
+        context: @context,
+        assignment: @assignment
+      )
     end
   end
 
-  def hero_section
-    div(class: "sticky top-0 z-20") do
-      turbo_frame_tag(
-        "assessment-scoring",
-        src: scoring_assessment_path(@assignment),
-        data: { assessment_sync_target: "scoringFrame" }
-      ) do
-        render Views::Assessments::HeroSummary.new(
-          scoring: @matrix_data[:scoring],
-          self_scoring: @matrix_data[:self_scoring],
-          manager_scoring: @matrix_data[:manager_scoring],
-          aligned_scoring: @matrix_data[:aligned_scoring],
-          categories: @matrix_data[:categories],
-          person_level: @matrix_data[:person_level],
-          merged_levels: @matrix_data[:merged_levels],
-          mastery_threshold: @matrix_data[:mastery_threshold],
-          meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
-          assessment_id: @assignment.id,
-          context: @context,
-          assignment: @assignment
-        )
-      end
+  def category_chips
+    render Views::Assessments::CategoryChipBar.new(
+      categories: @matrix_data[:categories],
+      scoring: primary_scoring,
+      active_category_id: @active_category_id,
+      context: @context
+    )
+  end
+
+  def primary_scoring
+    case @context
+    when :self      then @matrix_data[:self_scoring] || @matrix_data[:scoring]
+    when :manager   then @matrix_data[:manager_scoring] || @matrix_data[:scoring]
+    when :alignment then @matrix_data[:aligned_scoring] || @matrix_data[:scoring]
+    else @matrix_data[:scoring]
     end
   end
 
@@ -188,6 +209,7 @@ class Views::Assessments::ShowView < Views::Base
              "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto hidden shadow-xl",
       data: { activity_pane_target: "pane", pane_state: "closed" }
     ) do
+      activity_sidebar_header
       turbo_frame_tag(
         "assessment-activity",
         src: assessment_activity_path(@assignment),
@@ -199,6 +221,20 @@ class Views::Assessments::ShowView < Views::Base
           assignment: @assignment
         )
       end
+    end
+  end
+
+  def activity_sidebar_header
+    div(class: "flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700") do
+      span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Activity" }
+      button(
+        type: "button",
+        class: "w-6 h-6 flex items-center justify-center rounded-full " \
+               "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 " \
+               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+        data: { action: "click->activity-pane#close" },
+        aria: { label: "Close activity" }
+      ) { plain "×" }
     end
   end
 

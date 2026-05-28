@@ -48,16 +48,6 @@ class Views::Assessments::AssessmentMatrix < Views::Base
       matrix_active_category_id_value: first_category_id,
       action: "activity:navigate@window->matrix#navigateToEntity"
     }) do
-      render Views::Assessments::CategoryChipBar.new(
-        categories: @matrix_data[:categories],
-        scoring: primary_scoring,
-        active_category_id: @active_category_id,
-        context: @context
-      )
-
-      # Hidden placeholder for matrix-header Turbo Stream target
-      # (the old table header is gone; rating controllers still emit
-      # a replace for this ID).
       div(id: "matrix-header", class: "hidden") { }
 
       div(class: "space-y-8") do

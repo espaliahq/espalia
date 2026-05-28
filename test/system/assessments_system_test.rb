@@ -110,6 +110,60 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "sticky header" do
+    should "keep header, hero, and category chips visible when scrolled" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script("window.scrollTo(0, 500)")
+      sleep 0.5
+
+      # H1 should still be visible (unified sticky header)
+      h1_visible = page.evaluate_script(
+        "(function() { var r = document.querySelector('h1').getBoundingClientRect(); " \
+        "return r.top >= 0 && r.bottom <= window.innerHeight; })()"
+      )
+      assert h1_visible, "H1 (assessment name) should remain visible when scrolled"
+
+      # Activity toggle should still be visible
+      assert_selector "[data-action='click->activity-pane#toggle']", visible: true
+
+      # Category chips should still be visible
+      assert_selector "nav#category-tabs", visible: true
+    end
+
+    should "show category pass/fail indicators on chips" do
+      visit assessment_path(@assignment)
+      # Category chips should carry pass/fail status dots
+      within("nav#category-tabs") do
+        assert_selector "[data-category-status]"
+      end
+    end
+  end
+
+  context "activity sidebar" do
+    should "be closable when open" do
+      visit assessment_path(@assignment)
+      assert_selector "[data-action='click->activity-pane#toggle']"
+
+      # Open via JS-dispatched click (avoids flake-prone Selenium pointer)
+      page.execute_script(
+        "document.querySelector('[data-action*=\"activity-pane#toggle\"]').click()"
+      )
+      assert_selector "#assessment-activity-pane", visible: true
+
+      # Close via the × button inside the sidebar
+      page.execute_script(
+        "document.querySelector('#assessment-activity-pane [data-action*=\"activity-pane#close\"]').click()"
+      )
+
+      assert_selector "#assessment-activity-pane", visible: :hidden, wait: 3
+    end
+  end
+
   context "self-assessment flow" do
     should "display assessment with frequency selectors" do
       visit assessment_path(@assignment)

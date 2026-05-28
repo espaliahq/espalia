@@ -79,7 +79,6 @@ class Views::Assessments::HeroSummary < Views::Base
         data: { sticky_hero_target: "expandedBody" }) do
       context_and_verdict
       strengths_and_lift
-      categories_row
       promotion_and_ctas
     end
   end
@@ -243,7 +242,6 @@ class Views::Assessments::HeroSummary < Views::Base
       span(class: "text-sm font-semibold #{performance_color(ratio)}") do
         "#{verdict_short} · #{pct}%"
       end
-      compact_category_dots
       promotion_mini_pill
       div(class: "flex-1") { }
       a(

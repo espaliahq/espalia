@@ -1,20 +1,11 @@
 # frozen_string_literal: true
 
 # Manager's view of a direct report's assessment.
-# Card-based layout with hero summary, level strips, and activity feed.
+# Unified sticky header with hero summary, category chips, and activity feed.
 #
 class Views::Assessments::ManagerShowView < Views::Base
   include Views::Assessments::HeaderChrome
 
-  # @param assignment [PersonFrameworkAssignment]
-  # @param assessee [Person] the direct report being assessed
-  # @param framework [FrameworkState::Framework]
-  # @param matrix_data [Hash] output from Assessments::MatrixDataBuilder
-  # @param active_category_id [String, nil] highlighted category chip
-  # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
-  # @param user [User, nil]
-  # @param current_tenant [Tenant, nil]
-  # @param tenants [Array<Tenant>]
   def initialize(assignment:, assessee:, framework:, matrix_data:, active_category_id: nil,
                  expanded_capability_id: nil, expanded_level_ordinal: nil,
                  context: :manager,
@@ -53,11 +44,6 @@ class Views::Assessments::ManagerShowView < Views::Base
     @viewer_person_id.present?
   end
 
-  def confirm_message
-    "Starting alignment will lock self and manager ratings for this cycle. " \
-      "You and #{@assessee.name} can still record agreed values together. Continue?"
-  end
-
   def view_template
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
@@ -78,7 +64,6 @@ class Views::Assessments::ManagerShowView < Views::Base
       data[:evidence_relink_form_assessment_id_value] = @assignment.id if can_render_relink_modal?
       data[:evidence_edit_form_assessment_id_value] = @assignment.id if can_render_edit_modal?
       div(data: data) do
-        assessment_header
         assessment_layout
         render Views::Assessments::Evidence::Form.new(assessment_id: @assignment.id) if @can_create_evidence
         if can_render_relink_modal?
@@ -94,12 +79,32 @@ class Views::Assessments::ManagerShowView < Views::Base
 
   private
 
-  # ── Header ──
+  # ── Layout ──
+
+  def assessment_layout
+    div(data: { controller: "assessment-sync" }) do
+      turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
+      div(id: "assessment-sync-signal", class: "hidden",
+          data: { assessment_sync_target: "signal" }) { }
+
+      sticky_header
+      main_section
+      activity_sidebar
+    end
+  end
+
+  def sticky_header
+    div(class: "sticky top-0 z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2") do
+      assessment_header
+      hero_frame
+      category_chips
+    end
+  end
 
   def assessment_header
-    div(class: "mb-4") do
+    div(class: "pt-4 pb-2") do
       a(href: assessments_path,
-        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary mb-2 inline-block") do
+        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary mb-1 inline-block") do
         plain "← Assessments"
       end
 
@@ -128,10 +133,12 @@ class Views::Assessments::ManagerShowView < Views::Base
   end
 
   def start_alignment_button
+    confirm_msg = "Starting alignment will lock self and manager ratings for this cycle. " \
+      "You and #{@assessee.name} can still record agreed values together. Continue?"
     form(
       action: assessment_alignment_start_path(@assignment),
       method: "post",
-      data: { turbo_confirm: confirm_message },
+      data: { turbo_confirm: confirm_msg },
       class: "inline"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
@@ -145,16 +152,13 @@ class Views::Assessments::ManagerShowView < Views::Base
     end
   end
 
-  def mark_complete_confirm_message
-    "Marking alignment complete will lock all ratings for this cycle, " \
-      "including the agreed values. Continue?"
-  end
-
   def mark_complete_button
+    confirm_msg = "Marking alignment complete will lock all ratings for this cycle, " \
+      "including the agreed values. Continue?"
     form(
       action: assessment_alignment_completion_path(@assignment),
       method: "post",
-      data: { turbo_confirm: mark_complete_confirm_message },
+      data: { turbo_confirm: confirm_msg },
       class: "hidden md:inline-block"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
@@ -167,28 +171,13 @@ class Views::Assessments::ManagerShowView < Views::Base
     end
   end
 
-  # ── Layout ──
-
-  def assessment_layout
-    div(data: { controller: "assessment-sync" }) do
-      turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
-      div(id: "assessment-sync-signal", class: "hidden",
-          data: { assessment_sync_target: "signal" }) { }
-
-      hero_section
-      main_section
-      activity_sidebar
-    end
-  end
-
-  def hero_section
-    div(class: "sticky top-0 z-20") do
-      turbo_frame_tag(
-        "assessment-scoring",
-        src: scoring_assessment_path(@assignment),
-        data: { assessment_sync_target: "scoringFrame" }
-      ) do
-        render Views::Assessments::HeroSummary.new(
+  def hero_frame
+    turbo_frame_tag(
+      "assessment-scoring",
+      src: scoring_assessment_path(@assignment),
+      data: { assessment_sync_target: "scoringFrame" }
+    ) do
+      render Views::Assessments::HeroSummary.new(
         scoring: @matrix_data[:scoring],
         self_scoring: @matrix_data[:self_scoring],
         manager_scoring: @matrix_data[:manager_scoring],
@@ -205,7 +194,23 @@ class Views::Assessments::ManagerShowView < Views::Base
         can_complete_alignment: @can_complete_alignment,
         assessee_name: @assessee.name
       )
-      end
+    end
+  end
+
+  def category_chips
+    render Views::Assessments::CategoryChipBar.new(
+      categories: @matrix_data[:categories],
+      scoring: primary_scoring,
+      active_category_id: @active_category_id,
+      context: @context
+    )
+  end
+
+  def primary_scoring
+    case @context
+    when :manager   then @matrix_data[:manager_scoring] || @matrix_data[:scoring]
+    when :alignment then @matrix_data[:aligned_scoring] || @matrix_data[:scoring]
+    else @matrix_data[:scoring]
     end
   end
 
@@ -239,6 +244,7 @@ class Views::Assessments::ManagerShowView < Views::Base
              "bg-gray-50 dark:bg-gray-800/50 overflow-y-auto hidden shadow-xl",
       data: { activity_pane_target: "pane", pane_state: "closed" }
     ) do
+      activity_sidebar_header
       turbo_frame_tag(
         "assessment-activity",
         src: assessment_activity_path(@assignment),
@@ -250,6 +256,20 @@ class Views::Assessments::ManagerShowView < Views::Base
           assignment: @assignment
         )
       end
+    end
+  end
+
+  def activity_sidebar_header
+    div(class: "flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700") do
+      span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Activity" }
+      button(
+        type: "button",
+        class: "w-6 h-6 flex items-center justify-center rounded-full " \
+               "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 " \
+               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+        data: { action: "click->activity-pane#close" },
+        aria: { label: "Close activity" }
+      ) { plain "×" }
     end
   end
 

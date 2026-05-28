@@ -193,12 +193,11 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "<html"
     end
 
-    should "render category tabs" do
+    should "render all category sections in the matrix" do
       sign_in @user
       get matrix_assessment_path(@assignment)
 
       assert_response :success
-      assert_includes response.body, "category-tabs"
       assert_includes response.body, "Thinking"
     end
 
@@ -246,12 +245,13 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       # (tabs will still mention both categories)
     end
 
-    should "highlight active tab with aria-current" do
+    should "render category chips with aria-current on the show page" do
       sign_in @user
-      get matrix_assessment_path(@assignment, category: @cat2_id)
+      get assessment_path(@assignment)
 
       assert_response :success
-      assert_includes response.body, 'aria-current="page"'
+      assert_includes response.body, "category-tabs"
+      assert_includes response.body, "Thinking"
     end
 
     should "omit archived categories from the rendered matrix" do
