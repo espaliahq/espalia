@@ -360,49 +360,83 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       sleep 1.0
 
       # The eyebrow ("THINKING") and capability name ("Problem Solving")
-      # must be in view, not pushed under the sticky header. Check the
-      # entire card-header box is visible below the header bottom.
-      header_offset = page.evaluate_script(<<~JS)
+      # must be in view, not pushed under the sticky chrome. The
+      # EFFECTIVE blocker is the unified header AND the sticky category
+      # section header that pins underneath it — both cover the top.
+      diagnostics = page.evaluate_script(<<~JS)
         (function() {
           var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
+          var section = card.closest("section[data-category-id]");
+          var sectionHeader = section.querySelector(":scope > div.sticky");
           var header = document.getElementById('assessment-sticky-header');
-          return card.getBoundingClientRect().top - header.getBoundingClientRect().bottom;
+          return {
+            card_top: card.getBoundingClientRect().top,
+            header_bottom: header.getBoundingClientRect().bottom,
+            section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0
+          };
         })()
       JS
-      assert header_offset >= -5,
-        "Top of capability card should sit at or below the sticky header bottom (offset=#{header_offset})"
+      effective_blocker_bottom = diagnostics["header_bottom"] + diagnostics["section_header_height"]
+      offset = diagnostics["card_top"] - effective_blocker_bottom
+      assert offset >= -5,
+        "Top of capability card should sit at or below the effective sticky chrome " \
+        "(offset=#{offset}, diagnostics=#{diagnostics.inspect})"
     end
 
     should "smooth scroll the capability card into view when a chip is clicked" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
-      # Set up: scroll far past the second capability card so it's well
-      # below the visible viewport.
+      # Set up: starting from scrollY=0 (header expanded) and clicking a
+      # chip on a card BELOW the fold is the scenario that exposes the
+      # sticky-hero-compacts-mid-scroll race. The smooth-scroll target is
+      # computed against the expanded header height; mid-flight the hero
+      # compacts (scrollY crosses 80) and the scroll-compensation kick
+      # fights the animation, leaving the card top hidden behind the
+      # final-state header.
       page.execute_script(
         "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
       )
-      page.execute_script("window.scrollTo(0, 1200)")
+      page.execute_script("window.scrollTo(0, 0)")
       sleep 0.4
 
-      # Click a chip on cap2 (Problem Solving) — JS-dispatch so
-      # Capybara doesn't scroll it for us.
+      # Click a chip on cap2 (Problem Solving) — below the fold from
+      # scrollY=0. JS-dispatch so Capybara doesn't scroll it for us.
       page.execute_script(<<~JS)
         document.getElementById('cell-#{@cap2_stable}-1').click();
       JS
-      sleep 1.0
+      sleep 1.5
 
-      # After the chip click, the cap2 CARD should be in view, with its
-      # top at or just below the unified sticky header.
-      offset = page.evaluate_script(<<~JS)
+      # After the chip click, the cap2 CARD top must sit just below the
+      # sticky header bottom — close enough that the eyebrow and name
+      # are immediately visible without forcing the user to scroll up.
+      # We allow 0–30px of breathing room (the card has 12px of declared
+      # scroll-margin-top above its top edge); anything outside that
+      # window is a regression.
+      # Measure against the EFFECTIVE blocking top — unified header
+      # bottom + category section header height. The category section
+      # heading is itself sticky (pinned just under the unified header),
+      # so card top must clear both, not just the unified header.
+      diagnostics = page.evaluate_script(<<~JS)
         (function() {
           var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
+          var section = card.closest("section[data-category-id]");
+          var sectionHeader = section.querySelector(":scope > div.sticky");
           var header = document.getElementById('assessment-sticky-header');
-          return card.getBoundingClientRect().top - header.getBoundingClientRect().bottom;
+          return {
+            card_top: card.getBoundingClientRect().top,
+            header_bottom: header.getBoundingClientRect().bottom,
+            section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0,
+            scroll_y: window.scrollY
+          };
         })()
       JS
-      assert offset.between?(-20, 80),
-        "Capability card top should land just under the sticky header (offset=#{offset})"
+      effective_blocker_bottom = diagnostics["header_bottom"] + diagnostics["section_header_height"]
+      offset = diagnostics["card_top"] - effective_blocker_bottom
+      assert offset.between?(0, 30),
+        "Capability card top should land 0-30px below the effective sticky " \
+        "header bottom (unified + section). offset=#{offset}, " \
+        "diagnostics=#{diagnostics.inspect}"
     end
 
     should "render each level code only once (no duplicated labels under the chips)" do

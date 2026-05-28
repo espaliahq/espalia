@@ -344,11 +344,17 @@ export default class extends BaseController {
     this.#scrollCardUnderHeader(stableId)
   }
 
-  // After a chip click reloads the matrix frame, smooth-scroll the
-  // capability card into view. Uses scrollIntoView so the browser
-  // honours the card's `scroll-margin-top` (= unified sticky header
-  // height + 12px), which is more reliable than manual measurements
-  // that can race a re-mounting sticky header.
+  // After a chip click reloads the matrix frame, scroll the capability
+  // card to sit just below BOTH the unified sticky header AND the
+  // capability's category section header (which is itself sticky and
+  // pins underneath the unified header). Missing the category header
+  // is the most common failure mode — the card top lands behind it.
+  //
+  // After the smooth scroll, a settle pass re-measures and corrects:
+  // sticky-hero may compact during the animation, shifting the doc
+  // layout by ~100px and leaving the original target stale. The
+  // correction is a tiny instant scroll that snaps the card top to
+  // exactly `header_bottom + 12` once everything has settled.
   #scrollCardUnderHeader(stableId) {
     const frame = this.element.closest("turbo-frame") ||
                   this.element.querySelector("turbo-frame")
@@ -356,7 +362,29 @@ export default class extends BaseController {
     const scroll = () => {
       const card = document.querySelector(`[data-matrix-target="card"][data-capability-stable-id="${stableId}"]`)
       if (!card) return
-      card.scrollIntoView({ behavior: "smooth", block: "start" })
+
+      const computeTarget = () => {
+        const cardTopDoc = card.getBoundingClientRect().top + window.scrollY
+        const unifiedH = document.getElementById("assessment-sticky-header")?.offsetHeight || 0
+        const sectionHeader = card.closest("section[data-category-id]")
+          ?.querySelector(":scope > div.sticky")
+        const sectionH = sectionHeader?.offsetHeight || 0
+        return Math.max(0, cardTopDoc - unifiedH - sectionH - 12)
+      }
+
+      window.scrollTo({ top: computeTarget(), behavior: "smooth" })
+
+      // After the smooth-scroll settles, re-measure. If sticky-hero
+      // transitioned mid-animation the layout shifted; snap to the
+      // corrected position.
+      setTimeout(() => {
+        const offset = card.getBoundingClientRect().top -
+          ((document.getElementById("assessment-sticky-header")?.getBoundingClientRect().bottom || 0) +
+            (card.closest("section[data-category-id]")?.querySelector(":scope > div.sticky")?.offsetHeight || 0))
+        if (Math.abs(offset - 12) > 3) {
+          window.scrollTo({ top: computeTarget(), behavior: "instant" })
+        }
+      }, 600)
     }
 
     if (frame) {
