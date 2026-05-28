@@ -126,7 +126,7 @@ jobs:
       # test fails (does not skip) when the binary is absent, so the
       # install step is non-optional here.
       - name: Set up Node + install claude CLI
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
       - run: npm install -g @anthropic-ai/claude-code
