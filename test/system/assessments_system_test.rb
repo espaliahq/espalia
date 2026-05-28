@@ -327,6 +327,29 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "level strip" do
+    should "render each level code only once (no duplicated labels under the chips)" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Count distinct nodes whose text is exactly "E1" inside the first
+      # capability card. The chip already shows the code; the previous
+      # design ALSO rendered a label row below with the same codes.
+      count = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-matrix-target="card"]');
+          var matches = 0;
+          card.querySelectorAll('*').forEach(function(n) {
+            if (n.children.length === 0 && (n.textContent || '').trim() === 'E1') matches++;
+          });
+          return matches;
+        })()
+      JS
+      assert_equal 1, count,
+        "Expected exactly one 'E1' label in the chip strip, got #{count}"
+    end
+  end
+
   context "level chip colors" do
     should "tint unrated below-level chips with assumed-consistent green" do
       visit assessment_path(@assignment)

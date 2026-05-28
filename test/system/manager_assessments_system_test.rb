@@ -120,17 +120,20 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "show self-rating indicator and manager frequency selectors" do
+    should "not render a redundant secondary sub-strip below the chip row" do
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"
 
-      # The report's self-rating should appear as a read-only indicator.
-      # In the card layout, secondary perspectives appear as dot indicators
-      # on the level strip with "Self:" label.
-      assert_text "Self:"
+      # The previous design rendered a "Self:" sub-strip of tiny dots
+      # under the manager's chip row. It duplicated the divergence signal
+      # already on the primary chip. Drop it; the per-chip divergence
+      # marker + the expansion panel cover both roles.
+      assert_no_text(/^Self:$/)
+      assert_no_text(/^Mgr:$/)
+      assert_no_text(/^Agreed:$/)
 
-      # Manager frequency selector buttons should be present in the default
-      # rating area (visible without needing to focus a cell first).
+      # Manager frequency selector buttons should still render in the
+      # default rating area.
       assert_selector "button", text: "Some"
       assert_selector "button", text: "Most"
       assert_selector "button", text: "Consistently"
