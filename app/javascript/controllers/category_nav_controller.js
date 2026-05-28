@@ -68,23 +68,57 @@ export default class extends BaseController {
     const section = document.getElementById(`category-${categoryId}`)
     if (!section) return
 
-    // Force the sticky-hero into compact mode first so the document
-    // shape is stable before we measure (otherwise scroll-compensation
-    // fires mid-scroll and fights the target). Use instant scroll so
-    // the layout has settled when we re-measure.
-    window.scrollTo({ top: 200, behavior: "instant" })
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const offset = this.element.offsetHeight + 8
-        const top = section.getBoundingClientRect().top + window.scrollY - offset
-        window.scrollTo({ top, behavior: "instant" })
-      })
-    })
+    // Smooth scroll directly. The earlier pre-scroll-to-200 caused a
+    // visible flicker (page jumped to the first category before
+    // scrolling to the target). A post-animation settle pass corrects
+    // any drift if sticky-hero compacts mid-scroll.
+    const target = () => Math.max(
+      0,
+      section.getBoundingClientRect().top + window.scrollY - this.element.offsetHeight - 8
+    )
+    window.scrollTo({ top: target(), behavior: "smooth" })
+    setTimeout(() => {
+      const sectionTop = section.getBoundingClientRect().top
+      const desired = this.element.offsetHeight + 8
+      if (Math.abs(sectionTop - desired) > 3) {
+        window.scrollTo({ top: target(), behavior: "instant" })
+      }
+    }, 600)
+
+    this.#pushFocusState({ level: "category", categoryId })
   }
 
   scrollToTop(event) {
     event.preventDefault()
     window.scrollTo({ top: 0, behavior: "smooth" })
+    this.#pushFocusState({ level: "framework", categoryId: null })
+  }
+
+  // Updates the browser URL (?category=…) and broadcasts the focus
+  // change so the activity feed narrows to match the clicked badge.
+  // Clears capability/level params — switching category invalidates
+  // any prior cell focus.
+  #pushFocusState({ level, categoryId }) {
+    const url = new URL(window.location)
+    if (categoryId) {
+      url.searchParams.set("category", categoryId)
+    } else {
+      url.searchParams.delete("category")
+    }
+    url.searchParams.delete("capability")
+    url.searchParams.delete("level_ordinal")
+    window.history.pushState({}, "", url)
+
+    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
+      detail: {
+        level,
+        categoryId,
+        capabilityId: null,
+        capabilityStableId: null,
+        levelOrdinal: null,
+        expectationId: null
+      }
+    }))
   }
 
   #publishHeaderHeight() {

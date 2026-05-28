@@ -188,6 +188,50 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "category navigation" do
+    should "update the browser URL with ?category= when a chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      assert_selector "section#category-#{@cat2_id}"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]').click()"
+      )
+      sleep 0.6
+
+      # Browser URL must carry ?category=<id> so the activity sidebar
+      # and any other focus-aware UI narrow to the clicked category.
+      browser_url = page.evaluate_script("window.location.search")
+      assert_includes browser_url, "category=#{@cat2_id}",
+        "Browser URL should include ?category=#{@cat2_id}, got #{browser_url.inspect}"
+    end
+
+    should "dispatch matrix:focus-changed with category level when a chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Capture the focus payload broadcast by the category chip click.
+      # The activity feed listens to this event to narrow its rendered
+      # entries; without it, clicking a chip leaves the sidebar stale.
+      payload = page.evaluate_script(<<~JS)
+        (function() {
+          return new Promise(resolve => {
+            window.addEventListener("matrix:focus-changed", e => resolve(e.detail), { once: true });
+            document.querySelector('nav#category-tabs [data-category-id="#{@cat2_id}"]').click();
+          });
+        })()
+      JS
+      assert_equal "category", payload["level"]
+      assert_equal @cat2_id, payload["categoryId"]
+    end
+
     should "scroll the second category section under the sticky header when its chip is clicked" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
