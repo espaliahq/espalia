@@ -1,9 +1,18 @@
 // Sticky hero summary controller.
 //
-// The hero lives inside the unified sticky header so the old
-// IntersectionObserver-on-a-sentinel approach can't work — the sentinel
-// pins along with the header. Instead, listen to window scroll and
-// toggle compact mode once the user has scrolled past a small threshold.
+// Toggles compact/expanded visual state on scroll. Two pieces of
+// pitfall-avoidance:
+//
+// 1. Hysteresis: compact at COMPACT_THRESHOLD, only expand back when
+//    the user is essentially at the top of the page. Without this, the
+//    height change from a toggle puts the scroll position right back
+//    across the threshold and the state flickers.
+//
+// 2. Scroll compensation: when the hero shrinks (or grows), the
+//    document height changes, which shifts every element below.
+//    Without compensation the user's visible content jumps. We
+//    `scrollBy` the height delta so the user keeps seeing the same
+//    content they were looking at before the toggle.
 //
 // <div data-controller="sticky-hero">
 //   <div data-sticky-hero-target="hero">
@@ -14,7 +23,8 @@
 
 import BaseController from "controllers/base_controller"
 
-const COMPACT_SCROLL_THRESHOLD = 80
+const COMPACT_THRESHOLD = 80
+const EXPAND_THRESHOLD = 1
 
 export default class extends BaseController {
   static targets = ["hero", "expandedBody", "compactBody"]
@@ -26,7 +36,6 @@ export default class extends BaseController {
     this._onScroll = () => this.#scheduleUpdate()
     window.addEventListener("scroll", this._onScroll, { passive: true })
 
-    // Apply initial state in case the user lands mid-scroll (e.g. back/forward).
     requestAnimationFrame(() => this.#updateState())
   }
 
@@ -56,10 +65,26 @@ export default class extends BaseController {
   }
 
   #updateState() {
-    const shouldCompact = window.scrollY > COMPACT_SCROLL_THRESHOLD
-    if (shouldCompact === this._isCompact) return
-    this._isCompact = shouldCompact
+    const scrollY = window.scrollY
+    let nextState
+    if (this._isCompact) {
+      nextState = scrollY > EXPAND_THRESHOLD
+    } else {
+      nextState = scrollY > COMPACT_THRESHOLD
+    }
+    if (nextState === this._isCompact) return
+
+    const heightBefore = this.hasHeroTarget ? this.heroTarget.offsetHeight : 0
+    this._isCompact = nextState
     this.#applyVisual()
+
+    if (this.hasHeroTarget) {
+      const heightAfter = this.heroTarget.offsetHeight
+      const diff = heightBefore - heightAfter
+      // Positive when shrinking (compact) → scroll down to keep visible
+      // content stable. Negative when expanding → scroll up by the same.
+      if (diff !== 0) window.scrollBy(0, diff)
+    }
   }
 
   #applyVisual() {

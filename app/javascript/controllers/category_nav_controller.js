@@ -68,9 +68,18 @@ export default class extends BaseController {
     const section = document.getElementById(`category-${categoryId}`)
     if (!section) return
 
-    const offset = this.element.offsetHeight + 8
-    const top = section.getBoundingClientRect().top + window.scrollY - offset
-    window.scrollTo({ top, behavior: "smooth" })
+    // Force the sticky-hero into compact mode first so the document
+    // shape is stable before we measure (otherwise scroll-compensation
+    // fires mid-scroll and fights the target). Use instant scroll so
+    // the layout has settled when we re-measure.
+    window.scrollTo({ top: 200, behavior: "instant" })
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const offset = this.element.offsetHeight + 8
+        const top = section.getBoundingClientRect().top + window.scrollY - offset
+        window.scrollTo({ top, behavior: "instant" })
+      })
+    })
   }
 
   scrollToTop(event) {

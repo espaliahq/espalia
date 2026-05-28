@@ -338,6 +338,36 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "not jump scroll position to top when slowly scrolling past the compact threshold" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Capture the visible y-position of an element just below the hero.
+      # When the hero compacts during a slow scroll, that element must
+      # stay at roughly the same viewport position — not jump back to top.
+      below_hero_id = "category-#{@cat_id}"
+
+      # Slow scroll: a small step that crosses the compact threshold (80).
+      page.execute_script("window.scrollTo(0, 90)")
+      sleep 0.4
+
+      visible_y = page.evaluate_script(
+        "document.getElementById('#{below_hero_id}').getBoundingClientRect().top"
+      )
+      scroll_y = page.evaluate_script("window.scrollY")
+
+      # After the scroll + compact, the user's scroll position should
+      # NOT have snapped back to (or near) zero.
+      assert scroll_y > 50,
+        "Slow scroll past compact threshold caused scroll to jump to top (scrollY=#{scroll_y})"
+      # And the visible content below the hero should remain in view.
+      assert visible_y < 600,
+        "Content below the hero should still be visible after compact (top=#{visible_y})"
+    end
+
     should "compress the hero when the user scrolls past it" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
