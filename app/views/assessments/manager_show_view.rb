@@ -94,7 +94,9 @@ class Views::Assessments::ManagerShowView < Views::Base
   end
 
   def sticky_header
-    div(class: "sticky top-0 z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2") do
+    div(id: "assessment-sticky-header",
+        class: "sticky top-0 z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2",
+        data: { controller: "category-nav" }) do
       assessment_header
       hero_frame
       category_chips

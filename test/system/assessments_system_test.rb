@@ -83,6 +83,21 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         @eid3, @role_id, 1, "Creates a checklist of sub-tasks before starting work"
       )
 
+      # Second category — needed for multi-category scroll tests
+      @cat2_id = SecureRandom.uuid_v7
+      handler.add_capability_category(@framework_id, @cat2_id, "Delivering", ordinal: 2)
+
+      @cap3_id = SecureRandom.uuid_v7
+      @cap3_stable = SecureRandom.uuid_v7
+      handler.add_capability(@framework_id, @cap3_id, @cap3_stable, @cat2_id, "Execution")
+      handler.create_capability_role_binding(
+        @framework_id, SecureRandom.uuid_v7, @cap3_id, @role_id
+      )
+      handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap3_id, 1,
+        "Delivers small tasks reliably")
+      handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap3_id, 2,
+        "Owns medium-scope features end-to-end")
+
       # Publish v1 so shape-changing events land in the read model
       handler.publish_version(@framework_id, "test")
 
@@ -125,17 +140,15 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "hide Continue assessing button when all current-level cells are rated" do
-      # Rate both capabilities at level 2 (person's current level) as the user
+      # Rate every capability at level 2 (person's current level)
       ActsAsTenant.with_tenant(@tenant) do
         pd_handler = PersonDevelopment::CommandHandler.new
-        pd_handler.rate_self(
-          @person.id, @framework_id, @cap1_stable,
-          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
-        )
-        pd_handler.rate_self(
-          @person.id, @framework_id, @cap2_stable,
-          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
-        )
+        [ @cap1_stable, @cap2_stable, @cap3_stable ].each do |stable_id|
+          pd_handler.rate_self(
+            @person.id, @framework_id, stable_id,
+            level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+          )
+        end
       end
 
       visit assessment_path(@assignment)
@@ -171,6 +184,86 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "Expected matrix frame to reload with capability=#{@cap1_stable}, got #{frame_src}")
       assert_match(/level_ordinal=2/, frame_src,
         "Expected matrix frame to reload with level_ordinal=2, got #{frame_src}")
+    end
+  end
+
+  context "category navigation" do
+    should "scroll the second category section under the sticky header when its chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      assert_selector "section#category-#{@cat2_id}"
+
+      # Add a tall spacer so the page can scroll
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]').click()"
+      )
+      sleep 0.8
+
+      # The second category section should land at or just below the
+      # bottom of the sticky header — not under it, not far below.
+      offset = page.evaluate_script(
+        "(function() { var s = document.getElementById('category-#{@cat2_id}'); " \
+        "var h = document.getElementById('assessment-sticky-header'); " \
+        "return s.getBoundingClientRect().top - (h.getBoundingClientRect().bottom); })()"
+      )
+      assert offset.between?(-5, 30),
+        "Category section should sit just below the sticky header (offset=#{offset})"
+    end
+
+    should "mark the chip for the currently-visible category as active on scroll" do
+      visit assessment_path(@assignment)
+      assert_selector "#assessment-sticky-header"
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Scroll so the second category section is at the top of the viewport
+      page.execute_script(<<~JS)
+        var s = document.getElementById('category-#{@cat2_id}');
+        var h = document.getElementById('assessment-sticky-header');
+        window.scrollTo(0, s.offsetTop - h.offsetHeight - 4);
+      JS
+      sleep 0.8
+
+      # The chip for the second category should be the active one
+      active = page.evaluate_script(
+        "(function() { var c = document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]'); " \
+        "return c && c.getAttribute('aria-current') === 'page'; })()"
+      )
+      assert active,
+        "Second category chip should be marked aria-current when its section is in view"
+    end
+
+    should "keep the category heading visible under the sticky header while scrolling within the category" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      # Inject extra capability cards inside the first category to make
+      # the category section tall enough to scroll within
+      page.execute_script(<<~JS)
+        var section = document.getElementById('category-#{@cat_id}');
+        section.insertAdjacentHTML('beforeend', '<div style="height:1500px"></div>');
+      JS
+
+      # Scroll a few hundred pixels into the first category
+      page.execute_script("window.scrollTo(0, 700)")
+      sleep 0.5
+
+      # The category heading should be visible at the top of the viewport,
+      # just below the unified sticky header
+      heading_position = page.evaluate_script(
+        "(function() { var s = document.getElementById('category-#{@cat_id}'); " \
+        "var h2 = s.querySelector('h2'); " \
+        "var h = document.getElementById('assessment-sticky-header'); " \
+        "var headerBottom = h.getBoundingClientRect().bottom; " \
+        "var headingTop = h2.getBoundingClientRect().top; " \
+        "return headingTop - headerBottom; })()"
+      )
+      assert heading_position.between?(-5, 30),
+        "Category heading should stick just under the unified sticky header (offset=#{heading_position})"
     end
   end
 

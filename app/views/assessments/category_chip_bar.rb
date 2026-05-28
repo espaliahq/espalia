@@ -43,7 +43,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
       href: "#",
       class: "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
              "#{@active_category_id.nil? ? active_chip_classes : inactive_chip_classes}",
-      data: { action: "click->matrix#scrollToTop" }
+      data: { action: "click->category-nav#scrollToTop" }
     ) do
       plain "All"
       span(class: "text-xs font-mono opacity-70") { total.to_s }
@@ -58,10 +58,9 @@ class Views::Assessments::CategoryChipBar < Views::Base
     attrs = {
       href: "#category-#{category.category_id}",
       class: "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
-             "#{active ? active_chip_classes : inactive_chip_classes} " \
-             "scroll-smooth",
+             "#{active ? active_chip_classes : inactive_chip_classes}",
       data: { category_id: category.category_id,
-              action: "click->matrix#scrollToCategory" }
+              action: "click->category-nav#scrollTo" }
     }
     attrs[:aria] = { current: "page" } if active
     a(**attrs) do

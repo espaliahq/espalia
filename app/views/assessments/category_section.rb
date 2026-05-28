@@ -65,7 +65,17 @@ class Views::Assessments::CategorySection < Views::Base
   private
 
   def section_header
-    div(class: "flex items-baseline justify-between gap-3 mb-3") do
+    # Sticky just under the unified header. `top: var(--sticky-header-h)`
+    # is published by `category_nav_controller` whenever the header
+    # resizes. The negative `-mx-6 px-6` extends the heading background
+    # to the page edges so capability cards scroll underneath it
+    # cleanly. z-10 keeps it under the z-20 unified header.
+    div(
+      class: "sticky z-10 -mx-6 px-6 py-3 mb-3 " \
+             "bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-sm " \
+             "flex items-baseline justify-between gap-3",
+      style: "top: var(--sticky-header-h, 0px)"
+    ) do
       div do
         h2(class: "text-lg font-bold text-gray-900 dark:text-white") do
           @category.name
