@@ -36,7 +36,7 @@ class Components::Kit::PageLayout < Components::Base
       # Mobile-only sidebar drawer
       render Components::Kit::Sidebar.new(links: nav_links)
 
-      main(class: "flex-1 p-6 overflow-auto", &block)
+      main(class: "flex-1 p-6", &block)
     end
   end
 

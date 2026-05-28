@@ -19,7 +19,7 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["frame", "row", "expandedRow",
                      "categoryHeader", "rowChevron", "categoryChevron",
-                     "scrollContainer", "col"]
+                     "scrollContainer", "col", "card"]
   static values = {
     basePath: String,
     urlSync: { type: Boolean, default: false },
@@ -304,6 +304,94 @@ export default class extends BaseController {
       levelOrdinal: levelOrdinal,
       expectationId: expectationId
     })
+  }
+
+  // ── Card-based chip focus (assessment card layout) ──
+
+  focusChip(event) {
+    event.stopPropagation()
+    const chip = event.currentTarget
+    const stableId = chip.dataset.capabilityStableId
+    const ordinal = parseInt(chip.dataset.levelOrdinal, 10)
+    if (!stableId || isNaN(ordinal)) return
+
+    const alreadyFocused =
+      this.currentFocus.level === "cell" &&
+      this.currentFocus.capabilityStableId === stableId &&
+      this.currentFocus.levelOrdinal === ordinal
+
+    if (alreadyFocused) return
+
+    this.#reloadMatrixWithFocus(stableId, ordinal)
+  }
+
+  unfocusChip(event) {
+    event.stopPropagation()
+    this.#reloadMatrixWithFocus(null, null)
+  }
+
+  #reloadMatrixWithFocus(stableId, ordinal) {
+    const frame = this.element.closest("turbo-frame") ||
+                  this.element.querySelector("turbo-frame")
+    if (!frame) return
+
+    const currentSrc = frame.getAttribute("src")
+    if (!currentSrc) return
+
+    let url
+    try { url = new URL(currentSrc, window.location.origin) } catch { return }
+
+    if (stableId) {
+      url.searchParams.set("capability", stableId)
+      url.searchParams.set("level_ordinal", ordinal.toString())
+    } else {
+      url.searchParams.delete("capability")
+      url.searchParams.delete("level_ordinal")
+    }
+
+    frame.src = url.toString()
+
+    // Sync browser URL
+    const browserUrl = new URL(window.location)
+    if (stableId) {
+      browserUrl.searchParams.set("capability", stableId)
+      browserUrl.searchParams.set("level_ordinal", ordinal.toString())
+    } else {
+      browserUrl.searchParams.delete("capability")
+      browserUrl.searchParams.delete("level_ordinal")
+    }
+    window.history.pushState({}, "", browserUrl)
+  }
+
+  scrollToCategory(event) {
+    event.preventDefault()
+    const categoryId = event.currentTarget.dataset.categoryId
+    if (!categoryId) return
+    const section = document.getElementById(`category-${categoryId}`)
+    if (!section) return
+
+    const hero = document.getElementById("scoring-panel")
+    const heroHeight = hero ? hero.offsetHeight : 0
+    const sectionTop = section.getBoundingClientRect().top + window.scrollY
+    window.scrollTo({ top: sectionTop - heroHeight - 16, behavior: "smooth" })
+  }
+
+  scrollToTop(event) {
+    event.preventDefault()
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  focusFirstUnrated(event) {
+    event.preventDefault()
+    const chips = this.element.querySelectorAll("[data-level-ordinal][data-capability-stable-id]")
+    for (const chip of chips) {
+      const freq = chip.querySelector("[data-frequency]")
+      if (!freq) {
+        chip.click()
+        chip.scrollIntoView({ behavior: "smooth", block: "center" })
+        return
+      }
+    }
   }
 
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)

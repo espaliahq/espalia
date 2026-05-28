@@ -123,6 +123,7 @@ class Assessments::ManagerRatingsController < ApplicationController
     end
 
     cell_data = cap_data[:cells][level_ordinal]
+    level_code = matrix_data[:merged_levels].find { |l| l[:ordinal] == level_ordinal }&.dig(:level_code) || "L#{level_ordinal}"
     primary = primary_scoring(matrix_data, :manager)
     blocked = primary.dig(:capability_statuses, capability_stable_id) == :blocked
     block_reason = primary.dig(:block_reasons, capability_stable_id)
@@ -132,35 +133,36 @@ class Assessments::ManagerRatingsController < ApplicationController
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
-          Views::Assessments::AssessmentCell.new(
+          Views::Assessments::LevelChip.new(
             cell_data: cell_data,
-            capability_id: cap_data[:capability].capability_id,
             capability_stable_id: capability_stable_id,
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
-            assessment_id: @assignment.id,
+            level_code: level_code,
             context: :manager,
-            category_id: active_category_id || category_id,
-            frozen: matrix_data[:individual_ratings_frozen],
-            alignment_locked: matrix_data[:alignment_locked],
             focused: true
           ),
           layout: false
         )
       ),
       turbo_stream.replace(
+        "rating-#{capability_stable_id}-#{level_ordinal}",
+        rating_wrapper_html(capability_stable_id, level_ordinal, cell_data&.dig(:manager_frequency),
+                            :manager, active_category_id || category_id)
+      ),
+      turbo_stream.replace(
         "scoring-panel",
         render_to_string(
-          Views::Assessments::ScoringPanel.new(
+          Views::Assessments::HeroSummary.new(
             scoring: matrix_data[:scoring],
             self_scoring: matrix_data[:self_scoring],
             manager_scoring: matrix_data[:manager_scoring],
             aligned_scoring: matrix_data[:aligned_scoring],
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
+            merged_levels: matrix_data[:merged_levels],
             mastery_threshold: matrix_data[:mastery_threshold],
             meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
-            active_category_id: active_category_id || category_id,
             assessment_id: @assignment.id,
             context: :manager
           ),
@@ -180,43 +182,15 @@ class Assessments::ManagerRatingsController < ApplicationController
       ) if category_id),
       turbo_stream.replace(
         "capability-name-#{capability_stable_id}",
-        render_to_string(
-          Views::Assessments::CapabilityNameCell.new(
-            capability: cap_data[:capability],
-            weight: cap_data[:weight],
-            mandatory: cap_data[:binding].deficit_threshold&.to_f == 0.0,
-            blocked: blocked,
-            block_reason: block_reason,
-            contribution: contribution,
-            secondary_contributions: secondary_capability_contributions(capability_stable_id, matrix_data, :manager),
-            has_illustrations: cap_data[:cells].any? { |_, c| c[:illustration_count]&.positive? }
-          ),
-          layout: false
-        )
-      ),
-      turbo_stream.replace(
-        "matrix-header",
-        render_to_string(
-          Views::Assessments::MatrixHeader.new(
-            merged_levels: matrix_data[:merged_levels],
-            person_level: matrix_data[:person_level],
-            inferred_level: matrix_data[:inferred_level],
-            context: :manager
-          ),
-          layout: false
-        )
+        capability_name_html(cap_data, blocked, block_reason, contribution)
       ),
       (turbo_stream.replace(
         "category-tabs",
         render_to_string(
-          Views::Assessments::CategoryTabs.new(
+          Views::Assessments::CategoryChipBar.new(
             categories: matrix_data[:categories],
             scoring: primary,
-            self_scoring: matrix_data[:self_scoring],
-            manager_scoring: matrix_data[:manager_scoring],
-            aligned_scoring: matrix_data[:aligned_scoring],
             active_category_id: active_category_id || category_id,
-            assessment_id: @assignment.id,
             context: :manager
           ),
           layout: false
@@ -285,5 +259,37 @@ class Assessments::ManagerRatingsController < ApplicationController
 
       [ label, contribution ]
     end
+  end
+
+  def capability_name_html(cap_data, blocked, block_reason, contribution)
+    cap = cap_data[:capability]
+    parts = []
+    parts << %(<h3 class="text-sm font-semibold text-gray-900 dark:text-white">#{ERB::Util.html_escape(cap.name)}</h3>)
+    if blocked
+      parts << %(<span class="text-[10px] font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded" title="#{ERB::Util.html_escape(block_reason)}">Blocked</span>)
+    end
+    if contribution && !contribution.negative?
+      pct = (contribution * 100).round(0)
+      color = pct >= 100 ? "text-green-600 dark:text-green-400" :
+              pct >= 80 ? "text-amber-600 dark:text-amber-400" :
+              "text-red-600 dark:text-red-400"
+      parts << %(<span class="text-lg font-bold #{color} ml-auto">#{pct}%</span>)
+    end
+    %(<div id="capability-name-#{cap.stable_id}" class="flex items-center gap-2">#{parts.join}</div>)
+  end
+
+  def rating_wrapper_html(stable_id, ordinal, frequency, context, category_id)
+    selector_html = render_to_string(
+      Views::Assessments::FrequencySelector.new(
+        capability_stable_id: stable_id,
+        level_ordinal: ordinal,
+        current_frequency: frequency,
+        assessment_id: @assignment.id,
+        context: context,
+        category_id: category_id
+      ),
+      layout: false
+    )
+    "<div id=\"rating-#{stable_id}-#{ordinal}\">#{selector_html}</div>"
   end
 end
