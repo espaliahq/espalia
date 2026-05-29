@@ -48,10 +48,13 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   end
 
   def view_template
+    # No outer border / background — the parent capability card already
+    # carries those. A thin top border + a little top padding visually
+    # separates the expansion from the level strip without the boxed-
+    # in-a-box look (which was eating vertical space without earning it).
     div(
       id: "expansion-#{@capability_stable_id}",
-      class: "mt-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 " \
-             "bg-gray-50/50 dark:bg-gray-800/30"
+      class: "mt-3 pt-3 border-t border-gray-200 dark:border-gray-700"
     ) do
       expansion_header
       expectation_text if @cell_data[:expectation]
