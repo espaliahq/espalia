@@ -22,3 +22,40 @@
     --color-nav-fg: #e2e8f0;
   }
 }
+
+/* Hero summary middle band — collapses on scroll.
+ *
+ * The hero card has three bands: header (always visible), middle (this),
+ * and bottom line (always visible). The middle band's max-height,
+ * opacity, and padding animate from full → 0 over the first 240px of
+ * document scroll using CSS scroll-driven animations
+ * (animation-timeline: scroll()).
+ *
+ * Browsers without scroll-driven animation support silently ignore
+ * the animation properties and keep the band at its initial state
+ * (fully expanded). Functional, just static.
+ *
+ * Chrome/Edge 115+, Safari 26+, Firefox 137+ — ~94% global as of 2026.
+ */
+.hero-collapsible {
+  overflow: hidden;
+  max-height: 320px;
+  padding-block: 0.75rem;
+  opacity: 1;
+}
+
+@supports (animation-timeline: scroll()) {
+  .hero-collapsible {
+    animation: hero-collapse linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 240px;
+  }
+
+  @keyframes hero-collapse {
+    to {
+      max-height: 0;
+      padding-block: 0;
+      opacity: 0;
+    }
+  }
+}

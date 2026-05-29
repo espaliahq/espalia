@@ -3,12 +3,17 @@
 # Sticky hero summary card replacing the scoring sidebar.
 #
 # Carries `id="scoring-panel"` so the existing rating controller Turbo
-# Stream responses update it in-place. Shows two states:
-# - Expanded (initial): verdict, strengths/lift columns, categories, promotion
-# - Compact (sticky after scroll): single-row strip with key stats
+# Stream responses update it in-place. Renders three bands:
+# - Hero header (verdict + percentage) — always visible
+# - Strengths / Lift middle band — collapses on scroll via CSS
+#   scroll-driven animation (see `.hero-collapsible` in
+#   `app/assets/tailwind/application.css`)
+# - Bottom line (promotion pill + CTA) — always visible
 #
-# The compact/expanded toggle is driven by `sticky_hero_controller.js`
-# via an `[data-compact]` attribute.
+# No JS controller — the middle-band collapse is pure CSS
+# (`animation-timeline: scroll(root)`). Browsers without scroll-driven
+# animation support (~5% in 2026) keep the band expanded at all scroll
+# positions; the hero is still functional, just static.
 #
 class Views::Assessments::HeroSummary < Views::Base
   # @param scoring [Hash] effective scoring
@@ -51,29 +56,42 @@ class Views::Assessments::HeroSummary < Views::Base
 
   def view_template
     ratio = primary_scoring[:performance_ratio] || 0.0
-    div(data: { controller: "sticky-hero" }) do
-      div(id: "scoring-panel",
-          class: "mb-6 rounded-xl border border-gray-200 dark:border-gray-700 " \
-                 "bg-white dark:bg-gray-900 overflow-hidden",
-          data: { performance_pct: (ratio * 100).round(0),
-                  sticky_hero_target: "hero" }) do
-        expanded_content
-        compact_content
-      end
+    div(id: "scoring-panel",
+        class: "mb-6 rounded-xl border border-gray-200 dark:border-gray-700 " \
+               "bg-white dark:bg-gray-900 overflow-hidden",
+        data: { performance_pct: (ratio * 100).round(0) }) do
+      hero_header
+      middle_band
+      bottom_line
     end
   end
 
   private
 
-  # ── Expanded ──
+  # ── Bands ──
 
-  def expanded_content
-    div(class: "p-5 space-y-4 data-[compact=true]:hidden",
-        data: { sticky_hero_target: "expandedBody" }) do
-      context_and_verdict
-      strengths_and_lift
-      promotion_and_ctas
-    end
+  # Always visible at the top of the card.
+  def hero_header
+    div(class: "px-5 pt-5 pb-3") { context_and_verdict }
+  end
+
+  # Collapses on scroll. `.hero-collapsible` carries the CSS
+  # scroll-driven animation that drives max-height / opacity / padding
+  # from full → 0 over the first 240px of document scroll.
+  def middle_band
+    contributions = primary_scoring[:capability_contributions] || {}
+    return if contributions.empty?
+
+    div(class: "hero-collapsible px-5") { strengths_and_lift }
+  end
+
+  # Always visible at the bottom of the card. Rises naturally as the
+  # middle band shrinks.
+  def bottom_line
+    target = next_unrated_capability
+    return unless target || promotion_readiness_visible?
+
+    div(class: "px-5 pt-3 pb-5") { promotion_and_ctas }
   end
 
   def context_and_verdict
@@ -108,8 +126,6 @@ class Views::Assessments::HeroSummary < Views::Base
 
   def strengths_and_lift
     contributions = primary_scoring[:capability_contributions] || {}
-    return if contributions.empty?
-
     caps_by_name = @categories.flat_map { |c| c[:capabilities] }
                               .index_by { |cap| cap[:capability].stable_id }
 
@@ -161,34 +177,8 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  def categories_row
-    results = primary_scoring[:category_results] || {}
-    return if results.empty?
-
-    div(class: "flex flex-wrap gap-2") do
-      @categories.each do |cat_data|
-        cat = cat_data[:category]
-        result = results[cat.category_id]
-        next unless result
-
-        pass = result[:pass]
-        bg = pass ? "bg-green-50 dark:bg-green-900/20" : "bg-red-50 dark:bg-red-900/20"
-        text = pass ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
-
-        a(href: "#category-#{cat.category_id}",
-          class: "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs #{bg} #{text} " \
-                 "hover:opacity-80 transition-opacity scroll-smooth") do
-          span(class: "w-1.5 h-1.5 rounded-full #{pass ? 'bg-green-500' : 'bg-red-500'}") { }
-          plain cat.name
-        end
-      end
-    end
-  end
-
   def promotion_and_ctas
     target = next_unrated_capability
-    return unless target || promotion_readiness_visible?
-
     div(class: "flex flex-wrap items-center gap-3") do
       promotion_pill
       continue_assessing_cta(target) if target
@@ -265,52 +255,6 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  # ── Compact (sticky) ──
-
-  def compact_content
-    ratio = primary_scoring[:performance_ratio] || 0.0
-    pct = (ratio * 100).round(0)
-
-    div(class: "hidden data-[compact=true]:flex items-center gap-3 px-4 py-2 " \
-               "border-b border-gray-200 dark:border-gray-700",
-        data: { sticky_hero_target: "compactBody" }) do
-      span(class: "text-sm font-semibold #{performance_color(ratio)}") do
-        "#{verdict_short} · #{pct}%"
-      end
-      promotion_mini_pill
-      div(class: "flex-1") { }
-      a(
-        href: "#",
-        class: "text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300",
-        data: { action: "click->sticky-hero#scrollToTop" }
-      ) { "▲" }
-    end
-  end
-
-  def compact_category_dots
-    results = primary_scoring[:category_results] || {}
-    div(class: "flex items-center gap-1") do
-      @categories.each do |cat_data|
-        cat = cat_data[:category]
-        result = results[cat.category_id]
-        pass = result&.dig(:pass)
-        color = pass.nil? ? "bg-gray-300 dark:bg-gray-600" :
-                pass ? "bg-green-500" : "bg-red-500"
-        span(class: "w-2 h-2 rounded-full #{color}", title: cat.name) { }
-      end
-    end
-  end
-
-  def promotion_mini_pill
-    readiness = primary_scoring[:promotion_readiness]
-    return unless readiness&.dig(:eligible)
-
-    span(class: "text-[10px] font-medium text-green-600 dark:text-green-400 " \
-                "bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded") do
-      "Promo eligible"
-    end
-  end
-
   # ── Verdict helpers ──
 
   def verdict_headline
@@ -323,16 +267,6 @@ class Views::Assessments::HeroSummary < Views::Base
       "#{subject} almost there — close to meeting expectations."
     else
       "Below expectations — focus areas highlighted below."
-    end
-  end
-
-  def verdict_short
-    if primary_scoring[:mastering]
-      "Exceeding"
-    elsif primary_scoring[:meeting_expectations]
-      "On target"
-    else
-      "Below"
     end
   end
 
