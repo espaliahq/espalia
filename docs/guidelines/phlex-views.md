@@ -9,6 +9,7 @@
 - Do NOT create new ERB files — use ERB only for minor fixes to existing legacy views
 - Use `view_template` method (not `template`)
 - Use semantic Kit helpers: `Button()`, `Card()`, `Alert()`, `Badge()`, `Avatar()`
+- Always include ARIA labels in rendered html 
 
 ## Naming Conventions
 
