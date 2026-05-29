@@ -453,9 +453,6 @@ export default class extends BaseController {
     const { capabilityStableId, levelOrdinal } = event.detail || {}
     if (!capabilityStableId || typeof levelOrdinal !== "number") return
 
-    const chip = document.getElementById(`cell-${capabilityStableId}-${levelOrdinal}`)
-    if (chip) chip.scrollIntoView({ behavior: "smooth", block: "center" })
-
     this.currentFocus = {
       level: "cell",
       categoryId: null,
@@ -468,6 +465,15 @@ export default class extends BaseController {
       detail: { ...this.currentFocus }
     }))
     this.#reloadMatrixWithFocus(capabilityStableId, levelOrdinal)
+    // Land the *card* under the sticky chrome, not the chip centered in
+    // viewport. A bare `chip.scrollIntoView({block: "center"})` is
+    // sticky-chrome unaware — it puts the chip at viewport mid-height
+    // but pushes the capability title above it up behind the sticky
+    // header, so the user can't see what capability they just jumped
+    // to. `#scrollCardUnderHeader` accounts for both the unified and
+    // section-header heights and waits for the frame reload before
+    // measuring.
+    this.#scrollCardUnderHeader(capabilityStableId)
   }
 
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
