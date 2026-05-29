@@ -132,8 +132,17 @@ export default class extends BaseController {
     }))
   }
 
+  // `offsetHeight` rounds to an integer — when the real header height
+  // is fractional (Hi-DPI displays, subpixel scrolling, the hero's
+  // scroll-driven collapse), `--sticky-header-h` can land 0.5–1px
+  // shorter than the actual header bottom. The category section's
+  // sticky div then sits a hair below the header's bottom edge,
+  // revealing a thin strip of scrolling content through the gap.
+  // `getBoundingClientRect().height` gives sub-pixel precision; we
+  // round up to guarantee the section header always sits AT OR BELOW
+  // the unified header's bottom edge, never above it.
   #publishHeaderHeight() {
-    const h = this.element.offsetHeight
+    const h = Math.ceil(this.element.getBoundingClientRect().height)
     document.documentElement.style.setProperty("--sticky-header-h", `${h}px`)
   }
 
