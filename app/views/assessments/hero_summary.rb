@@ -172,12 +172,17 @@ class Views::Assessments::HeroSummary < Views::Base
         accent: "text-amber-700 dark:text-amber-300",
         caps: caps_by_id }
     when :performing
-      # Above the meeting bar but not yet mastering. Surface the
-      # capabilities still keeping the average below mastery so the
-      # path forward is "lift these to consistent at every level".
+      # Above the meeting bar but not yet mastering. The path to
+      # mastery is overperformance — rating consistent at L+1 (or
+      # beyond) is what actually pushes the ratio past 1.15.
+      # Surface capabilities by their NEXT-LEVEL contribution, not
+      # current: a capability at +0.0 current is meeting today, but
+      # if its L+1 is unrated (contribution -1.0 there) it's the
+      # real gap to mastering. Top of ladder falls back to current.
+      gap_items = next_level_contributions.any? ? sorted_next.last(3).reverse : sorted.last(3).reverse
       { state_label: "Performing at #{current_code}",
         list_label: "Gap to mastering",
-        items: sorted.last(3).reverse,
+        items: gap_items,
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
