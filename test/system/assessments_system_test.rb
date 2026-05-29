@@ -612,6 +612,25 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_match(/bg-green/, chip_classes,
         "Unrated at-person-level chip should be grey. Classes: #{chip_classes}")
     end
+
+    # Regression: the button-reset utilities added when chips were
+    # promoted from <div> to <button> (`bg-transparent`) won the cascade
+    # against `bg-green-100/60` / `bg-gray-100` / etc — the class string
+    # still listed the chip colour but the computed background painted
+    # transparent. The existing tests assert on className only and so
+    # passed; this asserts on what actually paints.
+    should "actually paint a non-transparent background for each chip state" do
+      visit assessment_path(@assignment)
+      bg = ->(id) { page.evaluate_script("window.getComputedStyle(document.getElementById('#{id}')).backgroundColor") }
+
+      below_unrated = bg.call("cell-#{@cap1_stable}-1")  # E1, below person_level
+      at_unrated    = bg.call("cell-#{@cap1_stable}-2")  # E2, person's level
+
+      assert_no_match(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/i, below_unrated,
+        "Unrated below-level chip painted transparent — bg-green-* lost the cascade. Got: #{below_unrated}")
+      assert_no_match(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/i, at_unrated,
+        "Unrated at-level chip painted transparent — bg-gray-* lost the cascade. Got: #{at_unrated}")
+    end
   end
 
   context "scroll stability on rating" do

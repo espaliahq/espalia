@@ -47,9 +47,14 @@ class Views::Assessments::LevelChip < Views::Base
   private
 
   def chip_classes
-    # `button` reset: kill the UA default background/font/text-align so
-    # the chip renders identically to its prior <div> form.
-    base = "appearance-none bg-transparent text-inherit " \
+    # `appearance-none` strips UA <button> chrome (gradient on macOS,
+    # focus outline on Windows). Don't add `bg-transparent` / `text-
+    # inherit` here — they're same-specificity utilities that win the
+    # cascade against the chip_bg colours we actually want to paint
+    # (the class-string still lists bg-green-200 but rgba(0,0,0,0)
+    # paints). Tailwind preflight already neutralises the UA button
+    # background; the chip_bg utility paints on top.
+    base = "appearance-none " \
            "relative flex flex-col items-center justify-center " \
            "h-12 flex-1 min-w-[60px] rounded-lg cursor-pointer " \
            "transition-all border-2 " \
@@ -57,12 +62,21 @@ class Views::Assessments::LevelChip < Views::Base
     if @focused
       base + "#{chip_bg} #{focus_border} shadow-sm"
     else
-      base + "#{chip_bg} border-transparent hover:shadow-sm"
+      base + "#{chip_bg} #{idle_border} hover:shadow-sm"
     end
   end
 
   def focus_border
     "border-gray-900 dark:border-white"
+  end
+
+  # Unrated idle chips need a quiet but discernible edge so the strip
+  # doesn't read as one flat band of colour. Rated chips already carry
+  # a solid fill so a transparent border there reads as edge enough.
+  def idle_border
+    return "border-transparent" if rated?
+
+    "border-gray-200 dark:border-gray-700"
   end
 
   # Screen-reader label spelling out which capability + level the chip
