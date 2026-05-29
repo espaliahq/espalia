@@ -156,7 +156,9 @@ class Assessments::AlignmentRatingsController < ApplicationController
           Views::Assessments::CategoryIndicators.new(
             category_id: category_id,
             category_result: primary[:category_results]&.dig(category_id),
-            secondary_results: secondary_category_results(category_id, matrix_data, :alignment)
+            secondary_results: secondary_category_results(category_id, matrix_data, :alignment),
+            category_data: matrix_data[:categories].find { |c| c[:category].category_id == category_id },
+            context: :alignment
           ),
           layout: false
         )

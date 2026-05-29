@@ -76,7 +76,7 @@ class Views::Assessments::CategorySection < Views::Base
              "flex items-baseline justify-between gap-3",
       style: "top: var(--sticky-header-h, 0px)"
     ) do
-      div do
+      div(class: "min-w-0") do
         h2(class: "text-lg font-bold text-gray-900 dark:text-white") do
           @category.name
         end
@@ -86,29 +86,36 @@ class Views::Assessments::CategorySection < Views::Base
           end
         end
       end
-      div(id: "category-indicators-#{@category.category_id}", class: "shrink-0") do
-        category_result_badge
-      end
+      render Views::Assessments::CategoryIndicators.new(
+        category_id: @category.category_id,
+        category_result: primary_scoring_for_context[:category_results]&.dig(@category.category_id),
+        secondary_results: secondary_category_results,
+        category_data: @category_data,
+        context: @context
+      )
     end
   end
 
-  def category_result_badge
-    result = primary_scoring_for_context[:category_results]&.dig(@category.category_id)
-    return unless result
+  # Pairs each labelled secondary perspective with its result for this
+  # category, dropping perspectives that have no scoring or no result for
+  # this category — matches the shape rating controllers thread in for
+  # the turbo-replace path so initial render and post-rate render agree.
+  def secondary_category_results
+    perspectives =
+      case @context
+      when :self      then [ [ "Mgr",  @manager_scoring ], [ "Agreed", @aligned_scoring ] ]
+      when :manager   then [ [ "Self", @self_scoring ],    [ "Agreed", @aligned_scoring ] ]
+      when :alignment then [ [ "Self", @self_scoring ],    [ "Mgr",    @manager_scoring ] ]
+      else []
+      end
 
-    pool = result[:pool]&.round(0)
-    pass = result[:pass]
+    perspectives.filter_map do |label, scoring|
+      next unless scoring
 
-    color = if pass
-              "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 " \
-              "border-green-200 dark:border-green-800"
-    else
-              "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 " \
-              "border-red-200 dark:border-red-800"
-    end
+      result = scoring[:category_results]&.dig(@category.category_id)
+      next unless result
 
-    span(class: "text-xs font-medium px-2 py-0.5 rounded-md border #{color}") do
-      pass ? "Pass" : "Below"
+      [ label, result ]
     end
   end
 
