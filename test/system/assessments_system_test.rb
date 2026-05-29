@@ -154,7 +154,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
       within("#scoring-panel") do
-        assert_no_text "Continue assessing"
+        assert_no_text "Continue"
       end
     end
 
@@ -162,7 +162,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
       within("#scoring-panel") do
-        assert_text "Continue assessing"
+        assert_text "Continue"
       end
     end
 
@@ -300,15 +300,19 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # finishes reflowing.
       page.execute_script("window.scrollTo(0, 300)")
       sleep 0.4
-      # Then scroll Delivering's heading just below the sticky header,
-      # measured AFTER compaction so the math is correct.
-      page.execute_script(<<~JS)
-        var s = document.getElementById('category-#{@cat2_id}');
-        var h = document.getElementById('assessment-sticky-header');
-        var sTop = s.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo(0, sTop - h.offsetHeight - 4);
-      JS
-      sleep 0.6
+      # Then iterate until cat2's section sits a few px inside the
+      # active-detection threshold (header bottom). Re-measuring on each
+      # pass absorbs any layout shift caused by the hero's scroll-driven
+      # collapse — we want a stable end state, not a one-shot scroll.
+      3.times do
+        page.execute_script(<<~JS)
+          var s = document.getElementById('category-#{@cat2_id}');
+          var h = document.getElementById('assessment-sticky-header');
+          var target = s.getBoundingClientRect().top + window.scrollY - h.offsetHeight - 4;
+          window.scrollTo(0, target);
+        JS
+        sleep 0.3
+      end
 
       # The chip for the second category should be the active one
       active = page.evaluate_script(

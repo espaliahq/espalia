@@ -62,7 +62,6 @@ class Views::Assessments::HeroSummary < Views::Base
         data: { performance_pct: (ratio * 100).round(0) }) do
       hero_header
       middle_band
-      bottom_line
     end
   end
 
@@ -70,48 +69,66 @@ class Views::Assessments::HeroSummary < Views::Base
 
   # ── Bands ──
 
-  # Always visible at the top of the card.
+  # Always visible at the top. The verdict + gloss + bottom-line stack
+  # share the left column; the big number + bar occupy the right
+  # column. The two columns sit side-by-side so the hero card is just
+  # tall enough to fit whichever column is taller — no wasted vertical
+  # space below the big number.
   def hero_header
-    div(class: "px-5 pt-5 pb-3") { context_and_verdict }
+    div(class: "px-5 py-4") { header_row }
   end
 
   # Collapses on scroll. `.hero-collapsible` carries the CSS
-  # scroll-driven animation that drives max-height / opacity / padding
-  # from full → 0 over the first 240px of document scroll.
+  # scroll-driven animation that drives its inner content height +
+  # opacity from full → 0 over the first 240px of document scroll.
+  # The wrapper itself has no padding — padding lives on an inner
+  # element so animating only the wrapper's height doesn't cascade
+  # padding-block changes into a layout-flicker loop.
   def middle_band
     contributions = primary_scoring[:capability_contributions] || {}
     return if contributions.empty?
 
-    div(class: "hero-collapsible px-5") { strengths_and_lift }
+    # Two-layer wrapper so the grid item can shrink to 0 without the
+    # inner padding forcing a minimum row height. The grid item
+    # (`<div>` no padding) lives inside `.hero-collapsible`'s `grid-
+    # template-rows`; padding lives one level deeper and is clipped by
+    # the outer `overflow: hidden` when the row collapses to 0fr.
+    div(class: "hero-collapsible") do
+      div do
+        div(class: "px-5 pb-5") { strengths_and_lift }
+      end
+    end
   end
 
-  # Always visible at the bottom of the card. Rises naturally as the
-  # middle band shrinks.
-  def bottom_line
-    target = next_unrated_capability
-    return unless target || promotion_readiness_visible?
-
-    div(class: "px-5 pt-3 pb-5") { promotion_and_ctas }
-  end
-
-  def context_and_verdict
+  def header_row
     ratio = primary_scoring[:performance_ratio] || 0.0
     pct = (ratio * 100).round(0)
 
     div(class: "flex items-start justify-between gap-4") do
-      div do
+      div(class: "min-w-0 flex-1") do
         h2(class: "text-xl font-bold text-gray-900 dark:text-white") do
           verdict_headline
         end
         p(class: "text-sm text-gray-500 dark:text-gray-400 mt-1") do
           verdict_gloss
         end
+        bottom_line
       end
       div(class: "text-right shrink-0") do
-        span(class: "text-4xl font-bold #{performance_color(ratio)}") { "#{pct}%" }
-        div(class: "text-xs text-gray-400 dark:text-gray-500 mt-0.5") { "of expected" }
+        span(class: "text-4xl font-bold leading-none #{performance_color(ratio)}") { "#{pct}%" }
+        div(class: "text-xs text-gray-400 dark:text-gray-500 mt-1") { "of expected" }
         progress_bar(ratio)
       end
+    end
+  end
+
+  def bottom_line
+    target = next_unrated_capability
+    return unless target || promotion_readiness_visible?
+
+    div(class: "mt-3 flex flex-wrap items-center gap-2") do
+      promotion_pill
+      continue_assessing_cta(target) if target
     end
   end
 
@@ -177,14 +194,6 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  def promotion_and_ctas
-    target = next_unrated_capability
-    div(class: "flex flex-wrap items-center gap-3") do
-      promotion_pill
-      continue_assessing_cta(target) if target
-    end
-  end
-
   # The first capability at the person's current level whose primary
   # frequency hasn't been recorded yet. Used to gate the Continue CTA
   # and to embed the target capability for the JS jump.
@@ -240,7 +249,7 @@ class Views::Assessments::HeroSummary < Views::Base
     # action from this scope.
     a(
       href: "#cell-#{stable_id}-#{@person_level}",
-      class: "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium " \
+      class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium " \
              "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
              "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors",
       data: {
@@ -250,7 +259,7 @@ class Views::Assessments::HeroSummary < Views::Base
         continue_assessing_level_ordinal_value: @person_level
       }
     ) do
-      plain "Continue assessing"
+      plain "Continue"
       span { "→" }
     end
   end
