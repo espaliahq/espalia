@@ -341,6 +341,17 @@ class Assessments::MatrixDataBuilder
       result[:capability_contributions] = bindings.to_h do |b|
         [ b.capability.stable_id, scoring.raw_contribution(b) ]
       end
+
+      # Next-level contributions power the "Gap to mastering" /
+      # "Gap to promotion" panels in the hero — they show which
+      # capabilities are holding the person back at the next level,
+      # not at their current one. Only meaningful when a next level
+      # exists in the framework.
+      if scoring.has_next_level?
+        result[:capability_contributions_at_next_level] = bindings.to_h do |b|
+          [ b.capability.stable_id, scoring.next_level_contribution(b) ]
+        end
+      end
     end
     result
   end

@@ -257,6 +257,27 @@ class PersonDevelopment::Scoring
     raw_contribution_at_level(binding, @person_level)
   end
 
+  # Whether the framework has a level above the person's current one.
+  # False at the top of the role's level ladder — used by the hero
+  # "Gap to promotion" panel and assessment_data builder to gate
+  # next-level-only signals.
+  #
+  # @return [Boolean]
+  def has_next_level?
+    @person_level < @all_level_ordinals.last
+  end
+
+  # Raw (uncapped) contribution evaluated against the next level above
+  # the person's current — what the contribution would be if their
+  # assigned level were @person_level + 1. Used to surface which
+  # capabilities still need work for promotion.
+  #
+  # @param binding [#capability_id, #weight, #capability]
+  # @return [Float]
+  def next_level_contribution(binding)
+    raw_contribution_at_level(binding, @person_level + 1)
+  end
+
   private
 
   # ── Core computation ──

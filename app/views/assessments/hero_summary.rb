@@ -153,6 +153,9 @@ class Views::Assessments::HeroSummary < Views::Base
     current_code = level_code(@person_level)
     next_code = level_code(@person_level + 1)
 
+    next_level_contributions = primary_scoring[:capability_contributions_at_next_level] || {}
+    sorted_next = next_level_contributions.sort_by { |_, v| -v }
+
     case primary_scoring[:performance_state]
     when :underperforming
       { state_label: "Underperforming at #{current_code}",
@@ -168,10 +171,20 @@ class Views::Assessments::HeroSummary < Views::Base
         border: "border-amber-300 dark:border-amber-700",
         accent: "text-amber-700 dark:text-amber-300",
         caps: caps_by_id }
+    when :performing
+      # Above the meeting bar but not yet mastering. Surface the
+      # capabilities still keeping the average below mastery so the
+      # path forward is "lift these to consistent at every level".
+      { state_label: "Performing at #{current_code}",
+        list_label: "Gap to mastering",
+        items: sorted.last(3).reverse,
+        border: "border-blue-300 dark:border-blue-700",
+        accent: "text-blue-700 dark:text-blue-300",
+        caps: caps_by_id }
     when :progressing_to_next
       blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
-      blocked_items = blocked.first(3).map { |sid| [ sid, contributions[sid] || 0.0 ] }
-      items = blocked_items.any? ? blocked_items : sorted.last(3).reverse
+      blocked_items = blocked.first(3).map { |sid| [ sid, next_level_contributions[sid] || contributions[sid] || 0.0 ] }
+      items = blocked_items.any? ? blocked_items : sorted_next.last(3).reverse
       { state_label: "Progressing toward #{next_code}",
         list_label: "Gap to #{next_code}",
         items: items,
@@ -186,13 +199,20 @@ class Views::Assessments::HeroSummary < Views::Base
         accent: "text-green-700 dark:text-green-300",
         caps: caps_by_id }
     when :mastering
+      # Already mastering current — the meaningful question is what's
+      # still in the way of promotion. Surface the capabilities with
+      # the weakest contribution AT the next level (blocked ones
+      # first when they exist).
+      blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
+      blocked_items = blocked.first(3).map { |sid| [ sid, next_level_contributions[sid] || 0.0 ] }
+      items = blocked_items.any? ? blocked_items : sorted_next.last(3).reverse
       { state_label: "Mastering #{current_code}",
-        list_label: "Top contributors",
-        items: sorted.first(3),
+        list_label: next_code ? "Gap to promotion to #{next_code}" : "Top contributors",
+        items: items.any? ? items : sorted.first(3),
         border: "border-purple-300 dark:border-purple-700",
         accent: "text-purple-700 dark:text-purple-300",
         caps: caps_by_id }
-    else # :performing or unknown
+    else # unknown state
       { state_label: "Performing at #{current_code}",
         list_label: "Gap to #{current_code}",
         items: sorted.last(3).reverse.select { |_, v| v < 0 },
@@ -228,8 +248,12 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
+  # Returns the level code for an ordinal in the merged level set, or
+  # nil when the ordinal isn't in the role's ladder (e.g. asking for
+  # @person_level + 1 when the person is already at the top). Callers
+  # branch on nil to swap the headline for a top-of-ladder framing.
   def level_code(ordinal)
-    @merged_levels.find { |l| l[:ordinal] == ordinal }&.dig(:level_code) || "L#{ordinal}"
+    @merged_levels.find { |l| l[:ordinal] == ordinal }&.dig(:level_code)
   end
 
   def contribution_color(value)

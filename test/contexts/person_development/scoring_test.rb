@@ -423,6 +423,24 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
   end
 
+  context "#has_next_level? and #next_level_contribution" do
+    should "return true and a next-level contribution when not at the top" do
+      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ r ])
+      assert scorer.has_next_level?
+      binding_obj = scorer.instance_variable_get(:@bindings).first
+      # At L4: L1, L2, L3 contribute 0 (consistent vs expected 1.0),
+      #        L4 unrated → 0.0 vs expected 1.0 = -1.0
+      assert_in_delta(-1.0, scorer.next_level_contribution(binding_obj), 0.01)
+    end
+
+    should "return false at the top of the level ladder" do
+      scorer = build_scorer(person_level: 4, all_levels: [ 1, 2, 3, 4 ])
+      assert_not scorer.has_next_level?
+    end
+  end
+
   # ── Agreed level ──
 
   context "#agreed_level_for" do
