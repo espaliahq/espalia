@@ -54,9 +54,18 @@ class Assessments::EvidenceController < ApplicationController
       external_reference: attrs[:external_reference]&.to_h
     )
 
-    redirect_to assessment_path(@assignment,
-                  redirect_params(attrs[:capability_stable_id], level_ordinal: level_ordinal)),
-      status: :see_other, notice: "Evidence recorded."
+    # Respond with turbo_stream so Turbo applies the update in place
+    # rather than navigating to the redirect — full-page navigation
+    # resets the scroll position to the top, throwing the user away
+    # from the cell they were working in.
+    respond_to do |format|
+      format.turbo_stream { render_evidence_list_stream(attrs[:capability_stable_id], level_ordinal) }
+      format.html do
+        redirect_to assessment_path(@assignment,
+                      redirect_params(attrs[:capability_stable_id], level_ordinal: level_ordinal)),
+          status: :see_other, notice: "Evidence recorded."
+      end
+    end
   rescue PersonDevelopment::Aggregate::CommandError => e
     redirect_back fallback_location: assessment_path(@assignment),
       alert: "Could not record evidence: #{e.message}"
@@ -221,5 +230,56 @@ class Assessments::EvidenceController < ApplicationController
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
       alert: "You are not authorized to perform this action."
+  end
+
+  # Renders the evidence list for the (capability, level) cell where the
+  # new item just landed. Used by the format.turbo_stream branch of
+  # `create` so the modal-driven submit updates the list in-place
+  # without a full-page redirect.
+  def render_evidence_list_stream(capability_stable_id, level_ordinal)
+    items = evidence_items_for(capability_stable_id, level_ordinal)
+    render turbo_stream: turbo_stream.replace(
+      "evidence-list-#{capability_stable_id}-#{level_ordinal}",
+      render_to_string(
+        Views::Assessments::Evidence::List.new(
+          items: items,
+          assessment_id: @assignment.id,
+          viewer_person_id: current_person.id,
+          can_create: true,
+          can_relink_others: viewer_can_relink_others_evidence?,
+          capability_stable_id: capability_stable_id,
+          level_ordinal: level_ordinal
+        ),
+        layout: false
+      )
+    )
+  end
+
+  def evidence_items_for(capability_stable_id, level_ordinal)
+    scope = EvidenceItem.active
+      .for_person(@assignment.person_id)
+      .for_framework(@assignment.framework_id)
+      .where(capability_stable_id: capability_stable_id, level_ordinal: level_ordinal)
+    scope = scope.where(author_id: current_person.id) unless viewer_sees_all_evidence?
+    scope.order(:recorded_at)
+  end
+
+  def viewer_can_relink_others_evidence?
+    return false unless current_person
+    return true if @assignment.person_id == current_person.id
+
+    assessee_person&.managed_by?(current_person) || false
+  end
+
+  def viewer_sees_all_evidence?
+    return false unless current_person
+    return true if @assignment.person_id == current_person.id
+    return true if assessee_person&.managed_by?(current_person)
+
+    pundit_user.tenant_user&.admin? || pundit_user.user&.global_admin?
+  end
+
+  def assessee_person
+    @assessee_person ||= Person.find_by(id: @assignment.person_id)
   end
 end
