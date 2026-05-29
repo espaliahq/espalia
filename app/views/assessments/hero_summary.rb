@@ -181,16 +181,6 @@ class Views::Assessments::HeroSummary < Views::Base
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
-    when :progressing_to_next
-      blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
-      blocked_items = blocked.first(3).map { |sid| [ sid, next_level_contributions[sid] || contributions[sid] || 0.0 ] }
-      items = blocked_items.any? ? blocked_items : sorted_next.last(3).reverse
-      { state_label: "Progressing toward #{next_code}",
-        list_label: "Gap to #{next_code}",
-        items: items,
-        border: "border-blue-300 dark:border-blue-700",
-        accent: "text-blue-700 dark:text-blue-300",
-        caps: caps_by_id }
     when :eligible
       { state_label: "Eligible for promotion to #{next_code}",
         list_label: "Top contributors",

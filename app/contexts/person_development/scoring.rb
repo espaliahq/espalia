@@ -139,20 +139,28 @@ class PersonDevelopment::Scoring
   end
 
   # Unified performance state for the assessment narrative. Maps the
-  # person's current position into the five-state vocabulary:
+  # person's current position into a five-state vocabulary, picked so
+  # the hero always points at the *next milestone* — not at one
+  # they've already cleared.
   #
-  #   :underperforming     — significantly below current-level expectations
-  #   :progressing         — close to but not yet meeting current level
-  #                          (typical for someone newly assigned to the level)
-  #   :performing          — at or above meeting threshold for current level
-  #   :mastering           — significantly exceeding current-level expectations
-  #   :eligible            — meets next-level expectations (promotion ready)
-  #   :progressing_to_next — performing at current AND showing meaningful
-  #                          progress at next level (above underperforming
-  #                          threshold but not yet eligible)
+  #   :underperforming — ratio < underperforming_threshold
+  #                      (e.g. < 0.80) → next milestone is the current
+  #                      level's meeting bar
+  #   :progressing     — underperforming_threshold ≤ ratio < meeting
+  #                      OR any capability blocked → next milestone is
+  #                      still the current level's meeting bar
+  #   :performing      — meeting ≤ ratio < mastery → next milestone is
+  #                      mastering the current level
+  #   :mastering       — ratio ≥ mastery_threshold AND not yet eligible
+  #                      for promotion → next milestone is promotion
+  #                      to the next level
+  #   :eligible        — meets next-level expectations (promotion
+  #                      ready) → past the last gate, celebrate
   #
-  # Precedence: underperforming → progressing → eligible → mastering →
-  # progressing_to_next → performing. Blocked capabilities downgrade
+  # Precedence: underperforming → progressing → eligible → mastering
+  # → performing. Eligible takes precedence over mastering because
+  # promotion-ready is a stronger signal than mastery; both supersede
+  # the merely-performing state. Blocked capabilities downgrade
   # otherwise-passing states to :progressing — a blocker prevents
   # "performing" the same way it prevents `meeting_expectations?`.
   #
@@ -405,20 +413,14 @@ class PersonDevelopment::Scoring
   def compute_performance_state
     ratio       = performance_ratio
     has_blocked = capability_statuses.values.any? { |s| s == :blocked }
-    max_level   = @all_level_ordinals.last
-    has_next    = @person_level < max_level
+    has_next    = @person_level < @all_level_ordinals.last
 
     return :underperforming if ratio < @underperforming_threshold
     return :progressing     if ratio < @meeting_expectation_threshold || has_blocked
     return :eligible        if has_next && promotion_readiness[:eligible]
     return :mastering       if ratio >= @mastery_threshold
 
-    if has_next &&
-       performance_ratio_at_level(@person_level + 1) >= @underperforming_threshold
-      :progressing_to_next
-    else
-      :performing
-    end
+    :performing
   end
 
   def compute_promotion_readiness
