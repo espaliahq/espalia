@@ -74,6 +74,10 @@ class Views::Assessments::CategorySection < Views::Base
       class: "md:sticky md:z-10 -mx-6 px-6 py-3 mb-3 " \
              "bg-gray-50/95 dark:bg-gray-950/95 md:backdrop-blur-sm " \
              "flex items-baseline justify-between gap-3",
+      # Stable hook for matrix_controller#scrollCardUnderHeader — the
+      # sticky flavour now varies by viewport (`md:sticky`), so a
+      # class-name selector would silently miss this element.
+      data: { section_header: "true" },
       style: "top: var(--sticky-header-h, 0px)"
     ) do
       div(class: "min-w-0") do

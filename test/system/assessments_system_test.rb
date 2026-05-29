@@ -495,7 +495,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         (function() {
           var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
           var section = card.closest("section[data-category-id]");
-          var sectionHeader = section.querySelector(":scope > div.sticky");
+          var sectionHeader = section.querySelector(":scope > [data-section-header]");
           var header = document.getElementById('assessment-sticky-header');
           return {
             card_top: card.getBoundingClientRect().top,
@@ -549,7 +549,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         (function() {
           var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
           var section = card.closest("section[data-category-id]");
-          var sectionHeader = section.querySelector(":scope > div.sticky");
+          var sectionHeader = section.querySelector(":scope > [data-section-header]");
           var header = document.getElementById('assessment-sticky-header');
           return {
             card_top: card.getBoundingClientRect().top,

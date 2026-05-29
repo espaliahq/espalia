@@ -67,10 +67,11 @@ class Views::Assessments::CapabilityCard < Views::Base
       class: "rounded-xl border border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 p-4 transition-shadow " \
              "#{@is_url_focused ? 'shadow-sm ring-1 ring-primary/10' : 'hover:shadow-sm'}",
-      # scroll-margin-top accounts for the unified sticky header so
-      # `scrollIntoView({ block: 'start' })` lands the card just under
-      # it instead of behind it. The CSS var is published by
-      # category_nav_controller.
+      # scroll-margin-top accounts for the unified sticky header. The
+      # section sticky heading height varies per section (description
+      # text wraps differently) so `matrix_controller#scrollCardUnderHeader`
+      # overrides scroll-margin-top with the measured section height
+      # right before scrolling.
       style: "scroll-margin-top: calc(var(--sticky-header-h, 0px) + 12px)",
       data: {
         matrix_target: "card",

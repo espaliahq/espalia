@@ -355,35 +355,61 @@ export default class extends BaseController {
   // layout by ~100px and leaving the original target stale. The
   // correction is a tiny instant scroll that snaps the card top to
   // exactly `header_bottom + 12` once everything has settled.
+  // Card scroll-margin-top (in `capability_card.rb`) carries the offset
+  // for the unified sticky chrome + the sticky section heading + a
+  // 12px gap. `scrollIntoView({block: 'start'})` honours that, so the
+  // card top lands flush below the chrome without manual math here.
+  //
+  // A settle pass re-scrolls instantly after the smooth animation
+  // finishes — the hero collapses via a scroll-driven CSS animation
+  // that runs in parallel with our smooth scroll, shifting the doc
+  // layout mid-animation and letting the original landing drift. The
+  // re-query guards against the original card node being detached
+  // when the matrix turbo-frame replaced its content during the scroll.
+  // Card scroll-margin-top (in `capability_card.rb`) carries the offset
+  // for the unified sticky chrome + the sticky section heading + a
+  // 12 px gap. We do the math explicitly here rather than relying on
+  // scrollIntoView({block: "start"}): the browser's smooth animation
+  // races with the hero's scroll-driven collapse, and scrollIntoView
+  // does not retarget mid-flight when scroll-margin shifts. Doing the
+  // arithmetic ourselves and snapping with `instant` after the smooth
+  // animation lands the card top exactly at scroll-margin-top.
   #scrollCardUnderHeader(stableId) {
     const frame = this.element.closest("turbo-frame") ||
                   this.element.querySelector("turbo-frame")
 
+    const findCard = () =>
+      document.querySelector(`[data-matrix-target="card"][data-capability-stable-id="${stableId}"]`)
+
+    // Override the card's static scroll-margin-top with one that also
+    // includes the measured section heading height (varies per section
+    // — descriptions wrap differently). Cards in different sections
+    // would need different margins, so a single CSS rule can't cover
+    // it; per-card inline override does.
+    const applyScrollMargin = (card) => {
+      const sectionH = card.closest("section[data-category-id]")
+        ?.querySelector("[data-section-header]")?.offsetHeight || 0
+      card.style.scrollMarginTop = `calc(var(--sticky-header-h, 0px) + ${sectionH + 12}px)`
+    }
+
+    const desiredTopFor = (card) => parseFloat(window.getComputedStyle(card).scrollMarginTop) || 0
+
+    const scrollTo = (card, behavior) => {
+      const cardTopDoc = card.getBoundingClientRect().top + window.scrollY
+      const target = Math.max(0, cardTopDoc - desiredTopFor(card))
+      window.scrollTo({ top: target, behavior })
+    }
+
     const scroll = () => {
-      const card = document.querySelector(`[data-matrix-target="card"][data-capability-stable-id="${stableId}"]`)
+      const card = findCard()
       if (!card) return
-
-      const computeTarget = () => {
-        const cardTopDoc = card.getBoundingClientRect().top + window.scrollY
-        const unifiedH = document.getElementById("assessment-sticky-header")?.offsetHeight || 0
-        const sectionHeader = card.closest("section[data-category-id]")
-          ?.querySelector(":scope > div.sticky")
-        const sectionH = sectionHeader?.offsetHeight || 0
-        return Math.max(0, cardTopDoc - unifiedH - sectionH - 12)
-      }
-
-      window.scrollTo({ top: computeTarget(), behavior: "smooth" })
-
-      // After the smooth-scroll settles, re-measure. If sticky-hero
-      // transitioned mid-animation the layout shifted; snap to the
-      // corrected position.
+      applyScrollMargin(card)
+      scrollTo(card, "smooth")
       setTimeout(() => {
-        const offset = card.getBoundingClientRect().top -
-          ((document.getElementById("assessment-sticky-header")?.getBoundingClientRect().bottom || 0) +
-            (card.closest("section[data-category-id]")?.querySelector(":scope > div.sticky")?.offsetHeight || 0))
-        if (Math.abs(offset - 12) > 3) {
-          window.scrollTo({ top: computeTarget(), behavior: "instant" })
-        }
+        const settled = findCard()
+        if (!settled) return
+        applyScrollMargin(settled)
+        scrollTo(settled, "instant")
       }, 600)
     }
 
