@@ -103,12 +103,13 @@ class Views::Assessments::CategoryChipBar < Views::Base
 
   # Tiny "3/24" count tucked inside the chip — desktop only so narrow
   # viewports keep chips compact and horizontally scrollable. Hidden when
-  # the category has no cells.
+  # the category has no cells. Active variant lifts contrast against the
+  # dark chip fill (text-gray-300 at 10px was barely legible).
   def rated_count_chip(cat_data, active)
     counts = category_rated_count(cat_data, @context)
     return if counts[:total].zero?
 
-    color = active ? "text-gray-300" : "text-gray-500 dark:text-gray-400"
+    color = active ? "text-white/70 dark:text-gray-900/70" : "text-gray-500 dark:text-gray-400"
     span(class: "hidden lg:inline text-[10px] font-mono tabular-nums #{color}") do
       "#{counts[:rated]}/#{counts[:total]}"
     end
