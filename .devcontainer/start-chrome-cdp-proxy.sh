@@ -22,11 +22,19 @@ LOG=/tmp/socat-chrome.log
 # pkill only SENDS the signal — wait for the prior socat to actually
 # release the port before starting a new one, otherwise the new bind()
 # races and fails with EADDRINUSE even with SO_REUSEADDR.
+#
+# The loop tries 10 times at 100ms intervals (1s budget). If a stale
+# process is still holding the port after that, log a warning and let
+# socat fail loudly — silently swallowing this would leave the user
+# without a working proxy and no obvious hint why.
 if pkill -f 'socat.*TCP-LISTEN:9222' >/dev/null 2>&1; then
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     pgrep -f 'socat.*TCP-LISTEN:9222' >/dev/null 2>&1 || break
     sleep 0.1
   done
+  if pgrep -f 'socat.*TCP-LISTEN:9222' >/dev/null 2>&1; then
+    echo "warning: prior socat on :9222 didn't exit within 1s; new bind may fail" >&2
+  fi
 fi
 
 # Detach from the shell so postStartCommand can return cleanly. nohup +

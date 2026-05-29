@@ -11,6 +11,8 @@
 # cycle is open via `ensure_in_cycle!`.
 #
 class Assessments::AlignmentRatingsController < ApplicationController
+  include Assessments::TurboStreamHelpers
+
   before_action :require_person
   before_action :set_assignment
 
@@ -247,37 +249,5 @@ class Assessments::AlignmentRatingsController < ApplicationController
     return nil if @assignment.person_id == current_person&.id
 
     @assessee_name_if_not_self ||= Person.find_by(id: @assignment.person_id)&.name
-  end
-
-  def capability_name_html(cap_data, blocked, block_reason, contribution)
-    cap = cap_data[:capability]
-    parts = []
-    parts << %(<h3 class="text-sm font-semibold text-gray-900 dark:text-white">#{ERB::Util.html_escape(cap.name)}</h3>)
-    if blocked
-      parts << %(<span class="text-[10px] font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded" title="#{ERB::Util.html_escape(block_reason)}">Blocked</span>)
-    end
-    if contribution && !contribution.negative?
-      pct = (contribution * 100).round(0)
-      color = pct >= 100 ? "text-green-600 dark:text-green-400" :
-              pct >= 80 ? "text-amber-600 dark:text-amber-400" :
-              "text-red-600 dark:text-red-400"
-      parts << %(<span class="text-lg font-bold #{color} ml-auto">#{pct}%</span>)
-    end
-    %(<div id="capability-name-#{cap.stable_id}" class="flex items-center gap-2">#{parts.join}</div>)
-  end
-
-  def rating_wrapper_html(stable_id, ordinal, frequency, context, category_id)
-    selector_html = render_to_string(
-      Views::Assessments::FrequencySelector.new(
-        capability_stable_id: stable_id,
-        level_ordinal: ordinal,
-        current_frequency: frequency,
-        assessment_id: @assignment.id,
-        context: context,
-        category_id: category_id
-      ),
-      layout: false
-    )
-    "<div id=\"rating-#{stable_id}-#{ordinal}\">#{selector_html}</div>"
   end
 end

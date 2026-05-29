@@ -10,6 +10,10 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param active_category_id [String, nil]
   # @param assessment_id [String, nil] UUID
+  # @param assessee_name [String, nil] full name of the assessee — used
+  #   by the hero verdict to address the person in third person (e.g.
+  #   "Alex is tracking on target") in manager and alignment views.
+  #   Nil in self view, where the hero uses "You're …" copy.
   def initialize(matrix_data:, context: :self, active_category_id: nil,
                  assessment_id: nil, assessee_name: nil)
     @matrix_data = matrix_data

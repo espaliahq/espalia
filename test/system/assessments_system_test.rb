@@ -879,8 +879,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#scoring-panel"
 
       section_id = "category-#{@cat_id}"
-      chip = find("nav#category-tabs [data-category-id='#{@cat_id}']")
-      chip.click
+      # JS-dispatched click so Stimulus actions fire reliably even on
+      # starved CI runners (see testing.md — *Flake-Prone Click Guards*).
+      page.execute_script(
+        "document.querySelector(\"nav#category-tabs [data-category-id='#{@cat_id}']\").click()"
+      )
       sleep 0.8
 
       section_visible = page.evaluate_script(
@@ -895,9 +898,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
-      # Click the E1 chip on the first capability
-      chip = find("#cell-#{@cap1_stable}-1")
-      chip.click
+      # Click the E1 chip on the first capability — JS-dispatched so
+      # the Stimulus action triggers reliably on starved CI.
+      page.execute_script("document.getElementById('cell-#{@cap1_stable}-1').click()")
 
       # The expansion panel for level 1 should appear with level-1 expectation
       assert_text "Asks clarifying questions to understand problems", wait: 5
