@@ -9,13 +9,6 @@
 class Views::Assessments::CategoryChipBar < Views::Base
   include Views::Assessments::Concerns::RatedCount
 
-  FREQUENCY_LEGEND = [
-    { label: "Consistently", color: "bg-green-300 dark:bg-green-500" },
-    { label: "Most",         color: "bg-blue-200 dark:bg-blue-500" },
-    { label: "Some",         color: "bg-amber-200 dark:bg-amber-500" },
-    { label: "None",         color: "bg-gray-300 dark:bg-gray-500" }
-  ].freeze
-
   # @param categories [Array<Hash>] from MatrixDataBuilder
   # @param scoring [Hash] primary scoring for the context
   # @param active_category_id [String, nil] highlighted chip
@@ -32,8 +25,6 @@ class Views::Assessments::CategoryChipBar < Views::Base
         class: "flex flex-wrap items-center gap-2") do
       all_chip
       @categories.each { |cat_data| category_chip(cat_data) }
-      spacer
-      legend
     end
   end
 
@@ -112,21 +103,6 @@ class Views::Assessments::CategoryChipBar < Views::Base
     color = active ? "text-white/70 dark:text-gray-900/70" : "text-gray-500 dark:text-gray-400"
     span(class: "hidden lg:inline text-[10px] font-mono tabular-nums #{color}") do
       "#{counts[:rated]}/#{counts[:total]}"
-    end
-  end
-
-  def spacer
-    div(class: "flex-1") { }
-  end
-
-  def legend
-    div(class: "hidden lg:flex items-center gap-3 text-[10px] text-gray-400 dark:text-gray-500") do
-      FREQUENCY_LEGEND.each do |item|
-        div(class: "flex items-center gap-1") do
-          span(class: "w-2.5 h-2.5 rounded-sm #{item[:color]}") { }
-          plain item[:label]
-        end
-      end
     end
   end
 
