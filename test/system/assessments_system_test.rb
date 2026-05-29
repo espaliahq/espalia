@@ -187,6 +187,41 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "capability contribution badge" do
+    should "render a signed delta (negative included) on every capability card" do
+      # Seed an explicit underperforming rating on cap1 at the person's
+      # level so its raw_contribution is < 0. Production renders this as
+      # a signed delta next to the capability name; the earlier
+      # redesign suppressed negative contributions, hiding the most
+      # useful "where am I under" signal.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap1_stable,
+          level_ordinal: 2, frequency: "some", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Find the cap1 card and assert its name row contains a signed
+      # delta matching `±N.N` (any sign, one decimal).
+      label = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-capability-stable-id="#{@cap1_stable}"]');
+          if (!card) return null;
+          var nameRow = card.querySelector('h3')?.parentElement;
+          var spans = nameRow ? Array.from(nameRow.querySelectorAll('span')) : [];
+          var m = spans.map(s => s.textContent.trim()).find(t => /^[+-]\\d+\\.\\d$/.test(t));
+          return m || null;
+        })()
+      JS
+
+      assert_match(/^[+-]\d+\.\d$/, label.to_s,
+        "Expected a signed delta (e.g. '-0.5') next to the capability name, got #{label.inspect}")
+    end
+  end
+
   context "category navigation" do
     should "update the browser URL with ?category= when a chip is clicked" do
       visit assessment_path(@assignment)

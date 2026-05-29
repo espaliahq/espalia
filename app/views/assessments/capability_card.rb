@@ -140,15 +140,27 @@ class Views::Assessments::CapabilityCard < Views::Base
     end
   end
 
+  # Signed delta vs the meeting-expectations baseline at the person's
+  # current level (from `PersonDevelopment::Scoring#raw_contribution`).
+  # Positive = over-performing for their level, negative = under,
+  # 0 = exactly meeting. Rendered as `+0.5` / `-0.5` / `+0.0`. Hiding
+  # the badge when negative — the previous behaviour — silently
+  # dropped the most useful signal (under-performance).
   def contribution_badge
     return unless @contribution
-    return if @contribution.negative?
 
-    pct = (@contribution * 100).round(0)
-    color = pct >= 100 ? "text-green-600 dark:text-green-400" :
-            pct >= 80  ? "text-amber-600 dark:text-amber-400" :
-                         "text-red-600 dark:text-red-400"
-    span(class: "text-lg font-bold #{color} ml-auto") { "#{pct}%" }
+    value = @contribution.to_f
+    label = sprintf("%+.1f", value)
+    color = if value >= 0.5
+              "text-green-600 dark:text-green-400"
+    elsif value > -0.5
+              "text-gray-500 dark:text-gray-400"
+    elsif value > -1.5
+              "text-amber-600 dark:text-amber-400"
+    else
+              "text-red-600 dark:text-red-400"
+    end
+    span(class: "text-base font-bold tabular-nums #{color} ml-auto") { label }
   end
 
   def evidence_button
