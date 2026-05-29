@@ -111,11 +111,13 @@ class Views::Assessments::HeroSummary < Views::Base
         p(class: "text-sm text-gray-500 dark:text-gray-400 mt-1") do
           verdict_gloss
         end
+        secondary_verdicts
         bottom_line
       end
       div(class: "text-right shrink-0") do
         span(class: "text-4xl font-bold leading-none #{performance_color(ratio)}") { "#{pct}%" }
         div(class: "text-xs text-gray-400 dark:text-gray-500 mt-1") { "of expected" }
+        secondary_percents
         progress_bar(ratio)
       end
     end
@@ -368,6 +370,54 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   # ── Perspective helpers ──
+
+  # Labelled secondary perspectives for the current context. Self is
+  # alone in its view (manager/aligned data is scrubbed upstream).
+  # Manager view surfaces self; alignment view surfaces both self and
+  # manager. Nil scorings drop out so a perspective with no ratings yet
+  # doesn't render as "0%".
+  def secondary_perspectives
+    @secondary_perspectives ||= case @context
+    when :manager   then [ [ "Self", @self_scoring ] ]
+    when :alignment then [ [ "Self", @self_scoring ], [ "Mgr", @manager_scoring ] ]
+    else []
+    end.select { |_, s| s }
+  end
+
+  # Tiny percentage line tucked under "of expected" so the primary
+  # number stays dominant. Renders nothing in self view.
+  def secondary_percents
+    return if secondary_perspectives.empty?
+
+    div(class: "text-[11px] text-gray-400 dark:text-gray-500 mt-1 tabular-nums") do
+      plain(secondary_perspectives.map { |label, s| "#{label}: #{format_pct(s)}" }.join(" · "))
+    end
+  end
+
+  # Only renders when a secondary verdict actually diverges from the
+  # primary. Otherwise it's redundant noise next to the headline.
+  def secondary_verdicts
+    primary = short_verdict(primary_scoring)
+    diverging = secondary_perspectives.reject { |_, s| short_verdict(s) == primary }
+    return if diverging.empty?
+
+    p(class: "text-xs text-gray-500 dark:text-gray-400 mt-1") do
+      plain(diverging.map { |label, s| "#{label}: #{short_verdict(s)}" }.join(" · "))
+    end
+  end
+
+  def format_pct(scoring)
+    "#{((scoring[:performance_ratio] || 0.0) * 100).round(0)}%"
+  end
+
+  def short_verdict(scoring)
+    ratio = scoring[:performance_ratio] || 0.0
+    return "Mastering" if scoring[:mastering]
+    return "Meeting expectations" if scoring[:meeting_expectations]
+    return "Almost there" if ratio >= 0.8
+
+    "Below expectations"
+  end
 
   def primary_scoring
     @primary_scoring ||=
