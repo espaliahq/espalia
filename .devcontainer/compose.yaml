@@ -22,6 +22,31 @@ services:
     depends_on:
     - selenium-hub
     - postgres
+    - chrome-debug
+
+  # Headless Chrome exposed over CDP for chrome-devtools-mcp. Separate
+  # from the Selenium nodes (those only run Chrome inside an active
+  # WebDriver session and don't expose a stable /json/version
+  # endpoint). The MCP server connects to http://chrome-debug:9222
+  # and drives this instance.
+  #
+  # chromedp/headless-shell's default entrypoint already runs Chrome
+  # on 127.0.0.1:9223 + a socat proxy listening on 0.0.0.0:9222 that
+  # forwards to it (the socat trick sidesteps Chrome 111+'s DNS-
+  # rebinding Host-header guard). DO NOT override `command:` — that
+  # appends flags that duplicate the port and break the proxy.
+  chrome-debug:
+    image: chromedp/headless-shell:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    # Extra flag only — the image's entrypoint appends `command:` to
+    # its own defaults. `--remote-allow-origins=*` lifts Chrome 111+'s
+    # Host-header check so requests with `Host: chrome-debug:9222`
+    # (what chrome-devtools-mcp sends through Puppeteer) are accepted.
+    # Don't pass --remote-debugging-port here — it would override the
+    # image's internal 9223 and collide with socat's 9222 listener.
+    command:
+      - --remote-allow-origins=*
 
   selenium-hub:
     image: selenium/hub:latest

@@ -3,6 +3,11 @@
     "growthOS": {
       "type": "streamable-http",
       "url": "http://localhost:3000/mcp"
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest", "--browserUrl", "http://localhost:9222"]
     }
   }
 }

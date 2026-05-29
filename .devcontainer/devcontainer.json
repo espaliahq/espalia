@@ -50,5 +50,5 @@
   // "remoteUser": "root",
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": "rm -f .overmind.sock && bin/setup --skip-server && .devcontainer/apply-claude-json-seed.sh && npm install -g @anthropic-ai/claude-code",
-  "postStartCommand": "cd /workspaces/${localWorkspaceFolderBasename}/ && bin/rails db:prepare &&rm -f .overmind.sock"
+  "postStartCommand": "cd /workspaces/${localWorkspaceFolderBasename}/ && bin/rails db:prepare && rm -f .overmind.sock && .devcontainer/start-chrome-cdp-proxy.sh"
 }

@@ -18,7 +18,7 @@ RUN curl -fsSL https://cli.coderabbit.ai/install.sh | sh \
 # browser still has to be opened on the host — the CLI just prints the URL).
 ARG RENDER_CLI_VERSION=2.17.0
 RUN sudo apt-get update \
-    && sudo apt-get install -y --no-install-recommends xdg-utils unzip \
+    && sudo apt-get install -y --no-install-recommends xdg-utils unzip socat \
     && sudo rm -rf /var/lib/apt/lists/* \
     && ARCH="$(dpkg --print-architecture)" \
     && curl -fsSL -o /tmp/render-cli.zip \
