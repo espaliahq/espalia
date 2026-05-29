@@ -126,16 +126,20 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "hero summary" do
-    should "show lift toward CURRENT level when below expectations" do
+    should "frame the middle band with the current-level gap when below expectations" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
-      # Person is at E2 with no ratings yet → below expectations.
-      # The lift column should target the current level (E2), not E3.
-      # (Label is CSS-uppercased, so Capybara sees it as "LIFT TOWARD E2".)
+      # Person is at E2 with no ratings yet → underperforming/progressing at E2.
+      # The state-driven middle band labels the list "Gap to E2", not E3.
+      # (Tailwind uppercases the labels via tracking-wide, so Capybara reads
+      # them in their source-case form; assert that way.)
       within("#scoring-panel") do
-        assert_text "LIFT TOWARD E2"
-        assert_no_text "LIFT TOWARD E3"
+        # Tailwind's `tracking-wide uppercase` re-cases the labels.
+        assert_text "GAP TO E2"
+        assert_no_text "GAP TO E3"
+        # State label sits beside it.
+        assert_text(/UNDERPERFORMING AT E2|PROGRESSING TOWARD E2/)
       end
     end
 

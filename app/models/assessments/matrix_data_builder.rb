@@ -314,6 +314,7 @@ class Assessments::MatrixDataBuilder
       thresholds: {
         mastery_threshold: @framework.mastery_threshold&.to_f,
         meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f,
+        underperforming_threshold: @framework.underperforming_threshold&.to_f,
         overperformance_cap: @framework.overperformance_cap,
         deficit_threshold: @framework.deficit_threshold&.to_f
       }
@@ -330,6 +331,7 @@ class Assessments::MatrixDataBuilder
       performance_ratio: scoring.performance_ratio,
       meeting_expectations: scoring.meeting_expectations?,
       mastering: scoring.mastering?,
+      performance_state: scoring.performance_state,
       category_results: scoring.category_results,
       promotion_readiness: scoring.promotion_readiness,
       capability_statuses: scoring.capability_statuses,

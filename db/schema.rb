@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_29_060000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -326,6 +326,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_000000) do
     t.string "name", null: false
     t.integer "overperformance_cap", default: 1, null: false
     t.uuid "tenant_id", null: false
+    t.decimal "underperforming_threshold", precision: 5, scale: 2
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "framework_id"], name: "index_framework_states_on_tenant_id_and_framework_id", unique: true
     t.index ["tenant_id"], name: "index_framework_states_on_tenant_id"

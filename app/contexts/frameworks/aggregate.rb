@@ -867,10 +867,14 @@ class Frameworks::Aggregate
   # @param mastery_threshold [BigDecimal, nil] ratio above baseline for mastery
   # @param promotion_score_threshold [BigDecimal, nil] ratio of next-level baseline
   #   required for promotion readiness score gate
+  # @param underperforming_threshold [BigDecimal, nil] ratio below which the
+  #   person is classified as underperforming (vs progressing). Defaults to
+  #   {PersonDevelopment::Scoring::DEFAULT_UNDERPERFORMING_THRESHOLD} (0.80).
   # @param overperformance_cap [Integer, nil] levels above assigned that count toward score
   # @param deficit_threshold [BigDecimal, nil] weighted deficit above which a capability is blocked
   # @raise [RuntimeError] if framework not created
   def configure_scoring_thresholds(framework_id, mastery_threshold: nil, promotion_score_threshold: nil,
+                                   underperforming_threshold: nil,
                                    overperformance_cap: nil, deficit_threshold: nil)
     ensure_created!
 
@@ -878,6 +882,7 @@ class Frameworks::Aggregate
       framework_id: framework_id,
       mastery_threshold: mastery_threshold,
       promotion_score_threshold: promotion_score_threshold,
+      underperforming_threshold: underperforming_threshold,
       overperformance_cap: overperformance_cap,
       deficit_threshold: deficit_threshold
     }))

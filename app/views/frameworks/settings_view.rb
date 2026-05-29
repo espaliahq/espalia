@@ -28,6 +28,17 @@ class Views::Frameworks::SettingsView < Views::Base
       min: "0.01"
     },
     {
+      key: :underperforming_threshold,
+      label: "Underperforming Threshold",
+      description: "The performance ratio below which a person is classified as " \
+                   "'underperforming' rather than 'progressing'. Between this value and " \
+                   "the meeting threshold the person is considered to be progressing toward " \
+                   "their current level.",
+      type: :decimal,
+      step: "0.01",
+      min: "0.01"
+    },
+    {
       key: :overperformance_cap,
       label: "Over-performance Cap",
       description: "How many levels above a person's assigned level contribute to their score. " \

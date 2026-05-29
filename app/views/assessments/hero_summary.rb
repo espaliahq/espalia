@@ -84,18 +84,17 @@ class Views::Assessments::HeroSummary < Views::Base
   # The wrapper itself has no padding — padding lives on an inner
   # element so animating only the wrapper's height doesn't cascade
   # padding-block changes into a layout-flicker loop.
+  #
+  # Renders a single state-driven panel (not two competing
+  # strengths/lift columns). The performance state picks the
+  # headline + tone; the capability list is the evidence for it.
   def middle_band
-    contributions = primary_scoring[:capability_contributions] || {}
-    return if contributions.empty?
+    config = state_panel_config
+    return unless config && config[:items].any?
 
-    # Two-layer wrapper so the grid item can shrink to 0 without the
-    # inner padding forcing a minimum row height. The grid item
-    # (`<div>` no padding) lives inside `.hero-collapsible`'s `grid-
-    # template-rows`; padding lives one level deeper and is clipped by
-    # the outer `overflow: hidden` when the row collapses to 0fr.
     div(class: "hero-collapsible") do
       div do
-        div(class: "px-5 pb-5") { strengths_and_lift }
+        div(class: "px-5 pb-5") { state_panel(config) }
       end
     end
   end
@@ -141,56 +140,107 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  def strengths_and_lift
+  # Builds the single state-driven panel for the middle band. Picks the
+  # headline, list source, and tone from `performance_state`.
+  # Returns nil when there are no contributions to back any framing.
+  def state_panel_config
     contributions = primary_scoring[:capability_contributions] || {}
-    caps_by_name = @categories.flat_map { |c| c[:capabilities] }
-                              .index_by { |cap| cap[:capability].stable_id }
+    return if contributions.empty?
 
+    caps_by_id = @categories.flat_map { |c| c[:capabilities] }
+                            .index_by { |cap| cap[:capability].stable_id }
     sorted = contributions.sort_by { |_, v| -v }
-    strengths = sorted.first(3).select { |_, v| v >= 0.9 }
-    lift = sorted.last(3).select { |_, v| v < 0.95 }.reverse
+    current_code = level_code(@person_level)
+    next_code = level_code(@person_level + 1)
 
-    return if strengths.empty? && lift.empty?
-
-    div(class: "grid grid-cols-1 md:grid-cols-2 gap-4") do
-      if strengths.any?
-        insight_column("✓ Strengths", strengths, caps_by_name,
-                       "border-green-200 dark:border-green-800")
-      end
-      if lift.any?
-        insight_column(lift_label, lift, caps_by_name,
-                       "border-amber-200 dark:border-amber-800")
-      end
+    case primary_scoring[:performance_state]
+    when :underperforming
+      { state_label: "Underperforming at #{current_code}",
+        list_label: "Gap to #{current_code}",
+        items: sorted.last(3).reverse,
+        border: "border-red-300 dark:border-red-700",
+        accent: "text-red-700 dark:text-red-300",
+        caps: caps_by_id }
+    when :progressing
+      { state_label: "Progressing toward #{current_code}",
+        list_label: "Gap to #{current_code}",
+        items: sorted.last(3).reverse,
+        border: "border-amber-300 dark:border-amber-700",
+        accent: "text-amber-700 dark:text-amber-300",
+        caps: caps_by_id }
+    when :progressing_to_next
+      blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
+      blocked_items = blocked.first(3).map { |sid| [ sid, contributions[sid] || 0.0 ] }
+      items = blocked_items.any? ? blocked_items : sorted.last(3).reverse
+      { state_label: "Progressing toward #{next_code}",
+        list_label: "Gap to #{next_code}",
+        items: items,
+        border: "border-blue-300 dark:border-blue-700",
+        accent: "text-blue-700 dark:text-blue-300",
+        caps: caps_by_id }
+    when :eligible
+      { state_label: "Eligible for promotion to #{next_code}",
+        list_label: "Top contributors",
+        items: sorted.first(3),
+        border: "border-green-300 dark:border-green-700",
+        accent: "text-green-700 dark:text-green-300",
+        caps: caps_by_id }
+    when :mastering
+      { state_label: "Mastering #{current_code}",
+        list_label: "Top contributors",
+        items: sorted.first(3),
+        border: "border-purple-300 dark:border-purple-700",
+        accent: "text-purple-700 dark:text-purple-300",
+        caps: caps_by_id }
+    else # :performing or unknown
+      { state_label: "Performing at #{current_code}",
+        list_label: "Gap to #{current_code}",
+        items: sorted.last(3).reverse.select { |_, v| v < 0 },
+        border: "border-gray-200 dark:border-gray-700",
+        accent: "text-gray-600 dark:text-gray-400",
+        caps: caps_by_id }
     end
   end
 
-  # When below current expectations, the lift target is the current
-  # level (close the gap first). When meeting/mastering, the lift
-  # target is the next level (growth focus).
-  def lift_label
-    target_ordinal = primary_scoring[:meeting_expectations] ? @person_level + 1 : @person_level
-    target_code = @merged_levels.find { |l| l[:ordinal] == target_ordinal }&.dig(:level_code)
-    target_code ? "! Lift toward #{target_code}" : "! Areas to grow"
-  end
-
-  def insight_column(title, items, caps_by_name, border_class)
-    div(class: "p-3 rounded-lg border #{border_class} bg-gray-50/50 dark:bg-gray-800/30") do
-      h3(class: "text-xs font-semibold text-gray-600 dark:text-gray-400 " \
-                "uppercase tracking-wide mb-2") { title }
-      items.each do |stable_id, value|
-        cap_data = caps_by_name[stable_id]
+  def state_panel(config)
+    div(class: "p-3 rounded-lg border #{config[:border]} bg-gray-50/50 dark:bg-gray-800/30") do
+      div(class: "flex items-baseline justify-between gap-3 mb-2") do
+        span(class: "text-xs font-semibold #{config[:accent]} uppercase tracking-wide truncate") do
+          config[:state_label]
+        end
+        span(class: "text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider shrink-0") do
+          config[:list_label]
+        end
+      end
+      config[:items].each do |stable_id, value|
+        cap_data = config[:caps][stable_id]
         next unless cap_data
 
-        pct = [ (value * 100).round(0), 0 ].max
         div(class: "flex items-center justify-between py-0.5") do
           span(class: "text-sm text-gray-700 dark:text-gray-300 truncate") do
             cap_data[:capability].name
           end
-          span(class: "text-sm font-mono font-medium text-gray-600 dark:text-gray-400 shrink-0 ml-2") do
-            "#{pct}%"
+          span(class: "text-sm font-bold tabular-nums shrink-0 ml-2 #{contribution_color(value)}") do
+            sprintf("%+.1f", value.to_f)
           end
         end
       end
+    end
+  end
+
+  def level_code(ordinal)
+    @merged_levels.find { |l| l[:ordinal] == ordinal }&.dig(:level_code) || "L#{ordinal}"
+  end
+
+  def contribution_color(value)
+    if value >= 0.5
+      "text-green-600 dark:text-green-400"
+    elsif value > -0.5
+      "text-gray-500 dark:text-gray-400"
+    elsif value > -1.5
+      "text-amber-600 dark:text-amber-400"
+    else
+      "text-red-600 dark:text-red-400"
     end
   end
 

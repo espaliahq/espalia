@@ -63,6 +63,7 @@ class PersonDevelopment::Scoring
   FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
   DEFAULT_MASTERY_THRESHOLD              = 1.15
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
+  DEFAULT_UNDERPERFORMING_THRESHOLD      = 0.80
   DEFAULT_OVERPERFORMANCE_CAP        = 1
   DEFAULT_DEFICIT_THRESHOLD          = 1.0
 
@@ -98,6 +99,7 @@ class PersonDevelopment::Scoring
     @perspective = perspective
     @mastery_threshold              = thresholds[:mastery_threshold]              || DEFAULT_MASTERY_THRESHOLD
     @meeting_expectation_threshold  = thresholds[:meeting_expectation_threshold]  || DEFAULT_MEETING_EXPECTATION_THRESHOLD
+    @underperforming_threshold      = thresholds[:underperforming_threshold]      || DEFAULT_UNDERPERFORMING_THRESHOLD
     @default_overperformance_cap  = thresholds[:overperformance_cap]    || DEFAULT_OVERPERFORMANCE_CAP
     @default_deficit_threshold    = thresholds[:deficit_threshold]      || DEFAULT_DEFICIT_THRESHOLD
   end
@@ -134,6 +136,29 @@ class PersonDevelopment::Scoring
   # @return [Boolean]
   def mastering?
     performance_ratio >= @mastery_threshold && capability_statuses.values.none? { |s| s == :blocked }
+  end
+
+  # Unified performance state for the assessment narrative. Maps the
+  # person's current position into the five-state vocabulary:
+  #
+  #   :underperforming     — significantly below current-level expectations
+  #   :progressing         — close to but not yet meeting current level
+  #                          (typical for someone newly assigned to the level)
+  #   :performing          — at or above meeting threshold for current level
+  #   :mastering           — significantly exceeding current-level expectations
+  #   :eligible            — meets next-level expectations (promotion ready)
+  #   :progressing_to_next — performing at current AND showing meaningful
+  #                          progress at next level (above underperforming
+  #                          threshold but not yet eligible)
+  #
+  # Precedence: underperforming → progressing → eligible → mastering →
+  # progressing_to_next → performing. Blocked capabilities downgrade
+  # otherwise-passing states to :progressing — a blocker prevents
+  # "performing" the same way it prevents `meeting_expectations?`.
+  #
+  # @return [Symbol]
+  def performance_state
+    @performance_state ||= compute_performance_state
   end
 
   # Highest level_ordinal where effective_frequency == "consistent" (1.0)
@@ -352,6 +377,26 @@ class PersonDevelopment::Scoring
         end
 
       [ stable_id, status ]
+    end
+  end
+
+  # See {#performance_state} for the state vocabulary + precedence.
+  def compute_performance_state
+    ratio       = performance_ratio
+    has_blocked = capability_statuses.values.any? { |s| s == :blocked }
+    max_level   = @all_level_ordinals.last
+    has_next    = @person_level < max_level
+
+    return :underperforming if ratio < @underperforming_threshold
+    return :progressing     if ratio < @meeting_expectation_threshold || has_blocked
+    return :eligible        if has_next && promotion_readiness[:eligible]
+    return :mastering       if ratio >= @mastery_threshold
+
+    if has_next &&
+       performance_ratio_at_level(@person_level + 1) >= @underperforming_threshold
+      :progressing_to_next
+    else
+      :performing
     end
   end
 
