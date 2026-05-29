@@ -97,13 +97,16 @@ class Views::Assessments::CapabilityCard < Views::Base
   private
 
   def card_header
-    div(class: "flex items-start justify-between gap-3 mb-3") do
-      div(class: "min-w-0 flex-1") do
-        eyebrow
-        capability_name
-        capability_description if @capability.description.present?
-      end
-      card_stats
+    # The previous header carried a top-right "Add evidence" affordance
+    # that duplicated the +/header affordance inside the expansion
+    # panel (per-level evidence list), took a chunky border on mobile,
+    # and pushed the contribution badge off into a separate column.
+    # Removed — `contribution_badge` already right-aligns itself via
+    # ml-auto inside capability_name.
+    div(class: "min-w-0 mb-3") do
+      eyebrow
+      capability_name
+      capability_description if @capability.description.present?
     end
   end
 
@@ -135,12 +138,6 @@ class Views::Assessments::CapabilityCard < Views::Base
     end
   end
 
-  def card_stats
-    div(class: "flex items-center gap-3 shrink-0") do
-      evidence_button if @can_create_evidence
-    end
-  end
-
   # Signed delta vs the meeting-expectations baseline at the person's
   # current level (from `PersonDevelopment::Scoring#raw_contribution`).
   # Positive = over-performing for their level, negative = under,
@@ -162,21 +159,6 @@ class Views::Assessments::CapabilityCard < Views::Base
               "text-red-600 dark:text-red-400"
     end
     span(class: "text-base font-bold tabular-nums #{color} ml-auto") { label }
-  end
-
-  def evidence_button
-    button(
-      type: "button",
-      class: "flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 " \
-             "hover:text-gray-700 dark:hover:text-gray-300 " \
-             "border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 " \
-             "cursor-pointer transition-colors",
-      data: { action: "evidence-form#open",
-              evidence_form_capability_stable_id_param: @capability.stable_id,
-              evidence_form_level_ordinal_param: @person_level.to_s }
-    ) do
-      plain "≡ Add evidence"
-    end
   end
 
   def blocked_badge
