@@ -37,6 +37,13 @@ export default class extends BaseController {
     this._resizeObserver = new ResizeObserver(() => this.#publishHeaderHeight())
     this._resizeObserver.observe(this.element)
 
+    // The outer flips between sticky (md+) and static (mobile). When
+    // sticky changes, we need to re-publish — viewport resize is the
+    // main trigger but a single media-query listener is more direct.
+    this._mql = window.matchMedia("(min-width: 768px)")
+    this._onMqlChange = () => this.#publishHeaderHeight()
+    this._mql.addEventListener("change", this._onMqlChange)
+
     this._onScroll = () => this.#scheduleActiveCategoryUpdate()
     window.addEventListener("scroll", this._onScroll, { passive: true })
 
@@ -53,6 +60,11 @@ export default class extends BaseController {
     if (this._onScroll) {
       window.removeEventListener("scroll", this._onScroll)
       this._onScroll = null
+    }
+    if (this._mql && this._onMqlChange) {
+      this._mql.removeEventListener("change", this._onMqlChange)
+      this._mql = null
+      this._onMqlChange = null
     }
     if (this._rafId) {
       cancelAnimationFrame(this._rafId)
@@ -72,14 +84,24 @@ export default class extends BaseController {
     // visible flicker (page jumped to the first category before
     // scrolling to the target). A post-animation settle pass corrects
     // any drift if sticky-hero compacts mid-scroll.
+    //
+    // `measurementAnchor` is whichever element is currently doing the
+    // pinning — outer on desktop, chip-bar wrapper on mobile — so the
+    // calculation lands the section just below the visible chrome in
+    // either layout.
+    // Scroll target subtracts the sticky chrome height so the section
+    // header (`top: var(--sticky-header-h)`) lands flush against the
+    // bottom of the chrome on desktop. On mobile the value is 0 and
+    // the section header simply lands at the top of the viewport.
+    const chromeH = () => this.#headerIsSticky() ? Math.ceil(this.element.getBoundingClientRect().height) : 0
     const target = () => Math.max(
       0,
-      section.getBoundingClientRect().top + window.scrollY - this.element.offsetHeight - 8
+      section.getBoundingClientRect().top + window.scrollY - chromeH() - 8
     )
     window.scrollTo({ top: target(), behavior: "smooth" })
     setTimeout(() => {
       const sectionTop = section.getBoundingClientRect().top
-      const desired = this.element.offsetHeight + 8
+      const desired = chromeH() + 8
       if (Math.abs(sectionTop - desired) > 3) {
         window.scrollTo({ top: target(), behavior: "instant" })
       }
@@ -141,9 +163,20 @@ export default class extends BaseController {
   // `getBoundingClientRect().height` gives sub-pixel precision; we
   // round up to guarantee the section header always sits AT OR BELOW
   // the unified header's bottom edge, never above it.
+  // Publishes how much chrome the section headers / scroll targets need
+  // to clear at the top of the viewport. On md+ the header is sticky
+  // and we publish its actual height; on mobile nothing is sticky and
+  // we publish 0 so the section header (`top: var(--sticky-header-h)`)
+  // pins at the top of its own range. Sub-pixel rounded UP so the
+  // section header never lands a hair above the sticky chrome on
+  // desktop (would reveal a strip of scrolling content).
   #publishHeaderHeight() {
-    const h = Math.ceil(this.element.getBoundingClientRect().height)
+    const h = this.#headerIsSticky() ? Math.ceil(this.element.getBoundingClientRect().height) : 0
     document.documentElement.style.setProperty("--sticky-header-h", `${h}px`)
+  }
+
+  #headerIsSticky() {
+    return window.getComputedStyle(this.element).position === "sticky"
   }
 
   // On every scroll, find the section whose top has scrolled just past
@@ -167,7 +200,13 @@ export default class extends BaseController {
     const sections = document.querySelectorAll("section[data-category-id]")
     if (sections.length === 0) return
 
-    const threshold = this.element.getBoundingClientRect().bottom + 16
+    // Threshold for picking the "active" section. On desktop where the
+    // header is sticky we want it just below the chrome bottom. On
+    // mobile (nothing sticky) we use a fixed viewport-top margin so
+    // active-marking still updates while the user scrolls through.
+    const threshold = this.#headerIsSticky()
+      ? this.element.getBoundingClientRect().bottom + 16
+      : 120
     let active = sections[0]
     sections.forEach(section => {
       if (section.getBoundingClientRect().top <= threshold) active = section

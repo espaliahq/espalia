@@ -110,8 +110,10 @@ class Views::Assessments::ShowView < Views::Base
   end
 
   def sticky_header
+    # See manager_show_view#sticky_header for the rationale on the
+    # md+-only outer sticky (mobile keeps everything in flow).
     div(id: "assessment-sticky-header",
-        class: "sticky top-0 z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2",
+        class: "md:sticky md:top-0 md:z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2",
         data: { controller: "category-nav" }) do
       assessment_header
       hero_frame

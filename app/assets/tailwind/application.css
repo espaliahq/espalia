@@ -45,11 +45,21 @@
 .hero-collapsible {
   display: grid;
   grid-template-rows: 1fr;
+  /*
+   * `minmax(0, 1fr)` rather than the implicit `auto` column. Without
+   * it the grid item sizes to its content's intrinsic width — on a
+   * narrow viewport that means the state panel can grow past the
+   * card's visible right edge, taking truncated capability names and
+   * their right-aligned deltas with it. The min-0 mirrors what
+   * `min-height: 0` does for the row collapse.
+   */
+  grid-template-columns: minmax(0, 1fr);
   opacity: 1;
   overflow: hidden;
 }
 .hero-collapsible > * {
   min-height: 0;
+  min-width: 0;
 }
 
 @supports (animation-timeline: scroll()) {

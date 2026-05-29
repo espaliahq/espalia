@@ -222,7 +222,11 @@ class Views::Assessments::HeroSummary < Views::Base
   def state_panel(config)
     div(class: "p-3 rounded-lg border #{config[:border]} bg-gray-50/50 dark:bg-gray-800/30") do
       div(class: "flex items-baseline justify-between gap-3 mb-2") do
-        span(class: "text-xs font-semibold #{config[:accent]} uppercase tracking-wide truncate") do
+        # `min-w-0` is what makes `truncate` actually clip inside a flex
+        # row — without it the span grows to fit its content and pushes
+        # the sibling delta past the panel's right edge (visible as
+        # the deltas being cut off on mobile).
+        span(class: "min-w-0 truncate text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
           config[:state_label]
         end
         span(class: "text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider shrink-0") do
@@ -233,11 +237,11 @@ class Views::Assessments::HeroSummary < Views::Base
         cap_data = config[:caps][stable_id]
         next unless cap_data
 
-        div(class: "flex items-center justify-between py-0.5") do
-          span(class: "text-sm text-gray-700 dark:text-gray-300 truncate") do
+        div(class: "flex items-center justify-between gap-2 py-0.5") do
+          span(class: "min-w-0 truncate text-sm text-gray-700 dark:text-gray-300") do
             cap_data[:capability].name
           end
-          span(class: "text-sm font-bold tabular-nums shrink-0 ml-2 #{contribution_color(value)}") do
+          span(class: "text-sm font-bold tabular-nums shrink-0 #{contribution_color(value)}") do
             sprintf("%+.1f", value.to_f)
           end
         end

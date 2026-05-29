@@ -96,8 +96,12 @@ class Views::Assessments::ManagerShowView < Views::Base
   end
 
   def sticky_header
+    # On md+ the whole header is sticky as one block. On mobile the
+    # outer is left in flow — the hero alone would push the sticky
+    # chrome past 80% of the viewport, leaving almost no room to read
+    # the cards. Mobile users scroll to switch categories.
     div(id: "assessment-sticky-header",
-        class: "sticky top-0 z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2",
+        class: "md:sticky md:top-0 md:z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2",
         data: { controller: "category-nav" }) do
       assessment_header
       hero_frame
