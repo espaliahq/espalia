@@ -178,9 +178,19 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "document.querySelector('a[data-controller~=\"continue-assessing\"]').click()"
       )
 
-      # The matrix turbo frame should reload with the capability + level
-      # focus params in its src.
-      sleep 0.5
+      # Poll the matrix turbo-frame's src until it carries the focus
+      # params, then assert — fixed sleeps are unreliable on starved CI.
+      Timeout.timeout(Capybara.default_max_wait_time) do
+        loop do
+          src = page.evaluate_script(
+            "document.querySelector('turbo-frame#assessment-matrix').getAttribute('src')"
+          ).to_s
+          break if src.match?(/capability=#{@cap1_stable}/) && src.match?(/level_ordinal=2/)
+
+          sleep 0.05
+        end
+      end
+
       frame_src = page.evaluate_script(
         "document.querySelector('turbo-frame#assessment-matrix').getAttribute('src')"
       )
