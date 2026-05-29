@@ -26,9 +26,11 @@ class Views::Assessments::LevelChip < Views::Base
   end
 
   def view_template
-    div(
+    button(
       id: "cell-#{@capability_stable_id}-#{@ordinal}",
+      type: "button",
       class: chip_classes,
+      aria: { label: aria_label, pressed: @focused.to_s },
       data: {
         level_ordinal: @ordinal,
         action: "click->matrix#focusChip",
@@ -45,9 +47,13 @@ class Views::Assessments::LevelChip < Views::Base
   private
 
   def chip_classes
-    base = "relative flex flex-col items-center justify-center " \
+    # `button` reset: kill the UA default background/font/text-align so
+    # the chip renders identically to its prior <div> form.
+    base = "appearance-none bg-transparent text-inherit " \
+           "relative flex flex-col items-center justify-center " \
            "h-12 flex-1 min-w-[60px] rounded-lg cursor-pointer " \
-           "transition-all border-2 "
+           "transition-all border-2 " \
+           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 "
     if @focused
       base + "#{chip_bg} #{focus_border} shadow-sm"
     else
@@ -57,6 +63,26 @@ class Views::Assessments::LevelChip < Views::Base
 
   def focus_border
     "border-gray-900 dark:border-white"
+  end
+
+  # Screen-reader label spelling out which capability + level the chip
+  # rates, plus the current frequency value (or "unrated"). Without this
+  # an SR user just hears "Button — E3" with no context.
+  def aria_label
+    freq = primary_frequency
+    base = at_person_level? ? "Focus #{@level_code} (your level)" : "Focus #{@level_code}"
+    rated = freq.present? ? humanise_frequency(freq) : "unrated"
+    "#{base}, rated #{rated}"
+  end
+
+  def humanise_frequency(freq)
+    case freq
+    when "consistent" then "consistently"
+    when "occasional" then "most times"
+    when "some"       then "some times"
+    when "none"       then "none"
+    else                   freq.to_s
+    end
   end
 
   # Chip background:
