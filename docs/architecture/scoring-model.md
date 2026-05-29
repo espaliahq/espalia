@@ -12,6 +12,7 @@ Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read m
 FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
 DEFAULT_MASTERY_THRESHOLD = 1.15
 DEFAULT_MEETING_EXPECTATION_THRESHOLD = 0.95
+DEFAULT_UNDERPERFORMING_THRESHOLD = 0.80
 DEFAULT_OVERPERFORMANCE_CAP = 1
 DEFAULT_DEFICIT_THRESHOLD = 1.0
 
@@ -99,6 +100,44 @@ agreed_level = max(level_ordinal where effective_frequency == "consistent")
 
 ---
 
+## Performance State Machine
+
+`Scoring#performance_state` returns a single symbol that drives the hero summary's narrative panel. The vocabulary is chosen so the UI always points at the **next milestone** — never one already cleared.
+
+```ruby
+:underperforming  performance_ratio < underperforming_threshold (default 0.80)
+                  → next milestone is the current-level meeting bar
+:progressing      underperforming_threshold ≤ ratio < meeting_threshold
+                  OR any capability blocked
+                  → next milestone is still the current-level meeting bar;
+                    a blocked capability also lands here regardless of ratio
+:eligible         has_next_level AND promotion_readiness[:eligible]
+                  → past the last gate, celebrate
+:mastering        ratio ≥ mastery_threshold AND NOT eligible
+                  → next milestone is promotion to E(n+1)
+:performing       fallback (meeting_threshold ≤ ratio < mastery_threshold)
+                  → next milestone is mastering the current level
+```
+
+Precedence: **underperforming → progressing → eligible → mastering → performing**. Eligible-precedence-over-mastering means promotion-readiness is the louder signal once both fire. Blocked-precedence-over-performing means a single blocker downgrades an otherwise-passing person to `:progressing` — same rule as `meeting_expectations?`.
+
+The state machine intentionally has no separate "progressing toward next level" state. At 110% performance ratio, a previous design fired `:progressing_to_next` because next-level ratio was above the underperforming floor — but that's misleading UX. The person hasn't mastered current yet; pointing at promotion skips a step. The simpler model: `:performing` owns 0.95–1.15, framed as "Gap to mastering". See [assessments.md](../guidelines/assessments.md#middle-band--state-driven) for the hero panel that consumes this.
+
+### `has_next_level?` and `next_level_contribution(binding)`
+
+Two public helpers on Scoring exist for the hero's gap-to panels:
+
+```ruby
+has_next_level?              → person_level < all_level_ordinals.last
+next_level_contribution(b)   → raw_contribution_at_level(b, person_level + 1)
+```
+
+The matrix data builder uses these to expose `capability_contributions_at_next_level` on each scoring perspective when there IS a next level. The hero's `:performing` panel ("Gap to mastering") and `:mastering` panel ("Gap to promotion") both consume this dict — they sort ascending and surface the lowest-contributing capabilities as the actual gap.
+
+`:performing` switched to this data source because the previous current-level-contribution version showed `+0.0` for capabilities meeting expectations exactly — those aren't gaps, they're meeting. The real gap to mastering lives at L+1: mastery requires overperformance, which means consistent at L+1.
+
+---
+
 ## Category Pass/Fail
 
 ```
@@ -132,13 +171,17 @@ Framework-level scoring thresholds are configurable via the settings page at `GE
 
 `Frameworks::SettingsController#update` → `CommandHandler#configure_scoring_thresholds` → `ScoringThresholdsConfigured` event → `PublishedState` projection → `framework_states` table.
 
-Nil values in nullable columns (`mastery_threshold`, `meeting_expectation_threshold`) mean "use system default". NOT NULL columns (`overperformance_cap`, `deficit_threshold`) are reset to their constant defaults when reverted.
+Nil values in nullable columns (`mastery_threshold`, `meeting_expectation_threshold`, `underperforming_threshold`) mean "use system default". NOT NULL columns (`overperformance_cap`, `deficit_threshold`) are reset to their constant defaults when reverted.
+
+The `underperforming_threshold` is a 2026-05 addition powering the `:underperforming` / `:progressing` boundary in the performance state machine. Past `ScoringThresholdsConfigured` events don't carry the field, so the projection's writes are identical to before — the new column stays NULL on legacy frameworks and `Scoring` falls back to `DEFAULT_UNDERPERFORMING_THRESHOLD` (0.80). No projection rebuild needed.
 
 ---
 
 ## UI Implications
 
-### Capability Matrix Badges
+### Framework explorer — capability matrix badges
+
+These apply to the framework explorer's read-only matrix view. The assessment view uses capability cards with a level strip; see [assessments.md](../guidelines/assessments.md#capability-cards) for the card / chip equivalents.
 
 | Signal | When | Display |
 |--------|------|---------|
@@ -148,27 +191,29 @@ Nil values in nullable columns (`mastery_threshold`, `meeting_expectation_thresh
 | Category threshold | `deficit_threshold == 0` on category | Lock icon on category section header |
 | Category threshold | `deficit_threshold > 0` on category | `"± N pts"` label on section header |
 | Category threshold | `nil` on category | No indicator (inherits framework default) |
-| Frequency selector | Self/manager/align input | Three toggle buttons: `some` · `occasional` · `consistent`. Clicking the selected button clears the rating (untoggle). |
-| Agreed level | Derived | Show as `"Agreed: L3"` computed from aligned assessments; no direct input |
+| Agreed level | Derived | Shown as `"Agreed: L3"` computed from aligned assessments; no direct input |
 
-### Assessment Cell Heatmap (background colour fills)
+### Rating input — four-button FrequencySelector
 
-Cells get background tints based on their rating relative to expectations at that level. Explicit ratings are more saturated than defaults.
+The assessment view uses a four-button `FrequencySelector`: `None` / `Some` / `Most` / `Consistently`. Clicking the currently-selected button clears the rating (untoggle). The selector is replaced with a read-only `FrequencyBar` when `frozen` (cycle in `aligning` / `aligned`) or `alignment_locked` (cycle `aligned`).
 
-| Cell state | At/below person level | Above person level |
-|------------|----------------------|-------------------|
-| Unrated (default consistent) | Muted green tint | Neutral gray |
-| Rated "consistent" | Solid green | Solid green (exceeding) |
-| Rated "occasional" | Amber | Blue (stretch attempt) |
-| Rated "some" | Red | Blue (stretch attempt) |
+### LevelChip heatmap
 
-### Scoring Panel — Three-tier Performance Signal
+`LevelChip` background tints are keyed by frequency × level position. See [assessments.md](../guidelines/assessments.md#level-chip-coloring) for the full table — same color rules the matrix cells used in the previous design.
 
-| Tier | Condition | Display |
-|------|-----------|---------|
-| Below expectations | `performance_ratio < meeting_expectation_threshold` (default 0.95) OR any :blocked capabilities | Red warning — performance concern |
-| Meeting expectations | `performance_ratio >= meeting_expectation_threshold` AND no :blocked capabilities | Green — at or above current level baseline |
-| Mastering | `performance_ratio >= mastery_threshold` (default 1.15) AND no :blocked capabilities | Purple — significantly exceeding expectations |
+### Hero summary — Five-state performance panel
+
+The legacy three-tier sidebar is replaced by `HeroSummary` in the unified sticky header. Its middle band is a single state-driven panel keyed off `performance_state`. Each state picks the tone, headline, and which 3 capabilities to surface as evidence — see [assessments.md](../guidelines/assessments.md#middle-band--state-driven) for the full UI table.
+
+| State | Tone | Headline | Capability list framing |
+|---|---|---|---|
+| `:underperforming` | red | "Underperforming at E(n)" | 3 lowest current-level contributions |
+| `:progressing` | amber | "Progressing toward E(n)" | 3 lowest current-level contributions |
+| `:performing` | blue | "Performing at E(n)" | 3 lowest **next-level** contributions (gap to mastering) |
+| `:mastering` | purple | "Mastering E(n)" | blocked-at-next-level OR 3 lowest next-level contributions (gap to promotion) |
+| `:eligible` | green | "Eligible for promotion to E(n+1)" | 3 highest current-level contributions |
+
+Capability cards render the signed contribution delta (`+0.5` / `-0.5` / `+0.0`) directly — see the assessment guideline for color tiers.
 
 ---
 
@@ -191,34 +236,25 @@ All other scoring logic (contribution, deficit, blocking, verdicts) is identical
 
 ### Assessment Context and Primary/Secondary Display
 
-The UI has three assessment contexts (`:self`, `:manager`, `:alignment`) that determine which perspective is primary. This mirrors the `AssessmentCell` pattern where `context:` determines which frequency is interactive.
+The UI has three assessment contexts (`:self`, `:manager`, `:alignment`) that determine which perspective is primary.
 
-| Context | Primary scoring | Secondary bars | Context label |
-|---------|----------------|----------------|---------------|
-| `:self` | `self_scoring` | Mgr, Agreed (if present) | "Self Assessment" |
-| `:manager` | `manager_scoring` | Self, Agreed (if present) | "Manager Assessment" |
-| `:alignment` | `aligned_scoring` | Self, Mgr | "Agreed Assessment" |
+| Context | Primary scoring | Subject pronoun in hero copy |
+|---|---|---|
+| `:self` | `self_scoring` | "You're …" |
+| `:manager` | `manager_scoring` | "Alex is …" (first name of assessee) |
+| `:alignment` | `aligned_scoring` | "Alex is …" |
 
-The primary scoring drives all panel sections: performance %, status tier, category results, and promotion readiness. Secondary perspectives appear as compact bars (matching `FrequencyBar` visual language) and divergence annotations.
+`HeroSummary` uses the primary scoring's `performance_state`, `performance_ratio`, `promotion_readiness`, and `capability_contributions` to render the verdict + middle band + bottom-line. Secondary perspectives surface as small divergence dots on `LevelChip`s — see [assessments.md — Level chip coloring](../guidelines/assessments.md#level-chip-coloring). The full per-perspective `FrequencyBar`s live inside `CapabilityCardExpansion`, where the user has space for the comparison.
 
-### Divergence Display
+In `:self` context the data layer scrubs manager + aligned fields entirely before any view sees them; see [assessments.md — Self-assessment privacy](../guidelines/assessments.md#self-assessment-privacy).
 
-Divergence between perspectives is surfaced at every level of the scoring panel:
+### Divergence — chip dots + expansion bars
 
-| Section | Divergence indicator | Detail shown |
-|---------|---------------------|--------------|
-| Performance % | Compact bar per secondary perspective + amber dot when ≥5% apart | Exact percentage |
-| Status tier | Amber dot + text annotation below primary badge | Alternate tier label ("Mgr: Meeting expectations") |
-| Category results | Amber dot on row + inline text below | Alternate pass/fail ("Self: Below") |
-| Promotion | Amber dot + text annotation | Alternate eligibility ("Self: Eligible") |
+Divergence between perspectives appears at two levels:
 
-**Design rationale:** Divergence is shown explicitly (with alternate result text, not just a dot) because disagreements are conversation opportunities. In the alignment context, both original positions (self + manager) are shown to make the starting points visible alongside the agreed result.
+| Surface | Indicator | Detail shown |
+|---|---|---|
+| `LevelChip` (in the level strip) | 2px amber dot when primary ≠ any secondary | None — dot is the only signal at strip level |
+| `CapabilityCardExpansion` | One `FrequencyBar` per secondary perspective | Label (`Self` / `Mgr` / `Agreed`) + colored strip + value |
 
-### Visual Language Consistency
-
-The scoring panel's secondary display mirrors the cell-level `FrequencyBar` pattern:
-- Compact horizontal bar with label, colored strip, and value
-- Amber divergence dot (1.5px) when perspectives disagree
-- Same color tiers (purple/green/amber/red) across cells and panel
-
-This ensures a user scanning from the matrix cells to the scoring sidebar sees a consistent visual language at every granularity.
+**Design rationale:** Divergence is shown by an explicit secondary value (not just an "X ≠ Y" indicator) because disagreements are conversation opportunities. In the alignment context, both original positions (self + manager) are shown alongside the aligned value so the starting points stay visible.
