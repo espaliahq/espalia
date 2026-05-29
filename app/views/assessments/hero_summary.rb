@@ -102,44 +102,52 @@ class Views::Assessments::HeroSummary < Views::Base
   def header_row
     ratio = primary_scoring[:performance_ratio] || 0.0
     pct = (ratio * 100).round(0)
+    target = next_unrated_capability
 
     div(class: "flex items-start justify-between gap-4") do
       div(class: "min-w-0 flex-1") do
-        h2(class: "text-xl font-bold text-gray-900 dark:text-white") do
-          verdict_headline
+        # Headline + actions on one line — "Continue" used to sit on a
+        # third row, and the promotion pill on a fourth. Inline-baseline
+        # collapses everything into a single visual rhythm and frees ~50
+        # vertical pixels in the always-visible band.
+        div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
+          h2(class: "text-xl font-bold text-gray-900 dark:text-white") { verdict_headline }
+          promotion_pill
+          continue_assessing_cta(target) if target
         end
-        p(class: "text-sm text-gray-500 dark:text-gray-400 mt-1") do
-          verdict_gloss
-        end
-        secondary_verdicts
-        bottom_line
+        # Gloss + divergent secondary verdicts share one line as long
+        # as they fit; flex-wrap drops the secondaries below on narrow
+        # viewports rather than the previous fixed two-line stack.
+        gloss_and_secondaries
       end
       div(class: "text-right shrink-0") do
+        # "of expected" caption + progress bar are redundant with the
+        # explicit percent — the bar duplicates the number it sits next
+        # to. Dropping both shaves ~30 px of vertical chrome.
         span(class: "text-4xl font-bold leading-none #{performance_color(ratio)}") { "#{pct}%" }
-        div(class: "text-xs text-gray-400 dark:text-gray-500 mt-1") { "of expected" }
         secondary_percents
-        progress_bar(ratio)
       end
     end
   end
 
-  def bottom_line
-    target = next_unrated_capability
-    return unless target || promotion_readiness_visible?
-
-    div(class: "mt-3 flex flex-wrap items-center gap-2") do
-      promotion_pill
-      continue_assessing_cta(target) if target
+  # Compact one-row gloss: "Baseline coverage at 107% of E3 expectations. · Self: Below expectations"
+  # On narrow viewports the secondary chunk wraps to a second line.
+  def gloss_and_secondaries
+    secondaries = diverging_secondary_verdicts
+    p(class: "text-sm text-gray-500 dark:text-gray-400 mt-1") do
+      plain verdict_gloss
+      if secondaries.any?
+        span(class: "ml-2 text-xs") do
+          plain " · "
+          plain(secondaries.map { |label, s| "#{label}: #{short_verdict(s)}" }.join(" · "))
+        end
+      end
     end
   end
 
-  def progress_bar(ratio)
-    pct = [ (ratio * 100).round(0), 150 ].min
-    width = (pct.to_f / 1.5).round(0)
-    div(class: "w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2") do
-      div(class: "#{performance_bar_color(ratio)} h-1.5 rounded-full",
-          style: "width: #{[ width, 100 ].min}%") { }
-    end
+  def diverging_secondary_verdicts
+    primary = short_verdict(primary_scoring)
+    secondary_perspectives.reject { |_, s| short_verdict(s) == primary }
   end
 
   # Builds the single state-driven panel for the middle band. Picks the
@@ -289,13 +297,6 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  def promotion_readiness_visible?
-    readiness = primary_scoring[:promotion_readiness]
-    return false unless readiness
-
-    readiness[:eligible] || (readiness[:blocked_at_next_level] || []).any?
-  end
-
   def promotion_pill
     readiness = primary_scoring[:promotion_readiness]
     return unless readiness
@@ -398,18 +399,6 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  # Only renders when a secondary verdict actually diverges from the
-  # primary. Otherwise it's redundant noise next to the headline.
-  def secondary_verdicts
-    primary = short_verdict(primary_scoring)
-    diverging = secondary_perspectives.reject { |_, s| short_verdict(s) == primary }
-    return if diverging.empty?
-
-    p(class: "text-xs text-gray-500 dark:text-gray-400 mt-1") do
-      plain(diverging.map { |label, s| "#{label}: #{short_verdict(s)}" }.join(" · "))
-    end
-  end
-
   def format_pct(scoring)
     "#{((scoring[:performance_ratio] || 0.0) * 100).round(0)}%"
   end
@@ -442,18 +431,6 @@ class Views::Assessments::HeroSummary < Views::Base
       "text-amber-600 dark:text-amber-400"
     else
       "text-red-600 dark:text-red-400"
-    end
-  end
-
-  def performance_bar_color(ratio)
-    if ratio >= @mastery_threshold
-      "bg-purple-500"
-    elsif ratio >= @meeting_expectation_threshold
-      "bg-green-500"
-    elsif ratio >= 0.8
-      "bg-amber-500"
-    else
-      "bg-red-500"
     end
   end
 end
