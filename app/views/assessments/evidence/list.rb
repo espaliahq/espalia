@@ -27,7 +27,7 @@ class Views::Assessments::Evidence::List < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-2 pt-2 border-t border-gray-200 dark:border-gray-700"
+      class: "mt-4 pt-3 border-t border-gray-200 dark:border-gray-700"
     ) do
       header
       ul(class: "space-y-0.5") do
@@ -67,7 +67,7 @@ class Views::Assessments::Evidence::List < Views::Base
   def add_button
     button(
       type: "button",
-      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 " \
+      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
              "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
              "dark:hover:text-gray-200 transition-colors",
       aria: { label: "Add evidence" },
@@ -84,7 +84,7 @@ class Views::Assessments::Evidence::List < Views::Base
 
   def header_label_classes
     "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-      "text-gray-500 dark:text-gray-400 mb-1"
+      "text-gray-500 dark:text-gray-400 mb-2"
   end
 
   def header_label_content
