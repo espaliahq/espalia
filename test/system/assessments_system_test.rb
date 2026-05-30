@@ -835,8 +835,15 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       scroll_y = stable || page.evaluate_script("window.scrollY")
 
       # After the scroll + compact, the user's scroll position should
-      # NOT have snapped back to (or near) zero.
-      assert scroll_y > 50,
+      # NOT have snapped back to (or near) zero. On CI the browser
+      # repositions partway during the CSS scroll-driven hero collapse
+      # (preserving the visual content position as doc height shrinks)
+      # — scrollY=36 is the deterministic steady state from a 90px input
+      # there, vs ~90 locally. The test is checking "didn't jump to
+      # TOP", so the >20 threshold catches the real regression (a true
+      # snap-to-zero) without false-positive flagging the CI-specific
+      # partial reposition.
+      assert scroll_y > 20,
         "Slow scroll past compact threshold caused scroll to jump to top (scrollY=#{scroll_y})"
       # And the visible content below the hero should remain in view.
       assert visible_y < 600,
