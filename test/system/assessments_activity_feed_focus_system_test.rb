@@ -248,6 +248,32 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "cell focus downgrades to capability focus once the user scrolls past the focused card" do
+    should "preserve cell focus while the card is still the area winner, and hand off when another card overtakes it" do
+      page.driver.browser.manage.window.resize_to(900, 600)
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # Click cap1's L1 chip — sets cell focus on (cap1, L1).
+      page.execute_script(<<~JS)
+        const matrix = document.querySelector("[data-controller~='matrix']");
+        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
+        const chip = document.getElementById("cell-#{@cap1_stable}-1");
+        ctrl?.focusChip({ currentTarget: chip, target: chip, stopPropagation: () => {} });
+      JS
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='true']"
+
+      # Scroll past cap1 so cap2 is now the area winner. Cell focus on
+      # cap1 should downgrade to capability focus on cap2 — the sidebar
+      # re-narrows to whatever the user is now reading.
+      scroll_card_into_band(@cap2_stable)
+
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
+    end
+  end
+
   context "capability focus ring" do
     should "stamp data-focused on the clicked card and clear it elsewhere" do
       visit assessment_path(@assignment)

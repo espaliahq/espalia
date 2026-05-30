@@ -933,10 +933,6 @@ export default class extends BaseController {
     // and surprise the user (page load shouldn't make the activity
     // sidebar narrow on its own). Wait for at least one real scroll.
     if (!this._sawUserScroll) return
-    // Don't downgrade an explicit cell-level focus to capability when
-    // the user scrolls — they intentionally clicked a chip and we
-    // honour that until they pick another chip or clear focus.
-    if (this.currentFocus.level === "cell") return
     if (this._intersectingCards.size === 0) return
 
     const stickyH = this.#stickyHeaderHeight()
@@ -977,8 +973,18 @@ export default class extends BaseController {
     const capabilityId = best.dataset.capabilityId
     const categoryId = best.closest("section[data-category-id]")?.dataset.categoryId || null
 
-    if (this.currentFocus.level === "capability" &&
-        this.currentFocus.capabilityStableId === stableId) return
+    // Cell focus persists while the focused capability is still the
+    // area-winner. The moment a different card takes over, cell focus
+    // downgrades to capability focus on the new winner — the sidebar
+    // re-narrows to whatever the user is now reading. Re-clicking a
+    // chip restores cell focus.
+    //
+    // Capability focus is treated the same way: no re-dispatch when
+    // the winner is unchanged.
+    if (this.currentFocus.capabilityStableId === stableId &&
+        (this.currentFocus.level === "cell" || this.currentFocus.level === "capability")) {
+      return
+    }
 
     this.#setFocus({
       level: "capability",
