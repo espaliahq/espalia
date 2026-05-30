@@ -389,6 +389,13 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       JS
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='true']"
 
+      # The chip click arms the scroll-observer suppression for 900ms
+      # so the scroll-to-card animation isn't overwritten mid-flight.
+      # In a real session the user spends well past that on the focused
+      # cell before scrolling; the test waits past it before simulating
+      # the next scroll so the picker is allowed to fire.
+      sleep 1.0
+
       # Scroll past cap1 so cap2 is now the area winner. Cell focus on
       # cap1 should downgrade to capability focus on cap2 — the sidebar
       # re-narrows to whatever the user is now reading.
@@ -442,6 +449,91 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       # And no card should carry the capability-focus ring.
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
+    end
+  end
+
+  context "capability focus persistence" do
+    should "preserve the focused capability across a full page reload" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # Click cap2's card header → capability focus on cap2 → URL must
+      # carry ?capability=cap2_stable so a reload restores it.
+      click_card_header(@cap2_stable)
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+
+      url_before = page.current_url
+      assert_match(/capability=#{Regexp.escape(@cap2_stable)}/, url_before,
+        "expected ?capability= in URL after capability click")
+
+      # Full page reload — visit the URL again.
+      visit url_before
+      wait_for_stimulus "matrix"
+
+      # cap2's card should reload focused, cap1's should not.
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
+    end
+  end
+
+  context "scroll-driven URL sync" do
+    should "update ?capability= as the user scrolls so reload restores the scroll-focused card" do
+      page.driver.browser.manage.window.resize_to(900, 600)
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      scroll_card_into_band(@cap2_stable)
+
+      # URL should now name cap2 so a reload lands on it.
+      assert_match(/capability=#{Regexp.escape(@cap2_stable)}/, page.current_url,
+        "expected scroll-driven focus to update ?capability= in URL")
+
+      visit page.current_url
+      wait_for_stimulus "matrix"
+
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+    end
+  end
+
+  context "capability focus scroll" do
+    should "scroll the clicked capability card into view when its card lives off-screen" do
+      # Smaller viewport so cap2 sits below the fold and a real scroll
+      # is required to bring it into view.
+      page.driver.browser.manage.window.resize_to(900, 600)
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # Pre-condition: cap2's card top is below the viewport bottom.
+      pre = page.execute_script(<<~JS)
+        const card = document.querySelector(
+          "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}']"
+        );
+        const r = card.getBoundingClientRect();
+        return JSON.stringify({ top: r.top, viewportH: window.innerHeight });
+      JS
+      pre_state = JSON.parse(pre)
+      assert pre_state["top"] > pre_state["viewportH"],
+        "expected cap2 to start below the viewport; got top=#{pre_state['top']}, viewportH=#{pre_state['viewportH']}"
+
+      click_card_header(@cap2_stable)
+
+      # Smooth scroll + settle pass takes ~700ms; wait for it before
+      # measuring. getBoundingClientRect can't be polled by Capybara
+      # selectors directly so a short fixed wait is the simplest contract.
+      sleep 1.2
+
+      post = page.execute_script(<<~JS)
+        const card = document.querySelector(
+          "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}']"
+        );
+        const r = card.getBoundingClientRect();
+        return JSON.stringify({ top: r.top, bottom: r.bottom, viewportH: window.innerHeight });
+      JS
+      post_state = JSON.parse(post)
+      assert post_state["top"] >= 0 && post_state["top"] < post_state["viewportH"],
+        "expected cap2 to scroll into view; got top=#{post_state['top']}, viewportH=#{post_state['viewportH']}"
     end
   end
 

@@ -429,6 +429,13 @@ export default class extends BaseController {
       levelOrdinal: null,
       expectationId: null
     })
+
+    // Scroll the focused card under the sticky chrome. The click may
+    // have landed anywhere on the page; the user expects the card they
+    // focused to be the focal point afterwards. No frame reload to
+    // wait for here — the scroll fires on the next animation frame
+    // against the current DOM.
+    this.#scrollCardUnderHeader(stableId, { awaitFrameLoad: false })
   }
 
   // ── Card-based chip focus (assessment card layout) ──
@@ -506,9 +513,17 @@ export default class extends BaseController {
   // does not retarget mid-flight when scroll-margin shifts. Doing the
   // arithmetic ourselves and snapping with `instant` after the smooth
   // animation lands the card top exactly at scroll-margin-top.
-  #scrollCardUnderHeader(stableId) {
-    const frame = this.element.closest("turbo-frame") ||
-                  this.element.querySelector("turbo-frame")
+  // `awaitFrameLoad` — wait for the matrix turbo-frame's next
+  // `turbo:frame-load` before scrolling. Used by `focusChip`, which
+  // first reloads the frame; the scroll target's position is only
+  // meaningful after the new DOM lands. Set false for paths that
+  // don't reload (card-header click, URL deep-link on connect) so
+  // the scroll fires on the next animation frame against the current
+  // DOM instead of waiting for a frame-load that never arrives.
+  #scrollCardUnderHeader(stableId, { awaitFrameLoad = true } = {}) {
+    const frame = awaitFrameLoad
+      ? (this.element.closest("turbo-frame") || this.element.querySelector("turbo-frame"))
+      : null
 
     const findCard = () =>
       document.querySelector(`[data-matrix-target="card"][data-capability-stable-id="${stableId}"]`)
@@ -731,7 +746,22 @@ export default class extends BaseController {
         // Ensure the row is expanded so the focused content is
         // visible alongside the widened column.
         this.#expandRow(fromUrl.capabilityId)
+        // Suppress scroll-driven re-picks for the animation window —
+        // without this, the smooth scroll below would trip the scroll
+        // observer mid-flight (the bar entering / leaving the viewport
+        // band) and the area-based picker would overwrite the URL's
+        // explicit choice with whichever card the eye lands on
+        // intermediately during the scroll animation.
+        this._capabilityFocusSuppressUntil = Date.now() + 1100
         this.#setFocus(fromUrl)
+        // Reload deep-linked into a capability or cell — scroll the
+        // focused card under the sticky chrome so the user lands on
+        // it instead of at the top of the document. No frame reload
+        // here (this is the initial connect path).
+        if (fromUrl.capabilityStableId &&
+            (fromUrl.level === "capability" || fromUrl.level === "cell")) {
+          this.#scrollCardUnderHeader(fromUrl.capabilityStableId, { awaitFrameLoad: false })
+        }
         return
       }
     }
@@ -777,15 +807,47 @@ export default class extends BaseController {
     }
   }
 
-  // Builds a cell-focus payload from the browser URL when both
-  // `?capability=stable_id` and `?level_ordinal=N` are present AND we
-  // can resolve a row OR card matching the stable_id in the current DOM.
-  // Returns null when the URL doesn't carry cell-focus params.
+  // Builds a focus payload from the browser URL:
+  //   `?capability=stable_id` alone → capability-level focus
+  //   `?capability=` + `?level_ordinal=N`      → cell-level focus
+  // Both shapes are restored on connect so reloads land back on the
+  // user's last focused capability (sidebar narrows, ring stays put,
+  // initial scroll lands on the focused card).
+  //
+  // Returns null when the URL carries no focus params.
   #focusFromUrl() {
     const url = new URL(window.location)
     const stableId = url.searchParams.get("capability")
+    if (!stableId) return null
+
     const ordRaw = url.searchParams.get("level_ordinal")
-    if (!stableId || !ordRaw) return null
+    if (!ordRaw) {
+      // Capability-level focus (no level_ordinal). Resolve the card OR
+      // the row by stable_id so the rest of the payload is populated
+      // exactly like the cell-level branch.
+      const card = this.hasCardTarget &&
+        this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
+      if (card) {
+        return {
+          level: "capability",
+          categoryId: card.closest("[data-category-id]")?.dataset.categoryId || this.activeCategoryIdValue,
+          capabilityId: card.dataset.capabilityId || null,
+          capabilityStableId: stableId,
+          levelOrdinal: null,
+          expectationId: null
+        }
+      }
+      const row = this.rowTargets.find(r => r.dataset.capabilityStableId === stableId)
+      if (!row) return null
+      return {
+        level: "capability",
+        categoryId: this.activeCategoryIdValue || this.#categoryIdForRow(row),
+        capabilityId: row.dataset.capabilityId,
+        capabilityStableId: stableId,
+        levelOrdinal: null,
+        expectationId: null
+      }
+    }
 
     const ordinal = parseInt(ordRaw, 10)
     if (isNaN(ordinal)) return null
@@ -832,19 +894,24 @@ export default class extends BaseController {
   // doesn't render <colgroup> so the col target list is empty there).
   //
   // `pushToUrl: false` opts out of `?capability=` / `?level_ordinal=`
-  // URL sync — used by the scroll-driven capability-focus observer so
-  // continuous scrolling doesn't thrash `history.pushState`. Explicit
-  // clicks (card header, level chip, suggestion pane navigation)
-  // pass through with the default and persist their state in the URL.
+  // URL sync entirely.
+  //
+  // `replaceUrl: true` updates the URL via `replaceState` instead of
+  // `pushState` — used by the scroll-driven capability picker so
+  // continuous scroll keeps the URL current (so reload restores the
+  // focused capability) without thrashing the back-stack. Explicit
+  // clicks (card header, level chip, suggestion pane navigation) push
+  // so Back returns the user to their previous click.
   #setFocus({ level, categoryId = null, capabilityId = null, capabilityStableId = null,
-              levelOrdinal = null, expectationId = null }, { pushToUrl = true } = {}) {
+              levelOrdinal = null, expectationId = null },
+            { pushToUrl = true, replaceUrl = false } = {}) {
     this.currentFocus = {
       level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
     }
     this.#applyColumnFocus(level === "cell" ? levelOrdinal : null,
                            level === "cell" ? capabilityId : null)
     this.#applyCardFocus(capabilityStableId, level)
-    if (pushToUrl && this.urlSyncValue) {
+    if ((pushToUrl || replaceUrl) && this.urlSyncValue) {
       // Capability is part of the URL whenever a row is expanded — i.e.
       // for cell AND capability focus levels. For framework/category
       // focus, capability is cleared. Always use the stable_id so the
@@ -853,7 +920,7 @@ export default class extends BaseController {
         ? capabilityStableId
         : null
       const ordForUrl = level === "cell" ? levelOrdinal : null
-      this.#syncFocusToUrl(capForUrl, ordForUrl)
+      this.#syncFocusToUrl(capForUrl, ordForUrl, { replace: replaceUrl })
     }
     this.#dispatchFocusEvent({ ...this.currentFocus })
   }
@@ -1048,22 +1115,13 @@ export default class extends BaseController {
       return
     }
 
-    // Downgrading from cell to capability via scroll: clear the stale
-    // `?capability=` + `?level_ordinal=` URL params so F5 doesn't
-    // restore the now-out-of-focus card's expansion. Continuous scroll
-    // through capability-level focus doesn't push (pushToUrl: false
-    // below) — this one-shot clear only fires on the leaving-cell
-    // edge, since the very next #updateFocusedCapabilityFromScroll
-    // call finds the URL already empty.
-    if (this.currentFocus.level === "cell" && this.urlSyncValue) {
-      const url = new URL(window.location)
-      if (url.searchParams.has("capability") || url.searchParams.has("level_ordinal")) {
-        url.searchParams.delete("capability")
-        url.searchParams.delete("level_ordinal")
-        window.history.replaceState({}, "", url)
-      }
-    }
-
+    // `replaceUrl: true` keeps `?capability=` current with the
+    // scrolling-driven capability so a reload restores the focused
+    // capability the user has scrolled to. Uses replaceState (not push)
+    // so continuous scroll doesn't pile up history entries — Back
+    // returns to the user's last explicit click, not every card they
+    // scrolled past. The level_ordinal is implicitly cleared because
+    // scroll-driven updates set `levelOrdinal: null`.
     this.#setFocus({
       level: "capability",
       categoryId,
@@ -1071,7 +1129,7 @@ export default class extends BaseController {
       capabilityStableId: stableId,
       levelOrdinal: null,
       expectationId: null
-    }, { pushToUrl: false })
+    }, { pushToUrl: false, replaceUrl: true })
   }
 
   #stickyHeaderHeight() {
@@ -1463,12 +1521,18 @@ export default class extends BaseController {
     window.history.pushState({}, "", browserUrl)
   }
 
-  // Batched URL sync for focus state. Pushes capability + level_ordinal
-  // in a single history entry so Back/Forward maps 1:1 to visible
+  // Batched URL sync for focus state. Updates capability + level_ordinal
+  // in a single history entry so Back/Forward maps 1:1 to explicit
   // focus changes. No-ops when the URL already matches — important on
   // initial connect, which dispatches focus from already-correct URL
   // state and would otherwise pile up duplicate back-stack entries.
-  #syncFocusToUrl(capId, levelOrdinal) {
+  //
+  // `replace: true` swaps the current history entry instead of pushing
+  // a new one — used by scroll-driven updates that fire continuously
+  // and would otherwise spam history. Explicit click paths
+  // (focusChip, focusCapability, focusCategory) push so Back returns
+  // the user to their previous click.
+  #syncFocusToUrl(capId, levelOrdinal, { replace = false } = {}) {
     const url = new URL(window.location)
     const desiredCap = capId || null
     const desiredOrd = levelOrdinal != null ? String(levelOrdinal) : null
@@ -1482,7 +1546,11 @@ export default class extends BaseController {
     if (desiredOrd != null) url.searchParams.set("level_ordinal", desiredOrd)
     else url.searchParams.delete("level_ordinal")
 
-    window.history.pushState({}, "", url)
+    if (replace) {
+      window.history.replaceState({}, "", url)
+    } else {
+      window.history.pushState({}, "", url)
+    }
   }
 
   // Dims sibling compact rows when a row is expanded for visual focus.
