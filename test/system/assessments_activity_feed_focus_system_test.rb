@@ -470,20 +470,26 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
         if (matrixCtrl) matrixCtrl._sawUserScroll = true;
       JS
 
-      # Give the IntersectionObserver a chance to fire and (incorrectly,
-      # in a regression) overwrite focus. The assertion below relies on
-      # currentFocus.level being "category", not "capability". Read
-      # inside the suppression window (suppression is 1800ms, this is
-      # 400ms in) so a regression where the observer fires unsuppressed
-      # still trips this assertion.
-      sleep 0.4
+      # Read at 100ms — comfortably inside the renew-on-scroll
+      # suppression window. The original 400ms read straddled the
+      # window's edge on CI runners where smooth scrolls collapsed
+      # to instant and the 500ms timer fired before 400ms had elapsed
+      # in CI's wall clock.
+      sleep 0.1
 
-      level = page.execute_script(<<~JS)
+      diag = page.execute_script(<<~JS)
         const matrixEl = document.querySelector("[data-controller~='matrix']");
         const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrixEl, "matrix");
-        return ctrl?.currentFocus?.level;
+        return JSON.stringify({
+          level: ctrl?.currentFocus?.level,
+          suppressionScrollRenew: ctrl?._suppressionScrollRenew,
+          sawUserScroll: ctrl?._sawUserScroll,
+          intersectingCount: ctrl?._intersectingCards?.size
+        });
       JS
-      assert_equal "category", level
+      state = JSON.parse(diag)
+      assert_equal "category", state["level"],
+        "currentFocus.level should be category; full state was #{state.inspect}"
       # And no card should carry the capability-focus ring.
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
