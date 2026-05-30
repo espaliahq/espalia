@@ -52,18 +52,33 @@ class Views::Assessments::LevelChip < Views::Base
     # focus outline on Windows). Don't add `bg-transparent` / `text-
     # inherit` here — they're same-specificity utilities that win the
     # cascade against the chip_bg colours we actually want to paint
-    # (the class-string still lists bg-green-200 but rgba(0,0,0,0)
-    # paints). Tailwind preflight already neutralises the UA button
-    # background; the chip_bg utility paints on top.
+    # (the class-string still resolves to e.g. `bg-green-500` but
+    # rgba(0,0,0,0) paints). Tailwind preflight already neutralises
+    # the UA button background; the chip_bg utility paints on top.
     base = "appearance-none " \
            "relative flex flex-col items-center justify-center " \
            "h-12 flex-1 min-w-[60px] rounded-lg cursor-pointer " \
            "transition-all border-2 " \
            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 "
     if @focused
-      base + "#{chip_bg} #{focus_border} shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{focus_border} shadow-sm"
     else
-      base + "#{chip_bg} #{idle_border} hover:shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{idle_border} hover:shadow-sm"
+    end
+  end
+
+  # Explicit text colour so the level code reads against the chip fill
+  # regardless of the surrounding card's inherited colour. Without this
+  # the inherited text colour washes out against the tinted chip in
+  # dark mode (Hard-Won Lesson: the chip fill is the only signal the
+  # eye gets — the code needs to stay legible on top of it).
+  def chip_text
+    freq = primary_frequency
+    if freq.nil?
+      @ordinal < @person_level ? "text-green-900 dark:text-green-100" : "text-gray-700 dark:text-gray-200"
+    else
+      config = Views::Assessments::FrequencyPalette.config_for(freq)
+      config ? config[:chip_txt] : "text-gray-700 dark:text-gray-200"
     end
   end
 
@@ -106,10 +121,10 @@ class Views::Assessments::LevelChip < Views::Base
   def chip_bg
     freq = primary_frequency
     if freq.nil?
-      @ordinal < @person_level ? "bg-green-100/60 dark:bg-green-900/20" : "bg-gray-100 dark:bg-gray-800"
+      @ordinal < @person_level ? "bg-green-100/60 dark:bg-green-900/40" : "bg-gray-100 dark:bg-gray-700"
     else
       config = Views::Assessments::FrequencyPalette.config_for(freq)
-      config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-800"
+      config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
     end
   end
 

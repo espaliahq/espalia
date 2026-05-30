@@ -962,7 +962,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
 
       # The chip color should update to reflect the new rating
-      assert_selector "#cell-#{@cap1_stable}-2.bg-green-200", wait: 5
+      assert_selector "#cell-#{@cap1_stable}-2.bg-green-500", wait: 5
     end
 
     should "not jump scroll position when scrolling past the hero summary" do
