@@ -773,9 +773,14 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     should "collapse the middle band while keeping the hero header visible on scroll" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
-      # The middle band only renders when there are capability contributions.
-      # Skip cleanly if the test fixture happens to render an empty hero.
-      skip "Hero has no middle band in this fixture" unless page.has_css?(".hero-collapsible")
+      # Pre-condition: the file-level fixture must produce a hero with a
+      # middle band (the perspective-driven 3-capability list). The band
+      # only renders when `primary_scoring[:capability_contributions]` is
+      # non-empty; with the shared setup (capabilities + person + ratings)
+      # this is currently always the case. Asserting it explicitly fails
+      # loudly if a future fixture change empties the hero — rather than
+      # silently skipping the actual collapse assertions below.
+      assert_selector ".hero-collapsible", visible: :all
 
       page.execute_script(
         "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
