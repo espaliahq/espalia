@@ -454,7 +454,13 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       # focus + suppressing its own scroll observer, the IntersectionObserver
       # would immediately overwrite category focus with capability focus
       # on whichever card lands in the viewport first.
-      page.execute_script(<<~JS)
+      # Synchronously: dispatch the chip click AND read currentFocus
+      # within a single execute_script. The listener fires synchronously
+      # when the dispatch happens, so by the time the next line of the
+      # script runs, currentFocus must already be category. This sidesteps
+      # ALL async timing — if the assertion fails here, it's a real
+      # regression in the listener's same-tick behaviour, not a race.
+      level = page.execute_script(<<~JS)
         const navEl = document.querySelector("[data-controller~='category-nav']");
         const ctrl = window.Stimulus.getControllerForElementAndIdentifier(navEl, "category-nav");
         const chip = navEl.querySelector("nav#category-tabs a[data-category-id='#{@cat_id}']");
@@ -462,36 +468,12 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
           preventDefault: () => {},
           currentTarget: chip
         });
-        // Simulate the user-scroll flag — `scrollTo` calls window.scrollTo
-        // smoothly which doesn't always fire a scroll event in headless
-        // Chrome. Real users always trip the flag on their first scroll.
         const matrixEl = document.querySelector("[data-controller~='matrix']");
         const matrixCtrl = window.Stimulus.getControllerForElementAndIdentifier(matrixEl, "matrix");
         if (matrixCtrl) matrixCtrl._sawUserScroll = true;
+        return matrixCtrl?.currentFocus?.level;
       JS
-
-      # Read at 100ms — comfortably inside the renew-on-scroll
-      # suppression window. The original 400ms read straddled the
-      # window's edge on CI runners where smooth scrolls collapsed
-      # to instant and the 500ms timer fired before 400ms had elapsed
-      # in CI's wall clock.
-      sleep 0.1
-
-      diag = page.execute_script(<<~JS)
-        const matrixEl = document.querySelector("[data-controller~='matrix']");
-        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrixEl, "matrix");
-        return JSON.stringify({
-          level: ctrl?.currentFocus?.level,
-          suppressionScrollRenew: ctrl?._suppressionScrollRenew,
-          sawUserScroll: ctrl?._sawUserScroll,
-          intersectingCount: ctrl?._intersectingCards?.size,
-          listenerRan: ctrl?._lastExternalFocusAt != null,
-          lastExternalDetail: ctrl?._lastExternalFocusDetail
-        });
-      JS
-      state = JSON.parse(diag)
-      assert_equal "category", state["level"],
-        "currentFocus.level should be category; full state was #{state.inspect}"
+      assert_equal "category", level
       # And no card should carry the capability-focus ring.
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
