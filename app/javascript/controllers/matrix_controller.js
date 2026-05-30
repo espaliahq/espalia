@@ -120,6 +120,10 @@ export default class extends BaseController {
       cancelAnimationFrame(this._capScrollRafId)
       this._capScrollRafId = null
     }
+    if (this._capScrollSettleTimer) {
+      clearTimeout(this._capScrollSettleTimer)
+      this._capScrollSettleTimer = null
+    }
     if (this._onUserScroll) {
       window.removeEventListener("scroll", this._onUserScroll)
       this._onUserScroll = null
@@ -401,7 +405,7 @@ export default class extends BaseController {
     // a chip click — without it, an IntersectionObserver callback
     // moments later could re-select a different card and overwrite
     // the user's explicit choice.
-    this._capabilityFocusSuppressUntil = Date.now() + 900
+    this._capabilityFocusSuppressUntil = Date.now() + 1800
 
     const alreadyFocused =
       this.currentFocus.level === "capability" &&
@@ -461,7 +465,7 @@ export default class extends BaseController {
     // Suppress scroll-driven capability focus so the chip's smooth scroll
     // to the focused card doesn't get overridden by an intersecting
     // sibling mid-animation. Mirrors the suppression on `focusCapability`.
-    this._capabilityFocusSuppressUntil = Date.now() + 900
+    this._capabilityFocusSuppressUntil = Date.now() + 1800
 
     // Dispatch focus immediately so the activity feed updates without
     // waiting for the matrix frame to round-trip.
@@ -752,7 +756,7 @@ export default class extends BaseController {
         // band) and the area-based picker would overwrite the URL's
         // explicit choice with whichever card the eye lands on
         // intermediately during the scroll animation.
-        this._capabilityFocusSuppressUntil = Date.now() + 1100
+        this._capabilityFocusSuppressUntil = Date.now() + 1800
         this.#setFocus(fromUrl)
         // Reload deep-linked into a capability or cell — scroll the
         // focused card under the sticky chrome so the user lands on
@@ -946,7 +950,7 @@ export default class extends BaseController {
     // capability re-picks for the animation window so the
     // IntersectionObserver can't overwrite the explicit focus on the
     // way to the target.
-    this._capabilityFocusSuppressUntil = Date.now() + 900
+    this._capabilityFocusSuppressUntil = Date.now() + 1800
 
     const same =
       this.currentFocus.level === detail.level &&
@@ -1046,11 +1050,25 @@ export default class extends BaseController {
   }
 
   #scheduleCapabilityScrollUpdate() {
-    if (this._capScrollRafId) return
-    this._capScrollRafId = requestAnimationFrame(() => {
-      this._capScrollRafId = null
+    if (!this._capScrollRafId) {
+      this._capScrollRafId = requestAnimationFrame(() => {
+        this._capScrollRafId = null
+        this.#updateFocusedCapabilityFromScroll()
+      })
+    }
+    // Settle pass: re-run the picker ~250ms after the last scroll
+    // event so the final landing position is what wins, not whichever
+    // intermediate frame the RAF coalescer happened to land on. The
+    // RAF path runs continuously so focus tracks scroll in real time;
+    // this is the safety net for the last frame when scroll stops.
+    // Without it, a smooth-scroll animation that ends right as
+    // suppression expires can leave focus on a card that's no longer
+    // the area-winner once the animation settles.
+    if (this._capScrollSettleTimer) clearTimeout(this._capScrollSettleTimer)
+    this._capScrollSettleTimer = setTimeout(() => {
+      this._capScrollSettleTimer = null
       this.#updateFocusedCapabilityFromScroll()
-    })
+    }, 250)
   }
 
   #updateFocusedCapabilityFromScroll() {

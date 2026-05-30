@@ -115,6 +115,23 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # Polls a JS predicate (Capybara's `assert_selector` only retries on
+  # CSS selectors, not on values read via execute_script). Used by the
+  # scroll-driven assertions below where the predicate is "the sidebar
+  # has finished scrolling" or "the picker has settled on this card"
+  # — both are race conditions on CI that need polling, not snapshots.
+  def wait_until_js(seconds: Capybara.default_max_wait_time, &block)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+    loop do
+      result = yield
+      return result if result
+      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep 0.1
+    end
+    nil
+  end
+
   # Click on a capability card's header sets capability-level focus.
   # Drive it via Stimulus directly (not Capybara click) for two reasons:
   # the card header has no role/accessible name (it's a focus affordance,
@@ -247,31 +264,31 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       # cap2 entries below ~16 cap1 entries.
       click_card_header(@cap2_stable)
 
-      # Wait for #scrollFirstMatchIntoView's smooth scroll to land, then
-      # verify the first cap2 entry is now within the aside's visible
-      # rect. If the scroll didn't fire, the entry would still be below
-      # the aside's visible bottom.
-      result = page.execute_script(<<~JS)
-        const aside = document.getElementById("assessment-activity-pane");
-        const entry = aside.querySelector(
-          "[data-activity-feed-target='entry'][data-capability-stable-id='#{@cap2_stable}'][data-match='true']"
-        );
-        if (!entry) return JSON.stringify({ entryFound: false });
-        const asideRect = aside.getBoundingClientRect();
-        const entryRect = entry.getBoundingClientRect();
-        return JSON.stringify({
-          entryFound: true,
-          inView: entryRect.top >= asideRect.top && entryRect.bottom <= asideRect.bottom,
-          entryTop: entryRect.top,
-          asideTop: asideRect.top,
-          asideBottom: asideRect.bottom
-        });
-      JS
-      diag = JSON.parse(result)
-      assert diag["entryFound"], "expected a cap2 entry with data-match='true' in the sidebar"
-      assert diag["inView"],
-        "expected the first matching entry to scroll into the sidebar viewport. " \
-        "entry.top=#{diag['entryTop']}, aside=[#{diag['asideTop']}..#{diag['asideBottom']}]"
+      # Poll for #scrollFirstMatchIntoView's smooth scroll to settle —
+      # snapshot reads land mid-animation on slow CI and report
+      # entry.top still below the aside's visible bottom.
+      diag = wait_until_js do
+        result = page.execute_script(<<~JS)
+          const aside = document.getElementById("assessment-activity-pane");
+          const entry = aside.querySelector(
+            "[data-activity-feed-target='entry'][data-capability-stable-id='#{@cap2_stable}'][data-match='true']"
+          );
+          if (!entry) return JSON.stringify({ entryFound: false });
+          const asideRect = aside.getBoundingClientRect();
+          const entryRect = entry.getBoundingClientRect();
+          return JSON.stringify({
+            entryFound: true,
+            inView: entryRect.top >= asideRect.top && entryRect.bottom <= asideRect.bottom,
+            entryTop: entryRect.top,
+            asideTop: asideRect.top,
+            asideBottom: asideRect.bottom
+          });
+        JS
+        parsed = JSON.parse(result)
+        parsed if parsed["entryFound"] && parsed["inView"]
+      end
+      assert diag,
+        "expected the first matching entry to scroll into the sidebar viewport within the wait window"
     end
   end
 
@@ -311,27 +328,28 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
         ctrl?.focusChip({ currentTarget: chip, target: chip, stopPropagation: () => {} });
       JS
 
-      result = page.execute_script(<<~JS)
-        const aside = document.getElementById("assessment-activity-pane");
-        const entry = aside.querySelector(
-          "[data-activity-feed-target='entry'][data-capability-stable-id='#{@cap2_stable}'][data-match='true']"
-        );
-        if (!entry) return JSON.stringify({ entryFound: false });
-        const asideRect = aside.getBoundingClientRect();
-        const entryRect = entry.getBoundingClientRect();
-        return JSON.stringify({
-          entryFound: true,
-          inView: entryRect.top >= asideRect.top && entryRect.bottom <= asideRect.bottom,
-          entryTop: entryRect.top,
-          asideTop: asideRect.top,
-          asideBottom: asideRect.bottom
-        });
-      JS
-      diag = JSON.parse(result)
-      assert diag["entryFound"], "expected a cap2 entry with data-match='true' in the sidebar"
-      assert diag["inView"],
-        "expected the first matching entry to scroll into the sidebar viewport. " \
-        "entry.top=#{diag['entryTop']}, aside=[#{diag['asideTop']}..#{diag['asideBottom']}]"
+      diag = wait_until_js do
+        result = page.execute_script(<<~JS)
+          const aside = document.getElementById("assessment-activity-pane");
+          const entry = aside.querySelector(
+            "[data-activity-feed-target='entry'][data-capability-stable-id='#{@cap2_stable}'][data-match='true']"
+          );
+          if (!entry) return JSON.stringify({ entryFound: false });
+          const asideRect = aside.getBoundingClientRect();
+          const entryRect = entry.getBoundingClientRect();
+          return JSON.stringify({
+            entryFound: true,
+            inView: entryRect.top >= asideRect.top && entryRect.bottom <= asideRect.bottom,
+            entryTop: entryRect.top,
+            asideTop: asideRect.top,
+            asideBottom: asideRect.bottom
+          });
+        JS
+        parsed = JSON.parse(result)
+        parsed if parsed["entryFound"] && parsed["inView"]
+      end
+      assert diag,
+        "expected the first matching entry to scroll into the sidebar viewport within the wait window"
     end
   end
 
@@ -389,12 +407,12 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       JS
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='true']"
 
-      # The chip click arms the scroll-observer suppression for 900ms
+      # The chip click arms the scroll-observer suppression for 1800ms
       # so the scroll-to-card animation isn't overwritten mid-flight.
       # In a real session the user spends well past that on the focused
       # cell before scrolling; the test waits past it before simulating
       # the next scroll so the picker is allowed to fire.
-      sleep 1.0
+      sleep 2.0
 
       # Scroll past cap1 so cap2 is now the area winner. Cell focus on
       # cap1 should downgrade to capability focus on cap2 — the sidebar
@@ -437,7 +455,10 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
 
       # Give the IntersectionObserver a chance to fire and (incorrectly,
       # in a regression) overwrite focus. The assertion below relies on
-      # currentFocus.level being "category", not "capability".
+      # currentFocus.level being "category", not "capability". Read
+      # inside the suppression window (suppression is 1800ms, this is
+      # 400ms in) so a regression where the observer fires unsuppressed
+      # still trips this assertion.
       sleep 0.4
 
       level = page.execute_script(<<~JS)
@@ -485,9 +506,15 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
 
       scroll_card_into_band(@cap2_stable)
 
-      # URL should now name cap2 so a reload lands on it.
-      assert_match(/capability=#{Regexp.escape(@cap2_stable)}/, page.current_url,
-        "expected scroll-driven focus to update ?capability= in URL")
+      # URL should now name cap2 so a reload lands on it. Poll —
+      # scroll-driven focus updates via replaceState fire on the
+      # picker's settle pass, which can take a couple of frames after
+      # the scroll lands on slower CI runners.
+      url_synced = wait_until_js do
+        page.current_url.include?("capability=#{@cap2_stable}")
+      end
+      assert url_synced,
+        "expected scroll-driven focus to update ?capability= in URL; got #{page.current_url}"
 
       visit page.current_url
       wait_for_stimulus "matrix"
