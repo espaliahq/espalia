@@ -256,7 +256,10 @@ class Views::Assessments::ManagerShowView < Views::Base
       style: "top: calc(var(--sticky-header-h, 0px) + 1rem)",
       data: { activity_pane_target: "pane", pane_state: "closed" }
     ) do
-      activity_sidebar_header
+      # No separate sidebar header — the feed's own header carries
+      # "Activity" + entry count + close button so it all lives in
+      # one row (and the count re-renders with the feed on ActionCable
+      # broadcasts).
       turbo_frame_tag(
         "assessment-activity",
         src: assessment_activity_path(@assignment),
@@ -268,20 +271,6 @@ class Views::Assessments::ManagerShowView < Views::Base
           assignment: @assignment
         )
       end
-    end
-  end
-
-  def activity_sidebar_header
-    div(class: "flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700") do
-      span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Activity" }
-      button(
-        type: "button",
-        class: "w-6 h-6 flex items-center justify-center rounded-full " \
-               "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 " \
-               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
-        data: { action: "click->activity-pane#close" },
-        aria: { label: "Close activity" }
-      ) { plain "×" }
     end
   end
 

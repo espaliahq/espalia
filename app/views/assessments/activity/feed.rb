@@ -38,12 +38,28 @@ class Views::Assessments::Activity::Feed < Views::Base
 
   private
 
+  # Single header for the pane — title + live entry count on the left,
+  # the close button on the right. Lives inside the turbo-frame
+  # (this component) so the count re-renders when ActionCable
+  # broadcasts a fresh feed. The previous layout duplicated "Activity"
+  # — once here in the feed, once in a wrapper `activity_sidebar_header`
+  # outside the frame — taking up two rows for one piece of context.
   def header
-    div(class: "mb-2 flex items-center justify-between") do
-      h2(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Activity" }
-      span(class: "text-[11px] text-gray-500 dark:text-gray-400") do
-        "#{@entries.size} #{@entries.size == 1 ? 'event' : 'events'}"
+    div(class: "mb-3 flex items-center justify-between gap-2") do
+      div(class: "flex items-baseline gap-2 min-w-0") do
+        h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") { "Activity" }
+        span(class: "text-[11px] text-gray-500 dark:text-gray-400 shrink-0") do
+          "#{@entries.size} #{@entries.size == 1 ? 'event' : 'events'}"
+        end
       end
+      button(
+        type: "button",
+        class: "shrink-0 w-6 h-6 flex items-center justify-center rounded-full " \
+               "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 " \
+               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+        data: { action: "click->activity-pane#close" },
+        aria: { label: "Close activity" }
+      ) { plain "×" }
     end
   end
 
