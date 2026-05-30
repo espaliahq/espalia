@@ -274,6 +274,52 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "category chip click" do
+    should "keep category focus active even after the programmatic scroll lands" do
+      page.driver.browser.manage.window.resize_to(900, 600)
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+      wait_for_stimulus "category-nav"
+
+      # Dispatch category-level focus via category_nav (as a chip click
+      # would). The trigger fires `matrix:focus-changed` and a smooth
+      # scroll. Without the matrix_controller picking up the external
+      # focus + suppressing its own scroll observer, the IntersectionObserver
+      # would immediately overwrite category focus with capability focus
+      # on whichever card lands in the viewport first.
+      page.execute_script(<<~JS)
+        const navEl = document.querySelector("[data-controller~='category-nav']");
+        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(navEl, "category-nav");
+        const chip = navEl.querySelector("nav#category-tabs a[data-category-id='#{@cat_id}']");
+        ctrl?.scrollTo({
+          preventDefault: () => {},
+          currentTarget: chip
+        });
+        // Simulate the user-scroll flag — `scrollTo` calls window.scrollTo
+        // smoothly which doesn't always fire a scroll event in headless
+        // Chrome. Real users always trip the flag on their first scroll.
+        const matrixEl = document.querySelector("[data-controller~='matrix']");
+        const matrixCtrl = window.Stimulus.getControllerForElementAndIdentifier(matrixEl, "matrix");
+        if (matrixCtrl) matrixCtrl._sawUserScroll = true;
+      JS
+
+      # Give the IntersectionObserver a chance to fire and (incorrectly,
+      # in a regression) overwrite focus. The assertion below relies on
+      # currentFocus.level being "category", not "capability".
+      sleep 0.4
+
+      level = page.execute_script(<<~JS)
+        const matrixEl = document.querySelector("[data-controller~='matrix']");
+        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrixEl, "matrix");
+        return ctrl?.currentFocus?.level;
+      JS
+      assert_equal "category", level
+      # And no card should carry the capability-focus ring.
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
+    end
+  end
+
   context "capability focus ring" do
     should "stamp data-focused on the clicked card and clear it elsewhere" do
       visit assessment_path(@assignment)

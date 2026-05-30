@@ -84,6 +84,15 @@ export default class extends BaseController {
     this._sawUserScroll = false
     this._onUserScroll = () => { this._sawUserScroll = true }
     window.addEventListener("scroll", this._onUserScroll, { passive: true })
+    // Listen for `matrix:focus-changed` from external dispatchers
+    // (currently `category_nav_controller` when a chip is clicked). The
+    // chip click triggers a programmatic scroll that would otherwise
+    // fire intersection events and downgrade focus to whichever
+    // capability happens to land in the band first — overwriting the
+    // explicit category focus mid-animation. Adopt the external state
+    // and suppress scroll-driven updates for the animation window.
+    this._onExternalFocusChange = (e) => this.#onExternalFocusChange(e)
+    window.addEventListener("matrix:focus-changed", this._onExternalFocusChange)
     this.#setupCapabilityScrollObserver()
 
     this.#dispatchInitialFocus()
@@ -114,6 +123,10 @@ export default class extends BaseController {
     if (this._onUserScroll) {
       window.removeEventListener("scroll", this._onUserScroll)
       this._onUserScroll = null
+    }
+    if (this._onExternalFocusChange) {
+      window.removeEventListener("matrix:focus-changed", this._onExternalFocusChange)
+      this._onExternalFocusChange = null
     }
     super.disconnect()
   }
@@ -453,9 +466,7 @@ export default class extends BaseController {
     // path bypasses #setFocus to dispatch immediately before the matrix
     // frame round-trips.
     this.#applyCardFocus(stableId, "cell")
-    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
-      detail: { ...this.currentFocus }
-    }))
+    this.#dispatchFocusEvent({ ...this.currentFocus })
 
     this.#reloadMatrixWithFocus(stableId, ordinal)
     this.#scrollCardUnderHeader(stableId)
@@ -604,9 +615,7 @@ export default class extends BaseController {
       levelOrdinal,
       expectationId: null
     }
-    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
-      detail: { ...this.currentFocus }
-    }))
+    this.#dispatchFocusEvent({ ...this.currentFocus })
     this.#reloadMatrixWithFocus(capabilityStableId, levelOrdinal)
     // Land the *card* under the sticky chrome, not the chip centered in
     // viewport. A bare `chip.scrollIntoView({block: "center"})` is
@@ -842,9 +851,66 @@ export default class extends BaseController {
       const ordForUrl = level === "cell" ? levelOrdinal : null
       this.#syncFocusToUrl(capForUrl, ordForUrl)
     }
-    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
-      detail: { ...this.currentFocus }
-    }))
+    this.#dispatchFocusEvent({ ...this.currentFocus })
+  }
+
+  // Picks up `matrix:focus-changed` events from external dispatchers
+  // (e.g. `category_nav_controller` on a chip click). Updates our own
+  // currentFocus to match and suppresses scroll-driven capability
+  // re-picks for the same window we use for our own explicit clicks.
+  //
+  // Self-dispatch guard: matrix_controller#setFocus updates currentFocus
+  // BEFORE dispatching `matrix:focus-changed`, so when the event lands
+  // back here, the detail already matches state and the early return
+  // prevents the listener from re-applying its own changes.
+  #onExternalFocusChange(event) {
+    // Self-dispatch from `#dispatchFocusEvent` flips this flag for the
+    // synchronous duration of `window.dispatchEvent`, so our own focus
+    // changes don't re-enter this listener and set the suppression
+    // window (which would freeze the IntersectionObserver after every
+    // scroll-driven update).
+    if (this._dispatchingFocus) return
+
+    const detail = event.detail || {}
+    if (!detail.level) return
+
+    // External focus events ride along with a programmatic scroll
+    // (a category chip click in particular). Suppress scroll-driven
+    // capability re-picks for the animation window so the
+    // IntersectionObserver can't overwrite the explicit focus on the
+    // way to the target.
+    this._capabilityFocusSuppressUntil = Date.now() + 900
+
+    const same =
+      this.currentFocus.level === detail.level &&
+      this.currentFocus.categoryId === (detail.categoryId || null) &&
+      this.currentFocus.capabilityStableId === (detail.capabilityStableId || null) &&
+      this.currentFocus.levelOrdinal === (detail.levelOrdinal ?? null)
+    if (same) return
+
+    this.currentFocus = {
+      level: detail.level,
+      categoryId: detail.categoryId || null,
+      capabilityId: detail.capabilityId || null,
+      capabilityStableId: detail.capabilityStableId || null,
+      levelOrdinal: detail.levelOrdinal ?? null,
+      expectationId: detail.expectationId || null
+    }
+    this.#applyCardFocus(detail.capabilityStableId || null, detail.level)
+  }
+
+  // Wraps `window.dispatchEvent("matrix:focus-changed")` so the same
+  // controller's external-focus listener can distinguish self-dispatch
+  // (skip — state is already up to date) from genuinely external
+  // events (adopt + suppress). Synchronous flag flip is safe because
+  // `dispatchEvent` invokes listeners synchronously before returning.
+  #dispatchFocusEvent(detail) {
+    this._dispatchingFocus = true
+    try {
+      window.dispatchEvent(new CustomEvent("matrix:focus-changed", { detail }))
+    } finally {
+      this._dispatchingFocus = false
+    }
   }
 
   // ── Scroll-driven capability focus ──
