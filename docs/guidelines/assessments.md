@@ -143,6 +143,45 @@ Five surfaces, all reading from the same `?category=` URL state:
 4. **Activity sidebar**. Listens for `matrix:focus-changed@window` with `level: "category"` and narrows its rendered entries.
 5. **Server state**. The controller reads `?category=` only to render the active chip class — the document includes every category section regardless.
 
+## Capability focus
+
+Sits between category focus and cell focus in the focus hierarchy. Narrows the activity sidebar to a single capability without committing to a specific level (the latter is cell focus, set by chip click).
+
+Two ways to trigger it:
+
+**Card-header click.** Clicking the card's header region (eyebrow + capability name + description) sets capability focus. Wired with `data-action="click->matrix#focusCapability"` scoped to the header (not the whole card) so clicks on the level strip and inside the expansion panel — which carry their own focus and interactive affordances — never accidentally land here. Re-clicking the same focused card's header toggles back to category focus, mirroring `focusCategory`'s behaviour.
+
+**Scroll past the sticky chrome.** An `IntersectionObserver` on `matrix_controller` tracks which cards are currently in the visible band (rootMargin `0px 0px -40% 0px`). On every intersection change, `#updateFocusedCapabilityFromScroll` picks the deepest card whose top has scrolled past the threshold (`sticky-header-h + 16px`) — that's the card the eye lands on first as the user reads down the page. Same heuristic `category_nav_controller#updateActiveCategory` uses for category sections.
+
+**Gating on scroll-driven updates** — three rules, each load-bearing:
+
+- **Wait for a real user scroll.** `IntersectionObserver`'s initial callback fires on connect with the cards' current intersection state, not in response to a user scroll. Acting on that would override URL- and click-driven initial focus and silently auto-narrow the activity feed on page load. `_sawUserScroll` flips on the first `scroll` event; until then `#updateFocusedCapabilityFromScroll` no-ops.
+- **Never downgrade cell focus.** When the user has explicitly clicked a chip, `currentFocus.level === "cell"` and scroll updates bail. Cell focus persists until the user clicks another chip or clears focus.
+- **Suppress for ~900ms after explicit clicks.** Card-header clicks, chip clicks, and any other explicit focus action sets `_capabilityFocusSuppressUntil = Date.now() + 900`. Mirrors the suppression `category_nav_controller#scrollTo` uses for chip clicks — without it, the smooth-scroll animation can fire intersection events that overwrite the user's choice mid-flight.
+
+**URL semantics.** Capability focus is transient; it does NOT write `?capability=` to the URL. That parameter remains owned by cell focus (chip click), where the server uses it to render the expansion panel for the named level. `#setFocus` accepts `{ pushToUrl: false }` for scroll-driven updates so continuous scrolling doesn't thrash `history.pushState`; explicit card-header clicks DO push to URL (default `pushToUrl: true`) — making them as shareable as cell focus.
+
+**Visual styling.** A focused card carries `data-focused="true"`; styling hangs off Tailwind data variants:
+
+```ruby
+"data-[focused=true]:shadow-sm data-[focused=true]:ring-1 data-[focused=true]:ring-primary/20"
+```
+
+Server stamps it from `?capability=` on initial render; `matrix_controller#applyCardFocus` toggles it on focus changes. Single source of truth.
+
+**Activity feed reconnect.** `activity_feed_controller#readMatrixFocusFromDom` reads `data-focused="true"` on a card to restore capability focus when its turbo-frame lazily loads. Without this signal, a lazy frame load would silently downgrade to category focus and undo the user's last click.
+
+### Focus hierarchy (most specific wins)
+
+| Level | Trigger | URL params written | Persists across |
+|---|---|---|---|
+| `framework` | Default / "Show all" link | — | — |
+| `category` | Category chip click; scroll-based category active marker | `?category=` | Browser navigation |
+| `capability` | Card-header click; scroll-driven IntersectionObserver | `?capability=` (click only) | Click: browser nav. Scroll: transient |
+| `cell` | Level chip click; URL deep-link | `?capability=` + `?level_ordinal=` | Browser navigation |
+
+The activity sidebar consumes the most specific currently active focus level. Each level's `#matchesFocus` check uses progressively narrower criteria — category by `category_id`, capability by `capability_stable_id`, cell by both stable_id and `level_ordinal`.
+
 ## Capability cards
 
 Each capability gets its own bordered card inside its category section:
@@ -326,7 +365,7 @@ ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
 
 | Controller | Responsibility |
 |---|---|
-| `matrix_controller.js` | Chip-click focus, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=`), URL-first focus restoration on connect, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
+| `matrix_controller.js` | Chip-click focus, card-header click focus (capability), scroll-driven capability focus via IntersectionObserver, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=`), URL-first focus restoration on connect, `data-focused` stamping on cards, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
 | `category_nav_controller.js` | Publishes `--sticky-header-h` via `getBoundingClientRect().height` + `Math.ceil` + `ResizeObserver`. Smooth-scrolls to category sections on chip click. Updates the active chip on scroll (suppressed for 900ms after a chip click — see *Category navigation*). |
 | `assessment_sync_controller.js` | ActionCable sync, self-submit suppression window, dual-frame reload, focus-param merge before reload. |
 | `frequency_selector_controller.js` | Optimistic UI on rating button click. Form action lives in the view, not the controller. |
@@ -415,6 +454,14 @@ The original card had a `×` close button on the expansion panel that returned t
 ### 10. Rating Turbo Streams must re-render with the right mode + context
 
 Inline rating responses use `turbo_stream.replace` on the rated cell or expansion. The replacement must carry both `context:` and `frozen:` / `alignment_locked:` from the parent view, otherwise the re-rendered fragment loses the read-only treatment in `aligning` / `aligned` states.
+
+### 11. IntersectionObserver's connect-time callback isn't a user scroll
+
+`new IntersectionObserver(cb).observe(el)` triggers `cb` once with the current intersection state — not in response to a user scroll, but as a one-shot bootstrap. Acting on that callback to update capability focus made every page load auto-narrow the activity feed to whichever card happened to sit in the visible band, silently overriding URL-driven (`?capability=`) and click-driven initial focus. Fix: gate `#updateFocusedCapabilityFromScroll` on `_sawUserScroll`, which only flips after a real `scroll` event has fired. Real users always trip the flag with their first scroll; the bootstrap callback no-ops.
+
+### 12. Activity feed reconnect on lazy-frame load needs a DOM signal for capability focus
+
+`activity_feed_controller#readMatrixFocusFromDom` runs on every `connect()`. The activity sidebar lives in a `loading: "lazy"` turbo-frame, so its first connect (when the pane opens) happens AFTER the user may have already clicked a card. Without a DOM signal for "capability focus is active on card X", the reconnect would default to category-level focus and silently undo the click. The signal is `data-focused="true"` on the matching card — server stamps it from `?capability=`, JS toggles it on focus changes, feed reads it on reconnect.
 
 ## Performance state machine
 

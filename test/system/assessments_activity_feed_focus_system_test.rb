@@ -115,15 +115,137 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # Click on a capability card's header sets capability-level focus.
+  # Drive it via Stimulus directly (not Capybara click) for two reasons:
+  # the card header has no role/accessible name (it's a focus affordance,
+  # not a button), and synthetic clicks against non-interactive elements
+  # have been observed to drop on slow CI. Direct controller invocation
+  # is the same path the click event would resolve to via Stimulus.
+  def click_card_header(stable_id)
+    page.execute_script(<<~JS)
+      const matrix = document.querySelector("[data-controller~='matrix']");
+      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
+      const card = document.querySelector(
+        "[data-matrix-target='card'][data-capability-stable-id='#{stable_id}']"
+      );
+      const target = card?.querySelector("[data-action*='matrix#focusCapability']");
+      ctrl?.focusCapability({
+        currentTarget: target, target: target, stopPropagation: () => {}
+      });
+    JS
+  end
+
   context "focus highlight mode" do
-    should "amber-accent the entries that match the focused capability" do
-      skip "Deferred: card layout does not use expandedRow target"
+    should "narrow data-match to the focused capability when its card header is clicked" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      toggle_activity_pane
+      wait_for_stimulus "activity-feed"
+      wait_for_stimulus "matrix"
+      wait_for_turbo_idle
+
+      click_card_header(@cap1_stable)
+
+      # Two cap1 entries (one rating, one evidence) should match; two
+      # cap2 entries should not.
+      assert_selector "[data-capability-stable-id='#{@cap1_stable}'][data-match='true']",
+        visible: :all, count: 2
+      assert_selector "[data-capability-stable-id='#{@cap2_stable}'][data-match='false']",
+        visible: :all, count: 2
     end
   end
 
   context "focus filter mode" do
     should "hide non-matching entries when Filter mode is selected and focus is active" do
-      skip "Deferred: card layout does not use expandedRow target"
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      toggle_activity_pane
+      wait_for_stimulus "activity-feed"
+      wait_for_stimulus "matrix"
+      wait_for_turbo_idle
+
+      # Default mode is "filter" (the cookie default). Click cap2's card
+      # header — non-matching cap1 entries should hide entirely.
+      click_card_header(@cap2_stable)
+
+      assert_selector "[data-capability-stable-id='#{@cap1_stable}'][data-hidden='true']",
+        visible: :all, count: 2
+      assert_selector "[data-capability-stable-id='#{@cap2_stable}'][data-hidden='false']",
+        visible: :all, count: 2
+    end
+  end
+
+  context "scroll-driven capability focus" do
+    should "shift the focused capability to whichever card the user has scrolled past the sticky header" do
+      # Smaller viewport so cap2 starts off-screen and a real scroll
+      # is required to bring it past the sticky-header threshold.
+      page.driver.browser.manage.window.resize_to(900, 600)
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # Bypass the bootstrap-suppression gate
+      # (`#updateFocusedCapabilityFromScroll` no-ops on the observer's
+      # connect-time callback so page load doesn't auto-narrow the
+      # activity feed). Programmatic scrollTo in headless Chrome doesn't
+      # reliably emit a scroll event, so set the user-scroll flag
+      # directly — real users always trip it on their first scroll.
+      #
+      # Two-pass scroll: pass 1 triggers the CSS scroll-driven hero
+      # collapse, which shrinks the doc height by ~120px. A single pass
+      # that computes from pre-collapse layout misses by exactly that
+      # delta. Pass 2 re-measures post-collapse and lands cap2 in the
+      # observer's threshold band.
+      page.execute_script(<<~JS)
+        const matrix = document.querySelector("[data-controller~='matrix']");
+        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
+        if (ctrl) ctrl._sawUserScroll = true;
+        const cap2 = document.querySelector(
+          "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}']"
+        );
+        // First pass: trigger hero collapse.
+        window.scrollTo({ top: 500, behavior: "instant" });
+      JS
+      sleep 0.2
+      page.execute_script(<<~JS)
+        const cap2 = document.querySelector(
+          "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}']"
+        );
+        const stickyH = parseFloat(
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--sticky-header-h")
+        ) || 0;
+        // Second pass: re-measure against post-collapse layout, land
+        // cap2.top at stickyH + 8 so it's inside the observer's
+        // threshold band (stickyH + 16).
+        const targetDocTop = cap2.getBoundingClientRect().top + window.scrollY - stickyH - 8;
+        window.scrollTo({ top: targetDocTop, behavior: "instant" });
+      JS
+
+      # IntersectionObserver fires async; the focus update is scheduled
+      # via requestAnimationFrame. Wait for the data-focused attribute
+      # to land on cap2.
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
+    end
+  end
+
+  context "capability focus ring" do
+    should "stamp data-focused on the clicked card and clear it elsewhere" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      click_card_header(@cap2_stable)
+
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
+
+      # Re-clicking the same card header drops back to category focus —
+      # the ring clears on both cards.
+      click_card_header(@cap2_stable)
+
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
     end
   end
 

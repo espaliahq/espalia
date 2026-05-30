@@ -63,10 +63,18 @@ class Views::Assessments::CapabilityCard < Views::Base
   end
 
   def view_template
+    # `data-focused` is the JS-managed source of truth for the
+    # capability-focus ring. The server stamps it from `?capability=`
+    # so the post-load look matches the URL; `matrix_controller#setFocus`
+    # toggles it as the user clicks card headers or scrolls cards
+    # past the sticky chrome. Styling stays in one place (Tailwind
+    # data variants) regardless of who set the attribute.
     div(
       class: "rounded-xl border border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 p-4 transition-shadow " \
-             "#{@is_url_focused ? 'shadow-sm ring-1 ring-primary/10' : 'hover:shadow-sm'}",
+             "hover:shadow-sm " \
+             "data-[focused=true]:shadow-sm " \
+             "data-[focused=true]:ring-1 data-[focused=true]:ring-primary/20",
       # scroll-margin-top accounts for the unified sticky header. The
       # section sticky heading height varies per section (description
       # text wraps differently) so `matrix_controller#scrollCardUnderHeader`
@@ -76,7 +84,8 @@ class Views::Assessments::CapabilityCard < Views::Base
       data: {
         matrix_target: "card",
         capability_id: @capability.capability_id,
-        capability_stable_id: @capability.stable_id
+        capability_stable_id: @capability.stable_id,
+        focused: @is_url_focused.to_s
       }
     ) do
       card_header
@@ -103,7 +112,19 @@ class Views::Assessments::CapabilityCard < Views::Base
     # and pushed the contribution badge off into a separate column.
     # Removed — `contribution_badge` already right-aligns itself via
     # ml-auto inside capability_name.
-    div(class: "min-w-0 mb-3") do
+    #
+    # Click on the header sets capability-level focus so the activity
+    # sidebar narrows to this capability. The handler lives on the
+    # header (not the whole card) to keep clicks on the level strip
+    # and expansion panel — which carry their own focus and interactive
+    # affordances — out of this path. The level chips also
+    # `event.stopPropagation()`, so even if the card were the handler
+    # they wouldn't double-fire, but scoping to the header is the
+    # cleaner contract.
+    div(
+      class: "min-w-0 mb-3 cursor-pointer select-none",
+      data: { action: "click->matrix#focusCapability" }
+    ) do
       eyebrow
       capability_name
       capability_description if @capability.description.present?

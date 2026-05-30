@@ -161,6 +161,15 @@ export default class extends BaseController {
   // before activity-feed has bound its listener — without this, the
   // feed would miss the initial category focus on every page load and
   // every Turbo Frame swap.
+  //
+  // Card-layout signal: a capability card stamped `data-focused="true"`
+  // by matrix_controller#setFocus represents capability-level focus.
+  // The feed reconnects when its turbo-frame loads lazily — without
+  // this signal it would silently downgrade to category-level focus
+  // on every frame load, undoing whatever the user just clicked.
+  //
+  // Table-layout signal: the legacy expandedRow target is still honoured
+  // for the framework explorer.
   #readMatrixFocusFromDom() {
     const blank = { level: "framework", categoryId: null, capabilityStableId: null, levelOrdinal: null }
     const matrix = document.querySelector("[data-controller~='matrix']")
@@ -168,6 +177,22 @@ export default class extends BaseController {
 
     const activeCategoryId = matrix.dataset.matrixActiveCategoryIdValue
     if (!activeCategoryId) return blank
+
+    // Card layout — focused card carries `data-focused="true"`. When
+    // multiple cards are focused (shouldn't happen, but be defensive),
+    // pick the first.
+    const focusedCard = matrix.querySelector(
+      "[data-matrix-target='card'][data-focused='true']"
+    )
+    if (focusedCard) {
+      const section = focusedCard.closest("section[data-category-id]")
+      return {
+        level: "capability",
+        categoryId: section?.dataset.categoryId || activeCategoryId,
+        capabilityStableId: focusedCard.dataset.capabilityStableId || null,
+        levelOrdinal: null
+      }
+    }
 
     const expandedRow = matrix.querySelector(
       "[data-matrix-target='expandedRow']:not(.hidden)"

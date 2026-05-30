@@ -63,6 +63,29 @@ export default class extends BaseController {
     })
     this._mutationObserver.observe(this.element, { childList: true, subtree: true })
 
+    // Scroll-driven capability focus (assessment card layout only).
+    // IntersectionObserver tracks which cards are currently in the
+    // visible band below the sticky chrome; the deepest one becomes
+    // the focused capability. Cheaper than a scroll listener and
+    // automatically updates when cards are added / removed by Turbo
+    // Stream replacements. No-op on the framework explorer where
+    // `cardTargets` is empty.
+    //
+    // The observer's initial callback fires on connect with the
+    // current intersection state — not on a user scroll. Acting on
+    // that would surprise the user (page load shouldn't auto-narrow
+    // the activity feed to whatever card happens to sit in the visible
+    // band) and override URL / data-attribute-driven initial focus.
+    // Gate scroll-driven updates on a real user scroll event so the
+    // first reaction is to the user's first scroll, never to the
+    // observer's connect-time bootstrap.
+    this._intersectingCards = new Set()
+    this._capabilityFocusSuppressUntil = 0
+    this._sawUserScroll = false
+    this._onUserScroll = () => { this._sawUserScroll = true }
+    window.addEventListener("scroll", this._onUserScroll, { passive: true })
+    this.#setupCapabilityScrollObserver()
+
     this.#dispatchInitialFocus()
   }
 
@@ -75,6 +98,18 @@ export default class extends BaseController {
     if (this._mutationObserver) {
       this._mutationObserver.disconnect()
       this._mutationObserver = null
+    }
+    if (this._capabilityIntersectionObserver) {
+      this._capabilityIntersectionObserver.disconnect()
+      this._capabilityIntersectionObserver = null
+    }
+    if (this._cardListMutationObserver) {
+      this._cardListMutationObserver.disconnect()
+      this._cardListMutationObserver = null
+    }
+    if (this._onUserScroll) {
+      window.removeEventListener("scroll", this._onUserScroll)
+      this._onUserScroll = null
     }
     super.disconnect()
   }
@@ -306,6 +341,75 @@ export default class extends BaseController {
     })
   }
 
+  // ── Card-based capability focus (assessment card layout) ──
+
+  // Click on a capability card's header sets capability-level focus
+  // so the activity sidebar narrows to this capability. Toggles back
+  // to category focus if the same card's header is re-clicked, mirroring
+  // `focusCategory`'s behaviour at the category level.
+  //
+  // Suppresses scroll-driven capability detection for ~900ms so the
+  // explicit click survives any in-flight scroll into-view animations
+  // (the user landed on this card on purpose — don't let a scroll event
+  // 200ms later overwrite their choice with whichever card now happens
+  // to sit in the viewport band).
+  focusCapability(event) {
+    // Card-level click handlers must not fire when the user is
+    // interacting with the level strip chips or any expansion-panel
+    // controls (rating pill, evidence buttons, comment threads, inline
+    // links). The chips and most expansion buttons already
+    // `stopPropagation()`, but evidence/comment links and the pill
+    // popover can bubble. The `card_header` only contains text, but
+    // the contribution badge could theoretically host a focusable
+    // child in future — guard defensively.
+    const onInteractive = !!event.target.closest("button, a, input, textarea, form, [contenteditable]")
+    if (onInteractive) return
+
+    event.stopPropagation()
+    const card = event.currentTarget.closest("[data-matrix-target='card']")
+    if (!card) return
+    const stableId = card.dataset.capabilityStableId
+    const capabilityId = card.dataset.capabilityId
+    if (!stableId) return
+
+    const section = card.closest("section[data-category-id]")
+    const categoryId = section?.dataset.categoryId || null
+
+    // Suppress scroll-driven detection long enough for the click to
+    // settle. Mirrors `category_nav_controller`'s 900ms window after
+    // a chip click — without it, an IntersectionObserver callback
+    // moments later could re-select a different card and overwrite
+    // the user's explicit choice.
+    this._capabilityFocusSuppressUntil = Date.now() + 900
+
+    const alreadyFocused =
+      this.currentFocus.level === "capability" &&
+      this.currentFocus.capabilityStableId === stableId
+
+    if (alreadyFocused) {
+      // Toggle off → category focus. Activity feed widens; the card's
+      // data-focused attribute clears in #setFocus.
+      this.#setFocus({
+        level: "category",
+        categoryId: categoryId,
+        capabilityId: null,
+        capabilityStableId: null,
+        levelOrdinal: null,
+        expectationId: null
+      })
+      return
+    }
+
+    this.#setFocus({
+      level: "capability",
+      categoryId: categoryId,
+      capabilityId: capabilityId,
+      capabilityStableId: stableId,
+      levelOrdinal: null,
+      expectationId: null
+    })
+  }
+
   // ── Card-based chip focus (assessment card layout) ──
 
   focusChip(event) {
@@ -326,6 +430,11 @@ export default class extends BaseController {
     const categoryId = card?.closest("[data-category-id]")?.dataset.categoryId || null
     const capabilityId = card?.dataset.capabilityId || null
 
+    // Suppress scroll-driven capability focus so the chip's smooth scroll
+    // to the focused card doesn't get overridden by an intersecting
+    // sibling mid-animation. Mirrors the suppression on `focusCapability`.
+    this._capabilityFocusSuppressUntil = Date.now() + 900
+
     // Dispatch focus immediately so the activity feed updates without
     // waiting for the matrix frame to round-trip.
     this.currentFocus = {
@@ -336,6 +445,10 @@ export default class extends BaseController {
       levelOrdinal: ordinal,
       expectationId: null
     }
+    // Mirror the card ring stamping that `#setFocus` would do — this
+    // path bypasses #setFocus to dispatch immediately before the matrix
+    // frame round-trips.
+    this.#applyCardFocus(stableId, "cell")
     window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
       detail: { ...this.currentFocus }
     }))
@@ -700,14 +813,21 @@ export default class extends BaseController {
   // Also resizes the table columns + toggles the per-cell close button when
   // entering / leaving cell-level focus (assessment view only — explorer
   // doesn't render <colgroup> so the col target list is empty there).
+  //
+  // `pushToUrl: false` opts out of `?capability=` / `?level_ordinal=`
+  // URL sync — used by the scroll-driven capability-focus observer so
+  // continuous scrolling doesn't thrash `history.pushState`. Explicit
+  // clicks (card header, level chip, suggestion pane navigation)
+  // pass through with the default and persist their state in the URL.
   #setFocus({ level, categoryId = null, capabilityId = null, capabilityStableId = null,
-              levelOrdinal = null, expectationId = null }) {
+              levelOrdinal = null, expectationId = null }, { pushToUrl = true } = {}) {
     this.currentFocus = {
       level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
     }
     this.#applyColumnFocus(level === "cell" ? levelOrdinal : null,
                            level === "cell" ? capabilityId : null)
-    if (this.urlSyncValue) {
+    this.#applyCardFocus(capabilityStableId, level)
+    if (pushToUrl && this.urlSyncValue) {
       // Capability is part of the URL whenever a row is expanded — i.e.
       // for cell AND capability focus levels. For framework/category
       // focus, capability is cleared. Always use the stable_id so the
@@ -721,6 +841,166 @@ export default class extends BaseController {
     window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
       detail: { ...this.currentFocus }
     }))
+  }
+
+  // ── Scroll-driven capability focus ──
+
+  // Sets up an IntersectionObserver that tracks which capability cards
+  // are currently in the visible band below the sticky chrome. Whenever
+  // the intersecting set changes, we re-pick the focused capability:
+  // the card whose top is closest to the sticky-header bottom (but not
+  // above it) becomes focused.
+  //
+  // Gating: scroll-driven changes never overwrite cell focus (an
+  // explicit chip click), and respect the suppression window set by
+  // explicit focus actions. Without the gate, scrolling past a focused
+  // card would silently demote the user's chip-level focus.
+  //
+  // Card targets can come and go as Turbo Stream replacements land
+  // inside the matrix frame. A small MutationObserver on the matrix
+  // root re-syncs the observed set whenever cards are added or
+  // removed — Stimulus' built-in cardTargets only reflects the current
+  // state, not a change feed.
+  #setupCapabilityScrollObserver() {
+    if (typeof IntersectionObserver === "undefined") return
+    if (!this.hasCardTarget) return
+
+    const onIntersection = (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          this._intersectingCards.add(entry.target)
+        } else {
+          this._intersectingCards.delete(entry.target)
+        }
+      })
+      this.#scheduleCapabilityScrollUpdate()
+    }
+
+    // `rootMargin` top is dynamic — sticky chrome height changes when
+    // the hero collapses. We read it from CSS at observation time;
+    // re-creating the observer on every header-height change would be
+    // overkill, and the natural cadence of intersections during scroll
+    // means we re-pick frequently anyway.
+    this._capabilityIntersectionObserver = new IntersectionObserver(onIntersection, {
+      root: null,
+      rootMargin: "0px 0px -40% 0px",
+      threshold: [0, 0.25, 0.5]
+    })
+
+    this.cardTargets.forEach(card => this._capabilityIntersectionObserver.observe(card))
+
+    // Re-observe when cards are added (Turbo Stream replacement of the
+    // matrix frame). Stimulus reconnects this controller on full frame
+    // load, but partial Turbo Stream replacements within the frame
+    // don't trigger reconnect.
+    this._cardListMutationObserver = new MutationObserver(() => {
+      const seen = new Set()
+      this.cardTargets.forEach(card => {
+        seen.add(card)
+        if (!this._observedCards?.has(card)) {
+          this._capabilityIntersectionObserver.observe(card)
+        }
+      })
+      this._observedCards = seen
+      // Drop intersecting refs that are no longer in the DOM.
+      this._intersectingCards.forEach(card => {
+        if (!seen.has(card)) this._intersectingCards.delete(card)
+      })
+    })
+    this._observedCards = new Set(this.cardTargets)
+    this._cardListMutationObserver.observe(this.element, { childList: true, subtree: true })
+  }
+
+  #scheduleCapabilityScrollUpdate() {
+    if (this._capScrollRafId) return
+    this._capScrollRafId = requestAnimationFrame(() => {
+      this._capScrollRafId = null
+      this.#updateFocusedCapabilityFromScroll()
+    })
+  }
+
+  #updateFocusedCapabilityFromScroll() {
+    if (Date.now() < this._capabilityFocusSuppressUntil) return
+    // Don't auto-narrow on the observer's connect-time bootstrap. The
+    // first IntersectionObserver callback fires with the cards' initial
+    // intersection state — not in response to a user scroll. Acting on
+    // it would silently override URL- and click-driven initial focus
+    // and surprise the user (page load shouldn't make the activity
+    // sidebar narrow on its own). Wait for at least one real scroll.
+    if (!this._sawUserScroll) return
+    // Don't downgrade an explicit cell-level focus to capability when
+    // the user scrolls — they intentionally clicked a chip and we
+    // honour that until they pick another chip or clear focus.
+    if (this.currentFocus.level === "cell") return
+    if (this._intersectingCards.size === 0) return
+
+    const stickyH = this.#stickyHeaderHeight()
+    const threshold = stickyH + 16
+
+    let best = null
+    let bestTop = -Infinity
+
+    this._intersectingCards.forEach(card => {
+      const top = card.getBoundingClientRect().top
+      // Pick the deepest card whose top has scrolled past the threshold.
+      // Mirrors `category_nav_controller`'s active-section heuristic so
+      // the focused capability matches what the user has just scrolled
+      // under the sticky chrome — the first card the eye lands on.
+      if (top <= threshold && top > bestTop) {
+        bestTop = top
+        best = card
+      }
+    })
+
+    // Fall back to the topmost intersecting card when nothing has
+    // crossed the threshold yet (e.g. very top of the page, hero
+    // expanded). Without this we'd leave focus on whatever was last
+    // set instead of converging on what's visible.
+    if (!best) {
+      this._intersectingCards.forEach(card => {
+        const top = card.getBoundingClientRect().top
+        if (best == null || top < best.getBoundingClientRect().top) best = card
+      })
+    }
+
+    if (!best) return
+
+    const stableId = best.dataset.capabilityStableId
+    const capabilityId = best.dataset.capabilityId
+    const categoryId = best.closest("section[data-category-id]")?.dataset.categoryId || null
+
+    if (this.currentFocus.level === "capability" &&
+        this.currentFocus.capabilityStableId === stableId) return
+
+    this.#setFocus({
+      level: "capability",
+      categoryId,
+      capabilityId,
+      capabilityStableId: stableId,
+      levelOrdinal: null,
+      expectationId: null
+    }, { pushToUrl: false })
+  }
+
+  #stickyHeaderHeight() {
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--sticky-header-h")
+    const n = parseFloat(v)
+    return isNaN(n) ? 0 : n
+  }
+
+  // Stamps `data-focused="true"` on the currently-focused capability's
+  // card and clears it on every other card. The ring + shadow styling
+  // hangs off this attribute (see capability_card.rb's data-variant
+  // classes), so the visual focus tracks any focus level that includes
+  // a specific capability (capability OR cell). Framework- and category-
+  // level focus clear the ring across every card.
+  #applyCardFocus(capabilityStableId, level) {
+    if (!this.hasCardTarget) return
+    const wantsRing = (level === "capability" || level === "cell") && !!capabilityStableId
+    this.cardTargets.forEach(card => {
+      const isFocused = wantsRing && card.dataset.capabilityStableId === capabilityStableId
+      card.dataset.focused = isFocused ? "true" : "false"
+    })
   }
 
   // ── Column focus (assessment cell-level) ──
