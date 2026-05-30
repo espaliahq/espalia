@@ -212,8 +212,15 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       if (ctrl) ctrl._sawUserScroll = true;
       window.scrollTo({ top: 500, behavior: "instant" });
     JS
-    sleep 0.2
+    # First scroll triggers the CSS scroll-driven hero collapse which
+    # rewrites doc height by ~120px. CI's headless Chrome is slower at
+    # settling layout than dev machines; give it real headroom before
+    # measuring positions for the second scroll.
+    sleep 0.5
     page.execute_script(<<~JS)
+      // Force layout flush before measuring so the second scroll uses
+      // post-collapse positions, not pre-collapse cached rects.
+      void document.body.offsetHeight;
       const card = document.querySelector(
         "[data-matrix-target='card'][data-capability-stable-id='#{stable_id}']"
       );
@@ -224,6 +231,16 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       const targetDocTop =
         card.getBoundingClientRect().top + window.scrollY - stickyH - #{offset_below_chrome};
       window.scrollTo({ top: targetDocTop, behavior: "instant" });
+    JS
+    # Let the final layout settle, then dispatch a synthetic scroll
+    # event so the picker fires once more against the SETTLED state.
+    # Without this, on slow CI runners the picker can fire against an
+    # intermediate frame mid-second-scroll and never re-fire (no more
+    # scroll events to trigger it) — leaving focus on the wrong card.
+    sleep 0.5
+    page.execute_script(<<~JS)
+      void document.body.offsetHeight;
+      window.dispatchEvent(new Event("scroll"));
     JS
   end
 
