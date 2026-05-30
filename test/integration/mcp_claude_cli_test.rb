@@ -32,9 +32,18 @@ class McpClaudeCliTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 
   setup do
-    # Non-optional: CI installs the CLI (.github/workflows/ci.yml) and the
-    # devcontainer postCreateCommand installs it for local dev. If you
-    # hit this outside those environments, run:
+    # The main `test` CI job sets SKIP_MCP_CLI_TEST=1 so it doesn't have
+    # to install Node + the claude CLI or carry the OAuth token. A
+    # separate `mcp-cli-test` job runs this file with the env var unset.
+    # Local runs and the devcontainer leave the env var unset — the
+    # binary check below still flunks (does NOT silently skip) so missing
+    # CLI parity coverage outside this one CI carve-out stays loud.
+    skip "SKIP_MCP_CLI_TEST set — runs in the dedicated mcp-cli-test CI job" if ENV["SKIP_MCP_CLI_TEST"].present?
+
+    # Non-optional: the dedicated CI job installs the CLI
+    # (.github/workflows/ci.yml) and the devcontainer postCreateCommand
+    # installs it for local dev. If you hit this outside those
+    # environments, run:
     #   npm install -g @anthropic-ai/claude-code
     # or point CLAUDE_CLI at a non-default install path.
     unless cli_available?

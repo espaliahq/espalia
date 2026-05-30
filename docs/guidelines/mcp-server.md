@@ -239,6 +239,12 @@ dispatch) works against a real client. Constraints worth knowing:
 - The CLI is required in CI (`.github/workflows/ci.yml` installs
   `@anthropic-ai/claude-code`) and in the devcontainer (`postCreateCommand`).
   The harness `flunk`s if missing — silent skips hide parity erosion.
+- The CLI test runs in a dedicated `mcp-cli-test` CI job so the main
+  `test` job doesn't pay for Node + the CLI install or the LLM
+  round-trip. The main job sets `SKIP_MCP_CLI_TEST=1`, which is the
+  ONLY supported skip path — the binary check still `flunk`s for any
+  other invocation so missing parity coverage outside the carve-out
+  stays loud.
 
 ## Hard-Won Lessons
 

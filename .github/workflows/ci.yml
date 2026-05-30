@@ -120,28 +120,68 @@ jobs:
         with:
           bundler-cache: true
 
-      # Required by test/integration/mcp_claude_cli_test.rb, which drives
-      # the real claude CLI as a subprocess to validate the MCP server
-      # end-to-end through the same transport a real client uses. The
-      # test fails (does not skip) when the binary is absent, so the
-      # install step is non-optional here.
+      - name: Run tests
+        env:
+          RAILS_ENV: test
+          DB_HOST: localhost
+          # The claude CLI parity test (test/integration/mcp_claude_cli_test.rb)
+          # is slow (real LLM round-trip) and needs Node + the CLI + an OAuth
+          # token. To avoid those install costs and to keep this job fast,
+          # we skip it here and run it in the dedicated `mcp-cli-test` job.
+          SKIP_MCP_CLI_TEST: "1"
+        run: bin/rails db:test:prepare test
+
+  # Runs only the claude CLI parity test (test/integration/mcp_claude_cli_test.rb)
+  # in isolation. Pulled out of the main `test` job because:
+  #   1. It needs Node + @anthropic-ai/claude-code installed (~30-60s).
+  #   2. It needs the CLAUDE_CODE_OAUTH_TOKEN secret (added under both
+  #      Actions and Dependabot scopes so dependabot PRs work too).
+  #   3. The real LLM round-trip dominates the main test job's wall time.
+  # Running it as its own job lets the main `test` job finish faster and
+  # makes "is CI red because of code, or because of Claude?" obvious.
+  mcp-cli-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
       - name: Set up Node + install claude CLI
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
       - run: npm install -g @anthropic-ai/claude-code
 
-      - name: Run tests
+      - name: Run claude CLI parity test
         env:
           RAILS_ENV: test
           DB_HOST: localhost
-          # Consumed by test/integration/mcp_claude_cli_test.rb — the CLI
-          # subprocess needs credentials to actually drive a model. Without
-          # this, `claude --print` exits non-zero on auth and the test
-          # raises. Generate locally with `claude setup-token` and add the
-          # output as a repo Actions secret named CLAUDE_CODE_OAUTH_TOKEN.
+          # Generate locally with `claude setup-token` and add the output
+          # as a repo Actions secret (and Dependabot secret) named
+          # CLAUDE_CODE_OAUTH_TOKEN.
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: bin/rails db:test:prepare test
+        # Run db:test:prepare and test as two separate invocations.
+        # `bin/rails db:test:prepare test <path>` parses <path> as a third
+        # Rails command, not as an argument to `test`, and fails with
+        # `Rails::Command::UnrecognizedCommandError`.
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/integration/mcp_claude_cli_test.rb
 
   system-test:
     runs-on: ubuntu-latest
