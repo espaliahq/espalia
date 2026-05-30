@@ -87,9 +87,17 @@ class Views::Assessments::Evidence::List < Views::Base
       "text-gray-500 dark:text-gray-400 mb-2"
   end
 
+  # When the list is empty AND the viewer can create, lean the label
+  # into the affordance ("Add evidence") rather than describing an
+  # empty section ("Evidence"). When items exist, switch back to the
+  # section label with a count so the row keeps its categorical meaning.
   def header_label_content
-    span { "Evidence" }
-    span(class: "font-mono") { "(#{@items.size})" } if @items.any?
+    if @items.any?
+      span { "Evidence" }
+      span(class: "font-mono") { "(#{@items.size})" }
+    else
+      span { "Add evidence" }
+    end
   end
 
   def can_withdraw?(item)

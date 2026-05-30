@@ -85,9 +85,17 @@ class Views::Assessments::Comments::Thread < Views::Base
       "text-gray-500 dark:text-gray-400 mb-2"
   end
 
+  # When the thread is empty AND the viewer can comment, lean the label
+  # into the affordance ("Add a comment") rather than describing an
+  # empty section ("Comments"). With comments present, switch back to
+  # the section label + count so the row keeps its categorical meaning.
   def header_label_content
-    span { "Comments" }
-    span(class: "font-mono") { "(#{visible_count})" } if visible_count.positive?
+    if visible_count.positive?
+      span { "Comments" }
+      span(class: "font-mono") { "(#{visible_count})" }
+    else
+      span { "Add a comment" }
+    end
   end
 
   # Count non-deleted comments. Deleted ones still render as tombstones
