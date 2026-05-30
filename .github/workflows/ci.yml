@@ -175,7 +175,13 @@ jobs:
           # as a repo Actions secret (and Dependabot secret) named
           # CLAUDE_CODE_OAUTH_TOKEN.
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: bin/rails db:test:prepare test test/integration/mcp_claude_cli_test.rb
+        # Run db:test:prepare and test as two separate invocations.
+        # `bin/rails db:test:prepare test <path>` parses <path> as a third
+        # Rails command, not as an argument to `test`, and fails with
+        # `Rails::Command::UnrecognizedCommandError`.
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/integration/mcp_claude_cli_test.rb
 
   system-test:
     runs-on: ubuntu-latest
