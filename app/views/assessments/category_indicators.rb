@@ -9,18 +9,25 @@
 # primary (pass/fail differs or pool signs differ).
 #
 class Views::Assessments::CategoryIndicators < Views::Base
+  include Views::Assessments::Concerns::RatedCount
+
   # @param category_id [String]
   # @param category_result [Hash, nil] primary perspective's { pass: Boolean, pool: Float }
   # @param secondary_results [Array<Array(String, Hash)>] [["Mgr", { pass:, pool: }], ...]
-  def initialize(category_id:, category_result:, secondary_results: [])
+  # @param category_data [Hash, nil] entry from `matrix_data[:categories]` — used to derive rated count
+  # @param context [Symbol] :self, :manager, or :alignment — picks which frequency the rated count reads
+  def initialize(category_id:, category_result:, secondary_results: [], category_data: nil, context: :self)
     @category_id = category_id
     @category_result = category_result
     @secondary_results = secondary_results
+    @category_data = category_data
+    @context = context
   end
 
   def view_template
     span(id: "category-indicators-#{@category_id}", class: "flex flex-col items-end gap-0.5 shrink-0") do
       span(class: "flex items-center gap-2") do
+        rated_count_badge
         render Views::Assessments::CategoryContributionLabel.new(
           category_id: @category_id,
           category_result: @category_result
@@ -35,6 +42,21 @@ class Views::Assessments::CategoryIndicators < Views::Base
   end
 
   private
+
+  # "3/24 rated" — quiet text count next to the pass/fail pill so
+  # in-progress assessments show what's still untouched. Skipped when
+  # we don't have category_data to derive the totals from (e.g. legacy
+  # callsites that haven't been updated).
+  def rated_count_badge
+    return unless @category_data
+
+    counts = category_rated_count(@category_data, @context)
+    return if counts[:total].zero?
+
+    span(class: "text-[11px] text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap") do
+      "#{counts[:rated]}/#{counts[:total]} rated"
+    end
+  end
 
   # Renders compact annotations for each divergent secondary perspective.
   #

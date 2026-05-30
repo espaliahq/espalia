@@ -115,10 +115,10 @@ class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
         f.requestSubmit();
       JS
 
-      # Wait for the post-redirect rendering. Use the URL as the sentinel —
-      # both capability names render on the initial page so a text match
-      # would resolve before the relink completes, racing the DB assertion.
-      assert_current_path(/capability=#{@cap2_stable}/)
+      # Wait for the post-redirect rendering. The card layout renders all
+      # categories inline so the redirect URL may not carry `capability=`
+      # as a query param. Use the flash notice as the sentinel instead.
+      assert_text "Evidence relinked."
 
       ActsAsTenant.with_tenant(@tenant) do
         item = EvidenceItem.find(@evidence_id)

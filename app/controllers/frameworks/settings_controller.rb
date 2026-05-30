@@ -31,6 +31,7 @@ class Frameworks::SettingsController < ApplicationController
       @framework.framework_id,
       mastery_threshold: resolve_value(settings[:mastery_threshold], :mastery_threshold),
       promotion_score_threshold: resolve_value(settings[:meeting_expectation_threshold], :meeting_expectation_threshold),
+      underperforming_threshold: resolve_value(settings[:underperforming_threshold], :underperforming_threshold),
       overperformance_cap: resolve_int_value(settings[:overperformance_cap], :overperformance_cap),
       deficit_threshold: resolve_value(settings[:deficit_threshold], :deficit_threshold)
     )
@@ -53,6 +54,7 @@ class Frameworks::SettingsController < ApplicationController
   # @return [ActionController::Parameters]
   def settings_params
     params.expect(settings: [ :mastery_threshold, :meeting_expectation_threshold,
+                              :underperforming_threshold,
                               :overperformance_cap, :deficit_threshold ])
   end
 
@@ -83,6 +85,7 @@ class Frameworks::SettingsController < ApplicationController
     {
       mastery_threshold: PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
       meeting_expectation_threshold: PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
+      underperforming_threshold: PersonDevelopment::Scoring::DEFAULT_UNDERPERFORMING_THRESHOLD,
       overperformance_cap: PersonDevelopment::Scoring::DEFAULT_OVERPERFORMANCE_CAP,
       deficit_threshold: PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD
     }

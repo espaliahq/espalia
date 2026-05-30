@@ -21,7 +21,7 @@ class Views::Assessments::Activity::FilterChips < Views::Base
 
   def view_template
     div(
-      class: "flex gap-1 text-[11px] font-medium",
+      class: "flex flex-wrap gap-1 text-[11px] font-medium",
       role: "group",
       aria_label: "Filter activity by kind"
     ) do

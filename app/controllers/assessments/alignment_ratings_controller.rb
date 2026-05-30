@@ -11,6 +11,8 @@
 # cycle is open via `ensure_in_cycle!`.
 #
 class Assessments::AlignmentRatingsController < ApplicationController
+  include Assessments::TurboStreamHelpers
+
   before_action :require_person
   before_action :set_assignment
 
@@ -36,11 +38,30 @@ class Assessments::AlignmentRatingsController < ApplicationController
 
     handler = PersonDevelopment::CommandHandler.new
 
-    handler.align_assessment(
-      @assignment.person_id, @assignment.framework_id, capability_stable_id,
-      level_ordinal: level_ordinal, aligned_frequency: frequency,
-      cycle_id: cycle.cycle_id, comment: comment
+    existing = AssessmentLevelRating.find_by(
+      cycle_id: cycle.cycle_id,
+      person_id: @assignment.person_id,
+      framework_id: @assignment.framework_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal
     )
+
+    if existing&.aligned_frequency == frequency
+      # Untoggle: posting the existing value back via the pill's "Clear
+      # rating" item drops the alignment. Mirrors the self/manager
+      # endpoints' untoggle path so the inline pill reads consistently
+      # across contexts.
+      handler.clear_alignment_rating(
+        @assignment.person_id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
+      )
+    else
+      handler.align_assessment(
+        @assignment.person_id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, aligned_frequency: frequency,
+        cycle_id: cycle.cycle_id, comment: comment
+      )
+    end
 
     respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id])
   rescue RuntimeError => e
@@ -101,6 +122,7 @@ class Assessments::AlignmentRatingsController < ApplicationController
     end
 
     cell_data = cap_data[:cells][level_ordinal]
+    level_code = matrix_data[:merged_levels].find { |l| l[:ordinal] == level_ordinal }&.dig(:level_code) || "L#{level_ordinal}"
     primary = primary_scoring(matrix_data, :alignment)
     blocked = primary.dig(:capability_statuses, capability_stable_id) == :blocked
     block_reason = primary.dig(:block_reasons, capability_stable_id)
@@ -110,37 +132,44 @@ class Assessments::AlignmentRatingsController < ApplicationController
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
-          Views::Assessments::AssessmentCell.new(
+          Views::Assessments::LevelChip.new(
             cell_data: cell_data,
-            capability_id: cap_data[:capability].capability_id,
             capability_stable_id: capability_stable_id,
             ordinal: level_ordinal,
             person_level: matrix_data[:person_level],
-            assessment_id: @assignment.id,
+            level_code: level_code,
             context: :alignment,
-            category_id: active_category_id || category_id,
-            frozen: matrix_data[:individual_ratings_frozen],
-            alignment_locked: matrix_data[:alignment_locked],
             focused: true
           ),
           layout: false
         )
       ),
       turbo_stream.replace(
+        "rating-#{capability_stable_id}-#{level_ordinal}",
+        rating_wrapper_html(capability_stable_id, level_ordinal, cell_data&.dig(:aligned_frequency),
+                            :alignment, active_category_id || category_id)
+      ),
+      turbo_stream.replace(
+        "secondaries-#{capability_stable_id}-#{level_ordinal}",
+        secondaries_wrapper_html(capability_stable_id, level_ordinal, cell_data,
+                                 cell_data&.dig(:aligned_frequency), :alignment)
+      ),
+      turbo_stream.replace(
         "scoring-panel",
         render_to_string(
-          Views::Assessments::ScoringPanel.new(
+          Views::Assessments::HeroSummary.new(
             scoring: matrix_data[:scoring],
             self_scoring: matrix_data[:self_scoring],
             manager_scoring: matrix_data[:manager_scoring],
             aligned_scoring: matrix_data[:aligned_scoring],
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
+            merged_levels: matrix_data[:merged_levels],
             mastery_threshold: matrix_data[:mastery_threshold],
             meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
-            active_category_id: active_category_id || category_id,
             assessment_id: @assignment.id,
-            context: :alignment
+            context: :alignment,
+            assessee_name: assessee_name_if_not_self
           ),
           layout: false
         )
@@ -151,50 +180,24 @@ class Assessments::AlignmentRatingsController < ApplicationController
           Views::Assessments::CategoryIndicators.new(
             category_id: category_id,
             category_result: primary[:category_results]&.dig(category_id),
-            secondary_results: secondary_category_results(category_id, matrix_data, :alignment)
+            secondary_results: secondary_category_results(category_id, matrix_data, :alignment),
+            category_data: matrix_data[:categories].find { |c| c[:category].category_id == category_id },
+            context: :alignment
           ),
           layout: false
         )
       ) if category_id),
       turbo_stream.replace(
         "capability-name-#{capability_stable_id}",
-        render_to_string(
-          Views::Assessments::CapabilityNameCell.new(
-            capability: cap_data[:capability],
-            weight: cap_data[:weight],
-            mandatory: cap_data[:binding].deficit_threshold&.to_f == 0.0,
-            blocked: blocked,
-            block_reason: block_reason,
-            contribution: contribution,
-            secondary_contributions: secondary_capability_contributions(capability_stable_id, matrix_data, :alignment),
-            has_illustrations: cap_data[:cells].any? { |_, c| c[:illustration_count]&.positive? }
-          ),
-          layout: false
-        )
-      ),
-      turbo_stream.replace(
-        "matrix-header",
-        render_to_string(
-          Views::Assessments::MatrixHeader.new(
-            merged_levels: matrix_data[:merged_levels],
-            person_level: matrix_data[:person_level],
-            inferred_level: matrix_data[:inferred_level],
-            context: :alignment
-          ),
-          layout: false
-        )
+        capability_name_html(cap_data, blocked, block_reason, contribution)
       ),
       (turbo_stream.replace(
         "category-tabs",
         render_to_string(
-          Views::Assessments::CategoryTabs.new(
+          Views::Assessments::CategoryChipBar.new(
             categories: matrix_data[:categories],
             scoring: primary,
-            self_scoring: matrix_data[:self_scoring],
-            manager_scoring: matrix_data[:manager_scoring],
-            aligned_scoring: matrix_data[:aligned_scoring],
             active_category_id: active_category_id || category_id,
-            assessment_id: @assignment.id,
             context: :alignment
           ),
           layout: false
@@ -263,5 +266,15 @@ class Assessments::AlignmentRatingsController < ApplicationController
 
       [ label, contribution ]
     end
+  end
+
+  # In alignment context, both the assessee and their manager can submit
+  # ratings. Use the assessee's name in the verdict only when the viewer
+  # is NOT the assessee themselves.
+  def assessee_name_if_not_self
+    return nil if @assignment.person_id == current_person&.id
+    return @assessee_name_if_not_self if defined?(@assessee_name_if_not_self)
+
+    @assessee_name_if_not_self = Person.find_by(id: @assignment.person_id)&.name
   end
 end

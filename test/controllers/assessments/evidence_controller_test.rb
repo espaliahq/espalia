@@ -92,10 +92,9 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
         }
       }
       follow_redirect!
-      # The fresh page render runs the matrix data builder with the new
-      # evidence in the DB; the indicator string only appears when the
-      # cell has a positive evidence_count.
-      assert_match "1 evidence", response.body
+      # The redirect lands with ?capability=&level_ordinal= so the
+      # expansion panel renders the evidence content inline.
+      assert_match "Done.", response.body
     end
 
     should "render the new entry in the inline activity feed on the post-redirect page" do
@@ -165,7 +164,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
 
       follow_redirect!
       assert_response :success
-      assert_match "1 evidence", response.body
+      assert_match "Strong refactor.", response.body
       assert_match "Code review note", response.body
     end
 

@@ -83,6 +83,21 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         @eid3, @role_id, 1, "Creates a checklist of sub-tasks before starting work"
       )
 
+      # Second category — needed for multi-category scroll tests
+      @cat2_id = SecureRandom.uuid_v7
+      handler.add_capability_category(@framework_id, @cat2_id, "Delivering", ordinal: 2)
+
+      @cap3_id = SecureRandom.uuid_v7
+      @cap3_stable = SecureRandom.uuid_v7
+      handler.add_capability(@framework_id, @cap3_id, @cap3_stable, @cat2_id, "Execution")
+      handler.create_capability_role_binding(
+        @framework_id, SecureRandom.uuid_v7, @cap3_id, @role_id
+      )
+      handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap3_id, 1,
+        "Delivers small tasks reliably")
+      handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap3_id, 2,
+        "Owns medium-scope features end-to-end")
+
       # Publish v1 so shape-changing events land in the read model
       handler.publish_version(@framework_id, "test")
 
@@ -110,67 +125,872 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
-  context "self-assessment flow" do
-    should "display assessment matrix with frequency selectors" do
+  context "hero summary" do
+    should "frame the middle band with the current-level gap when below expectations" do
       visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Person is at E2 with no ratings yet → underperforming/progressing at E2.
+      # The state-driven middle band labels the list "Gap to E2", not E3.
+      # (Tailwind uppercases the labels via tracking-wide, so Capybara reads
+      # them in their source-case form; assert that way.)
+      within("#scoring-panel") do
+        # Tailwind's `tracking-wide uppercase` re-cases the labels.
+        assert_text "GAP TO E2"
+        assert_no_text "GAP TO E3"
+        # State label sits beside it.
+        assert_text(/UNDERPERFORMING AT E2|PROGRESSING TOWARD E2/)
+      end
+    end
+
+    should "hide Continue assessing button when all current-level cells are rated" do
+      # Rate every capability at level 2 (person's current level)
+      ActsAsTenant.with_tenant(@tenant) do
+        pd_handler = PersonDevelopment::CommandHandler.new
+        [ @cap1_stable, @cap2_stable, @cap3_stable ].each do |stable_id|
+          pd_handler.rate_self(
+            @person.id, @framework_id, stable_id,
+            level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+          )
+        end
+      end
+
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      within("#scoring-panel") do
+        assert_no_text "Continue"
+      end
+    end
+
+    should "show Continue assessing button when some current-level cells are unrated" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      within("#scoring-panel") do
+        assert_text "Continue"
+      end
+    end
+
+    should "navigate to the unrated capability when Continue assessing is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('a[data-controller~=\"continue-assessing\"]').click()"
+      )
+
+      # Poll the matrix turbo-frame's src until it carries the focus
+      # params, then assert — fixed sleeps are unreliable on starved CI.
+      Timeout.timeout(Capybara.default_max_wait_time) do
+        loop do
+          src = page.evaluate_script(
+            "document.querySelector('turbo-frame#assessment-matrix').getAttribute('src')"
+          ).to_s
+          break if src.match?(/capability=#{@cap1_stable}/) && src.match?(/level_ordinal=2/)
+
+          sleep 0.05
+        end
+      end
+
+      frame_src = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getAttribute('src')"
+      )
+      assert_match(/capability=#{@cap1_stable}/, frame_src,
+        "Expected matrix frame to reload with capability=#{@cap1_stable}, got #{frame_src}")
+      assert_match(/level_ordinal=2/, frame_src,
+        "Expected matrix frame to reload with level_ordinal=2, got #{frame_src}")
+    end
+  end
+
+  context "capability contribution badge" do
+    should "render a signed delta (negative included) on every capability card" do
+      # Seed an explicit underperforming rating on cap1 at the person's
+      # level so its raw_contribution is < 0. Production renders this as
+      # a signed delta next to the capability name; the earlier
+      # redesign suppressed negative contributions, hiding the most
+      # useful "where am I under" signal.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap1_stable,
+          level_ordinal: 2, frequency: "some", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Find the cap1 card and assert its name row contains a signed
+      # delta matching `±N.N` (any sign, one decimal).
+      label = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-capability-stable-id="#{@cap1_stable}"]');
+          if (!card) return null;
+          var nameRow = card.querySelector('h3')?.parentElement;
+          var spans = nameRow ? Array.from(nameRow.querySelectorAll('span')) : [];
+          var m = spans.map(s => s.textContent.trim()).find(t => /^[+-]\\d+\\.\\d$/.test(t));
+          return m || null;
+        })()
+      JS
+
+      assert_match(/^[+-]\d+\.\d$/, label.to_s,
+        "Expected a signed delta (e.g. '-0.5') next to the capability name, got #{label.inspect}")
+    end
+  end
+
+  context "category navigation" do
+    should "update the browser URL with ?category= when a chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      assert_selector "section#category-#{@cat2_id}"
+      # Wait for the matrix turbo-frame to be fully loaded before
+      # clicking. matrix_controller's `turbo:frame-load` handler
+      # (`#syncFrameUrlToBrowser`) reads `category` from the frame's
+      # src and writes it onto the browser URL — if it fires AFTER the
+      # chip click, it overwrites the `?category=` that the click just
+      # pushed. Slow CI runners hit this race routinely.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]').click()"
+      )
+      sleep 0.6
+
+      # Browser URL must carry ?category=<id> so the activity sidebar
+      # and any other focus-aware UI narrow to the clicked category.
+      browser_url = page.evaluate_script("window.location.search")
+      assert_includes browser_url, "category=#{@cat2_id}",
+        "Browser URL should include ?category=#{@cat2_id}, got #{browser_url.inspect}"
+    end
+
+    should "dispatch matrix:focus-changed with category level when a chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Capture the focus payload broadcast by the category chip click.
+      # The activity feed listens to this event to narrow its rendered
+      # entries; without it, clicking a chip leaves the sidebar stale.
+      payload = page.evaluate_script(<<~JS)
+        (function() {
+          return new Promise(resolve => {
+            window.addEventListener("matrix:focus-changed", e => resolve(e.detail), { once: true });
+            document.querySelector('nav#category-tabs [data-category-id="#{@cat2_id}"]').click();
+          });
+        })()
+      JS
+      assert_equal "category", payload["level"]
+      assert_equal @cat2_id, payload["categoryId"]
+    end
+
+    should "mark the clicked category chip as active after the scroll settles" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Click the SECOND category chip after first parking on the first
+      # (so the click triggers a real scroll). The bug was that the
+      # final scroll event of the smooth animation could fire BEFORE the
+      # target was reached, marking the previous section active and
+      # leaving the chip mismatched with the visible section.
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat_id}\"]').click()"
+      )
+      sleep 0.6
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]').click()"
+      )
+      sleep 1.0
+
+      active_category_id = page.evaluate_script(
+        "(function() { var el = document.querySelector('nav#category-tabs a[aria-current=\"page\"]'); " \
+        "return el ? el.dataset.categoryId : null; })()"
+      )
+      assert_equal @cat2_id, active_category_id,
+        "Clicked category chip should remain active after the scroll settles, " \
+        "got #{active_category_id.inspect}"
+    end
+
+    should "scroll the second category section under the sticky header when its chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      assert_selector "section#category-#{@cat2_id}"
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+
+      # Add a tall spacer so the page can scroll
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      page.execute_script(
+        "document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]').click()"
+      )
+      sleep 0.8
+
+      # The second category section should land at or just below the
+      # bottom of the sticky header — not under it, not far below.
+      offset = page.evaluate_script(
+        "(function() { var s = document.getElementById('category-#{@cat2_id}'); " \
+        "var h = document.getElementById('assessment-sticky-header'); " \
+        "return s.getBoundingClientRect().top - (h.getBoundingClientRect().bottom); })()"
+      )
+      assert offset.between?(-5, 30),
+        "Category section should sit just below the sticky header (offset=#{offset})"
+    end
+
+    should "mark the chip for the currently-visible category as active on scroll" do
+      visit assessment_path(@assignment)
+      assert_selector "#assessment-sticky-header"
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # First, scroll enough that the hero compacts and the document
+      # finishes reflowing.
+      page.execute_script("window.scrollTo(0, 300)")
+      sleep 0.4
+      # Then iterate until cat2's section sits a few px inside the
+      # active-detection threshold (header bottom). Re-measuring on each
+      # pass absorbs any layout shift caused by the hero's scroll-driven
+      # collapse — we want a stable end state, not a one-shot scroll.
+      3.times do
+        page.execute_script(<<~JS)
+          var s = document.getElementById('category-#{@cat2_id}');
+          var h = document.getElementById('assessment-sticky-header');
+          var target = s.getBoundingClientRect().top + window.scrollY - h.offsetHeight - 4;
+          window.scrollTo(0, target);
+        JS
+        sleep 0.3
+      end
+
+      # The chip for the second category should be the active one
+      active = page.evaluate_script(
+        "(function() { var c = document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]'); " \
+        "return c && c.getAttribute('aria-current') === 'page'; })()"
+      )
+      assert active,
+        "Second category chip should be marked aria-current when its section is in view"
+    end
+
+    should "keep the category heading visible under the sticky header while scrolling within the category" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      # Inject extra capability cards inside the first category to make
+      # the category section tall enough to scroll within
+      page.execute_script(<<~JS)
+        var section = document.getElementById('category-#{@cat_id}');
+        section.insertAdjacentHTML('beforeend', '<div style="height:1500px"></div>');
+      JS
+
+      # Scroll a few hundred pixels into the first category
+      page.execute_script("window.scrollTo(0, 700)")
+      sleep 0.5
+
+      # The category heading should be visible at the top of the viewport,
+      # just below the unified sticky header
+      heading_position = page.evaluate_script(
+        "(function() { var s = document.getElementById('category-#{@cat_id}'); " \
+        "var h2 = s.querySelector('h2'); " \
+        "var h = document.getElementById('assessment-sticky-header'); " \
+        "var headerBottom = h.getBoundingClientRect().bottom; " \
+        "var headingTop = h2.getBoundingClientRect().top; " \
+        "return headingTop - headerBottom; })()"
+      )
+      assert heading_position.between?(-5, 30),
+        "Category heading should stick just under the unified sticky header (offset=#{heading_position})"
+    end
+  end
+
+  context "activity feed focus sync" do
+    should "narrow the activity feed to the capability x level when a chip is focused" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Click a chip to focus it (cell-level focus)
+      page.execute_script("document.getElementById('cell-#{@cap1_stable}-2').click()")
+      sleep 1.0
+
+      # The activity feed banner label should report cell-level focus,
+      # not category-level focus.
+      banner_label = page.evaluate_script(
+        "(document.querySelector('[data-activity-feed-target=\"focusBannerLabel\"]') || {}).textContent || ''"
+      )
+      # Cell-level focus narrows to "for the focused cell (L<n>)"
+      assert_match(/focused cell|focused capability/, banner_label,
+        "Activity feed banner should narrow to capability/cell focus, got: #{banner_label.inspect}")
+    end
+  end
+
+  context "sticky header" do
+    should "keep header, hero, and category chips visible when scrolled" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script("window.scrollTo(0, 500)")
+      sleep 0.5
+
+      # H1 should still be visible (unified sticky header)
+      h1_visible = page.evaluate_script(
+        "(function() { var r = document.querySelector('h1').getBoundingClientRect(); " \
+        "return r.top >= 0 && r.bottom <= window.innerHeight; })()"
+      )
+      assert h1_visible, "H1 (assessment name) should remain visible when scrolled"
+
+      # Activity toggle should still be visible
+      assert_selector "[data-action='click->activity-pane#toggle']", visible: true
+
+      # Category chips should still be visible
+      assert_selector "nav#category-tabs", visible: true
+    end
+
+    should "show category pass/fail indicators on chips" do
+      visit assessment_path(@assignment)
+      # Category chips should carry pass/fail status dots
+      within("nav#category-tabs") do
+        assert_selector "[data-category-status]"
+      end
+    end
+  end
+
+  context "level strip" do
+    should "auto-focus every card on the person's current level by default" do
+      visit assessment_path(@assignment)
+      # No ?capability= in URL — every card still auto-focuses on the
+      # person's level (E2). The level-2 expectation text renders inside
+      # each card's expansion panel.
+      assert_text "Synthesises information from multiple sources"
+    end
+
+    should "honour an explicit ?capability= focus on the matching card" do
+      visit assessment_path(@assignment, capability: @cap1_stable)
+      # ?capability= present but no ?level_ordinal=. The expansion
+      # should default to the person's level (E2), and only one
+      # expansion shows on this capability.
+      assert_text "Synthesises information from multiple sources"
+    end
+
+    should "fully reveal the capability name and eyebrow under the sticky header after chip click" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script("window.scrollTo(0, 1200)")
+      sleep 0.4
+
+      page.execute_script(<<~JS)
+        document.getElementById('cell-#{@cap2_stable}-1').click();
+      JS
+      sleep 1.0
+
+      # The eyebrow ("THINKING") and capability name ("Problem Solving")
+      # must be in view, not pushed under the sticky chrome. The
+      # EFFECTIVE blocker is the unified header AND the sticky category
+      # section header that pins underneath it — both cover the top.
+      diagnostics = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
+          var section = card.closest("section[data-category-id]");
+          var sectionHeader = section.querySelector(":scope > [data-section-header]");
+          var header = document.getElementById('assessment-sticky-header');
+          return {
+            card_top: card.getBoundingClientRect().top,
+            header_bottom: header.getBoundingClientRect().bottom,
+            section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0
+          };
+        })()
+      JS
+      effective_blocker_bottom = diagnostics["header_bottom"] + diagnostics["section_header_height"]
+      offset = diagnostics["card_top"] - effective_blocker_bottom
+      assert offset >= -5,
+        "Top of capability card should sit at or below the effective sticky chrome " \
+        "(offset=#{offset}, diagnostics=#{diagnostics.inspect})"
+    end
+
+    should "smooth scroll the capability card into view when a chip is clicked" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Set up: starting from scrollY=0 (header expanded) and clicking a
+      # chip on a card BELOW the fold is the scenario that exposes the
+      # sticky-hero-compacts-mid-scroll race. The smooth-scroll target is
+      # computed against the expanded header height; mid-flight the hero
+      # compacts (scrollY crosses 80) and the scroll-compensation kick
+      # fights the animation, leaving the card top hidden behind the
+      # final-state header.
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script("window.scrollTo(0, 0)")
+      sleep 0.4
+
+      # Click a chip on cap2 (Problem Solving) — below the fold from
+      # scrollY=0. JS-dispatch so Capybara doesn't scroll it for us.
+      page.execute_script(<<~JS)
+        document.getElementById('cell-#{@cap2_stable}-1').click();
+      JS
+      sleep 1.5
+
+      # After the chip click, the cap2 CARD top must sit just below the
+      # sticky header bottom — close enough that the eyebrow and name
+      # are immediately visible without forcing the user to scroll up.
+      # We allow 0–30px of breathing room (the card has 12px of declared
+      # scroll-margin-top above its top edge); anything outside that
+      # window is a regression.
+      # Measure against the EFFECTIVE blocking top — unified header
+      # bottom + category section header height. The category section
+      # heading is itself sticky (pinned just under the unified header),
+      # so card top must clear both, not just the unified header.
+      diagnostics = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
+          var section = card.closest("section[data-category-id]");
+          var sectionHeader = section.querySelector(":scope > [data-section-header]");
+          var header = document.getElementById('assessment-sticky-header');
+          return {
+            card_top: card.getBoundingClientRect().top,
+            header_bottom: header.getBoundingClientRect().bottom,
+            section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0,
+            scroll_y: window.scrollY
+          };
+        })()
+      JS
+      effective_blocker_bottom = diagnostics["header_bottom"] + diagnostics["section_header_height"]
+      offset = diagnostics["card_top"] - effective_blocker_bottom
+      assert offset.between?(0, 30),
+        "Capability card top should land 0-30px below the effective sticky " \
+        "header bottom (unified + section). offset=#{offset}, " \
+        "diagnostics=#{diagnostics.inspect}"
+    end
+
+    should "render each level code only once (no duplicated labels under the chips)" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Count distinct nodes whose text is exactly "E1" inside the first
+      # capability card. The chip already shows the code; the previous
+      # design ALSO rendered a label row below with the same codes.
+      count = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-matrix-target="card"]');
+          var matches = 0;
+          card.querySelectorAll('*').forEach(function(n) {
+            if (n.children.length === 0 && (n.textContent || '').trim() === 'E1') matches++;
+          });
+          return matches;
+        })()
+      JS
+      assert_equal 1, count,
+        "Expected exactly one 'E1' label in the chip strip, got #{count}"
+    end
+  end
+
+  context "level chip colors" do
+    should "tint unrated below-level chips with assumed-consistent green" do
+      visit assessment_path(@assignment)
+      # The unrated E1 chip (below person_level=2) should carry the
+      # assumed-consistent green tint — the person is at E2, so we
+      # assume they've cleared E1.
+      chip_classes = page.evaluate_script(
+        "document.getElementById('cell-#{@cap1_stable}-1').className"
+      )
+      assert_match(/bg-green/, chip_classes,
+        "Unrated below-level chip should carry assumed-consistent green tint. Classes: #{chip_classes}")
+    end
+
+    should "leave the at-person-level unrated chip neutral grey" do
+      visit assessment_path(@assignment)
+      # E2 is the person's level; with no rating it should be grey,
+      # not green (only BELOW-level cells get the mint tint).
+      chip_classes = page.evaluate_script(
+        "document.getElementById('cell-#{@cap1_stable}-2').className"
+      )
+      assert_no_match(/bg-green/, chip_classes,
+        "Unrated at-person-level chip should be grey. Classes: #{chip_classes}")
+    end
+
+    # Regression: the button-reset utilities added when chips were
+    # promoted from <div> to <button> (`bg-transparent`) won the cascade
+    # against `bg-green-100/60` / `bg-gray-100` / etc — the class string
+    # still listed the chip colour but the computed background painted
+    # transparent. The existing tests assert on className only and so
+    # passed; this asserts on what actually paints.
+    should "actually paint a non-transparent background for each chip state" do
+      visit assessment_path(@assignment)
+      bg = ->(id) { page.evaluate_script("window.getComputedStyle(document.getElementById('#{id}')).backgroundColor") }
+
+      below_unrated = bg.call("cell-#{@cap1_stable}-1")  # E1, below person_level
+      at_unrated    = bg.call("cell-#{@cap1_stable}-2")  # E2, person's level
+
+      assert_no_match(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/i, below_unrated,
+        "Unrated below-level chip painted transparent — bg-green-* lost the cascade. Got: #{below_unrated}")
+      assert_no_match(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/i, at_unrated,
+        "Unrated at-level chip painted transparent — bg-gray-* lost the cascade. Got: #{at_unrated}")
+    end
+  end
+
+  context "scroll stability on rating" do
+    should "not jump scroll position when a rating is submitted" do
+      # ?capability= focuses the third (Execution) card so the
+      # expansion panel renders the FrequencySelector buttons.
+      visit assessment_path(@assignment, capability: @cap3_stable)
+      assert_selector "#scoring-panel"
+
+      # Add tall spacer + scroll into the page so a later capability's
+      # rating button is visible without Capybara needing to scroll to
+      # it. The third (Execution) card under "Delivering" sits well
+      # below the hero.
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script(<<~JS)
+        var btn = document.querySelector('#rating-#{@cap3_stable}-2 button');
+        btn.scrollIntoView({ block: 'center' });
+      JS
+      sleep 0.5
+
+      scroll_before = page.evaluate_script("window.scrollY")
+      assert scroll_before > 200,
+        "Setup: should be scrolled into the page (scrollY=#{scroll_before})"
+
+      # JS-dispatch the open + pick so Capybara's "scroll element into
+      # view" doesn't reset scroll. This mirrors what a user clicking a
+      # naturally-visible pill experiences.
+      page.execute_script(<<~JS)
+        var trigger = document.querySelector("#rating-#{@cap3_stable}-2 button[aria-haspopup='menu']");
+        trigger.click();
+      JS
+      sleep 0.3
+      page.execute_script(<<~JS)
+        var item = Array.from(document.querySelectorAll("#rating-#{@cap3_stable}-2 [role='menuitem']"))
+          .find(b => b.textContent.trim().includes('Consistently'));
+        item?.closest('form')?.requestSubmit(item);
+      JS
+      sleep 1.0
+
+      scroll_after = page.evaluate_script("window.scrollY")
+      assert_in_delta scroll_before, scroll_after, 50,
+        "Scroll should remain stable when rating (was #{scroll_before}, now #{scroll_after})"
+    end
+  end
+
+  context "responsive layout" do
+    should "hide the activity sidebar on narrow viewports" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+
+      # Open the sidebar — on narrow viewports it should overlay rather
+      # than steal width from the main content
+      page.execute_script(
+        "document.querySelector('[data-action*=\"activity-pane#toggle\"]').click()"
+      )
+      sleep 0.3
+
+      main_visible_width = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getBoundingClientRect().width"
+      )
+      viewport_width = page.evaluate_script("window.innerWidth")
+
+      # Main pane should be at least 80% of viewport (sidebar overlays, not pushes)
+      assert main_visible_width >= viewport_width * 0.8,
+        "On narrow viewport sidebar should overlay, not compress main pane " \
+        "(main=#{main_visible_width}, viewport=#{viewport_width})"
+    end
+
+    should "contain capability cards within the viewport on narrow screens with many levels" do
+      # Frameworks with many levels (E1-E8) produce a chip strip far
+      # wider than mobile viewports — the card must contain that strip
+      # in a scrollable region instead of letting it bulge the card off
+      # the viewport. Add extra levels to this test's framework.
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.start_draft(@framework_id, 2, @person.id)
+        (3..8).each do |ord|
+          handler.add_level(@framework_id, SecureRandom.uuid_v7, @role_id, ord, "L#{ord}", "E#{ord}")
+        end
+        handler.publish_version(@framework_id, "many-levels")
+      end
+
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+
+      viewport_width = page.evaluate_script("window.innerWidth")
+      card_right = page.evaluate_script(
+        "document.querySelector('[data-matrix-target=\"card\"]').getBoundingClientRect().right"
+      )
+
+      assert card_right <= viewport_width + 5,
+        "Card right edge (#{card_right}) should not extend past viewport (#{viewport_width}) " \
+        "even with many levels"
+    end
+  end
+
+  context "hero refinements" do
+    should "not render a context-label eyebrow above the verdict" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      within("#scoring-panel") do
+        assert_no_text "SELF ASSESSMENT"
+        assert_no_text "Self Assessment"
+      end
+    end
+
+    should "not jump scroll position to top when slowly scrolling past the compact threshold" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # Capture the visible y-position of an element just below the hero.
+      # When the hero compacts during a slow scroll, that element must
+      # stay at roughly the same viewport position — not jump back to top.
+      below_hero_id = "category-#{@cat_id}"
+
+      # Slow scroll: a small step that crosses the compact threshold (80).
+      page.execute_script("window.scrollTo(0, 90)")
+      sleep 0.4
+
+      visible_y = page.evaluate_script(
+        "document.getElementById('#{below_hero_id}').getBoundingClientRect().top"
+      )
+      scroll_y = page.evaluate_script("window.scrollY")
+
+      # After the scroll + compact, the user's scroll position should
+      # NOT have snapped back to (or near) zero.
+      assert scroll_y > 50,
+        "Slow scroll past compact threshold caused scroll to jump to top (scrollY=#{scroll_y})"
+      # And the visible content below the hero should remain in view.
+      assert visible_y < 600,
+        "Content below the hero should still be visible after compact (top=#{visible_y})"
+    end
+
+    should "collapse the middle band while keeping the hero header visible on scroll" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      # Pre-condition: the file-level fixture must produce a hero with a
+      # middle band (the perspective-driven 3-capability list). The band
+      # only renders when `primary_scoring[:capability_contributions]` is
+      # non-empty; with the shared setup (capabilities + person + ratings)
+      # this is currently always the case. Asserting it explicitly fails
+      # loudly if a future fixture change empties the hero — rather than
+      # silently skipping the actual collapse assertions below.
+      assert_selector ".hero-collapsible", visible: :all
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      # At the top, the middle band should be at full height.
+      middle_before = page.evaluate_script(
+        "document.querySelector('.hero-collapsible').getBoundingClientRect().height"
+      )
+      assert middle_before > 40,
+        "Middle band should be expanded at scrollY=0, got height=#{middle_before}"
+
+      # Scroll past the collapse range (CSS animation maps 0..240 to full..0).
+      page.execute_script("window.scrollTo(0, 400)")
+      sleep 0.4
+
+      middle_after = page.evaluate_script(
+        "document.querySelector('.hero-collapsible').getBoundingClientRect().height"
+      )
+      assert middle_after < 5,
+        "Middle band should be collapsed past the scroll range, got height=#{middle_after}"
+
+      # The hero header (verdict text) must still be visible regardless.
+      header_visible = page.evaluate_script(<<~JS)
+        (function() {
+          var panel = document.getElementById('scoring-panel');
+          var rect = panel.getBoundingClientRect();
+          return rect.bottom > 0 && rect.height > 40;
+        })()
+      JS
+      assert header_visible, "Hero header should remain visible after the middle band collapses"
+    end
+  end
+
+  context "activity sidebar layout" do
+    should "expand inline and compress the main pane when open" do
+      visit assessment_path(@assignment)
+
+      main_width_before = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getBoundingClientRect().width"
+      )
+
+      # Open the sidebar
+      page.execute_script(
+        "document.querySelector('[data-action*=\"activity-pane#toggle\"]').click()"
+      )
+      sleep 0.5
+
+      main_width_after = page.evaluate_script(
+        "document.querySelector('turbo-frame#assessment-matrix').getBoundingClientRect().width"
+      )
+
+      assert main_width_after < main_width_before - 100,
+        "Main pane should compress when sidebar opens (was #{main_width_before}, now #{main_width_after})"
+    end
+  end
+
+  context "activity sidebar" do
+    should "be closable when open" do
+      visit assessment_path(@assignment)
+      assert_selector "[data-action='click->activity-pane#toggle']"
+
+      # Open via JS-dispatched click (avoids flake-prone Selenium pointer)
+      page.execute_script(
+        "document.querySelector('[data-action*=\"activity-pane#toggle\"]').click()"
+      )
+      assert_selector "#assessment-activity-pane", visible: true
+
+      # Close via the × button inside the sidebar
+      page.execute_script(
+        "document.querySelector('#assessment-activity-pane [data-action*=\"activity-pane#close\"]').click()"
+      )
+
+      assert_selector "#assessment-activity-pane", visible: :hidden, wait: 3
+    end
+  end
+
+  context "self-assessment flow" do
+    should "display assessment with inline rating pills" do
+      # ?capability= focuses the card so the expansion panel renders the
+      # inline frequency pill we want to assert on.
+      visit assessment_path(@assignment, capability: @cap1_stable)
 
       assert_selector "h1", text: "Senior Software Engineer"
       assert_text "E2"
       assert_text "Critical Thinking"
       assert_text "Problem Solving"
 
-      # Frequency selector buttons visible
-      assert_button "Some"
-      assert_button "Most"
-      assert_button "Consistently"
+      # The inline pill renders at the end of the expectation sentence
+      # with an aria-haspopup attribute identifying it as a chooser.
+      assert_selector "[aria-haspopup='menu']", minimum: 1
 
-      # Scoring panel visible on desktop
-      assert_text "Performance"
-      assert_text "Categories"
+      # Hero summary card visible
+      assert_selector "#scoring-panel"
+      assert_text "Thinking"
     end
 
     should "rate a capability and see scoring update" do
-      visit assessment_path(@assignment)
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector for the person's level (level 2 here).
+      visit assessment_path(@assignment, capability: @cap1_stable)
 
-      # Click the first "Consistently" button using a precise selector
-      click_rating_frequency("#rating-#{@cap1_stable}-1", "Consistently")
+      # The expansion panel shows the FrequencySelector for the person's level.
+      # Person is at level 2, so rating-#{stable}-2 is in the expansion panel.
+      click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
 
       # Scoring panel should update (performance ratio changes)
       assert_selector "#scoring-panel"
     end
 
-    should "show weight badge for weighted capabilities" do
+    should "show sticky hero when scrolled down" do
       visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
 
-      # Critical Thinking has weight 2.0 — should show "2×" badge
-      assert_text "2×"
+      # Add a tall spacer to make the page scrollable
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+
+      page.execute_script("window.scrollTo(0, 500)")
+      sleep 0.5
+
+      scroll_pos = page.evaluate_script("window.scrollY")
+      hero_top = page.evaluate_script(
+        "document.getElementById('scoring-panel').getBoundingClientRect().top"
+      )
+      assert scroll_pos > 100, "Page should have scrolled (scrollY=#{scroll_pos})"
+      assert hero_top >= 0 && hero_top < 100,
+        "Hero should be pinned near the top of the viewport (top=#{hero_top})"
     end
 
-    should "show mandatory indicator for zero-tolerance capabilities" do
+    should "scroll to the correct category section when clicking a category chip" do
       visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
 
-      # Critical Thinking has deficit_threshold=0 (via individual_tolerance mapping) and weight=2.0
-      # Should show amber left border on the name cell (border-l-amber-400)
-      assert_selector "td.border-l-3"
+      section_id = "category-#{@cat_id}"
+      # JS-dispatched click so Stimulus actions fire reliably even on
+      # starved CI runners (see testing.md — *Flake-Prone Click Guards*).
+      page.execute_script(
+        "document.querySelector(\"nav#category-tabs [data-category-id='#{@cat_id}']\").click()"
+      )
+      sleep 0.8
+
+      section_visible = page.evaluate_script(
+        "(function() { var r = document.getElementById('#{section_id}').getBoundingClientRect(); " \
+        "return r.top >= 0 && r.top < window.innerHeight; })()"
+      )
+      assert section_visible,
+        "Category section should be visible in the viewport after clicking chip"
     end
 
-    should "show illustration count and reveal full illustrations on cell focus" do
+    should "expand capability card when clicking a level chip" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Click the E1 chip on the first capability — JS-dispatched so
+      # the Stimulus action triggers reliably on starved CI.
+      page.execute_script("document.getElementById('cell-#{@cap1_stable}-1').click()")
+
+      # The expansion panel for level 1 should appear with level-1 expectation
+      assert_text "Asks clarifying questions to understand problems", wait: 5
+    end
+
+    should "update capability contribution when rating a frequency" do
+      # ?capability= focuses the card so the expansion panel renders the
+      # FrequencySelector for the person's level (level 2 here).
+      visit assessment_path(@assignment, capability: @cap1_stable)
+      assert_selector "#scoring-panel"
+
+      # Rate level 2 of first capability
+      click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
+
+      # The chip color should update to reflect the new rating
+      assert_selector "#cell-#{@cap1_stable}-2.bg-green-200", wait: 5
+    end
+
+    should "not jump scroll position when scrolling past the hero summary" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      page.execute_script(
+        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+      )
+      page.execute_script("window.scrollTo(0, 600)")
+      sleep 0.3
+
+      pos_before = page.evaluate_script("window.scrollY")
+      sleep 0.5
+      pos_after = page.evaluate_script("window.scrollY")
+
+      assert_in_delta pos_before, pos_after, 10,
+        "Scroll position jumped from #{pos_before} to #{pos_after} — hero compact/expand feedback loop"
+    end
+
+    should "render illustrations on the auto-focused level expansion" do
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
-      # Illustration count indicators should be visible on the compact cells
-      assert_text "2 examples"
-      assert_text "1 example"
-
-      # Expanding the row alone surfaces only dot summaries — full
-      # illustrations are reserved for the focused cell. Focus the
-      # level-1 cell of the first capability to reveal them.
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-      cap1_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap1_id, level_ordinal: 1)
-
-      assert_text "Asks 'why' before jumping into implementation"
-      assert_text "Rephrases the problem statement in their own words"
+      # Card layout: every card auto-focuses the person's level (E2)
+      # and renders the illustrations for that level in the expansion
+      # panel. Cap1 has one level-2 illustration.
+      assert_text "Cross-references docs, code, and stakeholder input before proposing solutions"
     end
   end
 
@@ -189,7 +1009,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_text "Critical Thinking"
 
-      # No "Mgr:" label should appear in any cell — manager rating is private
+      # No "Mgr:" label should appear anywhere — manager rating is private
       # to the manager until alignment formally begins.
       assert_no_text "Mgr:"
     end
@@ -202,83 +1022,6 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment, mode: "alignment")
       assert_text "Critical Thinking"
       assert_no_text "Mgr:"
-    end
-  end
-
-  context "row expansion accordion" do
-    should "expand a row when clicking it" do
-      visit assessment_path(@assignment)
-
-      # Click the capability name cell — avoids hitting rating form buttons
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
-    end
-
-    should "keep row expanded when clicking it again" do
-      visit assessment_path(@assignment)
-
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      # Click the same capability name again — should stay expanded
-      find("#capability-name-#{@cap1_stable}").click
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
-    end
-
-    should "collapse expanded row and expand new row when clicking a different row" do
-      visit assessment_path(@assignment)
-
-      # Expand first row, then focus a cell so we can assert on the
-      # focused-cell-only illustration text as a "this row is expanded
-      # AND focused" signal.
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-      cap1_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap1_id, level_ordinal: 1)
-      assert_text "Asks 'why' before jumping into implementation"
-
-      # Click second row — first should collapse, second should expand.
-      # JS-dispatch the click because Capybara's pointer click is dropped
-      # on slow CI (and click_with_retry's retry uses the same mechanism).
-      page.execute_script("document.querySelector('#capability-name-#{@cap2_stable}').click();")
-      cap2_id = capability_id_from_stable(@cap2_stable)
-      unless page.has_selector?("[data-matrix-target='expandedRow'][data-capability-id='#{cap2_id}']", visible: true, wait: 8)
-        page.execute_script("document.querySelector('#capability-name-#{@cap2_stable}').click();")
-      end
-
-      assert_no_selector "[data-matrix-target='expandedRow'][data-capability-id='#{cap1_id}']", visible: true
-      assert_selector "[data-matrix-target='expandedRow'][data-capability-id='#{cap2_id}']", visible: true
-      assert_no_text "Asks 'why' before jumping into implementation"
-    end
-
-    should "collapse row when clicking its chevron" do
-      visit assessment_path(@assignment)
-
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      # Click the chevron to collapse
-      row1 = find("[data-matrix-target='row']", match: :first)
-      chevron = row1.find("[data-matrix-target='rowChevron']")
-      chevron.click
-      assert_no_selector "[data-matrix-target='expandedRow']", visible: true
-    end
-
-    should "keep illustrations expanded when rating a capability in the same row" do
-      visit assessment_path(@assignment)
-
-      # Expand the first row and focus a cell so its illustration is
-      # visible — illustrations only render in the focused cell.
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-      cap1_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap1_id, level_ordinal: 1)
-      assert_text "Asks 'why' before jumping into implementation"
-
-      # Click a rating button inside the same row.
-      # Use the capability stable_id to build a precise selector, avoiding
-      # stale element references from Turbo Stream replacements.
-      click_rating_frequency("#rating-#{@cap1_stable}-1", "Consistently")
-
-      # Row should still be expanded with the same focused cell content visible
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
-      assert_text "Asks 'why' before jumping into implementation"
     end
   end
 
@@ -312,201 +1055,17 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
-    # Top category-tabs nav is hidden at `lg:` and above (the left-hand
-    # scoring panel is the primary nav on desktop — see assessments.md).
-    # The next four tests target the tab bar itself, so they run at a
-    # mobile viewport where the nav is visible.
-    context "at mobile viewport" do
-      setup do
-        page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      end
-
-      should "display category tabs and default to first category" do
-        visit assessment_path(@assignment)
-
-        # Both tabs should be visible
-        assert_selector "#category-tabs"
-        assert_text "Thinking"
-        assert_text "Delivering"
-
-        # First category content should be visible
-        assert_text "Critical Thinking"
-        assert_text "Problem Solving"
-
-        # Second category content should NOT be visible (only one category rendered)
-        assert_no_text "Execution"
-      end
-
-      should "switch categories when clicking a tab" do
-        visit assessment_path(@assignment)
-
-        # Wait for the lazy-loaded matrix frame to finish its eager fetch.
-        # The category-tabs nav lives INSIDE the assessment-matrix turbo frame,
-        # so a click on a tab can race the eager-fetch replacement and be
-        # silently dropped on slow CI runners.
-        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
-
-        # Drive the Turbo Frame fetch directly by setting frame.src — bypasses
-        # the click event entirely. Capybara's pointer click + JS dispatch
-        # have both been dropped on starved CI runners; this is the most
-        # reliable way to trigger the frame swap.
-        page.execute_script(<<~JS)
-          const tab = Array.from(document.querySelectorAll("#category-tabs a"))
-            .find(a => a.textContent.trim().includes("Delivering"));
-          const frame = document.getElementById("assessment-matrix");
-          if (tab && frame) frame.src = tab.href;
-        JS
-
-        assert_text "Execution"
-        assert_text "Ships features reliably"
-        assert_no_selector "#capability-name-#{@cap1_stable}"
-      end
-
-      should "show progress counts on tabs" do
-        visit assessment_path(@assignment)
-
-        # Tabs should show rated/total counts (0 rated initially)
-        within "#category-tabs" do
-          assert_text "0/"
-        end
-      end
-
-      should "update tab progress after rating" do
-        visit assessment_path(@assignment)
-
-        # Rate a capability in the first tab
-        click_rating_frequency("#rating-#{@cap1_stable}-1", "Consistently")
-
-        # Tab progress should update
-        within "#category-tabs" do
-          assert_text "1/"
-        end
-      end
-    end
-
-    should "switch tab when clicking category in scoring panel" do
+    should "display all categories on single scrollable page" do
       visit assessment_path(@assignment)
 
-      # Wait for the lazy-loaded scoring frame to finish its eager fetch.
-      # Without this, clicking inside #scoring-panel can race the frame
-      # replacement and the click is silently dropped on slow CI runners.
-      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
-
-      # Drive the Turbo Frame fetch directly by setting frame.src — bypasses
-      # the click event entirely (same as the category-tab test above).
-      page.execute_script(<<~JS)
-        const link = Array.from(document.querySelectorAll("#scoring-panel a"))
-          .find(a => a.textContent.trim().includes("Delivering"));
-        const frame = document.getElementById("assessment-matrix");
-        if (link && frame) frame.src = link.href;
-      JS
-
+      # Both categories and all capabilities should be visible on the same page
+      assert_selector "#category-tabs"
+      assert_text "Thinking"
+      assert_text "Delivering"
+      assert_text "Critical Thinking"
+      assert_text "Problem Solving"
       assert_text "Execution"
-      assert_no_selector "#capability-name-#{@cap1_stable}"
     end
-
-    should "preserve expanded row focus with sibling dimming" do
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-
-      # Expand a row
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      # Sibling rows should be dimmed
-      rows = all("[data-matrix-target='row']")
-      dimmed = rows.select { |r| r[:class]&.include?("opacity-40") }
-      assert dimmed.any?, "Expected sibling rows to be dimmed when a row is expanded"
-    end
-  end
-
-  # Reads the inline `style.width` of the matrix `<col>` for the given
-  # level ordinal. `evaluate_script` evaluates an expression (not a
-  # block), so the lookup is wrapped in an IIFE.
-  #
-  # @param level_ordinal [Integer] level ordinal whose `<col>` to read
-  # @return [String] inline width — "512px" focused, "280px" sibling,
-  #   "" when no inline override is set
-  def col_width_for(level_ordinal)
-    page.evaluate_script(<<~JS)
-      (() => {
-        const col = document.querySelector(
-          `col[data-matrix-target="col"][data-level-ordinal="#{level_ordinal}"]`
-        );
-        return col ? col.style.width : null;
-      })()
-    JS
-  end
-
-  # Looks up the per-version `data-capability-id` for the expanded row
-  # rendered with the given `stable_id`.
-  #
-  # @param stable_id [String] capability stable_id (UUID)
-  # @return [String, nil] the row's per-version `capability_id`, or
-  #   nil when no expanded row matches
-  def capability_id_from_stable(stable_id)
-    page.evaluate_script(<<~JS)
-      (() => {
-        const row = document.querySelector(
-          `tr[data-matrix-target="expandedRow"][data-capability-stable-id="#{stable_id}"]`
-        );
-        return row ? row.dataset.capabilityId : null;
-      })()
-    JS
-  end
-
-  # Polls until the matrix `<col>` for the given level has been
-  # restored to its 512px focused width. The rating Turbo Stream and
-  # the async CurrentAssessment broadcast that triggers the matrix
-  # frame reload settle out of order; this helper waits for the focus
-  # state to be re-applied after the reload completes.
-  #
-  # @param level_ordinal [Integer] focused level ordinal
-  # @param wait [Integer] seconds to poll before giving up
-  # @return [void]
-  def wait_for_focus_restored(level_ordinal:, wait: 5)
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
-    loop do
-      width = col_width_for(level_ordinal)
-      return if width == "512px"
-      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-      sleep 0.1
-    end
-  end
-
-  # Returns the rendered width in pixels of the first matrix `<td>` at
-  # the given level ordinal. Reads `getBoundingClientRect().width`, so
-  # observes ACTUAL layout, not declared style.
-  #
-  # @param level_ordinal [Integer] level ordinal whose `<td>` to measure
-  # @return [Float, nil] rendered width in CSS pixels, or nil when no
-  #   matching `<td>` exists
-  def rendered_col_width(level_ordinal)
-    page.evaluate_script(<<~JS)
-      (() => {
-        const td = document.querySelector(
-          `td[data-level-ordinal="#{level_ordinal}"]`
-        );
-        return td ? td.getBoundingClientRect().width : null;
-      })()
-    JS
-  end
-
-  # JS-dispatches a click on the expanded `<td>` for the given
-  # capability + level. Bypasses Selenium's synthetic pointer hit-test,
-  # which is occasionally dropped on starved CI runners.
-  #
-  # @param capability_id [String] per-version capability_id
-  # @param level_ordinal [Integer] target level
-  # @return [void]
-  def focus_expanded_cell(capability_id:, level_ordinal:)
-    page.execute_script(<<~JS, capability_id, level_ordinal.to_s)
-      const td = document.querySelector(
-        `tr[data-matrix-target="expandedRow"][data-capability-id="${arguments[0]}"] ` +
-        `td[data-level-ordinal="${arguments[1]}"]`
-      );
-      if (td) td.click();
-    JS
   end
 
   context "cell focus" do
@@ -514,281 +1073,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     end
 
-    should "widen focused column and show close button when an expanded cell is focused" do
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      screenshot("01_default_matrix")
-
-      # Defaults: no inline width on level cols.
-      assert_equal "", col_width_for(1)
-      assert_equal "", col_width_for(2)
-
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-      screenshot("02_row_expanded_no_focus")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      assert cap_id, "Expected to resolve the per-version capability_id from the expanded row"
-
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-
-      assert_equal "512px", col_width_for(1), "Focused column should widen (32rem == 512px)"
-      assert_equal "280px", col_width_for(2),
-        "Sibling columns keep their default width so the FrequencySelector fits on one line"
-
-      # The close button should be visible inside the focused expanded cell.
-      assert_selector(
-        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
-        "td[data-level-ordinal='1'] [data-focused-cell-close]",
-        visible: true
-      )
-      screenshot("03_cell_focused")
-    end
-
-    should "restore default column widths when the close button is clicked" do
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-      assert_equal "512px", col_width_for(1)
-      screenshot("01_focused")
-
-      # JS-dispatch close button click for CI determinism.
-      page.execute_script(<<~JS, cap_id)
-        const btn = document.querySelector(
-          `tr[data-matrix-target="row"][data-capability-id="${arguments[0]}"] ` +
-          `td[data-level-ordinal="1"] [data-focused-cell-close]`
-        );
-        if (btn) btn.click();
-      JS
-
-      # Use Capybara wait — the close path runs synchronously but we still
-      # poll for the post-state to give the URL pushState handler room.
-      assert col_width_for(1) == "", "Focused column width should reset"
-      assert col_width_for(2) == "", "Sibling column width should reset"
-      screenshot("02_after_unfocus")
-    end
-
-    should "deep link with capability + level_ordinal arrives focused" do
-      visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
-      wait_for_stimulus "matrix"
-
-      # Row should be pre-expanded
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
-
-      # Column should be focus-widened
-      assert_equal "512px", col_width_for(1)
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      assert_selector(
-        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
-        "td[data-level-ordinal='1'] [data-focused-cell-close]",
-        visible: true
-      )
-      screenshot("01_deep_linked_focus")
-    end
-
-    should "focus the cell when clicking the compact-row expectation text" do
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-
-      # Click the compact cell's expectation text — should expand row AND
-      # focus the cell, not just expand.
-      page.execute_script(<<~JS)
-        (() => {
-          const td = document.querySelector(`#cell-#{@cap1_stable}-1`);
-          const text = td.querySelector("p");
-          if (text) text.click();
-        })()
-      JS
-
-      assert_selector "[data-matrix-target='expandedRow']", visible: true
-      assert_equal "512px", col_width_for(1), "Compact-cell click should focus level 1"
-
-      # Regression: URL must carry BOTH `capability` AND `level_ordinal`
-      # so a full page reload (or any frame reload that re-runs
-      # dispatchInitialFocus from URL params) restores focus. Pre-fix,
-      # focusCell only synced level_ordinal; capability was missing,
-      # which made the URL un-restorable on reload and led to
-      # level_ordinal getting cleaned away on next focus change.
-      params = URI.decode_www_form(
-        URI.parse(page.evaluate_script("window.location.href")).query.to_s
-      ).to_h
-      assert_equal @cap1_stable, params["capability"],
-        "Compact-cell click must push capability=stable_id to the URL"
-      assert_equal "1", params["level_ordinal"],
-        "Compact-cell click must push level_ordinal to the URL"
-    end
-
-    should "keep focus when clicking a rating button on an already-focused cell" do
-      # Regression: previously, clicking a rating button inside a
-      # focused cell hit focusCell's "click same cell to toggle off"
-      # branch and dropped focus immediately. Toggle-off must only
-      # fire on a BACKGROUND click of the same cell. Additionally, the
-      # rating Turbo Stream response replaces the compact cell `<td>`,
-      # which would otherwise drop the close-button visibility — we
-      # re-apply column focus after every Turbo Stream render.
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-      assert_equal "512px", col_width_for(1), "Pre-condition: cell is focused"
-
-      # Click "Some" inside the (already-focused) cell. The form posts
-      # a Turbo Stream response that replaces the compact cell, so we
-      # wait for the rating to land before re-checking focus.
-      page.execute_script(<<~JS)
-        (() => {
-          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
-          const btn = Array.from(cell.querySelectorAll("button"))
-            .find(b => b.textContent.trim() === "Some");
-          if (btn) btn.click();
-        })()
-      JS
-      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
-
-      # The rating triggers an ActionCable broadcast (CurrentAssessment
-      # projection) → assessment_sync reloads the matrix frame
-      # asynchronously. Poll for focus state to settle.
-      wait_for_focus_restored(level_ordinal: 1)
-
-      assert_equal "512px", col_width_for(1),
-        "Clicking a rating button should NOT drop focus from an already-focused cell"
-
-      # The close button should still be visible after the Turbo
-      # Stream replaced the compact cell — focus state is whole.
-      assert_selector(
-        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
-        "td[data-level-ordinal='1'] [data-focused-cell-close]",
-        visible: true
-      )
-
-      # Click a SECOND rating button to make sure focus persists across
-      # multiple rating changes (the user's flow: rate, then change
-      # the rating).
-      page.execute_script(<<~JS)
-        (() => {
-          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
-          const btn = Array.from(cell.querySelectorAll("button"))
-            .find(b => b.textContent.trim() === "Most");
-          if (btn) btn.click();
-        })()
-      JS
-      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Most"
-      wait_for_focus_restored(level_ordinal: 1)
-
-      assert_equal "512px", col_width_for(1),
-        "Focus should still be intact after a second rating change"
-      assert_selector(
-        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
-        "td[data-level-ordinal='1'] [data-focused-cell-close]",
-        visible: true
-      )
-    end
-
-    should "not flash indicator badges when rating the focused cell" do
-      # Regression: the rating controllers' Turbo Stream response
-      # replaces the cell `<td>`. The server-rendered HTML must carry
-      # `data-focused="true"` so the new cell paints with indicators
-      # hidden (group-data-[focused=true]/assess-cell:hidden). Without
-      # the server-side stamp, the browser paints the new cell with
-      # badges visible while matrix_controller's MutationObserver
-      # waits to re-stamp focus — the user sees "2 examples" reappear.
-      #
-      # cap1 L1 has 2 illustrations → "2 examples" indicator badge.
-      # When the cell is focused, the badge MUST stay hidden. The
-      # capability-name cell has its own "2× / 1×" indicators that
-      # aren't related — assert against the cell's td directly.
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-      cap_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-      assert_equal "512px", col_width_for(1), "Pre-condition: cell is focused"
-
-      # Pre-condition: focused cell's "2 examples" badge is hidden.
-      assert_no_selector "#cell-#{@cap1_stable}-1", text: "2 examples"
-
-      # Click "Some" on the focused cell — fires a Turbo Stream that
-      # replaces the cell `<td>`.
-      page.execute_script(<<~JS)
-        (() => {
-          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
-          const btn = Array.from(cell.querySelectorAll("button"))
-            .find(b => b.textContent.trim() === "Some");
-          if (btn) btn.click();
-        })()
-      JS
-      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
-
-      # The cell must have `data-focused="true"` after the rating
-      # lands. Two failure modes the regression hits:
-      # 1. Server doesn't stamp data-focused → first paint shows badges.
-      # 2. Server stamps it but omits data-capability-id → matrix_controller's
-      #    MutationObserver re-runs applyColumnFocus, doesn't find a
-      #    capability match for the new cell, and `delete`s data-focused.
-      assert_selector "#cell-#{@cap1_stable}-1[data-focused='true']", visible: :all
-
-      # And no indicator badge text leaks through.
-      assert_no_selector "#cell-#{@cap1_stable}-1", text: "2 examples"
-    end
-
-    should "keep focus when clicking on content inside an already-focused expanded cell" do
-      # Regression: clicking on the expanded cell's body (expectation
-      # text, illustrations, evidence content — anything that isn't a
-      # button/link/input) was hitting focusCell's "background click of
-      # the same cell → toggle off" branch and dropping focus. Both the
-      # compact AND expanded assessment cells now carry
-      # `data-bg-unfocus="false"` to opt out of that branch — the ×
-      # close button is the canonical unfocus path.
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-      assert_equal "512px", col_width_for(1), "Pre-condition: cell is focused"
-
-      # Click on the expanded cell's expectation text — a non-interactive
-      # child of the focused `<td>`. Pre-fix, this would have toggled
-      # focus off; post-fix it must be a no-op.
-      page.execute_script(<<~JS, cap_id)
-        const td = document.querySelector(
-          `tr[data-matrix-target="expandedRow"][data-capability-id="${arguments[0]}"] ` +
-          `td[data-level-ordinal="1"]`
-        );
-        // Click on a descendant text node's parent — the illustration
-        // list or expectation paragraph, whichever the cell has. We use
-        // a non-button child so we exercise the background-click path
-        // explicitly.
-        const target = td.querySelector("p, li, span, div") || td;
-        target.click();
-      JS
-
-      # Focus must still be on level 1; close button must still be visible.
-      assert_equal "512px", col_width_for(1),
-        "Clicking inside the focused cell must NOT drop focus"
-      assert_selector(
-        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
-        "td[data-level-ordinal='1'] [data-focused-cell-close]",
-        visible: true
-      )
-    end
-
     should "not reload the matrix frame when the rater clicks their own rating button" do
-      # Regression: previously, the rater's own rating triggered a
-      # CurrentAssessment ActionCable broadcast → the signal element
-      # was replaced → assessment_sync reloaded the entire matrix
-      # frame, causing visible flicker and resetting the scroll
-      # position. The direct Turbo Stream response already updates the
-      # affected cells locally — assessment_sync should suppress its
-      # broadcast-triggered reload for the rater's own action.
-      visit assessment_path(@assignment)
+      # ?capability= focuses the card so the expansion panel renders
+      # the inline frequency pill we're going to click.
+      visit assessment_path(@assignment, capability: @cap1_stable)
       wait_for_stimulus "matrix"
 
       # Wait for the lazy-loaded matrix frame to finish its initial
@@ -809,16 +1097,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         })()
       JS
 
-      # Click the "Some" rating button.
-      page.execute_script(<<~JS)
-        (() => {
-          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
-          const btn = Array.from(cell.querySelectorAll("button"))
-            .find(b => b.textContent.trim() === "Some");
-          if (btn) btn.click();
-        })()
-      JS
-      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
+      # Pick "Some of the time" from the inline pill. Person is at level
+      # 2, so the rating wrapper is `#rating-{stable}-2`.
+      click_rating_frequency("#rating-#{@cap1_stable}-2", "Some")
 
       # Give the broadcast headroom — the suppress window is 2s, so
       # 2.5s is enough for a rogue reload to fire if the suppression
@@ -830,283 +1111,25 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "got #{load_count} reload(s). Suppression in assessment_sync " \
         "is broken."
     end
-
-    should "preserve focus across a full page reload (F5)" do
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-      assert_equal "512px", col_width_for(1), "Pre-condition: focused"
-
-      # Capture the URL after focus — pushState should have written
-      # capability + level_ordinal.
-      current_url = page.evaluate_script("window.location.href")
-      url_obj = URI.parse(current_url)
-      params = URI.decode_www_form(url_obj.query.to_s).to_h
-      assert_equal @cap1_stable, params["capability"],
-        "Browser URL should have capability=stable_id after focus"
-      assert_equal "1", params["level_ordinal"],
-        "Browser URL should have level_ordinal=1 after focus"
-
-      # Full page reload — go to the same URL fresh. This bypasses
-      # Turbo Drive entirely.
-      page.execute_script("window.location.reload()")
-      wait_for_stimulus "matrix"
-
-      # Focus must be re-applied from the URL params after reload.
-      assert_equal "512px", col_width_for(1),
-        "Focus should be restored after a full page reload — URL has level_ordinal=1"
-    end
-
-    should "preserve focus after rating + full page reload" do
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-
-      # Rate the focused cell
-      page.execute_script(<<~JS)
-        (() => {
-          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
-          const btn = Array.from(cell.querySelectorAll("button"))
-            .find(b => b.textContent.trim() === "Some");
-          if (btn) btn.click();
-        })()
-      JS
-      assert_selector "#cell-#{@cap1_stable}-1 button.ring-1", text: "Some"
-      wait_for_focus_restored(level_ordinal: 1)
-
-      # Verify URL still has level_ordinal after rating
-      url_after_rating = page.evaluate_script("window.location.href")
-      params = URI.decode_www_form(URI.parse(url_after_rating).query.to_s).to_h
-      assert_equal "1", params["level_ordinal"],
-        "level_ordinal should still be in URL after rating"
-
-      # Full reload — should arrive focused
-      page.execute_script("window.location.reload()")
-      wait_for_stimulus "matrix"
-
-      assert_equal "512px", col_width_for(1),
-        "Focus should survive: rate → reload"
-    end
-
-    should "stay reachable on mobile viewport" do
-      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-      assert_equal "512px", col_width_for(1)
-
-      # Close button must still be in the DOM and visible at mobile width.
-      assert_selector(
-        "tr[data-matrix-target='row'][data-capability-id='#{cap_id}'] " \
-        "td[data-level-ordinal='1'] [data-focused-cell-close]",
-        visible: true
-      )
-      screenshot("01_mobile_focused")
-    end
-  end
-
-  context "cell focus with many levels" do
-    # Realistic frameworks have 5–8 levels; with `w-full` + `table-fixed`,
-    # browsers proportionally scale `<col>` widths down when their sum
-    # exceeds the table's container width — silently breaking the
-    # focused-column-wider behaviour. This context adds extra levels and
-    # asserts ACTUAL rendered widths (getBoundingClientRect) rather than
-    # declared style.width, so the test catches the layout issue.
-    setup do
-      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-      ActsAsTenant.with_tenant(@tenant) do
-        handler = Frameworks::CommandHandler.new
-        handler.start_draft(@framework_id, 2, "test")
-
-        (3..7).each do |ord|
-          level_id = SecureRandom.uuid_v7
-          handler.add_level(@framework_id, level_id, @role_id, ord, "Level #{ord}", "E#{ord}")
-          handler.set_behavioural_expectation(
-            @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
-            @cap1_id, ord, "Expectation for level #{ord}"
-          )
-        end
-        handler.publish_version(@framework_id, "test")
-
-        # Add an illustration on level 3 after publish so the focus target
-        # has content beyond the expectation text.
-        handler.add_role_illustration(
-          @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
-          FrameworkState::BehaviouralExpectation.find_by!(capability_id: @cap1_id, level_ordinal: 3).expectation_id,
-          @role_id, 3, "Drives critical decisions in design reviews"
-        )
-      end
-    end
-
-    should "keep columns wide enough for the FrequencySelector in default unfocused state" do
-      # Regression: with many levels, the unfocused matrix must keep
-      # each column wide enough to show the FrequencySelector's four
-      # buttons without wrapping. Pre-fix, `w-full` + no col widths
-      # divided the matrix area equally and dropped each col below
-      # ~140px on realistic frameworks, stacking the buttons.
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      screenshot("01_default_unfocused_many_levels")
-
-      # Each level column should respect the cell's `min-w-[180px]`.
-      # We don't focus anything — pure default state.
-      width = rendered_col_width(1)
-      assert width >= 180,
-        "Default unfocused column rendered at #{width}px — expected " \
-        "min 180px so FrequencySelector buttons stay on one line"
-
-      # The FrequencySelector container should not wrap — buttons fit
-      # horizontally in a single row.
-      single_row = page.evaluate_script(<<~JS)
-        (() => {
-          const cell = document.querySelector(`#cell-#{@cap1_stable}-1`);
-          if (!cell) return null;
-          const buttons = cell.querySelectorAll("[data-frequency-selector-target='button']");
-          if (buttons.length < 2) return null;
-          const firstTop = buttons[0].getBoundingClientRect().top;
-          // All buttons should share the same baseline (same row)
-          return Array.from(buttons).every(b =>
-            Math.abs(b.getBoundingClientRect().top - firstTop) < 1
-          );
-        })()
-      JS
-      assert_equal true, single_row,
-        "FrequencySelector buttons should all sit on one row in the default " \
-        "unfocused state (non-wrapped)"
-    end
-
-    should "focusing the first level keeps the cell out from behind the sticky capability column" do
-      # Regression: scrolling with `inline: "center"` (or "start") parks
-      # the focused cell directly under the sticky-left capability
-      # column so users see the cap column overlaying their selection.
-      # The fix manually scrolls so the focused cell's left edge sits
-      # at or past the cap column's right edge.
-      page.driver.browser.manage.window.resize_to(1024, 1000)
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 1)
-      screenshot("01_focused_first_level")
-
-      # Wait for smooth scroll to settle. Capybara doesn't have a
-      # native primitive for scroll completion — poll for stable
-      # scrollLeft over 2 frames.
-      stable = page.evaluate_script(<<~JS)
-        new Promise(resolve => {
-          const scroller = document.querySelector(".overflow-x-auto");
-          let last = scroller.scrollLeft;
-          let stableTicks = 0;
-          const check = () => {
-            const cur = scroller.scrollLeft;
-            if (cur === last) {
-              stableTicks++;
-              if (stableTicks >= 3) return resolve(true);
-            } else {
-              stableTicks = 0;
-            }
-            last = cur;
-            requestAnimationFrame(check);
-          };
-          check();
-          setTimeout(() => resolve(true), 2000);
-        })
-      JS
-      assert stable
-
-      positions = page.evaluate_script(<<~JS)
-        (() => {
-          const compactCell = document.querySelector(
-            `tr[data-matrix-target="row"][data-capability-id="#{cap_id}"] td[data-level-ordinal="1"]`
-          );
-          const capCol = document.querySelector(`col[data-level-ordinal="capability"]`);
-          const capCell = document.querySelector(
-            `tr[data-matrix-target="row"][data-capability-id="#{cap_id}"] td.sticky`
-          ) || document.querySelector(
-            `tr[data-matrix-target="row"][data-capability-id="#{cap_id}"] td:first-child`
-          );
-          return {
-            cellLeft: compactCell?.getBoundingClientRect().left,
-            cellRight: compactCell?.getBoundingClientRect().right,
-            capRight: capCell?.getBoundingClientRect().right
-          };
-        })()
-      JS
-
-      assert positions["cellLeft"] >= positions["capRight"] - 1,
-        "Focused cell's left edge (#{positions['cellLeft']}) should be at " \
-        "or past the sticky capability column's right edge (#{positions['capRight']}); " \
-        "otherwise the cap column overlays the cell"
-    end
-
-    should "render focused column visibly wider than siblings with many levels" do
-      # Use a narrower viewport so the table's container width is closer
-      # to the sum of declared col widths — exposes the `w-full` +
-      # `table-fixed` proportional-scaling bug. At 1400px (default
-      # DESKTOP_SIZE) the matrix area exceeds the col sum and the bug
-      # masks itself.
-      page.driver.browser.manage.window.resize_to(1024, 1000)
-      visit assessment_path(@assignment)
-      wait_for_stimulus "matrix"
-      expand_matrix_row("#capability-name-#{@cap1_stable}")
-
-      cap_id = capability_id_from_stable(@cap1_stable)
-      focus_expanded_cell(capability_id: cap_id, level_ordinal: 3)
-      screenshot("01_focused_with_many_levels")
-
-      focused_width = rendered_col_width(3)
-      sibling_width = rendered_col_width(5)
-
-      # Bug: with `w-full` + `table-fixed`, browsers proportionally
-      # scale the declared widths down when their sum exceeds the
-      # table's container width — focused and sibling cols ended up
-      # nearly equal in width and focus was visually indistinguishable.
-      # Fixed: focused col is 32rem (~512px), siblings keep their
-      # default 280px so the FrequencySelector still fits on one line.
-      assert focused_width.present?, "Expected to read focused col width"
-      assert sibling_width.present?, "Expected to read sibling col width"
-      assert focused_width >= sibling_width * 1.7,
-        "Focused column (#{focused_width}px) should be at least 1.7× sibling (#{sibling_width}px)"
-      assert focused_width >= 480,
-        "Focused col rendered #{focused_width}px — expected close to 32rem (≈512px)"
-      assert sibling_width >= 270,
-        "Sibling col rendered #{sibling_width}px — expected default ≈280px so " \
-        "FrequencySelector still fits on a single row"
-    end
   end
 
   context "responsive behaviour" do
-    should "show scoring panel as sidebar on desktop" do
+    should "show scoring panel as hero card on desktop" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       visit assessment_path(@assignment)
 
-      # Scoring panel should be visible on desktop
+      # Hero summary card should be visible on desktop
       assert_selector "#scoring-panel", visible: true
     end
 
-    should "show scoring toggle button on mobile with long names" do
+    should "show header elements on mobile with long names" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@assignment)
 
-      # Header H1 + shortcode chip + status pill must wrap without pushing scoring off-screen
+      # Header H1 + shortcode chip + status pill must wrap without pushing content off-screen
       assert_selector "h1", text: "Senior Software Engineer"
       assert_text "E2"
       assert_text "In Progress"
-
-      # Scoring toggle must remain visible on-screen
-      scoring_button = find_button("Scoring")
-      assert scoring_button.obscured? == false, "Scoring button is off-screen or obscured"
     end
   end
 end

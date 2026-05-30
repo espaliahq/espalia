@@ -2,355 +2,385 @@
 
 This document captures the design decisions, interaction patterns, and hard-won lessons from building the assessment views (self-assessment, manager assessment, and alignment). Consult this before modifying assessment UX or building features that extend it.
 
-> **See also:** [framework-explorer.md](framework-explorer.md) for the underlying matrix pattern that assessments extend.
+> **See also:** [scoring-model.md](../architecture/scoring-model.md) for the scoring engine, performance-state vocabulary, and configurable thresholds.
 
 ## Overview
 
-The assessment UX uses a **tabbed, single-category-at-a-time** view. Rather than showing all categories in one matrix, a tab bar above the table lets users focus on one category at a time. Each tab shows the category name, a rated/total progress count, and a pass/fail status dot.
+The assessment UX is a **card-based, single-scroll** layout. The page renders one tall document — a unified sticky header on top, then a vertical stack of category sections, each containing a stack of capability cards. There is no matrix table and no tabbed category swap. Category chips in the header anchor-jump to the section below; the entire document is in view at all scroll positions.
 
-The matrix pattern uses a **parallel view hierarchy** in `app/views/assessments/`. Rather than adding a mode parameter to the explorer's `MatrixCell`, a separate set of assessment-specific components was built. This keeps the read-only explorer simple and gives assessment cells the interactive controls they need (frequency selectors, secondary rating bars, background coloring).
+Three coordinated surfaces share the page:
 
-### URL-Driven State
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Unified sticky header (sticky top:0)                                │
+│  ┌───────────────────────────────────────────────────────────────┐   │
+│  │ Back link · H1 (assessee or level title) · status pill        │   │
+│  │ ─── Hero summary card ─────────────────────────────────────   │   │
+│  │   Hero header (verdict + 91% + bar + bottom-line CTA)         │   │
+│  │   Middle band (collapses on scroll, see "State-driven panel") │   │
+│  │ ─── Category chip bar ─────────────────────────────────────   │   │
+│  │   [All 18] · [Thinking & Delivery] · [Collaboration] · …      │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+├──────────────────────────────────────────────────────────────────────┤
+│  Main column (scrolls beneath the sticky header)                     │
+│    ┌─ Category section: Thinking & Delivery ──── [Pass] ─┐           │
+│    │   sticky sub-heading (sticks below unified header)  │           │
+│    │   ┌─ Capability card ──────────────────────────────┐│           │
+│    │   │ THINKING · Critical Thinking      +0.5         ││           │
+│    │   │ Level strip: E1 E2 E3(YOU) E4 E5 …             ││           │
+│    │   │ Expansion panel for person_level (auto-focused)││           │
+│    │   └────────────────────────────────────────────────┘│           │
+│    │   ┌─ Capability card ──── … ┐                      │            │
+│    │   └─────────────────────────┘                      │            │
+│    └────────────────────────────────────────────────────┘            │
+│    ┌─ Category section: Collaboration & Communication ──┐            │
+│    └────────────────────────────────────────────────────┘            │
+│                                                                      │
+│  Activity sidebar (right) — slide-over on narrow, inline on wide     │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
-The active category, expanded capability, and focused cell-level are encoded in query params for shareability:
+The matrix Turbo Frame still exists and still carries `id="assessment-matrix"`, but its inner content is now the category-sections-with-cards stack rather than a table.
+
+### URL-driven state
+
+Active category, focused capability, and focused level ordinal are encoded as query params for shareability:
 
 ```text
 Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>&level_ordinal=<n>
 Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>&level_ordinal=<n>
-Scoring frame:/assessments/:id/scoring?category=<category_id>
+Activity:     /assessments/:id/activity?capability=<stable_id>&level_ordinal=<n>
 ```
 
-- `category` absent → defaults to first category (ordinal 1)
-- `capability` absent → no row pre-expanded
-- `capability` is the capability's **stable_id** (cross-version UUID), not the per-version `capability_id`. The server compares `params[:capability] == stable_id` when deciding which row to pre-expand; the browser URL must use stable_id so reloads (manual F5 + post-broadcast frame swaps) restore focus.
-- `level_ordinal` only honoured when `capability` is also present (cell focus lives inside an expanded row)
-- Tab clicks, row-toggle clicks, and cell-focus clicks update the browser URL via `history.pushState()`. `matrix_controller#syncFocusToUrl` writes `capability` and `level_ordinal` together in **one** push, no-ops when both already match, so Back/Forward maps 1:1 to visible focus changes.
-- The matrix Turbo Frame's `src` is NOT mutated on focus changes (would trigger a fetch). Instead, `assessment_sync_controller#mergeFocusParams` merges current browser URL params (`capability` + `level_ordinal`) into the frame's src at reload time, so focus survives broadcast-driven frame reloads.
+- `category` absent → server defaults to the first category for highlighting in the chip bar; all categories still render in the document.
+- `capability` is the capability's **stable_id** (cross-version UUID), never the per-version `capability_id`.
+- `level_ordinal` only honoured when `capability` is also present.
+- Every capability card auto-focuses the person's current level on render (the expansion panel is always visible for `@person_level`). When the URL specifies `?capability=` + `?level_ordinal=`, that overrides — the named card's expansion panel renders for the requested level instead.
+- `matrix_controller#syncFocusToUrl` writes `capability` and `level_ordinal` together in **one** `history.pushState` per focus change, so Back/Forward maps 1:1 to visible focus changes.
+- Category chip clicks update the URL with `?category=` and dispatch a `matrix:focus-changed` event at category level so the activity feed narrows.
 
-## Cell focus
+## Hero Summary — three bands
 
-When a row is expanded, clicking an expanded-row `<td>` focuses that capability × level intersection. The focused level's matrix column widens (32rem) and sibling level columns keep their default 280px width so the FrequencySelector still fits on a single row — the focused cell — expectation, illustrations, evidence list, and comment thread — gets breathing room. The focused **compact** cell also drops its bottom border so it flows visually into the expanded `<td>` below it. Clicking the close button (`×`, top-right of the focused cell) returns to capability-level focus; the row stays expanded.
+The hero is a single card with three logical bands. The header and bottom line are always visible; only the middle band scrolls away.
 
-**Reclaiming row height during focus.** The focused column widens to 512px and the FrequencySelector's buttons fit on a single row, so the focused compact cell is naturally short. Sibling columns stay at 280px and the buttons wrap; without intervention, sibling cells in the focused row are taller than the focused cell, the row stretches to the tallest sibling, and the focused cell renders visible wasted space above/below its content. To collapse the row to the focused cell's natural height, `AssessmentCell` hides `secondary_bars` and `indicators` on cells carrying `data-focus-compact="true"` — every cell whose level ordinal differs from the focused one (column-wide, matrix-wide). The focused cell keeps its own secondary bars visible; only siblings shed them. Users lose temporary awareness of other cells' secondary perspectives and badges during focus mode — accepted tradeoff for the density win, since focus mode means the user is zeroed in on a single cell anyway.
+```
+┌─ #scoring-panel ───────────────────────────────────────────────┐
+│  ── Hero header (always visible) ─────────────────────────────│
+│  Verdict headline           91%       ← big number on the     │
+│  Gloss · L2 expectations    of expected                       │
+│  [Promo pill] [Continue →]  ▓▓▓░░░    ← bar + bottom line     │
+│                                          stack in left col    │
+│  ── Middle band (collapses on scroll) ────────────────────────│
+│  [State label · Gap-to label]                                 │
+│   capability-1                              +0.5              │
+│   capability-2                              -0.5              │
+│   capability-3                              -1.0              │
+└────────────────────────────────────────────────────────────────┘
+```
 
-Add affordances inside the focused expanded cell are compact by design: the EVIDENCE header carries a small `+` icon that opens the evidence modal (replaces an earlier full-width dashed button), and the COMMENTS header carries a similar `+` icon that toggles the inline comment composer (which starts hidden — `comments_thread_controller#toggleComposer` shows it, and `submitted` re-hides after a successful post). Keep both affordances icon-only and adjacent to their section label so the section's vertical footprint stays minimal when no evidence/comments exist yet.
+### Header band
 
-**Full illustrations and evidence are reserved for the focused cell.** Only the focused expanded `<td>` (`data-focused="true"`) renders the full illustration list and evidence section; every other expanded cell renders empty. The expanded `<td>` also gates its vertical padding (`py-0 data-[focused=true]:py-2`) so the expanded `<tr>` collapses to a near-zero strip when the row is expanded but no cell is focused (e.g. after a chevron click or after pressing the × close button) — without that, the empty cells would render a wasted whitespace band below the compact row. The compact cell above each expanded cell continues to carry the `N examples` / `N evidence` dot badges for situational awareness — siblings in the focused row, and every cell in non-focused rows, keep advertising what they hold so the user can decide where to focus next without click-through. The focused cell itself hides its compact-cell badges via `group-data-[focused=true]/assess-cell:hidden` because the full content is rendered immediately below; repeating the badges there would just be noise.
+The left column carries the verdict headline, a one-line gloss, and the "bottom line" (promotion pill + Continue CTA). The right column carries the big percentage + "of expected" caption + a thin progress bar. Both columns sit side-by-side so the card is just tall enough to fit whichever side is taller — the previous "stack vertically" layout wasted ~40px below the big number.
 
-`data-focused` and `data-focus-compact` are stamped by `matrix_controller#applyColumnFocus`. `data-focus-compact` is column-wide (every cell whose level ordinal differs from the focused one) and drives density tweaks like FrequencySelector's wrap behaviour. `data-focused` is narrower — only on cells matching BOTH the focused level AND the focused capability — so the full-content reveal AND the compact-badge hide are scoped to a single cell even though sibling rows share the same level. Don't conflate the two: `data-focus-compact` is for shared column density; `data-focused` is for single-cell content reveal.
+The Continue CTA is intentionally small (chip-sized, `text-[11px] px-2 py-0.5`) so it sits inline with the promotion pill instead of looking like a primary action — at the hero level, it's a *nudge*, not the main affordance.
 
-**Implementation:**
+### Middle band — state-driven
 
-- `Views::Assessments::AssessmentMatrix` renders a `<colgroup>` with one `<col data-matrix-target="col">` per merged level (plus a 220px-fixed capability col). Default level cols use `width: 280px` — wide enough that the FrequencySelector's four buttons (including the long "Consistently" label) fit on a single row regardless of how many levels the framework has. The `<table>` keeps the browser's default `table-layout: auto` so cell `min-w-[180px]` still applies; the parent `overflow-x-auto` scrolls horizontally when the table grows past the container.
-- `matrix_controller#applyColumnFocus(levelOrdinal, capabilityId)` switches the table to `table-layout: fixed` via inline style, sets the focused col's width to `512px` (32rem) and siblings to `280px` (matching their default so the FrequencySelector still fits on one row), and pins the table's total width to the sum of col widths so browsers don't proportionally scale them when the sum exceeds the container. The "additive" widening (focused gets wider, siblings keep their default) means siblings remain fully usable while the user has a focused cell. Clearing the focus reverts every inline style and Tailwind reasserts.
-- After applying col widths, `#applyColumnFocus` scrolls the focused expanded `<tr>` (or the compact cell when no expanded row is present) into view vertically with `block: "nearest"`, then calls `#scrollHorizontallyPastStickyCap` to make sure the focused cell's left edge sits at or past the sticky capability column's right edge. A naive `inline: "center"` would park focus on the first level directly under the sticky cap, hiding the focused content. The scroll is deferred via `requestAnimationFrame` so the browser computes positions against the post-resize layout.
-- `unfocusCell` is a public Stimulus action wired on the close button: it returns to capability-level focus, leaving the row expanded.
-- The close button (`[data-focused-cell-close]`) is rendered inside the **compact cell**, top-right (absolute position). The compact cell is the user's anchor — placing the X next to where they clicked keeps the affordance discoverable without burying it in the illustration list below.
-- Both **compact** and **expanded** `<td>`s carry `data-action="click->matrix#focusCell"` plus `data-capability-id`, `data-capability-stable-id`, `data-level-ordinal`, and `data-expectation-id`. Compact cells additionally carry `data-focus-on-button-click="true"` so a tap on a rating button BOTH triggers the rating submit AND focuses the cell — without that flag the focusCell guard would skip clicks that landed on interactive children. `focusCell` also calls `#expandRow(capabilityId)` so a click on a compact cell's expectation text or rating button expands the row in the same gesture.
-- Both cells also carry `data-bg-unfocus="false"` to opt OUT of `focusCell`'s background-click-toggles-off behaviour. Once a cell is focused, clicking inside it (on the evidence text, illustrations, expectation copy, etc.) must NOT drop focus back to capability level — the `×` close button is the canonical exit. Without the opt-out, reading an evidence card or scanning illustrations could accidentally collapse the very view the user came to read. The framework explorer, which has no per-cell close button, leaves the attribute unset so its background-click-toggle remains the documented "Re-click same cell → capability" exit (see `framework-explorer.md`).
-- `matrix_controller#applyColumnFocus` stamps **two** mutually-exclusive markers on every `td[data-level-ordinal]`: `data-focused="true"` on the focused cell, `data-focus-compact="true"` on its siblings. When no cell is focused (capability or framework focus level), both are removed from every cell. `data-focus-compact` drives density tweaks on sibling rating cells (e.g. `frequency_selector`'s `flex-wrap`); `data-focused` is the gate for revealing full illustrations + evidence on the expanded `<td>` (see "Full illustrations and evidence are reserved for the focused cell" above). Don't conflate the two — siblings of a focused cell, and cells in an expanded-but-unfocused row, both correctly want the compact-summary view but only the former sets `data-focus-compact`.
-- **Keyboard a11y**: the compact cell carries `tabindex="0"`, `role="button"`, a per-cell `aria-label="Focus cell: <capability> · <level>"` (composed from `capability_name` + level title), and Stimulus actions `keydown.enter.self->matrix#focusCell` + `keydown.space.self->matrix#focusCell:prevent`. The `.self` modifier scopes activation to the cell itself so nested rating buttons keep their native keyboard activation.
-- **URL is the source of truth for focus restoration.** On controller connect, `dispatchInitialFocus` first calls `#focusFromUrl` — if the browser URL has `capability` + `level_ordinal` AND a matching `<td>` exists in the rendered DOM, it restores cell focus and exits. Only if URL params are absent or stale (the `<td>` doesn't exist — e.g. a dropped level after a framework version change) does it fall back to the server-rendered `data-focused-level-ordinal` on the visible expanded row, then to capability/category fallbacks. This makes focus survive page reloads, deep links, and frame replacements even when the focused capability has no expanded content server-side.
+A **single** panel framed by `performance_state`. The state picks the headline, tone, and list of capabilities. There is no separate Strengths vs Lift column — that doubled up the story. The state is the headline; the capabilities are the *evidence* for it.
 
-**Don't hide the FrequencySelector when shrinking sibling columns.** It's the primary rating affordance — making it disappear is a regression. The siblings keep their default 280px width specifically so the buttons remain on one row. Hang density tweaks off the `data-focus-compact="true"` attribute the controller stamps on sibling cells via `group-data-[focus-compact=true]/assess-cell:` Tailwind variants — never replace the selector with a read-only bar based on focus state alone.
+| Performance state | Headline | List label | Items | Border |
+|---|---|---|---|---|
+| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | red |
+| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | amber |
+| `:performing` | "Performing at E(n)" | "Gap to mastering" | 3 lowest **next-level** contributions | blue |
+| `:mastering` | "Mastering E(n)" | "Gap to promotion to E(n+1)" | blocked-at-next-level or 3 lowest next-level contributions | purple |
+| `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest current-level contributions | green |
+
+**Key insight — always point at the next milestone, never one already cleared.** A `:performing` person isn't trying to *meet* their level (they already do); they're trying to *master* it. A `:mastering` person isn't trying to master (they already do); they're trying to be eligible for promotion. The Gap-to label reflects this — and crucially, `:performing` uses **next-level** contributions, not current-level, because mastery is earned by overperformance at the level above.
+
+This was the bug that prompted the design: at 110% ratio, the panel originally showed three capabilities at `+0.0` current contribution (meeting exactly) under a "Gap to mastering" headline. That's not a gap — those capabilities ARE meeting expectations. The real gap is at L+1, where those same capabilities show `-1.0` (not yet rated consistent at the next level).
+
+### Collapse on scroll — pure CSS
+
+The middle band collapses to height 0 as the user scrolls past 240px, via a CSS scroll-driven animation:
+
+```css
+.hero-collapsible {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+.hero-collapsible > * { min-height: 0; }
+
+@supports (animation-timeline: scroll()) {
+  .hero-collapsible {
+    animation: hero-collapse linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 240px;
+  }
+  @keyframes hero-collapse {
+    to { grid-template-rows: 0fr; opacity: 0; }
+  }
+}
+```
+
+There is **no `sticky_hero_controller.js`** any more. The old binary "compact/expanded" toggle with scroll-compensation logic is gone. CSS scroll-timeline handles every pixel of the transition, no JS in the loop.
+
+Two practical notes:
+
+1. **`grid-template-rows: 1fr → 0fr` rather than `max-height`.** Animating max-height + padding-block inside the unified sticky header was triggering a re-layout feedback loop mid-scroll (visible as a flicker between hidden and visible). The grid-row approach owns the row's height locally, no cascade.
+2. **Two-layer wrapper** so the grid item can shrink to 0 without the inner padding forcing a minimum row height. `.hero-collapsible` is `display: grid` with `overflow: hidden`; the grid item is a plain `<div>` (no padding); padding lives on a deeper `<div class="px-5 pb-5">`. When the row collapses to `0fr`, the padded child overflows and is clipped.
+
+Browser support for `animation-timeline: scroll()` was at ~94% globally as of 2026 (Chrome/Edge 115+, Safari 26+, Firefox 137+). Browsers without it silently keep the middle band fully expanded — functional, just static.
+
+## Category navigation
+
+Five surfaces, all reading from the same `?category=` URL state:
+
+1. **Chip bar** in the sticky header. Anchor links to `#category-<id>`. Active chip has `aria-current="page"` and a dark fill. Click is intercepted by `category_nav_controller#scrollTo` (smooth-scrolls, accounting for sticky header height) and pushes the new `?category=` to the URL.
+2. **Category sections** in the main column. Each `<section id="category-<id>">` has a sticky inner heading that pins just under the unified header at `top: var(--sticky-header-h)`. `category_nav_controller#publishHeaderHeight` measures the unified header with `getBoundingClientRect().height` (sub-pixel precision) and writes it to a CSS custom property via `ResizeObserver`.
+3. **Scroll-based active marker**. As the user scrolls, `category_nav_controller#updateActiveCategory` finds the deepest section whose top has scrolled past the threshold and marks its chip active. Suppressed for ~900ms after a chip click so the explicit click result survives the smooth-scroll animation (otherwise the final scroll event of the animation could fall short of the threshold and re-mark the previous chip).
+4. **Activity sidebar**. Listens for `matrix:focus-changed@window` with `level: "category"` and narrows its rendered entries.
+5. **Server state**. The controller reads `?category=` only to render the active chip class — the document includes every category section regardless.
+
+## Capability focus
+
+Sits between category focus and cell focus in the focus hierarchy. Narrows the activity sidebar to a single capability without committing to a specific level (the latter is cell focus, set by chip click).
+
+Two ways to trigger it:
+
+**Card-header click.** Clicking the card's header region (eyebrow + capability name + description) sets capability focus. Wired with `data-action="click->matrix#focusCapability"` scoped to the header (not the whole card) so clicks on the level strip and inside the expansion panel — which carry their own focus and interactive affordances — never accidentally land here. Re-clicking the same focused card's header toggles back to category focus, mirroring `focusCategory`'s behaviour.
+
+**Scroll-driven focus.** An `IntersectionObserver` on `matrix_controller` (rootMargin `0px`, broad threshold list) tracks every card touching the viewport. On every intersection change, `#updateFocusedCapabilityFromScroll` picks the card with the **most visible area** in the **content band** — the viewport strip below the sticky chrome (`y ∈ [sticky-header-h, viewport.height]`). Whichever card occupies the most screen real estate is what the user is reading.
+
+This rule is symmetric: scrolling down, the new card's visible area grows from below until it exceeds the previous card's shrinking area, and focus switches; scrolling up reverses the same crossing in the opposite direction. The previous threshold-based heuristic ("deepest card whose top has crossed below the sticky-chrome bottom") was symmetric in mechanism but produced asymmetric perception — scrolling down the new card appeared naturally at the threshold line, but scrolling up the trigger fired when the current card's top crossed back above that line, often well before the returning card was meaningfully on-screen. Area-based picking removes that asymmetry entirely.
+
+**Gating on scroll-driven updates** — three rules, each load-bearing:
+
+- **Wait for a real user scroll.** `IntersectionObserver`'s initial callback fires on connect with the cards' current intersection state, not in response to a user scroll. Acting on that would override URL- and click-driven initial focus and silently auto-narrow the activity feed on page load. `_sawUserScroll` flips on the first `scroll` event; until then `#updateFocusedCapabilityFromScroll` no-ops.
+- **Cell focus is sticky-but-not-permanent.** When the user has explicitly clicked a chip, `currentFocus.level === "cell"` and scroll-driven updates leave the focus alone as long as the focused capability is still the area-winner. The moment a different card overtakes it, cell focus downgrades to capability focus on the new winner — the sidebar re-narrows to whatever the user is now reading. Re-clicking a chip restores cell focus.
+- **Suppress for ~900ms after explicit clicks.** Card-header clicks, chip clicks, and any other explicit focus action sets `_capabilityFocusSuppressUntil = Date.now() + 900`. Mirrors the suppression `category_nav_controller#scrollTo` uses for chip clicks — without it, the smooth-scroll animation can fire intersection events that overwrite the user's choice mid-flight.
+- **Respect external focus events.** `matrix_controller` listens for `matrix:focus-changed` on the window so any external dispatcher (today: `category_nav_controller` on chip click) can drive the controller's `currentFocus` and trip the same 900ms suppression window. Without this, a category chip click would dispatch category focus to the activity sidebar, start a smooth scroll, and let the IntersectionObserver immediately overwrite the focus with whichever capability landed in the band first. Self-dispatch from `matrix_controller`'s own actions is gated by a synchronous `_dispatchingFocus` flag set inside `#dispatchFocusEvent` so the listener doesn't re-suppress on every scroll-driven update.
+
+**URL semantics.** Capability focus is transient; it does NOT write `?capability=` to the URL. That parameter remains owned by cell focus (chip click), where the server uses it to render the expansion panel for the named level. `#setFocus` accepts `{ pushToUrl: false }` for scroll-driven updates so continuous scrolling doesn't thrash `history.pushState`; explicit card-header clicks DO push to URL (default `pushToUrl: true`) — making them as shareable as cell focus.
+
+**Visual styling.** A focused card carries `data-focused="true"`; styling hangs off Tailwind data variants:
+
+```ruby
+"data-[focused=true]:shadow-sm data-[focused=true]:ring-1 data-[focused=true]:ring-primary/20"
+```
+
+Server stamps it from `?capability=` on initial render; `matrix_controller#applyCardFocus` toggles it on focus changes. Single source of truth.
+
+**Activity feed reconnect.** `activity_feed_controller#readMatrixFocusFromDom` reads `data-focused="true"` on a card to restore capability focus when its turbo-frame lazily loads. Without this signal, a lazy frame load would silently downgrade to category focus and undo the user's last click.
+
+### Focus hierarchy (most specific wins)
+
+| Level | Trigger | URL params written | Persists across |
+|---|---|---|---|
+| `framework` | Default / "Show all" link | — | — |
+| `category` | Category chip click; scroll-based category active marker | `?category=` | Browser navigation |
+| `capability` | Card-header click; scroll-driven IntersectionObserver | `?capability=` (click only) | Click: browser nav. Scroll: transient |
+| `cell` | Level chip click; URL deep-link | `?capability=` + `?level_ordinal=` | Browser navigation |
+
+The activity sidebar consumes the most specific currently active focus level. Each level's `#matchesFocus` check uses progressively narrower criteria — category by `category_id`, capability by `capability_stable_id`, cell by both stable_id and `level_ordinal`.
+
+## Capability cards
+
+Each capability gets its own bordered card inside its category section:
+
+```
+┌─ Capability card ────────────────────────────────────────┐
+│ THINKING & DELIVERY                  +0.5    [Add evidence]│
+│ Critical Thinking                                          │
+│ Considers long-term impact, balances competing priorities.│
+│                                                            │
+│   E1   E2   E3◯   E4   E5   E6   E7   E8                  │
+│        YOU (with focus ring)                               │
+│                                                            │
+│ ── Expansion panel for the focused level ────────────────│
+│   E3 · Senior Software Engineer                            │
+│   Expectation text for E3 …                                │
+│   [None] [Some] [Most] [Consistently]                      │
+│   EXAMPLES (illustrations for this level)                  │
+│   EVIDENCE  +                                              │
+│   COMMENTS  +                                              │
+└────────────────────────────────────────────────────────────┘
+```
+
+Structure: `card_header` (eyebrow + name + signed delta + add-evidence) + `LevelStrip` + `CapabilityCardExpansion` for the focused level.
+
+### Auto-focus on the person's level
+
+Every card auto-focuses the person's current level on first render — the expansion panel is *always* visible for `@person_level`. When `?capability=` + `?level_ordinal=` are present in the URL, the named card uses that level instead. There is no longer a "default" state with the strip but no panel.
+
+There is no `×` close button. The previous design had one to drop back to "no level focused"; with auto-focus there's nothing meaningful to close *to*. Re-focusing means clicking a different level chip — handled by `matrix_controller#focusChip`, which sets the URL and reloads the matrix frame.
+
+### Signed contribution delta
+
+The top-right of every card carries the capability's **signed score delta** (e.g. `+0.5`, `-0.5`, `+0.0`) — the raw value from `Scoring#raw_contribution`. Color-tiered:
+
+| Value | Color |
+|---|---|
+| ≥ +0.5 | green |
+| -0.5 .. +0.5 | neutral gray |
+| -1.5 .. -0.5 | amber |
+| ≤ -1.5 | red |
+
+The previous design rendered this as a percentage AND hid the badge entirely when contribution was negative — silently dropping the most informative signal. Don't reintroduce either.
+
+### Level strip — `LevelStrip` + `LevelChip`
+
+A horizontal `flex` of `LevelChip`s, one per merged level ordinal. Each chip is colored by frequency × level position (same color rules the old matrix cells used). The person's level chip carries the "YOU" badge and a darker outline when focused. Click dispatches `click->matrix#focusChip`, which sets `?capability=` + `?level_ordinal=`, reloads the matrix frame, and smooth-scrolls the card under both sticky headers (unified + category section).
+
+The chip strip wraps `overflow-x-auto -mx-4 px-4` so it scrolls horizontally on narrow viewports without breaking the card's padded edges.
+
+### Scroll-to-card after chip click
+
+When a chip is clicked, `matrix_controller#scrollCardUnderHeader` smooth-scrolls the card so its top sits just below **both** sticky elements: the unified header AND the category section's sticky inner heading. Missing the section header was the most common scroll bug — the card top would land behind it. A post-animation settle pass re-snaps if the hero collapses mid-scroll.
+
+```js
+const target = Math.max(0, cardTopDoc - unifiedHeaderH - sectionHeaderH - 12)
+window.scrollTo({ top: target, behavior: "smooth" })
+setTimeout(reSnapIfDrifted, 600)
+```
 
 ## Context-Driven Rendering
 
 A single `context` symbol (`:self`, `:manager`, or `:alignment`) threads through the entire request — from controller detection to form action URLs.
 
-The controller detects context by comparing the assignment's person to the current user:
-
 ```ruby
 # assessments_controller.rb
 def assessment_context
+  return :alignment if cycle_in_alignment_phase?
   manager_viewing? ? :manager : :self
-end
-
-def manager_viewing?
-  @assignment.person_id != current_person.id
 end
 ```
 
-This routes to different views:
+Routes to:
 - **Self** (`context: :self`) → `ShowView` — person rates themselves. Manager and aligned ratings are hidden — see *Self-assessment privacy* below.
-- **Manager** (`context: :manager`) → `ManagerShowView` — manager rates their direct report
-- **Alignment** (`context: :alignment`) → automatic once the manager has formally started alignment (cycle status `aligning` or `aligned`). Both parties see all three rating perspectives. Gated by `AssessmentPolicy#view_alignment?`. There is no opt-in URL param and no in-page toggle — being in an alignment-phase assessment **is** alignment mode.
+- **Manager** (`context: :manager`) → `ManagerShowView` — manager rates their direct report.
+- **Alignment** (`context: :alignment`) → automatic once `cycle status ∈ {aligning, aligned}`. Both parties see all three rating perspectives. There is no opt-in URL param and no in-page toggle.
 
 ### Self-assessment privacy
 
-The assessee must not see the manager's rating until alignment formally begins. This is enforced at two layers:
+The assessee must not see the manager's rating until alignment formally begins. Enforced at two layers:
 
-1. **Data layer** — `Assessments::MatrixDataBuilder` accepts a `context:` kwarg. When `context == :self`, manager and aligned data are scrubbed from the result — `manager_frequency` / `aligned_frequency` per cell, plus `manager_scoring` / `aligned_scoring` at the top level. The primary scoring perspective is also forced to `:self_only` so the effective fallback chain (aligned → manager → self) cannot leak manager-derived numbers into the displayed totals.
-2. **Policy layer** — `AssessmentPolicy#view_alignment?` requires the participant's cycle status to be `aligning` or `aligned`. Until the manager has formally started alignment, the assessee renders in `:self` context regardless of any URL params. The controller treats stale `?mode=alignment` query strings as no-ops.
+1. **Data layer** — `Assessments::MatrixDataBuilder` accepts a `context:` kwarg. When `context == :self`, manager and aligned data are scrubbed from the result — `manager_frequency` / `aligned_frequency` per cell, plus `manager_scoring` / `aligned_scoring` at the top level. The primary scoring perspective is forced to `:self_only`.
+2. **Policy layer** — `AssessmentPolicy#view_alignment?` requires the participant's cycle status to be `aligning` or `aligned`. Until the manager has formally started alignment, the assessee renders in `:self` context regardless of any URL params.
 
-## Component Hierarchy
+### How context flows through components
 
-```
-PageLayout
-└── div[data-controller="assessment-sync panel"]
-    ├── assessment_header (back link, framework name, progress badge)
-    └── assessment_layout
-        ├── main
-        │   └── turbo-frame#assessment-matrix
-        │       └── div[data-controller="matrix" data-matrix-url-sync-value="true"]
-        │           ├── CategoryTabs (horizontal scrollable tab bar)
-        │           │   └── tab links → /assessments/:id/matrix?category=<id>
-        │           └── table (single-category matrix)
-        │               ├── MatrixHeader (level columns, person_level highlighted)
-        │               └── AssessmentCategoryGroup (active category only, no header)
-        │                   └── AssessmentRow (per capability)
-        │                       ├── compact row (CapabilityNameCell + AssessmentCells)
-        │                       │   └── siblings dimmed when any row expanded
-        │                       └── expanded row (illustrations, URL-driven pre-expansion)
-        │                           └── AssessmentCell (per level ordinal)
-        │                               ├── expectation text
-        │                               ├── secondary FrequencyBars (read-only)
-        │                               ├── primary FrequencySelector (interactive, category_id hidden field)
-        │                               └── illustration indicator
-        └── aside (scoring panel sidebar)
-            └── turbo-frame#assessment-scoring
-                └── ScoringPanel (multi-perspective, clickable category links)
-```
+| Component | What context determines |
+|---|---|
+| `MatrixDataBuilder` | Which scoring perspective is primary; whether manager/aligned data is scrubbed |
+| `HeroSummary` | Which `*_scoring` hash to render (`self_scoring` vs `manager_scoring` vs `aligned_scoring`); subject pronoun ("You're" vs "Alex is") |
+| `CapabilityCard` / `LevelChip` | Which `*_frequency` colors the chip; whether divergence dots show |
+| `CapabilityCardExpansion` | Which perspective the `FrequencyPill` rates; which `SecondaryRatingLine`s render |
+| `FrequencyPill#form_action` | POST endpoint — `/ratings` (self) vs `/manager_ratings` (manager) vs `/alignment_ratings` (alignment) |
 
-## Data Flow
+## Frequency rating vocabulary
+
+The four rating values share a single palette across every surface — inline pill, level chip, divergent-secondary dot — via `Views::Assessments::FrequencyPalette`. The palette walks a red → orange → amber → green ramp so the four states read as a clear gradient (worse → better) without relying on text. Data values (enum, events, DB, test fixtures) **never** change.
+
+| Enum | Sentence phrase | Compact label | Hue |
+|------|----|----|----|
+| `none` | Never | None | red |
+| `some` | Some of the time | Some | orange |
+| `occasional` | Most of the time | Most | amber |
+| `consistent` | Consistently | Consistently | green |
+
+The phrase reads inside the inline pill ("…explains reasoning. **Most of the time**"). The compact label is for tight spaces. The hue backs both pill and level chip so the strip and the inline pill agree pixel-for-pixel.
+
+## Frequency pill (primary rating surface)
+
+The primary rating is recorded via an inline `FrequencyPill` that reads as part of the expectation sentence:
 
 ```
-AssessmentsController (detects self/manager context)
-  → Assessments::MatrixDataBuilder (loads ratings, builds 4 scoring perspectives)
-    → ShowView / ManagerShowView (renders Phlex components with context)
-      → FrequencySelector posts to /ratings or /manager_ratings
-        → RatingsController / ManagerRatingsController
-          → PersonDevelopment::CommandHandler (rate_self / rate_as_manager)
-            → Event published → Projection updates AssessmentLevelRating
-              → Turbo Stream broadcasts → assessment_sync_controller reloads frames
+Breaks down problems, weighs options, and explains reasoning.  [Most of the time ▾]
 ```
 
-Key difference from the explorer: the `Assessments::MatrixDataBuilder` is a **single-role** builder (the person's assigned role) rather than multi-role. It enriches each cell with three frequency fields and computes four parallel scoring perspectives.
+The pill is a colour-coded button with a chevron. Clicking opens a small popover with the four phrase options + Clear rating; selecting a phrase POSTs through the same controller endpoints the previous segmented selector used. The popover reuses the existing `dropdown` Stimulus controller — same pattern as the comment kebab.
 
-## How Context Flows Through Components
+**Frozen variants** render the pill as a static coloured span (no chevron, no popover) when `frozen: true` (`aligning` / `aligned` in self / manager context) or `alignment_locked: true` (`aligned` in alignment context). The sentence still reads correctly because the static pill carries the same colour + phrase.
 
-### AssessmentCell — the core of context-aware rendering
+**Untoggle** lives inside the popover as a "Clear rating" item — controllers detect "POST same frequency back" and clear (same untoggle path as before).
 
-```ruby
-def primary_frequency
-  case @context
-  when :self      then @cell_data[:current_frequency]    # self_rated_frequency
-  when :manager   then @cell_data[:manager_frequency]    # manager_rated_frequency
-  when :alignment then @cell_data[:aligned_frequency]    # aligned_frequency
-  end
-end
+## Secondary perspectives (divergence-only, permission-aware)
 
-def secondary_rating_entries
-  case @context
-  when :self      # shows nothing — manager and aligned ratings are private
-                  # to the manager until alignment formally begins
-  when :manager   # shows Self + Agreed as read-only bars
-  when :alignment # shows Self + Mgr as read-only bars
-  end
-end
+A divergent secondary perspective renders as a single line below the pill:
+
+```
+○ Self rated: some of the time
 ```
 
-In `:self` context, manager and aligned data are scrubbed from `cell_data` (and `manager_scoring` / `aligned_scoring` set to `nil`) by `Assessments::MatrixDataBuilder` itself — defense-in-depth, so the data never reaches the assessee's HTML, not just hidden in CSS.
+— a coloured dot from the same palette plus a sentence. Replaces the previous `FrequencyBar` (filled progress bar that duplicated the text label).
 
-### FrequencySelector — context determines the POST endpoint
+**Rendering rules:**
+- Only perspectives the viewer is permitted to see appear. `MatrixDataBuilder` scrubs manager + aligned frequencies when `context == :self`, so a self-viewer never even receives the data.
+- Manager context shows Self.
+- Alignment context shows both Self and Manager.
+- Within the allowed set, only perspectives that **diverge** from the primary render. If self and primary agree, the row collapses.
 
-```ruby
-def form_action
-  case @context
-  when :manager then assessment_manager_ratings_path(@assessment_id)
-  else               assessment_ratings_path(@assessment_id)
-  end
-end
-```
+The wrapper carries a stable id `secondaries-<stable>-<ordinal>` so rating controllers `turbo_stream.replace` it on every rating change — the divergent set grows / shrinks as the primary moves.
 
-### ScoringPanel — context determines which perspective is primary
+## Level chip coloring
 
-```ruby
-def primary_scoring
-  case @context
-  when :self      then @self_scoring || @scoring       # falls back to effective
-  when :manager   then @manager_scoring || @scoring
-  when :alignment then @aligned_scoring || @scoring
-  end
-end
-```
-
-Secondary perspectives appear as compact bars. An amber dot indicates divergence (≥5% difference from primary).
-
-### AssessmentCategoryGroup — category-level scoring follows the same pattern
-
-```ruby
-# Category pass/fail, contribution pool, blocked status, and per-capability
-# contributions all come from the primary scoring perspective.
-def primary_scoring
-  case @context
-  when :self      then @self_scoring || @scoring
-  when :manager   then @manager_scoring || @scoring
-  when :alignment then @aligned_scoring || @scoring
-  end
-end
-```
-
-An amber divergence dot appears on category headers when secondary perspectives disagree on pass/fail. Capability contribution labels and blocked status also follow the primary perspective.
-
-## Frequency Rating Vocabulary
-
-The four rating values have distinct display labels and underlying enum values. UI buttons use the short form; tooltips and aria-labels use the long form. Data values (enum, events, DB, test fixtures) **never** change.
-
-| Enum value | Short label (button/bar) | Long label (tooltip/aria) |
-|------------|--------------------------|---------------------------|
-| `none` | None | None |
-| `some` | Some | Some times |
-| `occasional` | Most | Most times |
-| `consistent` | Consistently | Consistently |
-
-The `FrequencyBar` component abbreviates further when space-constrained (`Con.` for `consistent`), but still carries the long label as a `title` attribute.
-
-## Cell Background Coloring
-
-Cell backgrounds encode frequency + level position at a glance:
-
-| Level Position | Frequency | Background |
-|---------------|-----------|------------|
+| Level position | Frequency | Background |
+|---|---|---|
 | Below person_level | Unrated | Muted green (assumed consistent) |
-| Below person_level | Consistently (`consistent`) | Solid green |
-| Below person_level | Most times (`occasional`) | Amber |
-| Below person_level | Some times / None | Red |
+| Below person_level | rated | Solid hue from the palette (red / orange / amber / green) |
 | At/above person_level | Unrated | Neutral gray |
-| At/above person_level | Consistently (`consistent`) | Solid green |
-| At/above person_level | Some times / Most times | Blue (stretch attempt) |
+| At/above person_level | rated | Solid hue from the palette — same fill regardless of level position |
 
-## Multi-Perspective Scoring
+A small **divergence dot** appears on the chip when the primary perspective disagrees with any secondary the viewer can see. Full per-perspective values live in the expansion panel's `SecondaryRatingLine`s.
+
+## Multi-perspective scoring
 
 `Assessments::MatrixDataBuilder` builds four parallel scoring outputs:
 
 | Key | Perspective | Frequency Used |
-|-----|------------|----------------|
+|---|---|---|
 | `scoring` | `:effective` (default) | Fallback chain: aligned → manager → self |
 | `self_scoring` | `:self_only` | Only `self_rated_frequency` |
 | `manager_scoring` | `:manager_only` | Only `manager_rated_frequency` |
 | `aligned_scoring` | `:aligned_only` | Only `aligned_frequency` |
 
-Each uses `PersonDevelopment::Scoring` with a different `perspective:` parameter. A perspective returns `nil` (not empty) when no ratings exist for it — `ScoringPanel` detects this via `using_fallback?` and shows a "No ratings yet" badge.
+Each uses `PersonDevelopment::Scoring` with a different `perspective:` parameter. Returns `nil` (not empty hash) when no ratings exist for that perspective — `HeroSummary` falls back to effective when its preferred perspective is nil.
 
-The `ScoringPanel` displays:
-- **Performance ratio** as primary percentage + progress bar
-- **Status tier**: Below expectations / Meeting expectations / Mastering
-- **Category results** with pass/fail per category
-- **Promotion readiness** at next level
-- **Divergence annotations** when secondary perspectives disagree on tier, category pass/fail, or promotion eligibility
+Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_contributions_at_next_level` map keyed by stable_id. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
 
 ## Real-Time Sync
 
-Rating changes by another viewer (e.g. a manager rating while the person has their own assessment open) are broadcast via ActionCable. The `assessment_sync_controller` observes a signal element for Turbo Stream replacements and triggers a full frame reload, preserving the user's toggle state (expanded rows, collapsed categories).
+Rating changes by another viewer are broadcast via ActionCable. `assessment_sync_controller` observes a signal element for Turbo Stream replacements and triggers a frame reload:
 
 ```
-ActionCable broadcast → Turbo Stream replaces signal element
-  → MutationObserver fires → save toggle state
-    → reload matrix + scoring frames
-      → turbo:frame-load → restore toggle state + update score badge
+ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
+  → MutationObserver fires → reload matrix + scoring + activity frames
+    → turbo:frame-load → update performance pct badge
 ```
 
-**The rater's own broadcast echo is suppressed.** The `CurrentAssessment` projection broadcasts on every rating event, and ActionCable delivers that broadcast back to the rating user too — without intervention, this would re-fetch the entire matrix frame for the user who just acted (flicker, scroll reset). The direct Turbo Stream response from the rating endpoint already updates the affected cells locally, so the broadcast for our own action is redundant.
+**The rater's own broadcast echo is suppressed.** `assessment_sync_controller#listenForOwnSubmits` arms a 5-second `_suppressReloadUntil` window on the EARLIEST signal of a user-initiated form submit — `pointerdown` / `mousedown` / `click` (capture phase) against any real submit control (`button[type='submit']`, default-type `<button>` inside a form, `input[type='submit']`), plus `turbo:submit-start` as a backstop for programmatic submits. The MutationObserver bails when within the window so the rater's own broadcast doesn't trigger a redundant frame reload (flicker + scroll reset).
 
-`assessment_sync_controller#listenForOwnSubmits` arms a 5-second `_suppressReloadUntil` window on the EARLIEST signal of a user-initiated form submit — `pointerdown`, `mousedown`, or `click` (capture phase) on a real submit control (`button[type='submit']`, default-type `<button>` inside a form, `input[type='submit']`) belonging to a form contained by this controller, plus `turbo:submit-start` as a backstop for programmatic submits. The arming is narrowed to actual submit controls (not all interactive clicks) so we don't hide legitimate broadcasts from other users after non-submit interactions like opening a dropdown.
+**Focus-param merge on reload.** `#mergeFocusParams` reads `?capability=` + `?level_ordinal=` from the BROWSER URL and stamps them onto the matrix frame's `src` before reload, so focus survives broadcast-driven frame reloads.
 
-When the broadcast arrives within the window, the MutationObserver's reload callback returns early. Outside the window, the reload proceeds as normal — preserving the multi-viewer sync semantics.
+## Stimulus controllers
 
-## Stimulus Controller Responsibilities
+| Controller | Responsibility |
+|---|---|
+| `matrix_controller.js` | Chip-click focus, card-header click focus (capability), scroll-driven capability focus via IntersectionObserver, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=`), URL-first focus restoration on connect, `data-focused` stamping on cards, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
+| `category_nav_controller.js` | Publishes `--sticky-header-h` via `getBoundingClientRect().height` + `Math.ceil` + `ResizeObserver`. Smooth-scrolls to category sections on chip click. Updates the active chip on scroll (suppressed for 900ms after a chip click — see *Category navigation*). |
+| `assessment_sync_controller.js` | ActionCable sync, self-submit suppression window, dual-frame reload, focus-param merge before reload. |
+| `frequency_selector_controller.js` | Optimistic UI on rating button click. Form action lives in the view, not the controller. |
+| `activity_feed_controller.js` | Listens for `matrix:focus-changed` and narrows entries by capability + level focus. |
+| `context_pane_controller.js` (shared with framework explorer) | Right-pane suggestion / activity panel state, URL focus sync. |
+| `continue_assessing_controller.js` | Bottom-line CTA — dispatches a window event with the next-unrated capability stable_id + level, picked up by `matrix_controller#focusUnrated`. |
 
-### assessment_sync_controller.js
-- **ActionCable sync** — observes a signal element via `MutationObserver` for Turbo Stream replacements
-- **Self-broadcast suppress** — arms a 5s `_suppressReloadUntil` window on `pointerdown`/`mousedown`/`click` capture against any real submit control (`button[type='submit']`, default-type `<button>` in a form, `input[type='submit']`) inside this controller, plus `turbo:submit-start` as backstop. The MutationObserver bails when within the window so the rater's own broadcast doesn't trigger a redundant frame reload (flicker + scroll reset)
-- **Focus-param merge on reload** — `#mergeFocusParams` reads `capability` + `level_ordinal` from the BROWSER URL (kept current by matrix_controller's URL sync) and stamps them onto the matrix frame's `src` before reload, so focus state survives broadcast-driven frame reloads
-- **Toggle state preservation** — saves expanded rows and collapsed categories before frame reload, restores after
-- **Scoring badge update** — reads `data-performance-pct` from the scoring panel and updates the header badge color/text
-- **Dual frame reload** — reloads both the matrix frame and the scoring panel frame on rating changes
-- **Category sync** — after every matrix frame load, copies the `?category=` param from the matrix frame's `src` to the scoring frame's `src` and reloads it, keeping the scoring panel's active category highlight in sync with the tab bar
-
-### frequency_selector_controller.js
-- **Optimistic UI** — highlights the clicked frequency button immediately before the Turbo Stream response arrives
-- Lightweight controller; form action routing is handled server-side by `FrequencySelector` view component
-
-### matrix_controller.js (shared with explorer)
-- **Category collapse** (sibling row walking) — not used in assessment view (single category)
-- **Row expansion** (toggle hidden expanded row by capability ID)
-- **Cell focus** (`focusCell` action on compact AND expanded `<td>`, plus `keydown.enter.self`/`keydown.space.self` for keyboard activation) — dispatches `matrix:focus-changed` with `level: "cell"` and resizes columns via `#applyColumnFocus`. Compact-cell click also calls `#expandRow` so the gesture both opens the row and focuses the cell. **Assessment-only behaviour**: explorer's expanded cells emit the same focus event but render no `<colgroup>`, so the column-resize is a no-op there.
-- **Cell unfocus** (`unfocusCell` action on the per-cell `×` close button) — returns to capability-level focus, leaving the row expanded
-- **URL sync** (assessment only, gated behind `urlSyncValue`) — `#syncFocusToUrl` writes `?capability=<stable_id>` + `?level_ordinal=<n>` together in one `pushState` (or clears them) on every focus transition. `#syncFrameUrlToBrowser` only mirrors `?category=` from the frame's `src` to the browser URL — `capability`/`level_ordinal` are owned by JS focus state, never overwritten from the frame
-- **URL-first focus restoration** — `#dispatchInitialFocus` calls `#focusFromUrl` first; if the browser URL has `capability` + `level_ordinal` AND a matching `<td>` exists, restore cell focus from the URL. Stale URLs (no matching `<td>`) bail to the capability/category fallback.
-- **Sibling dimming** — dims non-expanded rows (`opacity-40`) when a row is expanded for visual focus
-- See [framework-explorer.md](framework-explorer.md) for full responsibilities
-
-## Key Design Decisions
-
-### Tabbed categories with server-side switching
-
-Instead of showing all categories at once, the assessment renders one category at a time via a tab bar. Each tab click fetches a Turbo Frame with `?category=<id>`. This was chosen over client-side show/hide because:
-
-1. **Payload reduction** — only one category's DOM is rendered, not all
-2. **Data freshness** — each tab switch gets the latest rating state from the server
-3. **Consistency** — matches the framework explorer pattern where role selection drives Turbo Frame fetches
-4. **No client-side tab state** — tabs live inside the Turbo Frame and re-render on every load, so active state is always correct
-
-The category header row is omitted when rendering a single category (the tab bar serves as the category identifier).
-
-### URL-driven focus state
-
-The active category and expanded capability are query params, enabling:
-- Bookmarking a specific category + capability view
-- Sharing deep links to a particular assessment focus
-- Browser back/forward navigation between category views
-- Server-side pre-expansion of rows from shared URLs
-
-### Scoring panel as navigation
-
-Category names in the scoring panel sidebar are clickable links that switch the active tab. When the matrix frame loads with a new category, the `assessment_sync_controller` syncs the scoring frame to update the active category highlight.
-
-## Hard-Won Lessons
-
-### 1. Separate view hierarchies over multi-mode components
-
-The original plan was to add a `mode` parameter to `MatrixCell` for explorer/assessment/review. In practice, a parallel `app/views/assessments/` hierarchy with its own cell/row/matrix components was cleaner — assessment cells need frequency selectors, secondary bars, and background coloring logic that doesn't belong in the read-only explorer.
-
-### 2. Context threading must be end-to-end
-
-The `:self`/`:manager` context flows from controller detection (`manager_viewing?`) through the builder, into every view component, and into form action URLs. Missing the context at any layer — especially `FrequencySelector#form_action` — routes ratings to the wrong endpoint silently.
-
-### 3. Toggle state preservation across Turbo Frame reloads
-
-When a rating changes, `assessment_sync_controller` reloads the matrix frame. Without saving/restoring expanded rows and collapsed categories, the user loses their scroll position and state. The controller uses a save/restore cycle around each reload via DOM queries before the fetch and re-application after `turbo:frame-load`.
-
-### 4. Category data contains model objects, not plain hashes
-
-`matrix_data[:categories]` contains `{ category: CapabilityCategory, ... }` where `category` is an ActiveRecord model, not a hash. Use `.dig(:category)&.category_id` (two-step), not `.dig(:category, :category_id)` — the latter requires `#dig` on the model which doesn't exist.
-
-### 5. Perspective scoring returns nil, not empty
-
-`build_perspective_scoring` returns `nil` (not an empty hash) when no ratings exist for a perspective. `ScoringPanel` checks this via `using_fallback?` and falls back to effective scoring, showing a "No ratings yet" badge. Returning an empty hash would display misleading zero scores.
-
-### 6. `table-fixed` ignores `min-w-*` on cells
-
-The cell-focus column resize requires `<colgroup>` + explicit `<col>` widths under `table-fixed`. Once `table-fixed` is on, every `min-w-[180px]` on a `<th>` or `<td>` becomes inert — column widths come solely from the `<col>` elements. The capability column needs an explicit `width: 220px` style to preserve the prior layout; level cols are unstyled by default so they auto-divide remaining width evenly. If you rely on cell-content-driven sizing anywhere in the matrix, it will silently stop working.
-
-### 7. `<col>` width transitions don't animate in WebKit
-
-When `matrix_controller#applyColumnFocus` sets `style.width` on a `<col>`, browsers do not animate the transition (Chromium/WebKit treat `<col>` as a layout primitive, not a transition source). Don't add `transition-[width]` and try to fight this — instant resize is the correct UX for cell focus and matches user expectation. Tested behaviour, accepted trade-off.
-
-### 8. Rating Turbo Streams must stamp `data-focused` AND `data-capability-id` server-side
-
-The rating controllers (`RatingsController`, `ManagerRatingsController`, `AlignmentRatingsController`) re-render the rated cell via `turbo_stream.replace`. Two interacting failure modes make the cell render with indicator badges visible (the regression appears as "rating a cell brings back the `2 examples` / `N evidence` badges"):
-
-1. **Browser paints the new `<td>` before MutationObserver fires.** Without `data-focused="true"` baked into the server HTML, the new cell renders with `group-data-[focused=true]/assess-cell:hidden` content (indicator badges, close button) visible until the next observer tick re-stamps focus.
-2. **Stamping `data-focused` alone is not enough.** When MutationObserver runs `applyColumnFocus(levelOrdinal, capabilityId)`, it iterates `td[data-level-ordinal]` and computes `sameCap = capabilityId && td.dataset.capabilityId === capabilityId`. If the re-rendered cell is missing `data-capability-id`, `sameCap` is false, so the observer **deletes** the freshly-stamped `data-focused` attribute. Result: same flash as case 1, but permanent until the next focus event.
-
-Fix: AssessmentCell takes a `focused:` kwarg that bakes `data-focused="true"` into the `<td>`. Every rating controller passes BOTH `focused: true` AND `capability_id: cap_data[:capability].capability_id` — without the explicit `capability_id:`, AssessmentCell defaults it to `nil` and Phlex drops the data attribute (it skips nil values in nested attribute hashes), which trips the observer's "doesn't match current focus → unstamp" branch.
-
-If you add another Turbo Stream re-render that targets `cell-…`, pass both kwargs there too; otherwise the flash returns. Coverage: [Assessments::RatingsControllerTest#test_:_POST_/assessments/:assessment_id/ratings_should_stamp_data-focused=true_on_the_rated_cell_in_the_turbo_stream_response] guards the server-side stamp; [AssessmentsSystemTest#test_:_cell_focus_should_not_flash_indicator_badges_when_rating_the_focused_cell] guards the end-to-end DOM state after the observer settles.
+There is **no** `sticky_hero_controller.js`. The hero's collapse is pure CSS scroll-driven animation. See *Hero Summary — Collapse on scroll*.
 
 ## Lifecycle
 
-Each enrolled `AssessmentCycleParticipation` (composing an `AssessmentCycleEnrollment` row with an optional `AssessmentCycleProgress` row) walks a lifecycle that the views render explicitly:
+Each enrolled `AssessmentCycleParticipation` walks a lifecycle the views render explicitly:
 
 ```text
 enrolled → started → aligning → aligned → withdrawn
@@ -358,100 +388,182 @@ enrolled → started → aligning → aligned → withdrawn
 
 | Status | Trigger | What's editable |
 |---|---|---|
-| `enrolled` | `PersonEnrolled` lands; participant created | Self + manager ratings |
+| `enrolled` | `PersonEnrolled` lands | Self + manager ratings |
 | `started` | First `SelfRated` / `ManagerRated` event with `source: "human"` | Self + manager ratings |
-| `aligning` | Manager fires `AlignmentStarted` (manager-only command) | Aligned values only — self + manager are FROZEN |
-| `aligned` | Manager fires `FullAlignmentCompleted` (manager-only) | Nothing — all ratings, including aligned values, are frozen |
+| `aligning` | Manager fires `AlignmentStarted` | Aligned values only — self + manager FROZEN |
+| `aligned` | Manager fires `FullAlignmentCompleted` | Nothing — all ratings frozen |
 | `withdrawn` | Person unenrolled or cycle closed | Nothing |
 
-**Threading the status to the views.** `MatrixDataBuilder` reads `participant_status` (controller derives via `assignment.current_open_cycle_participation&.status`) and produces two boolean flags on the matrix data hash:
-- `individual_ratings_frozen` — true for `aligning` / `aligned`. Threaded into `AssessmentRow` and `AssessmentCell` as `frozen:`. When the cell context is `:self` or `:manager`, the primary `FrequencySelector` is replaced with a read-only `FrequencyBar`.
-- `alignment_locked` — true only for `aligned`. Threaded in as `alignment_locked:`. When the cell context is `:alignment`, the alignment selector also becomes a read-only bar.
+**Threading the status to the views.** `MatrixDataBuilder` reads `participant_status` and produces two boolean flags:
 
-Both flags also flow through the rating controllers' Turbo Stream `respond_with_turbo_stream` paths so post-event re-renders pick the correct read-only / interactive shape.
+- `individual_ratings_frozen` — true for `aligning` / `aligned`. Threaded through `CapabilityCardExpansion` as `frozen:`. In self/manager context, the primary `FrequencyPill` renders as a static (non-interactive) coloured span instead of an interactive trigger.
+- `alignment_locked` — true only for `aligned`. Threaded as `alignment_locked:`. In alignment context, the alignment selector also becomes a read-only bar.
 
-**Header layout.** Both views render a single-row header (`flex flex-wrap items-baseline gap-x-3 gap-y-1`) consisting of an H1, a monospace shortcode chip, a status pill, and a right-aligned action cluster:
+Both flags also flow through the rating controllers' Turbo Stream responses so post-event re-renders pick the correct read-only / interactive shape.
 
-- **Self view** — H1 is the level title (e.g. "Senior Engineering Manager"); shortcode chip is `"#{role.code}#{level.ordinal}"` (e.g. `EM5`); status pill is one of `In Progress` / `Aligning` / `Aligned` (rendered only when `current_open_cycle` exists). The framework name and version badge are intentionally omitted — they live on the back link / index card. The role-name pill is also omitted (the level title already carries the role context, and the shortcode disambiguates).
-- **Manager view** — H1 is `assessee.name`; a secondary subtitle span renders the level title; same shortcode chip and status pill follow. The "Manager Review" badge is omitted — the assessee's name as H1 plus the back link to `Assessments` is sufficient context.
+**Header layout.** Both `ShowView` and `ManagerShowView` render a single-row header (`flex flex-wrap items-baseline gap-x-3 gap-y-1`):
 
-**Status pill.** Single helper `render_status_pill` returns one badge based on `participant_status` (`aligning` → warning, `aligned` → success) or falls back to "In Progress" warning when an open cycle exists. Self view never duplicates this with an extra "Aligning with manager" badge.
+- **Self view** — H1 is the level title; shortcode chip is `"#{role.code}#{level.ordinal}"`; status pill (`In Progress` / `Aligning` / `Aligned`) when a cycle is open.
+- **Manager view** — H1 is `assessee.name`; subtitle span renders the level title; same shortcode + status pill.
 
-**Action cluster (right side).**
-- Manager view, status `started`: "Start alignment" `<form>` with `data-turbo-confirm` warning that self + manager ratings will lock. Hidden on mobile (`hidden md:inline-block`).
-- Manager view, status `aligning`: "Mark alignment complete" green button with `data-turbo-confirm` warning that aligned values will be frozen.
-- Status `aligning` or `aligned`: no toggle — the assessment renders in alignment mode automatically. Both parties see all three rating perspectives without any UI affordance to enter or exit alignment.
+**Action cluster (right side).** Manager view with status `started` shows "Start alignment" (form with `data-turbo-confirm`); status `aligning` shows "Mark alignment complete". Status `aligning` or `aligned` automatically renders in alignment mode — no toggle.
 
-**`AlignmentStartsController` / `AlignmentCompletionsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment)`. Both rescue `RuntimeError` from the aggregate to surface a generic flash alert (the underlying message is logged via `Rails.logger.error` only).
+**`AlignmentStartsController` / `AlignmentCompletionsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment)`. Both rescue `RuntimeError` from the aggregate to surface a generic flash alert.
 
-**Auto-alignment on start.** Inside the same RES transaction as `AlignmentStarted`, `PersonDevelopment::CommandHandler#start_alignment` emits an `AssessmentAligned` event for every (capability × level) cell where both `self_rated_frequency` and `manager_rated_frequency` are explicitly recorded **and equal**. The conversation in alignment mode then focuses on disagreements and unrated cells. Default-fallback agreements (where one or both perspectives never recorded an explicit value) are NOT auto-aligned — an aligned event represents a positive act of agreement between two recorded positions, not an absence of dispute. Auto-aligned events carry the comment "Auto-aligned: self and manager already agreed" for forensic distinction.
+**Auto-alignment on start.** Inside the same RES transaction as `AlignmentStarted`, `PersonDevelopment::CommandHandler#start_alignment` emits an `AssessmentAligned` event for every (capability × level) cell where both `self_rated_frequency` and `manager_rated_frequency` are explicitly recorded **and equal**. The conversation in alignment mode then focuses on disagreements and unrated cells. Default-fallback agreements are NOT auto-aligned. Auto-aligned events carry the comment "Auto-aligned: self and manager already agreed".
 
-**Cross-cycle seeding.** When a person enrols in a new cycle for a framework where they previously completed alignment, both their self and manager ratings are pre-populated from the prior cycle's `aligned_frequency`. The seeded events carry `source: "seeded"` (vs the default `"human"`) and `seeded_from_cycle_id`. The participant stays in `enrolled` until the user makes their first real edit — seeded events alone do not trigger `started`, and the projection's `apply_source` flips the row's source back to `"human"` on any user revise. See `PR 4` of the assessment-lifecycle plan for full details.
+**Cross-cycle seeding.** When a person enrols in a new cycle for a framework where they previously completed alignment, both their self and manager ratings are pre-populated from the prior cycle's `aligned_frequency`. The seeded events carry `source: "seeded"` (vs the default `"human"`) and `seeded_from_cycle_id`. The participant stays in `enrolled` until the user makes their first real edit — seeded events alone do not trigger `started`.
+
+## Hard-Won Lessons
+
+### 1. Separate view hierarchies over multi-mode components
+
+A parallel `app/views/assessments/` hierarchy with its own card/strip/chip components was cleaner than adding mode parameters to the framework explorer's view. Assessment components need frequency selectors, secondary bars, contribution badges, and color-tiered chip backgrounds that don't belong in the read-only explorer.
+
+### 2. Context threading must be end-to-end
+
+The `:self` / `:manager` / `:alignment` context flows from controller detection through the builder, into every view component, and into form action URLs. Missing the context at any layer — especially `FrequencyPill#form_action` — routes ratings to the wrong endpoint silently.
+
+### 3. Perspective scoring returns nil, not empty
+
+`build_perspective_scoring` returns `nil` (not an empty hash) when no ratings exist for a perspective. `HeroSummary` falls back to effective scoring when its preferred perspective is nil. Returning an empty hash would display misleading zero scores.
+
+### 4. The middle band must point at the *next* milestone, not one already cleared
+
+At 110% performance ratio (in `:performing` range 0.95–1.15), the original state machine fired `:progressing_to_next` because next-level ratio was above the underperforming floor. That's wrong UX — the person hasn't even mastered current yet. The mental model the user wanted was *always-the-next-gate*: focus on mastering current first, then on promotion. The state machine now drops `:progressing_to_next` entirely; `:performing` owns the 0.95–1.15 band and is framed as "Gap to mastering", using next-level contributions so the gap values actually mean something (capabilities at `+0.0` current would show `-1.0` at L+1 — the real signal).
+
+### 5. CSS scroll-driven animation needs `grid-template-rows`, not `max-height`
+
+The original hero collapse animated `max-height` + `padding-block`. That caused a re-layout feedback loop mid-scroll — visible as a flicker between hidden and visible — because the unified sticky header height was changing every frame, which `category_nav_controller`'s ResizeObserver published as `--sticky-header-h`, which cascaded layout, which …
+
+`grid-template-rows: 1fr → 0fr` owns the row's height locally. Two-layer wrapper (grid item with no padding, padded child inside) lets the row shrink to 0 without padding contributing to a minimum height.
+
+### 6. Sub-pixel rounding leaves a 1px gap under the sticky header
+
+`element.offsetHeight` returns an integer. When the real sticky-header height is fractional (Hi-DPI displays, mid-animation), `--sticky-header-h` lands 0.5–1px short of the actual bottom edge, and the category section's `top: var(--sticky-header-h)` ends up a hair below the unified header — revealing a thin strip of scrolling content. Use `Math.ceil(getBoundingClientRect().height)` instead.
+
+### 7. Active-chip detection must be locked during programmatic scroll
+
+The smooth-scroll animation's final scroll event can fire while the target section's top is still a few pixels short of the active-detection threshold. Without a lock, the active marker reverts to the previous chip — the clicked chip appears to mismatch the visible section. `category_nav_controller` locks the active state for ~900ms after a chip click and suppresses scroll-based detection during that window.
+
+### 8. Capability contribution must render as a signed delta, never hidden when negative
+
+The original card had `return if @contribution.negative?` and rendered the contribution as a percentage. That silently dropped the most informative signal (under-performance) and showed even `+0.0` as `0%` — meaningless. Render as `±N.N` always; color-tier by magnitude.
+
+### 9. Auto-focus removes the "no level focused" state — drop the close button with it
+
+The original card had a `×` close button on the expansion panel that returned to "no level focused" — strip visible, panel hidden. Auto-focusing every card on the person's level makes that state meaningless (there's nothing to close *to*). Re-focusing means clicking a different chip; that's the only interaction the strip needs.
+
+### 10. Rating Turbo Streams must re-render with the right mode + context
+
+Inline rating responses use `turbo_stream.replace` on the rated cell or expansion. The replacement must carry both `context:` and `frozen:` / `alignment_locked:` from the parent view, otherwise the re-rendered fragment loses the read-only treatment in `aligning` / `aligned` states.
+
+### 11. IntersectionObserver's connect-time callback isn't a user scroll
+
+`new IntersectionObserver(cb).observe(el)` triggers `cb` once with the current intersection state — not in response to a user scroll, but as a one-shot bootstrap. Acting on that callback to update capability focus made every page load auto-narrow the activity feed to whichever card happened to sit in the visible band, silently overriding URL-driven (`?capability=`) and click-driven initial focus. Fix: gate `#updateFocusedCapabilityFromScroll` on `_sawUserScroll`, which only flips after a real `scroll` event has fired. Real users always trip the flag with their first scroll; the bootstrap callback no-ops.
+
+### 11a. "Deepest card past the sticky chrome" is symmetric in mechanism but asymmetric in perception
+
+First version of `#updateFocusedCapabilityFromScroll` picked the deepest card whose top had scrolled past `stickyH + 16` — same heuristic `category_nav_controller#updateActiveCategory` uses for category sections. Worked great scrolling down (the new card appears at the chrome line, focus switches naturally). Broke scrolling up: when the current card's top crossed back below the threshold, the "next" card in the set was the one ABOVE the chrome, often far above with only its bottom edge visible. Focus jumped to a card the user couldn't yet see.
+
+The cause: with downward scrolling the threshold-crossing card is also the one growing visibly in the band; with upward scrolling the same crossing dismisses the visible card while crowning one that's mostly off-screen. Fix: switch to a most-visible-area picker. The card with the most pixels in the content band (viewport strip below sticky chrome) wins regardless of scroll direction. Both directions converge on "what the user has the most of on screen", which is what they're reading.
+
+### 12. Activity feed reconnect on lazy-frame load needs a DOM signal for capability focus
+
+`activity_feed_controller#readMatrixFocusFromDom` runs on every `connect()`. The activity sidebar lives in a `loading: "lazy"` turbo-frame, so its first connect (when the pane opens) happens AFTER the user may have already clicked a card. Without a DOM signal for "capability focus is active on card X", the reconnect would default to category-level focus and silently undo the click. The signal is `data-focused="true"` on the matching card — server stamps it from `?capability=`, JS toggles it on focus changes, feed reads it on reconnect.
+
+## Performance state machine
+
+Defined in `PersonDevelopment::Scoring#performance_state`. See [scoring-model.md](../architecture/scoring-model.md) for the canonical definition. Summary:
+
+```
+:underperforming  ratio < underperforming_threshold (default 0.80)
+:progressing      underperforming_threshold ≤ ratio < meeting_threshold
+                  OR any capability blocked
+:eligible         has_next_level AND promotion_readiness[:eligible]
+:mastering        ratio ≥ mastery_threshold AND not eligible
+:performing       otherwise (meeting_threshold ≤ ratio < mastery_threshold)
+```
+
+Precedence: underperforming → progressing → eligible → mastering → performing.
+
+`MatrixDataBuilder` exposes the state on each perspective's scoring dict via `performance_state: scoring.performance_state`. The hero's `state_panel_config` is a `case` over this single symbol.
 
 ## Future Extension Points
 
-### Framework version migration UI for skipped seed values
-`RatingSeedSkipped` events are already emitted on the person-development stream when a prior aligned capability's `stable_id` no longer exists in the new cycle's framework — but no read model or UI surface consumes them yet. Once framework-version migration mappings ship, the migration UI should replay these events and surface a "use this rating against `<migrated equivalent>`" affordance.
-
-### Evidence Collection
-Events are defined (`EvidenceRecorded`, `EvidenceRelinked`, `EvidenceWithdrawn`) but no UI exists. Cell expansion would show an evidence attachment UI, letting users link evidence to a specific capability × level intersection.
-
-### Growth Plans
-Events are defined (`GrowthGoalSet`, `FocusAreaAdded`, `CheckInRecorded`) but no UI or read model projection exists yet.
-
-### Notifications and Snapshots
-Both are listed in the architecture docs as cross-cutting concerns. Neither has any infrastructure today; PR 3 of the lifecycle plan specifically deferred snapshot subscription on `FullAlignmentCompleted` until a `PersonDevelopment::Snapshotting` async handler exists.
+- **Framework version migration UI for skipped seed values** — `RatingSeedSkipped` events are emitted but no read model / UI surface consumes them yet.
+- **Growth Plans** — events defined (`GrowthGoalSet`, `FocusAreaAdded`, `CheckInRecorded`), no UI yet.
+- **Notifications and Snapshots** — both are listed in architecture docs; neither has any infrastructure today.
 
 ## File Reference
 
 | File | Purpose |
 |------|---------|
-| **Views** | |
-| `app/views/assessments/category_tabs.rb` | Horizontal tab bar for category switching (inside Turbo Frame) |
-| `app/views/assessments/show_view.rb` | Self-assessment two-pane layout (matrix + scoring sidebar) |
-| `app/views/assessments/manager_show_view.rb` | Manager assessment layout |
+| **Page-level views** | |
+| `app/views/assessments/show_view.rb` | Self-assessment shell — unified sticky header + main column + activity sidebar |
+| `app/views/assessments/manager_show_view.rb` | Manager assessment shell — same shape, different H1 + action cluster |
 | `app/views/assessments/index_view.rb` | Assessment list (own + direct reports) |
-| `app/views/assessments/assessment_matrix_frame_view.rb` | Turbo Frame wrapper for assessment matrix |
-| `app/views/assessments/assessment_matrix.rb` | Assessment matrix table container |
-| `app/views/assessments/assessment_category_group.rb` | Category group with contribution labels |
-| `app/views/assessments/assessment_row.rb` | Context-aware capability row |
-| `app/views/assessments/assessment_cell.rb` | Context-aware cell (self/manager/alignment) |
-| `app/views/assessments/matrix_header.rb` | Level columns with person_level highlight |
-| `app/views/assessments/frequency_selector.rb` | Four-button rating control (None/Some/Most/Consistently) |
+| **Hero summary** | |
+| `app/views/assessments/hero_summary.rb` | Three-band hero card with state-driven middle band; renders inside the unified sticky header |
+| **Category navigation** | |
+| `app/views/assessments/category_chip_bar.rb` | Sticky chip row, active marker, scoring legend |
+| `app/views/assessments/category_section.rb` | Anchor target + sticky section heading + stack of capability cards |
+| **Matrix content** | |
+| `app/views/assessments/assessment_matrix_frame_view.rb` | Turbo Frame wrapper for the matrix |
+| `app/views/assessments/assessment_matrix.rb` | Container that renders each `CategorySection` |
+| `app/views/assessments/capability_card.rb` | One card per capability — eyebrow, name, signed delta, level strip, expansion panel |
+| `app/views/assessments/level_strip.rb` | Horizontal flex of `LevelChip`s, scrolls horizontally on narrow |
+| `app/views/assessments/level_chip.rb` | One chip per level — color by frequency × level position, YOU badge, divergence dot |
+| `app/views/assessments/capability_card_expansion.rb` | Focused-level panel — expectation sentence + inline FrequencyPill, divergent SecondaryRatingLines, illustrations, evidence, comments |
+| `app/views/assessments/frequency_palette.rb` | Shared 4-state colour palette + sentence phrases for pill / chip / dot |
+| `app/views/assessments/frequency_pill.rb` | Inline rating pill (interactive popover or static coloured span) |
+| `app/views/assessments/secondary_rating_line.rb` | Divergent-perspective sentence with a colour-coded dot |
+| `app/views/assessments/frequency_selector.rb` | Four-button rating control (context determines POST endpoint) |
 | `app/views/assessments/frequency_bar.rb` | Read-only secondary rating bar with divergence dot |
-| `app/views/assessments/scoring_panel.rb` | Multi-perspective scoring sidebar |
-| `app/views/assessments/scoring_panel_frame_view.rb` | Scoring panel Turbo Frame |
-| `app/views/assessments/capability_name_cell.rb` | Capability name with contribution indicator |
-| `app/views/assessments/category_contribution_label.rb` | Category pass/fail badge |
-| `app/views/assessments/category_status.rb` | Category status indicator |
-| `app/views/assessments/contribution_label.rb` | Capability contribution indicator |
-| `app/views/assessments/rating_error.rb` | Rating error flash |
+| `app/views/assessments/rating_error.rb` | Rating error flash partial |
+| **Activity feed** | |
+| `app/views/assessments/activity/feed.rb` | Right sidebar — entry list, filter chips, focus mode toggle |
+| `app/views/assessments/activity/filter_chips.rb` | All / Ratings / Evidence / Comments / Alignment (wraps onto multiple lines) |
+| `app/views/assessments/activity/focus_mode_toggle.rb` | Highlight / Filter segmented control |
+| `app/views/assessments/activity/entry.rb` | Single entry — author, title, body, badges |
+| `app/views/assessments/activity/feed_frame_view.rb` | Turbo Frame wrapper for the activity feed |
+| `app/views/assessments/activity/pane_toggle.rb` | Activity button in the header — opens/closes the sidebar |
 | **Controllers** | |
-| `app/controllers/assessments_controller.rb` | show/index/matrix/scoring with self/manager/alignment context routing |
+| `app/controllers/assessments_controller.rb` | show / index / matrix / scoring / activity — self/manager/alignment context routing |
 | `app/controllers/assessments/ratings_controller.rb` | Self-rating POST (rate_self, revise, clear) |
 | `app/controllers/assessments/manager_ratings_controller.rb` | Manager-rating POST (rate_as_manager, revise, clear) |
 | `app/controllers/assessments/alignment_ratings_controller.rb` | Per-cell alignment POST (align_assessment) |
-| `app/controllers/assessments/alignment_starts_controller.rb` | Manager-only POST that fires `AlignmentStarted` and locks individual ratings |
-| `app/controllers/assessments/alignment_completions_controller.rb` | Manager-only POST that fires `FullAlignmentCompleted` and locks all ratings |
+| `app/controllers/assessments/alignment_starts_controller.rb` | Manager-only POST — fires `AlignmentStarted`, locks individual ratings |
+| `app/controllers/assessments/alignment_completions_controller.rb` | Manager-only POST — fires `FullAlignmentCompleted`, freezes all ratings |
 | **Data** | |
-| `app/models/assessments/matrix_data_builder.rb` | Single-role builder with ratings + 4-perspective scoring |
-| `app/read_models/assessment_level_rating.rb` | Three-frequency read model (self/manager/aligned) |
+| `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions |
+| `app/read_models/assessment_level_rating.rb` | Three-frequency read model (self / manager / aligned) |
 | `app/read_models/person_framework_assignment.rb` | Person-framework-role-level assignment |
 | **JavaScript** | |
-| `app/javascript/controllers/assessment_sync_controller.js` | ActionCable sync, toggle state preservation |
+| `app/javascript/controllers/matrix_controller.js` | Chip-click focus, smooth-scroll, URL sync, sibling dimming (shared with framework explorer) |
+| `app/javascript/controllers/category_nav_controller.js` | `--sticky-header-h` publish, chip-click scroll, active-chip detection on scroll |
+| `app/javascript/controllers/assessment_sync_controller.js` | ActionCable sync, self-submit suppression, dual-frame reload, focus-param merge |
 | `app/javascript/controllers/frequency_selector_controller.js` | Optimistic frequency button UI |
+| `app/javascript/controllers/activity_feed_controller.js` | Focus-narrowing on `matrix:focus-changed` |
+| `app/javascript/controllers/continue_assessing_controller.js` | Bottom-line CTA — dispatches focus-unrated event |
+| **CSS** | |
+| `app/assets/tailwind/application.css` | `.hero-collapsible` scroll-driven animation (`animation-timeline: scroll(root)`) |
 | **Tests** | |
 | `test/system/assessments_system_test.rb` | Self-assessment system tests |
 | `test/system/manager_assessments_system_test.rb` | Manager assessment system tests |
+| `test/system/assessments_activity_feed_focus_system_test.rb` | Activity feed narrows on focus |
+| `test/system/assessments_activity_pane_system_test.rb` | Sidebar open/close + responsive behaviour |
+| `test/contexts/person_development/scoring_test.rb` | `performance_state` transition-point coverage; raw_contribution math |
+| `test/models/assessments/matrix_data_builder_test.rb` | Data shape + `capability_contributions_at_next_level` presence |
 
 ## Keeping This Document Current
 
-This document must be updated whenever changes are made to the assessment architecture, interaction patterns, component hierarchy, or Stimulus controllers. Specifically:
+Update whenever changes are made to assessment architecture, interaction patterns, component hierarchy, or Stimulus controllers. Specifically:
 
-- **New design decisions** — add with rationale (e.g. new context type, new scoring perspective)
+- **New design decisions** — add with rationale (e.g. new context type, new state in the performance state machine, new threshold)
 - **Bug fixes revealing non-obvious behaviour** — add to Hard-Won Lessons
-- **New or modified components** — update the Component Hierarchy and File Reference
-- **New Stimulus controllers or changed responsibilities** — update the Stimulus Controller Responsibilities section
-- **New future extension points** — add to Future Extension Points; remove entries that have been implemented
+- **New or modified components** — update the File Reference
+- **New Stimulus controllers or changed responsibilities** — update the Stimulus controllers table
+- **New future extension points** — add; remove entries that have been implemented
 
 If a lesson or decision is superseded, update or remove the old entry rather than appending a contradiction.

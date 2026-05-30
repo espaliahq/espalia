@@ -33,7 +33,7 @@ class Views::Assessments::Comments::Thread < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-3 pt-2 border-t border-gray-200 dark:border-gray-700",
+      class: "mt-4 pt-3 border-t border-gray-200 dark:border-gray-700",
       data: { controller: "comments-thread" }
     ) do
       header
@@ -69,7 +69,7 @@ class Views::Assessments::Comments::Thread < Views::Base
   def add_button
     button(
       type: "button",
-      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 " \
+      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
              "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
              "dark:hover:text-gray-200 transition-colors",
       aria: { label: "Add a comment" },
@@ -82,12 +82,24 @@ class Views::Assessments::Comments::Thread < Views::Base
 
   def header_label_classes
     "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-      "text-gray-500 dark:text-gray-400 mb-1"
+      "text-gray-500 dark:text-gray-400 mb-2"
   end
 
+  # When the thread is empty AND the viewer can comment, lean the label
+  # into the affordance ("Add a comment") rather than describing an
+  # empty section ("Comments"). With comments present, switch back to
+  # the section label + count. When the viewer can't comment (read-only
+  # peer view), don't dangle an affordance they can't act on — render
+  # the plain "Comments" label.
   def header_label_content
-    span { "Comments" }
-    span(class: "font-mono") { "(#{visible_count})" } if visible_count.positive?
+    if visible_count.positive?
+      span { "Comments" }
+      span(class: "font-mono") { "(#{visible_count})" }
+    elsif @can_create
+      span { "Add a comment" }
+    else
+      span { "Comments" }
+    end
   end
 
   # Count non-deleted comments. Deleted ones still render as tombstones

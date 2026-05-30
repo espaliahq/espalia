@@ -18,6 +18,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "manager_rating_revised"   => "bg-indigo-500",
     "manager_rating_cleared"   => "bg-gray-400",
     "assessment_aligned"       => "bg-amber-500",
+    "alignment_cleared"        => "bg-gray-400",
     "evidence_recorded"        => "bg-amber-500",
     "evidence_relinked"        => "bg-sky-500",
     "evidence_withdrawn"       => "bg-gray-400",
@@ -38,6 +39,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "manager_rating_revised"  => "ratings",
     "manager_rating_cleared"  => "ratings",
     "assessment_aligned"      => "alignment",
+    "alignment_cleared"       => "alignment",
     "evidence_recorded"       => "evidence",
     "evidence_relinked"       => "evidence",
     "evidence_withdrawn"      => "evidence",
@@ -147,6 +149,8 @@ class Views::Assessments::Activity::Entry < Views::Base
       "Manager cleared rating on #{capability_label}"
     when "assessment_aligned"
       "Aligned on #{capability_label}"
+    when "alignment_cleared"
+      "Cleared alignment on #{capability_label}"
     when "evidence_recorded"     then evidence_recorded_summary
     when "evidence_relinked"     then evidence_relinked_summary
     when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"

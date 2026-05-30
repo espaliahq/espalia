@@ -115,7 +115,8 @@ class AssessmentsController < ApplicationController
       matrix_data: @matrix_data,
       context: assessment_context,
       active_category_id: resolve_active_category_id,
-      assessment_id: @assignment.id
+      assessment_id: @assignment.id,
+      assessee_name: manager_viewing? ? @assessee&.name : nil
     ), layout: false
   end
 

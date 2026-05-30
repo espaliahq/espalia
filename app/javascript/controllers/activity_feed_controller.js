@@ -161,6 +161,22 @@ export default class extends BaseController {
   // before activity-feed has bound its listener — without this, the
   // feed would miss the initial category focus on every page load and
   // every Turbo Frame swap.
+  //
+  // Card-layout signal: a capability card stamped `data-focused="true"`
+  // by matrix_controller#setFocus represents capability-or-cell focus
+  // (matrix_controller stamps the same attribute for both). The feed
+  // reconnects when its turbo-frame loads lazily — without this signal
+  // it would silently downgrade to category-level focus on every frame
+  // load, undoing whatever the user just clicked.
+  //
+  // Cell-vs-capability disambiguation: the browser URL is the source
+  // of truth for cell focus (the chip click pushes `?level_ordinal=`
+  // via `#syncFocusToUrl`). Without reading `level_ordinal` here, every
+  // lazy reconnect downgrades cell focus to capability focus and the
+  // sidebar widens to all entries across the capability's levels.
+  //
+  // Table-layout signal: the legacy expandedRow target is still honoured
+  // for the framework explorer.
   #readMatrixFocusFromDom() {
     const blank = { level: "framework", categoryId: null, capabilityStableId: null, levelOrdinal: null }
     const matrix = document.querySelector("[data-controller~='matrix']")
@@ -168,6 +184,32 @@ export default class extends BaseController {
 
     const activeCategoryId = matrix.dataset.matrixActiveCategoryIdValue
     if (!activeCategoryId) return blank
+
+    // Card layout — focused card carries `data-focused="true"`. When
+    // multiple cards are focused (shouldn't happen, but be defensive),
+    // pick the first.
+    const focusedCard = matrix.querySelector(
+      "[data-matrix-target='card'][data-focused='true']"
+    )
+    if (focusedCard) {
+      const section = focusedCard.closest("section[data-category-id]")
+      const url = new URL(window.location)
+      const stableId = focusedCard.dataset.capabilityStableId || null
+      const urlStableId = url.searchParams.get("capability")
+      const urlOrdRaw = url.searchParams.get("level_ordinal")
+      const urlOrd = urlOrdRaw == null ? null : parseInt(urlOrdRaw, 10)
+      // Cell focus is signalled by `?capability=` + `?level_ordinal=`
+      // matching the focused card's stable_id. Otherwise treat as
+      // capability-level.
+      const isCell = stableId && urlStableId === stableId &&
+                     urlOrd != null && !isNaN(urlOrd)
+      return {
+        level: isCell ? "cell" : "capability",
+        categoryId: section?.dataset.categoryId || activeCategoryId,
+        capabilityStableId: stableId,
+        levelOrdinal: isCell ? urlOrd : null
+      }
+    }
 
     const expandedRow = matrix.querySelector(
       "[data-matrix-target='expandedRow']:not(.hidden)"
@@ -211,15 +253,30 @@ export default class extends BaseController {
 
   // In highlight mode, the rest of the feed stays visible, so a matching
   // entry further down the list would otherwise sit off-screen until the
-  // user scrolls. Bring the first match into the visible band after every
-  // state apply that could have changed which entry matches. `nearest`
-  // avoids disrupting position when the match is already on screen.
+  // user scrolls. Park the first match at the top of the sidebar's
+  // visible band every time focus changes — clicking a new focus is
+  // "show me what changed", so the match should be the focal point
+  // regardless of where the sidebar happened to be scrolled.
+  //
+  // Scopes the scroll to the sidebar aside directly (rather than calling
+  // `scrollIntoView` on the entry, which cascades up and can shift the
+  // main page too).
   #scrollFirstMatchIntoView() {
     if (this.mode !== "highlight") return
     if (!this.#hasActiveFocus()) return
     const first = this.entryTargets.find(e => e.dataset.match === "true")
     if (!first) return
-    first.scrollIntoView({ block: "nearest", behavior: "smooth" })
+
+    const aside = first.closest("#assessment-activity-pane")
+    if (!aside) return
+
+    const entryRect = first.getBoundingClientRect()
+    const asideRect = aside.getBoundingClientRect()
+    // Land the entry at the top of the aside's visible area, with a
+    // small gap so it doesn't sit flush against the sidebar's own
+    // sticky header.
+    const target = aside.scrollTop + (entryRect.top - asideRect.top) - 8
+    aside.scrollTo({ top: Math.max(0, target), behavior: "smooth" })
   }
 
   #readCookieMode() {

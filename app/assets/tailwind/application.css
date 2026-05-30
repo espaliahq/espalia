@@ -22,3 +22,57 @@
     --color-nav-fg: #e2e8f0;
   }
 }
+
+/* Hero summary middle band — collapses on scroll.
+ *
+ * The hero card has two bands: a static header row (verdict + gloss +
+ * bottom line on the left, big number + bar on the right) and this
+ * collapsing middle band underneath. The middle band's grid-template-
+ * rows + opacity animate from full → 0 over the first 240px of scroll
+ * via CSS scroll-driven animations (animation-timeline: scroll(root)).
+ *
+ * The wrapper uses `display: grid; grid-template-rows: 1fr` so we can
+ * animate to `0fr` — a layout that's stable when its size changes
+ * (the grid row owns the height; the inner block doesn't fight back
+ * with intrinsic sizing or padding). Padding lives on an inner div so
+ * collapsing the row to 0 fully removes the band's footprint, no
+ * residual padding height.
+ *
+ * Chrome/Edge 115+, Safari 26+, Firefox 137+ — ~94% global as of 2026.
+ * Browsers without scroll-driven animation support silently keep the
+ * band at its initial expanded state.
+ */
+.hero-collapsible {
+  display: grid;
+  grid-template-rows: 1fr;
+  /*
+   * `minmax(0, 1fr)` rather than the implicit `auto` column. Without
+   * it the grid item sizes to its content's intrinsic width — on a
+   * narrow viewport that means the state panel can grow past the
+   * card's visible right edge, taking truncated capability names and
+   * their right-aligned deltas with it. The min-0 mirrors what
+   * `min-height: 0` does for the row collapse.
+   */
+  grid-template-columns: minmax(0, 1fr);
+  opacity: 1;
+  overflow: hidden;
+}
+.hero-collapsible > * {
+  min-height: 0;
+  min-width: 0;
+}
+
+@supports (animation-timeline: scroll()) {
+  .hero-collapsible {
+    animation: hero-collapse linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 240px;
+  }
+
+  @keyframes hero-collapse {
+    to {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
+  }
+}

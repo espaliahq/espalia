@@ -48,6 +48,14 @@ export default class extends BaseController {
     this.hide()
   }
 
+  // turbo:submit-end fires after a Turbo-handled form submission settles.
+  // event.detail.success reflects 2xx status. Close the modal only on
+  // success so validation errors keep the form visible for the user to
+  // fix and retry.
+  submitted(event) {
+    if (event.detail?.success) this.hide()
+  }
+
   typeChanged() {
     this.syncCustomLabel()
   }

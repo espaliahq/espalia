@@ -220,9 +220,13 @@ class Views::Assessments::Comments::Card < Views::Base
   end
 
   def actions_menu
+    # Kebab stays visible at all times — the opacity-0/hover pattern
+    # hid Reply on touch devices entirely and was hard to discover on
+    # desktop. On mobile a muted-by-default trigger is more discoverable
+    # than no trigger; the kebab subdues itself with text-gray-400 so
+    # it stays decorative rather than fighting the comment body.
     div(
-      class: "absolute top-1 right-1 opacity-0 group-hover:opacity-100 " \
-             "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity",
+      class: "absolute top-1 right-1",
       data: { controller: "dropdown",
               action: "keydown.esc@window->dropdown#close" }
     ) do
@@ -244,9 +248,13 @@ class Views::Assessments::Comments::Card < Views::Base
   end
 
   def kebab_menu
+    # z-30 puts the menu above the next category section's sticky
+    # heading (z-10) AND the unified sticky header (z-20) — when the
+    # menu opens near a section boundary it would otherwise be clipped
+    # by the following section's sticky chrome stacking context.
     div(
       class: "hidden absolute right-0 mt-1 w-32 rounded-md border border-gray-200 " \
-             "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-10 " \
+             "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-30 " \
              "py-1 text-xs",
       role: "menu",
       data: { dropdown_target: "menu" }

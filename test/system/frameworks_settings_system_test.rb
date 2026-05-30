@@ -49,11 +49,11 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       sign_in @admin_user
       visit framework_settings_path(framework_id: @framework_id)
 
-      # Wait for all four setting-field controllers to connect before typing
+      # Wait for all five setting-field controllers to connect before typing
       # or submitting — on slow CI runners, clicks fired while Stimulus is
       # still booting can be silently dropped, leaving the form unsubmitted.
       assert_selector "[data-controller~='setting-field'][data-connected]",
-                      count: 4, visible: :all
+                      count: 5, visible: :all
 
       # Set field values via JS rather than Capybara's fill_in. On slow CI
       # runners Selenium has been observed dropping individual keystrokes
@@ -69,6 +69,7 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
         };
         set("settings[mastery_threshold]", "1.25");
         set("settings[meeting_expectation_threshold]", "0.90");
+        set("settings[underperforming_threshold]", "0.70");
         set("settings[overperformance_cap]", "2");
         set("settings[deficit_threshold]", "0.50");
       JS
@@ -78,6 +79,7 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
 
       assert_field "settings[mastery_threshold]", with: "1.25"
       assert_field "settings[meeting_expectation_threshold]", with: "0.9"
+      assert_field "settings[underperforming_threshold]", with: "0.7"
       assert_field "settings[overperformance_cap]", with: "2"
       assert_field "settings[deficit_threshold]", with: "0.5"
     end

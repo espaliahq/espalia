@@ -94,71 +94,97 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # the index (team list) and the show (h1) pages.
       click_link_with_js_fallback("Review Assessment", expect_text: "Critical Thinking")
       assert_selector "h1", text: "Report Alex"
-      assert_text "assessment-matrix" if false # DOM id, not visible text
       assert_text "Critical Thinking"
+
+      # Every card auto-focuses on the person's current level, so the
+      # level-2 expectation renders without any extra navigation.
       assert_text "Synthesises information"
     end
 
-    should "show self-rating indicator and manager frequency selectors" do
+    should "address the assessee by name in the hero verdict" do
+      # Pre-rate as manager so the verdict triggers an "On target" headline,
+      # which is where the second-person wording leaks through.
+      ActsAsTenant.with_tenant(@tenant) do
+        pd_handler = PersonDevelopment::CommandHandler.new
+        pd_handler.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+      within("#scoring-panel") do
+        # The hero verdict should refer to the assessee in third person
+        # (first name), not "You're tracking on target"
+        assert_no_text "You're"
+        assert_no_text "you're"
+        assert_text "Report is tracking on target."
+      end
+    end
+
+    should "not render a redundant secondary sub-strip below the chip row" do
+      # The old design rendered a "Self:" sub-strip of tiny dots under
+      # the manager's chip row. That sub-strip is gone — the per-chip
+      # divergence marker covers the signal at strip level. Secondary
+      # bars still appear INSIDE the auto-focused expansion panel, so
+      # we assert there's no stray sub-strip *between* the chip row and
+      # the expansion (i.e. the chip strip's parent has no sibling
+      # ".self-sub-strip" / ".mgr-sub-strip" element).
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"
 
-      # The report's self-rating should appear as a read-only indicator
-      assert_text "Self:"
+      assert_no_selector "[data-self-sub-strip]"
+      assert_no_selector "[data-mgr-sub-strip]"
+      assert_no_selector "[data-agreed-sub-strip]"
+    end
 
-      # Manager frequency selector buttons should be present
-      assert_selector "button", text: "Some"
-      assert_selector "button", text: "Most"
-      assert_selector "button", text: "Consistently"
+    should "render the inline frequency pill in the focused card's expansion panel" do
+      visit assessment_path(@report_assignment, capability: @cap_stable)
+      assert_selector "h1", text: "Report Alex"
+
+      # The pill is an aria-haspopup button — opening it reveals the
+      # four options + Clear inside the popover.
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']"
+      open_pill_popover("#rating-#{@cap_stable}-2")
+      within("#rating-#{@cap_stable}-2 [role='menu']") do
+        assert_selector "[role='menuitem']", text: "Some of the time"
+        assert_selector "[role='menuitem']", text: "Most of the time"
+        assert_selector "[role='menuitem']", text: "Consistently"
+      end
     end
 
     should "allow manager to submit a rating" do
-      visit assessment_path(@report_assignment)
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
-      # Click a frequency button to rate (retry-tolerant on slow CI)
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
 
-      # Verify the Turbo Stream response re-rendered the cell with the button selected
-      within("#rating-#{@cap_stable}-2") do
-        assert_selector "button.ring-1", text: "Consistently"
-      end
+      # Pill's visible label updates to the picked phrase.
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']", text: "Consistently"
     end
 
-    should "allow manager to untoggle a rating by clicking the same frequency" do
-      visit assessment_path(@report_assignment)
+    should "allow manager to clear a rating via the popover Clear option" do
+      visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
-      # Rate as "Consistently" (retry-tolerant on slow CI)
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
-      assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently"
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']", text: "Consistently"
 
-      # Click "Consistently" again to untoggle — rating should be cleared.
-      # Submit the button's parent form via requestSubmit() instead of
-      # clicking the button: bypasses pointer hit-testing entirely so
-      # Chrome's event loop can't drop the action on a starved CI runner.
-      # Same primitive as the inline-editor pattern in CLAUDE.md.
-      #
-      # Retry once if the ring-1 is still visible after 5s — the first
-      # requestSubmit's submit event can race with Turbo's listener
-      # registration on a freshly-replaced cell. Re-dispatching is safe
-      # because the rating hasn't moved off ring-1 yet.
-      untoggle_js = <<~JS
-        const btn = document.querySelector("#rating-#{@cap_stable}-2 button.ring-1");
-        btn?.closest("form")?.requestSubmit(btn);
+      # Open popover and pick Clear rating.
+      open_pill_popover("#rating-#{@cap_stable}-2")
+      page.execute_script(<<~JS, @cap_stable)
+        const stable = arguments[0];
+        const wrapper = document.querySelector("#rating-" + stable + "-2");
+        const items = Array.from(wrapper.querySelectorAll("[role='menuitem']"));
+        const item = items.find(b => b.textContent.trim().includes("Clear"));
+        item?.closest("form")?.requestSubmit(item);
       JS
-      page.execute_script(untoggle_js)
 
-      page.execute_script(untoggle_js) unless page.has_no_css?(
-        "#rating-#{@cap_stable}-2 button.ring-1", wait: 5
-      )
-
-      # After clearing, no frequency button should have the selected ring style
-      within("#rating-#{@cap_stable}-2") do
-        assert_no_selector "button.ring-1"
-      end
+      # Pill returns to the un-rated label.
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']", text: "Not rated"
     end
   end
 
@@ -172,21 +198,17 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_link "Review Assessment"
     end
 
-    should "show manager review matrix on mobile with scoring toggle visible" do
+    should "show manager review on mobile with header elements visible" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"
 
-      # Header elements should remain visible on mobile without pushing scoring off-screen
+      # Header elements should remain visible on mobile
       assert_text "Senior Software Engineer"
       assert_text "E2"
 
       # Matrix content should be visible
       assert_text "Critical Thinking"
-
-      # Scoring toggle must remain visible on-screen despite long header text
-      scoring_button = find_button("Scoring")
-      assert scoring_button.obscured? == false, "Scoring button is off-screen or obscured"
     end
   end
 
@@ -200,7 +222,8 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "turbo-cable-stream-source", visible: :all
       wait_for_stimulus "assessment-sync"
 
-      # Level 1 has no self-rating yet — no "Self:" pill for that cell
+      # Level 1 has no self-rating yet — check the level chip for level 1
+      # doesn't show a Self: indicator
       within("#cell-#{@cap_stable}-1") do
         assert_no_text "Self:"
       end
@@ -218,10 +241,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # Wait for the sync signal to be replaced (broadcast delivery + frame reload)
       assert_selector "#assessment-sync-signal[data-updated-at]", visible: :all, wait: 10
 
-      # After frame reload, the self-rating pill should appear in the cell.
-      within("#cell-#{@cap_stable}-1") do
-        assert_text "Self:", wait: 10
-      end
+      # After frame reload, the self-rating indicator should appear.
+      # In the card layout the level strip shows secondary perspective dots.
+      # The level chip for level 1 should now show it's rated.
+      assert_selector "#cell-#{@cap_stable}-1", wait: 10
     end
   end
 end

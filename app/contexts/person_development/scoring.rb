@@ -63,6 +63,7 @@ class PersonDevelopment::Scoring
   FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
   DEFAULT_MASTERY_THRESHOLD              = 1.15
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
+  DEFAULT_UNDERPERFORMING_THRESHOLD      = 0.80
   DEFAULT_OVERPERFORMANCE_CAP        = 1
   DEFAULT_DEFICIT_THRESHOLD          = 1.0
 
@@ -98,6 +99,7 @@ class PersonDevelopment::Scoring
     @perspective = perspective
     @mastery_threshold              = thresholds[:mastery_threshold]              || DEFAULT_MASTERY_THRESHOLD
     @meeting_expectation_threshold  = thresholds[:meeting_expectation_threshold]  || DEFAULT_MEETING_EXPECTATION_THRESHOLD
+    @underperforming_threshold      = thresholds[:underperforming_threshold]      || DEFAULT_UNDERPERFORMING_THRESHOLD
     @default_overperformance_cap  = thresholds[:overperformance_cap]    || DEFAULT_OVERPERFORMANCE_CAP
     @default_deficit_threshold    = thresholds[:deficit_threshold]      || DEFAULT_DEFICIT_THRESHOLD
   end
@@ -134,6 +136,37 @@ class PersonDevelopment::Scoring
   # @return [Boolean]
   def mastering?
     performance_ratio >= @mastery_threshold && capability_statuses.values.none? { |s| s == :blocked }
+  end
+
+  # Unified performance state for the assessment narrative. Maps the
+  # person's current position into a five-state vocabulary, picked so
+  # the hero always points at the *next milestone* — not at one
+  # they've already cleared.
+  #
+  #   :underperforming — ratio < underperforming_threshold
+  #                      (e.g. < 0.80) → next milestone is the current
+  #                      level's meeting bar
+  #   :progressing     — underperforming_threshold ≤ ratio < meeting
+  #                      OR any capability blocked → next milestone is
+  #                      still the current level's meeting bar
+  #   :performing      — meeting ≤ ratio < mastery → next milestone is
+  #                      mastering the current level
+  #   :mastering       — ratio ≥ mastery_threshold AND not yet eligible
+  #                      for promotion → next milestone is promotion
+  #                      to the next level
+  #   :eligible        — meets next-level expectations (promotion
+  #                      ready) → past the last gate, celebrate
+  #
+  # Precedence: underperforming → progressing → eligible → mastering
+  # → performing. Eligible takes precedence over mastering because
+  # promotion-ready is a stronger signal than mastery; both supersede
+  # the merely-performing state. Blocked capabilities downgrade
+  # otherwise-passing states to :progressing — a blocker prevents
+  # "performing" the same way it prevents `meeting_expectations?`.
+  #
+  # @return [Symbol]
+  def performance_state
+    @performance_state ||= compute_performance_state
   end
 
   # Highest level_ordinal where effective_frequency == "consistent" (1.0)
@@ -230,6 +263,27 @@ class PersonDevelopment::Scoring
   # @return [Float]
   def raw_contribution(binding)
     raw_contribution_at_level(binding, @person_level)
+  end
+
+  # Whether the framework has a level above the person's current one.
+  # False at the top of the role's level ladder — used by the hero
+  # "Gap to promotion" panel and assessment_data builder to gate
+  # next-level-only signals.
+  #
+  # @return [Boolean]
+  def has_next_level?
+    @person_level < @all_level_ordinals.last
+  end
+
+  # Raw (uncapped) contribution evaluated against the next level above
+  # the person's current — what the contribution would be if their
+  # assigned level were @person_level + 1. Used to surface which
+  # capabilities still need work for promotion.
+  #
+  # @param binding [#capability_id, #weight, #capability]
+  # @return [Float]
+  def next_level_contribution(binding)
+    raw_contribution_at_level(binding, @person_level + 1)
   end
 
   private
@@ -353,6 +407,20 @@ class PersonDevelopment::Scoring
 
       [ stable_id, status ]
     end
+  end
+
+  # See {#performance_state} for the state vocabulary + precedence.
+  def compute_performance_state
+    ratio       = performance_ratio
+    has_blocked = capability_statuses.values.any? { |s| s == :blocked }
+    has_next    = @person_level < @all_level_ordinals.last
+
+    return :underperforming if ratio < @underperforming_threshold
+    return :progressing     if ratio < @meeting_expectation_threshold || has_blocked
+    return :eligible        if has_next && promotion_readiness[:eligible]
+    return :mastering       if ratio >= @mastery_threshold
+
+    :performing
   end
 
   def compute_promotion_readiness

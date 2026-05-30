@@ -83,7 +83,10 @@ class Views::Assessments::Evidence::Form < Views::Base
     form(
       action: assessment_evidence_index_path(@assessment_id),
       method: "post",
-      data: { evidence_form_target: "form" }
+      data: {
+        evidence_form_target: "form",
+        action: "turbo:submit-end->evidence-form#submitted"
+      }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "evidence[capability_stable_id]",

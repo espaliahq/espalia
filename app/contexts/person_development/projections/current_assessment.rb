@@ -51,6 +51,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::ManagerRatingCleared,
       PersonDevelopment::Events::AlignmentStarted,
       PersonDevelopment::Events::AssessmentAligned,
+      PersonDevelopment::Events::AlignmentCleared,
       PersonDevelopment::Events::FullAlignmentCompleted,
       PersonDevelopment::Events::FrameworkVersionMigrated
     ]
@@ -93,6 +94,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::ManagerRatingCleared then handle_manager_rating_cleared(event)
     when PersonDevelopment::Events::AlignmentStarted then handle_alignment_started(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
+    when PersonDevelopment::Events::AlignmentCleared then handle_alignment_cleared(event)
     when PersonDevelopment::Events::FullAlignmentCompleted then handle_full_alignment_completed(event)
     when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
     end
@@ -296,6 +298,30 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.aligned_frequency = event.data[:aligned_frequency]
     rating.aligned_comment = event.data[:comment]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
+    rating.save!
+    broadcast_assessment_sync(event)
+  end
+
+  def handle_alignment_cleared(event)
+    # find-only, never init: if no rating row exists for this (cycle,
+    # person, capability, level) there is nothing to clear, and
+    # inserting a fresh all-nil row would pollute reads and broadcast
+    # spurious sync events. AssessmentAligned is the only path that
+    # creates an aligned row, and the aggregate's
+    # `clear_alignment_rating` guard requires a prior alignment in the
+    # same cycle — so the only way this branch fires without a row is
+    # via a replay or out-of-band event we should ignore.
+    rating = AssessmentLevelRating.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id],
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal]
+    )
+    return unless rating
+
+    rating.aligned_frequency = nil
+    rating.aligned_comment = nil
     rating.save!
     broadcast_assessment_sync(event)
   end

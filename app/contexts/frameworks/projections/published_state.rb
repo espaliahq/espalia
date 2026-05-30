@@ -458,13 +458,22 @@ class Frameworks::Projections::PublishedState
     record.update!(attrs) if attrs.any?
   end
 
+  # Maps event payload keys to read-model column names. The
+  # promotion_score key is named for legacy reasons; on the read
+  # model it lives as meeting_expectation_threshold.
+  SCORING_THRESHOLD_FIELD_MAP = {
+    mastery_threshold: :mastery_threshold,
+    promotion_score_threshold: :meeting_expectation_threshold,
+    underperforming_threshold: :underperforming_threshold,
+    overperformance_cap: :overperformance_cap,
+    deficit_threshold: :deficit_threshold
+  }.freeze
+
   def handle_scoring_thresholds_configured(event)
     framework = find_framework(event)
-    attrs = {}
-    attrs[:mastery_threshold] = event.data[:mastery_threshold] if event.data.key?(:mastery_threshold)
-    attrs[:meeting_expectation_threshold] = event.data[:promotion_score_threshold] if event.data.key?(:promotion_score_threshold)
-    attrs[:overperformance_cap] = event.data[:overperformance_cap] if event.data.key?(:overperformance_cap)
-    attrs[:deficit_threshold] = event.data[:deficit_threshold] if event.data.key?(:deficit_threshold)
+    attrs = SCORING_THRESHOLD_FIELD_MAP.each_with_object({}) do |(event_key, column), acc|
+      acc[column] = event.data[event_key] if event.data.key?(event_key)
+    end
     framework&.update!(attrs) if attrs.any?
   end
 

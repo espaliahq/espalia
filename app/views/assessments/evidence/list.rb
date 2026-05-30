@@ -27,7 +27,7 @@ class Views::Assessments::Evidence::List < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-2 pt-2 border-t border-gray-200 dark:border-gray-700"
+      class: "mt-4 pt-3 border-t border-gray-200 dark:border-gray-700"
     ) do
       header
       ul(class: "space-y-0.5") do
@@ -67,7 +67,7 @@ class Views::Assessments::Evidence::List < Views::Base
   def add_button
     button(
       type: "button",
-      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 " \
+      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
              "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
              "dark:hover:text-gray-200 transition-colors",
       aria: { label: "Add evidence" },
@@ -84,12 +84,24 @@ class Views::Assessments::Evidence::List < Views::Base
 
   def header_label_classes
     "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-      "text-gray-500 dark:text-gray-400 mb-1"
+      "text-gray-500 dark:text-gray-400 mb-2"
   end
 
+  # When the list is empty AND the viewer can create, lean the label
+  # into the affordance ("Add evidence") rather than describing an
+  # empty section ("Evidence"). When items exist, switch back to the
+  # section label with a count. When the viewer can't create (read-only
+  # peer view), don't show an affordance they can't act on — render the
+  # plain "Evidence" label so the row reads as descriptive context.
   def header_label_content
-    span { "Evidence" }
-    span(class: "font-mono") { "(#{@items.size})" } if @items.any?
+    if @items.any?
+      span { "Evidence" }
+      span(class: "font-mono") { "(#{@items.size})" }
+    elsif @can_create
+      span { "Add evidence" }
+    else
+      span { "Evidence" }
+    end
   end
 
   def can_withdraw?(item)

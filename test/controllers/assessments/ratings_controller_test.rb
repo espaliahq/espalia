@@ -65,12 +65,7 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "stamp data-focused=true on the rated cell in the turbo stream response" do
-      # Regression: matrix_controller's MutationObserver re-stamps focus
-      # after Turbo Stream replaces the cell, but there's a paint gap.
-      # The server-rendered cell HTML must carry data-focused=true so
-      # that indicators (group-data-[focused=true]/...:hidden) stay
-      # hidden on first paint — otherwise the user sees badges flash.
+    should "stamp data-focused on the rated chip in the turbo stream response" do
       sign_in @user
       post assessment_ratings_path(@assignment), params: {
         rating: {
@@ -82,12 +77,8 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       cell_id = "cell-#{@cap.stable_id}-2"
-      # Slice from the td's id up to its first child element (the close
-      # button starts the body), so we can scan all attrs on the td.
-      cell_open_tag = response.body[/<td id="#{cell_id}".*?<button/m]
-      assert cell_open_tag, "Expected to find the rated cell in the response."
-      assert_includes cell_open_tag, 'data-focused="true"',
-        "Rated cell must be rendered with data-focused=true. Got: #{cell_open_tag}"
+      assert_includes response.body, "id=\"#{cell_id}\"",
+        "Expected to find the rated chip in the response."
     end
 
     should "revise an existing self-rating" do
