@@ -91,6 +91,15 @@ export default class extends BaseController {
     this._suppressionScrollRenew = false
     this._scrollSettleTimer = null
     this._sawUserScroll = false
+    // Sticky-category flag: set when an external dispatcher (chip click
+    // via category-nav) puts us in category focus. The scroll picker
+    // honours it the same way it honours cell focus on its own card —
+    // a deliberate, user-chosen state shouldn't get silently downgraded
+    // by a delayed scroll tick after the smooth scroll lands. Cleared
+    // by any explicit focus action that takes us off category (card
+    // header click, level chip click, suggestion-pane nav) and by the
+    // next genuine user scroll after the chip-click animation ends.
+    this._categoryFocusFromExternal = false
     this._onUserScroll = () => {
       this._sawUserScroll = true
       if (this._suppressionScrollRenew) this.#renewSuppressionUntilScrollStops()
@@ -928,6 +937,11 @@ export default class extends BaseController {
     this.currentFocus = {
       level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
     }
+    // Any explicit focus action that takes us off category clears the
+    // sticky-category flag. The picker can resume normal capability
+    // tracking after this. `#onExternalFocusChange` re-sets the flag
+    // if the new focus is itself an external category dispatch.
+    if (level !== "category") this._categoryFocusFromExternal = false
     this.#applyColumnFocus(level === "cell" ? levelOrdinal : null,
                            level === "cell" ? capabilityId : null)
     this.#applyCardFocus(capabilityStableId, level)
@@ -991,6 +1005,11 @@ export default class extends BaseController {
       levelOrdinal: detail.levelOrdinal ?? null,
       expectationId: detail.expectationId || null
     }
+    // An external category dispatch (chip click) is a deliberate user
+    // choice; mark it sticky so the post-animation picker doesn't
+    // overwrite it with capability focus on whatever card the scroll
+    // happened to land in front of.
+    this._categoryFocusFromExternal = detail.level === "category"
     this.#applyCardFocus(detail.capabilityStableId || null, detail.level)
   }
 
@@ -1203,6 +1222,17 @@ export default class extends BaseController {
     // the winner is unchanged.
     if (this.currentFocus.capabilityStableId === stableId &&
         (this.currentFocus.level === "cell" || this.currentFocus.level === "capability")) {
+      return
+    }
+
+    // Category focus set externally (a chip click) is sticky — it
+    // represents a deliberate user choice. The picker doesn't get to
+    // downgrade it to capability focus from a scroll tick that fires
+    // after the chip-click smooth scroll lands. The flag clears the
+    // first time the user explicitly takes us off category (card
+    // header / level chip click); after that, scroll-driven picks
+    // resume normally.
+    if (this.currentFocus.level === "category" && this._categoryFocusFromExternal) {
       return
     }
 
