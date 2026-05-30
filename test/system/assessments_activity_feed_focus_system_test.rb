@@ -376,6 +376,9 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
 
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
+      # Frame must be complete before scrolling — `#syncFrameUrlToBrowser`
+      # races otherwise and can clobber state mid-test.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
       scroll_card_into_band(@cap2_stable)
 
@@ -391,6 +394,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
 
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
       # First scroll all the way down to cap2 — establishes cap2 focus.
       scroll_card_into_band(@cap2_stable)

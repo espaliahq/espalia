@@ -323,6 +323,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
       assert_selector "section#category-#{@cat2_id}"
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
       # Add a tall spacer so the page can scroll
       page.execute_script(
