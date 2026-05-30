@@ -51,15 +51,14 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     # No outer border / background — the parent capability card already
     # carries those. A thin top border + a little top padding visually
     # separates the expansion from the level strip without the boxed-
-    # in-a-box look (which was eating vertical space without earning it).
+    # in-a-box look.
     div(
       id: "expansion-#{@capability_stable_id}",
       class: "mt-3 pt-3 border-t border-gray-200 dark:border-gray-700"
     ) do
       expansion_header
-      expectation_text if @cell_data[:expectation]
-      primary_selector
-      secondary_bars
+      expectation_sentence
+      diverging_secondaries
       illustrations_section
       evidence_section
       comments_section
@@ -76,44 +75,60 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     end
   end
 
-  def expectation_text
-    p(class: "text-sm text-gray-700 dark:text-gray-300 mb-3") do
-      @cell_data[:expectation].description
-    end
-  end
+  # Sentence-first layout: the expectation text flows naturally into
+  # the rating pill so the line reads ("Breaks down problems… Most of
+  # the time"). The pill itself carries the rating's interaction.
+  def expectation_sentence
+    return unless @cell_data[:expectation]
 
-  def primary_selector
-    div(id: "rating-#{@capability_stable_id}-#{@ordinal}", class: "mb-3") do
-      if primary_perspective_frozen?
-        render Views::Assessments::FrequencyBar.new(
-          label: primary_label,
-          frequency: primary_frequency
-        )
-      else
-        render Views::Assessments::FrequencySelector.new(
+    div(class: "mb-3 text-sm text-gray-700 dark:text-gray-300") do
+      span { @cell_data[:expectation].description.to_s.strip }
+      # Rating controllers replace `#rating-<stable>-<ord>` after every
+      # POST — the wrapper id has to live on the same element that
+      # `Assessments::TurboStreamHelpers#rating_wrapper_html` renders
+      # on the post-rate turbo_stream, otherwise the replace target
+      # never matches and the pill goes stale.
+      span(id: "rating-#{@capability_stable_id}-#{@ordinal}", class: "ml-2 inline-block") do
+        render Views::Assessments::FrequencyPill.new(
           capability_stable_id: @capability_stable_id,
           level_ordinal: @ordinal,
           current_frequency: primary_frequency,
           assessment_id: @assessment_id,
           context: @context,
-          category_id: @category_id
+          category_id: @category_id,
+          interactive: !primary_perspective_frozen?
         )
       end
     end
   end
 
-  def secondary_bars
-    bars = secondary_rating_entries
-    return if bars.empty?
-
-    div(class: "mb-3 space-y-1") do
-      bars.each do |entry|
-        render Views::Assessments::FrequencyBar.new(
+  # Renders ONLY perspectives that diverge from the primary AND that the
+  # viewer is permitted to see. Permission is enforced upstream — the
+  # data builder scrubs manager/aligned data when context == :self —
+  # so secondaries are effectively nil for an assessee viewing their
+  # own assessment and never reach the render branch.
+  # Always renders the wrapper, even when no perspectives diverge —
+  # rating controllers replace this target on every POST so the
+  # divergent set can grow / shrink as the primary value changes.
+  # The wrapper carries `mb-3 space-y-1` even when empty to keep the
+  # layout rhythm consistent (avoids the rest of the panel jumping
+  # 12 px when a secondary appears).
+  def diverging_secondaries
+    div(id: "secondaries-#{@capability_stable_id}-#{@ordinal}",
+        class: "mb-3 space-y-1") do
+      diverging_entries.each do |entry|
+        render Views::Assessments::SecondaryRatingLine.new(
           label: entry[:label],
           frequency: entry[:frequency],
           primary_frequency: primary_frequency
         )
       end
+    end
+  end
+
+  def diverging_entries
+    visible_secondary_entries.reject do |entry|
+      entry[:frequency].blank? || entry[:frequency] == primary_frequency
     end
   end
 
@@ -171,14 +186,6 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     @context == :alignment ? @alignment_locked : @frozen
   end
 
-  def primary_label
-    case @context
-    when :self    then "Self"
-    when :manager then "Mgr"
-    else "Agreed"
-    end
-  end
-
   def primary_frequency
     case @context
     when :self      then @cell_data[:current_frequency]
@@ -187,19 +194,21 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     end
   end
 
-  def secondary_rating_entries
-    entries = []
+  # Secondary perspectives the current viewer is permitted to see. Self
+  # context has no visible secondaries — the assessee never sees the
+  # manager's rating until alignment opens (the data layer already
+  # nils manager/aligned data for :self, this just makes the intent
+  # explicit). Manager context shows self; alignment shows both.
+  def visible_secondary_entries
     case @context
-    when :self
-      entries << { label: "Mgr", frequency: @cell_data[:manager_frequency] }
-      entries << { label: "Agreed", frequency: @cell_data[:aligned_frequency] }
     when :manager
-      entries << { label: "Self", frequency: @cell_data[:current_frequency] }
-      entries << { label: "Agreed", frequency: @cell_data[:aligned_frequency] }
+      [ { label: "Self", frequency: @cell_data[:current_frequency] } ]
     when :alignment
-      entries << { label: "Self", frequency: @cell_data[:current_frequency] }
-      entries << { label: "Mgr", frequency: @cell_data[:manager_frequency] }
+      [
+        { label: "Self", frequency: @cell_data[:current_frequency] },
+        { label: "Manager", frequency: @cell_data[:manager_frequency] }
+      ]
+    else []
     end
-    entries.select { |e| e[:frequency].present? }
   end
 end

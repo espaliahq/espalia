@@ -657,13 +657,18 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert scroll_before > 200,
         "Setup: should be scrolled into the page (scrollY=#{scroll_before})"
 
-      # JS-dispatch the click so Capybara's "scroll element into view"
-      # doesn't reset scroll. This mirrors what a user clicking a
-      # naturally-visible button experiences.
+      # JS-dispatch the open + pick so Capybara's "scroll element into
+      # view" doesn't reset scroll. This mirrors what a user clicking a
+      # naturally-visible pill experiences.
       page.execute_script(<<~JS)
-        var btn = Array.from(document.querySelectorAll('#rating-#{@cap3_stable}-2 button'))
-          .find(b => b.textContent.trim() === 'Consistently');
-        btn.click();
+        var trigger = document.querySelector("#rating-#{@cap3_stable}-2 button[aria-haspopup='menu']");
+        trigger.click();
+      JS
+      sleep 0.3
+      page.execute_script(<<~JS)
+        var item = Array.from(document.querySelectorAll("#rating-#{@cap3_stable}-2 [role='menuitem']"))
+          .find(b => b.textContent.trim().includes('Consistently'));
+        item?.closest('form')?.requestSubmit(item);
       JS
       sleep 1.0
 
@@ -849,9 +854,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "self-assessment flow" do
-    should "display assessment with frequency selectors" do
+    should "display assessment with inline rating pills" do
       # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector buttons we want to assert on.
+      # inline frequency pill we want to assert on.
       visit assessment_path(@assignment, capability: @cap1_stable)
 
       assert_selector "h1", text: "Senior Software Engineer"
@@ -859,10 +864,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Critical Thinking"
       assert_text "Problem Solving"
 
-      # Frequency selector buttons visible in the focused card's expansion panel
-      assert_button "Some"
-      assert_button "Most"
-      assert_button "Consistently"
+      # The inline pill renders at the end of the expectation sentence
+      # with an aria-haspopup attribute identifying it as a chooser.
+      assert_selector "[aria-haspopup='menu']", minimum: 1
 
       # Hero summary card visible
       assert_selector "#scoring-panel"
@@ -1637,8 +1641,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "not reload the matrix frame when the rater clicks their own rating button" do
-      # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector buttons we're going to click.
+      # ?capability= focuses the card so the expansion panel renders
+      # the inline frequency pill we're going to click.
       visit assessment_path(@assignment, capability: @cap1_stable)
       wait_for_stimulus "matrix"
 
@@ -1660,17 +1664,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         })()
       JS
 
-      # Click the "Some" rating button. Person is at level 2, so the
-      # default rating area has #rating-#{stable}-2.
-      page.execute_script(<<~JS)
-        (() => {
-          const cell = document.querySelector(`#rating-#{@cap1_stable}-2`);
-          const btn = Array.from(cell.querySelectorAll("button"))
-            .find(b => b.textContent.trim() === "Some");
-          if (btn) btn.click();
-        })()
-      JS
-      assert_selector "#rating-#{@cap1_stable}-2 button.ring-1", text: "Some"
+      # Pick "Some of the time" from the inline pill. Person is at level
+      # 2, so the rating wrapper is `#rating-{stable}-2`.
+      click_rating_frequency("#rating-#{@cap1_stable}-2", "Some")
 
       # Give the broadcast headroom — the suppress window is 2s, so
       # 2.5s is enough for a rogue reload to fire if the suppression

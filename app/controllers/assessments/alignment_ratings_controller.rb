@@ -131,6 +131,11 @@ class Assessments::AlignmentRatingsController < ApplicationController
                             :alignment, active_category_id || category_id)
       ),
       turbo_stream.replace(
+        "secondaries-#{capability_stable_id}-#{level_ordinal}",
+        secondaries_wrapper_html(capability_stable_id, level_ordinal, cell_data,
+                                 cell_data&.dig(:aligned_frequency), :alignment)
+      ),
+      turbo_stream.replace(
         "scoring-panel",
         render_to_string(
           Views::Assessments::HeroSummary.new(

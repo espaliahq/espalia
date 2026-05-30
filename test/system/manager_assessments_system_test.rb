@@ -139,67 +139,52 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-agreed-sub-strip]"
     end
 
-    should "render frequency selector buttons in the focused card's expansion panel" do
-      # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector buttons.
+    should "render the inline frequency pill in the focused card's expansion panel" do
       visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"
 
-      assert_selector "button", text: "Some"
-      assert_selector "button", text: "Most"
-      assert_selector "button", text: "Consistently"
+      # The pill is an aria-haspopup button — opening it reveals the
+      # four options + Clear inside the popover.
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']"
+      open_pill_popover("#rating-#{@cap_stable}-2")
+      within("#rating-#{@cap_stable}-2 [role='menu']") do
+        assert_selector "[role='menuitem']", text: "Some of the time"
+        assert_selector "[role='menuitem']", text: "Most of the time"
+        assert_selector "[role='menuitem']", text: "Consistently"
+      end
     end
 
     should "allow manager to submit a rating" do
-      # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector for the person's level (level 2 here).
       visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
-      # Click a frequency button to rate. Person is at level 2, so the
-      # expansion panel renders #rating-#{stable}-2.
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
 
-      # Verify the Turbo Stream response re-rendered with the button selected
-      within("#rating-#{@cap_stable}-2") do
-        assert_selector "button.ring-1", text: "Consistently"
-      end
+      # Pill's visible label updates to the picked phrase.
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']", text: "Consistently"
     end
 
-    should "allow manager to untoggle a rating by clicking the same frequency" do
+    should "allow manager to clear a rating via the popover Clear option" do
       visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"
 
-      # Rate as "Consistently" (retry-tolerant on slow CI)
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
-      assert_selector "#rating-#{@cap_stable}-2 button.ring-1", text: "Consistently"
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']", text: "Consistently"
 
-      # Click "Consistently" again to untoggle — rating should be cleared.
-      # Submit the button's parent form via requestSubmit() instead of
-      # clicking the button: bypasses pointer hit-testing entirely so
-      # Chrome's event loop can't drop the action on a starved CI runner.
-      # Same primitive as the inline-editor pattern in CLAUDE.md.
-      #
-      # Retry once if the ring-1 is still visible after 5s — the first
-      # requestSubmit's submit event can race with Turbo's listener
-      # registration on a freshly-replaced cell. Re-dispatching is safe
-      # because the rating hasn't moved off ring-1 yet.
-      untoggle_js = <<~JS
-        const btn = document.querySelector("#rating-#{@cap_stable}-2 button.ring-1");
-        btn?.closest("form")?.requestSubmit(btn);
+      # Open popover and pick Clear rating.
+      open_pill_popover("#rating-#{@cap_stable}-2")
+      page.execute_script(<<~JS, @cap_stable)
+        const stable = arguments[0];
+        const wrapper = document.querySelector("#rating-" + stable + "-2");
+        const items = Array.from(wrapper.querySelectorAll("[role='menuitem']"));
+        const item = items.find(b => b.textContent.trim().includes("Clear"));
+        item?.closest("form")?.requestSubmit(item);
       JS
-      page.execute_script(untoggle_js)
 
-      page.execute_script(untoggle_js) unless page.has_no_css?(
-        "#rating-#{@cap_stable}-2 button.ring-1", wait: 5
-      )
-
-      # After clearing, no frequency button should have the selected ring style
-      within("#rating-#{@cap_stable}-2") do
-        assert_no_selector "button.ring-1"
-      end
+      # Pill returns to the un-rated label.
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']", text: "Not rated"
     end
   end
 

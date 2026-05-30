@@ -336,33 +336,51 @@ module StimulusHelpers
     JS
   end
 
+  # Picks a frequency on the inline pill (open popover → click option).
+  # Substring match — callers pass "Some" / "Most" / "Consistently" /
+  # "Never" and we find the popover option whose phrase contains it.
+  # Falls back to a synchronous form.requestSubmit if the Capybara
+  # pointer click is silently dropped on a starved CI runner.
+  #
+  # @param cell_selector [String] e.g. "#rating-{stable}-{level}"
+  # @param frequency [String] short phrase to match
   def click_rating_frequency(cell_selector, frequency)
-    find("#{cell_selector} button", text: frequency).click
-
-    return if page.has_css?("#{cell_selector} button.ring-1", text: frequency, wait: 4)
-
-    find("#{cell_selector} button", text: frequency).click
-
-    return if page.has_css?("#{cell_selector} button.ring-1", text: frequency, wait: 4)
-
-    # Both Capybara pointer clicks dropped on a starved CI runner. Submit the
-    # button's form via requestSubmit() — invokes Turbo's submit interceptor
-    # synchronously, bypassing pointer hit-testing entirely.
-    # Substring match (not ===) — callers pass "Consistent" to match the
-    # alignment-mode button labelled "Consistently"; Capybara's `text:`
-    # filter does the same.
+    open_pill_popover(cell_selector)
     page.execute_script(<<~JS, cell_selector, frequency)
-      const cell = document.querySelector(arguments[0]);
-      const btn = Array.from(cell.querySelectorAll("button"))
-        .find(b => b.textContent.trim().includes(arguments[1]));
-      btn?.closest("form")?.requestSubmit(btn);
+      const wrapper = document.querySelector(arguments[0]);
+      const items = Array.from(wrapper.querySelectorAll('[role="menuitem"]'));
+      const item = items.find(b => b.textContent.trim().includes(arguments[1]));
+      item?.closest("form")?.requestSubmit(item);
     JS
 
     # Final assertion ensures we surface a real failure if the JS fallback
-    # also silently no-ops (selector wrong, button missing, etc) — without
+    # also silently no-ops (selector wrong, item missing, etc) — without
     # this the helper returns successfully and the caller asserts against
-    # stale UI state.
-    assert_selector "#{cell_selector} button.ring-1", text: frequency
+    # stale UI state. The pill's trigger label updates with the new
+    # phrase on success — we assert on the trigger button rather than
+    # any specific ring/selected class so the assertion survives styling
+    # changes.
+    assert_selector "#{cell_selector} button[aria-haspopup='menu']", text: frequency
+  end
+
+  # Opens the pill popover. Stimulus dropdown click handling is robust
+  # but on starved CI runners a pointer click can be lost; fall back to
+  # a synchronous `.click()` via execute_script the same way other
+  # toggle helpers in this file do.
+  def open_pill_popover(cell_selector)
+    trigger_selector = "#{cell_selector} button[aria-haspopup='menu']"
+    return unless page.has_css?(trigger_selector, wait: 4)
+
+    # Already open? Skip.
+    return if page.has_css?("#{cell_selector} [role='menu']:not(.hidden)")
+
+    find(trigger_selector).click
+    return if page.has_css?("#{cell_selector} [role='menu']:not(.hidden)", wait: 2)
+
+    page.execute_script(<<~JS, trigger_selector)
+      document.querySelector(arguments[0])?.click();
+    JS
+    assert_selector "#{cell_selector} [role='menu']:not(.hidden)", wait: 4
   end
 
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no

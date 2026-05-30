@@ -90,32 +90,23 @@ class Views::Assessments::LevelChip < Views::Base
   end
 
   def humanise_frequency(freq)
-    case freq
-    when "consistent" then "consistently"
-    when "occasional" then "most times"
-    when "some"       then "some times"
-    when "none"       then "none"
-    else                   freq.to_s
-    end
+    Views::Assessments::FrequencyPalette.phrase_for(freq).downcase
   end
 
   # Chip background:
   # - unrated below person's level → mint green (assumed-consistent,
   #   since the person is operating at a higher level)
   # - unrated at/above person's level → neutral grey
-  # - rated cells → solid colour keyed by frequency
+  # - rated cells → solid colour keyed by frequency via the shared
+  #   {FrequencyPalette}, so the strip and the inline pill agree
+  #   pixel-for-pixel.
   def chip_bg
     freq = primary_frequency
     if freq.nil?
       @ordinal < @person_level ? "bg-green-100/60 dark:bg-green-900/20" : "bg-gray-100 dark:bg-gray-800"
     else
-      case freq
-      when "consistent" then "bg-green-200 dark:bg-green-900/40"
-      when "occasional" then "bg-amber-200 dark:bg-amber-900/40"
-      when "some"       then "bg-red-200 dark:bg-red-900/40"
-      when "none"       then "bg-red-100 dark:bg-red-900/20"
-      else                   "bg-gray-100 dark:bg-gray-800"
-      end
+      config = Views::Assessments::FrequencyPalette.config_for(freq)
+      config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-800"
     end
   end
 

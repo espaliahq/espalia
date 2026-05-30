@@ -33,19 +33,53 @@ module Assessments::TurboStreamHelpers
   end
 
   # @return [String] HTML
-  def rating_wrapper_html(stable_id, ordinal, frequency, context, category_id)
-    selector_html = render_to_string(
-      Views::Assessments::FrequencySelector.new(
+  def rating_wrapper_html(stable_id, ordinal, frequency, context, category_id,
+                          interactive: true)
+    pill_html = render_to_string(
+      Views::Assessments::FrequencyPill.new(
         capability_stable_id: stable_id,
         level_ordinal: ordinal,
         current_frequency: frequency,
         assessment_id: @assignment.id,
         context: context,
-        category_id: category_id
+        category_id: category_id,
+        interactive: interactive
       ),
       layout: false
     )
-    %(<div id="rating-#{stable_id}-#{ordinal}">#{selector_html}</div>)
+    %(<span id="rating-#{stable_id}-#{ordinal}" class="ml-2 inline-block">#{pill_html}</span>)
+  end
+
+  # Renders the divergent-secondaries strip for a (capability, level)
+  # cell. `cell_data` carries the fresh frequencies for all three
+  # perspectives; the line view drops perspectives that aren't visible
+  # to the viewer (handled inside `secondary_entries_for`) and the
+  # render itself drops anything that agrees with the primary.
+  def secondaries_wrapper_html(stable_id, ordinal, cell_data, primary_freq, context)
+    lines = secondary_entries_for(cell_data, context).map do |entry|
+      render_to_string(
+        Views::Assessments::SecondaryRatingLine.new(
+          label: entry[:label],
+          frequency: entry[:frequency],
+          primary_frequency: primary_freq
+        ),
+        layout: false
+      )
+    end
+    %(<div id="secondaries-#{stable_id}-#{ordinal}" class="mb-3 space-y-1">#{lines.join}</div>)
+  end
+
+  def secondary_entries_for(cell_data, context)
+    case context
+    when :manager
+      [ { label: "Self", frequency: cell_data[:current_frequency] } ]
+    when :alignment
+      [
+        { label: "Self", frequency: cell_data[:current_frequency] },
+        { label: "Manager", frequency: cell_data[:manager_frequency] }
+      ]
+    else []
+    end
   end
 
   def blocked_badge_html(block_reason)

@@ -156,21 +156,19 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "render alignment frequency selectors once aligning" do
+    should "render the inline alignment pill once aligning" do
       seed_alignment_started!
-      # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector — without it the card is just header + level strip.
       visit assessment_path(@report_assignment, capability: @cap_stable)
       wait_for_stimulus "matrix"
 
       assert_text "Report Alex"
       assert_text "Critical Thinking"
-      assert_selector "button", text: "Consistent"
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']"
       assert_no_link "Exit alignment"
       assert_no_link "Continue alignment"
     end
 
-    should "record an alignment when a frequency is clicked" do
+    should "record an alignment when a frequency is picked from the pill" do
       seed_alignment_started!
       visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_text "Aligning"
@@ -178,9 +176,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistent")
 
-      within("#rating-#{@cap_stable}-2") do
-        assert_selector "button.ring-1", text: "Consistent"
-      end
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']", text: "Consistently"
 
       stream_name = "tenant-#{@tenant.id}/PersonDev-#{@report.id}-#{@framework_id}"
       events = Rails.configuration.event_store.read.stream(stream_name).to_a
@@ -200,19 +196,14 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_link "Exit alignment"
     end
 
-    should "render the alignment frequency selector as the interactive primary cell" do
-      # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector for the person's level.
+    should "render the alignment pill as the interactive primary control" do
       visit assessment_path(@report_assignment, capability: @cap_stable)
       wait_for_stimulus "matrix"
 
-      # In alignment mode the primary cell is the aligned selector (buttons
-      # present). Self/manager remain frozen at the policy/aggregate layer —
-      # the assessee/manager simply no longer have any interactive control
-      # over those individual perspectives in the UI.
-      within("#rating-#{@cap_stable}-2") do
-        assert_selector "button", text: "Consistent"
-      end
+      # In alignment mode the primary control is the aligned pill (an
+      # aria-haspopup button). Self/manager remain frozen at the
+      # policy/aggregate layer — they have no interactive control here.
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']"
     end
   end
 
@@ -232,13 +223,11 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_link "Exit alignment"
     end
 
-    should "render the alignment frequency selector as the interactive primary cell" do
+    should "render the alignment pill as the interactive primary control" do
       visit assessment_path(@report_assignment, capability: @cap_stable)
       wait_for_stimulus "matrix"
 
-      within("#rating-#{@cap_stable}-2") do
-        assert_selector "button", text: "Consistent"
-      end
+      assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']"
     end
   end
 

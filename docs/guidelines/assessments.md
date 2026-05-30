@@ -234,35 +234,64 @@ The assessee must not see the manager's rating until alignment formally begins. 
 | `MatrixDataBuilder` | Which scoring perspective is primary; whether manager/aligned data is scrubbed |
 | `HeroSummary` | Which `*_scoring` hash to render (`self_scoring` vs `manager_scoring` vs `aligned_scoring`); subject pronoun ("You're" vs "Alex is") |
 | `CapabilityCard` / `LevelChip` | Which `*_frequency` colors the chip; whether divergence dots show |
-| `CapabilityCardExpansion` | Which perspective the `FrequencySelector` rates; which `FrequencyBar`s show as secondary |
-| `FrequencySelector#form_action` | POST endpoint — `/ratings` (self) vs `/manager_ratings` (manager) vs `/alignment_ratings` (alignment) |
+| `CapabilityCardExpansion` | Which perspective the `FrequencyPill` rates; which `SecondaryRatingLine`s render |
+| `FrequencyPill#form_action` | POST endpoint — `/ratings` (self) vs `/manager_ratings` (manager) vs `/alignment_ratings` (alignment) |
 
 ## Frequency rating vocabulary
 
-The four rating values have distinct display labels and underlying enum values. UI buttons use the short form; tooltips and aria-labels use the long form. Data values (enum, events, DB, test fixtures) **never** change.
+The four rating values share a single palette across every surface — inline pill, level chip, divergent-secondary dot — via `Views::Assessments::FrequencyPalette`. The palette walks a red → orange → amber → green ramp so the four states read as a clear gradient (worse → better) without relying on text. Data values (enum, events, DB, test fixtures) **never** change.
 
-| Enum value | Short label (button/bar) | Long label (tooltip/aria) |
-|------------|--------------------------|---------------------------|
-| `none` | None | None |
-| `some` | Some | Some times |
-| `occasional` | Most | Most times |
-| `consistent` | Consistently | Consistently |
+| Enum | Sentence phrase | Compact label | Hue |
+|------|----|----|----|
+| `none` | Never | None | red |
+| `some` | Some of the time | Some | orange |
+| `occasional` | Most of the time | Most | amber |
+| `consistent` | Consistently | Consistently | green |
 
-`FrequencyBar` abbreviates further when space-constrained (`Con.` for `consistent`), still carrying the long label as `title`.
+The phrase reads inside the inline pill ("…explains reasoning. **Most of the time**"). The compact label is for tight spaces. The hue backs both pill and level chip so the strip and the inline pill agree pixel-for-pixel.
+
+## Frequency pill (primary rating surface)
+
+The primary rating is recorded via an inline `FrequencyPill` that reads as part of the expectation sentence:
+
+```
+Breaks down problems, weighs options, and explains reasoning.  [Most of the time ▾]
+```
+
+The pill is a colour-coded button with a chevron. Clicking opens a small popover with the four phrase options + Clear rating; selecting a phrase POSTs through the same controller endpoints the previous segmented selector used. The popover reuses the existing `dropdown` Stimulus controller — same pattern as the comment kebab.
+
+**Frozen variants** render the pill as a static coloured span (no chevron, no popover) when `frozen: true` (`aligning` / `aligned` in self / manager context) or `alignment_locked: true` (`aligned` in alignment context). The sentence still reads correctly because the static pill carries the same colour + phrase.
+
+**Untoggle** lives inside the popover as a "Clear rating" item — controllers detect "POST same frequency back" and clear (same untoggle path as before).
+
+## Secondary perspectives (divergence-only, permission-aware)
+
+A divergent secondary perspective renders as a single line below the pill:
+
+```
+○ Self rated: some of the time
+```
+
+— a coloured dot from the same palette plus a sentence. Replaces the previous `FrequencyBar` (filled progress bar that duplicated the text label).
+
+**Rendering rules:**
+- Only perspectives the viewer is permitted to see appear. `MatrixDataBuilder` scrubs manager + aligned frequencies when `context == :self`, so a self-viewer never even receives the data.
+- Manager context shows Self.
+- Alignment context shows both Self and Manager.
+- Within the allowed set, only perspectives that **diverge** from the primary render. If self and primary agree, the row collapses.
+
+The wrapper carries a stable id `secondaries-<stable>-<ordinal>` so rating controllers `turbo_stream.replace` it on every rating change — the divergent set grows / shrinks as the primary moves.
 
 ## Level chip coloring
 
 | Level position | Frequency | Background |
 |---|---|---|
 | Below person_level | Unrated | Muted green (assumed consistent) |
-| Below person_level | Consistently | Solid green |
-| Below person_level | Most times | Amber |
-| Below person_level | Some / None | Red |
+| Below person_level | rated | Solid hue from the palette (red / orange / amber / green) |
 | At/above person_level | Unrated | Neutral gray |
-| At/above person_level | Consistently | Solid green (exceeding) |
-| At/above person_level | Some / Most | Blue (stretch attempt) |
+| At/above person_level | rated | Solid hue from the palette — same fill regardless of level position |
 
-A small **divergence dot** appears on the chip when the primary perspective disagrees with any secondary — same dot you'd see on `FrequencyBar`. Full per-perspective values live in the expansion panel.
+A small **divergence dot** appears on the chip when the primary perspective disagrees with any secondary the viewer can see. Full per-perspective values live in the expansion panel's `SecondaryRatingLine`s.
 
 ## Multi-perspective scoring
 
@@ -325,7 +354,7 @@ enrolled → started → aligning → aligned → withdrawn
 
 **Threading the status to the views.** `MatrixDataBuilder` reads `participant_status` and produces two boolean flags:
 
-- `individual_ratings_frozen` — true for `aligning` / `aligned`. Threaded through `CapabilityCardExpansion` as `frozen:`. In self/manager context, the primary `FrequencySelector` becomes a read-only `FrequencyBar`.
+- `individual_ratings_frozen` — true for `aligning` / `aligned`. Threaded through `CapabilityCardExpansion` as `frozen:`. In self/manager context, the primary `FrequencyPill` renders as a static (non-interactive) coloured span instead of an interactive trigger.
 - `alignment_locked` — true only for `aligned`. Threaded as `alignment_locked:`. In alignment context, the alignment selector also becomes a read-only bar.
 
 Both flags also flow through the rating controllers' Turbo Stream responses so post-event re-renders pick the correct read-only / interactive shape.
@@ -351,7 +380,7 @@ A parallel `app/views/assessments/` hierarchy with its own card/strip/chip compo
 
 ### 2. Context threading must be end-to-end
 
-The `:self` / `:manager` / `:alignment` context flows from controller detection through the builder, into every view component, and into form action URLs. Missing the context at any layer — especially `FrequencySelector#form_action` — routes ratings to the wrong endpoint silently.
+The `:self` / `:manager` / `:alignment` context flows from controller detection through the builder, into every view component, and into form action URLs. Missing the context at any layer — especially `FrequencyPill#form_action` — routes ratings to the wrong endpoint silently.
 
 ### 3. Perspective scoring returns nil, not empty
 
@@ -429,7 +458,10 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/views/assessments/capability_card.rb` | One card per capability — eyebrow, name, signed delta, level strip, expansion panel |
 | `app/views/assessments/level_strip.rb` | Horizontal flex of `LevelChip`s, scrolls horizontally on narrow |
 | `app/views/assessments/level_chip.rb` | One chip per level — color by frequency × level position, YOU badge, divergence dot |
-| `app/views/assessments/capability_card_expansion.rb` | Focused-level panel — expectation, FrequencySelector, illustrations, evidence, comments |
+| `app/views/assessments/capability_card_expansion.rb` | Focused-level panel — expectation sentence + inline FrequencyPill, divergent SecondaryRatingLines, illustrations, evidence, comments |
+| `app/views/assessments/frequency_palette.rb` | Shared 4-state colour palette + sentence phrases for pill / chip / dot |
+| `app/views/assessments/frequency_pill.rb` | Inline rating pill (interactive popover or static coloured span) |
+| `app/views/assessments/secondary_rating_line.rb` | Divergent-perspective sentence with a colour-coded dot |
 | `app/views/assessments/frequency_selector.rb` | Four-button rating control (context determines POST endpoint) |
 | `app/views/assessments/frequency_bar.rb` | Read-only secondary rating bar with divergence dot |
 | `app/views/assessments/rating_error.rb` | Rating error flash partial |
