@@ -1052,7 +1052,14 @@ export default class extends BaseController {
       // the scroll event has fired) keep the external-focus suppression
       // alive until the layout truly settles.
       if (this._suppressionScrollRenew) this.#renewSuppressionUntilScrollStops()
-      this.#scheduleCapabilityScrollUpdate()
+      // Picker is no longer scheduled from IO callbacks. With the
+      // picker iterating `cardTargets` directly (not the IO-maintained
+      // set), the IO doesn't need to drive picker re-runs. Genuine
+      // user scrolls trigger the picker via `_onCapabilityScroll`;
+      // a delayed IO callback after a programmatic scroll's
+      // suppression has expired would otherwise fire the picker
+      // against a layout the user didn't actually touch and stomp
+      // on an explicit focus state.
     }
 
     // `rootMargin: 0` + `threshold: 0` fires only on viewport entry
