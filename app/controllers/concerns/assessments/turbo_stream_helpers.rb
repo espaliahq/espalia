@@ -47,7 +47,12 @@ module Assessments::TurboStreamHelpers
       ),
       layout: false
     )
-    %(<span id="rating-#{stable_id}-#{ordinal}" class="ml-2 inline-block">#{pill_html}</span>)
+    # Must match the wrapper rendered by
+    # `CapabilityCardExpansion#expectation_sentence` — same element
+    # type, same id, same classes. Otherwise the turbo_stream replace
+    # swaps the inline pill wrapper for a block element and the
+    # surrounding sentence rewraps to the next line.
+    %(<span id="rating-#{stable_id}-#{ordinal}" class="inline-block">#{pill_html}</span>)
   end
 
   # Renders the divergent-secondaries strip for a (capability, level)
@@ -66,7 +71,13 @@ module Assessments::TurboStreamHelpers
         layout: false
       )
     end
-    %(<div id="secondaries-#{stable_id}-#{ordinal}" class="mb-3 space-y-1">#{lines.join}</div>)
+    # Must match the wrapper in
+    # `CapabilityCardExpansion#diverging_secondaries` — inline-flex
+    # span so the secondaries flow on the same line as the pill,
+    # without left margin so when the line wraps on mobile the
+    # secondary starts flush against the new line's left edge
+    # (gap to the pill is owned by `mr-6` on the pill wrapper).
+    %(<span id="secondaries-#{stable_id}-#{ordinal}" class="inline-flex flex-wrap items-center gap-4">#{lines.join}</span>)
   end
 
   def secondary_entries_for(cell_data, context)

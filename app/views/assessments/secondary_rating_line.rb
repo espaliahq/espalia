@@ -34,12 +34,17 @@ class Views::Assessments::SecondaryRatingLine < Views::Base
     config = Views::Assessments::FrequencyPalette.config_for(@frequency)
     return unless config
 
-    div(class: "flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400") do
+    # Inline-flex so multiple secondaries (alignment view: Self + Manager)
+    # sit beside each other on the same line as the pill, separated by
+    # the parent's flex `gap`. Dot precedes the label per the design;
+    # phrase keeps the pill's natural case ("Most of the time", not
+    # "most of the time") for a single consistent vocabulary.
+    span(class: "inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400") do
       span(class: "w-2 h-2 rounded-full #{config[:dot]} shrink-0",
            aria: { hidden: "true" })
       span do
-        plain "#{@label} rated: "
-        span(class: "font-medium text-gray-800 dark:text-gray-200") { config[:phrase].downcase }
+        plain "#{@label} rating: "
+        span(class: "font-medium text-gray-800 dark:text-gray-200") { config[:phrase] }
       end
     end
   end

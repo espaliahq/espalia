@@ -58,7 +58,6 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     ) do
       expansion_header
       expectation_sentence
-      diverging_secondaries
       illustrations_section
       evidence_section
       comments_section
@@ -75,47 +74,51 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     end
   end
 
-  # Sentence-first layout: the expectation text flows naturally into
-  # the rating pill so the line reads ("Breaks down problems… Most of
-  # the time"). The pill itself carries the rating's interaction.
+  # Sentence-first layout. The expectation flows into:
+  #   "<text>. Demonstrates: [pill]    <divergent secondaries>"
+  # All on one line; on narrow viewports the secondaries wrap below
+  # the pill via flex-wrap. The lead-in "Demonstrates:" is glued to
+  # the pill via a `whitespace-nowrap` span so a wrap never strands
+  # the label without it.
   def expectation_sentence
     return unless @cell_data[:expectation]
 
     div(class: "mb-3 text-sm text-gray-700 dark:text-gray-300") do
       span { @cell_data[:expectation].description.to_s.strip }
-      # Rating controllers replace `#rating-<stable>-<ord>` after every
-      # POST — the wrapper id has to live on the same element that
-      # `Assessments::TurboStreamHelpers#rating_wrapper_html` renders
-      # on the post-rate turbo_stream, otherwise the replace target
-      # never matches and the pill goes stale.
-      span(id: "rating-#{@capability_stable_id}-#{@ordinal}", class: "ml-2 inline-block") do
-        render Views::Assessments::FrequencyPill.new(
-          capability_stable_id: @capability_stable_id,
-          level_ordinal: @ordinal,
-          current_frequency: primary_frequency,
-          assessment_id: @assessment_id,
-          context: @context,
-          category_id: @category_id,
-          interactive: !primary_perspective_frozen?
-        )
+      # `mr-6` lives on the Demonstrates+pill wrapper rather than on
+      # `ml-*` of the secondary so that when the line wraps on mobile
+      # the trailing margin stays at the end of the pill's line and
+      # the secondary starts flush against the next line's left edge
+      # (an `ml-*` on the secondary would re-indent it after wrap).
+      span(class: "whitespace-nowrap ml-2 mr-6") do
+        span(class: "text-gray-500 dark:text-gray-400 mr-1") { "Demonstrates:" }
+        # Rating controllers replace `#rating-<stable>-<ord>` after every
+        # POST — the id has to live on the element
+        # `Assessments::TurboStreamHelpers#rating_wrapper_html` writes.
+        span(id: "rating-#{@capability_stable_id}-#{@ordinal}", class: "inline-block") do
+          render Views::Assessments::FrequencyPill.new(
+            capability_stable_id: @capability_stable_id,
+            level_ordinal: @ordinal,
+            current_frequency: primary_frequency,
+            assessment_id: @assessment_id,
+            context: @context,
+            category_id: @category_id,
+            interactive: !primary_perspective_frozen?
+          )
+        end
       end
+      diverging_secondaries
     end
   end
 
-  # Renders ONLY perspectives that diverge from the primary AND that the
-  # viewer is permitted to see. Permission is enforced upstream — the
-  # data builder scrubs manager/aligned data when context == :self —
-  # so secondaries are effectively nil for an assessee viewing their
-  # own assessment and never reach the render branch.
-  # Always renders the wrapper, even when no perspectives diverge —
-  # rating controllers replace this target on every POST so the
-  # divergent set can grow / shrink as the primary value changes.
-  # The wrapper carries `mb-3 space-y-1` even when empty to keep the
-  # layout rhythm consistent (avoids the rest of the panel jumping
-  # 12 px when a secondary appears).
+  # Inline `<span>` so the secondaries flow with the sentence rather
+  # than dropping to a separate row. Always renders the wrapper (even
+  # empty) so rating controllers `turbo_stream.replace` the target on
+  # every POST and the divergent set can grow / shrink as the primary
+  # value changes.
   def diverging_secondaries
-    div(id: "secondaries-#{@capability_stable_id}-#{@ordinal}",
-        class: "mb-3 space-y-1") do
+    span(id: "secondaries-#{@capability_stable_id}-#{@ordinal}",
+         class: "inline-flex flex-wrap items-center gap-4") do
       diverging_entries.each do |entry|
         render Views::Assessments::SecondaryRatingLine.new(
           label: entry[:label],
