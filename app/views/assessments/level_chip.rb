@@ -61,9 +61,24 @@ class Views::Assessments::LevelChip < Views::Base
            "transition-all border-2 " \
            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 "
     if @focused
-      base + "#{chip_bg} #{focus_border} shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{focus_border} shadow-sm"
     else
-      base + "#{chip_bg} #{idle_border} hover:shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{idle_border} hover:shadow-sm"
+    end
+  end
+
+  # Explicit text colour so the level code reads against the chip fill
+  # regardless of the surrounding card's inherited colour. Without this
+  # the inherited text colour washes out against the tinted chip in
+  # dark mode (Hard-Won Lesson: the chip fill is the only signal the
+  # eye gets — the code needs to stay legible on top of it).
+  def chip_text
+    freq = primary_frequency
+    if freq.nil?
+      @ordinal < @person_level ? "text-green-900 dark:text-green-100" : "text-gray-700 dark:text-gray-200"
+    else
+      config = Views::Assessments::FrequencyPalette.config_for(freq)
+      config ? config[:chip_txt] : "text-gray-700 dark:text-gray-200"
     end
   end
 
@@ -106,10 +121,10 @@ class Views::Assessments::LevelChip < Views::Base
   def chip_bg
     freq = primary_frequency
     if freq.nil?
-      @ordinal < @person_level ? "bg-green-100/60 dark:bg-green-900/20" : "bg-gray-100 dark:bg-gray-800"
+      @ordinal < @person_level ? "bg-green-100/60 dark:bg-green-900/40" : "bg-gray-100 dark:bg-gray-700"
     else
       config = Views::Assessments::FrequencyPalette.config_for(freq)
-      config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-800"
+      config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
     end
   end
 
