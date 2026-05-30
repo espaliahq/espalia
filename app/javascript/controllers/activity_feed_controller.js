@@ -253,15 +253,30 @@ export default class extends BaseController {
 
   // In highlight mode, the rest of the feed stays visible, so a matching
   // entry further down the list would otherwise sit off-screen until the
-  // user scrolls. Bring the first match into the visible band after every
-  // state apply that could have changed which entry matches. `nearest`
-  // avoids disrupting position when the match is already on screen.
+  // user scrolls. Park the first match at the top of the sidebar's
+  // visible band every time focus changes — clicking a new focus is
+  // "show me what changed", so the match should be the focal point
+  // regardless of where the sidebar happened to be scrolled.
+  //
+  // Scopes the scroll to the sidebar aside directly (rather than calling
+  // `scrollIntoView` on the entry, which cascades up and can shift the
+  // main page too).
   #scrollFirstMatchIntoView() {
     if (this.mode !== "highlight") return
     if (!this.#hasActiveFocus()) return
     const first = this.entryTargets.find(e => e.dataset.match === "true")
     if (!first) return
-    first.scrollIntoView({ block: "nearest", behavior: "smooth" })
+
+    const aside = first.closest("#assessment-activity-pane")
+    if (!aside) return
+
+    const entryRect = first.getBoundingClientRect()
+    const asideRect = aside.getBoundingClientRect()
+    // Land the entry at the top of the aside's visible area, with a
+    // small gap so it doesn't sit flush against the sidebar's own
+    // sticky header.
+    const target = aside.scrollTop + (entryRect.top - asideRect.top) - 8
+    aside.scrollTo({ top: Math.max(0, target), behavior: "smooth" })
   }
 
   #readCookieMode() {

@@ -210,6 +210,131 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  context "highlight mode scrolls first match into view" do
+    should "scroll the sidebar to the first highlighted entry when focus changes" do
+      # Add many cap1 entries before any cap2 entries so the cap2-only
+      # entries (the post-focus match targets) are below the fold.
+      ActsAsTenant.with_tenant(@tenant) do
+        15.times do |i|
+          PersonDevelopment::CommandHandler.new.record_evidence(
+            @person.id, @framework_id, SecureRandom.uuid_v7,
+            capability_stable_id: @cap1_stable, level_ordinal: 1,
+            source: "self", evidence_type: "project_outcome",
+            content: "Filler #{i}", title: "Filler #{i}",
+            author_id: @person.id
+          )
+        end
+      end
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      toggle_activity_pane
+      wait_for_stimulus "activity-feed"
+      wait_for_stimulus "matrix"
+      wait_for_turbo_idle
+
+      # Switch to highlight mode so the rest of the feed stays visible
+      # and the matching entry has to be scrolled into view (filter mode
+      # would hide everything else and obviate the scroll).
+      page.execute_script(<<~JS)
+        const wrapper = document.querySelector("[data-controller~='activity-feed']");
+        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-feed");
+        ctrl.setMode({ params: { mode: "highlight" } });
+      JS
+
+      # Click cap2's card header → cap2 entries become the matches; the
+      # sidebar should scroll them into view since they're the only
+      # cap2 entries below ~16 cap1 entries.
+      click_card_header(@cap2_stable)
+
+      # Wait for #scrollFirstMatchIntoView's smooth scroll to land, then
+      # verify the first cap2 entry is now within the aside's visible
+      # rect. If the scroll didn't fire, the entry would still be below
+      # the aside's visible bottom.
+      result = page.execute_script(<<~JS)
+        const aside = document.getElementById("assessment-activity-pane");
+        const entry = aside.querySelector(
+          "[data-activity-feed-target='entry'][data-capability-stable-id='#{@cap2_stable}'][data-match='true']"
+        );
+        if (!entry) return JSON.stringify({ entryFound: false });
+        const asideRect = aside.getBoundingClientRect();
+        const entryRect = entry.getBoundingClientRect();
+        return JSON.stringify({
+          entryFound: true,
+          inView: entryRect.top >= asideRect.top && entryRect.bottom <= asideRect.bottom,
+          entryTop: entryRect.top,
+          asideTop: asideRect.top,
+          asideBottom: asideRect.bottom
+        });
+      JS
+      diag = JSON.parse(result)
+      assert diag["entryFound"], "expected a cap2 entry with data-match='true' in the sidebar"
+      assert diag["inView"],
+        "expected the first matching entry to scroll into the sidebar viewport. " \
+        "entry.top=#{diag['entryTop']}, aside=[#{diag['asideTop']}..#{diag['asideBottom']}]"
+    end
+  end
+
+  context "highlight mode: cell focus from chip click" do
+    should "scroll the sidebar to the first highlighted entry when a chip sets cell focus" do
+      ActsAsTenant.with_tenant(@tenant) do
+        15.times do |i|
+          PersonDevelopment::CommandHandler.new.record_evidence(
+            @person.id, @framework_id, SecureRandom.uuid_v7,
+            capability_stable_id: @cap1_stable, level_ordinal: 1,
+            source: "self", evidence_type: "project_outcome",
+            content: "Filler #{i}", title: "Filler #{i}",
+            author_id: @person.id
+          )
+        end
+      end
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      toggle_activity_pane
+      wait_for_stimulus "activity-feed"
+      wait_for_stimulus "matrix"
+      wait_for_turbo_idle
+
+      page.execute_script(<<~JS)
+        const wrapper = document.querySelector("[data-controller~='activity-feed']");
+        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-feed");
+        ctrl.setMode({ params: { mode: "highlight" } });
+      JS
+
+      # Click cap2's L1 chip — sets cell focus, sidebar should scroll
+      # to the matching cap2 + L1 entry.
+      page.execute_script(<<~JS)
+        const matrix = document.querySelector("[data-controller~='matrix']");
+        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
+        const chip = document.getElementById("cell-#{@cap2_stable}-1");
+        ctrl?.focusChip({ currentTarget: chip, target: chip, stopPropagation: () => {} });
+      JS
+
+      result = page.execute_script(<<~JS)
+        const aside = document.getElementById("assessment-activity-pane");
+        const entry = aside.querySelector(
+          "[data-activity-feed-target='entry'][data-capability-stable-id='#{@cap2_stable}'][data-match='true']"
+        );
+        if (!entry) return JSON.stringify({ entryFound: false });
+        const asideRect = aside.getBoundingClientRect();
+        const entryRect = entry.getBoundingClientRect();
+        return JSON.stringify({
+          entryFound: true,
+          inView: entryRect.top >= asideRect.top && entryRect.bottom <= asideRect.bottom,
+          entryTop: entryRect.top,
+          asideTop: asideRect.top,
+          asideBottom: asideRect.bottom
+        });
+      JS
+      diag = JSON.parse(result)
+      assert diag["entryFound"], "expected a cap2 entry with data-match='true' in the sidebar"
+      assert diag["inView"],
+        "expected the first matching entry to scroll into the sidebar viewport. " \
+        "entry.top=#{diag['entryTop']}, aside=[#{diag['asideTop']}..#{diag['asideBottom']}]"
+    end
+  end
+
   context "scroll-driven capability focus" do
     should "track the card with the most visible area in the content band as the user scrolls down" do
       page.driver.browser.manage.window.resize_to(900, 600)
