@@ -41,6 +41,7 @@ class Views::Assessments::LevelChip < Views::Base
       you_badge if at_person_level?
       rated_check if rated?
       divergence_dot if divergent?
+      activity_dots if has_activity?
     end
   end
 
@@ -86,7 +87,9 @@ class Views::Assessments::LevelChip < Views::Base
     freq = primary_frequency
     base = at_person_level? ? "Focus #{@level_code} (your level)" : "Focus #{@level_code}"
     rated = freq.present? ? humanise_frequency(freq) : "unrated"
-    "#{base}, rated #{rated}"
+    parts = ["#{base}, rated #{rated}"]
+    parts << activity_title if has_activity?
+    parts.join(", ")
   end
 
   def humanise_frequency(freq)
@@ -169,5 +172,47 @@ class Views::Assessments::LevelChip < Views::Base
       class: "absolute top-0.5 left-0.5 w-2 h-2 rounded-full bg-amber-400 dark:bg-amber-500",
       title: "Perspectives differ"
     ) { }
+  end
+
+  # Tiny indicators in the bottom-right corner: one dot for evidence,
+  # one for comments. Both appear together when both kinds exist.
+  # Smaller and lower-saturation than the rated-check / divergence dot
+  # so they read as ambient texture rather than a primary affordance —
+  # the user clicks the chip for full detail, the dots just hint that
+  # there's something inside.
+  #
+  # The corners taken by other indicators: top-left (divergence dot),
+  # top-right (rated check), bottom-center (YOU badge). Bottom-right
+  # is the only free corner and stays clear of the centered YOU badge
+  # since both `right-0.5` (4px from edge) and the badge's
+  # `-translate-x-1/2` keep them on opposite sides of the chip.
+  def activity_dots
+    span(
+      class: "absolute bottom-0.5 right-0.5 flex items-center gap-0.5",
+      title: activity_title,
+      aria: { hidden: "true" }
+    ) do
+      span(class: "w-1.5 h-1.5 rounded-full bg-slate-500 dark:bg-slate-400") { } if evidence_count.positive?
+      span(class: "w-1.5 h-1.5 rounded-full bg-violet-500 dark:bg-violet-400") { } if comment_count.positive?
+    end
+  end
+
+  def has_activity?
+    evidence_count.positive? || comment_count.positive?
+  end
+
+  def evidence_count
+    @cell_data&.dig(:evidence_count).to_i
+  end
+
+  def comment_count
+    @cell_data&.dig(:comment_count).to_i
+  end
+
+  def activity_title
+    parts = []
+    parts << "#{evidence_count} #{evidence_count == 1 ? 'evidence item' : 'evidence items'}" if evidence_count.positive?
+    parts << "#{comment_count} #{comment_count == 1 ? 'comment' : 'comments'}" if comment_count.positive?
+    parts.join(", ")
   end
 end

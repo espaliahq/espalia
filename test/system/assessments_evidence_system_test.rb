@@ -166,4 +166,59 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
       skip "Deferred: card layout evidence button uses different data-attribute names — needs view fix"
     end
   end
+
+  context "level chip activity indicators" do
+    # The level chip already shows: green ✓ for a rating, amber dot for
+    # cross-perspective divergence, YOU pill at the person's level. The
+    # dots in the bottom-right corner extend that vocabulary: a slate
+    # dot when there's evidence on the cell, a violet dot when there's
+    # a comment. Both appear together when both kinds exist.
+    should "render a slate dot when the cell has evidence" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap_stable, level_ordinal: 1,
+          source: "self", evidence_type: "project_outcome",
+          title: "Q1 launch", content: "Shipped Q1.",
+          author_id: @person.id
+        )
+      end
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      chip = find("#cell-#{@cap_stable}-1")
+      assert chip.has_css?(".bg-slate-500", visible: :all),
+        "expected the level chip to show an evidence dot"
+    end
+
+    should "render a violet dot when the cell has a comment" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.post_comment(
+          @person.id, @framework_id, SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          capability_stable_id: @cap_stable, level_ordinal: 1,
+          author_id: @person.id, body: "Lots of work here."
+        )
+      end
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      chip = find("#cell-#{@cap_stable}-1")
+      assert chip.has_css?(".bg-violet-500", visible: :all),
+        "expected the level chip to show a comment dot"
+    end
+
+    should "render no dot when the cell has neither evidence nor comments" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      chip = find("#cell-#{@cap_stable}-1")
+      assert chip.has_no_css?(".bg-slate-500", wait: 1),
+        "did not expect an evidence dot on a cell without evidence"
+      assert chip.has_no_css?(".bg-violet-500", wait: 1),
+        "did not expect a comment dot on a cell without comments"
+    end
+  end
 end
