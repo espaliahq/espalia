@@ -12,7 +12,6 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param matrix_data [Hash] from Assessments::MatrixDataBuilder
   # @param assessment_id [String] UUID
   # @param context [Symbol] :self, :manager, or :alignment
-  # @param active_category_id [String, nil] highlighted category chip
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param expanded_level_ordinal [Integer, nil] level ordinal pre-focused
   # @param viewer_person_id [String, nil] threaded into the evidence section
@@ -20,16 +19,22 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  #
+  # The "active category" the controller passes in is no longer relevant
+  # at this layer — the matrix renders all categories in one document,
+  # and the active chip marker is owned by `category_nav_controller`.
+  # `active_category_id:` is accepted for backwards compatibility with
+  # the existing controller call sites but not used.
   def initialize(matrix_data:, assessment_id:, context: :self,
-                 active_category_id: nil, expanded_capability_id: nil,
+                 expanded_capability_id: nil,
                  expanded_level_ordinal: nil,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false)
+                 can_comment: false, viewer_is_tenant_admin: false,
+                 **_ignored_kwargs)
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context
-    @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
     @expanded_level_ordinal = expanded_level_ordinal
     @frozen = matrix_data[:individual_ratings_frozen] || false
@@ -82,14 +87,5 @@ class Views::Assessments::AssessmentMatrix < Views::Base
 
   def first_category_id
     @matrix_data[:categories].first&.dig(:category)&.category_id
-  end
-
-  def primary_scoring
-    case @context
-    when :self      then @matrix_data[:self_scoring] || @matrix_data[:scoring]
-    when :manager   then @matrix_data[:manager_scoring] || @matrix_data[:scoring]
-    when :alignment then @matrix_data[:aligned_scoring] || @matrix_data[:scoring]
-    else @matrix_data[:scoring]
-    end
   end
 end

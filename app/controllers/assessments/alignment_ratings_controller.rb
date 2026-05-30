@@ -254,7 +254,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
   # is NOT the assessee themselves.
   def assessee_name_if_not_self
     return nil if @assignment.person_id == current_person&.id
+    return @assessee_name_if_not_self if defined?(@assessee_name_if_not_self)
 
-    @assessee_name_if_not_self ||= Person.find_by(id: @assignment.person_id)&.name
+    @assessee_name_if_not_self = Person.find_by(id: @assignment.person_id)&.name
   end
 end

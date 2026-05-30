@@ -107,6 +107,10 @@ export default class extends BaseController {
       this._cardListMutationObserver.disconnect()
       this._cardListMutationObserver = null
     }
+    if (this._capScrollRafId) {
+      cancelAnimationFrame(this._capScrollRafId)
+      this._capScrollRafId = null
+    }
     if (this._onUserScroll) {
       window.removeEventListener("scroll", this._onUserScroll)
       this._onUserScroll = null

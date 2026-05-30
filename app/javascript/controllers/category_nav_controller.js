@@ -12,8 +12,10 @@
 //    Tailwind's static `scroll-mt-*` utilities can express).
 //
 // 3. Updates the active chip (`aria-current="page"`) as the user
-//    scrolls through category sections, using IntersectionObserver
-//    with a top margin equal to the sticky header height.
+//    scrolls through category sections, via a passive scroll listener
+//    throttled with requestAnimationFrame. Each section's
+//    `getBoundingClientRect().top` is compared against the sticky
+//    chrome's bottom edge to pick the deepest section past it.
 //
 // <div data-controller="category-nav">
 //   <nav id="category-tabs">

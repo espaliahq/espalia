@@ -88,13 +88,17 @@ class Views::Assessments::Comments::Thread < Views::Base
   # When the thread is empty AND the viewer can comment, lean the label
   # into the affordance ("Add a comment") rather than describing an
   # empty section ("Comments"). With comments present, switch back to
-  # the section label + count so the row keeps its categorical meaning.
+  # the section label + count. When the viewer can't comment (read-only
+  # peer view), don't dangle an affordance they can't act on — render
+  # the plain "Comments" label.
   def header_label_content
     if visible_count.positive?
       span { "Comments" }
       span(class: "font-mono") { "(#{visible_count})" }
-    else
+    elsif @can_create
       span { "Add a comment" }
+    else
+      span { "Comments" }
     end
   end
 

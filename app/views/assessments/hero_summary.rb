@@ -197,7 +197,7 @@ class Views::Assessments::HeroSummary < Views::Base
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
     when :eligible
-      { state_label: "Eligible for promotion to #{next_code}",
+      { state_label: next_code ? "Eligible for promotion to #{next_code}" : "Eligible for promotion",
         list_label: "Top contributors",
         items: sorted.first(3),
         border: "border-green-300 dark:border-green-700",
@@ -301,17 +301,19 @@ class Views::Assessments::HeroSummary < Views::Base
     readiness = primary_scoring[:promotion_readiness]
     return unless readiness
 
+    next_label = level_code(@person_level + 1) || "L#{@person_level + 1}"
+
     if readiness[:eligible]
       span(class: "text-xs font-medium px-2 py-1 rounded-md " \
                   "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 " \
                   "border border-green-200 dark:border-green-800") do
-        "Eligible for promotion to L#{@person_level + 1}"
+        "Eligible for promotion to #{next_label}"
       end
     else
       blocked = readiness[:blocked_at_next_level] || []
       if blocked.any?
         span(class: "text-xs text-gray-500 dark:text-gray-400") do
-          "Blocked by #{blocked.size} #{'capability'.pluralize(blocked.size)} at L#{@person_level + 1}"
+          "Blocked by #{blocked.size} #{'capability'.pluralize(blocked.size)} at #{next_label}"
         end
       end
     end

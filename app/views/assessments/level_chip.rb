@@ -87,7 +87,7 @@ class Views::Assessments::LevelChip < Views::Base
     freq = primary_frequency
     base = at_person_level? ? "Focus #{@level_code} (your level)" : "Focus #{@level_code}"
     rated = freq.present? ? humanise_frequency(freq) : "unrated"
-    parts = ["#{base}, rated #{rated}"]
+    parts = [ "#{base}, rated #{rated}" ]
     parts << activity_title if has_activity?
     parts.join(", ")
   end
@@ -151,6 +151,8 @@ class Views::Assessments::LevelChip < Views::Base
       [ @cell_data[:current_frequency], @cell_data[:aligned_frequency] ]
     when :alignment
       [ @cell_data[:current_frequency], @cell_data[:manager_frequency] ]
+    else
+      []
     end.compact
   end
 

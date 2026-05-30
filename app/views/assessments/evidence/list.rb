@@ -90,13 +90,17 @@ class Views::Assessments::Evidence::List < Views::Base
   # When the list is empty AND the viewer can create, lean the label
   # into the affordance ("Add evidence") rather than describing an
   # empty section ("Evidence"). When items exist, switch back to the
-  # section label with a count so the row keeps its categorical meaning.
+  # section label with a count. When the viewer can't create (read-only
+  # peer view), don't show an affordance they can't act on — render the
+  # plain "Evidence" label so the row reads as descriptive context.
   def header_label_content
     if @items.any?
       span { "Evidence" }
       span(class: "font-mono") { "(#{@items.size})" }
-    else
+    elsif @can_create
       span { "Add evidence" }
+    else
+      span { "Evidence" }
     end
   end
 

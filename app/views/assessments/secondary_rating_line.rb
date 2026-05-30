@@ -2,7 +2,7 @@
 
 # Renders a divergent secondary perspective as a text line:
 #
-#   ○ Self rated: most of the time
+#   ○ Self rating: Most of the time
 #
 # Replaces the previous {FrequencyBar} for the secondary slot. The bar
 # duplicated the value visually (label + filled bar + label) and ate
