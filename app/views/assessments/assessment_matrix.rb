@@ -19,19 +19,12 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
-  #
-  # The "active category" the controller passes in is no longer relevant
-  # at this layer — the matrix renders all categories in one document,
-  # and the active chip marker is owned by `category_nav_controller`.
-  # `active_category_id:` is accepted for backwards compatibility with
-  # the existing controller call sites but not used.
   def initialize(matrix_data:, assessment_id:, context: :self,
                  expanded_capability_id: nil,
                  expanded_level_ordinal: nil,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false,
-                 **_ignored_kwargs)
+                 can_comment: false, viewer_is_tenant_admin: false)
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context

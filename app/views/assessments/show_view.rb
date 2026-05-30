@@ -198,7 +198,6 @@ class Views::Assessments::ShowView < Views::Base
         matrix_data: @matrix_data,
         assessment_id: @assignment.id,
         context: @context,
-        active_category_id: @active_category_id,
         expanded_capability_id: @expanded_capability_id,
         expanded_level_ordinal: @expanded_level_ordinal,
         viewer_person_id: @viewer_person_id,

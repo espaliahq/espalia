@@ -760,6 +760,7 @@ class PersonDevelopment::Aggregate
     @alignment_completed = false
     @self_ratings = {}
     @manager_ratings = {}
+    @aligned_ratings = {}
   end
 
   on PersonDevelopment::Events::LeftAssessmentCycle do |_event|

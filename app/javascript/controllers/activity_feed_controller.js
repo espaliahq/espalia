@@ -163,10 +163,17 @@ export default class extends BaseController {
   // every Turbo Frame swap.
   //
   // Card-layout signal: a capability card stamped `data-focused="true"`
-  // by matrix_controller#setFocus represents capability-level focus.
-  // The feed reconnects when its turbo-frame loads lazily — without
-  // this signal it would silently downgrade to category-level focus
-  // on every frame load, undoing whatever the user just clicked.
+  // by matrix_controller#setFocus represents capability-or-cell focus
+  // (matrix_controller stamps the same attribute for both). The feed
+  // reconnects when its turbo-frame loads lazily — without this signal
+  // it would silently downgrade to category-level focus on every frame
+  // load, undoing whatever the user just clicked.
+  //
+  // Cell-vs-capability disambiguation: the browser URL is the source
+  // of truth for cell focus (the chip click pushes `?level_ordinal=`
+  // via `#syncFocusToUrl`). Without reading `level_ordinal` here, every
+  // lazy reconnect downgrades cell focus to capability focus and the
+  // sidebar widens to all entries across the capability's levels.
   //
   // Table-layout signal: the legacy expandedRow target is still honoured
   // for the framework explorer.
@@ -186,11 +193,21 @@ export default class extends BaseController {
     )
     if (focusedCard) {
       const section = focusedCard.closest("section[data-category-id]")
+      const url = new URL(window.location)
+      const stableId = focusedCard.dataset.capabilityStableId || null
+      const urlStableId = url.searchParams.get("capability")
+      const urlOrdRaw = url.searchParams.get("level_ordinal")
+      const urlOrd = urlOrdRaw == null ? null : parseInt(urlOrdRaw, 10)
+      // Cell focus is signalled by `?capability=` + `?level_ordinal=`
+      // matching the focused card's stable_id. Otherwise treat as
+      // capability-level.
+      const isCell = stableId && urlStableId === stableId &&
+                     urlOrd != null && !isNaN(urlOrd)
       return {
-        level: "capability",
+        level: isCell ? "cell" : "capability",
         categoryId: section?.dataset.categoryId || activeCategoryId,
-        capabilityStableId: focusedCard.dataset.capabilityStableId || null,
-        levelOrdinal: null
+        capabilityStableId: stableId,
+        levelOrdinal: isCell ? urlOrd : null
       }
     }
 

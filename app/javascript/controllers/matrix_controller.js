@@ -124,6 +124,10 @@ export default class extends BaseController {
       window.removeEventListener("scroll", this._onUserScroll)
       this._onUserScroll = null
     }
+    if (this._onCapabilityScroll) {
+      window.removeEventListener("scroll", this._onCapabilityScroll)
+      this._onCapabilityScroll = null
+    }
     if (this._onExternalFocusChange) {
       window.removeEventListener("matrix:focus-changed", this._onExternalFocusChange)
       this._onExternalFocusChange = null
@@ -856,23 +860,19 @@ export default class extends BaseController {
 
   // Picks up `matrix:focus-changed` events from external dispatchers
   // (e.g. `category_nav_controller` on a chip click). Updates our own
-  // currentFocus to match and suppresses scroll-driven capability
-  // re-picks for the same window we use for our own explicit clicks.
+  // currentFocus to match and arms scroll-driven capability suppression
+  // for the animation window.
   //
-  // Self-dispatch guard: matrix_controller#setFocus updates currentFocus
-  // BEFORE dispatching `matrix:focus-changed`, so when the event lands
-  // back here, the detail already matches state and the early return
-  // prevents the listener from re-applying its own changes.
+  // Self/external discrimination: `detail.source === "matrix"`
+  // identifies events we dispatched from `#dispatchFocusEvent`; any
+  // other source (today: category-nav, omitted; tomorrow: anything
+  // else) is treated as external. Carrying source on the event
+  // payload survives any future change in dispatch timing (queueMicrotask,
+  // async wrappers) — a synchronous in-controller flag would not.
   #onExternalFocusChange(event) {
-    // Self-dispatch from `#dispatchFocusEvent` flips this flag for the
-    // synchronous duration of `window.dispatchEvent`, so our own focus
-    // changes don't re-enter this listener and set the suppression
-    // window (which would freeze the IntersectionObserver after every
-    // scroll-driven update).
-    if (this._dispatchingFocus) return
-
     const detail = event.detail || {}
     if (!detail.level) return
+    if (detail.source === "matrix") return
 
     // External focus events ride along with a programmatic scroll
     // (a category chip click in particular). Suppress scroll-driven
@@ -899,18 +899,14 @@ export default class extends BaseController {
     this.#applyCardFocus(detail.capabilityStableId || null, detail.level)
   }
 
-  // Wraps `window.dispatchEvent("matrix:focus-changed")` so the same
-  // controller's external-focus listener can distinguish self-dispatch
-  // (skip — state is already up to date) from genuinely external
-  // events (adopt + suppress). Synchronous flag flip is safe because
-  // `dispatchEvent` invokes listeners synchronously before returning.
+  // Wraps `window.dispatchEvent("matrix:focus-changed")` so every
+  // self-dispatch carries `source: "matrix"`. The external-focus
+  // listener uses this field to skip our own dispatches — without
+  // re-suppressing on every scroll-driven update.
   #dispatchFocusEvent(detail) {
-    this._dispatchingFocus = true
-    try {
-      window.dispatchEvent(new CustomEvent("matrix:focus-changed", { detail }))
-    } finally {
-      this._dispatchingFocus = false
-    }
+    window.dispatchEvent(new CustomEvent("matrix:focus-changed", {
+      detail: { ...detail, source: "matrix" }
+    }))
   }
 
   // ── Scroll-driven capability focus ──
@@ -946,43 +942,39 @@ export default class extends BaseController {
       this.#scheduleCapabilityScrollUpdate()
     }
 
-    // `rootMargin: 0` so the observer fires the moment any portion of
-    // a card touches the viewport. Area-based picking needs every
-    // visible card in the candidate set; a tighter margin would hide
-    // cards in the lower viewport from the picker, biasing it toward
-    // already-scrolled-past cards.
-    //
-    // `threshold` is a sequence — fire on the way in (any pixel
-    // visible), at 25% / 50% visible, and on the way out. The
-    // requestAnimationFrame coalescer in `#scheduleCapabilityScrollUpdate`
-    // collapses high-frequency events to one re-pick per frame.
+    // `rootMargin: 0` + `threshold: 0` fires only on viewport entry
+    // and exit — exactly what we need the observer to maintain (which
+    // cards are candidates). Area changes during continuous scroll
+    // don't cross thresholds, so a scroll-event listener below drives
+    // the area re-pick at frame rate (RAF-coalesced).
     this._capabilityIntersectionObserver = new IntersectionObserver(onIntersection, {
       root: null,
       rootMargin: "0px",
-      threshold: [0, 0.25, 0.5, 0.75, 1]
+      threshold: 0
     })
+
+    // Scroll-event-driven re-pick. The observer only fires on
+    // entry/exit; during continuous scrolling between fixed sets of
+    // intersecting cards (the common case), the picker won't run
+    // again without this. RAF coalescing keeps it cheap.
+    this._onCapabilityScroll = () => this.#scheduleCapabilityScrollUpdate()
+    window.addEventListener("scroll", this._onCapabilityScroll, { passive: true })
 
     this.cardTargets.forEach(card => this._capabilityIntersectionObserver.observe(card))
 
     // Re-observe when cards are added (Turbo Stream replacement of the
     // matrix frame). Stimulus reconnects this controller on full frame
     // load, but partial Turbo Stream replacements within the frame
-    // don't trigger reconnect.
+    // don't trigger reconnect. `observe(el)` is spec-defined as
+    // idempotent, so we can call it on every card without tracking a
+    // separate "already observed" set.
     this._cardListMutationObserver = new MutationObserver(() => {
-      const seen = new Set()
-      this.cardTargets.forEach(card => {
-        seen.add(card)
-        if (!this._observedCards?.has(card)) {
-          this._capabilityIntersectionObserver.observe(card)
-        }
-      })
-      this._observedCards = seen
-      // Drop intersecting refs that are no longer in the DOM.
+      const live = new Set(this.cardTargets)
+      live.forEach(card => this._capabilityIntersectionObserver.observe(card))
       this._intersectingCards.forEach(card => {
-        if (!seen.has(card)) this._intersectingCards.delete(card)
+        if (!live.has(card)) this._intersectingCards.delete(card)
       })
     })
-    this._observedCards = new Set(this.cardTargets)
     this._cardListMutationObserver.observe(this.element, { childList: true, subtree: true })
   }
 
@@ -1056,6 +1048,22 @@ export default class extends BaseController {
       return
     }
 
+    // Downgrading from cell to capability via scroll: clear the stale
+    // `?capability=` + `?level_ordinal=` URL params so F5 doesn't
+    // restore the now-out-of-focus card's expansion. Continuous scroll
+    // through capability-level focus doesn't push (pushToUrl: false
+    // below) — this one-shot clear only fires on the leaving-cell
+    // edge, since the very next #updateFocusedCapabilityFromScroll
+    // call finds the URL already empty.
+    if (this.currentFocus.level === "cell" && this.urlSyncValue) {
+      const url = new URL(window.location)
+      if (url.searchParams.has("capability") || url.searchParams.has("level_ordinal")) {
+        url.searchParams.delete("capability")
+        url.searchParams.delete("level_ordinal")
+        window.history.replaceState({}, "", url)
+      }
+    }
+
     this.#setFocus({
       level: "capability",
       categoryId,
@@ -1073,18 +1081,33 @@ export default class extends BaseController {
   }
 
   // Stamps `data-focused="true"` on the currently-focused capability's
-  // card and clears it on every other card. The ring + shadow styling
-  // hangs off this attribute (see capability_card.rb's data-variant
-  // classes), so the visual focus tracks any focus level that includes
-  // a specific capability (capability OR cell). Framework- and category-
-  // level focus clear the ring across every card.
+  // card and clears it on the previously-focused card. The ring +
+  // shadow styling hangs off this attribute (see capability_card.rb's
+  // data-variant classes), so the visual focus tracks any focus level
+  // that includes a specific capability (capability OR cell). Framework-
+  // and category-level focus clear the ring across every card.
+  //
+  // Diffs against `_focusedCard` so scroll-driven updates only touch
+  // the two cards that actually changed — not every card on the page.
+  // Iterating ~100 cardTargets per RAF tick during scroll otherwise
+  // burns frames on attribute writes that the CSS data-variant selector
+  // has to revalidate.
   #applyCardFocus(capabilityStableId, level) {
     if (!this.hasCardTarget) return
     const wantsRing = (level === "capability" || level === "cell") && !!capabilityStableId
-    this.cardTargets.forEach(card => {
-      const isFocused = wantsRing && card.dataset.capabilityStableId === capabilityStableId
-      card.dataset.focused = isFocused ? "true" : "false"
-    })
+    const next = wantsRing
+      ? this.cardTargets.find(c => c.dataset.capabilityStableId === capabilityStableId)
+      : null
+
+    if (next === this._focusedCard) return
+
+    if (this._focusedCard && this._focusedCard.isConnected) {
+      this._focusedCard.dataset.focused = "false"
+    }
+    if (next) {
+      next.dataset.focused = "true"
+    }
+    this._focusedCard = next
   }
 
   // ── Column focus (assessment cell-level) ──

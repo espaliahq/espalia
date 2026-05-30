@@ -303,7 +303,23 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   def handle_alignment_cleared(event)
-    rating = find_or_init_rating(event)
+    # find-only, never init: if no rating row exists for this (cycle,
+    # person, capability, level) there is nothing to clear, and
+    # inserting a fresh all-nil row would pollute reads and broadcast
+    # spurious sync events. AssessmentAligned is the only path that
+    # creates an aligned row, and the aggregate's
+    # `clear_alignment_rating` guard requires a prior alignment in the
+    # same cycle — so the only way this branch fires without a row is
+    # via a replay or out-of-band event we should ignore.
+    rating = AssessmentLevelRating.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id],
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal]
+    )
+    return unless rating
+
     rating.aligned_frequency = nil
     rating.aligned_comment = nil
     rating.save!
