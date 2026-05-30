@@ -81,8 +81,20 @@ export default class extends BaseController {
     // observer's connect-time bootstrap.
     this._intersectingCards = new Set()
     this._capabilityFocusSuppressUntil = 0
+    // Renew-on-scroll suppression covers the variable-duration smooth
+    // scrolls that explicit clicks trigger (category chip, capability
+    // card-header, level chip). A time-based window was too brittle on
+    // slow CI — the smooth scroll routinely outlasted 1800ms there.
+    // When active, every scroll event renews `_scrollSettleTimer` so
+    // the suppression naturally tracks the animation, releasing 250ms
+    // after the last scroll event.
+    this._suppressionScrollRenew = false
+    this._scrollSettleTimer = null
     this._sawUserScroll = false
-    this._onUserScroll = () => { this._sawUserScroll = true }
+    this._onUserScroll = () => {
+      this._sawUserScroll = true
+      if (this._suppressionScrollRenew) this.#renewSuppressionUntilScrollStops()
+    }
     window.addEventListener("scroll", this._onUserScroll, { passive: true })
     // Listen for `matrix:focus-changed` from external dispatchers
     // (currently `category_nav_controller` when a chip is clicked). The
@@ -123,6 +135,10 @@ export default class extends BaseController {
     if (this._capScrollSettleTimer) {
       clearTimeout(this._capScrollSettleTimer)
       this._capScrollSettleTimer = null
+    }
+    if (this._scrollSettleTimer) {
+      clearTimeout(this._scrollSettleTimer)
+      this._scrollSettleTimer = null
     }
     if (this._onUserScroll) {
       window.removeEventListener("scroll", this._onUserScroll)
@@ -947,10 +963,13 @@ export default class extends BaseController {
 
     // External focus events ride along with a programmatic scroll
     // (a category chip click in particular). Suppress scroll-driven
-    // capability re-picks for the animation window so the
-    // IntersectionObserver can't overwrite the explicit focus on the
-    // way to the target.
-    this._capabilityFocusSuppressUntil = Date.now() + 1800
+    // capability re-picks for the animation. Renew-on-scroll: every
+    // scroll event during the animation keeps suppression alive;
+    // when scroll events stop for 250ms the suppression releases.
+    // Naturally tracks the actual animation duration regardless of
+    // CI speed — a fixed time window was too brittle.
+    this._suppressionScrollRenew = true
+    this.#renewSuppressionUntilScrollStops()
 
     const same =
       this.currentFocus.level === detail.level &&
@@ -968,6 +987,19 @@ export default class extends BaseController {
       expectationId: detail.expectationId || null
     }
     this.#applyCardFocus(detail.capabilityStableId || null, detail.level)
+  }
+
+  // Sets/extends the "external focus is still settling" suppression.
+  // Called once when an external focus event arrives and again on
+  // every subsequent scroll event for as long as the suppression is
+  // active. When scroll events stop for 250ms the timer fires and
+  // clears the suppression, letting the picker run again.
+  #renewSuppressionUntilScrollStops() {
+    if (this._scrollSettleTimer) clearTimeout(this._scrollSettleTimer)
+    this._scrollSettleTimer = setTimeout(() => {
+      this._scrollSettleTimer = null
+      this._suppressionScrollRenew = false
+    }, 250)
   }
 
   // Wraps `window.dispatchEvent("matrix:focus-changed")` so every
@@ -1061,9 +1093,13 @@ export default class extends BaseController {
     // intermediate frame the RAF coalescer happened to land on. The
     // RAF path runs continuously so focus tracks scroll in real time;
     // this is the safety net for the last frame when scroll stops.
-    // Without it, a smooth-scroll animation that ends right as
-    // suppression expires can leave focus on a card that's no longer
-    // the area-winner once the animation settles.
+    //
+    // Skipped while an external focus event is still settling — the
+    // settle pass would otherwise fire immediately after `_suppressionScrollRenew`
+    // releases and overwrite the explicit focus with whatever the
+    // post-animation area winner is. Genuine user scrolls (no external
+    // suppression in flight) keep the settle pass.
+    if (this._suppressionScrollRenew) return
     if (this._capScrollSettleTimer) clearTimeout(this._capScrollSettleTimer)
     this._capScrollSettleTimer = setTimeout(() => {
       this._capScrollSettleTimer = null
@@ -1073,6 +1109,9 @@ export default class extends BaseController {
 
   #updateFocusedCapabilityFromScroll() {
     if (Date.now() < this._capabilityFocusSuppressUntil) return
+    // Renew-on-scroll suppression: external focus event is still
+    // riding its smooth-scroll animation. See #renewSuppressionUntilScrollStops.
+    if (this._suppressionScrollRenew) return
     // Don't auto-narrow on the observer's connect-time bootstrap. The
     // first IntersectionObserver callback fires with the cards' initial
     // intersection state — not in response to a user scroll. Acting on
