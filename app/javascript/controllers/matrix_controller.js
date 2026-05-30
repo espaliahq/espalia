@@ -958,6 +958,11 @@ export default class extends BaseController {
   // async wrappers) — a synchronous in-controller flag would not.
   #onExternalFocusChange(event) {
     const detail = event.detail || {}
+    // Debug breadcrumbs so tests can verify the listener actually ran
+    // (separate the "listener wasn't installed" failure mode from
+    // the "listener ran but did the wrong thing" failure mode).
+    this._lastExternalFocusAt = Date.now()
+    this._lastExternalFocusDetail = detail
     if (!detail.level) return
     if (detail.source === "matrix") return
 

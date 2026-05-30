@@ -484,7 +484,9 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
           level: ctrl?.currentFocus?.level,
           suppressionScrollRenew: ctrl?._suppressionScrollRenew,
           sawUserScroll: ctrl?._sawUserScroll,
-          intersectingCount: ctrl?._intersectingCards?.size
+          intersectingCount: ctrl?._intersectingCards?.size,
+          listenerRan: ctrl?._lastExternalFocusAt != null,
+          lastExternalDetail: ctrl?._lastExternalFocusDetail
         });
       JS
       state = JSON.parse(diag)
