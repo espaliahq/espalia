@@ -264,14 +264,6 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
-  context "responsive behaviour" do
-    setup { seed_alignment_started! }
-
-    should "render alignment view with Scoring toggle visible on mobile" do
-      skip "Deferred: card layout renders hero summary inline — no Scoring toggle button"
-    end
-  end
-
   private
 
   # Server-side seed: opens alignment for the cycle (sets participant to `aligning`).

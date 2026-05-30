@@ -158,12 +158,38 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
   context "evidence modal" do
     # The full create flow is covered end-to-end by the integration test in
     # test/controllers/assessments/evidence_controller_test.rb. The system
-    # test's unique value is asserting the Stimulus wiring: the `+` Add
+    # test's unique value is asserting the Stimulus wiring: the `+ Add`
     # affordance next to the EVIDENCE header inside the matrix turbo-frame
     # actually opens the modal hosted on the page wrapper, and the
     # capability + level coords are primed correctly.
     should "open with the cell's capability and level pre-populated" do
-      skip "Deferred: card layout evidence button uses different data-attribute names — needs view fix"
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # The "+ Add evidence" button lives inside the auto-focused level's
+      # expansion panel. Card layout: every card auto-focuses the
+      # person's level by default, so the button is visible without
+      # any further interaction. JS-dispatched click bypasses Selenium's
+      # synthetic pointer click which can be lost on starved CI.
+      page.execute_script(<<~JS)
+        const btn = document.querySelector(
+          "[data-action~='click->evidence-form#open']" +
+          "[data-evidence-form-capability-stable-id-param='#{@cap_stable}']" +
+          "[data-evidence-form-level-ordinal-param='1']"
+        );
+        btn?.click();
+      JS
+
+      # Modal is hosted on the page wrapper; opening flips the modal's
+      # `hidden`/`flex` classes. The form's hidden capability + level
+      # inputs get populated from the Stimulus params on open.
+      assert_selector "#evidence-form-modal.flex", visible: true
+      assert_equal @cap_stable, page.evaluate_script(
+        "document.querySelector(\"#evidence-form-modal input[name='evidence[capability_stable_id]']\")?.value"
+      )
+      assert_equal "1", page.evaluate_script(
+        "document.querySelector(\"#evidence-form-modal input[name='evidence[level_ordinal]']\")?.value"
+      )
     end
   end
 
