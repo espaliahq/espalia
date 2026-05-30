@@ -1001,10 +1001,18 @@ export default class extends BaseController {
   // clears the suppression, letting the picker run again.
   #renewSuppressionUntilScrollStops() {
     if (this._scrollSettleTimer) clearTimeout(this._scrollSettleTimer)
+    // 2000ms keeps suppression alive comfortably across any
+    // animation duration — including smooth scrolls that fire
+    // scroll events with sparse intervals (>500ms between frames
+    // is rare but not impossible under load). Every renew resets
+    // this, so a 16ms-cadence smooth scroll never lets the timer
+    // expire; the only release path is "scroll events have stopped
+    // for a full 2 seconds", which only happens when the animation
+    // is genuinely done.
     this._scrollSettleTimer = setTimeout(() => {
       this._scrollSettleTimer = null
       this._suppressionScrollRenew = false
-    }, 500)
+    }, 2000)
   }
 
   // Wraps `window.dispatchEvent("matrix:focus-changed")` so every
