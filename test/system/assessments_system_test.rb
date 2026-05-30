@@ -370,26 +370,39 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # First, scroll enough that the hero compacts and the document
       # finishes reflowing.
       page.execute_script("window.scrollTo(0, 300)")
-      sleep 0.4
+      sleep 0.6
       # Then iterate until cat2's section sits a few px inside the
       # active-detection threshold (header bottom). Re-measuring on each
       # pass absorbs any layout shift caused by the hero's scroll-driven
       # collapse — we want a stable end state, not a one-shot scroll.
-      3.times do
+      5.times do
         page.execute_script(<<~JS)
           var s = document.getElementById('category-#{@cat2_id}');
           var h = document.getElementById('assessment-sticky-header');
           var target = s.getBoundingClientRect().top + window.scrollY - h.offsetHeight - 4;
           window.scrollTo(0, target);
         JS
-        sleep 0.3
+        sleep 0.4
       end
 
-      # The chip for the second category should be the active one
-      active = page.evaluate_script(
-        "(function() { var c = document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]'); " \
-        "return c && c.getAttribute('aria-current') === 'page'; })()"
-      )
+      # Poll for aria-current to land — the category-nav controller
+      # updates aria-current on scroll (RAF-coalesced), and its
+      # _suppressActiveUpdateUntil window can briefly defer the update
+      # after the synthetic scrollTo bursts above. Bound by Capybara's
+      # default wait so a true regression still fails fast.
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) +
+                 Capybara.default_max_wait_time
+      active = false
+      loop do
+        active = page.evaluate_script(
+          "(function() { var c = document.querySelector('nav#category-tabs [data-category-id=\"#{@cat2_id}\"]'); " \
+          "return c && c.getAttribute('aria-current') === 'page'; })()"
+        )
+        break if active
+        break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.1
+      end
       assert active,
         "Second category chip should be marked aria-current when its section is in view"
     end
@@ -776,12 +789,29 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # Slow scroll: a small step that crosses the compact threshold (80).
       page.execute_script("window.scrollTo(0, 90)")
-      sleep 0.4
+      # On CI the CSS scroll-driven hero collapse can transiently nudge
+      # the scroll position downward by ~50px before settling. Wait for
+      # it to actually settle — poll until scrollY stabilises across
+      # two consecutive samples 100ms apart — instead of sampling once
+      # mid-animation.
+      stable = nil
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) +
+                 Capybara.default_max_wait_time
+      loop do
+        a = page.evaluate_script("window.scrollY")
+        sleep 0.1
+        b = page.evaluate_script("window.scrollY")
+        if a == b
+          stable = b
+          break
+        end
+        break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+      end
 
       visible_y = page.evaluate_script(
         "document.getElementById('#{below_hero_id}').getBoundingClientRect().top"
       )
-      scroll_y = page.evaluate_script("window.scrollY")
+      scroll_y = stable || page.evaluate_script("window.scrollY")
 
       # After the scroll + compact, the user's scroll position should
       # NOT have snapped back to (or near) zero.
