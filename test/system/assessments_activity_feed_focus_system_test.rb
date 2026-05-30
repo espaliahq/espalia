@@ -479,6 +479,10 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
       wait_for_stimulus "category-nav"
+      # Wait for the eager-loaded matrix turbo-frame to finish its fetch
+      # — the frame replacement disconnects+reconnects the matrix
+      # controller, losing the suppression state we set below.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       # category-nav.scrollTo fires a smooth scroll AND schedules a
       # 600ms-later settle scroll. matrix's auto-suppression releases
       # 250ms after the last scroll event, so the settle scroll can race
@@ -641,6 +645,10 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     should "stamp data-focused on the clicked card and clear it elsewhere" do
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
+      # Wait for the eager-loaded matrix turbo-frame to finish its fetch
+      # before locking — the frame replacement disconnects+reconnects
+      # the matrix controller, losing the suppression state.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       # The scroll-driven picker can race the test's assertion window
       # if any layout shift (CSS scroll-driven hero collapse, late frame
       # load) fires a scroll event after click_card_header returns —
