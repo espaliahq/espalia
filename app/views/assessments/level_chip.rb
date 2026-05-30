@@ -52,9 +52,9 @@ class Views::Assessments::LevelChip < Views::Base
     # focus outline on Windows). Don't add `bg-transparent` / `text-
     # inherit` here — they're same-specificity utilities that win the
     # cascade against the chip_bg colours we actually want to paint
-    # (the class-string still lists bg-green-200 but rgba(0,0,0,0)
-    # paints). Tailwind preflight already neutralises the UA button
-    # background; the chip_bg utility paints on top.
+    # (the class-string still resolves to e.g. `bg-green-500` but
+    # rgba(0,0,0,0) paints). Tailwind preflight already neutralises
+    # the UA button background; the chip_bg utility paints on top.
     base = "appearance-none " \
            "relative flex flex-col items-center justify-center " \
            "h-12 flex-1 min-w-[60px] rounded-lg cursor-pointer " \

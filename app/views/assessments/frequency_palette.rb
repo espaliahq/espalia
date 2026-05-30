@@ -20,7 +20,7 @@ module Views::Assessments::FrequencyPalette
       label:    "None",
       phrase:   "Never",
       chip_bg:  "bg-red-500 dark:bg-red-400",
-      chip_txt: "text-white dark:text-red-950",
+      chip_txt: "text-red-950",
       pill_bg:  "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
       dot:      "bg-red-500 dark:bg-red-400"
     },
@@ -28,7 +28,7 @@ module Views::Assessments::FrequencyPalette
       label:    "Some",
       phrase:   "Some of the time",
       chip_bg:  "bg-orange-500 dark:bg-orange-400",
-      chip_txt: "text-white dark:text-orange-950",
+      chip_txt: "text-orange-950",
       pill_bg:  "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300",
       dot:      "bg-orange-500 dark:bg-orange-400"
     },
@@ -36,7 +36,7 @@ module Views::Assessments::FrequencyPalette
       label:    "Most",
       phrase:   "Most of the time",
       chip_bg:  "bg-amber-500 dark:bg-amber-400",
-      chip_txt: "text-white dark:text-amber-950",
+      chip_txt: "text-amber-950",
       pill_bg:  "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300",
       dot:      "bg-amber-500 dark:bg-amber-400"
     },
@@ -44,7 +44,7 @@ module Views::Assessments::FrequencyPalette
       label:    "Consistently",
       phrase:   "Consistently",
       chip_bg:  "bg-green-500 dark:bg-green-400",
-      chip_txt: "text-white dark:text-green-950",
+      chip_txt: "text-green-950",
       pill_bg:  "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300",
       dot:      "bg-green-500 dark:bg-green-400"
     }
