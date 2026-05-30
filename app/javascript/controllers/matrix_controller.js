@@ -999,7 +999,7 @@ export default class extends BaseController {
     this._scrollSettleTimer = setTimeout(() => {
       this._scrollSettleTimer = null
       this._suppressionScrollRenew = false
-    }, 250)
+    }, 500)
   }
 
   // Wraps `window.dispatchEvent("matrix:focus-changed")` so every
@@ -1042,6 +1042,11 @@ export default class extends BaseController {
           this._intersectingCards.delete(entry.target)
         }
       })
+      // Layout-shift-driven IO callbacks during a smooth scroll (the
+      // CSS scroll-driven hero collapse rewrites positions even after
+      // the scroll event has fired) keep the external-focus suppression
+      // alive until the layout truly settles.
+      if (this._suppressionScrollRenew) this.#renewSuppressionUntilScrollStops()
       this.#scheduleCapabilityScrollUpdate()
     }
 
@@ -1119,7 +1124,7 @@ export default class extends BaseController {
     // and surprise the user (page load shouldn't make the activity
     // sidebar narrow on its own). Wait for at least one real scroll.
     if (!this._sawUserScroll) return
-    if (this._intersectingCards.size === 0) return
+    if (!this.hasCardTarget) return
 
     const stickyH = this.#stickyHeaderHeight()
     const viewportH = window.innerHeight
@@ -1139,10 +1144,19 @@ export default class extends BaseController {
     // screen above, only its bottom edge peeking in. Focus would jump
     // to a card the user couldn't yet see. Area-based picking removes
     // the asymmetry entirely.
+    //
+    // Iterates `cardTargets` directly rather than the
+    // IntersectionObserver-maintained `_intersectingCards` set so the
+    // picker doesn't depend on IO callback timing. On slow CI runners
+    // the IO callback can fire arbitrarily late, leaving the picker
+    // with a stale (or empty) candidate set when the test asserts.
+    // The IO is still useful as the scroll-event flusher (it triggers
+    // `#scheduleCapabilityScrollUpdate`); it just isn't load-bearing
+    // for which cards the picker considers.
     let best = null
     let bestArea = 0
 
-    this._intersectingCards.forEach(card => {
+    this.cardTargets.forEach(card => {
       const rect = card.getBoundingClientRect()
       const visibleTop = Math.max(rect.top, stickyH)
       const visibleBottom = Math.min(rect.bottom, viewportH)
