@@ -38,8 +38,9 @@ class PersonDevelopment::Aggregate
     @current_cycle_id = nil
     @alignment_started = false
     @alignment_completed = false
-    @self_ratings = {}   # [stable_id, level_ordinal] => frequency
+    @self_ratings = {}    # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
+    @aligned_ratings = {} # [stable_id, level_ordinal] => frequency
     @evidence = {}       # evidence_id => { capability_stable_id:, level_ordinal:, status: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
@@ -379,6 +380,34 @@ class PersonDevelopment::Aggregate
       aligned_frequency: aligned_frequency,
       cycle_id: cycle_id,
       comment: comment
+    }))
+  end
+
+  # Clears a previous alignment rating at a specific level.
+  #
+  # Symmetric counterpart to {#clear_self_rating} / {#clear_manager_rating}.
+  # During the alignment phase, either party can undo an alignment they
+  # set by re-clicking the same value in the inline pill — the
+  # controller treats a "post the same frequency back" submission as a
+  # clear. Refuses if alignment has already been completed for the cycle
+  # (in which case all values are frozen).
+  #
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being cleared
+  # @param cycle_id [String] UUID of the cycle this alignment belongs to
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not
+  #   started, alignment already completed, or no prior alignment for this cell
+  def clear_alignment_rating(capability_stable_id, level_ordinal:, cycle_id:)
+    ensure_in_cycle!(cycle_id)
+    raise "Alignment has not been started for this cycle" unless @alignment_started
+    raise "Alignment has been completed for this cycle" if @alignment_completed
+    raise "No alignment exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
+      @aligned_ratings.key?([ capability_stable_id, level_ordinal ])
+
+    apply(PersonDevelopment::Events::AlignmentCleared.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      cycle_id: cycle_id
     }))
   end
 
@@ -779,8 +808,13 @@ class PersonDevelopment::Aggregate
     @manager_ratings.delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
   end
 
-  on PersonDevelopment::Events::AssessmentAligned do |_event|
-    # Alignment is persisted via projection; no aggregate state needed
+  on PersonDevelopment::Events::AssessmentAligned do |event|
+    @aligned_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
+      event.data[:aligned_frequency]
+  end
+
+  on PersonDevelopment::Events::AlignmentCleared do |event|
+    @aligned_ratings.delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
   end
 
   on PersonDevelopment::Events::EvidenceRecorded do |event|

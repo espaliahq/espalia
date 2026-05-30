@@ -51,6 +51,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::ManagerRatingCleared,
       PersonDevelopment::Events::AlignmentStarted,
       PersonDevelopment::Events::AssessmentAligned,
+      PersonDevelopment::Events::AlignmentCleared,
       PersonDevelopment::Events::FullAlignmentCompleted,
       PersonDevelopment::Events::FrameworkVersionMigrated
     ]
@@ -93,6 +94,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::ManagerRatingCleared then handle_manager_rating_cleared(event)
     when PersonDevelopment::Events::AlignmentStarted then handle_alignment_started(event)
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
+    when PersonDevelopment::Events::AlignmentCleared then handle_alignment_cleared(event)
     when PersonDevelopment::Events::FullAlignmentCompleted then handle_full_alignment_completed(event)
     when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
     end
@@ -296,6 +298,14 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.aligned_frequency = event.data[:aligned_frequency]
     rating.aligned_comment = event.data[:comment]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
+    rating.save!
+    broadcast_assessment_sync(event)
+  end
+
+  def handle_alignment_cleared(event)
+    rating = find_or_init_rating(event)
+    rating.aligned_frequency = nil
+    rating.aligned_comment = nil
     rating.save!
     broadcast_assessment_sync(event)
   end

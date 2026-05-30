@@ -38,11 +38,30 @@ class Assessments::AlignmentRatingsController < ApplicationController
 
     handler = PersonDevelopment::CommandHandler.new
 
-    handler.align_assessment(
-      @assignment.person_id, @assignment.framework_id, capability_stable_id,
-      level_ordinal: level_ordinal, aligned_frequency: frequency,
-      cycle_id: cycle.cycle_id, comment: comment
+    existing = AssessmentLevelRating.find_by(
+      cycle_id: cycle.cycle_id,
+      person_id: @assignment.person_id,
+      framework_id: @assignment.framework_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal
     )
+
+    if existing&.aligned_frequency == frequency
+      # Untoggle: posting the existing value back via the pill's "Clear
+      # rating" item drops the alignment. Mirrors the self/manager
+      # endpoints' untoggle path so the inline pill reads consistently
+      # across contexts.
+      handler.clear_alignment_rating(
+        @assignment.person_id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
+      )
+    else
+      handler.align_assessment(
+        @assignment.person_id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, aligned_frequency: frequency,
+        cycle_id: cycle.cycle_id, comment: comment
+      )
+    end
 
     respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id])
   rescue RuntimeError => e

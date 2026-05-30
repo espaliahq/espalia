@@ -483,6 +483,56 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#clear_alignment_rating" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(@cycle_id, 1)
+      @aggregate.start_alignment(@cycle_id, started_by_id: SecureRandom.uuid_v7)
+      @cap_sid = SecureRandom.uuid_v7
+      @aggregate.align_assessment(@cap_sid, level_ordinal: 3, aligned_frequency: "consistent",
+        cycle_id: @cycle_id)
+    end
+
+    should "apply AlignmentCleared event with cycle_id" do
+      @aggregate.clear_alignment_rating(@cap_sid, level_ordinal: 3, cycle_id: @cycle_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::AlignmentCleared, event
+      assert_equal @cap_sid, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal @cycle_id, event.data[:cycle_id]
+    end
+
+    should "raise if no prior alignment exists for the cell" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.clear_alignment_rating(@cap_sid, level_ordinal: 4, cycle_id: @cycle_id)
+      end
+      assert_match /No alignment exists/, err.message
+    end
+
+    should "raise if alignment has not been started" do
+      aggregate = PersonDevelopment::Aggregate.new
+      aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      cycle_id = SecureRandom.uuid_v7
+      aggregate.join_cycle(cycle_id, 1)
+
+      err = assert_raises(RuntimeError) do
+        aggregate.clear_alignment_rating(SecureRandom.uuid_v7, level_ordinal: 1, cycle_id: cycle_id)
+      end
+      assert_match /Alignment has not been started/, err.message
+    end
+
+    should "raise if alignment has been completed (frozen)" do
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: SecureRandom.uuid_v7)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.clear_alignment_rating(@cap_sid, level_ordinal: 3, cycle_id: @cycle_id)
+      end
+      assert_match /Alignment has been completed/, err.message
+    end
+  end
+
   context "#start_alignment" do
     setup do
       @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)

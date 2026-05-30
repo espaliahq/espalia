@@ -244,6 +244,21 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Clears a previous alignment rating for a capability at a specific level.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level being cleared
+  # @param cycle_id [String] UUID of the cycle this alignment belongs to
+  def clear_alignment_rating(person_id, framework_id, capability_stable_id,
+                             level_ordinal:, cycle_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.clear_alignment_rating(capability_stable_id,
+        level_ordinal: level_ordinal, cycle_id: cycle_id)
+    end
+  end
+
   # Marks alignment complete for the current cycle.
   #
   # After this lands, all ratings (including aligned values) are frozen.

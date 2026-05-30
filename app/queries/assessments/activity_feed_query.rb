@@ -33,7 +33,8 @@ class Assessments::ActivityFeedQuery
     PersonDevelopment::Events::ManagerRated           => "manager_rated",
     PersonDevelopment::Events::ManagerRatingRevised   => "manager_rating_revised",
     PersonDevelopment::Events::ManagerRatingCleared   => "manager_rating_cleared",
-    PersonDevelopment::Events::AssessmentAligned      => "assessment_aligned"
+    PersonDevelopment::Events::AssessmentAligned      => "assessment_aligned",
+    PersonDevelopment::Events::AlignmentCleared       => "alignment_cleared"
   }.freeze
 
   # Evidence relinks live on the same RES stream as ratings — they're
