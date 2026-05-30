@@ -175,58 +175,76 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # Scroll the page so the named card occupies the majority of the
+  # content band (the viewport area below the sticky chrome). After
+  # this, the area-based picker in `matrix#updateFocusedCapabilityFromScroll`
+  # should pick the named card as focused.
+  #
+  # Programmatic scrollTo in headless Chrome doesn't reliably emit a
+  # scroll event, so set the user-scroll flag on the controller
+  # directly — real users always trip it on their first scroll.
+  #
+  # Two-pass scroll: pass 1 triggers the CSS scroll-driven hero collapse
+  # (which shrinks the doc height by ~120px). A single pass that
+  # computes from pre-collapse layout misses by exactly that delta.
+  # Pass 2 re-measures post-collapse and lands the target.
+  def scroll_card_into_band(stable_id, offset_below_chrome: 8)
+    page.execute_script(<<~JS)
+      const matrix = document.querySelector("[data-controller~='matrix']");
+      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
+      if (ctrl) ctrl._sawUserScroll = true;
+      window.scrollTo({ top: 500, behavior: "instant" });
+    JS
+    sleep 0.2
+    page.execute_script(<<~JS)
+      const card = document.querySelector(
+        "[data-matrix-target='card'][data-capability-stable-id='#{stable_id}']"
+      );
+      const stickyH = parseFloat(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--sticky-header-h")
+      ) || 0;
+      const targetDocTop =
+        card.getBoundingClientRect().top + window.scrollY - stickyH - #{offset_below_chrome};
+      window.scrollTo({ top: targetDocTop, behavior: "instant" });
+    JS
+  end
+
   context "scroll-driven capability focus" do
-    should "shift the focused capability to whichever card the user has scrolled past the sticky header" do
-      # Smaller viewport so cap2 starts off-screen and a real scroll
-      # is required to bring it past the sticky-header threshold.
+    should "track the card with the most visible area in the content band as the user scrolls down" do
       page.driver.browser.manage.window.resize_to(900, 600)
 
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
-      # Bypass the bootstrap-suppression gate
-      # (`#updateFocusedCapabilityFromScroll` no-ops on the observer's
-      # connect-time callback so page load doesn't auto-narrow the
-      # activity feed). Programmatic scrollTo in headless Chrome doesn't
-      # reliably emit a scroll event, so set the user-scroll flag
-      # directly — real users always trip it on their first scroll.
-      #
-      # Two-pass scroll: pass 1 triggers the CSS scroll-driven hero
-      # collapse, which shrinks the doc height by ~120px. A single pass
-      # that computes from pre-collapse layout misses by exactly that
-      # delta. Pass 2 re-measures post-collapse and lands cap2 in the
-      # observer's threshold band.
-      page.execute_script(<<~JS)
-        const matrix = document.querySelector("[data-controller~='matrix']");
-        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
-        if (ctrl) ctrl._sawUserScroll = true;
-        const cap2 = document.querySelector(
-          "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}']"
-        );
-        // First pass: trigger hero collapse.
-        window.scrollTo({ top: 500, behavior: "instant" });
-      JS
-      sleep 0.2
-      page.execute_script(<<~JS)
-        const cap2 = document.querySelector(
-          "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}']"
-        );
-        const stickyH = parseFloat(
-          getComputedStyle(document.documentElement)
-            .getPropertyValue("--sticky-header-h")
-        ) || 0;
-        // Second pass: re-measure against post-collapse layout, land
-        // cap2.top at stickyH + 8 so it's inside the observer's
-        // threshold band (stickyH + 16).
-        const targetDocTop = cap2.getBoundingClientRect().top + window.scrollY - stickyH - 8;
-        window.scrollTo({ top: targetDocTop, behavior: "instant" });
-      JS
+      scroll_card_into_band(@cap2_stable)
 
       # IntersectionObserver fires async; the focus update is scheduled
       # via requestAnimationFrame. Wait for the data-focused attribute
       # to land on cap2.
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
       assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='false']"
+    end
+
+    should "switch focus symmetrically when scrolling back up — area-based, not threshold-based" do
+      page.driver.browser.manage.window.resize_to(900, 600)
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      # First scroll all the way down to cap2 — establishes cap2 focus.
+      scroll_card_into_band(@cap2_stable)
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+
+      # Now scroll back up to a position where cap1 covers most of the
+      # band — area-based picker should switch BACK to cap1. The previous
+      # threshold-based rule would keep cap2 focused until its top
+      # crossed back above the sticky-chrome line, leaving focus stuck
+      # on a card whose visual share of the screen had already shrunk.
+      scroll_card_into_band(@cap1_stable)
+
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap1_stable}'][data-focused='true']"
+      assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
     end
   end
 

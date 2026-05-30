@@ -876,15 +876,20 @@ export default class extends BaseController {
       this.#scheduleCapabilityScrollUpdate()
     }
 
-    // `rootMargin` top is dynamic — sticky chrome height changes when
-    // the hero collapses. We read it from CSS at observation time;
-    // re-creating the observer on every header-height change would be
-    // overkill, and the natural cadence of intersections during scroll
-    // means we re-pick frequently anyway.
+    // `rootMargin: 0` so the observer fires the moment any portion of
+    // a card touches the viewport. Area-based picking needs every
+    // visible card in the candidate set; a tighter margin would hide
+    // cards in the lower viewport from the picker, biasing it toward
+    // already-scrolled-past cards.
+    //
+    // `threshold` is a sequence — fire on the way in (any pixel
+    // visible), at 25% / 50% visible, and on the way out. The
+    // requestAnimationFrame coalescer in `#scheduleCapabilityScrollUpdate`
+    // collapses high-frequency events to one re-pick per frame.
     this._capabilityIntersectionObserver = new IntersectionObserver(onIntersection, {
       root: null,
-      rootMargin: "0px 0px -40% 0px",
-      threshold: [0, 0.25, 0.5]
+      rootMargin: "0px",
+      threshold: [0, 0.25, 0.5, 0.75, 1]
     })
 
     this.cardTargets.forEach(card => this._capabilityIntersectionObserver.observe(card))
@@ -935,33 +940,36 @@ export default class extends BaseController {
     if (this._intersectingCards.size === 0) return
 
     const stickyH = this.#stickyHeaderHeight()
-    const threshold = stickyH + 16
+    const viewportH = window.innerHeight
 
+    // Pick the card with the most visible area in the "content band" —
+    // the viewport strip below the sticky chrome. Symmetric for scroll
+    // up and down: the focused capability is always whichever card the
+    // user has most of on screen.
+    //
+    // The previous "deepest card past sticky-chrome bottom" heuristic
+    // was symmetric in mechanism but asymmetric in perception. Scrolling
+    // DOWN, the trigger fired when the next card's top crossed the
+    // chrome bottom — natural, since the new card was just appearing
+    // there. Scrolling UP, the same trigger fired when the current
+    // card's top crossed back below the chrome bottom, but at that
+    // moment the "next" (returning) card could still be mostly off-
+    // screen above, only its bottom edge peeking in. Focus would jump
+    // to a card the user couldn't yet see. Area-based picking removes
+    // the asymmetry entirely.
     let best = null
-    let bestTop = -Infinity
+    let bestArea = 0
 
     this._intersectingCards.forEach(card => {
-      const top = card.getBoundingClientRect().top
-      // Pick the deepest card whose top has scrolled past the threshold.
-      // Mirrors `category_nav_controller`'s active-section heuristic so
-      // the focused capability matches what the user has just scrolled
-      // under the sticky chrome — the first card the eye lands on.
-      if (top <= threshold && top > bestTop) {
-        bestTop = top
+      const rect = card.getBoundingClientRect()
+      const visibleTop = Math.max(rect.top, stickyH)
+      const visibleBottom = Math.min(rect.bottom, viewportH)
+      const area = Math.max(0, visibleBottom - visibleTop)
+      if (area > bestArea) {
+        bestArea = area
         best = card
       }
     })
-
-    // Fall back to the topmost intersecting card when nothing has
-    // crossed the threshold yet (e.g. very top of the page, hero
-    // expanded). Without this we'd leave focus on whatever was last
-    // set instead of converging on what's visible.
-    if (!best) {
-      this._intersectingCards.forEach(card => {
-        const top = card.getBoundingClientRect().top
-        if (best == null || top < best.getBoundingClientRect().top) best = card
-      })
-    }
 
     if (!best) return
 
