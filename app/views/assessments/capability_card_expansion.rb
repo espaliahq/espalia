@@ -85,12 +85,13 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
 
     div(class: "mb-3 text-sm text-gray-700 dark:text-gray-300") do
       span { @cell_data[:expectation].description.to_s.strip }
-      # `mr-6` lives on the Demonstrates+pill wrapper rather than on
-      # `ml-*` of the secondary so that when the line wraps on mobile
-      # the trailing margin stays at the end of the pill's line and
-      # the secondary starts flush against the next line's left edge
-      # (an `ml-*` on the secondary would re-indent it after wrap).
-      span(class: "whitespace-nowrap ml-2 mr-6") do
+      # `mr-3` is a sentence-pause's worth of gap — enough to set the
+      # pill apart from the secondary without feeling disconnected.
+      # Living on the pill wrapper (not as `ml-*` on the secondary)
+      # means the trailing margin sits at the end of the pill's line
+      # when the secondary wraps below on mobile, so the secondary
+      # starts flush against the new line's left edge.
+      span(class: "whitespace-nowrap ml-2 mr-3") do
         span(class: "text-gray-500 dark:text-gray-400 mr-1") { "Demonstrates:" }
         # Rating controllers replace `#rating-<stable>-<ord>` after every
         # POST — the id has to live on the element
