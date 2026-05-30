@@ -510,6 +510,10 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
 
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
+      # Frame must finish loading before scrolling — otherwise
+      # `#syncFrameUrlToBrowser` fires after the picker has updated
+      # the URL and clobbers the change.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
       scroll_card_into_band(@cap2_stable)
 
@@ -520,8 +524,31 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       url_synced = wait_until_js do
         page.current_url.include?("capability=#{@cap2_stable}")
       end
-      assert url_synced,
-        "expected scroll-driven focus to update ?capability= in URL; got #{page.current_url}"
+      unless url_synced
+        # Surface the picker's view of the world to the CI log.
+        diag = page.execute_script(<<~JS)
+          const matrixEl = document.querySelector("[data-controller~='matrix']");
+          const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrixEl, "matrix");
+          const cards = (ctrl?.cardTargets || []).map(c => {
+            const r = c.getBoundingClientRect();
+            return { stable: c.dataset.capabilityStableId, top: r.top, bottom: r.bottom };
+          });
+          const stickyH = parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue("--sticky-header-h")
+          ) || 0;
+          return JSON.stringify({
+            url: window.location.href,
+            scrollY: window.scrollY,
+            stickyH: stickyH,
+            viewportH: window.innerHeight,
+            currentFocus: ctrl?.currentFocus,
+            sawUserScroll: ctrl?._sawUserScroll,
+            suppressionScrollRenew: ctrl?._suppressionScrollRenew,
+            cards: cards
+          });
+        JS
+        flunk "scroll-driven focus did not update URL to cap2; diag=#{diag}"
+      end
 
       visit page.current_url
       wait_for_stimulus "matrix"

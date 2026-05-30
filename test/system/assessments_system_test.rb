@@ -241,6 +241,13 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
       assert_selector "section#category-#{@cat2_id}"
+      # Wait for the matrix turbo-frame to be fully loaded before
+      # clicking. matrix_controller's `turbo:frame-load` handler
+      # (`#syncFrameUrlToBrowser`) reads `category` from the frame's
+      # src and writes it onto the browser URL — if it fires AFTER the
+      # chip click, it overwrites the `?category=` that the click just
+      # pushed. Slow CI runners hit this race routinely.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
       page.execute_script(
         "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
