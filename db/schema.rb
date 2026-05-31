@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_31_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_31_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -35,6 +35,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_31_000003) do
   create_table "assessment_cycle_progress", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "aligned_at"
     t.uuid "aligned_by_id"
+    t.integer "aligned_framework_version"
     t.datetime "alignment_started_at"
     t.uuid "alignment_started_by_id"
     t.datetime "created_at", null: false

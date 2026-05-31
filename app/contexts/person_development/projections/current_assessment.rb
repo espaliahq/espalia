@@ -32,9 +32,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     on rating rows for `same`/`evolved` mappings and stamps
   #     `migration_status`/`reassessment_reason` for the rest.
   #
-  # NOT bumped for `manager_rated_by_id` / `aligned_by_id`: historical
-  # ManagerRated/Revised and AssessmentAligned events carry no actor id, so a
-  # rebuild writes nil into the new columns — identical to their defaults. New
+  # NOT bumped for `manager_rated_by_id` / `aligned_by_id` /
+  # `aligned_framework_version`: historical ManagerRated/Revised,
+  # AssessmentAligned, and FullAlignmentCompleted events carry no value for
+  # these, so a rebuild writes nil — identical to the column defaults. New
   # events populate them via the live subscriber. Per the bump rules, a rebuild
   # that reproduces identical read-model state does not warrant a version bump.
   CODE_VERSION = 2
@@ -345,7 +346,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     progress.update!(
       status: "aligned",
       aligned_at: now,
-      aligned_by_id: event.data[:completed_by_id]
+      aligned_by_id: event.data[:completed_by_id],
+      aligned_framework_version: event.data[:framework_version]
     )
     broadcast_assessment_sync(event)
   end
