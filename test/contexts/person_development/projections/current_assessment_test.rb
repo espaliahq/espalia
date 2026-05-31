@@ -558,6 +558,38 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
+    should "freeze rows of an aligned cycle while migrating in-progress cycles" do
+      aligned_cycle_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_cycle, :closed, tenant: @tenant, cycle_id: aligned_cycle_id,
+          framework_id: @framework_id, framework_version: 1)
+        AssessmentCycleProgress.create!(tenant: @tenant, cycle_id: aligned_cycle_id,
+          person_id: @person_id, status: "aligned", aligned_at: Time.current)
+        # Frozen row in the completed (aligned) cycle.
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: aligned_cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 3, self_rated_frequency: "consistent")
+        # Migratable row in the in-progress cycle (@cycle_id, progress not aligned).
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 3, self_rated_frequency: "consistent")
+      end
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "same", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        frozen = AssessmentLevelRating.find_by(cycle_id: aligned_cycle_id)
+        assert_equal @from_stable_id, frozen.capability_stable_id,
+          "aligned cycle's rating must NOT be re-keyed"
+        migrated = AssessmentLevelRating.find_by(cycle_id: @cycle_id)
+        assert_equal @to_stable_id, migrated.capability_stable_id,
+          "in-progress cycle's rating should still migrate"
+      end
+    end
+
     should "flag rating rows as evolved when requires_reassessment is true" do
       ActsAsTenant.with_tenant(@tenant) do
         create(:assessment_level_rating, tenant: @tenant,

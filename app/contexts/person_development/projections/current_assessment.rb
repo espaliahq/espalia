@@ -31,14 +31,17 @@ class PersonDevelopment::Projections::CurrentAssessment
   # 2 — handles `FrameworkVersionMigrated`: rewrites `capability_stable_id`
   #     on rating rows for `same`/`evolved` mappings and stamps
   #     `migration_status`/`reassessment_reason` for the rest.
+  # 3 — `FrameworkVersionMigrated` now FREEZES completed assessments: rating
+  #     rows belonging to a cycle the person has aligned are no longer
+  #     re-keyed/flagged. A rebuild therefore reverts any completed-cycle rows
+  #     that earlier code had migrated — so this bump requires a rebuild
+  #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
   #
-  # NOT bumped for `manager_rated_by_id` / `aligned_by_id` /
+  # Not bumped for `manager_rated_by_id` / `aligned_by_id` /
   # `aligned_framework_version`: historical ManagerRated/Revised,
   # AssessmentAligned, and FullAlignmentCompleted events carry no value for
-  # these, so a rebuild writes nil — identical to the column defaults. New
-  # events populate them via the live subscriber. Per the bump rules, a rebuild
-  # that reproduces identical read-model state does not warrant a version bump.
-  CODE_VERSION = 2
+  # these, so a rebuild writes nil — identical to the column defaults.
+  CODE_VERSION = 3
 
   # All event classes this projection handles.
   #
@@ -119,18 +122,28 @@ class PersonDevelopment::Projections::CurrentAssessment
   #   until the future relink/dismiss UI surfaces it.
   # * `new` → no predecessor row to touch.
   #
+  # **Completed assessments are frozen**: rows belonging to a cycle this person
+  # has aligned are never re-keyed or flagged — a completed assessment is an
+  # immutable record, viewed as-at-completion (see the freeze-vs-migrate
+  # decision). The frozen set is read from `AssessmentCycleProgress` (status
+  # "aligned"), which this projection also owns, so it's replay-safe: a cycle
+  # aligned BEFORE this migration in stream order is frozen; one aligned after
+  # is migrated normally (it was in-progress when the version published).
+  #
   # Idempotent: never downgrades an existing flag (the
   # `WHERE migration_status = 'not_flagged'` clause). Re-keying an
   # already-re-keyed row is a no-op (the WHERE clause won't match).
   def handle_framework_version_migrated(event)
     person_id = event.metadata[:person_id]
     framework_id = event.data[:framework_id]
+    frozen_cycle_ids = aligned_cycle_ids(person_id)
 
     event.data[:mappings].each do |mapping|
       scope = AssessmentLevelRating.where(
         person_id: person_id, framework_id: framework_id,
         capability_stable_id: mapping[:from_stable_id]
       )
+      scope = scope.where.not(cycle_id: frozen_cycle_ids) if frozen_cycle_ids.any?
 
       case mapping[:mapping_type]
       when "same"
@@ -138,12 +151,13 @@ class PersonDevelopment::Projections::CurrentAssessment
       when "evolved"
         scope.update_all(capability_stable_id: mapping[:to_stable_id])
         if mapping[:requires_reassessment]
-          AssessmentLevelRating
+          flag_scope = AssessmentLevelRating
             .where(person_id: person_id, framework_id: framework_id,
                    capability_stable_id: mapping[:to_stable_id],
                    migration_status: "not_flagged")
-            .update_all(migration_status: "flagged",
-                        reassessment_reason: "expectations_evolved")
+          flag_scope = flag_scope.where.not(cycle_id: frozen_cycle_ids) if frozen_cycle_ids.any?
+          flag_scope.update_all(migration_status: "flagged",
+                                reassessment_reason: "expectations_evolved")
         end
       when "archived"
         scope.where(migration_status: "not_flagged")
@@ -157,6 +171,18 @@ class PersonDevelopment::Projections::CurrentAssessment
         # No predecessor data on this stream — nothing to migrate.
       end
     end
+  end
+
+  # Cycle ids this person has aligned (completed) — their rating rows are
+  # frozen from migration. Read from the projection's own
+  # `AssessmentCycleProgress` table (status "aligned"), keeping the frozen-set
+  # determination replay-safe. A cycle_id is unique to a framework, so no
+  # framework filter is needed — the caller's scope is already framework-bound.
+  #
+  # @param person_id [String]
+  # @return [Array<String>] frozen cycle ids
+  def aligned_cycle_ids(person_id)
+    AssessmentCycleProgress.where(person_id: person_id, status: "aligned").pluck(:cycle_id)
   end
 
   def handle_assigned(event)
