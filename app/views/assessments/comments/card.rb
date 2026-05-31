@@ -15,18 +15,23 @@ class Views::Assessments::Comments::Card < Views::Base
   # @param can_edit [Boolean]
   # @param can_delete [Boolean]
   # @param can_reply [Boolean] whether the viewer may post a reply on this thread
-  # @param indent [Boolean] true when rendering as a reply (visual indent)
+  # @param indent [Boolean] true for any reply — a single level of visual
+  #   indent. Depth beyond one is conveyed by the reply chip, not by
+  #   deeper nesting, so replies-of-replies share this same indent.
+  # @param reply_to [PersonDevelopmentComment, nil] the comment this one
+  #   answers, when it should be surfaced (i.e. the parent isn't the line
+  #   rendered directly above — see Thread#render_thread_tree). nil hides
+  #   the "↳ replying to" affordance.
   def initialize(comment:, assessment_id:, can_edit: false, can_delete: false,
-                 can_reply: false, indent: false)
+                 can_reply: false, indent: false, reply_to: nil)
     @comment = comment
     @assessment_id = assessment_id
     @can_edit = can_edit
     @can_delete = can_delete
-    # V1 thread depth is one level — replies-of-replies render as same-
-    # level replies (see Thread#render_thread_tree). To keep that
-    # invariant, only top-level comments expose a Reply affordance.
-    @can_reply = can_reply && @comment.parent_id.nil?
+    # Display is flat beyond one level — any comment on the cell can be replied to.
+    @can_reply = can_reply
     @indent = indent
+    @reply_to = reply_to
   end
 
   def view_template
@@ -41,6 +46,7 @@ class Views::Assessments::Comments::Card < Views::Base
         if @comment.deleted?
           deleted_body
         else
+          reply_context_chip if @reply_to
           header_line
           body_line
           reply_form if @can_reply
@@ -51,6 +57,30 @@ class Views::Assessments::Comments::Card < Views::Base
   end
 
   private
+
+  # Small "↳ replying to <author>" link shown when the answered comment
+  # isn't the one directly above. Clicking scrolls to and briefly
+  # highlights the parent so the reader can find it in the flat stream.
+  def reply_context_chip
+    a(
+      href: "#comment-#{@reply_to.id}",
+      class: "inline-flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500 " \
+             "hover:text-gray-600 dark:hover:text-gray-300",
+      title: "Replying to #{reply_to_author_name}",
+      data: {
+        action: "click->comments-thread#scrollToComment",
+        comments_thread_comment_id_param: @reply_to.id
+      }
+    ) do
+      plain "↳ replying to #{reply_to_author_name}"
+    end
+  end
+
+  def reply_to_author_name
+    return "a deleted comment" if @reply_to.deleted?
+
+    @reply_to.author&.name.to_s.strip.presence || "Unknown"
+  end
 
   def avatar_dot
     span(

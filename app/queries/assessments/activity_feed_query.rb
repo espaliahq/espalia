@@ -228,7 +228,7 @@ class Assessments::ActivityFeedQuery
       .for_person(@assignment.person_id)
       .for_framework(@assignment.framework_id)
       .where(commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL)
-      .includes(:author)
+      .includes(:author, parent: :author)
       .map do |comment|
         stable_id = comment.capability_stable_id
         Entry.new(

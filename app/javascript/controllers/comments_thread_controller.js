@@ -88,6 +88,20 @@ export default class extends BaseController {
     if (textarea) textarea.focus()
   }
 
+  // Scrolls to and briefly highlights the comment a "↳ replying to"
+  // chip points at, so the reader can jump to the answered comment in
+  // the flat thread without losing their place.
+  scrollToComment(event) {
+    const id = event.params.commentId
+    if (!id) return
+    const li = this.element.querySelector(`#comment-${CSS.escape(id)}`)
+    if (!li) return
+    event.preventDefault()
+    li.scrollIntoView({ behavior: "smooth", block: "center" })
+    li.classList.add("comment-flash")
+    setTimeout(() => li.classList.remove("comment-flash"), 1200)
+  }
+
   cancelReply(event) {
     const form = event.target.closest("[data-comments-thread-target='replyForm']")
     if (!form) return
