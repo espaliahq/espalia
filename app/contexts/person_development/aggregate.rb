@@ -135,11 +135,16 @@ class PersonDevelopment::Aggregate
   # @param new_version [Integer] newly published version
   # @param mappings [Array<Hash>] one entry per archived capability
   #   (see {PersonDevelopment::Events::FrameworkVersionMigrated} for shape)
-  # @raise [RuntimeError] if not assigned to this framework
+  # @raise [RuntimeError] if not assigned to this framework, or if the current
+  #   cycle's alignment is already completed (a completed assessment is an
+  #   immutable record and must not be migrated — see the freeze-vs-migrate
+  #   decision; the dispatching sync handler skips such participants so this
+  #   guard is defense-in-depth rather than the primary gate)
   def migrate_framework_version(framework_id, old_version, new_version, mappings)
     ensure_assigned!
     raise "Framework_id #{framework_id} does not match assignment" unless @framework_id == framework_id
     return if @last_migrated_to_version && @last_migrated_to_version >= new_version
+    raise "Cannot migrate a completed assessment cycle" if @alignment_completed
 
     apply(PersonDevelopment::Events::FrameworkVersionMigrated.new(data: {
       framework_id: framework_id,

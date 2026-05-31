@@ -68,6 +68,18 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @mappings, event.data[:mappings]
     end
 
+    should "refuse to migrate once the current cycle's alignment is completed" do
+      cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(cycle_id, 1)
+      @aggregate.start_alignment(cycle_id, started_by_id: SecureRandom.uuid_v7)
+      @aggregate.complete_alignment(cycle_id, completed_by_id: SecureRandom.uuid_v7)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.migrate_framework_version(@framework_id, 1, 2, @mappings)
+      end
+      assert_match(/completed assessment cycle/, err.message)
+    end
+
     should "raise when not assigned to the framework" do
       err = assert_raises(RuntimeError) do
         @aggregate.migrate_framework_version(SecureRandom.uuid_v7, 1, 2, @mappings)

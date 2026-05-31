@@ -73,6 +73,14 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSync
       .pluck(:person_id)
     return if assignments.empty?
 
+    # Skip participants whose current (open, still-enrolled) cycle has completed
+    # alignment: a completed assessment is frozen as-at-completion and must not
+    # migrate. The PersonDev aggregate also guards this (raising), but that
+    # raise runs inside the publish transaction — filtering here keeps one
+    # completed participant from rolling back the entire version publish.
+    assignments -= completed_alignment_person_ids(framework_id)
+    return if assignments.empty?
+
     name_by_stable_id = capability_names_for(mappings)
     from_ids = mappings.map(&:from_stable_id).uniq
 
@@ -125,6 +133,27 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSync
       .where(person_id: person_ids, framework_id: framework_id, capability_stable_id: from_ids)
       .group(:person_id, :capability_stable_id)
       .count
+  end
+
+  # Person ids whose current open, still-enrolled cycle for this framework has
+  # completed alignment — i.e. the PersonDev aggregate's `@alignment_completed`
+  # would be true, so migrating them would raise. Mirrors that condition from
+  # the read models (the sync handler runs live, never replayed).
+  #
+  # @param framework_id [String]
+  # @return [Array<String>] person ids to exclude from migration
+  def completed_alignment_person_ids(framework_id)
+    AssessmentCycleProgress
+      .joins("INNER JOIN assessment_cycles ac " \
+             "ON ac.cycle_id = assessment_cycle_progress.cycle_id")
+      .joins("INNER JOIN assessment_cycle_enrollments e " \
+             "ON e.cycle_id = assessment_cycle_progress.cycle_id " \
+             "AND e.person_id = assessment_cycle_progress.person_id")
+      .where("ac.framework_id = ? AND ac.status = ?", framework_id, "open")
+      .where.not("e.status = ?", "withdrawn")
+      .where(assessment_cycle_progress: { status: "aligned" })
+      .distinct
+      .pluck(:person_id)
   end
 
   def capability_names_for(mappings)
