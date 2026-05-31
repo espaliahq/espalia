@@ -216,7 +216,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     # rewrites doc height by ~120px. CI's headless Chrome is slower at
     # settling layout than dev machines; give it real headroom before
     # measuring positions for the second scroll.
-    sleep 0.5
+    sleep 0.6
     page.execute_script(<<~JS)
       // Force layout flush before measuring so the second scroll uses
       // post-collapse positions, not pre-collapse cached rects.
@@ -232,15 +232,43 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
         card.getBoundingClientRect().top + window.scrollY - stickyH - #{offset_below_chrome};
       window.scrollTo({ top: targetDocTop, behavior: "instant" });
     JS
-    # Let the final layout settle, then dispatch a synthetic scroll
-    # event so the picker fires once more against the SETTLED state.
-    # Without this, on slow CI runners the picker can fire against an
-    # intermediate frame mid-second-scroll and never re-fire (no more
-    # scroll events to trigger it) — leaving focus on the wrong card.
-    sleep 0.5
+    sleep 0.6
+    # Drive the picker explicitly against the settled layout. Clear the
+    # suppression timers so any stale "external focus in flight" state
+    # left by the connect-time dispatch can't keep the picker idle, then
+    # fire two scroll events one RAF apart — the first arms the picker,
+    # the second acts as a settle pass after the area calculation has
+    # had a tick to use the post-collapse rects.
     page.execute_script(<<~JS)
       void document.body.offsetHeight;
+      const matrix = document.querySelector("[data-controller~='matrix']");
+      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
+      if (ctrl) {
+        ctrl._capabilityFocusSuppressUntil = 0;
+        ctrl._suppressionScrollRenew = false;
+        ctrl._sawUserScroll = true;
+      }
       window.dispatchEvent(new Event("scroll"));
+      requestAnimationFrame(() => window.dispatchEvent(new Event("scroll")));
+    JS
+    sleep 0.3
+  end
+
+  # Locks the matrix scroll-driven capability picker for the rest of
+  # the test. Use after driving focus state directly via Stimulus
+  # (click_card_header, ctrl.focusChip, category-nav.scrollTo, etc.)
+  # when the test asserts on data-focused / currentFocus and a later
+  # scroll-driven re-pick would invalidate the assertion. The
+  # production controller would never sit suppressed this long — we
+  # only do it inside the test to isolate the assertion from the
+  # RAF/IntersectionObserver/settle-pass timing soup.
+  def lock_scroll_focus_picker
+    page.execute_script(<<~JS)
+      const matrix = document.querySelector("[data-controller~='matrix']");
+      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix");
+      if (ctrl) {
+        ctrl._capabilityFocusSuppressUntil = Number.MAX_SAFE_INTEGER;
+      }
     JS
   end
 
@@ -451,6 +479,17 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
       wait_for_stimulus "category-nav"
+      # Wait for the eager-loaded matrix turbo-frame to finish its fetch
+      # — the frame replacement disconnects+reconnects the matrix
+      # controller, losing the suppression state we set below.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      # category-nav.scrollTo fires a smooth scroll AND schedules a
+      # 600ms-later settle scroll. matrix's auto-suppression releases
+      # 250ms after the last scroll event, so the settle scroll can race
+      # the picker post-suppression and overwrite category focus with
+      # capability focus on the area-winner card. Lock the picker out
+      # so the assertion only sees the synchronously-applied state.
+      lock_scroll_focus_picker
 
       # Dispatch category-level focus via category_nav (as a chip click
       # would). The trigger fires `matrix:focus-changed` and a smooth
@@ -606,6 +645,18 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     should "stamp data-focused on the clicked card and clear it elsewhere" do
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
+      # Wait for the eager-loaded matrix turbo-frame to finish its fetch
+      # before locking — the frame replacement disconnects+reconnects
+      # the matrix controller, losing the suppression state.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      # The scroll-driven picker can race the test's assertion window
+      # if any layout shift (CSS scroll-driven hero collapse, late frame
+      # load) fires a scroll event after click_card_header returns —
+      # the picker then re-applies capability focus to whichever card
+      # is the area-winner and the second click_card_header's "back to
+      # category" state never lands. Lock the picker out for the
+      # duration of the test.
+      lock_scroll_focus_picker
 
       click_card_header(@cap2_stable)
 
