@@ -92,8 +92,27 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
 
     should "resolve the rating manager's name into the entry payload" do
       entry = @entries.find { |e| e.kind == "manager_rated" }
-      assert_equal "Dana Lee", entry.payload[:rated_by_name],
+      assert_equal "Dana Lee", entry.payload[:actor_name],
         "expected the query to resolve rated_by_id to the rater's name"
+    end
+  end
+
+  context "alignment actor attribution" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.start_alignment(@assessee.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+        handler.align_assessment(@assessee.id, @framework_id, @cap_sid,
+          level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
+          aligned_by_id: @manager.id)
+      end
+      @entries = run_query(viewer: @manager, sees_all: true, context: :alignment,
+        alignment_started: true)
+    end
+
+    should "resolve the aligner's name into the entry payload" do
+      entry = @entries.find { |e| e.kind == "assessment_aligned" }
+      assert_equal "Dana Lee", entry.payload[:actor_name]
     end
   end
 
