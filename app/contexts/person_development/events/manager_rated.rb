@@ -13,6 +13,11 @@
 #     "seeded" when carried over from a prior cycle's aligned value at cycle join
 #   @option data [String, nil] :seeded_from_cycle_id UUID of the originating cycle
 #     when source == "seeded"
+#   @option data [String, nil] :rated_by_id UUID of the Person (manager) who
+#     recorded this rating. The assessee's manager can change over time, so the
+#     rater is captured here as a domain fact rather than inferred from the
+#     person's *current* manager at read time. nil on historical events emitted
+#     before attribution was added, and on "seeded" system carry-forwards.
 #
 class PersonDevelopment::Events::ManagerRated < RubyEventStore::Event
 end

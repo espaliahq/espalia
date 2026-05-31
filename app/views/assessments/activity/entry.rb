@@ -144,9 +144,9 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "self_rating_cleared"
       "Cleared self rating on #{capability_label}"
     when "manager_rated", "manager_rating_revised"
-      "Manager rated #{capability_label}"
+      "#{manager_label} rated #{capability_label}"
     when "manager_rating_cleared"
-      "Manager cleared rating on #{capability_label}"
+      "#{manager_label} cleared rating on #{capability_label}"
     when "assessment_aligned"
       "Aligned on #{capability_label}"
     when "alignment_cleared"
@@ -159,6 +159,13 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "comment_posted"        then comment_posted_summary
     else @entry.kind.humanize
     end
+  end
+
+  # The rating manager's name when known, else the generic "Manager".
+  # Historical manager-rating events carry no `rated_by_id`, so the query
+  # leaves `rated_by_name` nil and we fall back — never render a blank.
+  def manager_label
+    payload_value(:rated_by_name).to_s.strip.presence || "Manager"
   end
 
   # "<Author> commented on <Capability · Lx>", or — when the comment

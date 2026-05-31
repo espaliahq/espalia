@@ -123,6 +123,15 @@ class Assessments::ActivityFeedQuery
       next if hide_manager_rating?(kind)
 
       data = event.data.with_indifferent_access
+      # Resolve the rating manager's name from the event's `rated_by_id`
+      # (a domain fact captured at rating time, since the assessee's
+      # *current* manager can differ from who actually rated). Merged into
+      # the payload so the view stays a dumb renderer. nil-safe: historical
+      # events carry no rated_by_id → name stays nil → the view falls back
+      # to the generic "Manager" label.
+      if MANAGER_KINDS.include?(kind)
+        data = data.merge(rated_by_name: rater_names[data[:rated_by_id]])
+      end
       stable_id = data[:capability_stable_id]
       Entry.new(
         id: event.event_id,
@@ -135,6 +144,21 @@ class Assessments::ActivityFeedQuery
         capability_name: capability_name_for(stable_id),
         category_id: category_id_for(stable_id)
       )
+    end
+  end
+
+  # {Person id => name} for every manager who recorded a rating on this
+  # stream. Loaded in one query and memoised so the per-entry merge above
+  # never N+1s. Person is acts_as_tenant-scoped, and the rater is always in
+  # the assessee's tenant, so the active tenant scope resolves them.
+  def rater_names
+    @rater_names ||= begin
+      ids = stream_events.filter_map do |event|
+        next unless MANAGER_KINDS.include?(RATING_KINDS[event.class])
+
+        event.data[:rated_by_id] || event.data["rated_by_id"]
+      end.uniq
+      ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
     end
   end
 

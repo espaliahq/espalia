@@ -31,6 +31,20 @@ class AuditMetadataTest < ActiveSupport::TestCase
       refute_includes AuditMetadata.current.keys, :client_application_id
     end
 
+    should "include actor_id and correlation_id when provided" do
+      AuditMetadata.seed!(acting_via: :web, actor_id: "person-7", correlation_id: "req-42")
+      assert_equal(
+        { acting_via: :web, actor_id: "person-7", correlation_id: "req-42" },
+        AuditMetadata.current
+      )
+    end
+
+    should "omit actor_id and correlation_id when nil" do
+      AuditMetadata.seed!(acting_via: :web)
+      refute_includes AuditMetadata.current.keys, :actor_id
+      refute_includes AuditMetadata.current.keys, :correlation_id
+    end
+
     should "clear the slot" do
       AuditMetadata.seed!(acting_via: :web)
       AuditMetadata.clear!
@@ -94,6 +108,16 @@ class AuditMetadataTest < ActiveSupport::TestCase
       # And it's fully cleared on exit (not just "different from mcp" —
       # that'd pass for any other surprise value).
       assert_nil Rails.configuration.event_store.metadata[:acting_via]
+    end
+
+    should "carry actor_id and correlation_id onto the event_store metadata" do
+      AuditMetadata.seed!(acting_via: :web, actor_id: "person-7", correlation_id: "req-42")
+
+      seen = nil
+      AuditMetadata.wrap_event_store { seen = Rails.configuration.event_store.metadata }
+
+      assert_equal "person-7", seen[:actor_id]
+      assert_equal "req-42",   seen[:correlation_id]
     end
   end
 end

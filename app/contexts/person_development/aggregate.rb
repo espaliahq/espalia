@@ -251,9 +251,11 @@ class PersonDevelopment::Aggregate
   # @param frequency [String] "some", "occasional", or "consistent"
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
+  # @param rated_by_id [String, nil] UUID of the manager recording the rating;
+  #   nil for system "seeded" carry-forwards
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
   def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
-                      source: "human", seeded_from_cycle_id: nil)
+                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -265,7 +267,8 @@ class PersonDevelopment::Aggregate
       cycle_id: cycle_id,
       comment: comment,
       source: source,
-      seeded_from_cycle_id: seeded_from_cycle_id
+      seeded_from_cycle_id: seeded_from_cycle_id,
+      rated_by_id: rated_by_id
     }))
   end
 
@@ -277,8 +280,10 @@ class PersonDevelopment::Aggregate
   # @param rationale [String] reason for the change
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
+  # @param rated_by_id [String, nil] UUID of the manager recording the revision
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
-  def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+  def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
+                            rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -291,7 +296,8 @@ class PersonDevelopment::Aggregate
       frequency: frequency,
       cycle_id: cycle_id,
       comment: comment,
-      rationale: rationale
+      rationale: rationale,
+      rated_by_id: rated_by_id
     }))
   end
 
@@ -300,8 +306,9 @@ class PersonDevelopment::Aggregate
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
   # @param cycle_id [String] UUID of the cycle this rating belongs to
+  # @param rated_by_id [String, nil] UUID of the manager clearing the rating
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
-  def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:)
+  def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
@@ -310,7 +317,8 @@ class PersonDevelopment::Aggregate
     apply(PersonDevelopment::Events::ManagerRatingCleared.new(data: {
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
-      cycle_id: cycle_id
+      cycle_id: cycle_id,
+      rated_by_id: rated_by_id
     }))
   end
 

@@ -163,13 +163,15 @@ class PersonDevelopment::CommandHandler
   #   "seeded" when carried over from a prior cycle's aligned value at cycle join
   # @param seeded_from_cycle_id [String, nil] UUID of the originating cycle when
   #   source == "seeded"; nil otherwise
+  # @param rated_by_id [String, nil] UUID of the manager recording the rating;
+  #   nil for system "seeded" carry-forwards
   def rate_as_manager(person_id, framework_id, capability_stable_id,
                       level_ordinal:, frequency:, cycle_id:, comment: nil,
-                      source: "human", seeded_from_cycle_id: nil)
+                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.rate_as_manager(capability_stable_id, level_ordinal: level_ordinal,
         frequency: frequency, cycle_id: cycle_id, comment: comment,
-        source: source, seeded_from_cycle_id: seeded_from_cycle_id)
+        source: source, seeded_from_cycle_id: seeded_from_cycle_id, rated_by_id: rated_by_id)
     end
   end
 
@@ -183,11 +185,14 @@ class PersonDevelopment::CommandHandler
   # @param rationale [String] reason for the change
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
+  # @param rated_by_id [String, nil] UUID of the manager recording the revision
   def revise_manager_rating(person_id, framework_id, capability_stable_id,
-                            level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+                            level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
+                            rated_by_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.revise_manager_rating(capability_stable_id, level_ordinal: level_ordinal,
-        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment)
+        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment,
+        rated_by_id: rated_by_id)
     end
   end
 
@@ -198,9 +203,12 @@ class PersonDevelopment::CommandHandler
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
   # @param cycle_id [String] UUID of the cycle this rating belongs to
-  def clear_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:, cycle_id:)
+  # @param rated_by_id [String, nil] UUID of the manager clearing the rating
+  def clear_manager_rating(person_id, framework_id, capability_stable_id, level_ordinal:, cycle_id:,
+                           rated_by_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.clear_manager_rating(capability_stable_id, level_ordinal: level_ordinal, cycle_id: cycle_id)
+      aggregate.clear_manager_rating(capability_stable_id, level_ordinal: level_ordinal, cycle_id: cycle_id,
+        rated_by_id: rated_by_id)
     end
   end
 

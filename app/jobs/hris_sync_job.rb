@@ -36,12 +36,15 @@ class HrisSyncJob < ApplicationJob
 
   # Resolves the correct adapter based on the tenant's HRIS provider.
   #
+  # Passes this job's `job_id` as the adapter's correlation id so every
+  # event the sync emits shares one traceable id (see {AuditMetadata}).
+  #
   # @param tenant [Tenant]
   # @return [Integrations::Hris::BaseAdapter]
   def resolve_adapter(tenant)
     case tenant.hris_config.provider
     when "hibob"
-      Hris::Hibob::Adapter.new(tenant)
+      Hris::Hibob::Adapter.new(tenant, correlation_id: job_id)
     else
       raise "Unknown HRIS provider: #{tenant.hris_config.provider}"
     end

@@ -198,8 +198,11 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # The entire loop runs inside `event_store.with_metadata(tenant_id:)` so
   # the CurrentAssessment projection can resolve tenant context, AND inside
-  # `AuditMetadata.with(:hris)` so every event is attributable to a sync run
-  # (vs a web request or MCP client) in the activity log.
+  # `AuditMetadata.with(:hris, ...)` so every event is attributable to a sync
+  # run (vs a web request or MCP client) and correlated by a single run id in
+  # the activity log. `actor_id` is intentionally nil — an HRIS sync has no
+  # human actor; the `correlation_id` (the enqueuing job's id, or a fresh
+  # uuid when run inline) is the unit of attribution.
   #
   # @param result [Hash] running tally of sync results
   # @param touched_person_ids [Array<String>] Person ids touched in Pass 1
@@ -213,7 +216,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     title_to_mapping = build_title_to_mapping
     roles_by_code = framework_roles_by_code
 
-    AuditMetadata.with(acting_via: :hris) do
+    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
       Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
         command_handler = PersonDevelopment::CommandHandler.new
 

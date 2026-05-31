@@ -350,6 +350,23 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal "Needs work", event.data[:comment]
     end
 
+    should "capture rated_by_id on the ManagerRated event" do
+      rater_id = SecureRandom.uuid_v7
+      @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, rated_by_id: rater_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal rater_id, event.data[:rated_by_id]
+    end
+
+    should "default rated_by_id to nil (e.g. seeded carry-forwards)" do
+      @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_nil event.data[:rated_by_id]
+    end
+
     should "raise for invalid frequency" do
       err = assert_raises(RuntimeError) do
         @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "never",
@@ -380,6 +397,15 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @cycle_id, event.data[:cycle_id]
       assert_equal "Reconsidered", event.data[:rationale]
       assert_equal "Updated", event.data[:comment]
+    end
+
+    should "capture rated_by_id on the ManagerRatingRevised event" do
+      rater_id = SecureRandom.uuid_v7
+      @aggregate.revise_manager_rating(@cap_sid, level_ordinal: 3, frequency: "consistent",
+        rationale: "Reconsidered", cycle_id: @cycle_id, rated_by_id: rater_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal rater_id, event.data[:rated_by_id]
     end
 
     should "raise if no prior manager rating for capability at that level" do
@@ -416,6 +442,14 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @cap_sid, event.data[:capability_stable_id]
       assert_equal 3, event.data[:level_ordinal]
       assert_equal @cycle_id, event.data[:cycle_id]
+    end
+
+    should "capture rated_by_id on the ManagerRatingCleared event" do
+      rater_id = SecureRandom.uuid_v7
+      @aggregate.clear_manager_rating(@cap_sid, level_ordinal: 3, cycle_id: @cycle_id, rated_by_id: rater_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal rater_id, event.data[:rated_by_id]
     end
 
     should "raise if no prior manager rating for capability at that level" do
