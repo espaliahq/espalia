@@ -181,6 +181,16 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
       assert_equal @defined_by, event.data[:enrolled_by]
     end
 
+    should "snapshot the assessed role_id/level_id on PersonEnrolled" do
+      role_id = SecureRandom.uuid_v7
+      level_id = SecureRandom.uuid_v7
+      @aggregate.enroll(@person_id, role_id: role_id, level_id: level_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal role_id, event.data[:role_id]
+      assert_equal level_id, event.data[:level_id]
+    end
+
     should "raise if person already enrolled" do
       @aggregate.enroll(@person_id)
 
@@ -204,6 +214,50 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
         @aggregate.enroll(@person_id)
       end
       assert_match /closed/, err.message
+    end
+  end
+
+  context "#update_participant_role" do
+    setup do
+      @aggregate.define(@cycle_id, @framework_id, "Q1", "regular", 1)
+      @person_id = SecureRandom.uuid_v7
+      @role_id = SecureRandom.uuid_v7
+      @level_id = SecureRandom.uuid_v7
+      @aggregate.enroll(@person_id, role_id: @role_id, level_id: @level_id)
+    end
+
+    should "apply ParticipantRoleLevelChanged when role/level changes" do
+      new_level = SecureRandom.uuid_v7
+      @aggregate.update_participant_role(@person_id, @role_id, new_level, reason: "promotion")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::ParticipantRoleLevelChanged, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+      assert_equal @person_id, event.data[:person_id]
+      assert_equal @role_id, event.data[:role_id]
+      assert_equal new_level, event.data[:level_id]
+      assert_equal "promotion", event.data[:reason]
+    end
+
+    should "be a no-op when role and level are unchanged" do
+      before = @aggregate.unpublished_events.to_a.length
+      @aggregate.update_participant_role(@person_id, @role_id, @level_id)
+      assert_equal before, @aggregate.unpublished_events.to_a.length
+    end
+
+    should "raise if the person is not enrolled" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.update_participant_role(SecureRandom.uuid_v7, @role_id, SecureRandom.uuid_v7)
+      end
+      assert_match(/not enrolled/, err.message)
+    end
+
+    should "raise when the cycle is closed" do
+      @aggregate.close
+      err = assert_raises(RuntimeError) do
+        @aggregate.update_participant_role(@person_id, @role_id, SecureRandom.uuid_v7)
+      end
+      assert_match(/closed/, err.message)
     end
   end
 

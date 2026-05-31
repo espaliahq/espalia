@@ -66,9 +66,27 @@ class AssessmentCycles::CommandHandler
   # @param cycle_id [String] UUID of the cycle
   # @param person_id [String] UUID of the person to enroll
   # @param enrolled_by [String, nil] optional person_id / tenant_user_id
-  def enroll(cycle_id, person_id, enrolled_by: nil)
+  # @param role_id [String, nil] role the person is assessed against (snapshot)
+  # @param level_id [String, nil] level the person is assessed against (snapshot)
+  def enroll(cycle_id, person_id, enrolled_by: nil, role_id: nil, level_id: nil)
     @repository.with_cycle(cycle_id) do |cycle|
-      cycle.enroll(person_id, enrolled_by: enrolled_by)
+      cycle.enroll(person_id, enrolled_by: enrolled_by, role_id: role_id, level_id: level_id)
+    end
+  end
+
+  # Re-snapshots an enrolled participant's assessed role/level mid-cycle.
+  #
+  # Called ONLY by {AssessmentCycles::SyncHandlers::ParticipantRoleSync} in
+  # response to a PersonDevelopment level/role change — never by controllers.
+  #
+  # @param cycle_id [String] UUID of the cycle
+  # @param person_id [String] UUID of the enrolled participant
+  # @param role_id [String] new role being assessed against
+  # @param level_id [String] new level being assessed against
+  # @param reason [String] why the change occurred
+  def update_participant_role(cycle_id, person_id, role_id, level_id, reason: "hris_sync")
+    @repository.with_cycle(cycle_id) do |cycle|
+      cycle.update_participant_role(person_id, role_id, level_id, reason: reason)
     end
   end
 

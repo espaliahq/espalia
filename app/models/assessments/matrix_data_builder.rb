@@ -63,6 +63,7 @@ class Assessments::MatrixDataBuilder
   #
   # @return [Hash]
   def build
+    @level = resolve_assessment_level
     @ratings_index = load_ratings
     @evidence_index = load_evidence
     @comments_index = load_comments
@@ -100,6 +101,28 @@ class Assessments::MatrixDataBuilder
   end
 
   private
+
+  # Resolves the level this cycle is scored and displayed AGAINST.
+  #
+  # Prefers the cycle's enrollment snapshot (the role/level the person was
+  # assessed at) over their *current* assignment level, so a later promotion
+  # never silently re-interprets a cycle's ratings. Gated on the snapshot
+  # being for the SAME role being rendered — a horizontal-move snapshot is
+  # left alone (the matrix is built from the current role; applying another
+  # role's level ordinal would be incoherent — deferred to role-aware
+  # rendering). Falls back to the passed-in assignment level whenever there's
+  # no usable snapshot (no cycle, historical enrollment, or different role).
+  #
+  # @return [FrameworkState::Level]
+  def resolve_assessment_level
+    return @level unless @cycle_id
+
+    enrollment = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @person_id)
+    return @level unless enrollment&.level_id
+    return @level unless enrollment.role_id == @role.role_id
+
+    @role.levels.find { |lvl| lvl.level_id == enrollment.level_id } || @level
+  end
 
   # Builds the level columns for the person's assigned role.
   #

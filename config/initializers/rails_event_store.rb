@@ -84,6 +84,15 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::SyncHandlers::FrameworkVersionRollSync.handled_events
   )
 
+  # ParticipantRoleSync re-snapshots an open cycle's per-participant assessed
+  # role/level when the person is promoted/transferred mid-cycle. Dispatches
+  # an AssessmentCycles command — same projection-rebuild hazard, MUST NOT be
+  # registered as a projection.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::ParticipantRoleSync.new,
+    to: AssessmentCycles::SyncHandlers::ParticipantRoleSync.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Subscriptions will be added here as integrations are implemented.
   # Example:
