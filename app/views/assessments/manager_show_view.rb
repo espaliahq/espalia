@@ -246,7 +246,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   def activity_sidebar
     aside(
       id: "assessment-activity-pane",
-      class: "hidden bg-gray-50 dark:bg-gray-800/50 overflow-y-auto " \
+      class: "hidden bg-gray-50 dark:bg-gray-800/50 overflow-auto " \
              "border border-gray-200 dark:border-gray-700 " \
              "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
              "max-lg:w-80 max-lg:shadow-xl max-lg:border-l max-lg:rounded-none " \
