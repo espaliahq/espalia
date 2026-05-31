@@ -646,11 +646,12 @@ class PersonDevelopment::Aggregate
       parent = @comments[parent_id]
       raise CommandError, "No parent comment with id #{parent_id}" unless parent
       raise CommandError, "Cannot reply to a deleted comment" if parent[:status] == "deleted"
-      # V1 thread depth is one level. The Reply UI affordance is hidden
-      # on reply cards (see Comments::Card), but the aggregate is the
-      # authoritative boundary — a hand-rolled API call must not be able
-      # to nest deeper than the projection's render layer expects.
-      raise CommandError, "Cannot reply to a reply (one-level threading)" if parent[:parent_id]
+      # A reply may target ANY non-deleted comment on the cell, including
+      # another reply. Display is flat (see Comments::Thread) — depth is
+      # unbounded in the data and a reply simply records which comment it
+      # answered via parent_id. No cycle risk: the parent must already
+      # exist in @comments before its child is posted, so links only ever
+      # point backwards in time.
       # Replies must share their parent's anchor. Without this, a reply
       # could be posted on a different (capability, level) cell than its
       # parent, and the projection's group-by-parent thread tree would

@@ -161,15 +161,25 @@ class Views::Assessments::Activity::Entry < Views::Base
     end
   end
 
-  # "<Author name> commented on <Capability · Lx>" — anchors the entry
-  # to whose voice it is, since informal conversation makes voice
-  # primary in a way ratings don't.
+  # "<Author> commented on <Capability · Lx>", or — when the comment
+  # answers another — "<Author> replied to <Parent author> on …", so the
+  # feed tells the story of the conversation. The comment body renders on
+  # the secondary line (see #secondary_text). Anchors the entry to whose
+  # voice it is, since informal conversation makes voice primary in a way
+  # ratings don't.
   def comment_posted_summary
     author_name = if @entry.payload.respond_to?(:author)
       @entry.payload.author&.name
     end
     name = author_name.to_s.strip.presence || "Someone"
-    "#{name} commented on #{capability_label}"
+
+    parent = @entry.payload.respond_to?(:parent) ? @entry.payload.parent : nil
+    if parent
+      parent_name = parent.author&.name.to_s.strip.presence || "another comment"
+      "#{name} replied to #{parent_name} on #{capability_label}"
+    else
+      "#{name} commented on #{capability_label}"
+    end
   end
 
   # "Relinked evidence from <prev cap · L<prev>> to <new cap · L<new>>"

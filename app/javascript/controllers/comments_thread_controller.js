@@ -18,6 +18,13 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["composer", "composerBody", "displayBody", "editForm", "replyForm", "replyBody"]
 
+  // Cancel a pending jump-to-parent highlight so its callback can't fire
+  // against a detached element after the thread frame is replaced.
+  disconnect() {
+    if (this.flashTimeoutId) clearTimeout(this.flashTimeoutId)
+    this.flashTimeoutId = null
+  }
+
   // Toggles the comment composer's visibility. The composer starts
   // hidden so the focused cell isn't dominated by an empty textarea —
   // the `+` icon next to the COMMENTS header opens it on demand.
@@ -86,6 +93,24 @@ export default class extends BaseController {
     form.classList.remove("hidden")
     const textarea = form.querySelector("textarea[name='comment[body]']")
     if (textarea) textarea.focus()
+  }
+
+  // Scrolls to and briefly highlights the comment a "↳ replying to"
+  // chip points at, so the reader can jump to the answered comment in
+  // the flat thread without losing their place.
+  scrollToComment(event) {
+    const id = event.params.commentId
+    if (!id) return
+    const li = this.element.querySelector(`#comment-${CSS.escape(id)}`)
+    if (!li) return
+    event.preventDefault()
+    li.scrollIntoView({ behavior: "smooth", block: "center" })
+    li.classList.add("comment-flash")
+    if (this.flashTimeoutId) clearTimeout(this.flashTimeoutId)
+    this.flashTimeoutId = setTimeout(() => {
+      li.classList.remove("comment-flash")
+      this.flashTimeoutId = null
+    }, 1200)
   }
 
   cancelReply(event) {

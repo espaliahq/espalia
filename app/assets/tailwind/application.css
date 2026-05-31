@@ -76,3 +76,17 @@
     }
   }
 }
+
+/*
+ * Transient highlight for a comment jumped-to from a "↳ replying to"
+ * chip. Toggled by comments_thread_controller#scrollToComment. Defined
+ * as a named class rather than Tailwind ring utilities so the ring +
+ * opacity modifier can't fall victim to JIT class detection from a JS
+ * literal (the colour modifier `ring-primary/40` is not guaranteed to
+ * be generated when it only appears in scanned JavaScript).
+ */
+.comment-flash {
+  border-radius: 0.375rem;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent);
+  transition: box-shadow 150ms ease-out;
+}
