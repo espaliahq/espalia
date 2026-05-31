@@ -98,6 +98,28 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSyncTest < ActiveSuppor
       assert_equal 0, migrated_p2.data[:mappings].first[:counts][:ratings]
     end
 
+    should "skip participants whose current open cycle has completed alignment" do
+      # @p1 has a completed (aligned) assessment in an open cycle — frozen.
+      cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id, framework_version: 1)
+      AssessmentCycleEnrollment.create!(tenant: @tenant, cycle_id: cycle.cycle_id,
+        person_id: @p1, status: "enrolled", enrolled_at: Time.current)
+      AssessmentCycleProgress.create!(tenant: @tenant, cycle_id: cycle.cycle_id,
+        person_id: @p1, status: "aligned", aligned_at: Time.current)
+
+      @handler.call(publish_event)
+
+      p1_stream = EventStreamNaming.person_development_stream(@p1, @framework_id)
+      assert_nil Rails.configuration.event_store.read.stream(p1_stream).to_a
+        .find { |e| e.is_a?(PersonDevelopment::Events::FrameworkVersionMigrated) },
+        "completed-alignment participant must not be migrated"
+
+      # @p2 (no cycle / not completed) still migrates.
+      p2_stream = EventStreamNaming.person_development_stream(@p2, @framework_id)
+      assert_not_nil Rails.configuration.event_store.read.stream(p2_stream).to_a
+        .find { |e| e.is_a?(PersonDevelopment::Events::FrameworkVersionMigrated) },
+        "in-progress participant should still migrate"
+    end
+
     should "no-op when the publish has no migration mappings" do
       FrameworkState::MigrationMapping.delete_all
 
