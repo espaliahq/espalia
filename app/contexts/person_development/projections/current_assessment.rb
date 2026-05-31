@@ -31,6 +31,12 @@ class PersonDevelopment::Projections::CurrentAssessment
   # 2 — handles `FrameworkVersionMigrated`: rewrites `capability_stable_id`
   #     on rating rows for `same`/`evolved` mappings and stamps
   #     `migration_status`/`reassessment_reason` for the rest.
+  #
+  # NOT bumped for `manager_rated_by_id` / `aligned_by_id`: historical
+  # ManagerRated/Revised and AssessmentAligned events carry no actor id, so a
+  # rebuild writes nil into the new columns — identical to their defaults. New
+  # events populate them via the live subscriber. Per the bump rules, a rebuild
+  # that reproduces identical read-model state does not warrant a version bump.
   CODE_VERSION = 2
 
   # All event classes this projection handles.
@@ -253,6 +259,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
+    rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     apply_source(rating, event)
     rating.save!
@@ -264,6 +271,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
+    rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
     rating.save!
@@ -275,6 +283,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = nil
     rating.manager_rated_comment = nil
+    rating.manager_rated_by_id = nil
     rating.save!
     broadcast_assessment_sync(event)
   end
@@ -297,6 +306,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.aligned_frequency = event.data[:aligned_frequency]
     rating.aligned_comment = event.data[:comment]
+    rating.aligned_by_id = event.data[:aligned_by_id]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
     rating.save!
     broadcast_assessment_sync(event)
@@ -322,6 +332,7 @@ class PersonDevelopment::Projections::CurrentAssessment
 
     rating.aligned_frequency = nil
     rating.aligned_comment = nil
+    rating.aligned_by_id = nil
     rating.save!
     broadcast_assessment_sync(event)
   end

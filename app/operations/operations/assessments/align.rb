@@ -42,7 +42,7 @@ class Operations::Assessments::Align < Operations::Base
     PersonDevelopment::CommandHandler.new.align_assessment(
       assignment.person_id, assignment.framework_id, params[:capability_stable_id],
       level_ordinal: params[:level_ordinal], aligned_frequency: params[:frequency],
-      cycle_id: cycle.cycle_id, comment: params[:comment]
+      cycle_id: cycle.cycle_id, comment: params[:comment], aligned_by_id: context.person&.id
     )
 
     {

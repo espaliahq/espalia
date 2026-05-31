@@ -65,6 +65,8 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
         )
         assert_not_nil rating
         assert_equal "occasional", rating.manager_rated_frequency
+        assert_equal @manager.id, rating.manager_rated_by_id,
+          "expected the acting manager's id to be captured as the rater"
       end
     end
 

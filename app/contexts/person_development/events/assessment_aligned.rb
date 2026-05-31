@@ -13,6 +13,11 @@
 #   @option data [String] :aligned_frequency agreed frequency: "some", "occasional", or "consistent"
 #   @option data [String] :cycle_id UUID of the cycle this alignment belongs to
 #   @option data [String] :comment optional comment on the agreement
+#   @option data [String, nil] :aligned_by_id UUID of the Person who recorded the
+#     agreement. For manual alignments this is whoever submitted it (assessee or
+#     manager); for the auto-aligned cells emitted at alignment start it is the
+#     manager who started alignment. nil on historical events emitted before
+#     attribution was added.
 #
 class PersonDevelopment::Events::AssessmentAligned < RubyEventStore::Event
 end

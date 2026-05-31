@@ -296,6 +296,23 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
+    should "record manager_rated_by_id from the event's rated_by_id" do
+      cap_sid = SecureRandom.uuid_v7
+      rater_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::ManagerRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional",
+        cycle_id: @cycle_id, comment: nil, rated_by_id: rater_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by(
+          cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3
+        )
+        assert_equal rater_id, rating.manager_rated_by_id
+      end
+    end
+
     should "update progress started_at on first rating of any kind" do
       emit(PersonDevelopment::Events::ManagerRated,
         capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 3,
@@ -314,7 +331,7 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
 
       emit(PersonDevelopment::Events::ManagerRated,
         capability_stable_id: cap_sid, level_ordinal: 3, frequency: "occasional",
-        cycle_id: @cycle_id, comment: "Initial")
+        cycle_id: @cycle_id, comment: "Initial", rated_by_id: SecureRandom.uuid_v7)
       emit(PersonDevelopment::Events::ManagerRatingCleared,
         capability_stable_id: cap_sid, level_ordinal: 3, cycle_id: @cycle_id)
 
@@ -324,6 +341,7 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
           capability_stable_id: cap_sid, level_ordinal: 3
         )
         assert_nil rating.manager_rated_frequency
+        assert_nil rating.manager_rated_by_id, "clearing should also drop the rater attribution"
       end
     end
   end
@@ -437,6 +455,27 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
         assert_not_equal "aligned", progress.status
       end
+    end
+
+    should "record aligned_by_id, and clear it on AlignmentCleared" do
+      cap_sid = SecureRandom.uuid_v7
+      aligner_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::AssessmentAligned,
+        capability_stable_id: cap_sid, level_ordinal: 3, aligned_frequency: "consistent",
+        cycle_id: @cycle_id, comment: nil, aligned_by_id: aligner_id)
+
+      rating = ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.find_by(cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3)
+      end
+      assert_equal aligner_id, rating.aligned_by_id
+
+      emit(PersonDevelopment::Events::AlignmentCleared,
+        capability_stable_id: cap_sid, level_ordinal: 3, cycle_id: @cycle_id,
+        cleared_by_id: SecureRandom.uuid_v7)
+
+      assert_nil rating.reload.aligned_by_id
     end
   end
 

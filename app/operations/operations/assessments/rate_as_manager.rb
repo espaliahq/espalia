@@ -50,23 +50,25 @@ class Operations::Assessments::RateAsManager < Operations::Base
   def dispatch(cycle_id)
     handler = PersonDevelopment::CommandHandler.new
     existing_freq = existing_rating(cycle_id)&.manager_rated_frequency
+    rated_by_id = context.person&.id
 
     if existing_freq == params[:frequency]
       handler.clear_manager_rating(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
-        level_ordinal: params[:level_ordinal], cycle_id: cycle_id
+        level_ordinal: params[:level_ordinal], cycle_id: cycle_id, rated_by_id: rated_by_id
       )
     elsif existing_freq.present?
       handler.revise_manager_rating(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
-        rationale: rationale_for_revision, cycle_id: cycle_id, comment: params[:comment]
+        rationale: rationale_for_revision, cycle_id: cycle_id, comment: params[:comment],
+        rated_by_id: rated_by_id
       )
     else
       handler.rate_as_manager(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
-        cycle_id: cycle_id, comment: params[:comment]
+        cycle_id: cycle_id, comment: params[:comment], rated_by_id: rated_by_id
       )
     end
   end

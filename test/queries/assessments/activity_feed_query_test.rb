@@ -12,7 +12,7 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
 
     ActsAsTenant.with_tenant(@tenant) do
       @assessee = create(:person, tenant: @tenant, name: "Assessee")
-      @manager = create(:person, tenant: @tenant, name: "Manager")
+      @manager = create(:person, tenant: @tenant, name: "Dana Lee")
       @peer = create(:person, tenant: @tenant, name: "Peer")
       @assessee.update!(manager: @manager)
 
@@ -31,7 +31,8 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       handler.rate_self(@assessee.id, @framework_id, @cap_sid,
         level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id, comment: "Self note")
       handler.rate_as_manager(@assessee.id, @framework_id, @cap_sid,
-        level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id, comment: "Mgr note")
+        level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id, comment: "Mgr note",
+        rated_by_id: @manager.id)
 
       @evidence_id = SecureRandom.uuid_v7
       handler.record_evidence(@assessee.id, @framework_id, @evidence_id,
@@ -87,6 +88,31 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_includes kinds, "self_rated"
       assert_includes kinds, "manager_rated"
       assert_includes kinds, "evidence_recorded"
+    end
+
+    should "resolve the rating manager's name into the entry payload" do
+      entry = @entries.find { |e| e.kind == "manager_rated" }
+      assert_equal "Dana Lee", entry.payload[:actor_name],
+        "expected the query to resolve rated_by_id to the rater's name"
+    end
+  end
+
+  context "alignment actor attribution" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.start_alignment(@assessee.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+        handler.align_assessment(@assessee.id, @framework_id, @cap_sid,
+          level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
+          aligned_by_id: @manager.id)
+      end
+      @entries = run_query(viewer: @manager, sees_all: true, context: :alignment,
+        alignment_started: true)
+    end
+
+    should "resolve the aligner's name into the entry payload" do
+      entry = @entries.find { |e| e.kind == "assessment_aligned" }
+      assert_equal "Dana Lee", entry.payload[:actor_name]
     end
   end
 

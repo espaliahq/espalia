@@ -32,6 +32,39 @@ All three aggregate repositories ([frameworks](../../app/contexts/frameworks/rep
 
 Tests must obey the same invariant — either via the repository (which wraps automatically), or by passing `metadata: { tenant_id: @tenant.id }` when constructing raw events.
 
+## Attribution invariant — every event carries provenance
+
+Every event MUST be attributable to *who* triggered it, *how*, and *as part of which logical operation*. This is non-negotiable: an unattributed event is a permanent hole in the audit trail — events are immutable, so provenance not captured at write time can never be back-filled.
+
+There are **two layers**, and the distinction is load-bearing — put each fact in the right place:
+
+### 1. Provenance → RES metadata (universal, automatic)
+
+Cross-cutting "who/how/which-request" provenance lives in **metadata**, set once at the request/job boundary via [`AuditMetadata`](../../app/services/audit_metadata.rb) and applied to *every* event automatically — no per-event or per-handler wiring:
+
+| Metadata key | Meaning | Seeded by |
+|---|---|---|
+| `acting_via` | `web` / `mcp` / `hris` — the surface | `ApplicationController`, `Mcp::ServerController`, HRIS adapter |
+| `actor_id` | uuid of the Person who triggered the write (nil for system syncs) | same |
+| `client_application_id` | Doorkeeper application uuid (MCP only) | `Mcp::ServerController` |
+| `correlation_id` | id shared by every event one request/sync produced | request id (web/MCP) · job id or fresh uuid (HRIS) |
+
+`Operations::Base#call` wraps `perform` in `AuditMetadata.wrap_event_store`, so any event a command handler publishes inside an Operation inherits all four. **You almost never touch this layer** — it already covers all events. Symbols are stringified at the event-store boundary (RES `Metadata` rejects Symbol values).
+
+### 2. Domain attribution → event payload (selective, explicit)
+
+When the actor is also a **first-class domain fact a read model surfaces** — e.g. *which manager* rated you, who authored evidence, who approved a suggestion — model it ADDITIONALLY as an explicit payload field (`rated_by_id`, `author_id`, `reviewer_id`, `started_by_id`, …) and a read-model column. Reasons it goes in payload, not just metadata:
+
+- Projections read `event.data`, not metadata — a column the UI renders must be fed from payload.
+- It's domain history with real weight, not ops telemetry, and should survive independently of the provenance layer.
+- Metadata `actor_id` is absent on non-request paths (replay, rake, seeds); a domain command should know its actor explicitly.
+
+The well-attributed events to copy: Evidence (`author_id`/`edited_by_id`/`relinked_by_id`/`withdrawn_by_id`), Comments (`author_id`/`edited_by_id`/`deleted_by_id`), Suggestions (`author_id`/`reviewer_id`), collaborator + cycle-lifecycle + alignment-milestone events (`added_by`, `defined_by`, `started_by_id`, `completed_by_id`).
+
+**Adding a payload attribution field to an existing event is additive-safe** (older instances simply lack it) — projections and views MUST tolerate nil for historical events (fall back to a generic label like "Manager", never crash). Pure structural framework events (`CapabilityAdded`, `LevelAdded`, …) stay metadata-only — they have no read-model actor surface.
+
+When you add a new event or command, decide deliberately: metadata provenance is automatic; add a payload actor field iff a read model will surface it.
+
 ## Projection contract (replayable projections)
 
 Every projection in [lib/projections/registry.rb](../../lib/projections/registry.rb) declares:
