@@ -148,9 +148,9 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "manager_rating_cleared"
       "#{manager_label} cleared rating on #{capability_label}"
     when "assessment_aligned"
-      "Aligned on #{capability_label}"
+      actor_name ? "#{actor_name} aligned #{capability_label}" : "Aligned on #{capability_label}"
     when "alignment_cleared"
-      "Cleared alignment on #{capability_label}"
+      actor_name ? "#{actor_name} cleared alignment on #{capability_label}" : "Cleared alignment on #{capability_label}"
     when "evidence_recorded"     then evidence_recorded_summary
     when "evidence_relinked"     then evidence_relinked_summary
     when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
@@ -161,11 +161,16 @@ class Views::Assessments::Activity::Entry < Views::Base
     end
   end
 
+  # The resolved actor name for an attributed entry (rater / aligner /
+  # clearer), or nil when unknown. The query merges it under `actor_name`;
+  # historical events carry no actor id so it stays nil and callers fall back.
+  def actor_name
+    payload_value(:actor_name).to_s.strip.presence
+  end
+
   # The rating manager's name when known, else the generic "Manager".
-  # Historical manager-rating events carry no `rated_by_id`, so the query
-  # leaves `rated_by_name` nil and we fall back — never render a blank.
   def manager_label
-    payload_value(:rated_by_name).to_s.strip.presence || "Manager"
+    actor_name || "Manager"
   end
 
   # "<Author> commented on <Capability · Lx>", or — when the comment

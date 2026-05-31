@@ -17,9 +17,11 @@ class PersonDevelopment::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param role_id [String] UUID of the assigned role
   # @param level_id [String] UUID of the assigned level
-  def assign_to_framework(person_id, framework_id, role_id, level_id)
+  # @param assigned_by [String, nil] UUID of the Person who triggered the
+  #   assignment; nil for system-driven HRIS syncs
+  def assign_to_framework(person_id, framework_id, role_id, level_id, assigned_by: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.assign_to_framework(person_id, framework_id, role_id, level_id)
+      aggregate.assign_to_framework(person_id, framework_id, role_id, level_id, assigned_by: assigned_by)
     end
   end
 
@@ -30,9 +32,12 @@ class PersonDevelopment::CommandHandler
   # @param new_role_id [String] UUID of the new role
   # @param new_level_id [String] UUID of the new level
   # @param reason [String] why the change occurred
-  def change_person_role(person_id, framework_id, new_role_id, new_level_id, reason: "hris_sync")
+  # @param changed_by [String, nil] UUID of the Person who triggered the change;
+  #   nil for system-driven HRIS syncs
+  def change_person_role(person_id, framework_id, new_role_id, new_level_id, reason: "hris_sync",
+                         changed_by: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.change_role(new_role_id, new_level_id, reason: reason)
+      aggregate.change_role(new_role_id, new_level_id, reason: reason, changed_by: changed_by)
     end
   end
 
@@ -42,9 +47,11 @@ class PersonDevelopment::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param new_level_id [String] UUID of the new level
   # @param reason [String] why the change occurred
-  def change_person_level(person_id, framework_id, new_level_id, reason: "hris_sync")
+  # @param changed_by [String, nil] UUID of the Person who triggered the change;
+  #   nil for system-driven HRIS syncs
+  def change_person_level(person_id, framework_id, new_level_id, reason: "hris_sync", changed_by: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.change_level(new_level_id, reason: reason)
+      aggregate.change_level(new_level_id, reason: reason, changed_by: changed_by)
     end
   end
 
@@ -244,11 +251,14 @@ class PersonDevelopment::CommandHandler
   # @param aligned_frequency [String] agreed frequency
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param comment [String, nil] optional comment
+  # @param aligned_by_id [String, nil] UUID of the Person recording the agreement
   def align_assessment(person_id, framework_id, capability_stable_id,
-                       level_ordinal:, aligned_frequency:, cycle_id:, comment: nil)
+                       level_ordinal:, aligned_frequency:, cycle_id:, comment: nil,
+                       aligned_by_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.align_assessment(capability_stable_id, level_ordinal: level_ordinal,
-        aligned_frequency: aligned_frequency, cycle_id: cycle_id, comment: comment)
+        aligned_frequency: aligned_frequency, cycle_id: cycle_id, comment: comment,
+        aligned_by_id: aligned_by_id)
     end
   end
 
@@ -259,11 +269,12 @@ class PersonDevelopment::CommandHandler
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
+  # @param cleared_by_id [String, nil] UUID of the Person clearing the alignment
   def clear_alignment_rating(person_id, framework_id, capability_stable_id,
-                             level_ordinal:, cycle_id:)
+                             level_ordinal:, cycle_id:, cleared_by_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.clear_alignment_rating(capability_stable_id,
-        level_ordinal: level_ordinal, cycle_id: cycle_id)
+        level_ordinal: level_ordinal, cycle_id: cycle_id, cleared_by_id: cleared_by_id)
     end
   end
 

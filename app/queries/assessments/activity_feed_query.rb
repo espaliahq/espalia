@@ -59,6 +59,18 @@ class Assessments::ActivityFeedQuery
 
   MANAGER_KINDS = %w[manager_rated manager_rating_revised manager_rating_cleared].freeze
 
+  # Maps each attributable rating entry kind to the payload key carrying its
+  # actor's Person id. Drives both name preloading (`actor_names`) and the
+  # per-entry `actor_name` merge. Self-ratings are omitted — the actor is
+  # always the assessee, so attribution would be redundant.
+  ACTOR_ID_KEYS = {
+    "manager_rated"          => :rated_by_id,
+    "manager_rating_revised" => :rated_by_id,
+    "manager_rating_cleared" => :rated_by_id,
+    "assessment_aligned"     => :aligned_by_id,
+    "alignment_cleared"      => :cleared_by_id
+  }.freeze
+
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self / :manager / :alignment
   # @param viewer_person_id [String, nil] UUID of the current viewer
@@ -123,15 +135,14 @@ class Assessments::ActivityFeedQuery
       next if hide_manager_rating?(kind)
 
       data = event.data.with_indifferent_access
-      # Resolve the rating manager's name from the event's `rated_by_id`
-      # (a domain fact captured at rating time, since the assessee's
-      # *current* manager can differ from who actually rated). Merged into
-      # the payload so the view stays a dumb renderer. nil-safe: historical
-      # events carry no rated_by_id → name stays nil → the view falls back
-      # to the generic "Manager" label.
-      if MANAGER_KINDS.include?(kind)
-        data = data.merge(rated_by_name: rater_names[data[:rated_by_id]])
-      end
+      # Resolve the actor's name from the event's actor id (a domain fact
+      # captured at write time — e.g. the assessee's *current* manager can
+      # differ from who actually rated). Merged into the payload under an
+      # `actor_name` key so the view stays a dumb renderer. nil-safe:
+      # historical events carry no actor id → name stays nil → the view
+      # falls back to a generic label.
+      actor_id = data[ACTOR_ID_KEYS[kind]] if ACTOR_ID_KEYS.key?(kind)
+      data = data.merge(actor_name: actor_names[actor_id]) if actor_id
       stable_id = data[:capability_stable_id]
       Entry.new(
         id: event.event_id,
@@ -147,16 +158,18 @@ class Assessments::ActivityFeedQuery
     end
   end
 
-  # {Person id => name} for every manager who recorded a rating on this
-  # stream. Loaded in one query and memoised so the per-entry merge above
-  # never N+1s. Person is acts_as_tenant-scoped, and the rater is always in
-  # the assessee's tenant, so the active tenant scope resolves them.
-  def rater_names
-    @rater_names ||= begin
+  # {Person id => name} for every actor referenced by an attributed rating
+  # entry on this stream (rating manager, aligner, alignment-clearer). Loaded
+  # in one query and memoised so the per-entry merge above never N+1s. Person
+  # is acts_as_tenant-scoped, and the actor is always in the assessee's tenant,
+  # so the active tenant scope resolves them.
+  def actor_names
+    @actor_names ||= begin
       ids = stream_events.filter_map do |event|
-        next unless MANAGER_KINDS.include?(RATING_KINDS[event.class])
+        key = ACTOR_ID_KEYS[RATING_KINDS[event.class]]
+        next unless key
 
-        event.data[:rated_by_id] || event.data["rated_by_id"]
+        event.data[key] || event.data[key.to_s]
       end.uniq
       ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
     end
