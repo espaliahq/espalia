@@ -159,8 +159,9 @@ This rule is symmetric: scrolling down, the new card's visible area grows from b
 
 - **Wait for a real user scroll.** `IntersectionObserver`'s initial callback fires on connect with the cards' current intersection state, not in response to a user scroll. Acting on that would override URL- and click-driven initial focus and silently auto-narrow the activity feed on page load. `_sawUserScroll` flips on the first `scroll` event; until then `#updateFocusedCapabilityFromScroll` no-ops.
 - **Cell focus is sticky-but-not-permanent.** When the user has explicitly clicked a chip, `currentFocus.level === "cell"` and scroll-driven updates leave the focus alone as long as the focused capability is still the area-winner. The moment a different card overtakes it, cell focus downgrades to capability focus on the new winner — the sidebar re-narrows to whatever the user is now reading. Re-clicking a chip restores cell focus.
-- **Suppress for ~900ms after explicit clicks.** Card-header clicks, chip clicks, and any other explicit focus action sets `_capabilityFocusSuppressUntil = Date.now() + 900`. Mirrors the suppression `category_nav_controller#scrollTo` uses for chip clicks — without it, the smooth-scroll animation can fire intersection events that overwrite the user's choice mid-flight.
-- **Respect external focus events.** `matrix_controller` listens for `matrix:focus-changed` on the window so any external dispatcher (today: `category_nav_controller` on chip click) can drive the controller's `currentFocus` and trip the same 900ms suppression window. Without this, a category chip click would dispatch category focus to the activity sidebar, start a smooth scroll, and let the IntersectionObserver immediately overwrite the focus with whichever capability landed in the band first. Self-dispatch from `matrix_controller`'s own actions is gated by a synchronous `_dispatchingFocus` flag set inside `#dispatchFocusEvent` so the listener doesn't re-suppress on every scroll-driven update.
+- **Two-layer suppression around explicit clicks: time-based AND renew-on-scroll.** Card-header clicks, chip clicks, and any other explicit focus action set `_capabilityFocusSuppressUntil = Date.now() + 1800` (time-based) AND flip `_suppressionScrollRenew = true` (renew-on-scroll). Every scroll event during the suppression window renews a 2000ms settle timer; when scroll events stop for 2000ms the flag clears. The time-based window covers the explicit click itself; the renew-on-scroll layer covers the variable-duration smooth scroll that follows. A fixed time window alone was too brittle on slow CI — the smooth scroll routinely outlasted 1800ms there.
+- **Respect external focus events.** `matrix_controller` listens for `matrix:focus-changed` on the window so any external dispatcher (today: `category_nav_controller` on chip click) can drive the controller's `currentFocus` and trip the same dual suppression. Without this, a category chip click would dispatch category focus to the activity sidebar, start a smooth scroll, and let the IntersectionObserver immediately overwrite the focus with whichever capability landed in the band first. Self-dispatch from `matrix_controller`'s own actions carries `source: "matrix"` on the event payload so the listener can skip it.
+- **External category focus is sticky like cell focus.** When a chip click puts us in category focus, `#onExternalFocusChange` sets `_categoryFocusFromExternal = true`. The scroll picker checks this flag the same way it checks for same-card cell/capability focus and refuses to downgrade — even after suppression releases on the next scroll tick. The flag clears on the next explicit non-category focus action (card-header click, level chip click), at which point scroll-driven capability picking resumes normally. Initial default category focus from `#dispatchInitialFocus` does **not** set the flag, so the first user scroll on a fresh page still narrows to capability focus.
 
 **URL semantics.** Capability focus is transient; it does NOT write `?capability=` to the URL. That parameter remains owned by cell focus (chip click), where the server uses it to render the expansion panel for the named level. `#setFocus` accepts `{ pushToUrl: false }` for scroll-driven updates so continuous scrolling doesn't thrash `history.pushState`; explicit card-header clicks DO push to URL (default `pushToUrl: true`) — making them as shareable as cell focus.
 
@@ -179,7 +180,7 @@ Server stamps it from `?capability=` on initial render; `matrix_controller#apply
 | Level | Trigger | URL params written | Persists across |
 |---|---|---|---|
 | `framework` | Default / "Show all" link | — | — |
-| `category` | Category chip click; scroll-based category active marker | `?category=` | Browser navigation |
+| `category` | Category chip click; scroll-based category active marker | `?category=` | Browser navigation. Chip-click also sticky against scroll picker via `_categoryFocusFromExternal`. |
 | `capability` | Card-header click; scroll-driven IntersectionObserver | `?capability=` (click only) | Click: browser nav. Scroll: transient |
 | `cell` | Level chip click; URL deep-link | `?capability=` + `?level_ordinal=` | Browser navigation |
 
@@ -333,6 +334,8 @@ The wrapper carries a stable id `secondaries-<stable>-<ordinal>` so rating contr
 | At/above person_level | Unrated | Neutral gray |
 | At/above person_level | rated | Solid hue from the palette — same fill regardless of level position |
 
+**Rated chip fills are the exact `-500` (light) / `-400` (dark) shades the `FrequencyPalette` dots use everywhere else.** Same hue at the same saturation across pill / chip / divergence dot — the four ratings read as four distinct, equally-intense colours rather than four muddy near-identical tints. Text on rated chips uses `text-{hue}-950` in both modes for ~7–10:1 contrast against the saturated fill (WCAG AA on small text needs 4.5:1; lighter text tokens fail it on `amber-500` / `green-500`).
+
 A small **divergence dot** appears on the chip when the primary perspective disagrees with any secondary the viewer can see. Full per-perspective values live in the expansion panel's `SecondaryRatingLine`s.
 
 ## Multi-perspective scoring
@@ -471,6 +474,18 @@ The cause: with downward scrolling the threshold-crossing card is also the one g
 ### 12. Activity feed reconnect on lazy-frame load needs a DOM signal for capability focus
 
 `activity_feed_controller#readMatrixFocusFromDom` runs on every `connect()`. The activity sidebar lives in a `loading: "lazy"` turbo-frame, so its first connect (when the pane opens) happens AFTER the user may have already clicked a card. Without a DOM signal for "capability focus is active on card X", the reconnect would default to category-level focus and silently undo the click. The signal is `data-focused="true"` on the matching card — server stamps it from `?capability=`, JS toggles it on focus changes, feed reads it on reconnect.
+
+### 13. Renew-on-scroll suppression beats a fixed time window
+
+The first version of the explicit-click suppression was time-only: `_capabilityFocusSuppressUntil = Date.now() + 900`. On slow CI runners the smooth scroll that an explicit click triggers routinely outlasted 900ms — even after bumping to 1800ms the picker could fire mid-animation and overwrite the user's focus with whichever card was the area-winner at that frame. Fix: pair the time-based window with a `_suppressionScrollRenew` flag plus a `_scrollSettleTimer` that every scroll event resets. The flag stays true until scroll events have been quiet for 2000ms, so the suppression naturally tracks the actual animation duration regardless of CI speed. Time-based covers the click itself; renew-on-scroll covers the scroll animation. Both are needed — neither alone survives the full range of CI timing.
+
+### 14. IntersectionObserver callbacks aren't load-bearing for the picker
+
+The original picker iterated `_intersectingCards`, a `Set` maintained by the `IntersectionObserver` callback. On slow CI the IO callback fires arbitrarily late — the picker would run with a stale or empty set when the test asserted. Fix: iterate `cardTargets` directly inside the picker and compute visible area via `getBoundingClientRect()` for each card. The IO is still useful as the scroll-event flusher (it triggers `#scheduleCapabilityScrollUpdate` from the callback) but it's no longer the source of truth for *which* cards the picker considers. Genuine user scrolls drive the picker via `_onCapabilityScroll`; the IO callback only renews suppression for layout-shift-driven re-fires.
+
+### 15. External category focus must be sticky against the scroll picker
+
+The picker's "don't override" check originally only honoured `cell` / `capability` focus on the same card — `category` always fell through and got rewritten to `capability` focus on whatever card was the area winner. That meant a deliberate chip click would persist for the suppression window, then silently downgrade the moment a single scroll event landed past the renew timer. Fix: track external category dispatches with a `_categoryFocusFromExternal` sticky flag (set in `#onExternalFocusChange` when `detail.level === "category"`, cleared in `#setFocus` whenever the new level is anything else). The picker checks the flag the same way it checks for same-card cell/capability focus. Initial default category focus from `#dispatchInitialFocus` doesn't set the flag, so the first user scroll on a fresh page still narrows to capability focus as expected — only chip-set category focus is sticky.
 
 ## Performance state machine
 
