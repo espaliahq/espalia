@@ -28,6 +28,7 @@ class AssessmentCycles::Aggregate
     @planned_end_at = nil
     @status = :new
     @enrolled_person_ids = Set.new
+    @enrolled_roles = {}  # person_id => { role_id:, level_id: } — assessed role/level per participant
   end
 
   # Defines a new assessment cycle.
@@ -111,8 +112,10 @@ class AssessmentCycles::Aggregate
   #
   # @param person_id [String] UUID of the person to enroll
   # @param enrolled_by [String, nil] optional person_id / tenant_user_id of the enroller
+  # @param role_id [String, nil] role the person is assessed against (snapshot)
+  # @param level_id [String, nil] level the person is assessed against (snapshot)
   # @raise [RuntimeError] if cycle not open or person already enrolled
-  def enroll(person_id, enrolled_by: nil)
+  def enroll(person_id, enrolled_by: nil, role_id: nil, level_id: nil)
     ensure_open!
     raise "Person already enrolled" if @enrolled_person_ids.include?(person_id)
 
@@ -121,7 +124,37 @@ class AssessmentCycles::Aggregate
       person_id: person_id,
       framework_id: @framework_id,
       framework_version: @framework_version,
-      enrolled_by: enrolled_by
+      enrolled_by: enrolled_by,
+      role_id: role_id,
+      level_id: level_id
+    }))
+  end
+
+  # Re-snapshots an enrolled participant's assessed role/level mid-cycle.
+  #
+  # Issued by {AssessmentCycles::SyncHandlers::ParticipantRoleSync} when a
+  # PersonLevelChanged / PersonRoleChanged lands while this cycle is open.
+  # No-op (no event) when role+level are unchanged, so repeat HRIS syncs
+  # don't emit redundant events.
+  #
+  # @param person_id [String] UUID of the enrolled participant
+  # @param role_id [String] new role being assessed against
+  # @param level_id [String] new level being assessed against
+  # @param reason [String] why the change occurred
+  # @raise [RuntimeError] if cycle not open or person not enrolled
+  def update_participant_role(person_id, role_id, level_id, reason: "hris_sync")
+    ensure_open!
+    raise "Person not enrolled" unless @enrolled_person_ids.include?(person_id)
+
+    current = @enrolled_roles[person_id]
+    return if current && current[:role_id] == role_id && current[:level_id] == level_id
+
+    apply(AssessmentCycles::Events::ParticipantRoleLevelChanged.new(data: {
+      cycle_id: @cycle_id,
+      person_id: person_id,
+      role_id: role_id,
+      level_id: level_id,
+      reason: reason
     }))
   end
 
@@ -236,14 +269,23 @@ class AssessmentCycles::Aggregate
 
   on AssessmentCycles::Events::PersonEnrolled do |event|
     @enrolled_person_ids << event.data[:person_id]
+    @enrolled_roles[event.data[:person_id]] =
+      { role_id: event.data[:role_id], level_id: event.data[:level_id] }
   end
 
   on AssessmentCycles::Events::PersonUnenrolled do |event|
     @enrolled_person_ids.delete(event.data[:person_id])
+    @enrolled_roles.delete(event.data[:person_id])
+  end
+
+  on AssessmentCycles::Events::ParticipantRoleLevelChanged do |event|
+    @enrolled_roles[event.data[:person_id]] =
+      { role_id: event.data[:role_id], level_id: event.data[:level_id] }
   end
 
   on AssessmentCycles::Events::CycleClosed do |_event|
     @status = :closed
     @enrolled_person_ids.clear
+    @enrolled_roles.clear
   end
 end

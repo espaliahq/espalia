@@ -24,6 +24,12 @@ class AssessmentCycles::Projections::CurrentState
   #     framework version publishes, expressing the full version range.
   #     `CycleDefined` also now initialises the new column to
   #     `framework_version` (replay reconstructs it).
+  #
+  # NOT bumped for the assessed role/level snapshot: historical PersonEnrolled
+  # events carry no role/level, so a rebuild writes nil into the new columns —
+  # identical to their defaults — and ParticipantRoleLevelChanged is brand new
+  # with no past events. Per the bump rules, a rebuild reproducing identical
+  # state does not warrant a version bump.
   CODE_VERSION = 2
 
   # All event classes this projection handles.
@@ -36,6 +42,7 @@ class AssessmentCycles::Projections::CurrentState
       AssessmentCycles::Events::CycleTypeChanged,
       AssessmentCycles::Events::CyclePlannedEndSet,
       AssessmentCycles::Events::PersonEnrolled,
+      AssessmentCycles::Events::ParticipantRoleLevelChanged,
       AssessmentCycles::Events::PersonUnenrolled,
       AssessmentCycles::Events::CycleClosed,
       AssessmentCycles::Events::FrameworkVersionRolled
@@ -74,6 +81,7 @@ class AssessmentCycles::Projections::CurrentState
     when AssessmentCycles::Events::CycleTypeChanged then handle_cycle_type_changed(event)
     when AssessmentCycles::Events::CyclePlannedEndSet then handle_cycle_planned_end_set(event)
     when AssessmentCycles::Events::PersonEnrolled then handle_person_enrolled(event)
+    when AssessmentCycles::Events::ParticipantRoleLevelChanged then handle_participant_role_level_changed(event)
     when AssessmentCycles::Events::PersonUnenrolled then handle_person_unenrolled(event)
     when AssessmentCycles::Events::CycleClosed then handle_cycle_closed(event)
     when AssessmentCycles::Events::FrameworkVersionRolled then handle_framework_version_rolled(event)
@@ -144,9 +152,29 @@ class AssessmentCycles::Projections::CurrentState
       status: "enrolled",
       enrolled_at: event.metadata[:timestamp] || Time.current,
       withdrawn_at: nil,
-      withdrawal_reason: nil
+      withdrawal_reason: nil,
+      role_id: event.data[:role_id],
+      level_id: event.data[:level_id],
+      level_ordinal: level_ordinal_for(event.data[:level_id])
     )
     enrollment.save!
+  end
+
+  # Re-snapshots the participant's assessed role/level when a promotion or
+  # transfer landed while the cycle was open. find-only: the enrollment row
+  # always exists (the participant must be enrolled for the aggregate to emit).
+  def handle_participant_role_level_changed(event)
+    enrollment = AssessmentCycleEnrollment.find_by(
+      cycle_id: event.data[:cycle_id],
+      person_id: event.data[:person_id]
+    )
+    return unless enrollment
+
+    enrollment.update!(
+      role_id: event.data[:role_id],
+      level_id: event.data[:level_id],
+      level_ordinal: level_ordinal_for(event.data[:level_id])
+    )
   end
 
   def handle_person_unenrolled(event)
@@ -178,6 +206,17 @@ class AssessmentCycles::Projections::CurrentState
         withdrawal_reason: "cycle_closed"
       )
     end
+  end
+
+  # Resolves a level's ordinal from its id, denormalised onto the enrollment
+  # so scoring reads it without a join. nil-safe for historical/absent levels.
+  #
+  # @param level_id [String, nil]
+  # @return [Integer, nil]
+  def level_ordinal_for(level_id)
+    return nil unless level_id
+
+    FrameworkState::Level.find_by(level_id: level_id)&.ordinal
   end
 
   # Sets tenant context from event metadata for projection writes.

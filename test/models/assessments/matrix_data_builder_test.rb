@@ -68,6 +68,25 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
     end
   end
 
+  context "assessment level snapshot (per-cycle)" do
+    should "score against the enrollment snapshot level, not the passed (current) level" do
+      # Passed @level is ordinal 2; snapshot says they were assessed at ordinal 1.
+      build_snapshot_enrollment(role_id: @role.role_id, level_id: @levels[0].level_id, level_ordinal: 1)
+      data = build_self_data
+      assert_equal 1, data[:person_level]
+      assert_equal 1, data[:level].ordinal
+    end
+
+    should "ignore a snapshot whose role differs from the rendered role" do
+      build_snapshot_enrollment(role_id: SecureRandom.uuid_v7, level_id: @levels[0].level_id, level_ordinal: 1)
+      assert_equal 2, build_self_data[:person_level], "cross-role snapshot must not apply"
+    end
+
+    should "fall back to the passed level when no snapshot exists" do
+      assert_equal 2, build_self_data[:person_level]
+    end
+  end
+
   context "context: :self" do
     setup do
       @data = Assessments::MatrixDataBuilder.new(
@@ -229,6 +248,22 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
   end
 
   private
+
+  def build_self_data
+    Assessments::MatrixDataBuilder.new(
+      framework: @framework, role: @role, level: @level,
+      person_id: @person_id, cycle_id: @cycle_id, categories: @categories,
+      context: :self
+    ).build
+  end
+
+  def build_snapshot_enrollment(role_id:, level_id:, level_ordinal:)
+    AssessmentCycleEnrollment.create!(
+      tenant: @tenant, cycle_id: @cycle_id, person_id: @person_id,
+      status: "enrolled", enrolled_at: Time.current,
+      role_id: role_id, level_id: level_id, level_ordinal: level_ordinal
+    )
+  end
 
   def build_for(viewer_person_id:, viewer_sees_all_evidence:)
     Assessments::MatrixDataBuilder.new(

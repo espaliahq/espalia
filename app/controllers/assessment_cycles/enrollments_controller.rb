@@ -28,9 +28,12 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
 
     person_id = enrollment_params[:person_id]
 
+    role_id, level_id = assignment_role_level(person_id)
+
     ActiveRecord::Base.transaction do
       AssessmentCycles::CommandHandler.new.enroll(
-        @cycle.cycle_id, person_id, enrolled_by: current_person&.id
+        @cycle.cycle_id, person_id, enrolled_by: current_person&.id,
+        role_id: role_id, level_id: level_id
       )
     end
     redirect_to assessment_cycle_path(@cycle), notice: "Person enrolled."
@@ -52,9 +55,11 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
     command_handler = AssessmentCycles::CommandHandler.new
 
     @cycle.eligible_people.find_each do |person|
+      role_id, level_id = assignment_role_level(person.id)
       ActiveRecord::Base.transaction do
         command_handler.enroll(
-          @cycle.cycle_id, person.id, enrolled_by: current_person&.id
+          @cycle.cycle_id, person.id, enrolled_by: current_person&.id,
+          role_id: role_id, level_id: level_id
         )
       end
       enrolled += 1
@@ -103,5 +108,19 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
 
   def enrollment_params
     params.expect(enrollment: [ :person_id ])
+  end
+
+  # Resolves the person's current role/level on this cycle's framework, to
+  # snapshot as the assessed role/level at enrollment. Returns [nil, nil] when
+  # the person has no assignment (the downstream PersonEnrollmentSync guard
+  # surfaces that as a domain error).
+  #
+  # @param person_id [String]
+  # @return [Array(String, String)] [role_id, level_id]
+  def assignment_role_level(person_id)
+    assignment = PersonFrameworkAssignment.find_by(
+      person_id: person_id, framework_id: @cycle.framework_id
+    )
+    [ assignment&.role_id, assignment&.level_id ]
   end
 end

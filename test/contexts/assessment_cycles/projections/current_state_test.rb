@@ -143,6 +143,59 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
         assert_not_nil enrollment.enrolled_at
       end
     end
+
+    should "snapshot the assessed role/level (resolving the ordinal)" do
+      person_id = SecureRandom.uuid_v7
+      role, level = ActsAsTenant.with_tenant(@tenant) do
+        rf = create(:framework_role_family, framework_id: @framework_id)
+        r = create(:framework_role, role_family_id: rf.role_family_id, code: "E", track: "ic")
+        l = create(:framework_level, role_id: r.role_id, ordinal: 3, title: "Senior", code: "E3")
+        [ r, l ]
+      end
+
+      emit(AssessmentCycles::Events::PersonEnrolled,
+        cycle_id: @cycle_id, person_id: person_id, framework_id: @framework_id,
+        framework_version: 1, enrolled_by: nil, role_id: role.role_id, level_id: level.level_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        enrollment = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: person_id)
+        assert_equal role.role_id, enrollment.role_id
+        assert_equal level.level_id, enrollment.level_id
+        assert_equal 3, enrollment.level_ordinal
+      end
+    end
+  end
+
+  context "ParticipantRoleLevelChanged" do
+    setup do
+      emit(AssessmentCycles::Events::CycleDefined,
+        cycle_id: @cycle_id, framework_id: @framework_id, framework_version: 1,
+        name: "Q1", cycle_type: "regular", defined_by: nil)
+      @person_id = SecureRandom.uuid_v7
+      emit(AssessmentCycles::Events::PersonEnrolled,
+        cycle_id: @cycle_id, person_id: @person_id, framework_id: @framework_id,
+        framework_version: 1, enrolled_by: nil)
+    end
+
+    should "re-snapshot the enrollment's role/level/ordinal" do
+      role, level = ActsAsTenant.with_tenant(@tenant) do
+        rf = create(:framework_role_family, framework_id: @framework_id)
+        r = create(:framework_role, role_family_id: rf.role_family_id, code: "E", track: "ic")
+        l = create(:framework_level, role_id: r.role_id, ordinal: 4, title: "Staff", code: "E4")
+        [ r, l ]
+      end
+
+      emit(AssessmentCycles::Events::ParticipantRoleLevelChanged,
+        cycle_id: @cycle_id, person_id: @person_id, role_id: role.role_id,
+        level_id: level.level_id, reason: "promotion")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        enrollment = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal role.role_id, enrollment.role_id
+        assert_equal level.level_id, enrollment.level_id
+        assert_equal 4, enrollment.level_ordinal
+      end
+    end
   end
 
   context "PersonUnenrolled" do

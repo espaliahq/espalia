@@ -61,7 +61,8 @@ class AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments
     # subscribers run synchronously but NOT in an implicit DB transaction.
     ActiveRecord::Base.transaction do
       AssessmentCycles::CommandHandler.new.enroll(
-        cycle.cycle_id, person_id, enrolled_by: nil
+        cycle.cycle_id, person_id, enrolled_by: nil,
+        role_id: event.data[:role_id], level_id: event.data[:level_id]
       )
     end
   end

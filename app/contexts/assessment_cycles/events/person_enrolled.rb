@@ -13,6 +13,12 @@
 #   @option data [String] :framework_id UUID of the framework (from cycle state)
 #   @option data [Integer] :framework_version frozen framework version (from cycle state)
 #   @option data [String, nil] :enrolled_by person_id / tenant_user_id of the enroller
+#   @option data [String, nil] :role_id role the person is assessed AGAINST for this
+#     cycle, snapshotted at enrollment. nil on historical events emitted before
+#     the snapshot was added, or when the person had no assignment at enroll time.
+#   @option data [String, nil] :level_id level the person is assessed AGAINST for
+#     this cycle, snapshotted at enrollment. Re-snapshotted mid-cycle via
+#     {AssessmentCycles::Events::ParticipantRoleLevelChanged}.
 #
 class AssessmentCycles::Events::PersonEnrolled < RubyEventStore::Event
 end
