@@ -44,6 +44,7 @@ class PersonDevelopment::Aggregate
     @evidence = {}       # evidence_id => { capability_stable_id:, level_ordinal:, status: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
+    @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
   end
 
   # ── Assignment ──
@@ -479,7 +480,8 @@ class PersonDevelopment::Aggregate
 
     apply(PersonDevelopment::Events::FullAlignmentCompleted.new(data: {
       cycle_id: cycle_id,
-      completed_by_id: completed_by_id
+      completed_by_id: completed_by_id,
+      framework_version: @assessed_framework_version
     }))
   end
 
@@ -776,10 +778,13 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::FrameworkVersionMigrated do |event|
     @last_migrated_to_version = event.data[:new_version]
+    # The current cycle is now assessed against the migrated-to version.
+    @assessed_framework_version = event.data[:new_version]
   end
 
   on PersonDevelopment::Events::JoinedAssessmentCycle do |event|
     @current_cycle_id = event.data[:cycle_id]
+    @assessed_framework_version = event.data[:framework_version]
     @alignment_started = false
     @alignment_completed = false
     @self_ratings = {}

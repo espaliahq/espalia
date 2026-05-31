@@ -786,6 +786,20 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @completed_by_id, event.data[:completed_by_id]
     end
 
+    should "capture the join framework_version on completion" do
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
+      assert_equal 1, @aggregate.unpublished_events.to_a.last.data[:framework_version]
+    end
+
+    should "capture the migrated-to framework_version when migrated mid-cycle" do
+      mappings = [ { from_stable_id: SecureRandom.uuid_v7, to_stable_id: SecureRandom.uuid_v7,
+                     mapping_type: "same", requires_reassessment: false,
+                     counts: { ratings: 0, evidence: 0, comments: 0 } } ]
+      @aggregate.migrate_framework_version(@framework_id, 1, 2, mappings)
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
+      assert_equal 2, @aggregate.unpublished_events.to_a.last.data[:framework_version]
+    end
+
     should "raise if alignment has not been started" do
       aggregate = PersonDevelopment::Aggregate.new
       aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)

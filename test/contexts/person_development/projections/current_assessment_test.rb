@@ -422,13 +422,14 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
 
       emit(PersonDevelopment::Events::FullAlignmentCompleted,
-        cycle_id: @cycle_id, completed_by_id: manager.id)
+        cycle_id: @cycle_id, completed_by_id: manager.id, framework_version: 2)
 
       ActsAsTenant.with_tenant(@tenant) do
         progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
         assert_equal "aligned", progress.status
         assert_not_nil progress.aligned_at
         assert_equal manager.id, progress.aligned_by_id
+        assert_equal 2, progress.aligned_framework_version
       end
     end
   end
