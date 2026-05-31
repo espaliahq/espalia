@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_29_060000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_31_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -72,6 +72,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_29_060000) do
   end
 
   create_table "assessment_level_ratings", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "aligned_by_id"
     t.text "aligned_comment"
     t.string "aligned_frequency"
     t.uuid "capability_stable_id", null: false
@@ -82,6 +83,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_29_060000) do
     t.datetime "last_manager_rated_at"
     t.datetime "last_self_rated_at"
     t.integer "level_ordinal", null: false
+    t.uuid "manager_rated_by_id"
     t.text "manager_rated_comment"
     t.string "manager_rated_frequency"
     t.string "migration_status", default: "not_flagged", null: false

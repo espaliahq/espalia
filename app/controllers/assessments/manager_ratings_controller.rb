@@ -50,19 +50,20 @@ class Assessments::ManagerRatingsController < ApplicationController
       # Untoggle: clicking the already-selected frequency clears the rating
       handler.clear_manager_rating(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
+        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id, rated_by_id: current_person.id
       )
     elsif existing&.manager_rated_frequency.present?
       handler.revise_manager_rating(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Updated during manager assessment", cycle_id: cycle.cycle_id, comment: comment
+        rationale: "Updated during manager assessment", cycle_id: cycle.cycle_id, comment: comment,
+        rated_by_id: current_person.id
       )
     else
       handler.rate_as_manager(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, frequency: frequency,
-        cycle_id: cycle.cycle_id, comment: comment
+        cycle_id: cycle.cycle_id, comment: comment, rated_by_id: current_person.id
       )
     end
 

@@ -12,7 +12,7 @@
 class Views::Assessments::Comments::Thread < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
 
-  # @param comments [Array<PersonDevelopmentComment>] chronological, top-level + replies
+  # @param comments [Array<PersonDevelopmentComment>] all comments on the cell (any depth)
   # @param assessment_id [String]
   # @param viewer_person_id [String]
   # @param can_create [Boolean]
@@ -108,46 +108,50 @@ class Views::Assessments::Comments::Thread < Views::Base
     @visible_count ||= @comments.count { |c| !c.deleted? }
   end
 
-  # Renders comments top-level-first, with replies grouped under their
-  # parent. V1 supports a single level of replies — replies-of-replies
-  # are flattened to the first reply level.
+  # Renders every comment on the cell as a flat, chronological stream.
+  # Threading is conveyed not by nesting but by a small "↳ replying to
+  # <author>" affordance on any comment whose parent isn't the line
+  # directly above it — when a reply follows the comment it answers, the
+  # relationship is self-evident and the chip is omitted.
   #
   # Deleted-comment visibility rule: a tombstone stays only when it is
-  # load-bearing for thread structure — i.e. when its presence is the
-  # only reason a still-visible reply makes sense. Concretely:
-  # - Deleted REPLIES are always hidden (they are leaves; nothing depends
-  #   on them).
-  # - Deleted TOP-LEVELS are hidden when they have no non-deleted
-  #   replies, and kept (as a "[deleted]" tombstone) when active
-  #   replies still hang off them.
-  # This preserves conversational continuity for active threads without
-  # accumulating dead-comment clutter indefinitely. The cell's
+  # load-bearing — i.e. some still-visible comment replied to it, so a
+  # "↳ replying to …" link would otherwise dangle. Deleted comments that
+  # nothing points at are dropped entirely. This preserves conversational
+  # continuity without accumulating dead-comment clutter. The cell's
   # `comment_count` badge already counts only active comments, so
   # tombstone visibility here doesn't bleed into the count.
   def render_thread_tree
-    by_parent = @comments.group_by(&:parent_id)
-    top_level = by_parent[nil] || []
-    top_level.sort_by(&:posted_at).each do |comment|
-      replies = (by_parent[comment.id] || []).reject(&:deleted?).sort_by(&:posted_at)
-      next if comment.deleted? && replies.empty?
+    ordered = @comments.sort_by(&:posted_at)
+    referenced_parent_ids = ordered.reject(&:deleted?).filter_map(&:parent_id).to_set
+    by_id = ordered.index_by(&:id)
+    visible = ordered.reject { |c| c.deleted? && !referenced_parent_ids.include?(c.id) }
 
-      render_card(comment, indent: false)
-      replies.each { |reply| render_card(reply, indent: true) }
+    previous_id = nil
+    visible.each do |comment|
+      parent = comment.parent_id && by_id[comment.parent_id]
+      # Show the "replying to" chip only when the answered comment isn't
+      # the one rendered immediately above — otherwise the link is noise.
+      reply_to = (parent if parent && comment.parent_id != previous_id)
+      # Any reply gets a single level of indent. Depth beyond one is
+      # conveyed by the chip, not deeper nesting — so a reply-to-a-reply
+      # sits at the same indent as a reply, never further right.
+      render_card(comment, indent: comment.parent_id.present?, reply_to: reply_to)
+      previous_id = comment.id
     end
   end
 
-  def render_card(comment, indent:)
+  def render_card(comment, indent:, reply_to:)
     render Views::Assessments::Comments::Card.new(
       comment: comment,
       assessment_id: @assessment_id,
       can_edit: can_edit?(comment),
       can_delete: can_delete?(comment),
-      # Reply rights match comment-creation rights — anyone who can
-      # post a top-level comment can reply to one. Card-side guard
-      # then narrows further (only top-level comments expose Reply,
-      # to preserve the one-level threading invariant).
+      # Reply rights match comment-creation rights — anyone who can post
+      # a comment can reply to any comment on the cell.
       can_reply: @can_create,
-      indent: indent
+      indent: indent,
+      reply_to: reply_to
     )
   end
 

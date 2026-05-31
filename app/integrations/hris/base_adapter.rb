@@ -14,9 +14,13 @@
 #
 class Hris::BaseAdapter
   # @param tenant [Tenant] the tenant whose HRIS data to sync
-  def initialize(tenant)
+  # @param correlation_id [String, nil] id correlating every event this
+  #   sync run produces — typically the enqueuing job's id. Falls back to
+  #   a fresh uuid per run when nil (see the adapter's audit wrap).
+  def initialize(tenant, correlation_id: nil)
     @tenant = tenant
     @config = tenant.hris_config
+    @correlation_id = correlation_id
   end
 
   # Performs a full sync of employee data into Person records.
@@ -42,5 +46,5 @@ class Hris::BaseAdapter
 
   private
 
-  attr_reader :tenant, :config
+  attr_reader :tenant, :config, :correlation_id
 end

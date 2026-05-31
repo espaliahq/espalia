@@ -111,6 +111,64 @@ class Assessments::CommentsControllerTest < ActionDispatch::IntegrationTest
       }
       assert_response :unprocessable_content
     end
+
+    should "let a reply target another reply (multi-level threading)" do
+      sign_in @assessee_user
+      cell = { capability_stable_id: @cap.stable_id, level_ordinal: 2 }
+
+      post assessment_comments_path(@assignment), params: { comment: cell.merge(body: "Top") }
+      assert_response :redirect
+      top = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.last }
+
+      post assessment_comments_path(@assignment),
+        params: { comment: cell.merge(body: "Reply", parent_id: top.id) }
+      assert_response :redirect
+      reply = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.last }
+      assert_equal top.id, reply.parent_id
+
+      post assessment_comments_path(@assignment),
+        params: { comment: cell.merge(body: "Reply to a reply", parent_id: reply.id) }
+      assert_response :redirect
+
+      ActsAsTenant.with_tenant(@tenant) do
+        nested = PersonDevelopmentComment.last
+        assert_equal "Reply to a reply", nested.body
+        assert_equal reply.id, nested.parent_id
+        assert_equal "active", nested.status
+      end
+    end
+  end
+
+  context "rendered thread on the assessment page" do
+    setup do
+      sign_in @assessee_user
+      @cell = { capability_stable_id: @cap.stable_id, level_ordinal: 2 }
+      post assessment_comments_path(@assignment), params: { comment: @cell.merge(body: "Anchor point") }
+      @anchor = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.last }
+    end
+
+    should "omit the reply chip when the parent is the comment directly above" do
+      post assessment_comments_path(@assignment),
+        params: { comment: @cell.merge(body: "Right below", parent_id: @anchor.id) }
+
+      get assessment_path(@assignment)
+      assert_response :success
+      assert_no_match(/replying to/, response.body)
+    end
+
+    should "show the reply chip when the parent is not the comment directly above" do
+      # Two replies to the same anchor: the first sits directly under the
+      # anchor (no chip); the second is separated from the anchor by the
+      # first reply, so it surfaces a "↳ replying to Dev" chip.
+      post assessment_comments_path(@assignment),
+        params: { comment: @cell.merge(body: "First reply", parent_id: @anchor.id) }
+      post assessment_comments_path(@assignment),
+        params: { comment: @cell.merge(body: "Second reply", parent_id: @anchor.id) }
+
+      get assessment_path(@assignment)
+      assert_response :success
+      assert_match(/↳ replying to #{@assessee.name}/, response.body)
+    end
   end
 
   context "PATCH /assessments/:assessment_id/comments/:id" do

@@ -8,6 +8,9 @@
 #   @option data [String] :capability_stable_id stable UUID of the capability
 #   @option data [Integer] :level_ordinal the level being cleared
 #   @option data [String] :cycle_id UUID of the cycle this rating belongs to
+#   @option data [String, nil] :rated_by_id UUID of the Person (manager) who
+#     cleared the rating. nil on historical events emitted before attribution
+#     was added.
 #
 class PersonDevelopment::Events::ManagerRatingCleared < RubyEventStore::Event
 end

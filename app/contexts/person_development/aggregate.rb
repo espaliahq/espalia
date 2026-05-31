@@ -54,15 +54,18 @@ class PersonDevelopment::Aggregate
   # @param framework_id [String] UUID of the framework
   # @param role_id [String] UUID of the assigned role
   # @param level_id [String] UUID of the assigned level
+  # @param assigned_by [String, nil] UUID of the Person who triggered the
+  #   assignment; nil for system-driven HRIS syncs
   # @raise [RuntimeError] if already assigned
-  def assign_to_framework(person_id, framework_id, role_id, level_id)
+  def assign_to_framework(person_id, framework_id, role_id, level_id, assigned_by: nil)
     raise "Person already assigned to this framework" if @assigned
 
     apply(PersonDevelopment::Events::PersonAssignedToFramework.new(data: {
       person_id: person_id,
       framework_id: framework_id,
       role_id: role_id,
-      level_id: level_id
+      level_id: level_id,
+      assigned_by: assigned_by
     }))
   end
 
@@ -74,8 +77,10 @@ class PersonDevelopment::Aggregate
   # @param new_role_id [String] UUID of the new role
   # @param new_level_id [String] UUID of the new level (must belong to new role)
   # @param reason [String] why the change occurred (e.g. "hris_sync", "manual")
+  # @param changed_by [String, nil] UUID of the Person who triggered the change;
+  #   nil for system-driven HRIS syncs
   # @raise [RuntimeError] if not yet assigned, or if role is unchanged
-  def change_role(new_role_id, new_level_id, reason: "hris_sync")
+  def change_role(new_role_id, new_level_id, reason: "hris_sync", changed_by: nil)
     ensure_assigned!
     raise "Role unchanged" if @role_id == new_role_id
 
@@ -84,7 +89,8 @@ class PersonDevelopment::Aggregate
       new_role_id: new_role_id,
       previous_level_id: @level_id,
       new_level_id: new_level_id,
-      reason: reason
+      reason: reason,
+      changed_by: changed_by
     }))
   end
 
@@ -92,15 +98,18 @@ class PersonDevelopment::Aggregate
   #
   # @param new_level_id [String] UUID of the new level (must belong to current role)
   # @param reason [String] why the change occurred (e.g. "hris_sync", "manual")
+  # @param changed_by [String, nil] UUID of the Person who triggered the change;
+  #   nil for system-driven HRIS syncs
   # @raise [RuntimeError] if not yet assigned, or if level is unchanged
-  def change_level(new_level_id, reason: "hris_sync")
+  def change_level(new_level_id, reason: "hris_sync", changed_by: nil)
     ensure_assigned!
     raise "Level unchanged" if @level_id == new_level_id
 
     apply(PersonDevelopment::Events::PersonLevelChanged.new(data: {
       previous_level_id: @level_id,
       new_level_id: new_level_id,
-      reason: reason
+      reason: reason,
+      changed_by: changed_by
     }))
   end
 
@@ -251,9 +260,11 @@ class PersonDevelopment::Aggregate
   # @param frequency [String] "some", "occasional", or "consistent"
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional rationale
+  # @param rated_by_id [String, nil] UUID of the manager recording the rating;
+  #   nil for system "seeded" carry-forwards
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
   def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
-                      source: "human", seeded_from_cycle_id: nil)
+                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -265,7 +276,8 @@ class PersonDevelopment::Aggregate
       cycle_id: cycle_id,
       comment: comment,
       source: source,
-      seeded_from_cycle_id: seeded_from_cycle_id
+      seeded_from_cycle_id: seeded_from_cycle_id,
+      rated_by_id: rated_by_id
     }))
   end
 
@@ -277,8 +289,10 @@ class PersonDevelopment::Aggregate
   # @param rationale [String] reason for the change
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
+  # @param rated_by_id [String, nil] UUID of the manager recording the revision
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
-  def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+  def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
+                            rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -291,7 +305,8 @@ class PersonDevelopment::Aggregate
       frequency: frequency,
       cycle_id: cycle_id,
       comment: comment,
-      rationale: rationale
+      rationale: rationale,
+      rated_by_id: rated_by_id
     }))
   end
 
@@ -300,8 +315,9 @@ class PersonDevelopment::Aggregate
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
   # @param cycle_id [String] UUID of the cycle this rating belongs to
+  # @param rated_by_id [String, nil] UUID of the manager clearing the rating
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
-  def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:)
+  def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
@@ -310,7 +326,8 @@ class PersonDevelopment::Aggregate
     apply(PersonDevelopment::Events::ManagerRatingCleared.new(data: {
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
-      cycle_id: cycle_id
+      cycle_id: cycle_id,
+      rated_by_id: rated_by_id
     }))
   end
 
@@ -350,7 +367,8 @@ class PersonDevelopment::Aggregate
         level_ordinal: level_ordinal,
         aligned_frequency: self_freq,
         cycle_id: cycle_id,
-        comment: "Auto-aligned: self and manager already agreed"
+        comment: "Auto-aligned: self and manager already agreed",
+        aligned_by_id: started_by_id
       }))
     end
   end
@@ -367,8 +385,10 @@ class PersonDevelopment::Aggregate
   # @param aligned_frequency [String] agreed frequency
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param comment [String, nil] optional comment
+  # @param aligned_by_id [String, nil] UUID of the Person recording the agreement
   # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or invalid frequency
-  def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, cycle_id:, comment: nil)
+  def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, cycle_id:, comment: nil,
+                       aligned_by_id: nil)
     ensure_in_cycle!(cycle_id)
     raise "Alignment has not been started for this cycle" unless @alignment_started
     raise "Alignment has been completed for this cycle" if @alignment_completed
@@ -379,7 +399,8 @@ class PersonDevelopment::Aggregate
       level_ordinal: level_ordinal,
       aligned_frequency: aligned_frequency,
       cycle_id: cycle_id,
-      comment: comment
+      comment: comment,
+      aligned_by_id: aligned_by_id
     }))
   end
 
@@ -395,9 +416,10 @@ class PersonDevelopment::Aggregate
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
+  # @param cleared_by_id [String, nil] UUID of the Person clearing the alignment
   # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not
   #   started, alignment already completed, or no prior alignment for this cell
-  def clear_alignment_rating(capability_stable_id, level_ordinal:, cycle_id:)
+  def clear_alignment_rating(capability_stable_id, level_ordinal:, cycle_id:, cleared_by_id: nil)
     ensure_in_cycle!(cycle_id)
     raise "Alignment has not been started for this cycle" unless @alignment_started
     raise "Alignment has been completed for this cycle" if @alignment_completed
@@ -407,7 +429,8 @@ class PersonDevelopment::Aggregate
     apply(PersonDevelopment::Events::AlignmentCleared.new(data: {
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
-      cycle_id: cycle_id
+      cycle_id: cycle_id,
+      cleared_by_id: cleared_by_id
     }))
   end
 
@@ -646,11 +669,12 @@ class PersonDevelopment::Aggregate
       parent = @comments[parent_id]
       raise CommandError, "No parent comment with id #{parent_id}" unless parent
       raise CommandError, "Cannot reply to a deleted comment" if parent[:status] == "deleted"
-      # V1 thread depth is one level. The Reply UI affordance is hidden
-      # on reply cards (see Comments::Card), but the aggregate is the
-      # authoritative boundary — a hand-rolled API call must not be able
-      # to nest deeper than the projection's render layer expects.
-      raise CommandError, "Cannot reply to a reply (one-level threading)" if parent[:parent_id]
+      # A reply may target ANY non-deleted comment on the cell, including
+      # another reply. Display is flat (see Comments::Thread) — depth is
+      # unbounded in the data and a reply simply records which comment it
+      # answered via parent_id. No cycle risk: the parent must already
+      # exist in @comments before its child is posted, so links only ever
+      # point backwards in time.
       # Replies must share their parent's anchor. Without this, a reply
       # could be posted on a different (capability, level) cell than its
       # parent, and the projection's group-by-parent thread tree would

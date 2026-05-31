@@ -77,6 +77,11 @@ class Operations::Assessments::RateAsManagerTest < ActiveSupport::TestCase
       assert_equal @cycle_id,    result[:cycle_id]
       assert_equal @framework_id, result[:framework_id]
     end
+
+    should "capture the calling manager as the rater" do
+      call_op(frequency: "consistent")
+      assert_equal @manager.id, reload_rating.manager_rated_by_id
+    end
   end
 
   context "second rating with the SAME frequency" do

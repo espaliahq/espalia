@@ -53,13 +53,13 @@ class Assessments::AlignmentRatingsController < ApplicationController
       # across contexts.
       handler.clear_alignment_rating(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
+        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id, cleared_by_id: current_person.id
       )
     else
       handler.align_assessment(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, aligned_frequency: frequency,
-        cycle_id: cycle.cycle_id, comment: comment
+        cycle_id: cycle.cycle_id, comment: comment, aligned_by_id: current_person.id
       )
     end
 

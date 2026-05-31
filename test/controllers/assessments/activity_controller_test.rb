@@ -46,6 +46,26 @@ class Assessments::ActivityControllerTest < ActionDispatch::IntegrationTest
       assert_match "Self-rated", response.body
     end
 
+    should "phrase a reply as 'replied to <parent author>' in the feed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        top_id = SecureRandom.uuid_v7
+        handler.post_comment(@person.id, @framework.framework_id, top_id,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          body: "Top note", author_id: @person.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 1)
+        handler.post_comment(@person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          body: "My reply", author_id: @person.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 1, parent_id: top_id)
+      end
+
+      sign_in @user
+      get assessment_activity_path(@assignment)
+      assert_response :success
+      assert_match(/replied to #{@person.name}/, response.body)
+    end
+
     should "render an empty state when there's no activity" do
       ActsAsTenant.with_tenant(@tenant) do
         other_person = create(:person, tenant: @tenant, name: "Other")

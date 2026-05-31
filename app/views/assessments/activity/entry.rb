@@ -144,13 +144,13 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "self_rating_cleared"
       "Cleared self rating on #{capability_label}"
     when "manager_rated", "manager_rating_revised"
-      "Manager rated #{capability_label}"
+      "#{manager_label} rated #{capability_label}"
     when "manager_rating_cleared"
-      "Manager cleared rating on #{capability_label}"
+      "#{manager_label} cleared rating on #{capability_label}"
     when "assessment_aligned"
-      "Aligned on #{capability_label}"
+      actor_name ? "#{actor_name} aligned #{capability_label}" : "Aligned on #{capability_label}"
     when "alignment_cleared"
-      "Cleared alignment on #{capability_label}"
+      actor_name ? "#{actor_name} cleared alignment on #{capability_label}" : "Cleared alignment on #{capability_label}"
     when "evidence_recorded"     then evidence_recorded_summary
     when "evidence_relinked"     then evidence_relinked_summary
     when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
@@ -161,15 +161,37 @@ class Views::Assessments::Activity::Entry < Views::Base
     end
   end
 
-  # "<Author name> commented on <Capability · Lx>" — anchors the entry
-  # to whose voice it is, since informal conversation makes voice
-  # primary in a way ratings don't.
+  # The resolved actor name for an attributed entry (rater / aligner /
+  # clearer), or nil when unknown. The query merges it under `actor_name`;
+  # historical events carry no actor id so it stays nil and callers fall back.
+  def actor_name
+    payload_value(:actor_name).to_s.strip.presence
+  end
+
+  # The rating manager's name when known, else the generic "Manager".
+  def manager_label
+    actor_name || "Manager"
+  end
+
+  # "<Author> commented on <Capability · Lx>", or — when the comment
+  # answers another — "<Author> replied to <Parent author> on …", so the
+  # feed tells the story of the conversation. The comment body renders on
+  # the secondary line (see #secondary_text). Anchors the entry to whose
+  # voice it is, since informal conversation makes voice primary in a way
+  # ratings don't.
   def comment_posted_summary
     author_name = if @entry.payload.respond_to?(:author)
       @entry.payload.author&.name
     end
     name = author_name.to_s.strip.presence || "Someone"
-    "#{name} commented on #{capability_label}"
+
+    parent = @entry.payload.respond_to?(:parent) ? @entry.payload.parent : nil
+    if parent
+      parent_name = parent.author&.name.to_s.strip.presence || "another comment"
+      "#{name} replied to #{parent_name} on #{capability_label}"
+    else
+      "#{name} commented on #{capability_label}"
+    end
   end
 
   # "Relinked evidence from <prev cap · L<prev>> to <new cap · L<new>>"

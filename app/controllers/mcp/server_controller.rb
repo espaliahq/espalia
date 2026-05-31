@@ -64,7 +64,9 @@ class Mcp::ServerController < ActionController::Base
 
     response_body = AuditMetadata.with(
       acting_via: :mcp,
-      client_application_id: doorkeeper_token.application_id
+      actor_id: context.person&.id,
+      client_application_id: doorkeeper_token.application_id,
+      correlation_id: request.request_id
     ) do
       Mcp::RequestHandler.new(
         context: context,

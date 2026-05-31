@@ -10,6 +10,9 @@
 #   @option data [String] :cycle_id UUID of the cycle this rating belongs to
 #   @option data [String] :comment optional comment on the revision
 #   @option data [String] :rationale reason for the change
+#   @option data [String, nil] :rated_by_id UUID of the Person (manager) who
+#     recorded this revision. nil on historical events emitted before
+#     attribution was added.
 #
 class PersonDevelopment::Events::ManagerRatingRevised < RubyEventStore::Event
 end

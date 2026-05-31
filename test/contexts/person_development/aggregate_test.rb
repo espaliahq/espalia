@@ -26,6 +26,16 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @level_id, events.first.data[:level_id]
     end
 
+    should "capture assigned_by when provided, nil otherwise" do
+      actor = SecureRandom.uuid_v7
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id, assigned_by: actor)
+      assert_equal actor, @aggregate.unpublished_events.to_a.last.data[:assigned_by]
+
+      fresh = PersonDevelopment::Aggregate.new
+      fresh.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      assert_nil fresh.unpublished_events.to_a.last.data[:assigned_by]
+    end
+
     should "raise if already assigned" do
       @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
 
@@ -107,6 +117,12 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal "hris_sync", event.data[:reason]
     end
 
+    should "capture changed_by when provided" do
+      actor = SecureRandom.uuid_v7
+      @aggregate.change_role(@new_role_id, @new_level_id, reason: "manual", changed_by: actor)
+      assert_equal actor, @aggregate.unpublished_events.to_a.last.data[:changed_by]
+    end
+
     should "raise if not assigned" do
       aggregate = PersonDevelopment::Aggregate.new
       err = assert_raises(RuntimeError) do
@@ -139,6 +155,12 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @level_id, event.data[:previous_level_id]
       assert_equal @new_level_id, event.data[:new_level_id]
       assert_equal "hris_sync", event.data[:reason]
+    end
+
+    should "capture changed_by when provided" do
+      actor = SecureRandom.uuid_v7
+      @aggregate.change_level(@new_level_id, reason: "manual", changed_by: actor)
+      assert_equal actor, @aggregate.unpublished_events.to_a.last.data[:changed_by]
     end
 
     should "raise if not assigned" do
@@ -350,6 +372,23 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal "Needs work", event.data[:comment]
     end
 
+    should "capture rated_by_id on the ManagerRated event" do
+      rater_id = SecureRandom.uuid_v7
+      @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id, rated_by_id: rater_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal rater_id, event.data[:rated_by_id]
+    end
+
+    should "default rated_by_id to nil (e.g. seeded carry-forwards)" do
+      @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 2, frequency: "consistent",
+        cycle_id: @cycle_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_nil event.data[:rated_by_id]
+    end
+
     should "raise for invalid frequency" do
       err = assert_raises(RuntimeError) do
         @aggregate.rate_as_manager(SecureRandom.uuid_v7, level_ordinal: 1, frequency: "never",
@@ -380,6 +419,15 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @cycle_id, event.data[:cycle_id]
       assert_equal "Reconsidered", event.data[:rationale]
       assert_equal "Updated", event.data[:comment]
+    end
+
+    should "capture rated_by_id on the ManagerRatingRevised event" do
+      rater_id = SecureRandom.uuid_v7
+      @aggregate.revise_manager_rating(@cap_sid, level_ordinal: 3, frequency: "consistent",
+        rationale: "Reconsidered", cycle_id: @cycle_id, rated_by_id: rater_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal rater_id, event.data[:rated_by_id]
     end
 
     should "raise if no prior manager rating for capability at that level" do
@@ -418,6 +466,14 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @cycle_id, event.data[:cycle_id]
     end
 
+    should "capture rated_by_id on the ManagerRatingCleared event" do
+      rater_id = SecureRandom.uuid_v7
+      @aggregate.clear_manager_rating(@cap_sid, level_ordinal: 3, cycle_id: @cycle_id, rated_by_id: rater_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal rater_id, event.data[:rated_by_id]
+    end
+
     should "raise if no prior manager rating for capability at that level" do
       err = assert_raises(RuntimeError) do
         @aggregate.clear_manager_rating(@cap_sid, level_ordinal: 4, cycle_id: @cycle_id)
@@ -448,6 +504,13 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal "consistent", event.data[:aligned_frequency]
       assert_equal @cycle_id, event.data[:cycle_id]
       assert_equal "We agree", event.data[:comment]
+    end
+
+    should "capture aligned_by_id on the AssessmentAligned event" do
+      actor = SecureRandom.uuid_v7
+      @aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 3, aligned_frequency: "consistent",
+        cycle_id: @cycle_id, aligned_by_id: actor)
+      assert_equal actor, @aggregate.unpublished_events.to_a.last.data[:aligned_by_id]
     end
 
     should "raise for invalid frequency" do
@@ -502,6 +565,12 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @cap_sid, event.data[:capability_stable_id]
       assert_equal 3, event.data[:level_ordinal]
       assert_equal @cycle_id, event.data[:cycle_id]
+    end
+
+    should "capture cleared_by_id on the AlignmentCleared event" do
+      actor = SecureRandom.uuid_v7
+      @aggregate.clear_alignment_rating(@cap_sid, level_ordinal: 3, cycle_id: @cycle_id, cleared_by_id: actor)
+      assert_equal actor, @aggregate.unpublished_events.to_a.last.data[:cleared_by_id]
     end
 
     should "raise if no prior alignment exists for the cell" do
@@ -577,6 +646,20 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
       end
       assert_match /already started/, err.message
+    end
+
+    should "attribute auto-aligned cells to the person who started alignment" do
+      cap_sid = SecureRandom.uuid_v7
+      @aggregate.rate_self(cap_sid, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+      @aggregate.rate_as_manager(cap_sid, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+
+      @aggregate.start_alignment(@cycle_id, started_by_id: @started_by_id)
+
+      aligned = @aggregate.unpublished_events.to_a.select do |e|
+        e.is_a?(PersonDevelopment::Events::AssessmentAligned)
+      end
+      assert_equal 1, aligned.length, "expected the agreed cell to auto-align"
+      assert_equal @started_by_id, aligned.first.data[:aligned_by_id]
     end
 
     should "raise if not in a cycle" do
