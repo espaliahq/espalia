@@ -18,6 +18,13 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["composer", "composerBody", "displayBody", "editForm", "replyForm", "replyBody"]
 
+  // Cancel a pending jump-to-parent highlight so its callback can't fire
+  // against a detached element after the thread frame is replaced.
+  disconnect() {
+    if (this.flashTimeoutId) clearTimeout(this.flashTimeoutId)
+    this.flashTimeoutId = null
+  }
+
   // Toggles the comment composer's visibility. The composer starts
   // hidden so the focused cell isn't dominated by an empty textarea —
   // the `+` icon next to the COMMENTS header opens it on demand.
@@ -99,7 +106,11 @@ export default class extends BaseController {
     event.preventDefault()
     li.scrollIntoView({ behavior: "smooth", block: "center" })
     li.classList.add("comment-flash")
-    setTimeout(() => li.classList.remove("comment-flash"), 1200)
+    if (this.flashTimeoutId) clearTimeout(this.flashTimeoutId)
+    this.flashTimeoutId = setTimeout(() => {
+      li.classList.remove("comment-flash")
+      this.flashTimeoutId = null
+    }, 1200)
   }
 
   cancelReply(event) {
