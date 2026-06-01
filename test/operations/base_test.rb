@@ -195,7 +195,23 @@ class Operations::BaseTest < ActiveSupport::TestCase
         def perform = :wrote
       end
 
-      AuditMetadata.with(acting_via: :web, actor_id: "target", impersonator_id: "admin") do
+      AuditMetadata.with(acting_via: :web, actor_id: "target", impersonation_active: true) do
+        assert_raises(Operations::Base::ImpersonationReadOnlyError) do
+          op.call(context: build_context, params: {})
+        end
+      end
+    end
+
+    should "block a non-read operation while impersonating even when the admin has no Person" do
+      op = Class.new(Operations::Base) do
+        category :write
+        def policy_check = nil
+        def perform = :wrote
+      end
+
+      # impersonator_id is nil (no linked admin Person) but the flag is set —
+      # the guard must still fire.
+      AuditMetadata.with(acting_via: :web, actor_id: "target", impersonation_active: true) do
         assert_raises(Operations::Base::ImpersonationReadOnlyError) do
           op.call(context: build_context, params: {})
         end
@@ -209,7 +225,7 @@ class Operations::BaseTest < ActiveSupport::TestCase
         def perform = :read_ok
       end
 
-      result = AuditMetadata.with(acting_via: :web, actor_id: "target", impersonator_id: "admin") do
+      result = AuditMetadata.with(acting_via: :web, actor_id: "target", impersonation_active: true) do
         op.call(context: build_context, params: {})
       end
       assert_equal :read_ok, result

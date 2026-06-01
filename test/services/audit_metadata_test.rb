@@ -56,6 +56,16 @@ class AuditMetadataTest < ActiveSupport::TestCase
       refute_includes AuditMetadata.current.keys, :impersonator_id
     end
 
+    should "include impersonation_active only when true" do
+      AuditMetadata.seed!(acting_via: :web, impersonation_active: true)
+      assert_equal true, AuditMetadata.current[:impersonation_active]
+    end
+
+    should "omit impersonation_active when false" do
+      AuditMetadata.seed!(acting_via: :web, impersonation_active: false)
+      refute_includes AuditMetadata.current.keys, :impersonation_active
+    end
+
     should "clear the slot" do
       AuditMetadata.seed!(acting_via: :web)
       AuditMetadata.clear!

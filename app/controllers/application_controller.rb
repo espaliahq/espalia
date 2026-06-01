@@ -152,6 +152,7 @@ class ApplicationController < ActionController::Base
       acting_via: :web,
       actor_id: current_person&.id,
       impersonator_id: impersonating? ? real_context.person&.id : nil,
+      impersonation_active: impersonating?,
       correlation_id: request.request_id
     )
     yield

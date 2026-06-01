@@ -201,11 +201,13 @@ class Operations::Base
   # Domain backstop for read-only impersonation: refuse any non-read
   # Operation while an impersonation session is active. `:none`-approval
   # reads pass; everything else raises. The signal is {AuditMetadata}'s
-  # `impersonator_id`, seeded only on web requests where a tenant admin is
-  # impersonating — MCP/HRIS never set it, so this is a no-op there.
+  # `impersonation_active` flag, seeded only on web requests where a tenant
+  # admin is impersonating — MCP/HRIS never set it, so this is a no-op
+  # there. We consult the flag rather than `impersonator_id` so the guard
+  # still fires when the real admin has no linked Person (nil id).
   def forbid_impersonated_write!
     return if self.class.category == :read
-    return if AuditMetadata.current[:impersonator_id].blank?
+    return unless AuditMetadata.current[:impersonation_active]
 
     raise ImpersonationReadOnlyError,
           "#{self.class} is a #{self.class.category} operation and cannot run while impersonating"
