@@ -10,8 +10,13 @@ One RES stream per person per framework: `tenant-{tenant_id}/PersonDev-{person_i
 
 ```
 Assignment:
-  PersonAssignedToFramework { framework_id, role_id, level_id }
-  RoleChanged { old_role_id, new_role_id, old_level_id, new_level_id, reason }
+  PersonAssignedToFramework { framework_id, role_id, level_id, assigned_by? }
+  PersonRoleChanged { previous_role_id, new_role_id, previous_level_id, new_level_id, reason, changed_by? }
+  PersonLevelChanged { previous_level_id, new_level_id, reason, changed_by? }
+    ← assigned_by / changed_by are nil for system-driven HRIS syncs (provenance
+      is then the metadata layer: acting_via: :hris + correlation_id). See ADR-18.
+    ← migrate_framework_version RAISES if the current cycle's alignment is
+      completed — a completed assessment is immutable (ADR-19).
 
 Evidence:
   EvidenceRecorded { id, capability_stable_id, level_id, source, evidence_type,
@@ -51,10 +56,15 @@ Self-assessment:
       Scoring falls back to the default for that cell.
 
 Manager assessment:
-  ManagerRated { capability_stable_id, level_ordinal, frequency, comment, source, seeded_from_cycle_id }
+  ManagerRated { capability_stable_id, level_ordinal, frequency, comment, source,
+                 seeded_from_cycle_id, rated_by_id? }
     Same source / seeded_from_cycle_id semantics as SelfRated.
-  ManagerRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale }
+    ← rated_by_id: the manager who rated (a domain fact — the assessee's manager
+      changes over time). nil for "seeded" carry-forwards and historical events.
+      Projected to AssessmentLevelRating.manager_rated_by_id. See ADR-18.
+  ManagerRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale, rated_by_id? }
     ← Like SelfRatingRevised, always flips the row's source back to "human".
+  ManagerRatingCleared { capability_stable_id, level_ordinal, cycle_id, rated_by_id? }
 
 Alignment lifecycle (per cycle):
   AlignmentStarted { cycle_id, started_by_id }
@@ -66,14 +76,22 @@ Alignment lifecycle (per cycle):
       manager_rated_frequency are explicitly recorded and equal — all inside the
       same with_person_development block. Default-fallback matches do NOT
       auto-align; only deliberate, recorded agreement counts.
-  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, cycle_id, comment }
+  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, cycle_id, comment, aligned_by_id? }
     ← Per-cell agreed frequency. Requires alignment to have been started.
       Agreed level is DERIVED (never stored): max(level_ordinal where
       aligned_frequency == "consistent").
-  FullAlignmentCompleted { cycle_id, completed_by_id }
+    ← aligned_by_id: who recorded the agreement (manual = the submitter; the
+      cells auto-aligned at start = the manager who started). Projected to
+      AssessmentLevelRating.aligned_by_id. See ADR-18.
+  AlignmentCleared { capability_stable_id, level_ordinal, cycle_id, cleared_by_id? }
+  FullAlignmentCompleted { cycle_id, completed_by_id, framework_version? }
     ← Manager-only. Flips participant status to `aligned` and freezes ALL
       ratings (including aligned values). SNAPSHOT POINT — long streams will
       compress here when snapshotting infrastructure ships.
+    ← framework_version: the version this cycle was assessed against at
+      completion (join version, advanced by any mid-cycle migration). Projected
+      to AssessmentCycleProgress.aligned_framework_version for reporting. A
+      completed assessment is immutable as-at-completion — see ADR-19.
 
 Cross-cycle seeding:
   RatingSeedSkipped { capability_stable_id, level_ordinal, prior_aligned_frequency,
@@ -117,6 +135,12 @@ Framework migration:
     — implemented in PR #119. Versions are integers (not UUIDs);
       `mappings` (not `capability_mappings`) carries per-mapping counts
       so projections and the activity feed need no extra joins.
+    — COMPLETED ASSESSMENTS ARE FROZEN from migration (ADR-19): the aggregate
+      refuses to migrate once alignment is completed; FrameworkVersionMigrationSync
+      skips aligned participants; and CurrentAssessment#handle_framework_version_migrated
+      skips re-keying/flagging rating rows of any cycle the person has aligned
+      (frozen set read from AssessmentCycleProgress, owned by the same
+      projection → replay-safe). Migrate-forward applies only to open cycles.
   ReassessmentFlagged { capability_stable_id, reason }
     — not yet emitted; flagging is currently done in-place via
       `AssessmentLevelRating.migration_status = "flagged"` on the
@@ -145,12 +169,20 @@ Per-level frequency ratings per capability. One row per `(person, framework, cap
 #   self_rated_frequency, manager_rated_frequency, aligned_frequency,
 #   self_rated_comment, manager_rated_comment, aligned_comment,
 #   last_self_rated_at, last_manager_rated_at, last_aligned_at,
+#   manager_rated_by_id, aligned_by_id,            # actor attribution (ADR-18)
 #   source (human | seeded | agent), seeded_from_cycle_id,
 #   migration_status, reassessment_reason
+#
+# assessment_cycle_progress also carries: aligned_framework_version (ADR-19).
+# assessment_cycle_enrollments carries the per-cycle assessed-level snapshot:
+#   role_id, level_id, level_ordinal (owned by AssessmentCycles::Projections::
+#   CurrentState; read by scoring instead of the live assignment level — ADR-19).
 #
 # Effective frequency fallback: aligned → manager → self → default
 #   default: 1.0 for level_ordinal <= person_level (assume consistent)
 #            0.0 for level_ordinal >  person_level (not expected)
+#   person_level = the cycle's ASSESSED level (enrollment snapshot), not the
+#                  person's live assignment level (ADR-19).
 #
 # Agreed level: derived as max(level_ordinal where effective_frequency == "consistent")
 #               Never stored — computed on demand by PersonDevelopment::Scoring

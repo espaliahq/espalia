@@ -20,6 +20,10 @@ effective_frequency(capability_stable_id, level_ordinal):
   aligned_frequency  → manager_rated_frequency  → self_rated_frequency
   → default: 1.0 if level_ordinal < person_level (assume consistent for past levels)
              0.0 if level_ordinal >= person_level (current level and above must be explicitly assessed)
+  note: person_level is the cycle's ASSESSED level (the enrollment snapshot
+        resolved by Assessments::MatrixDataBuilder), NOT the person's live
+        assignment level — so a promotion never silently re-scores a completed
+        cycle. See ADR-19.
 
 contribution_at_level = (effective_frequency − expected_at_level) × weight
   where expected_at_level = level_ordinal <= person_level ? 1.0 : 0.0
