@@ -9,7 +9,7 @@
 - Do NOT create new ERB files — use ERB only for minor fixes to existing legacy views
 - Use `view_template` method (not `template`)
 - Use semantic Kit helpers: `Button()`, `Card()`, `Alert()`, `Badge()`, `Avatar()`
-- Always include ARIA labels in rendered html 
+- Always include ARIA labels in rendered html (see [Accessibility](#accessibility-non-negotiable))
 
 ## Naming Conventions
 
@@ -155,6 +155,50 @@ def view_template
   end
 end
 ```
+
+## Accessibility (NON-NEGOTIABLE)
+
+Target **WCAG 2.1 AA**. Every view and Kit component must hold the line on the
+rules below — they were paid for once and regress silently. Validate UI changes
+with the chrome-devtools MCP (see [chrome-mcp.md](chrome-mcp.md)) in **both light
+and dark** and at a **mobile viewport**, then pin regressions with a test.
+
+### Colour contrast — 1.4.3 (4.5:1 normal text, 3:1 large/≥18.66px-bold)
+
+- **Muted/secondary text uses one AA-safe pairing: `text-gray-600 dark:text-gray-300`.** Do not reach for `text-gray-400`/`text-gray-500` for readable text — both fall below 4.5:1 on white/`gray-50` (and on `gray-800` cards in dark). The lighter greys are for genuinely incidental/decorative glyphs only (e.g. faint empty-cell `—` placeholders), never for content.
+- **Coloured accent text on a light/neutral background needs `-700`, not `-600`** (`text-amber-700`, `text-green-700`, `text-red-700`). `blue-600` is the exception — it already clears AA. On the `-100` tinted fills used by `Kit::Badge`-style chips, go one darker again (`-800`).
+- **Contrast depends on the background, so verify, don't eyeball.** A token that passes on white can fail on a `gray-50`/`gray-800` card. The same applies in reverse for dark mode — lighten the `dark:` variant, never just darken the light one.
+- **An indicator that sits on a variably-coloured surface can't use a single text colour** — put it on a contrasting disc (e.g. the level-chip "rated" `✓` on `bg-white dark:bg-gray-900`) so it clears AA against any fill.
+
+### Don't ship translucent text surfaces
+
+A panel that holds readable content must be **opaque**. `dark:bg-gray-800/50` over the page or another component composites to a muddy, low-contrast surface (this bit the assessment activity sidebar). Reserve `/NN` alpha backgrounds for subtle highlights behind already-high-contrast text, not for content containers.
+
+### Touch targets — 2.5.5 (≥44×44 CSS px)
+
+Standalone interactive controls need a 44px hit area. Icon-only buttons use `h-11 w-11` with `inline-flex items-center justify-center`; standalone text links/rows use `min-h-11` (wrap a smaller visual in a 44px box rather than enlarging the visual — see `Kit::UserMenu`'s avatar). The inline-link exception only applies to links *within a sentence*.
+
+### Accessible names
+
+- **Every form field needs a programmatic name** — a `<label for>`, `aria-labelledby`, or `aria-label`. A `placeholder` is **not** a name (it disappears and isn't reliably announced). Comment/inline composers must carry `aria: { label: "…" }`.
+- **Icon-only controls** carry `aria: { label: "…" }`; the icon itself is `aria: { hidden: "true" }`.
+- **Decorative glyphs** (separators, faint placeholders) get `aria: { hidden: "true" }` so they aren't announced.
+
+### Graphical widgets need ARIA semantics — 4.1.2
+
+A bar/meter built from `<div>`s conveys nothing to AT and must not rely on colour/width alone (1.4.1). Add `role: "progressbar"` with `aria: { valuenow:, valuemin: 0, valuemax: 100, label: "…" }` (see the cohort funnel bars). Prefer a text equivalent where one already exists (e.g. the Home funnel renders `Self 0%` as text — no widget needed).
+
+### Heading order — 1.3.1 / 2.4.10
+
+Headings descend sequentially; never skip a level for styling. `Kit::Card` takes `heading_level:` (default `:h3`) — pass `:h2` when a card title is the next level under the page `h1` so the outline stays sequential (the Home dashboard cards do this).
+
+### Keyboard focus — 2.4.7
+
+A global `:focus-visible` ring lives in `app/assets/tailwind/application.css` (2px, offset, blue-700/blue-300). **Never reset an outline (`outline-hidden`/`focus:outline-none`) without providing an equivalent visible focus state** — a per-component `focus:ring-2` is fine, a bare reset is not.
+
+### Document structure (layout-level, but views rely on it)
+
+`<html lang>`, the skip-to-content link, and the `main#main-content` landmark live in the layout / `Kit::PageLayout`. New top-level page views render inside that `<main>` — don't introduce a second `<main>` or bury page content outside it.
 
 ## Turbo Frames
 
