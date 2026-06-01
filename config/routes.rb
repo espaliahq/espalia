@@ -163,6 +163,8 @@ Rails.application.routes.draw do
     end
   end
 
-  # Defines the root path route ("/")
-  root "pages#index"
+  # Home dashboard — composable, role-aware card grid (replaces the old
+  # root redirect). Cards lazy-load their content via the card route.
+  root "home#show"
+  get "home/cards/:card(/:key)", to: "home#card", as: :home_card
 end

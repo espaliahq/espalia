@@ -106,9 +106,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # If the form click was dropped, the URL stays on /users/sign_in — fall
     # back to a JS-dispatched form submit, which bypasses Selenium pointer
     # hit-testing entirely. We detect a dropped submit by the URL never
-    # moving away from the sign-in path within the wait window; we cannot
-    # pin on root_path because / itself redirects to /assessments or
-    # /frameworks.
+    # moving away from the sign-in path within the wait window. (We pin on the
+    # sign-in path leaving, not on root_path landing, so this stays robust
+    # regardless of where a successful sign-in routes.)
     unless page.has_no_current_path?(new_user_session_path, wait: Capybara.default_max_wait_time)
       submit_sign_in_form_via_js(user.email, password)
     end
