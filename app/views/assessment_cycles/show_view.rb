@@ -19,6 +19,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
   # @param framework [FrameworkState::Framework, nil]
   # @param eligible_people [Array<Person>] people who can be enrolled (admin only)
   # @param is_admin [Boolean] whether the viewer can enroll/unenroll/close
+  # @param can_view_cohort [Boolean] whether to render the cohort progress link
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
