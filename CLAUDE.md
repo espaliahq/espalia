@@ -47,6 +47,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Service objects | @docs/guidelines/service-objects.md |
 | Authorization / permissions | @docs/guidelines/authorization.md |
 | Tests | @docs/guidelines/testing.md |
+| Manual UI validation (Chrome MCP) | @docs/guidelines/chrome-mcp.md |
 | Framework Explorer UX | @docs/guidelines/framework-explorer.md |
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
@@ -201,6 +202,12 @@ bin/rails test:system        # Run system tests (Capybara + Selenium)
 # The above test tasks run as part of precommit so if you are done just run precommit, not individual test tasks
 
 SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per action -> saves to tmp/screenshots/{TestClass}/{test_name}/{001_action.png} -> use /screenshot-test skill to run + visually examine results
+
+# Manual UI validation in a real browser via the chrome-devtools MCP — drive the
+# running app, reproduce UI bugs, check the console. Navigate to http://rails-app:3000
+# (NOT localhost — the browser is a separate container). Connection relies on the
+# socat forwarder started by .devcontainer/start-chrome-cdp-proxy.sh. Full setup,
+# the connect-failure fix, login, and gotchas: docs/guidelines/chrome-mcp.md
 
 # Validation (NON-NEGOTIABLE)
 bin/rails development:precommit  # ALWAYS run before completing development work
