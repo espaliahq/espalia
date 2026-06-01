@@ -59,12 +59,45 @@ class ApplicationController < ActionController::Base
     )
   end
 
-  # Handles Pundit authorization failures with a redirect and flash alert.
+  # Handles Pundit authorization failures.
+  #
+  # A Turbo Frame `src` fetch cannot follow a redirect — Turbo looks for the
+  # requested frame in the redirect target, doesn't find it, logs "the response
+  # did not contain the expected <turbo-frame>", and leaves that section of the
+  # UI broken. So for frame requests we render the requested frame with a
+  # recoverable message instead of redirecting; everything else redirects as
+  # before.
   #
   # @param _exception [Pundit::NotAuthorizedError]
   # @return [void]
   def user_not_authorized(_exception = nil)
-    redirect_back fallback_location: root_path, alert: "You are not authorized to perform this action."
+    if turbo_frame_request?
+      render_turbo_frame_recovery("You don't have access to this section, or your session has changed.")
+    else
+      redirect_back fallback_location: root_path, alert: "You are not authorized to perform this action."
+    end
+  end
+
+  # Renders the requested Turbo Frame wrapping a recoverable message + a
+  # top-level reload link, so a denied/expired frame fetch degrades into a
+  # clean refresh rather than a silent broken frame. Intentionally NOT
+  # auto-reloading — a persistently-denied frame would otherwise loop.
+  #
+  # @param message [String]
+  # @return [void]
+  def render_turbo_frame_recovery(message)
+    content = helpers.turbo_frame_tag(turbo_frame_request_id) do
+      helpers.safe_join([
+        helpers.tag.p(message, class: "p-4 text-sm text-gray-600 dark:text-gray-300"),
+        # `url_from` returns the referer only if it's same-origin (or relative),
+        # else nil — the Referer header is attacker-controllable, so never link
+        # to it raw. Falls back to root_path for off-site / missing referers.
+        helpers.link_to("Reload", url_from(request.referer) || root_path,
+          data: { turbo_frame: "_top" },
+          class: "mx-4 mb-4 inline-block text-sm font-medium text-primary underline")
+      ])
+    end
+    render html: content, layout: false
   end
 
   # Ensures the TenantUser has a linked Person — the invariant that lets
