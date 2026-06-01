@@ -64,9 +64,8 @@ class AssessmentCycles::CohortSystemTest < ApplicationSystemTestCase
     visit assessment_cycle_path(@cycle)
 
     assert_text "Cohort progress"
-    click_link "Cohort progress →"
+    click_link_with_js_fallback "Cohort progress →", expect_text: "Progress funnel"
 
-    assert_text "Progress funnel"
     assert_text "Report One"
   end
 
