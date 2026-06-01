@@ -219,6 +219,36 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "GET /assessments/:id/matrix — unauthorized" do
+    setup do
+      @other_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        other = create(:person, tenant: @tenant, email: @other_user.email, name: "Outsider")
+        create(:tenant_user, tenant: @tenant, user: @other_user, person: other)
+      end
+    end
+
+    # A Turbo Frame fetch can't follow a redirect — it must get the requested
+    # frame back, or Turbo logs "did not contain the expected <turbo-frame>"
+    # and the section breaks. Denied frame requests render a recovery frame.
+    should "render the recovery frame (not redirect) for a Turbo Frame request" do
+      sign_in @other_user
+      get matrix_assessment_path(@assignment), headers: { "Turbo-Frame" => "assessment-matrix" }
+
+      assert_response :success
+      assert_includes response.body, "assessment-matrix"
+      assert_includes response.body, "Reload"
+      assert_not_includes response.body, "<html"
+    end
+
+    should "still redirect for a normal (non-frame) request" do
+      sign_in @other_user
+      get matrix_assessment_path(@assignment)
+
+      assert_response :redirect
+    end
+  end
+
   context "GET /assessments/:id/matrix with multiple categories" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

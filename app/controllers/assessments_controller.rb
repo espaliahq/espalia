@@ -123,7 +123,13 @@ class AssessmentsController < ApplicationController
   private
 
   def require_person
-    unless current_person
+    return if current_person
+
+    # A Turbo Frame fetch (matrix / scoring reload) can't follow a redirect —
+    # render the frame with a reload prompt instead of silently breaking it.
+    if turbo_frame_request?
+      render_turbo_frame_recovery("Your session has changed — please reload.")
+    else
       redirect_to root_path, alert: "No person profile linked to your account."
     end
   end
@@ -135,7 +141,11 @@ class AssessmentsController < ApplicationController
     @framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
     @assessee = Person.find_by(id: @assignment.person_id) if manager_viewing?
   rescue ActiveRecord::RecordNotFound
-    redirect_to assessments_path, alert: "Assessment not found."
+    if turbo_frame_request?
+      render_turbo_frame_recovery("This assessment is no longer available — please reload.")
+    else
+      redirect_to assessments_path, alert: "Assessment not found."
+    end
   end
 
   # Whether current_person is viewing a direct report's assessment.
