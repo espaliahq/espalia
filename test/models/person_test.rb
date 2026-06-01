@@ -127,4 +127,75 @@ class PersonTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "#all_reports" do
+    setup do
+      @tenant = create(:tenant)
+    end
+
+    should "return an empty relation for a leaf with no reports" do
+      ActsAsTenant.with_tenant(@tenant) do
+        leaf = create(:person)
+        assert_empty leaf.all_reports
+      end
+    end
+
+    should "return all descendants across multiple levels, excluding self" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ceo = create(:person)
+        vp = create(:person, manager: ceo)
+        lead = create(:person, manager: vp)
+        ic = create(:person, manager: lead)
+        sibling = create(:person, manager: ceo)
+
+        ids = ceo.all_reports.pluck(:id)
+        assert_equal [ vp.id, lead.id, ic.id, sibling.id ].sort, ids.sort
+        assert_not_includes ids, ceo.id
+      end
+    end
+
+    should "scope to a subtree when called on a mid-level manager" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ceo = create(:person)
+        vp = create(:person, manager: ceo)
+        lead = create(:person, manager: vp)
+
+        assert_equal [ lead.id ], vp.all_reports.pluck(:id)
+      end
+    end
+
+    should "not include people from other tenants" do
+      other_tenant = create(:tenant)
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person) }
+      ActsAsTenant.with_tenant(other_tenant) { create(:person, manager_id: manager.id) }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_empty manager.all_reports
+      end
+    end
+
+    should "terminate and exclude the root when a management cycle exists" do
+      ActsAsTenant.with_tenant(@tenant) do
+        a = create(:person)
+        b = create(:person, manager: a)
+        # Inject a cycle: a now reports to b.
+        a.update!(manager: b)
+
+        ids = a.all_reports.pluck(:id)
+        assert_includes ids, b.id
+        assert_not_includes ids, a.id
+      end
+    end
+
+    should "return a composable relation" do
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person)
+        active = create(:person, manager: manager, status: "active")
+        create(:person, manager: manager, status: "inactive")
+
+        ids = manager.all_reports.where(status: "active").pluck(:id)
+        assert_equal [ active.id ], ids
+      end
+    end
+  end
 end
