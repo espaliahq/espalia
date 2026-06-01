@@ -32,7 +32,7 @@ class Components::Kit::Sidebar < Components::Base
   def nav_link(link)
     a(
       href: link[:href],
-      class: "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium " \
+      class: "flex items-center gap-3 px-3 py-2 min-h-11 rounded-md text-sm font-medium " \
              "text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
     ) do
       plain link[:label]

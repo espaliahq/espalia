@@ -53,7 +53,8 @@ class Components::Kit::Navbar < Components::Base
     button(
       type: "button",
       aria: { label: "Toggle navigation", expanded: "false" },
-      class: "md:hidden p-1.5 rounded-md hover:bg-white/10 focus:outline-hidden focus:ring-2 focus:ring-white",
+      class: "md:hidden inline-flex items-center justify-center h-11 w-11 -ml-1.5 rounded-md " \
+             "hover:bg-white/10 focus:outline-hidden focus:ring-2 focus:ring-white",
       data: { action: "sidebar#toggle" }
     ) do
       svg(

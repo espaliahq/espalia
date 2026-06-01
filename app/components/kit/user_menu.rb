@@ -37,12 +37,16 @@ class Components::Kit::UserMenu < Components::Base
     @user.email.chr.upcase
   end
 
+  # Wraps the 32px avatar in a 44x44 target so the touch/click area meets
+  # WCAG 2.5.5 (Target Size) while keeping the circle's visual size.
   def avatar_circle
-    div(
-      class: "h-8 w-8 rounded-full bg-nav-fg/20 flex items-center justify-center " \
-             "text-sm font-medium text-nav-fg hover:bg-nav-fg/30 transition-colors cursor-pointer"
-    ) do
-      plain user_initial
+    div(class: "flex items-center justify-center h-11 w-11 cursor-pointer") do
+      div(
+        class: "h-8 w-8 rounded-full bg-nav-fg/20 flex items-center justify-center " \
+               "text-sm font-medium text-nav-fg hover:bg-nav-fg/30 transition-colors"
+      ) do
+        plain user_initial
+      end
     end
   end
 
