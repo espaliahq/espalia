@@ -47,7 +47,7 @@ class ApplicationController < ActionController::Base
   # @return [AuthorizationContext]
   def pundit_user
     AuthorizationContext.new(
-      user: current_user,
+      user: effective_user,
       tenant_user: current_tenant_user,
       person: current_person
     )
