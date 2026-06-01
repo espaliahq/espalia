@@ -9,7 +9,7 @@
 - Do NOT create new ERB files — use ERB only for minor fixes to existing legacy views
 - Use `view_template` method (not `template`)
 - Use semantic Kit helpers: `Button()`, `Card()`, `Alert()`, `Badge()`, `Avatar()`
-- Always include ARIA labels in rendered html (see [Accessibility](#accessibility-non-negotiable))
+- Give interactive/form elements accessible names — prefer a native `<label>` or `aria-labelledby`, and reserve `aria-label` for controls with no visible label (see [Accessibility](#accessibility-non-negotiable))
 
 ## Naming Conventions
 
