@@ -38,8 +38,8 @@ class AuthSystemTest < ApplicationSystemTestCase
       click_button "Log in"
       screenshot("post_login_dashboard")
 
-      # Root redirects to /frameworks when the user has no assessments.
-      assert_current_path frameworks_path
+      # Sign-in lands on the Home dashboard.
+      assert_current_path root_path
       assert_text "GrowthOS"
     end
   end
@@ -79,7 +79,7 @@ class AuthSystemTest < ApplicationSystemTestCase
 
       click_button "Continue with Google"
 
-      assert_current_path frameworks_path
+      assert_current_path root_path
     end
   end
 end
