@@ -102,6 +102,7 @@ class Views::Tenant::Users::IndexView < Views::Base
       input(type: "hidden", name: "tenant_user_id", value: tenant_user.id)
       button(
         type: "submit",
+        aria: { label: "View as #{display_name(tenant_user)}" },
         class: "rounded-md border border-gray-300 dark:border-gray-600 px-2.5 py-1 text-xs " \
                "font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 " \
                "focus:outline-hidden focus:ring-2 focus:ring-primary/40 cursor-pointer"

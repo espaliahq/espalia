@@ -23,7 +23,7 @@ class ImpersonationsController < ApplicationController
       "tenant_user_id" => target.id,
       "expires_at" => (Time.current + Impersonatable::TTL).iso8601
     }
-    redirect_to root_path, notice: "Now viewing as #{target_display_name(target)}."
+    redirect_to root_path, status: :see_other, notice: "Now viewing as #{target_display_name(target)}."
   rescue ActiveRecord::RecordNotFound
     redirect_to tenant_users_path, alert: "That user could not be found.", status: :see_other
   end

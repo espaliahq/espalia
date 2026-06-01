@@ -2,6 +2,10 @@
 
 require "test_helper"
 
+# Integration coverage for starting/stopping tenant-admin impersonation:
+# the effective-context override, the no-escalation guard, the read-only
+# write block (redirect + in-frame recovery), TTL expiry, and denied-access
+# paths. See app/controllers/concerns/impersonatable.rb.
 class ImpersonationsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @tenant = create(:tenant)
