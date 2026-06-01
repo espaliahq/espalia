@@ -116,15 +116,25 @@ module Impersonatable
   # controllers and all Devise flows are exempt so the user can always
   # stop impersonating, switch tenant, or sign out.
   #
+  # A Turbo Frame `src`/form request can't follow a redirect (Turbo looks
+  # for the frame in the redirect target, doesn't find it, and leaves the
+  # section broken), so for frame requests we degrade into the same
+  # in-frame recovery message {ApplicationController#user_not_authorized}
+  # uses for denials; everything else redirects back with a flash.
+  #
   # @return [void]
   def enforce_impersonation_read_only
     return unless impersonating?
     return if request.get? || request.head?
     return if impersonation_exempt_controller?
 
-    redirect_back fallback_location: root_path,
-                  alert: "You're viewing as #{impersonated_display_name} — that action is read-only. " \
-                         "Stop impersonating to make changes."
+    message = "You're viewing as #{impersonated_display_name} — that action is read-only. " \
+              "Stop impersonating to make changes."
+    if turbo_frame_request?
+      render_turbo_frame_recovery(message)
+    else
+      redirect_back fallback_location: root_path, alert: message
+    end
   end
 
   private

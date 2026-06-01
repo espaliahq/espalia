@@ -51,6 +51,17 @@ class ImpersonationsControllerTest < ActionDispatch::IntegrationTest
         assert_equal "member", @member_tu.reload.role
       end
 
+      should "render an in-frame recovery (not a redirect) for blocked Turbo Frame writes" do
+        post impersonation_path, params: { tenant_user_id: @member_tu.id }
+        patch tenant_user_path(@member_tu),
+              params: { tenant_user: { role: "admin" } },
+              headers: { "Turbo-Frame" => "edit_role" }
+        assert_response :success
+        assert_match(/turbo-frame/, response.body)
+        assert_match(/read-only/, response.body)
+        assert_equal "member", @member_tu.reload.role
+      end
+
       should "expire the session after the TTL" do
         post impersonation_path, params: { tenant_user_id: @member_tu.id }
         travel(Impersonatable::TTL + 1.minute) do
