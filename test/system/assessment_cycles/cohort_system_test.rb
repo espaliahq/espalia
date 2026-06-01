@@ -59,6 +59,16 @@ class AssessmentCycles::CohortSystemTest < ApplicationSystemTestCase
     assert_text "Progress funnel"
   end
 
+  should "reach the cohort from the cycle page" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit assessment_cycle_path(@cycle)
+
+    assert_text "Cohort progress"
+    click_link_with_js_fallback "Cohort progress →", expect_text: "Progress funnel"
+
+    assert_text "Report One"
+  end
+
   should "switch the breakdown pivot to role" do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     visit cohort_assessment_cycle_path(@cycle)

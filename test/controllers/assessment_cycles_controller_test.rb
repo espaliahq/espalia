@@ -225,6 +225,44 @@ class AssessmentCyclesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "cohort progress link on GET /assessment_cycles/:id" do
+    should "show the cohort link to an admin" do
+      cycle = open_cycle
+      sign_in @admin_user
+      get assessment_cycle_path(cycle)
+
+      assert_response :success
+      assert_includes response.body, "Cohort progress"
+      assert_includes response.body, cohort_assessment_cycle_path(cycle)
+    end
+
+    should "hide the cohort link from a member with no reports in the cycle" do
+      cycle = open_cycle
+      sign_in @member_user
+      get assessment_cycle_path(cycle)
+
+      assert_response :success
+      assert_not_includes response.body, "Cohort progress"
+    end
+
+    should "show the cohort link to a manager with a report in the cycle" do
+      cycle = open_cycle
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person, tenant: @tenant, email: @member_user.email, name: "Manager")
+        TenantUser.find_by(user_id: @member_user.id).update!(person: manager)
+        report = create(:person, tenant: @tenant, manager: manager)
+        create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: cycle, person_id: report.id, status: "enrolled")
+      end
+
+      sign_in @member_user
+      get assessment_cycle_path(cycle)
+
+      assert_response :success
+      assert_includes response.body, "Cohort progress"
+    end
+  end
+
   context "as tenant member" do
     should "deny GET /assessment_cycles" do
       sign_in @member_user
@@ -282,6 +320,16 @@ class AssessmentCyclesControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def open_cycle
+    cycle_id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentCycles::CommandHandler.new.define_cycle(
+        cycle_id, @framework.framework_id, "Q1 2026 Review", "regular", 1
+      )
+      AssessmentCycle.find_by!(cycle_id: cycle_id)
+    end
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }

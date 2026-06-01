@@ -49,6 +49,7 @@ class AssessmentCyclesController < ApplicationController
       framework: framework,
       eligible_people: @cycle.eligible_people.to_a,
       is_admin: policy(@cycle).enroll?,
+      can_view_cohort: policy(@cycle).cohort?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
