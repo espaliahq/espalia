@@ -247,6 +247,18 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :redirect
     end
+
+    should "never link the recovery Reload to an off-site Referer" do
+      sign_in @other_user
+      get matrix_assessment_path(@assignment), headers: {
+        "Turbo-Frame" => "assessment-matrix",
+        "Referer" => "https://evil.example.com/phish"
+      }
+
+      assert_response :success
+      assert_not_includes response.body, "evil.example.com"
+      assert_includes response.body, %(href="#{root_path}")
+    end
   end
 
   context "GET /assessments/:id/matrix with multiple categories" do

@@ -89,7 +89,10 @@ class ApplicationController < ActionController::Base
     content = helpers.turbo_frame_tag(turbo_frame_request_id) do
       helpers.safe_join([
         helpers.tag.p(message, class: "p-4 text-sm text-gray-600 dark:text-gray-300"),
-        helpers.link_to("Reload", request.referer || root_path,
+        # `url_from` returns the referer only if it's same-origin (or relative),
+        # else nil — the Referer header is attacker-controllable, so never link
+        # to it raw. Falls back to root_path for off-site / missing referers.
+        helpers.link_to("Reload", url_from(request.referer) || root_path,
           data: { turbo_frame: "_top" },
           class: "mx-4 mb-4 inline-block text-sm font-medium text-primary underline")
       ])
