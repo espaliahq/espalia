@@ -23,11 +23,12 @@ class Views::AssessmentCycles::ShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(cycle:, framework:, eligible_people:, is_admin:,
-                 user: nil, current_tenant: nil, tenants: [])
+                 can_view_cohort: false, user: nil, current_tenant: nil, tenants: [])
     @cycle = cycle
     @framework = framework
     @eligible_people = eligible_people
     @is_admin = is_admin
+    @can_view_cohort = can_view_cohort
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -65,6 +66,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
         render Views::AssessmentCycles::CycleNameFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
       div(class: "flex items-center gap-3") do
+        cohort_link if @can_view_cohort
         render Components::Kit::Badge.new(
           @cycle.open? ? "Open" : "Closed",
           variant: @cycle.open? ? :success : :default
@@ -72,6 +74,18 @@ class Views::AssessmentCycles::ShowView < Views::Base
         close_button if @is_admin && @cycle.open?
       end
     end
+  end
+
+  # Link to the cohort progress roll-up. Shown only to viewers who can open it
+  # (admins, or managers with participants in their subtree) — see
+  # AssessmentCyclePolicy#cohort?.
+  def cohort_link
+    a(
+      href: cohort_assessment_cycle_path(@cycle),
+      class: "inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
+             "text-gray-800 shadow-xs hover:bg-gray-200 transition-colors " \
+             "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+    ) { "Cohort progress →" }
   end
 
   def close_button
