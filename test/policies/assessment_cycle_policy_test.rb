@@ -25,6 +25,8 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       refute policy.unenroll?
       refute policy.close?
       refute policy.update?
+      refute policy.cohort?
+      refute policy.cohort_full_access?
     end
   end
 
@@ -48,6 +50,68 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       refute policy.close?
       refute policy.update?
     end
+
+    should "deny the cohort view when they have no reports in the cycle" do
+      policy = AssessmentCyclePolicy.new(@context, @cycle)
+      ActsAsTenant.with_tenant(@tenant) do
+        refute policy.cohort?
+        refute policy.cohort_full_access?
+      end
+    end
+  end
+
+  context "as a manager with a report in the cycle" do
+    setup do
+      @user = create(:user)
+      @tenant_user = create(:tenant_user, user: @user, tenant: @tenant, role: :member)
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant)
+        @tenant_user.update!(person: @manager)
+        report = create(:person, tenant: @tenant, manager: @manager)
+        create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: @cycle, person_id: report.id, status: "enrolled")
+      end
+      @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @manager)
+    end
+
+    should "permit the cohort view but not full access or mutations" do
+      policy = AssessmentCyclePolicy.new(@context, @cycle)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert policy.cohort?
+        refute policy.cohort_full_access?
+        refute policy.update?
+      end
+    end
+
+    should "permit the cohort view for a skip-level (report-of-report) participant" do
+      ActsAsTenant.with_tenant(@tenant) do
+        lead = create(:person, tenant: @tenant, manager: @manager)
+        ic = create(:person, tenant: @tenant, manager: lead)
+        create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: @cycle, person_id: ic.id, status: "enrolled")
+
+        assert AssessmentCyclePolicy.new(@context, @cycle).cohort?
+      end
+    end
+  end
+
+  context "as a manager with no reports in the cycle" do
+    setup do
+      @user = create(:user)
+      @tenant_user = create(:tenant_user, user: @user, tenant: @tenant, role: :member)
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant)
+        @tenant_user.update!(person: @manager)
+        create(:person, tenant: @tenant, manager: @manager) # report, but not enrolled
+      end
+      @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @manager)
+    end
+
+    should "deny the cohort view" do
+      ActsAsTenant.with_tenant(@tenant) do
+        refute AssessmentCyclePolicy.new(@context, @cycle).cohort?
+      end
+    end
   end
 
   context "as a tenant admin" do
@@ -66,6 +130,8 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.unenroll?
       assert policy.close?
       assert policy.update?
+      assert policy.cohort?
+      assert policy.cohort_full_access?
     end
   end
 
@@ -84,6 +150,8 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.unenroll?
       assert policy.close?
       assert policy.update?
+      assert policy.cohort?
+      assert policy.cohort_full_access?
     end
   end
 end
