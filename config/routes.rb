@@ -154,6 +154,9 @@ Rails.application.routes.draw do
       patch :rename
       patch :change_type
       patch :set_planned_end
+      # Cohort progress roll-up — broader audience than the admin-only
+      # management surface (any manager, scoped to their subtree).
+      get :cohort, to: "assessment_cycles/cohorts#show"
     end
     resources :enrollments, only: [ :create, :destroy ],
                             controller: "assessment_cycles/enrollments" do
