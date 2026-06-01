@@ -70,7 +70,7 @@ class Views::Home::Cards::CycleProgress < Views::Base
     a(
       href: cohort_assessment_cycle_path(@cycle),
       data: { turbo_frame: "_top" },
-      class: "text-sm font-medium text-primary hover:underline"
+      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline"
     ) { "View progress →" }
   end
 end
