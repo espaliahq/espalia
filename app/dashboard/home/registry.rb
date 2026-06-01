@@ -9,6 +9,7 @@
 module Home::Registry
   CARDS = [
     Home::AwaitingYouCard,
+    Home::CycleProgressCard,
     Home::AssessmentProgressCard
   ].freeze
 

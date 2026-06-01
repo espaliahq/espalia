@@ -81,6 +81,41 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Review team"
     end
 
+    should "render the cycle-progress card frame for a manager with a report" do
+      ActsAsTenant.with_tenant(@tenant) do
+        report = create(:person, tenant: @tenant, name: "Report One", manager: @person)
+        create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: @cycle, person_id: report.id, status: "enrolled")
+        create(:assessment_cycle_progress,
+          tenant: @tenant, cycle: @cycle, person_id: report.id, status: "started")
+      end
+
+      sign_in @user
+      get home_card_path(card: "cycle_progress", key: @cycle.cycle_id)
+
+      assert_response :success
+      assert_includes response.body, "Cycle progress"
+      assert_includes response.body, "View progress"
+    end
+
+    should "deny a cycle-progress instance the manager has no reports in (per-instance guard)" do
+      other_cycle = nil
+      ActsAsTenant.with_tenant(@tenant) do
+        # @person gains the cohort card audience via a report in @cycle...
+        report = create(:person, tenant: @tenant, name: "Report One", manager: @person)
+        create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: @cycle, person_id: report.id, status: "enrolled")
+        # ...but has no reports in this unrelated open cycle.
+        other_cycle = create(:assessment_cycle,
+          tenant: @tenant, framework_id: SecureRandom.uuid_v7, status: "open")
+      end
+
+      sign_in @user
+      get home_card_path(card: "cycle_progress", key: other_cycle.cycle_id)
+
+      assert_response :redirect
+    end
+
     should "404 for an unknown card" do
       sign_in @user
       get home_card_path(card: "does-not-exist", key: "default")

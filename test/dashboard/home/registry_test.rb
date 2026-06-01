@@ -74,4 +74,31 @@ class Home::RegistryTest < ActiveSupport::TestCase
       assert_empty Home::Registry.instances_for(@context)
     end
   end
+
+  context "cycle-progress card audience" do
+    setup do
+      @cycle = create(:assessment_cycle, tenant: @tenant, name: "Q1", status: "open")
+    end
+
+    should "be hidden for a manager with no reports in any cycle" do
+      assert_not Home::CycleProgressCard.audience?(@context)
+    end
+
+    should "be visible for a manager with a report enrolled, scoped to their subtree" do
+      report = create(:person, tenant: @tenant, manager: @person)
+      create(:assessment_cycle_enrollment,
+        tenant: @tenant, cycle: @cycle, person_id: report.id, status: "enrolled")
+
+      assert Home::CycleProgressCard.audience?(@context)
+      keys = Home::CycleProgressCard.instances(@context).map(&:instance_key)
+      assert_equal [ @cycle.cycle_id ], keys
+    end
+
+    should "be visible for an admin across all open cycles" do
+      admin_tu = create(:tenant_user, tenant: @tenant, role: :admin)
+      admin_ctx = AuthorizationContext.new(user: admin_tu.user, tenant_user: admin_tu, person: nil)
+
+      assert Home::CycleProgressCard.audience?(admin_ctx)
+    end
+  end
 end
