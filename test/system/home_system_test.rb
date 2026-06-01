@@ -2,7 +2,7 @@
 
 require "application_system_test_case"
 
-class PagesSystemTest < ApplicationSystemTestCase
+class HomeSystemTest < ApplicationSystemTestCase
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -11,26 +11,12 @@ class PagesSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  context "root redirect" do
-    should "redirect to frameworks when the user has no assessments" do
+  context "home dashboard" do
+    should "render the dashboard greeting and an empty state when nothing is pending" do
       visit root_path
 
-      assert_current_path frameworks_path
-    end
-
-    should "redirect to assessments when the user has at least one assignment" do
-      ActsAsTenant.with_tenant(@tenant) do
-        # sign_in_as triggers a request that auto-links a Person to the
-        # tenant_user via email; reuse it rather than creating a duplicate.
-        person = Person.find_or_create_by!(tenant: @tenant, email: @user.email) do |p|
-          p.name = @user.email
-        end
-        FactoryBot.create(:person_framework_assignment, tenant: @tenant, person_id: person.id)
-      end
-
-      visit root_path
-
-      assert_current_path assessments_path
+      assert_text "Home"
+      assert_text "Nothing needs your attention right now."
     end
   end
 

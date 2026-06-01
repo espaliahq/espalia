@@ -94,8 +94,7 @@ class Tenant::IntegrationsControllerTest < ActionDispatch::IntegrationTest
     should "deny GET /integrations" do
       get tenant_integrations_path
       assert_redirected_to root_path
-      follow_redirect!  # / → /frameworks (member with no assessments)
-      follow_redirect!
+      follow_redirect!  # / renders the Home dashboard, which shows the flash alert
       assert_includes response.body, "You are not authorized"
     end
 

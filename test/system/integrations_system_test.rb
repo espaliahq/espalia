@@ -107,9 +107,8 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       visit tenant_integrations_path
       screenshot("member_denied")
 
-      # / redirects to /frameworks for users without assessments; the
-      # not-authorized flash is preserved by PagesController#index.
-      assert_current_path frameworks_path
+      # Denied access redirects to the Home dashboard, which shows the flash.
+      assert_current_path root_path
       assert_text "You are not authorized to perform this action"
     end
   end

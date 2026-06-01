@@ -154,6 +154,9 @@ Rails.application.routes.draw do
       patch :rename
       patch :change_type
       patch :set_planned_end
+      # Cohort progress roll-up — broader audience than the admin-only
+      # management surface (any manager, scoped to their subtree).
+      get :cohort, to: "assessment_cycles/cohorts#show"
     end
     resources :enrollments, only: [ :create, :destroy ],
                             controller: "assessment_cycles/enrollments" do
@@ -163,6 +166,8 @@ Rails.application.routes.draw do
     end
   end
 
-  # Defines the root path route ("/")
-  root "pages#index"
+  # Home dashboard — composable, role-aware card grid (replaces the old
+  # root redirect). Cards lazy-load their content via the card route.
+  root "home#show"
+  get "home/cards/:card(/:key)", to: "home#card", as: :home_card
 end

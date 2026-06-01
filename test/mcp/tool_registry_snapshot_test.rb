@@ -223,6 +223,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "reporting_cycle_cohort",
+        "description" => "Aggregate progress for an assessment cycle across the caller's org subtree " \
+          "(admins see the whole cycle): the self/manager/aligned funnel, lifecycle status " \
+          "counts, at-risk count, and — in full mode — grouped breakdowns and per-participant " \
+          "progress. Returns no rating values.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cycle_id" => { "type" => "string" },
+            "mode" => { "type" => "string", "enum" => [ "summary", "full" ] }
+          },
+          "required" => [ "cycle_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "system_whoami",
         "description" => "Identify the user, tenant, and person the MCP token resolves to.",
         "inputSchema" => {

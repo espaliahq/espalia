@@ -47,6 +47,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Service objects | @docs/guidelines/service-objects.md |
 | Authorization / permissions | @docs/guidelines/authorization.md |
 | Tests | @docs/guidelines/testing.md |
+| Manual UI validation (Chrome MCP) | @docs/guidelines/chrome-mcp.md |
 | Framework Explorer UX | @docs/guidelines/framework-explorer.md |
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
@@ -202,6 +203,12 @@ bin/rails test:system        # Run system tests (Capybara + Selenium)
 
 SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per action -> saves to tmp/screenshots/{TestClass}/{test_name}/{001_action.png} -> use /screenshot-test skill to run + visually examine results
 
+# Manual UI validation in a real browser via the chrome-devtools MCP — drive the
+# running app, reproduce UI bugs, check the console. Navigate to http://rails-app:3000
+# (NOT localhost — the browser is a separate container). Connection relies on the
+# socat forwarder started by .devcontainer/start-chrome-cdp-proxy.sh. Full setup,
+# the connect-failure fix, login, and gotchas: docs/guidelines/chrome-mcp.md
+
 # Validation (NON-NEGOTIABLE)
 bin/rails development:precommit  # ALWAYS run before completing development work
                                  # Runs: erblint, rubocop, brakeman, bundler audit,
@@ -314,6 +321,7 @@ test/
 - Commit per discrete change, creating a stacked PR
 - `/coderabbit:review --base main` - Use CodeRabbit to review the change code vs main branch before commit, if using CodeRabbit CLI use the `--agent` flag
 - When creating PR, always track CI, always investigate code review and CodeRabbit suggestions and commit each fix as a separate commit in the PR. Always check for fresh code review comments after each commit. 
+- Only stack PRs if the changes are large and indepedent enough in their overall goal
 - **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
 
 ## Learnings

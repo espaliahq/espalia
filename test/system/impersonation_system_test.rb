@@ -39,7 +39,8 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
     assert_text "Casey Member"
     assert_text "read-only"
 
-    click_button_with_js_fallback "Stop impersonating", expect_text: "No frameworks defined yet."
+    # Stopping returns to root, which renders the Home dashboard.
+    click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
     assert_no_text "Viewing as"
   end
 end

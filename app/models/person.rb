@@ -61,4 +61,32 @@ class Person < ApplicationRecord
 
     manager_chain.any? { |m| m.id == other.id }
   end
+
+  # All people anywhere below this person in the org chart — direct reports,
+  # their reports, and so on — resolved in a single recursive query and scoped
+  # to this person's tenant. Returned as a relation for composability
+  # (e.g. chaining further `where`s).
+  #
+  # Cycle-safe: the recursive `UNION` stops re-adding already-seen ids, and the
+  # result excludes the person themselves — a defensive guard against a manager
+  # loop that points back at the root (mirrors {#manager_chain}'s guard).
+  #
+  # @return [ActiveRecord::Relation<Person>] descendants; never includes self
+  def all_reports
+    sql = <<~SQL.squish
+      WITH RECURSIVE report_tree AS (
+        SELECT id FROM people
+        WHERE manager_id = :root_id AND tenant_id = :tenant_id
+        UNION
+        SELECT p.id FROM people p
+        INNER JOIN report_tree rt ON p.manager_id = rt.id
+        WHERE p.tenant_id = :tenant_id
+      )
+      SELECT id FROM report_tree WHERE id != :root_id
+    SQL
+    ids = self.class.connection.select_values(
+      self.class.sanitize_sql_array([ sql, { root_id: id, tenant_id: tenant_id } ])
+    )
+    self.class.where(id: ids)
+  end
 end
