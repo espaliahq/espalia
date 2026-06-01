@@ -45,6 +45,20 @@ class AssessmentCycles::CohortSystemTest < ApplicationSystemTestCase
     assert_text "Report One"
   end
 
+  should "navigate from the Home cohort card to the drill-down" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit root_path
+
+    # The cohort card lazy-loads; wait for its CTA, then follow it.
+    assert_text "View progress"
+    click_link "View progress →"
+
+    # The CTA must break out of the lazy card frame (data-turbo-frame=_top),
+    # otherwise Turbo renders "Content missing" into the card.
+    assert_text "cohort progress"
+    assert_text "Progress funnel"
+  end
+
   should "switch the breakdown pivot to role" do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     visit cohort_assessment_cycle_path(@cycle)

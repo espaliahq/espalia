@@ -50,6 +50,7 @@ class Views::Home::Cards::AwaitingYou < Views::Base
   def review_link
     a(
       href: assessments_path,
+      data: { turbo_frame: "_top" },
       class: "text-sm font-medium text-primary hover:underline"
     ) { "Review team →" }
   end

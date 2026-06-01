@@ -61,6 +61,8 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "<html"
       assert_includes response.body, "Q1 2026"
       assert_includes response.body, "Continue self-assessment"
+      # CTA must break out of the lazy card frame, not navigate within it.
+      assert_includes response.body, 'data-turbo-frame="_top"'
     end
 
     should "render the awaiting-you card frame for a manager with a pending report" do
@@ -79,6 +81,8 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Awaiting you"
       assert_includes response.body, "Report One"
       assert_includes response.body, "Review team"
+      # CTA must break out of the lazy card frame, not navigate within it.
+      assert_includes response.body, 'data-turbo-frame="_top"'
     end
 
     should "render the cycle-progress card frame for a manager with a report" do
@@ -96,6 +100,8 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Cycle progress"
       assert_includes response.body, "View progress"
+      # CTA must break out of the lazy card frame, not navigate within it.
+      assert_includes response.body, 'data-turbo-frame="_top"'
     end
 
     should "deny a cycle-progress instance the manager has no reports in (per-instance guard)" do

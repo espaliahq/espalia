@@ -62,6 +62,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
     href = @state[:assignment] ? assessment_path(@state[:assignment]) : assessments_path
     a(
       href: href,
+      data: { turbo_frame: "_top" },
       class: "text-sm font-medium text-primary hover:underline"
     ) { "Continue self-assessment →" }
   end
