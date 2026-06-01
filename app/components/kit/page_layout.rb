@@ -25,6 +25,16 @@ class Components::Kit::PageLayout < Components::Base
       class: "min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950",
       data: { controller: "sidebar" }
     ) do
+      # Skip link — first focusable element, visible only on keyboard focus
+      # (WCAG 2.4.1 Bypass Blocks). Jumps past the navbar to main content.
+      a(
+        href: "#main-content",
+        class: "sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 " \
+               "focus:rounded-md focus:bg-white focus:dark:bg-gray-900 focus:px-4 focus:py-2 " \
+               "focus:text-sm focus:font-medium focus:text-gray-900 focus:dark:text-white " \
+               "focus:shadow-lg focus:ring-2 focus:ring-blue-600"
+      ) { "Skip to main content" }
+
       render Components::Kit::Navbar.new(
         app_name: "GrowthOS",
         links: nav_links,
@@ -36,7 +46,7 @@ class Components::Kit::PageLayout < Components::Base
       # Mobile-only sidebar drawer
       render Components::Kit::Sidebar.new(links: nav_links)
 
-      main(class: "flex-1 p-6", &block)
+      main(id: "main-content", tabindex: "-1", class: "flex-1 p-6 focus:outline-hidden", &block)
     end
   end
 
