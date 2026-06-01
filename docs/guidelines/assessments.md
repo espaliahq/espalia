@@ -551,7 +551,7 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/controllers/assessments/alignment_starts_controller.rb` | Manager-only POST — fires `AlignmentStarted`, locks individual ratings |
 | `app/controllers/assessments/alignment_completions_controller.rb` | Manager-only POST — fires `FullAlignmentCompleted`, freezes all ratings |
 | **Data** | |
-| `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions |
+| `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../architecture/adrs.md) |
 | `app/read_models/assessment_level_rating.rb` | Three-frequency read model (self / manager / aligned) |
 | `app/read_models/person_framework_assignment.rb` | Person-framework-role-level assignment |
 | **JavaScript** | |
