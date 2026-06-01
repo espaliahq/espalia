@@ -84,14 +84,11 @@ global admin in the `me&u` tenant, so it can reach every surface.
 
 ## Gotchas learned
 
-- **Links inside a lazy Turbo Frame need `data-turbo-frame="_top"`.** Content
-  rendered in its own `turbo_frame_tag(name, src:)` (e.g. a Home dashboard card)
-  will try to load a plain navigation link *into that frame*; if the destination
-  page has no matching `<turbo-frame id=name>`, Turbo replaces the frame with
-  **"Content missing"** and logs an error. Manual MCP clicking catches this;
-  a system test that `visit`s the destination path directly does **not**. Always
-  exercise the real click path, and add `data: { turbo_frame: "_top" }` to
-  navigation links inside frames.
+- **Always click the real path, don't just `navigate_page` to the destination.**
+  Driving the actual link/button surfaces bugs a direct navigation hides — most
+  notably the lazy-Turbo-Frame "Content missing" trap (links inside a frame need
+  `data-turbo-frame="_top"`), which is how that bug was found this session. The
+  rule itself lives in [phlex-views.md → Turbo Frames](phlex-views.md).
 - **CDP/Selenium `.text` reflects CSS `text-transform`.** An eyebrow styled
   `uppercase` reports `UPPERCASE` text — `wait_for`/assertions must match the
   rendered case (or key off an untransformed element like a link label).

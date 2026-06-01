@@ -156,6 +156,39 @@ def view_template
 end
 ```
 
+## Turbo Frames
+
+Page regions can lazy-load via `turbo_frame_tag(name, src:, loading: "lazy")`:
+the frame renders a placeholder, then fetches its real content from a controller
+action that re-renders a frame with the **same id**. The Home dashboard cards,
+the framework-explorer suggestion panel, and the assessment matrix all use this.
+
+**Navigation links and forms inside a frame must target `_top` (or another
+frame) explicitly (NON-NEGOTIABLE).** A bare `<a>`/`<form>` inside a
+`turbo_frame_tag` navigates *within that frame*; if the response is a full page
+with no matching `<turbo-frame id=name>`, Turbo renders **"Content missing"**
+instead of navigating. Add `data: { turbo_frame: "_top" }` to any in-frame
+control that should drive a full-page navigation:
+
+```ruby
+turbo_frame_tag("home-card-cycle_progress-#{cycle.cycle_id}") do
+  Card(...) do |card|
+    card.actions do
+      # Full-page nav — must break out of the lazy card frame
+      a(href: cohort_assessment_cycle_path(cycle),
+        data: { turbo_frame: "_top" }) { "View progress →" }
+    end
+  end
+end
+```
+
+This bug is invisible to a system test that `visit`s the destination path
+directly — only clicking the in-frame link reproduces it, so exercise the real
+click path (see [testing.md](testing.md) and [chrome-mcp.md](chrome-mcp.md)).
+For the related rule that a frame's re-render response must carry the same
+`mode:` / permission flags / counts as the initial render, see
+[framework-explorer.md](framework-explorer.md) Hard-Won Lessons 13 & 16.
+
 ## ERB Bridge (Legacy Views Only)
 
 When making minor updates to existing ERB views, use Kit helpers:
