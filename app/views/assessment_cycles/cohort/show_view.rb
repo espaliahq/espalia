@@ -20,9 +20,14 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
 
   # @param result [Reporting::CycleCohort::Result]
   # @param pivot [String] active grouping pivot ("manager" | "role" | "level")
-  def initialize(result:, pivot: "manager", user: nil, current_tenant: nil, tenants: [])
+  # @param scope [String] active viewer scope ("all" | "mine")
+  # @param can_scope_to_self [Boolean] whether to offer the My-org/Whole-cycle toggle
+  def initialize(result:, pivot: "manager", scope: "all", can_scope_to_self: false,
+                 user: nil, current_tenant: nil, tenants: [])
     @result = result
     @pivot = pivot
+    @scope = scope
+    @can_scope_to_self = can_scope_to_self
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -62,7 +67,33 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
       p(class: "mt-2 text-xs text-gray-400 dark:text-gray-500") do
         "Ratings stay private to each person and their manager until alignment. This view shows progress only."
       end
+      scope_toggle
     end
+  end
+
+  # Admin/HR who are also managers can flip between the whole cycle and just
+  # their own org subtree.
+  def scope_toggle
+    return unless @can_scope_to_self
+
+    nav(class: "mt-3 inline-flex gap-1 rounded-md bg-gray-100 p-0.5 dark:bg-gray-800", aria: { label: "Scope" }) do
+      scope_link("Whole cycle", "all")
+      scope_link("My org", "mine")
+    end
+  end
+
+  def scope_link(label, value)
+    active = @scope == value
+    params = { pivot: @pivot }
+    params[:scope] = value if value == "mine"
+    a(
+      href: cohort_assessment_cycle_path(cycle, **params),
+      aria: { current: active ? "true" : nil },
+      class: [
+        "rounded px-3 py-1 text-sm font-medium",
+        active ? "bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+      ].join(" ")
+    ) { label }
   end
 
   def deadline_badge
@@ -137,7 +168,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
       PIVOTS.each do |key, label|
         active = key == @pivot
         a(
-          href: cohort_assessment_cycle_path(cycle, pivot: key),
+          href: cohort_assessment_cycle_path(cycle, **pivot_link_params(key)),
           aria: { current: active ? "page" : nil },
           class: [
             "rounded-t-md px-3 py-2 text-sm font-medium",
@@ -146,6 +177,13 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
         ) { label }
       end
     end
+  end
+
+  # Preserve the active scope when switching pivots.
+  def pivot_link_params(key)
+    params = { pivot: key }
+    params[:scope] = "mine" if @scope == "mine"
+    params
   end
 
   def groups_table

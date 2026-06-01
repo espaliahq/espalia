@@ -82,7 +82,11 @@ position per person, nothing finer.
 
 **Authorization**: `AssessmentCyclePolicy#cohort?` (any manager with a participant
 in their `Person#all_reports` subtree) / `#cohort_full_access?` (admins/HR see the
-whole cycle).
+whole cycle). A full-access viewer who is also a manager can narrow to their own
+subtree via `?scope=mine` (web) / `scope: "mine"` (MCP) — the drill-down renders a
+"My org / Whole cycle" toggle. Impersonation is honoured correctly: `pundit_user`
+acts as the impersonated target (`Impersonatable#effective_user`), so an admin
+viewing-as a member sees only what that member would — no full-cycle leak.
 
 **Follow-ons** (deferred): denormalize completion counts onto
 `AssessmentCycleProgress` (owned by `CurrentAssessment`) if compute-on-read proves

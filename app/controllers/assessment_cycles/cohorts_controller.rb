@@ -20,6 +20,8 @@ class AssessmentCycles::CohortsController < ApplicationController
     render Views::AssessmentCycles::Cohort::ShowView.new(
       result: result,
       pivot: pivot_param,
+      scope: scope_param,
+      can_scope_to_self: can_scope_to_self?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -34,11 +36,27 @@ class AssessmentCycles::CohortsController < ApplicationController
     redirect_to root_path, alert: "Cycle not found."
   end
 
-  # nil = whole cycle (admin/HR); otherwise the viewer's org subtree.
+  # nil = whole cycle; otherwise the viewer's org subtree. Non-admins are
+  # always scoped to their subtree; admins/HR see the whole cycle by default
+  # but can opt into their own subtree via `?scope=mine`.
   def cohort_scope_ids
-    return nil if policy(@cycle).cohort_full_access?
+    return nil unless scope_to_subtree?
 
     current_person&.all_reports&.pluck(:id) || []
+  end
+
+  def scope_to_subtree?
+    !policy(@cycle).cohort_full_access? || scope_param == "mine"
+  end
+
+  def scope_param
+    params[:scope] == "mine" ? "mine" : "all"
+  end
+
+  # Whether to offer the "My org / Whole cycle" toggle: only for a full-access
+  # viewer (admin/HR) who is also a manager with reports to scope to.
+  def can_scope_to_self?
+    policy(@cycle).cohort_full_access? && current_person.present? && current_person.all_reports.exists?
   end
 
   def pivot_param

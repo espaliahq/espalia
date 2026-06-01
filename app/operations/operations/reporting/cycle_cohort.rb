@@ -17,6 +17,7 @@ class Operations::Reporting::CycleCohort < Operations::Base
 
   parameter :cycle_id, String, required: true
   parameter :mode, String, required: false, allowed: %w[summary full]
+  parameter :scope, String, required: false, allowed: %w[mine all]
 
   def policy_check
     authorize cycle, :cohort?
@@ -46,11 +47,16 @@ class Operations::Reporting::CycleCohort < Operations::Base
     @policy ||= AssessmentCyclePolicy.new(context, cycle)
   end
 
-  # nil = whole cycle (admin/HR); otherwise the caller's org subtree.
+  # nil = whole cycle; otherwise the caller's org subtree. Non-admins are
+  # always scoped; admins/HR see the whole cycle unless they pass scope: "mine".
   def scope_person_ids
-    return nil if policy.cohort_full_access?
+    return context.person&.all_reports&.pluck(:id) || [] if scope_to_subtree?
 
-    context.person&.all_reports&.pluck(:id) || []
+    nil
+  end
+
+  def scope_to_subtree?
+    !policy.cohort_full_access? || params[:scope] == "mine"
   end
 
   def serialize(result)

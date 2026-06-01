@@ -75,7 +75,52 @@ class AssessmentCycles::CohortsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "viewer scope" do
+    should "default an admin to the whole cycle" do
+      sign_in @admin_user
+      get cohort_assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, "Report One"
+    end
+
+    should "narrow an admin to their own subtree with ?scope=mine" do
+      # The admin manages nobody here, so their subtree is empty — proving the
+      # param flipped the scope (the whole-cycle participant drops out).
+      sign_in @admin_user
+      get cohort_assessment_cycle_path(@cycle, scope: "mine")
+
+      assert_response :success
+      assert_not_includes response.body, "Report One"
+    end
+  end
+
+  context "while impersonating (admin's global privileges must not leak)" do
+    should "deny the cohort when impersonating a plain member with no reports" do
+      sign_in @admin_user
+      impersonate(@outsider_user)
+
+      get cohort_assessment_cycle_path(@cycle)
+      # As the member, not the admin: no reports in the cycle → denied.
+      assert_response :redirect
+    end
+
+    should "scope to the impersonated manager's subtree, not the whole cycle" do
+      sign_in @admin_user
+      impersonate(@manager_user)
+
+      get cohort_assessment_cycle_path(@cycle)
+      assert_response :success
+      assert_includes response.body, "Report One"
+    end
+  end
+
   private
+
+  def impersonate(user)
+    tenant_user = ActsAsTenant.with_tenant(@tenant) { TenantUser.find_by(user_id: user.id) }
+    post impersonation_path, params: { tenant_user_id: tenant_user.id }
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }

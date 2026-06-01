@@ -65,6 +65,20 @@ module Impersonatable
     impersonated_tenant_user || real_tenant_user
   end
 
+  # The User whose privileges Pundit and views should act with: the
+  # impersonated target's user while impersonating, otherwise the real admin.
+  #
+  # {#current_user} (the Devise session) stays the real admin for audit and the
+  # impersonation guard ({#real_context}); only the authorization context
+  # renders as the target. Without this, a *global admin* impersonating a
+  # member would keep `global_admin?` (and every admin-gated policy) — the
+  # target's reduced tenant role can't override that flag.
+  #
+  # @return [User, nil]
+  def effective_user
+    impersonated_tenant_user&.user || current_user
+  end
+
   # The impersonated target, or nil. Resolution validates the session
   # (expiry + {ImpersonationPolicy} against the real admin) and clears it on
   # any failure, so this is the single source of truth for "is impersonation
