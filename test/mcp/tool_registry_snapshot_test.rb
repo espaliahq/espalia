@@ -232,7 +232,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "type" => "object",
           "properties" => {
             "cycle_id" => { "type" => "string" },
-            "mode" => { "type" => "string", "enum" => [ "summary", "full" ] }
+            "mode" => { "type" => "string", "enum" => [ "summary", "full" ] },
+            "scope" => { "type" => "string", "enum" => [ "mine", "all" ] }
           },
           "required" => [ "cycle_id" ],
           "additionalProperties" => false

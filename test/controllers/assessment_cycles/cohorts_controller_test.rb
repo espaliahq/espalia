@@ -75,6 +75,26 @@ class AssessmentCycles::CohortsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "viewer scope" do
+    should "default an admin to the whole cycle" do
+      sign_in @admin_user
+      get cohort_assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, "Report One"
+    end
+
+    should "narrow an admin to their own subtree with ?scope=mine" do
+      # The admin manages nobody here, so their subtree is empty — proving the
+      # param flipped the scope (the whole-cycle participant drops out).
+      sign_in @admin_user
+      get cohort_assessment_cycle_path(@cycle, scope: "mine")
+
+      assert_response :success
+      assert_not_includes response.body, "Report One"
+    end
+  end
+
   context "while impersonating (admin's global privileges must not leak)" do
     should "deny the cohort when impersonating a plain member with no reports" do
       sign_in @admin_user

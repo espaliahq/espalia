@@ -53,7 +53,7 @@ class Operations::Reporting::CycleCohortTest < ActiveSupport::TestCase
     assert_includes participant.keys, :self_done
   end
 
-  should "let an admin see the whole cycle" do
+  should "let an admin see the whole cycle, or narrow to their own subtree" do
     admin_user = create(:user)
     admin_tu = ActsAsTenant.with_tenant(@tenant) do
       person = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
@@ -61,8 +61,12 @@ class Operations::Reporting::CycleCohortTest < ActiveSupport::TestCase
     end
     ctx = AuthorizationContext.new(user: admin_user, tenant_user: admin_tu, person: admin_tu.person)
 
-    result = call_op(context: ctx, params: { cycle_id: @cycle.cycle_id })
-    assert_equal 1, result[:total]
+    whole = call_op(context: ctx, params: { cycle_id: @cycle.cycle_id })
+    assert_equal 1, whole[:total]
+
+    # Admin manages nobody → "mine" scopes to an empty subtree.
+    mine = call_op(context: ctx, params: { cycle_id: @cycle.cycle_id, scope: "mine" })
+    assert_equal 0, mine[:total]
   end
 
   should "deny a member with no reports in the cycle" do
