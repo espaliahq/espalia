@@ -321,6 +321,7 @@ test/
 - Commit per discrete change, creating a stacked PR
 - `/coderabbit:review --base main` - Use CodeRabbit to review the change code vs main branch before commit, if using CodeRabbit CLI use the `--agent` flag
 - When creating PR, always track CI, always investigate code review and CodeRabbit suggestions and commit each fix as a separate commit in the PR. Always check for fresh code review comments after each commit. 
+- Only stack PRs if the changes are large and indepedent enough in their overall goal
 - **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
 
 ## Learnings
