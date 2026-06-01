@@ -2,6 +2,7 @@
 
 class ApplicationController < ActionController::Base
   include Pundit::Authorization
+  include Impersonatable
 
   set_current_tenant_through_filter
 
@@ -13,28 +14,21 @@ class ApplicationController < ActionController::Base
 
   before_action :authenticate_user!
   before_action :set_tenant
+  before_action :enforce_impersonation_read_only
   around_action :wrap_with_audit_metadata
 
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
 
   private
 
-  # Resolves the current user's TenantUser membership for the active tenant.
-  # Cached per request. Returns nil if no membership exists.
+  # Resolves the TenantUser the request should act as, honouring an active
+  # impersonation session (see {Impersonatable}). Falls back to the real
+  # admin's own membership. Cached per request.
   #
   # @return [TenantUser, nil]
   def current_tenant_user
     return @current_tenant_user if defined?(@current_tenant_user)
-    tenant = ActsAsTenant.current_tenant
-    @current_tenant_user = ActsAsTenant.without_tenant do
-      tu = current_user&.tenant_users&.find_by(tenant: tenant)
-      begin
-        auto_link_person(tu) if tu&.person_id.nil?
-      rescue StandardError => e
-        Rails.logger.warn("auto_link_person failed for TenantUser #{tu&.id}: #{e.class}: #{e.message}")
-      end
-      tu
-    end
+    @current_tenant_user = effective_tenant_user
   end
 
   # Resolves the Person domain entity for the current user in the active tenant.
@@ -146,15 +140,19 @@ class ApplicationController < ActionController::Base
   # Tags every event published during this web request with provenance via
   # {AuditMetadata}: `acting_via: :web`, the acting Person's `actor_id`, and
   # a `correlation_id` (the Rails request id) shared by every event this
-  # request produces. Operations and grandfathered controllers that publish
-  # events inherit it through the thread-local without any per-handler
-  # wiring. The `ensure` guarantees cleanup even on raised exceptions — an
-  # `after_action` would skip on raises and could leak context into the next
-  # request on the same Puma worker thread.
+  # request produces. When an impersonation session is active, `actor_id` is
+  # the impersonated target (the write reads as theirs) and `impersonator_id`
+  # names the real admin — see {Impersonatable}. Operations and grandfathered
+  # controllers that publish events inherit it through the thread-local
+  # without any per-handler wiring. The `ensure` guarantees cleanup even on
+  # raised exceptions — an `after_action` would skip on raises and could leak
+  # context into the next request on the same Puma worker thread.
   def wrap_with_audit_metadata
     AuditMetadata.seed!(
       acting_via: :web,
       actor_id: current_person&.id,
+      impersonator_id: impersonating? ? real_context.person&.id : nil,
+      impersonation_active: impersonating?,
       correlation_id: request.request_id
     )
     yield

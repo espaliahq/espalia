@@ -188,6 +188,62 @@ class Operations::BaseTest < ActiveSupport::TestCase
       assert_same custom_policy, seen_class
     end
 
+    should "block a non-read operation while impersonating" do
+      op = Class.new(Operations::Base) do
+        category :write
+        def policy_check = nil
+        def perform = :wrote
+      end
+
+      AuditMetadata.with(acting_via: :web, actor_id: "target", impersonation_active: true) do
+        assert_raises(Operations::Base::ImpersonationReadOnlyError) do
+          op.call(context: build_context, params: {})
+        end
+      end
+    end
+
+    should "block a non-read operation while impersonating even when the admin has no Person" do
+      op = Class.new(Operations::Base) do
+        category :write
+        def policy_check = nil
+        def perform = :wrote
+      end
+
+      # impersonator_id is nil (no linked admin Person) but the flag is set —
+      # the guard must still fire.
+      AuditMetadata.with(acting_via: :web, actor_id: "target", impersonation_active: true) do
+        assert_raises(Operations::Base::ImpersonationReadOnlyError) do
+          op.call(context: build_context, params: {})
+        end
+      end
+    end
+
+    should "allow a read operation while impersonating" do
+      op = Class.new(Operations::Base) do
+        category :read
+        def policy_check = nil
+        def perform = :read_ok
+      end
+
+      result = AuditMetadata.with(acting_via: :web, actor_id: "target", impersonation_active: true) do
+        op.call(context: build_context, params: {})
+      end
+      assert_equal :read_ok, result
+    end
+
+    should "allow a write operation when not impersonating" do
+      op = Class.new(Operations::Base) do
+        category :write
+        def policy_check = nil
+        def perform = :wrote
+      end
+
+      result = AuditMetadata.with(acting_via: :web, actor_id: "target") do
+        op.call(context: build_context, params: {})
+      end
+      assert_equal :wrote, result
+    end
+
     should "propagate Pundit::NotAuthorizedError raised by authorize" do
       record = Object.new
       raising_stub = ->(*_args) { raise Pundit::NotAuthorizedError }

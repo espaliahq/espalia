@@ -57,6 +57,10 @@ Rails.application.routes.draw do
       as: :users_tenant_switch
   end
 
+  # Tenant-admin "view as another user". Read-only, within-tenant. Start
+  # (create) takes a tenant_user_id; stop (destroy) ends the session.
+  resource :impersonation, only: [ :create, :destroy ], controller: "impersonations"
+
   namespace :tenant do
     root to: "dashboard#show", as: :root
 

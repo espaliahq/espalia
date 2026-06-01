@@ -42,6 +42,14 @@ class Operations::Base
   # to different response codes (4xx vs 403).
   class ParameterError < StandardError; end
 
+  # Raised when a non-read Operation is invoked during an impersonation
+  # session. Impersonation ("view as another user") is read-only; the web
+  # controller boundary blocks unsafe HTTP methods, and this is the domain
+  # backstop in case a write reaches an Operation another way. Detected via
+  # {AuditMetadata}'s `impersonator_id`, which the request boundary seeds
+  # whenever impersonation is active.
+  class ImpersonationReadOnlyError < StandardError; end
+
   # Describes one declared parameter on an Operation.
   Parameter = Struct.new(:name, :type, :required, :allowed, keyword_init: true) do
     # @param value [Object] the raw value supplied by the caller
@@ -155,6 +163,7 @@ class Operations::Base
   # @raise [ParameterError] never reached here — params are validated in `#initialize`
   def call
     policy_check
+    forbid_impersonated_write!
     AuditMetadata.wrap_event_store { perform }
   end
 
@@ -188,6 +197,21 @@ class Operations::Base
   end
 
   private
+
+  # Domain backstop for read-only impersonation: refuse any non-read
+  # Operation while an impersonation session is active. `:none`-approval
+  # reads pass; everything else raises. The signal is {AuditMetadata}'s
+  # `impersonation_active` flag, seeded only on web requests where a tenant
+  # admin is impersonating — MCP/HRIS never set it, so this is a no-op
+  # there. We consult the flag rather than `impersonator_id` so the guard
+  # still fires when the real admin has no linked Person (nil id).
+  def forbid_impersonated_write!
+    return if self.class.category == :read
+    return unless AuditMetadata.current[:impersonation_active]
+
+    raise ImpersonationReadOnlyError,
+          "#{self.class} is a #{self.class.category} operation and cannot run while impersonating"
+  end
 
   # Reduce a raw input hash to the declared parameter set, with validation.
   # Symbolises keys so callers may pass either form (controller params are
