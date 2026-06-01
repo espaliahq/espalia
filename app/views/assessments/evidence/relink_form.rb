@@ -56,7 +56,7 @@ class Views::Assessments::Evidence::RelinkForm < Views::Base
         aria: { label: "Close" }
       ) { "×" }
     end
-    p(class: "mb-3 text-xs text-gray-500 dark:text-gray-400",
+    p(class: "mb-3 text-xs text-gray-600 dark:text-gray-300",
       data: { evidence_relink_form_target: "currentLabel" }) { "" }
   end
 

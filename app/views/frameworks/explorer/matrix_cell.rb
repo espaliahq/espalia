@@ -70,7 +70,7 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   def illustration_indicator
     div(class: "mt-1.5 flex items-center gap-1") do
       span(class: "w-1.5 h-1.5 rounded-full bg-primary") { }
-      span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
         count = @cell_data[:illustration_count]
         "#{count} #{'example'.pluralize(count)}"
       end

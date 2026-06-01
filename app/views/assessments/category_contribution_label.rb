@@ -19,11 +19,11 @@ class Views::Assessments::CategoryContributionLabel < Views::Base
 
         color =
           if score > 0
-            "text-green-600 dark:text-green-400"
+            "text-green-700 dark:text-green-400"
           elsif score < 0
-            "text-red-600 dark:text-red-400"
+            "text-red-700 dark:text-red-400"
           else
-            "text-gray-400 dark:text-gray-500"
+            "text-gray-600 dark:text-gray-300"
           end
 
         span(class: "text-xs font-mono #{color}") { label }

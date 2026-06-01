@@ -88,7 +88,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
               pending_edit: @category_pending_edit
             )
 
-            span(class: "text-xs text-gray-400 dark:text-gray-500") do
+            span(class: "text-xs text-gray-600 dark:text-gray-300") do
               "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
             end
           end

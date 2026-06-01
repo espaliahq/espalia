@@ -99,7 +99,7 @@ class Views::Assessments::FrequencySelector < Views::Base
     if selected
       "#{base}#{freq[:bg]} #{freq[:text]} ring-1 #{freq[:ring]}"
     else
-      "#{base}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 " \
+      "#{base}text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 " \
         "hover:bg-gray-100 dark:hover:bg-gray-700"
     end
   end

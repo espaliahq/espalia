@@ -121,13 +121,13 @@ class Views::Assessments::Activity::Entry < Views::Base
   end
 
   def secondary_line
-    p(class: "mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2") do
+    p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300 line-clamp-2") do
       secondary_text
     end
   end
 
   def footer
-    div(class: "mt-1 text-[10px] text-gray-400 dark:text-gray-500") do
+    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
       time_ago = @entry.occurred_at ? "#{time_ago_in_words(@entry.occurred_at)} ago" : "—"
       span { time_ago }
     end

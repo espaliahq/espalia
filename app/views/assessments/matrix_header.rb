@@ -26,7 +26,7 @@ class Views::Assessments::MatrixHeader < Views::Base
         # Capability name column (sticky corner)
         th(class: "sticky top-0 left-0 z-20 bg-gray-50 dark:bg-gray-800 " \
                   "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider " \
-                  "text-gray-500 dark:text-gray-400 border-b border-r " \
+                  "text-gray-600 dark:text-gray-300 border-b border-r " \
                   "border-gray-200 dark:border-gray-700 min-w-[220px]") do
           plain "Capability"
         end
@@ -41,7 +41,7 @@ class Views::Assessments::MatrixHeader < Views::Base
           th(class: "sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 " \
                     "px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider " \
                     "border-b border-r border-gray-200 dark:border-gray-700 " \
-                    "min-w-[180px] #{current ? 'text-primary' : 'text-gray-500 dark:text-gray-400'}") do
+                    "min-w-[180px] #{current ? 'text-primary' : 'text-gray-600 dark:text-gray-300'}") do
             div { level[:level_code] }
             div(class: "font-normal normal-case mt-0.5") { level[:level_title] }
             if current
@@ -101,6 +101,6 @@ class Views::Assessments::MatrixHeader < Views::Base
   # @return [void]
   def level_score_label(ratio)
     pct = (ratio * 100).round(0)
-    span(class: "block text-[10px] font-mono text-gray-400 dark:text-gray-500") { "#{pct}%" }
+    span(class: "block text-[10px] font-mono text-gray-600 dark:text-gray-300") { "#{pct}%" }
   end
 end

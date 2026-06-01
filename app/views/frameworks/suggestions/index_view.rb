@@ -68,7 +68,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   def back_link
     a(
       href: framework_path(@framework.framework_id),
-      class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary"
+      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary"
     ) { plain "\u2190 Back to framework" }
   end
 
@@ -78,7 +78,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
         h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Suggested edits" }
         render Components::Kit::Badge.new(@framework.name, variant: :info)
       end
-      p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
         "Review and apply inline suggestions from collaborators."
       end
     end
@@ -89,7 +89,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
       class: "mb-6 flex flex-wrap items-center gap-2 border-b border-gray-200 " \
              "dark:border-gray-700 pb-4"
     ) do
-      span(class: "text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase") { "Status" }
+      span(class: "text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase") { "Status" }
       status_filter_link("All", nil)
       STATUSES.each { |status| status_filter_link(status.humanize, status) }
     end
@@ -129,7 +129,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
     render Components::Kit::Card.new do |card|
       card.body do
         div(class: "py-8 text-center") do
-          p(class: "text-sm text-gray-500 dark:text-gray-400") do
+          p(class: "text-sm text-gray-600 dark:text-gray-300") do
             "No suggestions match these filters."
           end
         end
@@ -139,7 +139,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
 
   def tier_section(tier, suggestions)
     div(class: "mb-8") do
-      h2(class: "text-sm font-semibold uppercase text-gray-500 dark:text-gray-400 mb-3") do
+      h2(class: "text-sm font-semibold uppercase text-gray-600 dark:text-gray-300 mb-3") do
         TIER_LABELS[tier]
       end
       div(class: "space-y-3") do
@@ -178,7 +178,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
       render Components::Kit::Badge.new(entity_label(suggestion))
       render Components::Kit::Badge.new(suggestion.kind, variant: kind_variant(suggestion.kind))
       if suggestion.kind == "edit" && suggestion.field.present?
-        span(class: "text-xs text-gray-400 dark:text-gray-500") do
+        span(class: "text-xs text-gray-600 dark:text-gray-300") do
           "field: #{suggestion.field}"
         end
       end
@@ -233,7 +233,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   end
 
   def suggestion_footer(suggestion)
-    div(class: "mt-2 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400") do
+    div(class: "mt-2 flex items-center gap-3 text-xs text-gray-600 dark:text-gray-300") do
       span { "by #{@author_names.resolve(suggestion.author_id)}" }
       span { local_time_ago(suggestion.created_at) }
       if suggestion.rationale.present?

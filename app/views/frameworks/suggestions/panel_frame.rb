@@ -54,7 +54,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
            data: { suggestion_panel_target: "focusTitle" }) do
           focus_title
         end
-        p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5") do
+        p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
           pending_count = pending.size
           "#{pending_count} pending"
         end
@@ -73,7 +73,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
 
     a(
       href: @clear_path,
-      class: "text-xs text-gray-500 dark:text-gray-400 hover:text-primary mt-1 inline-block",
+      class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary mt-1 inline-block",
       data: {
         turbo_frame: "suggestion-panel",
         action: "click->context-pane#clearFocus"
@@ -111,7 +111,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   end
 
   def empty_state
-    div(class: "p-6 text-center text-sm text-gray-400 dark:text-gray-500") do
+    div(class: "p-6 text-center text-sm text-gray-600 dark:text-gray-300") do
       p { "No pending suggestions." }
     end
   end
@@ -167,7 +167,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
 
   def navigate_body_content(suggestion, label)
     if label
-      p(class: "text-xs text-gray-500 dark:text-gray-400 mb-0.5") { plain label }
+      p(class: "text-xs text-gray-600 dark:text-gray-300 mb-0.5") { plain label }
     end
     p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
       plain suggestion_preview(suggestion)
@@ -178,7 +178,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   def detail_link(suggestion)
     a(
       href: framework_suggestion_path(@framework.framework_id, suggestion.suggestion_id),
-      class: "ml-auto text-gray-400 dark:text-gray-500 hover:text-primary " \
+      class: "ml-auto text-gray-600 dark:text-gray-300 hover:text-primary " \
              "focus-visible:text-primary focus-visible:opacity-100 " \
              "focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 " \
              "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",

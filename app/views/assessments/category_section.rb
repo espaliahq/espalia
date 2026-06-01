@@ -85,7 +85,7 @@ class Views::Assessments::CategorySection < Views::Base
           @category.name
         end
         if @category.description.present?
-          p(class: "text-sm text-gray-500 dark:text-gray-400 mt-0.5") do
+          p(class: "text-sm text-gray-600 dark:text-gray-300 mt-0.5") do
             @category.description
           end
         end

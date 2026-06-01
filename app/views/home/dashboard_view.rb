@@ -36,7 +36,7 @@ class Views::Home::DashboardView < Views::Base
 
   def greeting
     h1(class: "mb-1 text-2xl font-semibold text-gray-900 dark:text-white") { "Home" }
-    p(class: "mb-6 text-sm text-gray-500 dark:text-gray-400") do
+    p(class: "mb-6 text-sm text-gray-600 dark:text-gray-300") do
       "Your next actions across GrowthOS."
     end
   end
@@ -59,7 +59,7 @@ class Views::Home::DashboardView < Views::Base
   def empty_state
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-500 dark:text-gray-400") do
+        p(class: "text-sm text-gray-600 dark:text-gray-300") do
           "Nothing needs your attention right now."
         end
       end

@@ -47,7 +47,7 @@ class Views::AssessmentCycles::NewView < Views::Base
   def back_link
     a(
       href: assessment_cycles_path,
-      class: "text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 " \
+      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
              "dark:hover:text-gray-200 transition-colors"
     ) do
       plain "\u2190 Back to cycles"
@@ -57,7 +57,7 @@ class Views::AssessmentCycles::NewView < Views::Base
   def page_header
     div(class: "mt-4 mb-6") do
       h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Define a new cycle" }
-      p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
         "A cycle is frozen against the currently-published framework version."
       end
     end
@@ -97,7 +97,7 @@ class Views::AssessmentCycles::NewView < Views::Base
           end
         end
       end
-      p(class: "mt-1 text-xs text-gray-500 dark:text-gray-400") do
+      p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
         "Only frameworks without an open cycle are listed."
       end
     end
@@ -158,7 +158,7 @@ class Views::AssessmentCycles::NewView < Views::Base
         class: "block w-full rounded-sm border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
       )
-      p(class: "mt-1 text-xs text-gray-500 dark:text-gray-400") do
+      p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
         "Soft deadline shown to participants. The cycle remains open until you close it."
       end
     end
@@ -176,7 +176,7 @@ class Views::AssessmentCycles::NewView < Views::Base
 
   def empty_state
     div(class: "mt-6 text-center py-12") do
-      p(class: "text-gray-500 dark:text-gray-400") do
+      p(class: "text-gray-600 dark:text-gray-300") do
         "Every framework already has an open cycle. Close one first to define a new one."
       end
     end

@@ -64,7 +64,7 @@ class Views::Assessments::Comments::Card < Views::Base
   def reply_context_chip
     a(
       href: "#comment-#{@reply_to.id}",
-      class: "inline-flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500 " \
+      class: "inline-flex items-center gap-1 text-[10px] text-gray-600 dark:text-gray-300 " \
              "hover:text-gray-600 dark:hover:text-gray-300",
       title: "Replying to #{reply_to_author_name}",
       data: {
@@ -105,7 +105,7 @@ class Views::Assessments::Comments::Card < Views::Base
       if @comment.posted_at
         a(
           href: comment_path(@comment),
-          class: "inline-flex items-center gap-1 text-gray-400 dark:text-gray-500 " \
+          class: "inline-flex items-center gap-1 text-gray-600 dark:text-gray-300 " \
                  "underline decoration-dotted decoration-gray-300 dark:decoration-gray-600 " \
                  "underline-offset-2 hover:decoration-solid hover:text-gray-600 " \
                  "dark:hover:text-gray-300",
@@ -115,11 +115,11 @@ class Views::Assessments::Comments::Card < Views::Base
           plain "#{time_ago_in_words(@comment.posted_at)} ago"
         end
       else
-        span(class: "text-gray-400 dark:text-gray-500") { "—" }
+        span(class: "text-gray-600 dark:text-gray-300") { "—" }
       end
       if @comment.edited_at.present?
         span(
-          class: "text-gray-400 dark:text-gray-500 italic",
+          class: "text-gray-600 dark:text-gray-300 italic",
           title: "Last edited #{@comment.edited_at.utc.iso8601}"
         ) { "(edited)" }
       end
@@ -183,6 +183,7 @@ class Views::Assessments::Comments::Card < Views::Base
         rows: 2,
         required: true,
         placeholder: "Reply…",
+        aria: { label: "Reply to comment" },
         class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
                "focus:outline-none focus:ring-2 focus:ring-primary",
@@ -221,6 +222,7 @@ class Views::Assessments::Comments::Card < Views::Base
         name: "comment[body]",
         rows: 3,
         required: true,
+        aria: { label: "Edit comment" },
         class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
                "focus:outline-none focus:ring-2 focus:ring-primary",
@@ -241,7 +243,7 @@ class Views::Assessments::Comments::Card < Views::Base
   end
 
   def deleted_body
-    div(class: "italic text-gray-400 dark:text-gray-500") do
+    div(class: "italic text-gray-600 dark:text-gray-300") do
       plain "[deleted]"
       if @comment.deletion_reason.present?
         plain " — #{@comment.deletion_reason}"

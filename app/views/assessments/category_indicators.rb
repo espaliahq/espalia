@@ -53,7 +53,7 @@ class Views::Assessments::CategoryIndicators < Views::Base
     counts = category_rated_count(@category_data, @context)
     return if counts[:total].zero?
 
-    span(class: "text-[11px] text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap") do
+    span(class: "text-[11px] text-gray-600 dark:text-gray-300 tabular-nums whitespace-nowrap") do
       "#{counts[:rated]}/#{counts[:total]} rated"
     end
   end
@@ -70,15 +70,15 @@ class Views::Assessments::CategoryIndicators < Views::Base
       pool = alt_result[:pool]&.round(2)
       pool_label = pool && pool >= 0 ? "+#{pool}" : pool.to_s
       pass_label = alt_result[:pass] ? "Pass" : "Below"
-      pass_color = alt_result[:pass] ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+      pass_color = alt_result[:pass] ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
 
       span(class: "flex items-center gap-1") do
         span(class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0") { }
-        span(class: "text-[10px] text-gray-400 dark:text-gray-500") { "#{label}:" }
+        span(class: "text-[10px] text-gray-600 dark:text-gray-300") { "#{label}:" }
         if pool
-          pool_color = pool > 0 ? "text-green-600 dark:text-green-400" :
-                       pool < 0 ? "text-red-600 dark:text-red-400" :
-                       "text-gray-400 dark:text-gray-500"
+          pool_color = pool > 0 ? "text-green-700 dark:text-green-400" :
+                       pool < 0 ? "text-red-700 dark:text-red-400" :
+                       "text-gray-600 dark:text-gray-300"
           span(class: "text-[10px] font-mono #{pool_color}") { pool_label }
         end
         span(class: "text-[10px] font-medium #{pass_color}") { pass_label }

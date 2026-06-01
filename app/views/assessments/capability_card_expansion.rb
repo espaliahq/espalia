@@ -68,7 +68,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
 
   def expansion_header
     div(class: "flex items-center gap-2 mb-3") do
-      span(class: "text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide") do
+      span(class: "text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide") do
         "#{@level[:level_code]} · #{@level[:level_title]}"
       end
     end
@@ -92,7 +92,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
       # when the secondary wraps below on mobile, so the secondary
       # starts flush against the new line's left edge.
       span(class: "whitespace-nowrap ml-2 mr-3") do
-        span(class: "text-gray-500 dark:text-gray-400 mr-1") { "Demonstrates:" }
+        span(class: "text-gray-600 dark:text-gray-300 mr-1") { "Demonstrates:" }
         # Rating controllers replace `#rating-<stable>-<ord>` after every
         # POST — the id has to live on the element
         # `Assessments::TurboStreamHelpers#rating_wrapper_html` writes.
@@ -141,7 +141,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     return if illustrations.empty?
 
     div(class: "mb-3") do
-      h4(class: "text-[10px] font-semibold text-gray-500 dark:text-gray-400 " \
+      h4(class: "text-[10px] font-semibold text-gray-600 dark:text-gray-300 " \
                 "uppercase tracking-wide mb-1") { "Examples" }
       ul(class: "space-y-1") do
         illustrations.each do |ill|

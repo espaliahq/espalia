@@ -55,7 +55,7 @@ class Views::Frameworks::IndexView < Views::Base
             framework.name
           end
 
-          div(class: "mt-4 flex gap-4 text-sm text-gray-500 dark:text-gray-400") do
+          div(class: "mt-4 flex gap-4 text-sm text-gray-600 dark:text-gray-300") do
             stat_pill("Role families", framework.role_families.size)
             stat_pill("Capabilities", framework.capability_categories.sum { |c| c.capabilities.size })
           end
@@ -77,7 +77,7 @@ class Views::Frameworks::IndexView < Views::Base
 
   def empty_state
     div(class: "text-center py-12") do
-      p(class: "text-gray-500 dark:text-gray-400") { "No frameworks defined yet." }
+      p(class: "text-gray-600 dark:text-gray-300") { "No frameworks defined yet." }
     end
   end
 end

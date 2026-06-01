@@ -71,11 +71,11 @@ class Views::Assessments::ScoringPanel < Views::Base
   def context_label
     label = CONTEXT_LABELS[@context] || CONTEXT_LABELS[:self]
     div(class: "flex items-center gap-2") do
-      span(class: "text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide") do
+      span(class: "text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide") do
         label
       end
       if using_fallback?
-        span(class: "text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded") do
+        span(class: "text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded") do
           "No ratings yet"
         end
       end
@@ -93,7 +93,7 @@ class Views::Assessments::ScoringPanel < Views::Base
 
       div(class: "flex items-baseline gap-2 mb-2") do
         span(class: "text-3xl font-bold #{performance_color(ratio)}") { "#{pct}%" }
-        span(class: "text-xs text-gray-500 dark:text-gray-400") { "of expected" }
+        span(class: "text-xs text-gray-600 dark:text-gray-300") { "of expected" }
       end
 
       # Progress bar
@@ -122,7 +122,7 @@ class Views::Assessments::ScoringPanel < Views::Base
     diverges = (pct - (primary_ratio * 100).round(0)).abs >= 5
 
     div(class: "flex items-center gap-1.5 mt-1.5") do
-      span(class: "text-[10px] text-gray-400 dark:text-gray-500 w-9 shrink-0") { "#{label}:" }
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300 w-9 shrink-0") { "#{label}:" }
 
       div(class: "flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden") do
         bar_width = [ pct, 150 ].min.to_f / 1.5
@@ -130,7 +130,7 @@ class Views::Assessments::ScoringPanel < Views::Base
             style: "width: #{[ bar_width, 100 ].min.round(0)}%") { }
       end
 
-      span(class: "text-[10px] text-gray-500 dark:text-gray-400 w-7 shrink-0 text-right") do
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300 w-7 shrink-0 text-right") do
         "#{pct}%"
       end
 
@@ -195,9 +195,9 @@ class Views::Assessments::ScoringPanel < Views::Base
         when :mastering
           [ "Mastering", "text-purple-600 dark:text-purple-400" ]
         when :meeting
-          [ "Meeting expectations", "text-green-600 dark:text-green-400" ]
+          [ "Meeting expectations", "text-green-700 dark:text-green-400" ]
         else
-          [ "Below expectations", "text-red-600 dark:text-red-400" ]
+          [ "Below expectations", "text-red-700 dark:text-red-400" ]
         end
 
       div(class: "flex items-center gap-1.5 px-3 py-1") do
@@ -205,7 +205,7 @@ class Views::Assessments::ScoringPanel < Views::Base
           class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0",
           title: "Divergent assessment"
         ) { }
-        span(class: "text-xs text-gray-500 dark:text-gray-400") do
+        span(class: "text-xs text-gray-600 dark:text-gray-300") do
           "#{label}: "
         end
         span(class: "text-xs font-medium #{color}") { text }
@@ -285,7 +285,7 @@ class Views::Assessments::ScoringPanel < Views::Base
       render Components::Kit::CategoryToleranceIndicator.new(
         threshold: cat_data[:deficit_threshold]
       )
-      span(class: "text-[10px] text-gray-500 dark:text-gray-400") do
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
         "#{progress[:rated]}/#{progress[:total]} rated"
       end
     end
@@ -295,10 +295,10 @@ class Views::Assessments::ScoringPanel < Views::Base
       next unless alt_result && result && alt_result[:pass] != result[:pass]
 
       alt_text = alt_result[:pass] ? "Pass" : "Below"
-      alt_color = alt_result[:pass] ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+      alt_color = alt_result[:pass] ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
 
       div(class: "flex items-center gap-1.5 mt-0.5 ml-0.5") do
-        span(class: "text-[10px] text-gray-400 dark:text-gray-500") { "#{label}:" }
+        span(class: "text-[10px] text-gray-600 dark:text-gray-300") { "#{label}:" }
         span(class: "text-[10px] font-medium #{alt_color}") { alt_text }
       end
     end
@@ -313,11 +313,11 @@ class Views::Assessments::ScoringPanel < Views::Base
     score = result[:pool].round(2)
     label = score >= 0 ? "+#{score}" : score.to_s
     color = if score > 0
-              "text-green-600 dark:text-green-400"
+              "text-green-700 dark:text-green-400"
     elsif score < 0
-              "text-red-600 dark:text-red-400"
+              "text-red-700 dark:text-red-400"
     else
-              "text-gray-400 dark:text-gray-500"
+              "text-gray-600 dark:text-gray-300"
     end
     span(class: "text-[10px] font-mono #{color}") { label }
   end
@@ -400,14 +400,14 @@ class Views::Assessments::ScoringPanel < Views::Base
       next if alt_readiness[:eligible] == primary_readiness[:eligible]
 
       text = alt_readiness[:eligible] ? "Eligible" : "Not eligible"
-      color = alt_readiness[:eligible] ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-gray-400"
+      color = alt_readiness[:eligible] ? "text-green-700 dark:text-green-400" : "text-gray-600 dark:text-gray-300"
 
       div(class: "flex items-center gap-1.5 mt-1.5") do
         span(
           class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0",
           title: "Divergent assessment"
         ) { }
-        span(class: "text-xs text-gray-500 dark:text-gray-400") { "#{label}:" }
+        span(class: "text-xs text-gray-600 dark:text-gray-300") { "#{label}:" }
         span(class: "text-xs font-medium #{color}") { text }
       end
     end
@@ -431,7 +431,7 @@ class Views::Assessments::ScoringPanel < Views::Base
       ul(class: "space-y-1") do
         blocked_caps.each do |cap|
           stable_id = cap[:capability].stable_id
-          li(class: "text-xs text-red-600 dark:text-red-400") do
+          li(class: "text-xs text-red-700 dark:text-red-400") do
             div(class: "flex items-center gap-1") do
               span(class: "w-1 h-1 rounded-full bg-red-400 shrink-0") { }
               plain cap[:capability].name
@@ -533,11 +533,11 @@ class Views::Assessments::ScoringPanel < Views::Base
     if ratio >= @mastery_threshold
       "text-purple-600 dark:text-purple-400"
     elsif ratio >= @meeting_expectation_threshold
-      "text-green-600 dark:text-green-400"
+      "text-green-700 dark:text-green-400"
     elsif ratio >= AMBER_THRESHOLD
-      "text-amber-600 dark:text-amber-400"
+      "text-amber-700 dark:text-amber-400"
     else
-      "text-red-600 dark:text-red-400"
+      "text-red-700 dark:text-red-400"
     end
   end
 

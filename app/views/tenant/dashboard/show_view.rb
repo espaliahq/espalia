@@ -65,7 +65,7 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
              "hover:border-primary hover:shadow-sm transition"
     ) do
       h3(class: "text-base font-semibold text-gray-900 dark:text-white") { tile[:label] }
-      p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") { tile[:description] }
+      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { tile[:description] }
     end
   end
 end

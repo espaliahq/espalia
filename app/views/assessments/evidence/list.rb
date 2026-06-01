@@ -84,7 +84,7 @@ class Views::Assessments::Evidence::List < Views::Base
 
   def header_label_classes
     "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-      "text-gray-500 dark:text-gray-400 mb-2"
+      "text-gray-600 dark:text-gray-300 mb-2"
   end
 
   # When the list is empty AND the viewer can create, lean the label

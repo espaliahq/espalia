@@ -82,7 +82,7 @@ class Views::Assessments::Comments::Thread < Views::Base
 
   def header_label_classes
     "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-      "text-gray-500 dark:text-gray-400 mb-2"
+      "text-gray-600 dark:text-gray-300 mb-2"
   end
 
   # When the thread is empty AND the viewer can comment, lean the label
@@ -190,6 +190,7 @@ class Views::Assessments::Comments::Thread < Views::Base
         rows: 2,
         required: true,
         placeholder: "Add a comment…",
+        aria: { label: "Add a comment" },
         class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
                "focus:outline-none focus:ring-2 focus:ring-primary",
@@ -204,7 +205,7 @@ class Views::Assessments::Comments::Thread < Views::Base
         # and ctrlKey as the submit modifier so we don't need to detect
         # the platform server-side. Mac users read this as "⌘+Enter",
         # PC/Linux users read it as "Ctrl+Enter".
-        span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+        span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
           plain "⌘/Ctrl+Enter to post"
         end
         button(

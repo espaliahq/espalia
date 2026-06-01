@@ -72,7 +72,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               pending_edit: @capability_pending_edit
             )
             draft_state_badge if @mode == :edit
-            p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1") do
+            p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-1") do
               @capability.description
             end if @capability.description.present?
           end

@@ -88,7 +88,7 @@ class Views::Assessments::CategoryTabs < Views::Base
         threshold: cat_data[:deficit_threshold]
       )
       # Progress
-      span(class: "text-[10px] text-gray-500 dark:text-gray-400") do
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
         "#{progress[:rated]}/#{progress[:total]} rated"
       end
     end
@@ -98,7 +98,7 @@ class Views::Assessments::CategoryTabs < Views::Base
 
   # Compact info for inactive tabs.
   def inactive_tab_info(progress, active)
-    span(class: "text-[10px] #{active ? 'text-gray-600 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}") do
+    span(class: "text-[10px] #{active ? 'text-gray-600 dark:text-gray-300' : 'text-gray-600 dark:text-gray-300'}") do
       "#{progress[:rated]}/#{progress[:total]}"
     end
   end
@@ -109,18 +109,18 @@ class Views::Assessments::CategoryTabs < Views::Base
     score = result[:pool].round(2)
     label = score >= 0 ? "+#{score}" : score.to_s
     color = if score > 0
-              "text-green-600 dark:text-green-400"
+              "text-green-700 dark:text-green-400"
     elsif score < 0
-              "text-red-600 dark:text-red-400"
+              "text-red-700 dark:text-red-400"
     else
-              "text-gray-400 dark:text-gray-500"
+              "text-gray-600 dark:text-gray-300"
     end
     span(class: "text-xs font-mono #{color}") { label }
   end
 
   def pass_badge(result)
     if result.nil?
-      span(class: "text-[10px] font-medium text-gray-400 dark:text-gray-500 " \
+      span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 " \
                   "bg-gray-100 dark:bg-gray-700 rounded-full px-1.5 py-0.5") { "N/A" }
     elsif result[:pass]
       span(class: "text-[10px] font-medium text-green-700 dark:text-green-300 " \
@@ -143,15 +143,15 @@ class Views::Assessments::CategoryTabs < Views::Base
       pool = alt_result[:pool]&.round(2)
       pool_text = pool && pool >= 0 ? "+#{pool}" : pool.to_s
       pass_label = alt_result[:pass] ? "Pass" : "Below"
-      pass_color = alt_result[:pass] ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+      pass_color = alt_result[:pass] ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
 
       div(class: "flex items-center gap-1 mt-0.5") do
         span(class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0") { }
-        span(class: "text-[10px] text-gray-400 dark:text-gray-500") { "#{label}:" }
+        span(class: "text-[10px] text-gray-600 dark:text-gray-300") { "#{label}:" }
         if pool
-          pool_color = pool > 0 ? "text-green-600 dark:text-green-400" :
-                       pool < 0 ? "text-red-600 dark:text-red-400" :
-                       "text-gray-400 dark:text-gray-500"
+          pool_color = pool > 0 ? "text-green-700 dark:text-green-400" :
+                       pool < 0 ? "text-red-700 dark:text-red-400" :
+                       "text-gray-600 dark:text-gray-300"
           span(class: "text-[10px] font-mono #{pool_color}") { pool_text }
         end
         span(class: "text-[10px] font-medium #{pass_color}") { pass_label }
@@ -180,7 +180,7 @@ class Views::Assessments::CategoryTabs < Views::Base
       "#{base}text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 " \
         "border-b-2 border-primary"
     else
-      "#{base}text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 " \
+      "#{base}text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 " \
         "hover:bg-gray-50 dark:hover:bg-gray-800/50"
     end
   end

@@ -38,7 +38,7 @@ class Views::Assessments::FrequencyBar < Views::Base
 
     div(class: "flex items-center gap-1.5 mt-1") do
       # Label
-      span(class: "text-[10px] text-gray-400 dark:text-gray-500 w-8 shrink-0") { "#{@label}:" }
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300 w-8 shrink-0") { "#{@label}:" }
 
       # Colored bar
       div(class: "flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden") do
@@ -47,7 +47,7 @@ class Views::Assessments::FrequencyBar < Views::Base
 
       # Frequency label
       span(
-        class: "text-[10px] text-gray-500 dark:text-gray-400 w-7 shrink-0 text-right",
+        class: "text-[10px] text-gray-600 dark:text-gray-300 w-7 shrink-0 text-right",
         title: config[:long_label]
       ) do
         config[:label]

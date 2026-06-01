@@ -50,7 +50,7 @@ class Views::Integrations::HrisView < Views::Base
     div(class: "mb-6") do
       a(
         href: tenant_integrations_path,
-        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 " \
+        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
                "dark:hover:text-gray-200 transition-colors"
       ) { plain "\u2190 Back to Integrations" }
 
@@ -58,7 +58,7 @@ class Views::Integrations::HrisView < Views::Base
         h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "HRIS Integration" }
         render Components::Kit::Badge.new(provider_label, variant: :info)
       end
-      p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
         plain "Sync employee data from your HRIS to keep people, roles, and levels up to date."
       end
     end
@@ -112,7 +112,7 @@ class Views::Integrations::HrisView < Views::Base
         ) { "Sync now" }
 
         unless sync_ready?
-          p(class: "text-xs text-gray-500 dark:text-gray-400") do
+          p(class: "text-xs text-gray-600 dark:text-gray-300") do
             plain "Configure provider, credentials, and enable sync to trigger an on-demand sync."
           end
         end
@@ -182,7 +182,7 @@ class Views::Integrations::HrisView < Views::Base
   def framework_role_cell(row)
     if row[:role]
       span(class: "font-mono text-gray-900 dark:text-white") { row[:mapping].framework_role_code }
-      span(class: "ml-2 text-gray-500 dark:text-gray-400") { row[:role].name }
+      span(class: "ml-2 text-gray-600 dark:text-gray-300") { row[:role].name }
     else
       span(class: "font-mono text-gray-900 dark:text-white") { row[:mapping].framework_role_code }
     end
@@ -192,7 +192,7 @@ class Views::Integrations::HrisView < Views::Base
     if mapping.level_ordinal
       span(class: "font-mono") { "L#{mapping.level_ordinal}" }
     else
-      span(class: "text-xs text-gray-500 dark:text-gray-400") { "from custom column" }
+      span(class: "text-xs text-gray-600 dark:text-gray-300") { "from custom column" }
     end
   end
 
@@ -253,7 +253,7 @@ class Views::Integrations::HrisView < Views::Base
   def person_identity(person)
     div do
       div(class: "font-medium text-gray-900 dark:text-white") { person.name }
-      div(class: "text-xs text-gray-500 dark:text-gray-400") { person.email }
+      div(class: "text-xs text-gray-600 dark:text-gray-300") { person.email }
     end
   end
 
@@ -268,14 +268,14 @@ class Views::Integrations::HrisView < Views::Base
   # ── Helpers ──
 
   def empty_state(text)
-    div(class: "px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400") { text }
+    div(class: "px-6 py-10 text-center text-sm text-gray-600 dark:text-gray-300") { text }
   end
 
   def th_cell(label)
     th(
       scope: "col",
       class: "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide " \
-             "text-gray-500 dark:text-gray-400"
+             "text-gray-600 dark:text-gray-300"
     ) { label }
   end
 

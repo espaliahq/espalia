@@ -27,12 +27,12 @@ class Views::Home::Cards::CycleProgress < Views::Base
   def header
     div(class: "flex items-start justify-between gap-3") do
       div do
-        p(class: "text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500") do
+        p(class: "text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
           "Cycle progress · your org"
         end
-        h3(class: "text-base font-semibold text-gray-900 dark:text-white") { @cycle.name }
+        h2(class: "text-base font-semibold text-gray-900 dark:text-white") { @cycle.name }
       end
-      span(class: "text-sm text-gray-500 dark:text-gray-400") { "#{@result.total} enrolled" }
+      span(class: "text-sm text-gray-600 dark:text-gray-300") { "#{@result.total} enrolled" }
     end
   end
 
@@ -40,9 +40,9 @@ class Views::Home::Cards::CycleProgress < Views::Base
     div(class: "mt-3 flex items-center gap-2 text-xs font-medium") do
       stage("Self", @result.funnel.self_pct, "text-blue-600 dark:text-blue-400")
       arrow
-      stage("Mgr", @result.funnel.manager_pct, "text-amber-600 dark:text-amber-400")
+      stage("Mgr", @result.funnel.manager_pct, "text-amber-700 dark:text-amber-400")
       arrow
-      stage("Aligned", @result.funnel.aligned_pct, "text-green-600 dark:text-green-400")
+      stage("Aligned", @result.funnel.aligned_pct, "text-green-700 dark:text-green-400")
     end
   end
 
@@ -51,7 +51,7 @@ class Views::Home::Cards::CycleProgress < Views::Base
   end
 
   def arrow
-    span(class: "text-gray-300 dark:text-gray-600") { "▸" }
+    span(class: "text-gray-600 dark:text-gray-300") { "▸" }
   end
 
   def attention_line
@@ -61,7 +61,7 @@ class Views::Home::Cards::CycleProgress < Views::Base
     p(class: "mt-3 text-sm text-amber-700 dark:text-amber-400") do
       plain "⚠ #{@result.at_risk_count} need attention"
       if lagging && lagging.at_risk_count.positive?
-        span(class: "text-gray-500 dark:text-gray-400") { " · #{lagging.label} is behind" }
+        span(class: "text-gray-600 dark:text-gray-300") { " · #{lagging.label} is behind" }
       end
     end
   end

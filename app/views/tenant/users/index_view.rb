@@ -112,7 +112,7 @@ class Views::Tenant::Users::IndexView < Views::Base
 
   def th_label(text)
     th(class: "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider " \
-              "text-gray-500 dark:text-gray-400") { text }
+              "text-gray-600 dark:text-gray-300") { text }
   end
 
   def cell(&block)
@@ -135,7 +135,7 @@ class Views::Tenant::Users::IndexView < Views::Base
   def person_status(tenant_user)
     person = tenant_user.person
     if person.nil?
-      span(class: "text-gray-400 dark:text-gray-500") { "Not linked" }
+      span(class: "text-gray-600 dark:text-gray-300") { "Not linked" }
     elsif person.status == "active"
       render Components::Kit::Badge.new("Active", variant: :success)
     else
@@ -148,14 +148,14 @@ class Views::Tenant::Users::IndexView < Views::Base
     if count.positive?
       span { "#{count} #{'assignment'.pluralize(count)}" }
     else
-      span(class: "text-gray-400 dark:text-gray-500") { "None" }
+      span(class: "text-gray-600 dark:text-gray-300") { "None" }
     end
   end
 
   def empty_state
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-500 dark:text-gray-400 text-center py-6") do
+        p(class: "text-sm text-gray-600 dark:text-gray-300 text-center py-6") do
           "No tenant members yet."
         end
       end

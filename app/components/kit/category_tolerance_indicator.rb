@@ -35,7 +35,7 @@ class Components::Kit::CategoryToleranceIndicator < Components::Base
   def capped_threshold
     formatted = @threshold == @threshold.to_i ? @threshold.to_i.to_s : @threshold.to_s
     span(class: "inline-flex items-center text-[10px] font-medium " \
-                "text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 " \
+                "text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 " \
                 "rounded-full px-1.5 py-0.5") do
       plain "\u00B1 #{formatted} pts"
     end

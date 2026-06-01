@@ -61,10 +61,10 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
         class: "text-sm text-gray-500 hover:underline dark:text-gray-400") { "← Cycles" }
       div(class: "mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
         h1(class: "text-2xl font-semibold text-gray-900 dark:text-white") { "#{cycle.name} — cohort progress" }
-        span(class: "text-sm text-gray-500 dark:text-gray-400") { "#{@result.total} enrolled" }
+        span(class: "text-sm text-gray-600 dark:text-gray-300") { "#{@result.total} enrolled" }
         deadline_badge
       end
-      p(class: "mt-2 text-xs text-gray-400 dark:text-gray-500") do
+      p(class: "mt-2 text-xs text-gray-600 dark:text-gray-300") do
         "Ratings stay private to each person and their manager until alignment. This view shows progress only."
       end
       scope_toggle
@@ -120,9 +120,16 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
     div do
       div(class: "mb-1 flex items-baseline justify-between text-sm") do
         span(class: "font-medium text-gray-700 dark:text-gray-200") { label }
-        span(class: "text-gray-500 dark:text-gray-400") { "#{count} of #{@result.total} · #{pct}%" }
+        span(class: "text-gray-600 dark:text-gray-300") { "#{count} of #{@result.total} · #{pct}%" }
       end
-      div(class: "h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700") do
+      div(
+        class: "h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700",
+        role: "progressbar",
+        aria: {
+          label: "#{label}: #{count} of #{@result.total} (#{pct}%)",
+          valuenow: pct, valuemin: 0, valuemax: 100
+        }
+      ) do
         div(class: "h-2 rounded-full #{color}", style: "width: #{pct}%")
       end
     end
@@ -133,7 +140,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
     render Components::Kit::Card.new(title: "Needs attention") do |card|
       card.body do
         if at_risk.empty?
-          p(class: "text-sm text-gray-500 dark:text-gray-400") { "Nobody is flagged — the cohort is on track." }
+          p(class: "text-sm text-gray-600 dark:text-gray-300") { "Nobody is flagged — the cohort is on track." }
         else
           p(class: "text-sm text-gray-700 dark:text-gray-200") do
             "#{at_risk.size} #{at_risk.size == 1 ? "participant is" : "participants are"} at risk (past the deadline or idle)."
@@ -142,7 +149,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
             at_risk.first(8).each do |participant|
               li(class: "text-sm text-gray-600 dark:text-gray-300") do
                 plain participant.name
-                span(class: "text-gray-400 dark:text-gray-500") { " · #{participant.role_name || "—"}" }
+                span(class: "text-gray-600 dark:text-gray-300") { " · #{participant.role_name || "—"}" }
               end
             end
           end
@@ -197,9 +204,9 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
     div(class: "flex flex-wrap items-center justify-between gap-2 px-6 py-3") do
       div do
         span(class: "text-sm font-medium text-gray-900 dark:text-white") { group.label }
-        span(class: "ml-2 text-xs text-gray-400 dark:text-gray-500") { "#{group.total} #{group.total == 1 ? "person" : "people"}" }
+        span(class: "ml-2 text-xs text-gray-600 dark:text-gray-300") { "#{group.total} #{group.total == 1 ? "person" : "people"}" }
       end
-      div(class: "flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400") do
+      div(class: "flex items-center gap-3 text-xs text-gray-600 dark:text-gray-300") do
         span { "Aligned #{group.funnel.aligned_pct}%" }
         if group.at_risk_count.positive?
           render Components::Kit::Badge.new("#{group.at_risk_count} at risk", variant: :warning)
@@ -225,7 +232,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
     div(class: "flex flex-wrap items-center justify-between gap-2 px-6 py-3") do
       div do
         span(class: "text-sm font-medium text-gray-900 dark:text-white") { participant.name }
-        span(class: "ml-2 text-xs text-gray-400 dark:text-gray-500") do
+        span(class: "ml-2 text-xs text-gray-600 dark:text-gray-300") do
           [ participant.role_name, participant.level_ordinal && "L#{participant.level_ordinal}" ].compact.join(" · ")
         end
       end
@@ -239,7 +246,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   end
 
   def coverage_chip(label, done)
-    classes = done ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+    classes = done ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200"
     span(class: "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium #{classes}") do
       "#{label} #{done ? "✓" : "—"}"
     end
@@ -253,7 +260,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   def empty_state
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-500 dark:text-gray-400") { "No participants in your scope for this cycle yet." }
+        p(class: "text-sm text-gray-600 dark:text-gray-300") { "No participants in your scope for this cycle yet." }
       end
     end
   end
