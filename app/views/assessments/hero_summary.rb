@@ -134,7 +134,7 @@ class Views::Assessments::HeroSummary < Views::Base
   # On narrow viewports the secondary chunk wraps to a second line.
   def gloss_and_secondaries
     secondaries = diverging_secondary_verdicts
-    p(class: "text-sm text-gray-500 dark:text-gray-400 mt-1") do
+    p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") do
       plain verdict_gloss
       if secondaries.any?
         span(class: "ml-2 text-xs") do
@@ -237,7 +237,7 @@ class Views::Assessments::HeroSummary < Views::Base
         span(class: "min-w-0 truncate text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
           config[:state_label]
         end
-        span(class: "text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider shrink-0") do
+        span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider shrink-0") do
           config[:list_label]
         end
       end
@@ -267,13 +267,13 @@ class Views::Assessments::HeroSummary < Views::Base
 
   def contribution_color(value)
     if value >= 0.5
-      "text-green-600 dark:text-green-400"
+      "text-green-700 dark:text-green-400"
     elsif value > -0.5
-      "text-gray-500 dark:text-gray-400"
+      "text-gray-600 dark:text-gray-300"
     elsif value > -1.5
-      "text-amber-600 dark:text-amber-400"
+      "text-amber-700 dark:text-amber-400"
     else
-      "text-red-600 dark:text-red-400"
+      "text-red-700 dark:text-red-400"
     end
   end
 
@@ -312,7 +312,7 @@ class Views::Assessments::HeroSummary < Views::Base
     else
       blocked = readiness[:blocked_at_next_level] || []
       if blocked.any?
-        span(class: "text-xs text-gray-500 dark:text-gray-400") do
+        span(class: "text-xs text-gray-600 dark:text-gray-300") do
           "Blocked by #{blocked.size} #{'capability'.pluralize(blocked.size)} at #{next_label}"
         end
       end
@@ -396,7 +396,7 @@ class Views::Assessments::HeroSummary < Views::Base
   def secondary_percents
     return if secondary_perspectives.empty?
 
-    div(class: "text-[11px] text-gray-400 dark:text-gray-500 mt-1 tabular-nums") do
+    div(class: "text-[11px] text-gray-600 dark:text-gray-300 mt-1 tabular-nums") do
       plain(secondary_perspectives.map { |label, s| "#{label}: #{format_pct(s)}" }.join(" · "))
     end
   end
@@ -428,11 +428,11 @@ class Views::Assessments::HeroSummary < Views::Base
     if ratio >= @mastery_threshold
       "text-purple-600 dark:text-purple-400"
     elsif ratio >= @meeting_expectation_threshold
-      "text-green-600 dark:text-green-400"
+      "text-green-700 dark:text-green-400"
     elsif ratio >= 0.8
-      "text-amber-600 dark:text-amber-400"
+      "text-amber-700 dark:text-amber-400"
     else
-      "text-red-600 dark:text-red-400"
+      "text-red-700 dark:text-red-400"
     end
   end
 end

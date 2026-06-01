@@ -49,12 +49,12 @@ class Views::Assessments::CapabilityNameCell < Views::Base
             )
           end
           if @capability.description.present?
-            p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2") do
+            p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-2") do
               @capability.description
             end
           end
           if @block_reason
-            p(class: "text-[10px] text-red-600 dark:text-red-400 mt-0.5") { @block_reason }
+            p(class: "text-[10px] text-red-700 dark:text-red-400 mt-0.5") { @block_reason }
           end
         end
       end

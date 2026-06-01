@@ -20,7 +20,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   PENDING_EDIT_CLASSES = "underline decoration-amber-400 decoration-wavy decoration-2 underline-offset-4"
   PENDING_DELETE_CLASSES = "line-through decoration-red-400 decoration-2"
   PENDING_ADD_CLASSES = "underline decoration-sky-400 decoration-wavy decoration-2 underline-offset-4 text-sky-700 dark:text-sky-300"
-  PENDING_REMOVE_CLASSES = "line-through decoration-current/60 decoration-2 text-gray-500 dark:text-gray-400"
+  PENDING_REMOVE_CLASSES = "line-through decoration-current/60 decoration-2 text-gray-600 dark:text-gray-300"
   PROPOSED_TEXT_CLASSES = PENDING_ADD_CLASSES
 
   # Returns Tailwind CSS classes for an entity wrapper when there are

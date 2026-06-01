@@ -94,7 +94,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     if dept_name.present?
       # Department header with collapsible content
       div(class: "mb-2") do
-        div(class: "px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider") do
+        div(class: "px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider") do
           dept_name
         end
         div(class: "space-y-0.5") do
@@ -151,7 +151,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           role_family.name
         end
 
-        span(class: "text-xs text-gray-400 dark:text-gray-500") { visible_roles.size.to_s }
+        span(class: "text-xs text-gray-600 dark:text-gray-300") { visible_roles.size.to_s }
       end
 
       # Roles
@@ -183,7 +183,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       button(
         type: "button",
         class: "opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
-               "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 " \
+               "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
                "hover:bg-primary/20 hover:text-primary transition-opacity",
         data: { action: "tree#solo", role_id: role.role_id },
         title: "Solo — focus on this role only"

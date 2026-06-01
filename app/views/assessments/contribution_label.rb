@@ -45,7 +45,7 @@ class Views::Assessments::ContributionLabel < Views::Base
 
       span(class: "flex items-center gap-0.5") do
         span(class: "w-1 h-1 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0") { }
-        span(class: "text-[9px] text-gray-400 dark:text-gray-500") { "#{label}:" }
+        span(class: "text-[9px] text-gray-600 dark:text-gray-300") { "#{label}:" }
         span(class: "text-[9px] font-mono #{score_color(alt_score)}") { alt_label }
       end
     end
@@ -53,11 +53,11 @@ class Views::Assessments::ContributionLabel < Views::Base
 
   def score_color(score)
     if score > 0
-      "text-green-600 dark:text-green-400"
+      "text-green-700 dark:text-green-400"
     elsif score < 0
-      "text-red-600 dark:text-red-400"
+      "text-red-700 dark:text-red-400"
     else
-      "text-gray-400 dark:text-gray-500"
+      "text-gray-600 dark:text-gray-300"
     end
   end
 

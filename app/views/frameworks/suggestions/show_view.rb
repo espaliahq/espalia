@@ -59,7 +59,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   def back_link
     a(
       href: framework_suggestions_path(@framework.framework_id),
-      class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary"
+      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary"
     ) { plain "\u2190 Back to suggestions" }
   end
 
@@ -73,7 +73,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
             variant: STATUS_VARIANTS.fetch(@suggestion.status, :default)
           )
         end
-        p(class: "text-sm text-gray-500 dark:text-gray-400") do
+        p(class: "text-sm text-gray-600 dark:text-gray-300") do
           plain entity_label
           if @suggestion.kind == "edit"
             plain " \u00b7 field: "
@@ -136,7 +136,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
 
   def create_attr_row(key, value)
     div do
-      dt(class: "text-xs font-semibold uppercase text-gray-500 dark:text-gray-400") do
+      dt(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300") do
         key.humanize
       end
       dd(class: "mt-0.5 rounded-md border border-green-200 dark:border-green-900/50 " \
@@ -148,7 +148,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
 
   def parent_context_row
     div do
-      dt(class: "text-xs font-semibold uppercase text-gray-500 dark:text-gray-400") { "For" }
+      dt(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300") { "For" }
       dd(class: "mt-0.5 rounded-md border border-gray-200 dark:border-gray-700 " \
                 "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-gray-900 dark:text-gray-100") do
         plain parent_context_label
@@ -220,7 +220,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     end
 
     div do
-      h3(class: "text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1") { label }
+      h3(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1") { label }
       pre(
         class: "rounded-md border #{classes} p-3 text-sm text-gray-900 dark:text-gray-100 " \
                "whitespace-pre-wrap font-sans"
@@ -248,13 +248,13 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
         card.body do
           dl(class: "grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm") do
             div do
-              dt(class: "text-gray-500 dark:text-gray-400") { "Reviewer" }
+              dt(class: "text-gray-600 dark:text-gray-300") { "Reviewer" }
               dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
                 plain @author_names.resolve(@suggestion.reviewed_by)
               end
             end
             div do
-              dt(class: "text-gray-500 dark:text-gray-400") { "Reviewed at" }
+              dt(class: "text-gray-600 dark:text-gray-300") { "Reviewed at" }
               dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
                 if @suggestion.reviewed_at
                   local_time(@suggestion.reviewed_at)
@@ -265,7 +265,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
             end
             if @suggestion.reviewer_comment.present?
               div(class: "sm:col-span-2") do
-                dt(class: "text-gray-500 dark:text-gray-400") { "Comment" }
+                dt(class: "text-gray-600 dark:text-gray-300") { "Comment" }
                 dd(class: "mt-0.5 text-gray-900 dark:text-white whitespace-pre-wrap") do
                   @suggestion.reviewer_comment
                 end
@@ -357,7 +357,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
           chevron_icon
           plain "Amend this suggestion"
         end
-        span(class: "text-xs font-normal text-gray-500 dark:text-gray-400") do
+        span(class: "text-xs font-normal text-gray-600 dark:text-gray-300") do
           "Revise your own pending suggestion."
         end
       end
@@ -381,7 +381,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
           ) { "Save amendment" }
           a(
             href: framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
-            class: "text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300"
           ) { "Cancel" }
         end
       end
@@ -392,7 +392,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     div do
       label(
         for: "suggestion_suggested_value",
-        class: "block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1"
+        class: "block text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1"
       ) { amend_value_label }
       textarea(
         id: "suggestion_suggested_value",
@@ -409,7 +409,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     div do
       label(
         for: "suggestion_rationale",
-        class: "block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1"
+        class: "block text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1"
       ) { "Rationale (optional)" }
       textarea(
         id: "suggestion_rationale",
@@ -485,7 +485,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       button(
         type: "submit",
-        class: "text-sm text-gray-500 hover:text-red-600 transition-colors"
+        class: "text-sm text-gray-500 hover:text-red-700 transition-colors"
       ) { "Withdraw" }
     end
   end

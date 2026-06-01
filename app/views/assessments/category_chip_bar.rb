@@ -85,9 +85,9 @@ class Views::Assessments::CategoryChipBar < Views::Base
     color = if active
               pct >= 100 ? "text-green-300" : pct >= 80 ? "text-amber-300" : "text-red-300"
     else
-              pct >= 100 ? "text-green-600 dark:text-green-400" :
-              pct >= 80 ? "text-amber-600 dark:text-amber-400" :
-              "text-red-600 dark:text-red-400"
+              pct >= 100 ? "text-green-700 dark:text-green-400" :
+              pct >= 80 ? "text-amber-700 dark:text-amber-400" :
+              "text-red-700 dark:text-red-400"
     end
     span(class: "text-xs font-mono #{color}") { "#{pct}%" }
   end
@@ -100,7 +100,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
     counts = category_rated_count(cat_data, @context)
     return if counts[:total].zero?
 
-    color = active ? "text-white/70 dark:text-gray-900/70" : "text-gray-500 dark:text-gray-400"
+    color = active ? "text-white/70 dark:text-gray-900/70" : "text-gray-600 dark:text-gray-300"
     span(class: "hidden lg:inline text-[10px] font-mono tabular-nums #{color}") do
       "#{counts[:rated]}/#{counts[:total]}"
     end

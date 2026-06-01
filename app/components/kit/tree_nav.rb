@@ -76,7 +76,7 @@ class Components::Kit::TreeNav < Components::Base
         end
 
         # Child count badge
-        span(class: "text-xs text-gray-400 dark:text-gray-500") do
+        span(class: "text-xs text-gray-600 dark:text-gray-300") do
           children.size.to_s
         end
       end
@@ -116,7 +116,7 @@ class Components::Kit::TreeNav < Components::Base
       button(
         type: "button",
         class: "opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
-               "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 " \
+               "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
                "hover:bg-primary/20 hover:text-primary transition-opacity",
         data: { action: "tree#solo", role_id: node[:id] },
         title: "Solo — focus on this role only"

@@ -146,7 +146,7 @@ class Views::Assessments::FrequencyPill < Views::Base
       button(
         type: "submit",
         role: "menuitem",
-        class: "block w-full text-left px-3 py-1.5 text-gray-500 dark:text-gray-400 " \
+        class: "block w-full text-left px-3 py-1.5 text-gray-600 dark:text-gray-300 " \
                "hover:bg-gray-100 dark:hover:bg-gray-700",
         data: { action: "click->dropdown#close" }
       ) { "Clear rating" }
@@ -167,7 +167,7 @@ class Views::Assessments::FrequencyPill < Views::Base
 
   def pill_bg_classes
     config = Views::Assessments::FrequencyPalette.config_for(@current_frequency)
-    return "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" unless config
+    return "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" unless config
 
     config[:pill_bg]
   end

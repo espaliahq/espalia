@@ -33,10 +33,10 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   def header
     div(class: "flex items-start justify-between gap-3") do
       div do
-        p(class: "text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500") do
+        p(class: "text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
           "Your assessment"
         end
-        h3(class: "text-base font-semibold text-gray-900 dark:text-white") { @state[:cycle].name }
+        h2(class: "text-base font-semibold text-gray-900 dark:text-white") { @state[:cycle].name }
       end
       label, variant = STATUS_LABELS.fetch(@state[:status], [ @state[:status].to_s.humanize, :default ])
       render Components::Kit::Badge.new(label, variant: variant)
@@ -52,7 +52,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   end
 
   def rated_line
-    p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+    p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
       count = @state[:self_rated_count]
       "#{count} #{count == 1 ? "capability" : "capabilities"} rated so far"
     end
@@ -70,7 +70,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   def empty
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-500 dark:text-gray-400") { "No open assessment." }
+        p(class: "text-sm text-gray-600 dark:text-gray-300") { "No open assessment." }
       end
     end
   end

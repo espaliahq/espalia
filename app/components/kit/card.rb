@@ -26,9 +26,12 @@ class Components::Kit::Card < Components::Base
 
   # @param title [String, nil] optional card title
   # @param variant [Symbol] :default or :flush
-  def initialize(title: nil, variant: :default)
+  # @param heading_level [Symbol] heading tag for the title (:h2..:h4) — set
+  #   to keep the document outline sequential for the card's context
+  def initialize(title: nil, variant: :default, heading_level: :h3)
     @title = title
     @variant = variant
+    @heading_level = heading_level
   end
 
   def view_template
@@ -58,7 +61,7 @@ class Components::Kit::Card < Components::Base
 
   def title_section
     div(class: "px-6 pt-6 pb-4") do
-      h3(class: "text-base font-semibold text-gray-900 dark:text-white") { @title }
+      send(@heading_level, class: "text-base font-semibold text-gray-900 dark:text-white") { @title }
     end
   end
 end

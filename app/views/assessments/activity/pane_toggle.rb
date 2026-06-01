@@ -26,7 +26,7 @@ class Views::Assessments::Activity::PaneToggle < Views::Base
       aria: { expanded: "false", controls: "assessment-activity-pane" }
     ) do
       span { "Activity" }
-      span(class: "text-xs font-mono text-gray-500 dark:text-gray-400") { @entry_count.to_s }
+      span(class: "text-xs font-mono text-gray-600 dark:text-gray-300") { @entry_count.to_s }
     end
   end
 end

@@ -26,7 +26,7 @@ class Components::Kit::DescriptionList < Components::Base
 
   def description_item(item)
     div(class: "px-4 py-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg") do
-      dt(class: "text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide") do
+      dt(class: "text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide") do
         item[:term]
       end
       dd(class: "mt-1 text-xl font-semibold text-gray-900 dark:text-white") do

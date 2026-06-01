@@ -179,7 +179,10 @@ class Views::Assessments::LevelChip < Views::Base
   end
 
   def rated_check
-    span(class: "absolute top-0.5 right-0.5 w-3 h-3 flex items-center justify-center") do
+    # Sits on a contrasting white/dark disc so the check clears AA against any
+    # level-chip fill (the chip colour varies by frequency × level position).
+    span(class: "absolute top-0.5 right-0.5 w-3 h-3 flex items-center justify-center " \
+                "rounded-full bg-white dark:bg-gray-900 shadow-sm") do
       span(class: "text-[8px] text-green-700 dark:text-green-400") { "✓" }
     end
   end

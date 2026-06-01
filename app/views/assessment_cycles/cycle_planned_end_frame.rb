@@ -50,7 +50,7 @@ class Views::AssessmentCycles::CyclePlannedEndFrame < Views::Base
     if @cycle.planned_end_at
       "font-medium text-gray-900 dark:text-white"
     else
-      "italic text-gray-500 dark:text-gray-400"
+      "italic text-gray-600 dark:text-gray-300"
     end
   end
 

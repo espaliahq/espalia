@@ -52,7 +52,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
   def back_link
     a(
       href: assessment_cycles_path,
-      class: "text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 " \
+      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
              "dark:hover:text-gray-200 transition-colors"
     ) do
       plain "\u2190 Back to cycles"
@@ -100,14 +100,14 @@ class Views::AssessmentCycles::ShowView < Views::Base
           cycle_type_row
           planned_end_row
           div do
-            dt(class: "text-gray-500 dark:text-gray-400") { "Opened at" }
+            dt(class: "text-gray-600 dark:text-gray-300") { "Opened at" }
             dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
               local_time(@cycle.opened_at)
             end
           end
           if @cycle.closed_at
             div do
-              dt(class: "text-gray-500 dark:text-gray-400") { "Closed at" }
+              dt(class: "text-gray-600 dark:text-gray-300") { "Closed at" }
               dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
                 local_time(@cycle.closed_at)
               end
@@ -120,14 +120,14 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def meta_row(label, value)
     div do
-      dt(class: "text-gray-500 dark:text-gray-400") { label }
+      dt(class: "text-gray-600 dark:text-gray-300") { label }
       dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") { value }
     end
   end
 
   def cycle_type_row
     div do
-      dt(class: "text-gray-500 dark:text-gray-400") { "Cycle type" }
+      dt(class: "text-gray-600 dark:text-gray-300") { "Cycle type" }
       dd(class: "mt-0.5") do
         render Views::AssessmentCycles::CycleTypeFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
@@ -136,7 +136,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def planned_end_row
     div do
-      dt(class: "text-gray-500 dark:text-gray-400") { "Target completion" }
+      dt(class: "text-gray-600 dark:text-gray-300") { "Target completion" }
       dd(class: "mt-0.5") do
         render Views::AssessmentCycles::CyclePlannedEndFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
@@ -175,7 +175,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
           if @cycle.participations.any?
             participants_table
           else
-            p(class: "text-sm text-gray-500 dark:text-gray-400") do
+            p(class: "text-sm text-gray-600 dark:text-gray-300") do
               "No participants enrolled yet."
             end
           end
@@ -189,11 +189,11 @@ class Views::AssessmentCycles::ShowView < Views::Base
       table(class: "min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm") do
         thead do
           tr do
-            th(class: "py-2 text-left font-semibold text-gray-500 dark:text-gray-400") { "Name" }
-            th(class: "py-2 text-left font-semibold text-gray-500 dark:text-gray-400") { "Email" }
-            th(class: "py-2 text-left font-semibold text-gray-500 dark:text-gray-400") { "Status" }
-            th(class: "py-2 text-left font-semibold text-gray-500 dark:text-gray-400") { "Enrolled" }
-            th(class: "py-2 text-left font-semibold text-gray-500 dark:text-gray-400") { "Aligned" }
+            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Name" }
+            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Email" }
+            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Status" }
+            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Enrolled" }
+            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Aligned" }
             th(class: "py-2") { "" } if @is_admin && @cycle.open?
           end
         end
@@ -209,7 +209,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
       td(class: "py-2 text-gray-900 dark:text-white") do
         plain participant.person&.name || "(unknown)"
       end
-      td(class: "py-2 text-gray-500 dark:text-gray-400") do
+      td(class: "py-2 text-gray-600 dark:text-gray-300") do
         plain participant.person&.email || "—"
       end
       td(class: "py-2") do
@@ -218,14 +218,14 @@ class Views::AssessmentCycles::ShowView < Views::Base
           variant: STATUS_VARIANTS.fetch(participant.status, :default)
         )
       end
-      td(class: "py-2 text-gray-500 dark:text-gray-400") do
+      td(class: "py-2 text-gray-600 dark:text-gray-300") do
         if participant.enrolled_at
           local_time(participant.enrolled_at)
         else
           plain "—"
         end
       end
-      td(class: "py-2 text-gray-500 dark:text-gray-400") do
+      td(class: "py-2 text-gray-600 dark:text-gray-300") do
         if participant.aligned_at
           local_time(participant.aligned_at)
         else
@@ -251,7 +251,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       button(
         type: "submit",
-        class: "text-xs text-red-600 hover:text-red-700 transition-colors"
+        class: "text-xs text-red-700 hover:text-red-700 transition-colors"
       ) { "Unenroll" }
     end
   end
@@ -266,7 +266,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
               bulk_enroll_form
             end
           else
-            p(class: "text-sm text-gray-500 dark:text-gray-400") do
+            p(class: "text-sm text-gray-600 dark:text-gray-300") do
               "No eligible people — everyone assigned to this framework is already enrolled."
             end
           end
@@ -283,7 +283,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
       data: { turbo_confirm: "Enroll all #{@eligible_people.size} eligible #{'person'.pluralize(@eligible_people.size)}?" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      p(class: "text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "text-sm text-gray-600 dark:text-gray-300") do
         "Enroll everyone assigned to this framework in one go."
       end
       button(

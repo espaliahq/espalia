@@ -91,14 +91,14 @@ class Views::Frameworks::SettingsView < Views::Base
     div(class: "mb-8") do
       a(
         href: framework_path(@framework.framework_id),
-        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 " \
+        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
                "dark:hover:text-gray-200 transition-colors"
       ) do
         plain "\u2190 Back to #{@framework.name}"
       end
 
       h1(class: "mt-2 text-2xl font-bold text-gray-900 dark:text-white") { "Settings" }
-      p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
         plain "Configure how assessments are scored and evaluated for this framework."
       end
     end
@@ -131,7 +131,7 @@ class Views::Frameworks::SettingsView < Views::Base
         loading: "lazy",
         class: "block mt-6"
       ) do
-        p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading collaborators…" }
+        p(class: "text-sm text-gray-600 dark:text-gray-300") { "Loading collaborators…" }
       end
     end
   end
@@ -175,7 +175,7 @@ class Views::Frameworks::SettingsView < Views::Base
                 end
               end
             end
-            p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") { setting[:description] }
+            p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { setting[:description] }
           end
 
           # Input field
@@ -225,7 +225,7 @@ class Views::Frameworks::SettingsView < Views::Base
 
       a(
         href: framework_path(@framework.framework_id),
-        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 " \
+        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
                "dark:hover:text-gray-200 transition-colors"
       ) { "Cancel" }
     end

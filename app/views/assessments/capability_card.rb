@@ -134,7 +134,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   def eyebrow
     return unless @category
 
-    span(class: "text-[10px] font-medium text-gray-400 dark:text-gray-500 " \
+    span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 " \
                 "uppercase tracking-wider") do
       @category.name
     end
@@ -154,7 +154,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   end
 
   def capability_description
-    p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2") do
+    p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-2") do
       @capability.description
     end
   end
@@ -171,20 +171,20 @@ class Views::Assessments::CapabilityCard < Views::Base
     value = @contribution.to_f
     label = sprintf("%+.1f", value)
     color = if value >= 0.5
-              "text-green-600 dark:text-green-400"
+              "text-green-700 dark:text-green-400"
     elsif value > -0.5
-              "text-gray-500 dark:text-gray-400"
+              "text-gray-600 dark:text-gray-300"
     elsif value > -1.5
-              "text-amber-600 dark:text-amber-400"
+              "text-amber-700 dark:text-amber-400"
     else
-              "text-red-600 dark:text-red-400"
+              "text-red-700 dark:text-red-400"
     end
     span(class: "text-base font-bold tabular-nums #{color} ml-auto") { label }
   end
 
   def blocked_badge
     span(
-      class: "text-[10px] font-medium text-red-600 dark:text-red-400 " \
+      class: "text-[10px] font-medium text-red-700 dark:text-red-400 " \
              "bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded",
       title: @block_reason
     ) { "Blocked" }

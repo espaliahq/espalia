@@ -300,7 +300,7 @@ class Views::Assessments::AssessmentCell < Views::Base
   def illustration_indicator
     div(class: "flex items-center gap-1") do
       span(class: "w-1.5 h-1.5 rounded-full bg-primary") { }
-      span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
         count = @cell_data[:illustration_count]
         "#{count} #{'example'.pluralize(count)}"
       end
@@ -312,7 +312,7 @@ class Views::Assessments::AssessmentCell < Views::Base
       span(class: "w-1.5 h-1.5 rounded-full bg-amber-500") { }
       # "evidence" is treated as uncountable here — matches the card's
       # body copy and avoids "evidences"/"piece of evidence" awkwardness.
-      span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
         "#{@cell_data[:evidence_count]} evidence"
       end
     end
@@ -325,7 +325,7 @@ class Views::Assessments::AssessmentCell < Views::Base
   def comment_indicator
     div(class: "flex items-center gap-1") do
       span(class: "w-1.5 h-1.5 rounded-full bg-sky-500") { }
-      span(class: "text-[10px] text-gray-400 dark:text-gray-500") do
+      span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
         count = @cell_data[:comment_count]
         "#{count} #{'comment'.pluralize(count)}"
       end

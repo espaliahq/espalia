@@ -44,6 +44,9 @@ class AssessmentCycles::CohortsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "cohort progress"
       assert_includes response.body, "Progress funnel"
       assert_includes response.body, "Report One"
+      # Funnel bars expose progressbar semantics for assistive tech (WCAG 4.1.2).
+      assert_includes response.body, 'role="progressbar"'
+      assert_includes response.body, "aria-valuenow"
     end
 
     should "render the cohort view for an admin" do

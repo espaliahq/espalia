@@ -54,14 +54,14 @@ class Views::Integrations::IndexView < Views::Base
             div do
               h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
                         "group-hover:text-primary transition-colors") { "HRIS" }
-              p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
                 plain provider_label
               end
             end
             render Components::Kit::Badge.new(status_label, variant: status_variant)
           end
 
-          div(class: "mt-4 text-xs text-gray-500 dark:text-gray-400") do
+          div(class: "mt-4 text-xs text-gray-600 dark:text-gray-300") do
             plain "Last synced: #{last_synced_label}"
           end
         end

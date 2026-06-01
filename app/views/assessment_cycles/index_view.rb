@@ -105,7 +105,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
                 class: "text-lg font-semibold text-gray-900 dark:text-white " \
                        "group-hover:text-primary transition-colors"
               ) { cycle.name }
-              p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
                 plain framework_label(cycle)
               end
             end
@@ -125,7 +125,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
             )
           end
 
-          div(class: "mt-3 text-xs text-gray-500 dark:text-gray-400") do
+          div(class: "mt-3 text-xs text-gray-600 dark:text-gray-300") do
             plain "Opened "
             local_time(cycle.opened_at)
           end
@@ -163,7 +163,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
 
   def empty_state(message)
     div(class: "text-center py-12") do
-      p(class: "text-gray-500 dark:text-gray-400") { message }
+      p(class: "text-gray-600 dark:text-gray-300") { message }
     end
   end
 end

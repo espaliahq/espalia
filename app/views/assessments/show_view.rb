@@ -124,7 +124,7 @@ class Views::Assessments::ShowView < Views::Base
   def assessment_header
     div(class: "pt-4 pb-2") do
       a(href: assessments_path,
-        class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary mb-1 inline-block") do
+        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary mb-1 inline-block") do
         plain "← My Assessments"
       end
 
@@ -215,7 +215,7 @@ class Views::Assessments::ShowView < Views::Base
     # so the matrix gets the full width and isn't squeezed to nothing.
     aside(
       id: "assessment-activity-pane",
-      class: "hidden bg-gray-50 dark:bg-gray-800/50 overflow-auto " \
+      class: "hidden bg-gray-50 dark:bg-gray-800 overflow-auto " \
              "border border-gray-200 dark:border-gray-700 " \
              "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
              "max-lg:w-80 max-lg:shadow-xl max-lg:border-l max-lg:rounded-none " \

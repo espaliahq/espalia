@@ -47,7 +47,7 @@ class Views::Tenant::Users::ShowView < Views::Base
   def back_link
     div(class: "mb-4") do
       a(href: tenant_users_path,
-        class: "text-sm text-gray-500 dark:text-gray-400 hover:underline") do
+        class: "text-sm text-gray-600 dark:text-gray-300 hover:underline") do
         plain "← All tenant users"
       end
     end
@@ -77,7 +77,7 @@ class Views::Tenant::Users::ShowView < Views::Base
 
   def current_role_summary
     div do
-      p(class: "text-sm text-gray-500 dark:text-gray-400 mb-1") { "Current role" }
+      p(class: "text-sm text-gray-600 dark:text-gray-300 mb-1") { "Current role" }
       if @tenant_user.admin?
         render Components::Kit::Badge.new("Admin", variant: :primary)
       else
@@ -107,7 +107,7 @@ class Views::Tenant::Users::ShowView < Views::Base
         if @collaborator_rows.any?
           collaborator_table
         else
-          p(class: "text-sm text-gray-500 dark:text-gray-400") do
+          p(class: "text-sm text-gray-600 dark:text-gray-300") do
             "No framework collaborator assignments yet."
           end
         end
@@ -166,7 +166,7 @@ class Views::Tenant::Users::ShowView < Views::Base
     ) do
       button(
         type: "submit",
-        class: "text-sm text-red-600 dark:text-red-400 hover:underline"
+        class: "text-sm text-red-700 dark:text-red-400 hover:underline"
       ) { "Remove" }
     end
   end
@@ -183,7 +183,7 @@ class Views::Tenant::Users::ShowView < Views::Base
 
   def th_label(text)
     th(class: "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider " \
-              "text-gray-500 dark:text-gray-400") { text }
+              "text-gray-600 dark:text-gray-300") { text }
   end
 
   def cell(extra_classes: nil, &block)

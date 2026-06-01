@@ -61,7 +61,7 @@ class Views::Frameworks::ShowView < Views::Base
       div(class: "flex items-center justify-between") do
         div do
           a(href: frameworks_path,
-            class: "text-sm text-gray-500 dark:text-gray-400 hover:text-primary mb-2 inline-block") do
+            class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary mb-2 inline-block") do
             plain "\u2190 Frameworks"
           end
           div(class: "flex items-center gap-3") do
@@ -95,7 +95,7 @@ class Views::Frameworks::ShowView < Views::Base
       data: {
         controller: "edit-mode-toggle",
         edit_mode_toggle_active_class: "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs",
-        edit_mode_toggle_inactive_class: "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+        edit_mode_toggle_inactive_class: "text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
       }
     ) do
       edit_suggest_segment("editing", "Editing",
@@ -160,7 +160,7 @@ class Views::Frameworks::ShowView < Views::Base
       "bg-amber-100 text-amber-800 hover:bg-amber-200 " \
         "dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
     else
-      "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 " \
+      "text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 " \
         "hover:bg-gray-100 dark:hover:bg-gray-800"
     end
   end
@@ -169,7 +169,7 @@ class Views::Frameworks::ShowView < Views::Base
     a(
       href: framework_settings_path(@framework.framework_id),
       class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm " \
-             "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 " \
+             "text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 " \
              "hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
       title: "Framework settings"
     ) do
@@ -195,7 +195,7 @@ class Views::Frameworks::ShowView < Views::Base
     level_count = @matrix_data[:merged_levels].size
     cap_count = @matrix_data[:categories].sum { |c| c[:capabilities].size }
 
-    div(class: "mt-3 flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400") do
+    div(class: "mt-3 flex items-center gap-6 text-sm text-gray-600 dark:text-gray-300") do
       # Roles stat doubles as the toggle button for the role pane
       button(
         type: "button",
@@ -337,7 +337,7 @@ class Views::Frameworks::ShowView < Views::Base
         class: "block h-full",
         data: { context_pane_target: "frame" }
       ) do
-        div(class: "p-6 text-center text-gray-400 dark:text-gray-500 text-sm") do
+        div(class: "p-6 text-center text-gray-600 dark:text-gray-300 text-sm") do
           p { "Loading suggestions\u2026" }
         end
       end

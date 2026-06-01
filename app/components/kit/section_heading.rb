@@ -24,7 +24,7 @@ class Components::Kit::SectionHeading < Components::Base
     div(class: "flex items-baseline justify-between mb-4") do
       div do
         send(@tag, class: heading_classes) { @title }
-        p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") { @subtitle } if @subtitle
+        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { @subtitle } if @subtitle
       end
       yield(self) if block_given?
     end

@@ -58,7 +58,7 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   def empty_state
     div(class: "flex items-center justify-center h-64") do
       div(class: "text-center") do
-        p(class: "text-gray-500 dark:text-gray-400 text-sm") do
+        p(class: "text-gray-600 dark:text-gray-300 text-sm") do
           "Select roles from the tree to view the capability matrix."
         end
       end

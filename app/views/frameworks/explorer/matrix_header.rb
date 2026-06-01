@@ -30,7 +30,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
 
   def corner_cell
     th(class: "sticky top-0 left-0 z-20 bg-gray-50 dark:bg-gray-900 " \
-              "px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 " \
+              "px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 " \
               "uppercase tracking-wide border-b border-r border-gray-200 dark:border-gray-700 " \
               "min-w-[200px]") do
       "Capability"
@@ -57,7 +57,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
   def full_title_badges(role_codes)
     div(class: "flex flex-col items-center gap-0.5") do
       role_codes.each do |rc|
-        span(class: "text-xs text-gray-500 dark:text-gray-400") do
+        span(class: "text-xs text-gray-600 dark:text-gray-300") do
           rc[:level_title]
         end
       end

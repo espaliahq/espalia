@@ -82,7 +82,7 @@ class Views::Tenant::Theme::EditView < Views::Base
         # Column headers — only on sm+ to anchor the light/dark grouping.
         div(class: "hidden sm:grid sm:grid-cols-[1fr_auto_auto] gap-x-6 gap-y-2 " \
                    "text-xs font-medium uppercase tracking-wide " \
-                   "text-gray-400 dark:text-gray-500 pb-2 " \
+                   "text-gray-600 dark:text-gray-300 pb-2 " \
                    "border-b border-gray-200 dark:border-gray-700") do
           span { "" }
           span(class: "text-center min-w-[5rem]") { "Light" }
@@ -110,7 +110,7 @@ class Views::Tenant::Theme::EditView < Views::Base
     current = @tenant.public_send(slot[:attr]).presence || slot[:default]
 
     div(class: "flex items-center gap-2 sm:justify-self-center") do
-      span(class: "sm:hidden text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 w-12") do
+      span(class: "sm:hidden text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300 w-12") do
         mode.to_s.capitalize
       end
       form.color_field slot[:attr],
@@ -124,7 +124,7 @@ class Views::Tenant::Theme::EditView < Views::Base
           theme_live_preview_default_param: current,
           action: "input->theme-live-preview#apply"
         }
-      span(class: "text-xs font-mono text-gray-500 dark:text-gray-400 w-16 truncate") { current }
+      span(class: "text-xs font-mono text-gray-600 dark:text-gray-300 w-16 truncate") { current }
     end
   end
 
@@ -135,7 +135,7 @@ class Views::Tenant::Theme::EditView < Views::Base
       card.body do
         form.label :font_family, "Font family",
                    class: "block text-sm font-medium text-gray-700 dark:text-gray-300"
-        p(class: "text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-2") do
+        p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 mb-2") do
           plain "Google Fonts family name (e.g. \"Inter\", \"Roboto\"). Leave blank for the default."
         end
         form.text_field :font_family,
@@ -155,7 +155,7 @@ class Views::Tenant::Theme::EditView < Views::Base
   end
 
   def dark_mode_note
-    p(class: "text-xs text-gray-500 dark:text-gray-400 px-1") do
+    p(class: "text-xs text-gray-600 dark:text-gray-300 px-1") do
       plain "Dark-mode previews are visible only when your OS is in dark mode."
     end
   end

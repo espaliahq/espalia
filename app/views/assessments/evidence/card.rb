@@ -98,7 +98,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def footer_line
-    div(class: "mt-1 text-[10px] text-gray-400 dark:text-gray-500") do
+    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
       span { @item.author&.name || "Unknown" }
       plain " · "
       span { @item.recorded_at ? "#{time_ago_in_words(@item.recorded_at)} ago" : "—" }

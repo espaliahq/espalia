@@ -11,7 +11,7 @@ class Views::Home::Cards::AwaitingYou < Views::Base
   end
 
   def view_template
-    render Components::Kit::Card.new(title: "Awaiting you") do |card|
+    render Components::Kit::Card.new(title: "Awaiting you", heading_level: :h2) do |card|
       card.body do
         summary_line
         report_list
@@ -36,11 +36,11 @@ class Views::Home::Cards::AwaitingYou < Views::Base
       @reports.first(PREVIEW_LIMIT).each do |report|
         li(class: "text-sm text-gray-700 dark:text-gray-300") do
           plain report[:person]&.name || "Unknown"
-          span(class: "text-gray-400 dark:text-gray-500") { " · #{report[:cycle].name}" }
+          span(class: "text-gray-600 dark:text-gray-300") { " · #{report[:cycle].name}" }
         end
       end
       if @reports.size > PREVIEW_LIMIT
-        li(class: "text-sm text-gray-400 dark:text-gray-500") do
+        li(class: "text-sm text-gray-600 dark:text-gray-300") do
           "+#{@reports.size - PREVIEW_LIMIT} more"
         end
       end

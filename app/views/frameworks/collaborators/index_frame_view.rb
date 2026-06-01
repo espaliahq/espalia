@@ -50,7 +50,7 @@ class Views::Frameworks::Collaborators::IndexFrameView < Views::Base
         end
       end
     else
-      p(class: "text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "text-sm text-gray-600 dark:text-gray-300") do
         "No collaborators on this framework yet."
       end
     end
@@ -76,7 +76,7 @@ class Views::Frameworks::Collaborators::IndexFrameView < Views::Base
             value: view_context.form_authenticity_token)
       button(
         type: "submit",
-        class: "text-sm text-red-600 dark:text-red-400 hover:underline"
+        class: "text-sm text-red-700 dark:text-red-400 hover:underline"
       ) { "Remove" }
     end
   end
@@ -98,7 +98,7 @@ class Views::Frameworks::Collaborators::IndexFrameView < Views::Base
 
   def th_label(text)
     th(class: "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider " \
-              "text-gray-500 dark:text-gray-400") { text }
+              "text-gray-600 dark:text-gray-300") { text }
   end
 
   def cell(extra_classes: nil, &block)

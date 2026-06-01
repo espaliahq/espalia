@@ -48,7 +48,7 @@ class Views::Assessments::Activity::Feed < Views::Base
     div(class: "mb-3 flex items-center justify-between gap-2") do
       div(class: "flex items-baseline gap-2 min-w-0") do
         h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") { "Activity" }
-        span(class: "text-[11px] text-gray-500 dark:text-gray-400 shrink-0") do
+        span(class: "text-[11px] text-gray-600 dark:text-gray-300 shrink-0") do
           "#{@entries.size} #{@entries.size == 1 ? 'event' : 'events'}"
         end
       end
@@ -95,7 +95,7 @@ class Views::Assessments::Activity::Feed < Views::Base
 
   def empty_state
     div(class: "rounded-lg border border-dashed border-gray-200 dark:border-gray-700 " \
-               "p-4 text-center text-xs text-gray-500 dark:text-gray-400") do
+               "p-4 text-center text-xs text-gray-600 dark:text-gray-300") do
       "No activity yet. Record evidence or update a rating to begin."
     end
   end

@@ -36,7 +36,7 @@ class Views::Assessments::IndexView < Views::Base
   def page_header
     div(class: "mb-6") do
       h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "My Assessments" }
-      p(class: "mt-1 text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
         "Self-assess your capabilities against your assigned framework."
       end
     end
@@ -55,7 +55,7 @@ class Views::Assessments::IndexView < Views::Base
   def report_assignments_section
     div(class: "mt-10") do
       h2(class: "text-xl font-bold text-gray-900 dark:text-white mb-1") { "Team Assessments" }
-      p(class: "text-sm text-gray-500 dark:text-gray-400 mb-4") do
+      p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
         "Review and rate your direct reports\u2019 assessments."
       end
       div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
@@ -75,7 +75,7 @@ class Views::Assessments::IndexView < Views::Base
           h3(class: "text-lg font-semibold text-gray-900 dark:text-white") do
             person&.name || "Team Member"
           end
-          p(class: "text-sm text-gray-500 dark:text-gray-400") do
+          p(class: "text-sm text-gray-600 dark:text-gray-300") do
             assignment.framework&.name || "Framework"
           end
           div(class: "mt-1 flex items-center gap-2") do
@@ -91,7 +91,7 @@ class Views::Assessments::IndexView < Views::Base
       end
 
       if cycle&.name.present?
-        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { cycle.name }
+        p(class: "mt-3 text-sm text-gray-600 dark:text-gray-300") { cycle.name }
       end
 
       div(class: "mt-4") do
@@ -129,7 +129,7 @@ class Views::Assessments::IndexView < Views::Base
       end
 
       if cycle&.name.present?
-        p(class: "mt-3 text-sm text-gray-500 dark:text-gray-400") { cycle.name }
+        p(class: "mt-3 text-sm text-gray-600 dark:text-gray-300") { cycle.name }
       end
 
       div(class: "mt-4") do
@@ -163,7 +163,7 @@ class Views::Assessments::IndexView < Views::Base
   def empty_state
     div(class: "rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 " \
                "p-12 text-center") do
-      p(class: "text-sm text-gray-500 dark:text-gray-400") do
+      p(class: "text-sm text-gray-600 dark:text-gray-300") do
         "You have not been assigned to any frameworks yet."
       end
     end
