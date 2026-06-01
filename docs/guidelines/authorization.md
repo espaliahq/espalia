@@ -156,6 +156,19 @@ end
 
 The concern provides: `collaborator_roles`, `has_any_collaborator_role?`, `can_publish?`, `can_manage_collaborators?`, `can_approve_tier?(tier)`.
 
+## Impersonation ("view as another user")
+
+A tenant admin can experience the system from another user's perspective. The design overrides the **lower two tiers** of the identity chain rather than swapping the Devise session: `current_user` stays the real admin, while `current_tenant_user` / `current_person` resolve to the impersonated target. Every policy and view then renders as the target sees it, automatically, because they all read from `pundit_user` / the identity chain.
+
+Rules baked into the implementation:
+
+- **Read-only.** Enforced at two layers — `ApplicationController` blocks unsafe HTTP methods while impersonating (`Impersonatable#enforce_impersonation_read_only`), and `Operations::Base` refuses any non-`:read` operation when `AuditMetadata`'s `impersonator_id` is set (the domain backstop). The impersonation, tenant-switch, and Devise controllers are exempt so the user can always stop, switch, or sign out.
+- **Within-tenant, non-admin targets only.** `ImpersonationPolicy#create?` requires the actor to be a tenant admin and the target to be a same-tenant, non-admin, non-global-admin, non-self membership. The single load-bearing rule: **never impersonate someone with more privilege than yourself** (no escalation).
+- **Authority is always the real admin.** The policy is evaluated against `Impersonatable#real_context`, never `pundit_user` (which is the impersonated context once active). It is **re-checked every request** — a revoked admin role or a target promoted to admin ends the session mid-flight, failing closed to the real admin's own view.
+- **Auto-expiry.** A hard 30-minute TTL (`Impersonatable::TTL`), no refresh-on-activity. Also cleared on tenant switch and sign-out.
+- **Audit.** While impersonating, events carry `actor_id` = the target and `impersonator_id` = the real admin, so the immutable stream names both identities (belt-and-suspenders, since writes are blocked).
+- **Web-only.** MCP builds its `AuthorizationContext` from the token, never from session, so it ignores impersonation by construction — do not bridge them.
+
 ## Key Files
 
 | File | Purpose |
@@ -167,6 +180,10 @@ The concern provides: `collaborator_roles`, `has_any_collaborator_role?`, `can_p
 | `app/policies/concerns/framework_collaborator_permissions.rb` | Reusable collaborator role queries |
 | `app/read_models/framework_state/collaborator.rb` | Collaborator read model with role scopes |
 | `app/controllers/application_controller.rb` | Identity chain helpers, `pundit_user`, `rescue_from` |
+| `app/controllers/concerns/impersonatable.rb` | Impersonation session: context override, read-only guard, expiry, re-auth |
+| `app/policies/impersonation_policy.rb` | `create?` — who a tenant admin may "view as" |
+| `app/controllers/impersonations_controller.rb` | Start (`create`) / stop (`destroy`) impersonation |
+| `app/components/kit/impersonation_banner.rb` | Sticky read-only banner shown while impersonating |
 
 ## Anti-patterns
 

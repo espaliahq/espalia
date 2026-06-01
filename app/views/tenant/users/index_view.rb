@@ -8,13 +8,16 @@
 class Views::Tenant::Users::IndexView < Views::Base
   # @param tenant_users [Array<TenantUser>]
   # @param collaborator_counts [Hash{String => Integer}] person_id → count
+  # @param impersonatable_ids [Set<String>] TenantUser ids the admin may "view as"
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(tenant_users:, collaborator_counts:,
+                 impersonatable_ids: Set.new,
                  user: nil, current_tenant: nil, tenants: [])
     @tenant_users = tenant_users
     @collaborator_counts = collaborator_counts
+    @impersonatable_ids = impersonatable_ids
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -60,6 +63,7 @@ class Views::Tenant::Users::IndexView < Views::Base
             th_label "Tenant role"
             th_label "Linked person"
             th_label "Framework involvement"
+            th_label "View as"
           end
         end
         tbody(class: "divide-y divide-gray-200 dark:divide-gray-700 " \
@@ -80,6 +84,28 @@ class Views::Tenant::Users::IndexView < Views::Base
       cell { role_badge(tenant_user) }
       cell { person_status(tenant_user) }
       cell { collaborator_count_text(tenant_user) }
+      cell { impersonate_action(tenant_user) }
+    end
+  end
+
+  # "View as" affordance — a small POST form to start impersonation. Only
+  # rendered for memberships the acting admin is authorised to impersonate
+  # (computed server-side via ImpersonationPolicy); everyone else gets a
+  # muted dash so the column stays aligned.
+  def impersonate_action(tenant_user)
+    unless @impersonatable_ids.include?(tenant_user.id)
+      return span(class: "text-gray-300 dark:text-gray-600") { "—" }
+    end
+
+    form(action: impersonation_path, method: "post") do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      input(type: "hidden", name: "tenant_user_id", value: tenant_user.id)
+      button(
+        type: "submit",
+        class: "rounded-md border border-gray-300 dark:border-gray-600 px-2.5 py-1 text-xs " \
+               "font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 " \
+               "focus:outline-hidden focus:ring-2 focus:ring-primary/40 cursor-pointer"
+      ) { "View as" }
     end
   end
 

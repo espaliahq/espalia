@@ -45,6 +45,17 @@ class AuditMetadataTest < ActiveSupport::TestCase
       refute_includes AuditMetadata.current.keys, :correlation_id
     end
 
+    should "include impersonator_id when provided" do
+      AuditMetadata.seed!(acting_via: :web, actor_id: "target-1", impersonator_id: "admin-9")
+      assert_equal "admin-9", AuditMetadata.current[:impersonator_id]
+      assert_equal "target-1", AuditMetadata.current[:actor_id]
+    end
+
+    should "omit impersonator_id when nil" do
+      AuditMetadata.seed!(acting_via: :web, actor_id: "target-1")
+      refute_includes AuditMetadata.current.keys, :impersonator_id
+    end
+
     should "clear the slot" do
       AuditMetadata.seed!(acting_via: :web)
       AuditMetadata.clear!

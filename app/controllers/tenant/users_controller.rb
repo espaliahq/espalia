@@ -18,6 +18,7 @@ class Tenant::UsersController < ApplicationController
     render Views::Tenant::Users::IndexView.new(
       tenant_users: @tenant_users,
       collaborator_counts: collaborator_counts_for(@tenant_users),
+      impersonatable_ids: impersonatable_ids(@tenant_users),
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants_for_user
@@ -99,6 +100,20 @@ class Tenant::UsersController < ApplicationController
   #
   # @param tenant_users [Enumerable<TenantUser>]
   # @return [Hash{String => Integer}] person_id → count
+  # Ids of memberships the acting admin may "view as", per
+  # {ImpersonationPolicy}. Evaluated against {Impersonatable#real_context}
+  # so the affordance reflects the admin's own authority. Returned as a Set
+  # of TenantUser ids for O(1) lookup in the view.
+  #
+  # @param tenant_users [Enumerable<TenantUser>]
+  # @return [Set<String>]
+  def impersonatable_ids(tenant_users)
+    ctx = real_context
+    tenant_users.each_with_object(Set.new) do |tu, set|
+      set << tu.id if ImpersonationPolicy.new(ctx, tu).create?
+    end
+  end
+
   def collaborator_counts_for(tenant_users)
     person_ids = tenant_users.map(&:person_id).compact
     return {} if person_ids.empty?
