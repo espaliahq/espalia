@@ -43,4 +43,34 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
     click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
     assert_no_text "Viewing as"
   end
+
+  should "hide admin-only nav links while impersonating a non-admin member" do
+    sign_in_as(@admin_user)
+    visit root_path
+    assert_text "Your next actions across GrowthOS."
+
+    # Baseline: the admin sees the admin-only links in the navbar.
+    within "nav" do
+      assert_selector "a", text: "Admin"
+      assert_selector "a", text: "Cycles"
+    end
+
+    visit tenant_users_path
+    assert_text "Tenant users"
+    click_button_with_js_fallback "View as", expect_text: "Viewing as"
+
+    # While impersonating the member, the navbar renders the member's
+    # perspective — the admin-only links are gone.
+    within "nav" do
+      assert_no_selector "a", text: "Admin"
+      assert_no_selector "a", text: "Cycles"
+    end
+
+    # Stopping restores the admin's own navbar.
+    click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
+    within "nav" do
+      assert_selector "a", text: "Admin"
+      assert_selector "a", text: "Cycles"
+    end
+  end
 end
