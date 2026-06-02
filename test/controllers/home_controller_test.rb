@@ -122,6 +122,27 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
     end
 
+    should "render the recent-activity card frame from the viewer's own activity" do
+      ActsAsTenant.with_tenant(@tenant) do
+        category = create(:framework_capability_category, framework_id: @cycle.framework_id)
+        cap = create(:framework_capability, category_id: category.category_id, name: "Critical Thinking")
+        create(:assessment_level_rating,
+          tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
+          framework_id: @cycle.framework_id, capability_stable_id: cap.stable_id, level_ordinal: 2,
+          self_rated_frequency: "consistent", last_self_rated_at: Time.current)
+      end
+
+      sign_in @user
+      get home_card_path(card: "recent_activity", key: "default")
+
+      assert_response :success
+      assert_includes response.body, "Recent activity"
+      assert_includes response.body, "self-rated"
+      assert_includes response.body, "Critical Thinking"
+      # In-frame link must break out to the full page.
+      assert_includes response.body, 'data-turbo-frame="_top"'
+    end
+
     should "404 for an unknown card" do
       sign_in @user
       get home_card_path(card: "does-not-exist", key: "default")

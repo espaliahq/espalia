@@ -151,6 +151,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_recent_activity",
+        "description" => "Recent assessment activity for the caller — their own as an IC, or their direct " \
+          "reports' as a manager: ratings, evidence, comments, and alignment milestones " \
+          "(metadata only, no rating values), most-recent first.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "limit" => { "type" => "integer" }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "assessments_record_evidence",
         "description" => "Record a piece of evidence against a capability × level on an assessment.",
         "inputSchema" => {

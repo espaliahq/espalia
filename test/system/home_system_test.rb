@@ -18,6 +18,29 @@ class HomeSystemTest < ApplicationSystemTestCase
       assert_text "Home"
       assert_text "Nothing needs your attention right now."
     end
+
+    should "surface the recent-activity card when the viewer has assessment activity" do
+      framework_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        # sign_in_as already auto-created the viewer's Person (by email); reuse it.
+        person = Person.find_or_create_by!(tenant: @tenant, email: @user.email) { |p| p.name = "Me" }
+        category = FactoryBot.create(:framework_capability_category, framework_id: framework_id)
+        cap = FactoryBot.create(:framework_capability, category_id: category.category_id, name: "Critical Thinking")
+        FactoryBot.create(:person_framework_assignment,
+          tenant: @tenant, person_id: person.id, framework_id: framework_id)
+        FactoryBot.create(:evidence_item,
+          tenant: @tenant, person_id: person.id, framework_id: framework_id,
+          capability_stable_id: cap.stable_id, level_ordinal: 2, recorded_at: Time.current,
+          author: person)
+      end
+
+      visit root_path
+
+      # The card lazy-loads its content; assert_text waits for the frame fetch.
+      assert_text "Recent activity"
+      assert_text "added evidence to"
+      assert_text "Critical Thinking"
+    end
   end
 
   context "page layout shell on /frameworks" do
