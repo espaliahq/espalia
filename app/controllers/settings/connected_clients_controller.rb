@@ -70,7 +70,9 @@ class Settings::ConnectedClientsController < ApplicationController
   #
   # @return [String] absolute https URL ending in `/mcp`
   def mcp_endpoint_url
-    issuer = Rails.application.config.x.oauth_issuer.presence || request.base_url
+    # Strip any trailing slash so a `OAUTH_ISSUER=https://host/` doesn't
+    # yield a double-slash `https://host//mcp`.
+    issuer = (Rails.application.config.x.oauth_issuer.presence || request.base_url).sub(%r{/+\z}, "")
     "#{issuer}/mcp"
   end
 end

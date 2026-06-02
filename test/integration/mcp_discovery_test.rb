@@ -54,6 +54,19 @@ class McpDiscoveryTest < ActionDispatch::IntegrationTest
       assert_equal %w[read write],            body["scopes_supported"]
       assert_equal [ "none" ],                body["token_endpoint_auth_methods_supported"]
     end
+
+    should "canonicalise a configured issuer with a trailing slash" do
+      original = Rails.application.config.x.oauth_issuer
+      Rails.application.config.x.oauth_issuer = "https://growth.example.com/"
+      get "/.well-known/oauth-authorization-server"
+
+      assert_response :success
+      body = JSON.parse(response.body)
+      assert_equal "https://growth.example.com", body["issuer"]
+      assert_equal "https://growth.example.com/oauth/authorize", body["authorization_endpoint"]
+    ensure
+      Rails.application.config.x.oauth_issuer = original
+    end
   end
 
   context "POST /oauth/register (Dynamic Client Registration)" do

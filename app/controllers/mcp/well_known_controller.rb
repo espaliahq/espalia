@@ -52,7 +52,10 @@ class Mcp::WellKnownController < ActionController::Base
   # value; only fall back to `request.base_url` in development where the
   # canonical URL is the dev server itself.
   def issuer
-    configured = Rails.application.config.x.oauth_issuer.presence
+    # Strip any trailing slash so a `OAUTH_ISSUER=https://host/` doesn't
+    # produce double-slash URLs (`https://host//oauth/authorize`,
+    # `https://host//mcp`) that break clients' exact-match validation.
+    configured = Rails.application.config.x.oauth_issuer.presence&.sub(%r{/+\z}, "")
     return configured if configured
 
     # In production a proxy-derived issuer is dangerous: tokens are bound
