@@ -77,7 +77,14 @@ class AuthSystemTest < ApplicationSystemTestCase
       visit new_user_session_path
       assert_selector "button[type='submit']", text: "Continue with Google"
 
-      click_button "Continue with Google"
+      # On starved CI runners the Capybara pointer click on the OAuth
+      # button can be dropped, leaving the test on /users/sign_in. The
+      # JS-fallback helper escalates to a synthetic JS click and then
+      # form.requestSubmit() if the destination text doesn't appear.
+      # "Your next actions across GrowthOS." is unique to the post-login
+      # Home dashboard (the sign-in page only says "GrowthOS").
+      click_button_with_js_fallback "Continue with Google",
+        expect_text: "Your next actions across GrowthOS."
 
       assert_current_path root_path
     end
