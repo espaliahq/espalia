@@ -62,6 +62,42 @@ class Settings::ConnectedClientsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_match(/No MCP clients connected/, response.body)
     end
+
+    should "render connect instructions for each supported client" do
+      sign_in @user
+      get settings_connected_clients_path
+
+      assert_response :success
+      assert_match "Connect an assistant", response.body
+      assert_match "MCP server URL", response.body
+      assert_match "Claude Code", response.body
+      assert_match "Claude.ai &amp; Claude Desktop", response.body
+      assert_match "ChatGPT", response.body
+      assert_match "Codex", response.body
+    end
+
+    should "render the MCP endpoint URL built from the request host" do
+      sign_in @user
+      get settings_connected_clients_path
+
+      assert_response :success
+      # No OAUTH_ISSUER configured in test → falls back to request base URL.
+      assert_match "#{request.base_url}/mcp", response.body
+      assert_match "claude mcp add --transport http growthos", response.body
+    end
+
+    should "not double-slash the MCP URL when the issuer has a trailing slash" do
+      original = Rails.application.config.x.oauth_issuer
+      Rails.application.config.x.oauth_issuer = "https://growth.example.com/"
+      sign_in @user
+      get settings_connected_clients_path
+
+      assert_response :success
+      assert_match "https://growth.example.com/mcp", response.body
+      refute_match "https://growth.example.com//mcp", response.body
+    ensure
+      Rails.application.config.x.oauth_issuer = original
+    end
   end
 
   context "DELETE /settings/connected_clients/:id" do
