@@ -102,3 +102,13 @@ audience and priority and emit 0..N instances; each instance lazy-loads its
 content in its own Turbo Frame via `HomeController#card`. The cohort card above
 is the first reporting-driven card; assessment-progress and awaiting-you cards
 ship alongside it.
+
+**Recent activity card** (`Home::RecentActivityCard`) surfaces a short feed of
+recent assessment activity — for an IC their own, for a manager their direct
+reports'. Built from `Assessments::RecentActivityQuery`, which assembles ratings
+/ evidence / comments / alignment milestones cheaply from read models with
+bounded `ORDER ... LIMIT` queries — **never** the per-assignment event replay of
+`Assessments::ActivityFeedQuery` (O(people × stream)). Rendered as actor-led
+sentences with the capability linked to the assessment cell; exposes activity
+metadata only, never rating values. Shared with MCP via
+`Operations::Assessments::RecentActivity` (`assessments_recent_activity`).

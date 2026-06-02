@@ -101,4 +101,32 @@ class Home::RegistryTest < ActiveSupport::TestCase
       assert Home::CycleProgressCard.audience?(admin_ctx)
     end
   end
+
+  context "recent-activity card" do
+    should "be hidden when there is no activity" do
+      assert_not Home::RecentActivityCard.audience?(@context)
+    end
+
+    should "show an IC their own activity" do
+      cycle = create(:assessment_cycle, tenant: @tenant, status: "open")
+      create(:assessment_level_rating,
+        tenant: @tenant, cycle_id: cycle.cycle_id, person_id: @person.id,
+        framework_id: cycle.framework_id, capability_stable_id: SecureRandom.uuid_v7,
+        level_ordinal: 2, self_rated_frequency: "consistent", last_self_rated_at: Time.current)
+
+      assert_equal [ @person.id ], Home::RecentActivityCard.scope_person_ids(@context)
+      assert Home::RecentActivityCard.audience?(@context)
+      assert_equal [ "recent_activity" ], Home::RecentActivityCard.instances(@context).map(&:card_key)
+    end
+
+    should "scope a manager to their direct reports' activity" do
+      report = create(:person, tenant: @tenant, manager: @person)
+      create(:evidence_item,
+        tenant: @tenant, person_id: report.id, framework_id: SecureRandom.uuid_v7,
+        capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, recorded_at: Time.current)
+
+      assert_equal [ report.id ], Home::RecentActivityCard.scope_person_ids(@context)
+      assert Home::RecentActivityCard.audience?(@context)
+    end
+  end
 end
