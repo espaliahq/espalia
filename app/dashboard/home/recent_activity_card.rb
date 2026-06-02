@@ -7,11 +7,12 @@
 # Backed by {Assessments::RecentActivityQuery} (read-model only), never the
 # per-assignment event-replay feed.
 class Home::RecentActivityCard < Home::Card
-  # High in the hierarchy — the activity feed is the main "what's happening"
-  # surface. Sits just under the actionable "Awaiting you" (60), above the
-  # oversight/progress cards (55/50).
-  PRIORITY = 58
-  LIMIT = 8
+  # Top of the hierarchy — the activity feed is the main "what's happening"
+  # surface. Being first (and tall) also makes the masonry layout pack it into
+  # its own full-height column with the compact cards stacked beside it, rather
+  # than leaving dead space next to a short card.
+  PRIORITY = 70
+  LIMIT = 6
 
   def self.key = "recent_activity"
 

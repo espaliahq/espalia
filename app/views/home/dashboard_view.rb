@@ -22,7 +22,12 @@ class Views::Home::DashboardView < Views::Base
       div(class: "mx-auto max-w-5xl") do
         greeting
         if @card_instances.any?
-          div(class: "grid grid-cols-1 gap-4 md:grid-cols-2") do
+          # Masonry (CSS multi-column) rather than a grid: a 2-column grid sizes
+          # each row to its tallest card, so a short card beside the tall
+          # activity feed leaves dead space and pushes later cards below the
+          # fold. Columns pack cards vertically instead — the short cards stack
+          # in one column alongside the feed.
+          div(class: "columns-1 gap-4 md:columns-2") do
             @card_instances.each { |instance| card_frame(instance) }
           end
         else
@@ -46,7 +51,8 @@ class Views::Home::DashboardView < Views::Base
     turbo_frame_tag(
       instance.dom_id,
       src: home_card_path(card: instance.card_key, key: instance.instance_key),
-      loading: "lazy"
+      loading: "lazy",
+      class: "mb-4 block break-inside-avoid"
     ) do
       render Components::Kit::Card.new do |card|
         card.body do
