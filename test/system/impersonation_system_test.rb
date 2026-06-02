@@ -43,4 +43,32 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
     click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
     assert_no_text "Viewing as"
   end
+
+  should "hide admin-only nav links while impersonating a non-admin member" do
+    sign_in_as(@admin_user)
+    visit root_path
+    assert_text "Your next actions across GrowthOS."
+
+    # Nav-scoped CSS selectors (not `within "nav"`) so each retry re-queries
+    # the navbar — a `within` block caches the <nav> node, which Turbo Drive
+    # detaches when it replaces the body on the redirect-to-root below.
+
+    # Baseline: the admin sees the admin-only links in the navbar.
+    assert_selector "nav a", text: "Admin"
+    assert_selector "nav a", text: "Cycles"
+
+    visit tenant_users_path
+    assert_text "Tenant users"
+    click_button_with_js_fallback "View as", expect_text: "Viewing as"
+
+    # While impersonating the member, the navbar renders the member's
+    # perspective — the admin-only links are gone.
+    assert_no_selector "nav a", text: "Admin"
+    assert_no_selector "nav a", text: "Cycles"
+
+    # Stopping restores the admin's own navbar.
+    click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
+    assert_selector "nav a", text: "Admin"
+    assert_selector "nav a", text: "Cycles"
+  end
 end

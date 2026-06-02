@@ -11,6 +11,16 @@
 #   end
 #
 class Components::Kit::PageLayout < Components::Base
+  extend Phlex::Rails::HelperMacros
+
+  # Reads the effective TenantUser for the request — the impersonated target
+  # while a tenant admin is "viewing as" another user, otherwise the real
+  # admin's own membership (see {Impersonatable}). Role-dependent nav links
+  # gate on this so an admin impersonating a member sees the member's menu,
+  # not their own admin links. The user menu still shows the real admin
+  # (`@user`), who owns the session, tenant switcher, and sign-out.
+  register_value_helper :current_tenant_user
+
   # @param user [User, nil] the currently signed-in user
   # @param current_tenant [Tenant, nil] the active tenant
   # @param tenants [Array<Tenant>] all tenants the user belongs to
@@ -72,38 +82,46 @@ class Components::Kit::PageLayout < Components::Base
   end
 
   # Whether the current viewer can manage assessment cycles.
-  # Visible to global admins and tenant admins only.
+  # Visible to global admins and tenant admins only — evaluated against the
+  # effective identity, so an admin impersonating a member does not see it.
   #
   # @return [Boolean]
   def show_cycles_link?
-    return false unless @user && @current_tenant
-    return true if @user.global_admin?
-
-    resolve_tenant_user&.admin?
+    viewer_is_admin?
   end
 
   # Whether the current viewer can reach the tenant administration
   # hub (theme, users, integrations). Visible to global admins and
-  # tenant admins only.
+  # tenant admins only — evaluated against the effective identity.
   #
   # @return [Boolean]
   def show_admin_link?
-    return false unless @user && @current_tenant
-    return true if @user.global_admin?
-
-    resolve_tenant_user&.admin?
+    viewer_is_admin?
   end
 
-  # Resolves the TenantUser membership for the current user/tenant pair.
+  # Whether the effective viewer holds admin rights in the active tenant.
+  # Reads from {#current_tenant_user} (the impersonated target while "viewing
+  # as", otherwise the real admin) so admin-only links disappear during
+  # impersonation of a non-admin.
+  #
+  # @return [Boolean]
+  def viewer_is_admin?
+    return false unless @current_tenant
+
+    tenant_user = resolve_tenant_user
+    return false unless tenant_user
+
+    tenant_user.user&.global_admin? || tenant_user.admin?
+  end
+
+  # The effective TenantUser membership the navbar should render for.
   # Cached so the navbar doesn't re-query for every link helper.
   #
   # @return [TenantUser, nil]
   def resolve_tenant_user
     return @resolved_tenant_user if defined?(@resolved_tenant_user)
 
-    @resolved_tenant_user = ActsAsTenant.without_tenant do
-      @user.tenant_users.find_by(tenant: @current_tenant)
-    end
+    @resolved_tenant_user = current_tenant_user
   end
 
   def framework_nav_link
