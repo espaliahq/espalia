@@ -49,11 +49,13 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
     visit root_path
     assert_text "Your next actions across GrowthOS."
 
+    # Nav-scoped CSS selectors (not `within "nav"`) so each retry re-queries
+    # the navbar — a `within` block caches the <nav> node, which Turbo Drive
+    # detaches when it replaces the body on the redirect-to-root below.
+
     # Baseline: the admin sees the admin-only links in the navbar.
-    within "nav" do
-      assert_selector "a", text: "Admin"
-      assert_selector "a", text: "Cycles"
-    end
+    assert_selector "nav a", text: "Admin"
+    assert_selector "nav a", text: "Cycles"
 
     visit tenant_users_path
     assert_text "Tenant users"
@@ -61,16 +63,12 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
 
     # While impersonating the member, the navbar renders the member's
     # perspective — the admin-only links are gone.
-    within "nav" do
-      assert_no_selector "a", text: "Admin"
-      assert_no_selector "a", text: "Cycles"
-    end
+    assert_no_selector "nav a", text: "Admin"
+    assert_no_selector "nav a", text: "Cycles"
 
     # Stopping restores the admin's own navbar.
     click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
-    within "nav" do
-      assert_selector "a", text: "Admin"
-      assert_selector "a", text: "Cycles"
-    end
+    assert_selector "nav a", text: "Admin"
+    assert_selector "nav a", text: "Cycles"
   end
 end
