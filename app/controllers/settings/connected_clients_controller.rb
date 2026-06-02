@@ -28,6 +28,7 @@ class Settings::ConnectedClientsController < ApplicationController
     render Views::Settings::ConnectedClients::IndexView.new(
       tokens: tokens,
       tenant_map: tenant_map,
+      mcp_url: mcp_endpoint_url,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user.tenants
@@ -57,5 +58,19 @@ class Settings::ConnectedClientsController < ApplicationController
     redirect_to settings_connected_clients_path,
       notice: "Revoked access for #{client_name}. The client must re-authorise to keep working.",
       status: :see_other
+  end
+
+  private
+
+  # The Streamable-HTTP MCP endpoint a client connects to. Built from the
+  # configured OAuth issuer so the displayed URL matches the issuer that
+  # tokens are bound to — mirrors Mcp::WellKnownController#issuer. Falls
+  # back to the request's base URL in non-production where the dev server
+  # IS the canonical host.
+  #
+  # @return [String] absolute https URL ending in `/mcp`
+  def mcp_endpoint_url
+    issuer = Rails.application.config.x.oauth_issuer.presence || request.base_url
+    "#{issuer}/mcp"
   end
 end

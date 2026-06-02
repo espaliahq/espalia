@@ -54,6 +54,7 @@ class Components::Kit::UserMenu < Components::Base
     email_header
     tenant_section if @tenants.size > 1
     divider
+    ai_assistants_link
     sign_out_link
   end
 
@@ -109,6 +110,18 @@ class Components::Kit::UserMenu < Components::Base
     end
   end
 
+  def ai_assistants_link
+    a(
+      href: settings_connected_clients_path,
+      class: "flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 " \
+             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      role: "menuitem"
+    ) do
+      ai_assistants_icon
+      span { "AI assistants" }
+    end
+  end
+
   def sign_out_link
     a(
       href: destroy_user_session_path,
@@ -136,6 +149,24 @@ class Components::Kit::UserMenu < Components::Base
       stroke_width: "2"
     ) do |s|
       s.path(stroke_linecap: "round", stroke_linejoin: "round", d: "M5 13l4 4L19 7")
+    end
+  end
+
+  def ai_assistants_icon
+    svg(
+      xmlns: "http://www.w3.org/2000/svg",
+      class: "w-4 h-4 shrink-0 text-gray-400",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      stroke_width: "2",
+      aria: { hidden: "true" }
+    ) do |s|
+      s.path(
+        stroke_linecap: "round",
+        stroke_linejoin: "round",
+        d: "M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 7h10a2 2 0 012 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2V9a2 2 0 012-2z"
+      )
     end
   end
 
