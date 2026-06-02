@@ -41,7 +41,7 @@ class Home::RecentActivityCard < Home::Card
     scope = self.class.scope_person_ids(context)
     Views::Home::Cards::RecentActivity.new(
       items: Assessments::RecentActivityQuery.new(person_ids: scope, limit: LIMIT).call,
-      team: scope != [ person&.id ]
+      team: scope != [ context.person&.id ]
     )
   end
 end
