@@ -136,8 +136,18 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         editor
       )
 
-      textarea = editor.find("textarea[name='capability[name]']")
-      textarea.fill_in with: "Sharper Strategic Thinking"
+      # Set the value via JS and fire input/change events — Selenium's
+      # send_keys can drop characters on starved CI runners, leaving the
+      # textarea with the original capability name. The server then sees
+      # no-op edit and the assertion below fails. JS assignment is
+      # deterministic; the events fire any Stimulus listeners that may
+      # gate the submit on dirty-state.
+      page.execute_script(<<~JS, editor)
+        const ta = arguments[0].querySelector("textarea[name='capability[name]']");
+        ta.value = "Sharper Strategic Thinking";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
       page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
 
       assert_text "Sharper Strategic Thinking"
