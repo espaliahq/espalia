@@ -16,7 +16,10 @@
 - [`.devcontainer/start-chrome-cdp-proxy.sh`](../../.devcontainer/start-chrome-cdp-proxy.sh)
   (run by `postStartCommand` on every container start) launches a **socat
   forwarder** `127.0.0.1:9222 → chrome-debug:9222`. `socat` is installed via
-  [.devcontainer/Dockerfile](../../.devcontainer/Dockerfile).
+  [.devcontainer/Dockerfile](../../.devcontainer/Dockerfile). It runs under
+  `setsid` (its own session/process group) so it survives the `postStartCommand`
+  process-group teardown — otherwise the boot-time forwarder is reaped seconds
+  after starting and `localhost:9222` is dead despite the hook having "run".
 
 **Why the forwarder is required (not optional):** Chrome 111+'s DNS-rebinding
 guard rejects any CDP request whose `Host` header isn't `localhost`/an IP.

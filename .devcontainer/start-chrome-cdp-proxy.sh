@@ -37,10 +37,14 @@ if pkill -f 'socat.*TCP-LISTEN:9222' >/dev/null 2>&1; then
   fi
 fi
 
-# Detach from the shell so postStartCommand can return cleanly. nohup +
-# disown keeps the listener alive past devcontainer-init's exit.
-nohup socat TCP-LISTEN:9222,fork,reuseaddr,bind=127.0.0.1 \
-            TCP:chrome-debug:9222 \
+# Detach into a NEW session/process group with setsid so the listener
+# survives postStartCommand finishing. nohup + disown alone only ignore
+# SIGHUP and clear the shell's job table — they leave socat in the hook's
+# process group, which the devcontainer reaps when the hook returns, so the
+# boot-time forwarder was being killed moments after it started. setsid moves
+# socat into its own session (it reparents to init), so it outlives the hook.
+setsid socat TCP-LISTEN:9222,fork,reuseaddr,bind=127.0.0.1 \
+             TCP:chrome-debug:9222 \
     >"$LOG" 2>&1 &
 disown
 echo "started socat forwarder (pid $!) — logging to $LOG"
