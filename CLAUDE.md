@@ -324,6 +324,7 @@ test/
 - **`gh pr checks` does NOT reveal CodeRabbit findings.** Its CodeRabbit row reports the *check* status (e.g. "Review skipped" / "pass") which is independent of the review CodeRabbit posts as PR *review comments*. A green/"skipped" row can still hide actionable findings. To read them, fetch the reviews and inline comments explicitly: `gh pr view <n> --json reviews --jq '.reviews[] | select(.author.login=="coderabbitai") | .body'` and `gh api repos/{owner}/{repo}/pulls/<n>/comments`. Never conclude "no findings" from `gh pr checks` alone.
 - *CRITICAL* - Stack commits, do not stack PRs. It requires too much overhead (rebasing after previous PRs are merged, re-running CI)
 - **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
+- When referencing a PR, always link to it so to avoid having to scroll up to find the link
 
 ## Learnings
 
