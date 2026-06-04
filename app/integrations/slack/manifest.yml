@@ -1,0 +1,88 @@
+# Slack App Manifest — GrowthOS
+#
+# Register this app at https://api.slack.com/apps → "Create New App" → "From a manifest".
+# Paste this YAML, then install to your workspace. Rotate/replace the signing secret and
+# tokens via Rails credentials (config/credentials.yml.enc) — never commit them.
+#
+# Scopes below grant full read access to channels and history plus the write/identity
+# scopes a notification + assistant bot needs. Trim any you don't use before going to prod;
+# Slack reviews broad scopes (notably the `*:history` and `users:read.email` families).
+
+display_information:
+  name: GrowthOS
+  description: Career growth framework assistant — assessment nudges, alignment reminders, and growth-plan check-ins.
+  background_color: "#1a1a2e"
+  long_description: >-
+    GrowthOS operationalises career growth frameworks — self-assessments, manager
+    alignment conversations, evidence collection, and growth planning. This Slack app
+    delivers notifications and lets people interact with their development journey
+    without leaving Slack.
+
+features:
+  bot_user:
+    display_name: GrowthOS
+    always_online: true
+  app_home:
+    home_tab_enabled: true
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+
+oauth_config:
+  scopes:
+    bot:
+      # --- Channel listing & metadata ---
+      - channels:read          # list & inspect public channels
+      - groups:read            # list & inspect private channels the bot is in
+      - im:read                # list direct messages
+      - mpim:read              # list group direct messages
+
+      # --- Reading history ---
+      - channels:history       # read messages in public channels
+      - groups:history         # read messages in private channels
+      - im:history             # read direct message history
+      - mpim:history           # read group DM history
+
+      # --- Membership / joining ---
+      - channels:join          # join public channels programmatically
+
+      # --- Posting & messaging ---
+      - chat:write             # send messages as the bot
+      - chat:write.public      # post to public channels without joining first
+      - chat:write.customize   # customise username/icon per message
+
+      # --- Identity / org lookup (map Slack users → Person records) ---
+      - users:read             # list workspace users
+      - users:read.email       # match users by email to GrowthOS Person records
+      - users.profile:read     # read extended user profiles
+      - team:read              # workspace/org metadata
+
+      # --- Reactions & files ---
+      - reactions:read         # read reactions
+      - reactions:write        # add reactions (e.g. acknowledge a nudge)
+      - files:read             # read shared files (evidence attachments)
+
+      # --- Interactivity / commands ---
+      - commands               # slash commands
+      - app_mentions:read      # respond when @-mentioned
+
+settings:
+  event_subscriptions:
+    # Set request_url after deploy, e.g. https://app.growthos.example/slack/events
+    request_url: https://growthos.work/slack/events
+    bot_events:
+      - app_home_opened
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+      - member_joined_channel
+      - reaction_added
+      - team_join
+  interactivity:
+    is_enabled: true
+    # Set request_url after deploy, e.g. https://app.growthos.example/slack/interactions
+    request_url: https://growthos.work/slack/interactions
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
