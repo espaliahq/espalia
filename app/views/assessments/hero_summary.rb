@@ -16,6 +16,14 @@
 # positions; the hero is still functional, just static.
 #
 class Views::Assessments::HeroSummary < Views::Base
+  # Fraction of current-level capabilities that must be rated before the
+  # score + verdict are trustworthy enough to show. Below this, an unrated
+  # cell scores as 0.0 ("never demonstrated") in PersonDevelopment::Scoring,
+  # so a near-empty assessment would render a punitive "Below expectations"
+  # verdict that only means "you haven't rated yet". Until the threshold is
+  # met we show a neutral coverage-progress hero instead.
+  COVERAGE_UNLOCK_THRESHOLD = 0.5
+
   # @param scoring [Hash] effective scoring
   # @param self_scoring [Hash, nil]
   # @param manager_scoring [Hash, nil]
@@ -60,8 +68,12 @@ class Views::Assessments::HeroSummary < Views::Base
         class: "mb-6 rounded-xl border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 overflow-hidden",
         data: { performance_pct: (ratio * 100).round(0) }) do
-      hero_header
-      middle_band
+      if coverage_unlocked?
+        hero_header
+        middle_band
+      else
+        priming_header
+      end
     end
   end
 
@@ -114,6 +126,7 @@ class Views::Assessments::HeroSummary < Views::Base
           h2(class: "text-xl font-bold text-gray-900 dark:text-white") { verdict_headline }
           promotion_pill
           continue_assessing_cta(target) if target
+          coverage_chip if @context != :alignment && !coverage_complete?
         end
         # Gloss + divergent secondary verdicts share one line as long
         # as they fit; flex-wrap drops the secondaries below on narrow
@@ -128,6 +141,140 @@ class Views::Assessments::HeroSummary < Views::Base
         secondary_percents
       end
     end
+  end
+
+  # ── Priming state (coverage below the unlock threshold) ──
+  #
+  # Shown before enough current-level capabilities are rated to make the
+  # score meaningful. Neutral framing (never red), the score and gap panel
+  # are withheld, and the "rate next" action is promoted from a chip to the
+  # primary affordance. Mirrors header_row's two-column layout: prompt +
+  # CTA on the left, coverage fraction + progress on the right.
+  def priming_header
+    target = next_unrated_capability
+
+    div(class: "px-5 py-4") do
+      div(class: "flex items-start justify-between gap-4") do
+        div(class: "min-w-0 flex-1") do
+          h2(class: "text-xl font-bold text-gray-900 dark:text-white") { priming_headline }
+          p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") { priming_gloss }
+          div(class: "mt-3") { priming_cta(target) } if target
+        end
+        div(class: "text-right shrink-0") do
+          span(class: "text-4xl font-bold leading-none text-gray-900 dark:text-white tabular-nums") do
+            "#{current_level_rated}/#{current_level_total}"
+          end
+          div(class: "text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide") { "rated" }
+          coverage_progress_bar
+        end
+      end
+    end
+  end
+
+  def priming_headline
+    if @context == :self
+      "Rate yourself to see your score"
+    elsif @assessee_name.present?
+      "Rate #{@assessee_name.split.first} to see their score"
+    else
+      "Rate to see the score"
+    end
+  end
+
+  def priming_gloss
+    level_code = level_code(@person_level) || "L#{@person_level}"
+    whose = @context == :self ? "your" : "these"
+    "Rate at least half of #{whose} #{level_code} capabilities and the score appears."
+  end
+
+  # Thin bar filling toward the unlock point (not 100%), with the concrete
+  # target spelled out — "Score unlocks at 6" reads as a closer, more
+  # motivating goal than an abstract percentage.
+  def coverage_progress_bar
+    target = unlock_target
+    fill = target.positive? ? [ current_level_rated.to_f / target, 1.0 ].min : 1.0
+
+    div(class: "mt-2 w-32 ml-auto") do
+      div(class: "h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden") do
+        div(class: "h-full rounded-full bg-gray-900 dark:bg-white",
+            style: "width: #{(fill * 100).round}%") { }
+      end
+      div(class: "text-[11px] text-gray-500 dark:text-gray-400 mt-1") do
+        "Score unlocks at #{target}"
+      end
+    end
+  end
+
+  def priming_cta(target)
+    stable_id = target[:capability].stable_id
+    a(
+      href: "#cell-#{stable_id}-#{@person_level}",
+      class: "inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-semibold " \
+             "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
+             "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors",
+      data: {
+        controller: "continue-assessing",
+        action: "click->continue-assessing#focus",
+        continue_assessing_capability_stable_id_value: stable_id,
+        continue_assessing_level_ordinal_value: @person_level
+      }
+    ) do
+      plain "Rate next capability"
+      span { "→" }
+    end
+  end
+
+  # Small muted "X of Y rated" badge shown in the unlocked header while the
+  # assessment is still incomplete, so the partial score reads as honest.
+  def coverage_chip
+    span(class: "text-xs text-gray-500 dark:text-gray-400 tabular-nums") do
+      "#{current_level_rated} of #{current_level_total} rated"
+    end
+  end
+
+  # ── Coverage helpers ──
+
+  # Cells at the person's current level across every bound capability —
+  # the denominator for coverage. The verdict is about this level, so
+  # coverage is measured here rather than across the whole matrix.
+  def current_level_cells
+    @current_level_cells ||= @categories
+      .flat_map { |cat| cat[:capabilities] }
+      .filter_map { |cap| cap[:cells][@person_level] }
+  end
+
+  def current_level_total
+    current_level_cells.size
+  end
+
+  def current_level_rated
+    @current_level_rated ||= current_level_cells.count { |cell| primary_cell_frequency(cell).present? }
+  end
+
+  def coverage_complete?
+    current_level_rated >= current_level_total
+  end
+
+  # Number of rated current-level capabilities needed to reveal the score.
+  def unlock_target
+    (current_level_total * COVERAGE_UNLOCK_THRESHOLD).ceil
+  end
+
+  # Whether the score + verdict are trustworthy enough to show. Alignment
+  # context keeps the scoring hero unconditionally (individual ratings are
+  # frozen by then and coverage is high by construction). A role with no
+  # current-level cells unlocks too, to avoid a permanently-stuck prompt.
+  def coverage_unlocked?
+    return true if @context == :alignment
+    return true if current_level_total.zero?
+
+    coverage_ratio >= COVERAGE_UNLOCK_THRESHOLD
+  end
+
+  def coverage_ratio
+    return 0.0 if current_level_total.zero?
+
+    current_level_rated.to_f / current_level_total
   end
 
   # Compact one-row gloss: "Baseline coverage at 107% of E3 expectations. · Self: Below expectations"

@@ -78,6 +78,22 @@ The hero is a single card with three logical bands. The header and bottom line a
 └────────────────────────────────────────────────────────────────┘
 ```
 
+### Coverage gate — priming before scoring
+
+Before enough current-level capabilities are rated, the hero does **not** show a score. An unrated cell scores as `0.0` ("never demonstrated") in `PersonDevelopment::Scoring`, so a near-empty assessment would otherwise render a punitive "Below expectations" verdict that only means "you haven't rated yet". `HeroSummary` gates on **current-level coverage** and renders one of three states:
+
+| State | Condition | Hero |
+|---|---|---|
+| **Priming** | coverage < `COVERAGE_UNLOCK_THRESHOLD` (0.5) | Neutral prompt — "Rate yourself to see your score", `rated/total` big number, progress bar toward the unlock point ("Score unlocks at N"), and a promoted primary "Rate next capability →" CTA. No verdict, no score, no middle gap band, no promotion pill. |
+| **Unlocked, incomplete** | 0.5 ≤ coverage < 1.0 | The normal scoring hero (header + middle band) **plus** a small muted "X of Y rated" chip so the partial score reads as honest. |
+| **Complete** | coverage = 1.0 | The normal scoring hero, no coverage chip. |
+
+- **Coverage metric** = fraction of capabilities with a cell at `person_level` whose *primary* frequency (per `@context`) is recorded. Measured at the current level only, because the verdict is about that level. Computed entirely inside `HeroSummary` from `@categories` / `@person_level` / `@context` — no `MatrixDataBuilder` change and no threading through the six render sites.
+- **`unlock_target`** = `(current_level_total * 0.5).ceil`. The bar fills toward this target (not 100%) — a concrete "Score unlocks at 6" reads as a closer goal than an abstract %.
+- **Once unlocked, the score is shown as-is** (option 1) — remaining unrated current-level cells still depress it, and the "X of Y rated" chip is the signal that it will keep moving. We deliberately do **not** score provisionally over only-rated cells (that would let the score *drop* at completion — confusing).
+- **`:alignment` context is exempt** — it always shows the scoring hero (individual ratings are frozen by then and coverage is high by construction). A role with zero current-level cells also unlocks, to avoid a permanently-stuck prompt.
+- Later: `COVERAGE_UNLOCK_THRESHOLD` could become framework-configurable like the other scoring thresholds.
+
 ### Header band
 
 The left column carries the verdict headline, a one-line gloss, and the "bottom line" (promotion pill + Continue CTA). The right column carries the big percentage + "of expected" caption + a thin progress bar. Both columns sit side-by-side so the card is just tall enough to fit whichever side is taller — the previous "stack vertically" layout wasted ~40px below the big number.
