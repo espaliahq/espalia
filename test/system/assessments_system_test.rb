@@ -126,11 +126,29 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "hero summary" do
-    should "frame the middle band with the current-level gap when below expectations" do
+    should "show the priming coverage prompt instead of a score before enough is rated" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
-      # Person is at E2 with no ratings yet → underperforming/progressing at E2.
+      within("#scoring-panel") do
+        # Neutral coverage prompt — no alarming verdict/score yet.
+        assert_text "Rate yourself to see your score"
+        assert_text "Score unlocks at 1"
+        assert_no_text "Below expectations"
+        assert_no_text "Baseline coverage at"
+      end
+    end
+
+    should "frame the middle band with the current-level gap when below expectations" do
+      # Rate one current-level cap "none" so coverage clears the 50% unlock
+      # threshold (1 of 2 current-level caps) — surfacing the scoring hero —
+      # while staying clearly below expectations at E2.
+      rate_to_unlock_hero(frequency: "none")
+
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # Person is at E2, below expectations → underperforming/progressing at E2.
       # The state-driven middle band labels the list "Gap to E2", not E3.
       # (Tailwind uppercases the labels via tracking-wide, so Capybara reads
       # them in their source-case form; assert that way.)
@@ -163,6 +181,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "show Continue assessing button when some current-level cells are unrated" do
+      # Unlock the scoring hero (rates cap1); cap3 stays unrated so the
+      # "Continue" nudge still has a target in the unlocked header.
+      rate_to_unlock_hero
+
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
       within("#scoring-panel") do
@@ -851,6 +873,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "collapse the middle band while keeping the hero header visible on scroll" do
+      # The middle band only renders in the unlocked scoring hero — rate one
+      # current-level cap to clear the 50% coverage threshold.
+      rate_to_unlock_hero
+
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
       # Pre-condition: the file-level fixture must produce a hero with a
@@ -1211,6 +1237,20 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "h1", text: "Senior Software Engineer"
       assert_text "E2"
       assert_text "In Progress"
+    end
+  end
+
+  private
+
+  # Rates one current-level capability (cap1) so the assessment clears the
+  # 50% coverage threshold (1 of 2 E2-bound caps) and the hero swaps from the
+  # priming "rate to see your score" prompt to the real scoring hero.
+  def rate_to_unlock_hero(frequency: "consistent")
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.rate_self(
+        @person.id, @framework_id, @cap1_stable,
+        level_ordinal: 2, frequency: frequency, cycle_id: @cycle_id
+      )
     end
   end
 end

@@ -310,7 +310,84 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "GET /assessments/:id/scoring — coverage gating" do
+    setup do
+      # Base setup has one current-level (E2) capability. Add two more so the
+      # current-level denominator is 3 and the 50% unlock threshold lands at 2
+      # rated — making the boundary non-degenerate.
+      ActsAsTenant.with_tenant(@tenant) do
+        cat = FrameworkState::CapabilityCategory.find_by!(framework_id: @framework.framework_id, name: "Thinking")
+        @extra_caps = [ "Communication", "Ownership" ].map do |name|
+          cap = create(:framework_capability, category_id: cat.category_id, name: name)
+          create(:framework_capability_role_binding,
+            capability_id: cap.capability_id, role_id: @role.role_id, weight: 1.0)
+          create(:framework_behavioural_expectation,
+            capability_id: cap.capability_id, level_ordinal: 1, description: "L1 #{name}")
+          create(:framework_behavioural_expectation,
+            capability_id: cap.capability_id, level_ordinal: 2, description: "L2 #{name}")
+          cap
+        end
+      end
+    end
+
+    should "show the priming hero with no ratings" do
+      sign_in @user
+      get scoring_assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Rate yourself to see your score"
+      assert_includes response.body, "Score unlocks at 2"
+      assert_not_includes response.body, "Baseline coverage at"
+    end
+
+    should "stay primed below the 50% threshold (1 of 3 rated)" do
+      rate(@cap, "consistent")
+
+      sign_in @user
+      get scoring_assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Score unlocks at 2"
+      assert_includes response.body, "1/3"
+      assert_not_includes response.body, "Baseline coverage at"
+    end
+
+    should "unlock scoring at the 50% threshold with a coverage chip (2 of 3 rated)" do
+      rate(@cap, "consistent")
+      rate(@extra_caps.first, "consistent")
+
+      sign_in @user
+      get scoring_assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Baseline coverage at"
+      assert_includes response.body, "2 of 3 rated"
+      assert_not_includes response.body, "Rate yourself to see your score"
+    end
+
+    should "drop the coverage chip once fully rated" do
+      @extra_caps.each { |c| rate(c, "consistent") }
+      rate(@cap, "consistent")
+
+      sign_in @user
+      get scoring_assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Baseline coverage at"
+      assert_not_includes response.body, "of 3 rated"
+    end
+  end
+
   private
+
+  def rate(capability, frequency)
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.rate_self(
+        @person.id, @framework.framework_id, capability.stable_id,
+        level_ordinal: 2, frequency: frequency, cycle_id: @cycle_id
+      )
+    end
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }
