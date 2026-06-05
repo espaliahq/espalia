@@ -24,7 +24,10 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_withdrawn"       => "bg-gray-400",
     "alignment_started"        => "bg-amber-500",
     "alignment_completed"      => "bg-green-600",
-    "comment_posted"           => "bg-sky-500"
+    "comment_posted"           => "bg-sky-500",
+    "delegation_granted"       => "bg-indigo-500",
+    "delegation_revoked"       => "bg-gray-400",
+    "reporting_manager_recorded" => "bg-sky-500"
   }.freeze
 
   # Maps each entry kind into one of the four user-facing groups that
@@ -45,7 +48,11 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_withdrawn"      => "evidence",
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment",
-    "comment_posted"          => "comments"
+    "comment_posted"          => "comments",
+    # No filter chip — these surface under "All" only.
+    "delegation_granted"        => "authority",
+    "delegation_revoked"        => "authority",
+    "reporting_manager_recorded" => "authority"
   }.freeze
 
   FREQUENCY_LABEL = {
@@ -157,8 +164,21 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
     when "comment_posted"        then comment_posted_summary
+    when "delegation_granted"    then "#{actor_name || 'Manager'} delegated rating to #{delegate_name}"
+    when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"
+    when "reporting_manager_recorded" then "Reporting manager changed to #{manager_name}"
     else @entry.kind.humanize
     end
+  end
+
+  # Name of the delegate referenced by a delegation entry, or a generic label.
+  def delegate_name
+    payload_value(:delegate_name).to_s.strip.presence || "a delegate"
+  end
+
+  # New reporting manager's name for a reporting_manager_recorded entry.
+  def manager_name
+    payload_value(:manager_name).to_s.strip.presence || "someone new"
   end
 
   # The resolved actor name for an attributed entry (rater / aligner /
@@ -168,9 +188,12 @@ class Views::Assessments::Activity::Entry < Views::Base
     payload_value(:actor_name).to_s.strip.presence
   end
 
-  # The rating manager's name when known, else the generic "Manager".
+  # The rating manager's name when known, else the generic "Manager". When the
+  # rating was recorded by a delegate (not the reporting manager), a "(delegate)"
+  # badge distinguishes it — derived in the query via `via_delegation`.
   def manager_label
-    actor_name || "Manager"
+    base = actor_name || "Manager"
+    payload_value(:via_delegation) ? "#{base} (delegate)" : base
   end
 
   # "<Author> commented on <Capability · Lx>", or — when the comment

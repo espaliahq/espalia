@@ -11,7 +11,7 @@ class AssessmentPolicy < ApplicationPolicy
   def index? = person.present?
 
   # @return [Boolean]
-  def show? = owns_assessment? || manages_assessee?
+  def show? = owns_assessment? || manages_assessee? || active_rating_delegate?
 
   # @return [Boolean]
   def matrix? = show?
@@ -22,8 +22,27 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def create_self_rating? = owns_assessment? && individual_ratings_editable?
 
+  # A direct (recorded) manager OR an active delegate may record manager
+  # ratings — delegation is for cases where the reporting manager lacks
+  # visibility (e.g. the report is seconded into another team).
+  #
   # @return [Boolean]
-  def create_manager_rating? = manages_assessee? && individual_ratings_editable?
+  def create_manager_rating?
+    (manages_assessee? || active_rating_delegate?) && individual_ratings_editable?
+  end
+
+  # Grant/revoke a manager-rating delegation. Any ancestor manager (direct,
+  # skip-level, …) or a tenant admin may delegate the reporting manager's
+  # rating authority. Distinct from `manages_assessee?` (direct-recorded
+  # manager only) which gates the rating itself.
+  #
+  # @return [Boolean]
+  def delegate_manager_rating?
+    tenant_admin? || assessee_managed_by_actor?
+  end
+
+  # @return [Boolean]
+  def revoke_manager_rating_delegation? = delegate_manager_rating?
 
   # Either the assessee or their manager can record an alignment, but only
   # while the cycle is in the `aligning` lifecycle state — i.e. the manager
@@ -45,7 +64,7 @@ class AssessmentPolicy < ApplicationPolicy
   #
   # @return [Boolean]
   def view_alignment?
-    return false unless owns_assessment? || manages_assessee?
+    return false unless owns_assessment? || manages_assessee? || active_rating_delegate?
 
     %w[aligning aligned].include?(current_open_cycle_participation&.status)
   end
@@ -102,17 +121,50 @@ class AssessmentPolicy < ApplicationPolicy
     person.present? && record.person_id == person.id
   end
 
-  # The current user's person is the assessee's direct manager.
-  # Alignment-related actions intentionally remain direct-manager-only —
-  # alignment is a 1:1 conversation. Skip-level access is granted through
-  # {EvidencePolicy} for evidence-related actions, not through this
-  # policy.
+  # The current user's person is the assessee's reporting manager.
+  #
+  # Recorded-authoritative: reads the reporting manager captured on the
+  # PersonDevelopment stream ({RecordedReportingManager}). Falls back to the
+  # live `Person.manager_id` only when nothing has been recorded yet (manual /
+  # non-HRIS tenant, or pre-backfill), so those tenants keep working.
+  #
+  # Alignment-related actions remain manager-only (a 1:1 conversation);
+  # delegates are excluded from them. Skip-level access for evidence is granted
+  # through {EvidencePolicy}, not this policy.
   #
   # @return [Boolean]
   def manages_assessee?
     return false unless person.present?
 
+    recorded = RecordedReportingManager.manager_id_for(record.person_id, record.framework_id)
+    return recorded == person.id if recorded.present?
+
     assessee = Person.find_by(id: record.person_id)
     assessee&.manager_id == person.id
+  end
+
+  # The current user's person holds an active manager-rating delegation for
+  # this assessment.
+  #
+  # @return [Boolean]
+  def active_rating_delegate?
+    return false unless person.present?
+
+    ManagerAssessmentDelegation.active_delegate?(
+      person_id: record.person_id,
+      framework_id: record.framework_id,
+      delegate_person_id: person.id
+    )
+  end
+
+  # Whether the actor is anywhere in the assessee's manager chain (direct,
+  # skip-level, …) — used to gate who may grant/revoke a delegation.
+  #
+  # @return [Boolean]
+  def assessee_managed_by_actor?
+    return false unless person.present?
+
+    assessee = Person.find_by(id: record.person_id)
+    assessee&.managed_by?(person) || false
   end
 end

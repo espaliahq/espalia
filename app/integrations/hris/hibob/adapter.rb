@@ -309,5 +309,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       command_handler.change_person_level(person.id, framework.framework_id, level.level_id)
       result[:level_changed] += 1
     end
+
+    # Record the reporting manager as a first-class fact on the stream so the
+    # aggregate / policy can gate manager-rating authority. Idempotent — a
+    # no-op when unchanged or when the person has no manager.
+    command_handler.record_reporting_manager(
+      person.id, framework.framework_id, person.manager_id, source: "hris"
+    )
   end
 end

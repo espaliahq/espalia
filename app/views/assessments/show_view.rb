@@ -61,12 +61,14 @@ class Views::Assessments::ShowView < Views::Base
     ) do
       controllers = [
         "activity-pane",
+        ("modal" if @can_create_evidence),
         ("evidence-form" if @can_create_evidence),
         ("evidence-relink-form" if can_render_relink_modal?),
         ("evidence-edit-form" if can_render_edit_modal?)
       ].compact.join(" ")
       esc_actions = [
-        ("keydown.esc->evidence-form#close" if @can_create_evidence),
+        ("keydown.esc->modal#close" if @can_create_evidence),
+        ("modal:open@window->evidence-form#prefill" if @can_create_evidence),
         ("keydown.esc->evidence-relink-form#close" if can_render_relink_modal?),
         ("keydown.esc->evidence-edit-form#close" if can_render_edit_modal?)
       ].compact.join(" ")

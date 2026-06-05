@@ -77,6 +77,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_delegate_manager_rating",
+        "description" => "Delegate manager-rating authority for one of your reports to another person.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"      => { "type" => "string" },
+            "delegate_person_id" => { "type" => "string" },
+            "expires_at"         => { "type" => "string" },
+            "reason"             => { "type" => "string" }
+          },
+          "required" => %w[assignment_id delegate_person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_get",
         "description" => "Fetch one assessment's framework structure and the assessee's current role/level/cycle status.",
         "inputSchema" => {
@@ -185,6 +205,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "external_reference"   => { "type" => "object" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_revoke_manager_rating_delegation",
+        "description" => "Revoke a manager-rating delegation for one of your reports.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"      => { "type" => "string" },
+            "delegate_person_id" => { "type" => "string" }
+          },
+          "required" => %w[assignment_id delegate_person_id],
           "additionalProperties" => false
         },
         "annotations" => {

@@ -14,6 +14,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
+                 can_manage_delegates: false, active_delegations: [], candidate_delegates: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @assessee = assessee
@@ -31,6 +32,9 @@ class Views::Assessments::ManagerShowView < Views::Base
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
     @activity_entries = activity_entries
+    @can_manage_delegates = can_manage_delegates
+    @active_delegations = active_delegations
+    @candidate_delegates = candidate_delegates
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -50,12 +54,14 @@ class Views::Assessments::ManagerShowView < Views::Base
     ) do
       controllers = [
         "activity-pane",
+        ("modal" if @can_create_evidence),
         ("evidence-form" if @can_create_evidence),
         ("evidence-relink-form" if can_render_relink_modal?),
         ("evidence-edit-form" if can_render_edit_modal?)
       ].compact.join(" ")
       esc_actions = [
-        ("keydown.esc->evidence-form#close" if @can_create_evidence),
+        ("keydown.esc->modal#close" if @can_create_evidence),
+        ("modal:open@window->evidence-form#prefill" if @can_create_evidence),
         ("keydown.esc->evidence-relink-form#close" if can_render_relink_modal?),
         ("keydown.esc->evidence-edit-form#close" if can_render_edit_modal?)
       ].compact.join(" ")
@@ -132,6 +138,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
+          delegates_button if @can_manage_delegates
           mark_complete_button if @can_complete_alignment
           start_alignment_button if @can_start_alignment
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
@@ -176,6 +183,25 @@ class Views::Assessments::ManagerShowView < Views::Base
                "bg-green-600 dark:bg-green-700 text-white " \
                "hover:bg-green-700 dark:hover:bg-green-600 cursor-pointer"
       ) { "Mark alignment complete" }
+    end
+  end
+
+  def delegates_button
+    count = @active_delegations.size
+    label = count.positive? ? "Delegates · #{count}" : "Delegates"
+    render Components::Kit::Modal.new(id: "delegate-modal", title: "Manage delegates") do |modal|
+      modal.trigger { label }
+      modal.body do
+        p(class: "text-sm text-gray-600 dark:text-gray-400 mb-3") do
+          "Delegates can record manager ratings for #{@assessee.name} but cannot start or " \
+            "complete alignment."
+        end
+        render Views::Assessments::Delegations::Frame.new(
+          assignment: @assignment,
+          active_delegations: @active_delegations,
+          candidate_delegates: @candidate_delegates
+        )
+      end
     end
   end
 

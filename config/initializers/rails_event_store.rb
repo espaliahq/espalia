@@ -45,6 +45,11 @@ Rails.configuration.to_prepare do
   )
 
   event_store.subscribe(
+    PersonDevelopment::Projections::AssessmentAuthority.new,
+    to: PersonDevelopment::Projections::AssessmentAuthority.handled_events
+  )
+
+  event_store.subscribe(
     AssessmentCycles::Projections::CurrentState.new,
     to: AssessmentCycles::Projections::CurrentState.handled_events
   )

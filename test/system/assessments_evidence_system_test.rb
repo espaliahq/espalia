@@ -173,7 +173,7 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
       # synthetic pointer click which can be lost on starved CI.
       page.execute_script(<<~JS)
         const btn = document.querySelector(
-          "[data-action~='click->evidence-form#open']" +
+          "[data-action~='click->modal#open']" +
           "[data-evidence-form-capability-stable-id-param='#{@cap_stable}']" +
           "[data-evidence-form-level-ordinal-param='1']"
         );

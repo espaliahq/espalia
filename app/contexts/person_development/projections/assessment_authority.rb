@@ -1,0 +1,104 @@
+# frozen_string_literal: true
+
+# Synchronous projection that materialises assessment *authority* facts from
+# the PersonDevelopment stream into two read models it owns exclusively:
+#
+# * `RecordedReportingManager` — the reporting manager per (person, framework),
+#   the authoritative source for "who may manager-rate".
+# * `ManagerAssessmentDelegation` — grants of manager-rating authority to
+#   another person.
+#
+# Kept separate from {PersonDevelopment::Projections::CurrentAssessment} so
+# adding it does not bump that projection's CODE_VERSION, and so each table has
+# a single writer (see docs/guidelines/event-sourcing.md).
+#
+class PersonDevelopment::Projections::AssessmentAuthority
+  PROJECTION_NAME = "person_development/assessment_authority"
+  CODE_VERSION = 1
+
+  # @return [Array<Class>] event classes this projection handles
+  def self.handled_events
+    [
+      PersonDevelopment::Events::ReportingManagerRecorded,
+      PersonDevelopment::Events::ManagerRatingDelegated,
+      PersonDevelopment::Events::ManagerRatingDelegationRevoked
+    ]
+  end
+
+  # Truncates both owned read models, scoped to one tenant. Idempotent.
+  #
+  # @param tenant [Tenant]
+  def self.reset!(tenant:)
+    ActsAsTenant.with_tenant(tenant) do
+      RecordedReportingManager.where(tenant_id: tenant.id).delete_all
+      ManagerAssessmentDelegation.where(tenant_id: tenant.id).delete_all
+    end
+  end
+
+  # @param event [RubyEventStore::Event]
+  def call(event)
+    with_tenant(event) do
+      handle(event)
+    end
+  end
+
+  private
+
+  def handle(event)
+    case event
+    when PersonDevelopment::Events::ReportingManagerRecorded then handle_reporting_manager_recorded(event)
+    when PersonDevelopment::Events::ManagerRatingDelegated then handle_delegated(event)
+    when PersonDevelopment::Events::ManagerRatingDelegationRevoked then handle_revoked(event)
+    end
+  end
+
+  def handle_reporting_manager_recorded(event)
+    record = RecordedReportingManager.find_or_initialize_by(
+      tenant_id: event.metadata[:tenant_id],
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id]
+    )
+    record.manager_id = event.data[:manager_id]
+    record.source = event.data[:source]
+    record.save!
+  end
+
+  def handle_delegated(event)
+    delegation = ManagerAssessmentDelegation.find_or_initialize_by(
+      tenant_id: event.metadata[:tenant_id],
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id],
+      delegate_person_id: event.data[:delegate_person_id]
+    )
+    delegation.assign_attributes(
+      granted_by_id: event.data[:granted_by_id],
+      expires_at: event.data[:expires_at],
+      reason: event.data[:reason],
+      status: "active",
+      revoked_at: nil,
+      revoked_by_id: nil
+    )
+    delegation.save!
+  end
+
+  def handle_revoked(event)
+    delegation = ManagerAssessmentDelegation.find_by(
+      tenant_id: event.metadata[:tenant_id],
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id],
+      delegate_person_id: event.data[:delegate_person_id]
+    )
+    return unless delegation
+
+    delegation.update!(
+      status: "revoked",
+      revoked_at: event.metadata[:timestamp] || Time.current,
+      revoked_by_id: event.data[:revoked_by_id]
+    )
+  end
+
+  def with_tenant(event, &block)
+    tenant = Tenant.find(event.metadata[:tenant_id])
+    ActsAsTenant.with_tenant(tenant, &block)
+  end
+end
