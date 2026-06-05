@@ -9,6 +9,8 @@
 # as "peer" only if they have a Person.
 #
 class Assessments::EvidenceController < ApplicationController
+  include AssessmentVisibility
+
   before_action :require_person
   before_action :set_assignment
 
@@ -269,14 +271,6 @@ class Assessments::EvidenceController < ApplicationController
     return true if @assignment.person_id == current_person.id
 
     assessee_person&.managed_by?(current_person) || false
-  end
-
-  def viewer_sees_all_evidence?
-    return false unless current_person
-    return true if @assignment.person_id == current_person.id
-    return true if assessee_person&.managed_by?(current_person)
-
-    pundit_user.tenant_user&.admin? || pundit_user.user&.global_admin?
   end
 
   def assessee_person

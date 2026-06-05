@@ -80,6 +80,23 @@ class Assessments::CommentsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "let an active rating delegate comment (not just the manager chain)" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @framework.framework_id, delegate_person_id: @peer.id,
+          granted_by_id: @manager.id)
+      end
+      sign_in @peer_user
+      post assessment_comments_path(@assignment), params: {
+        comment: { capability_stable_id: @cap.stable_id, level_ordinal: 2, body: "Saw this on the Payments team." }
+      }
+      assert_response :redirect
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal @peer.id, PersonDevelopmentComment.last.author_id
+      end
+    end
+
     should "redirect with capability and category so the matrix lands on the right cell" do
       sign_in @assessee_user
       post assessment_comments_path(@assignment), params: {

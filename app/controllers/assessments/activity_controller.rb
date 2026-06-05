@@ -9,6 +9,8 @@
 # a page refresh.
 #
 class Assessments::ActivityController < ApplicationController
+  include AssessmentVisibility
+
   before_action :require_person
   before_action :set_assignment
 
@@ -54,14 +56,6 @@ class Assessments::ActivityController < ApplicationController
     else
       :self
     end
-  end
-
-  def viewer_sees_all_evidence?
-    return false unless current_person
-    return true if current_user&.global_admin? || current_tenant_user&.admin?
-    return true if @assignment.person_id == current_person.id
-
-    Person.find_by(id: @assignment.person_id)&.managed_by?(current_person) || false
   end
 
   def alignment_started?
