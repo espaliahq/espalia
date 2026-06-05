@@ -24,6 +24,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   def view_template
     div(class: "flex flex-col h-full") do
       header_section
+      solo_hint
       div(class: "flex-1 overflow-y-auto p-3") do
         nav(class: "space-y-1", role: "tree") do
           departments_with_families.each do |dept_name, families|
@@ -42,13 +43,51 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     div(class: "p-3 border-b border-gray-200 dark:border-gray-700 space-y-3") do
       div(class: "flex items-center justify-between") do
         h3(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Roles" }
-        button(
-          type: "button",
-          class: "text-xs text-primary hover:text-primary/80",
-          data: { action: "tree#showAll" }
-        ) { "Show All" }
+        div(class: "flex items-center gap-3") do
+          button(
+            type: "button",
+            class: "text-xs text-primary hover:text-primary/80",
+            data: { action: "tree#showAll" }
+          ) { "Show All" }
+          button(
+            type: "button",
+            class: "text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200",
+            data: { action: "tree#clearAll" }
+          ) { "Clear All" }
+        end
       end
       track_filter_buttons
+    end
+  end
+
+  # One-time discovery tip for the per-role "solo" button, whose hover-only
+  # affordance is otherwise easy to miss. The tree controller removes this on
+  # connect when the user has dismissed it before (persisted in localStorage).
+  def solo_hint
+    div(
+      class: "flex items-start gap-2 px-3 py-2 text-xs " \
+             "bg-primary/5 text-gray-600 dark:text-gray-300 " \
+             "border-b border-gray-200 dark:border-gray-700",
+      data: { tree_target: "hint" }
+    ) do
+      span(class: "flex-1 leading-snug") do
+        plain "Tip: hover a role and click "
+        span(class: "font-semibold text-primary") { "Solo" }
+        plain " to focus on just that one."
+      end
+      button(
+        type: "button",
+        class: "shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300",
+        aria: { label: "Dismiss tip" },
+        data: { action: "tree#dismissHint" }
+      ) do
+        svg(
+          class: "w-3.5 h-3.5", fill: "none", viewBox: "0 0 24 24",
+          stroke: "currentColor", stroke_width: "2"
+        ) do |s|
+          s.path(d: "M6 18L18 6M6 6l12 12")
+        end
+      end
     end
   end
 

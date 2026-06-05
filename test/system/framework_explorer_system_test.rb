@@ -159,6 +159,65 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "clear all roles" do
+    should "uncheck every role, then let you build a fresh selection" do
+      visit framework_path(@framework_id)
+
+      # Default load selects every role (empty selection = filter cleared)
+      assert_text "E1"
+      assert_text "PD1"
+
+      # JS-dispatch the click — a Capybara pointer click on a Stimulus-action
+      # button can be silently dropped on a starved CI runner. Re-dispatch once
+      # if the action hadn't attached yet; clearAll is idempotent.
+      # See docs/guidelines/testing.md.
+      clear_all = "document.querySelector(\"[data-action='tree#clearAll']\")?.click()"
+      page.execute_script(clear_all)
+      if page.has_css?("input[data-role-id='#{@pd_role_id}']:checked", visible: :all, wait: 3)
+        page.execute_script(clear_all)
+      end
+
+      assert_no_selector "input[data-role-id='#{@pd_role_id}']:checked", visible: :all
+
+      every_role_unchecked =
+        "Array.from(document.querySelectorAll(\"input[type=checkbox][data-role-id]\"))" \
+        ".every(function (cb) { return !cb.checked })"
+      assert page.evaluate_script(every_role_unchecked),
+        "Expected every role checkbox to be unchecked after Clear All"
+
+      # Tick a single role to build a fresh selection — matrix narrows to it
+      page.execute_script(
+        "var cb = document.querySelector('input[data-role-id=\"#{@pd_role_id}\"]'); " \
+        "cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true }));"
+      )
+
+      assert_text "Associate Product Designer"
+      assert_no_text "E1"
+      assert_no_text "FC1"
+    end
+  end
+
+  context "solo discovery hint" do
+    should "surface the solo tip and remember dismissal across reloads" do
+      visit framework_path(@framework_id)
+
+      assert_selector "[data-tree-target='hint']", text: /Solo/i
+
+      # JS-dispatch the dismiss click (Stimulus-action element — a pointer
+      # click can be dropped on starved CI). Re-dispatch once if the hint
+      # survives; the click is idempotent. See docs/guidelines/testing.md.
+      dismiss = "document.querySelector(\"[data-action='tree#dismissHint']\")?.click()"
+      page.execute_script(dismiss)
+      page.execute_script(dismiss) if page.has_selector?("[data-tree-target='hint']", wait: 3)
+
+      assert_no_selector "[data-tree-target='hint']"
+
+      # Reload — dismissal persists via localStorage, so the tip stays gone
+      visit framework_path(@framework_id)
+      assert_no_selector "[data-tree-target='hint']"
+    end
+  end
+
   context "sticky header on vertical scroll" do
     should "keep column headers pinned to the top of the scroll container" do
       # Short viewport forces the matrix to overflow vertically even with one
