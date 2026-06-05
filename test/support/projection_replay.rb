@@ -32,6 +32,12 @@ module ProjectionReplayHelpers
           person_development_comments: rows(PersonDevelopmentComment, natural_key_is_id: true)
         }
 
+      when "PersonDevelopment::Projections::AssessmentAuthority"
+        {
+          recorded_reporting_managers:    rows(RecordedReportingManager),
+          manager_assessment_delegations: rows(ManagerAssessmentDelegation)
+        }
+
       when "Frameworks::Projections::PublishedState"
         {
           frameworks:               rows(FrameworkState::Framework),

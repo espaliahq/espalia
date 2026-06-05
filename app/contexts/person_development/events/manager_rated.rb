@@ -18,6 +18,9 @@
 #     rater is captured here as a domain fact rather than inferred from the
 #     person's *current* manager at read time. nil on historical events emitted
 #     before attribution was added, and on "seeded" system carry-forwards.
+#   @option data [Boolean, nil] :via_delegation true when recorded by an active
+#     delegate rather than the reporting manager (stamped at event time for
+#     accurate activity-feed attribution). Absent on historical events.
 #
 class PersonDevelopment::Events::ManagerRated < RubyEventStore::Event
 end

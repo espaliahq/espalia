@@ -35,6 +35,8 @@ class PersonDevelopment::Aggregate
     @role_id = nil
     @level_id = nil
     @assigned = false
+    @manager_id = nil       # recorded reporting manager (authoritative for rating authority)
+    @active_delegates = {}   # delegate person id => expires_at (nil = open-ended)
     @current_cycle_id = nil
     @alignment_started = false
     @alignment_completed = false
@@ -111,6 +113,73 @@ class PersonDevelopment::Aggregate
       new_level_id: new_level_id,
       reason: reason,
       changed_by: changed_by
+    }))
+  end
+
+  # ── Reporting manager ──
+
+  # Records the person's reporting manager as a first-class domain fact.
+  #
+  # Idempotent: a no-op when the manager already matches the recorded value, so
+  # re-running HRIS sync emits nothing. Populated from HRIS sync and a one-off
+  # backfill; the recorded value is authoritative for the manager-rating
+  # invariant (see {#rate_as_manager}) and for {AssessmentPolicy}.
+  #
+  # @param manager_id [String, nil] UUID of the reporting manager (skipped when nil)
+  # @param source [String] "hris" or "backfill"
+  def record_reporting_manager(manager_id, source: "hris")
+    return if manager_id.nil?
+    return if manager_id == @manager_id
+
+    apply(PersonDevelopment::Events::ReportingManagerRecorded.new(data: {
+      manager_id: manager_id,
+      previous_manager_id: @manager_id,
+      source: source
+    }))
+  end
+
+  # ── Manager-rating delegation ──
+
+  # Grants manager-rating authority for this person/framework to another person.
+  #
+  # Does not require an open cycle — a delegation can be set up ahead of a cycle
+  # and persists across cycles until revoked/expired. Idempotent when the person
+  # already holds an active delegation. Granter authority (ancestor manager or
+  # tenant admin) is enforced by the controller-side policy, not the aggregate.
+  #
+  # @param delegate_person_id [String] UUID of the person receiving authority
+  # @param granted_by_id [String] UUID of the granter
+  # @param expires_at [String, Time, nil] optional expiry
+  # @param reason [String, nil] optional note
+  # @raise [CommandError] if delegating to the assessee or to nobody
+  def delegate_manager_rating(delegate_person_id, granted_by_id:, expires_at: nil, reason: nil)
+    raise CommandError, "Delegate is required" if delegate_person_id.blank?
+    raise CommandError, "Cannot delegate to the assessee" if delegate_person_id == @person_id
+    # Idempotent only against a still-active grant — an expired delegation can be
+    # renewed (a fresh event with a new expires_at).
+    return if delegate_active?(delegate_person_id)
+
+    apply(PersonDevelopment::Events::ManagerRatingDelegated.new(data: {
+      delegate_person_id: delegate_person_id,
+      granted_by_id: granted_by_id,
+      expires_at: expires_at,
+      reason: reason
+    }))
+  end
+
+  # Revokes a manager-rating delegation. Non-destructive — existing ratings the
+  # delegate made remain, attributed to them.
+  #
+  # @param delegate_person_id [String] UUID of the delegate
+  # @param revoked_by_id [String] UUID of the revoker
+  # @raise [CommandError] if no active delegation exists for the delegate
+  def revoke_manager_rating_delegation(delegate_person_id, revoked_by_id:)
+    raise CommandError, "No active delegation for this person" unless
+      @active_delegates.key?(delegate_person_id)
+
+    apply(PersonDevelopment::Events::ManagerRatingDelegationRevoked.new(data: {
+      delegate_person_id: delegate_person_id,
+      revoked_by_id: revoked_by_id
     }))
   end
 
@@ -273,6 +342,7 @@ class PersonDevelopment::Aggregate
                       source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
+    ensure_manager_authority!(rated_by_id, source)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
     apply(PersonDevelopment::Events::ManagerRated.new(data: {
@@ -283,7 +353,8 @@ class PersonDevelopment::Aggregate
       comment: comment,
       source: source,
       seeded_from_cycle_id: seeded_from_cycle_id,
-      rated_by_id: rated_by_id
+      rated_by_id: rated_by_id,
+      via_delegation: rated_via_delegation?(rated_by_id)
     }))
   end
 
@@ -301,6 +372,7 @@ class PersonDevelopment::Aggregate
                             rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
+    ensure_manager_authority!(rated_by_id, "human")
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
@@ -312,7 +384,8 @@ class PersonDevelopment::Aggregate
       cycle_id: cycle_id,
       comment: comment,
       rationale: rationale,
-      rated_by_id: rated_by_id
+      rated_by_id: rated_by_id,
+      via_delegation: rated_via_delegation?(rated_by_id)
     }))
   end
 
@@ -326,6 +399,7 @@ class PersonDevelopment::Aggregate
   def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
+    ensure_manager_authority!(rated_by_id, "human")
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
 
@@ -333,7 +407,8 @@ class PersonDevelopment::Aggregate
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       cycle_id: cycle_id,
-      rated_by_id: rated_by_id
+      rated_by_id: rated_by_id,
+      via_delegation: rated_via_delegation?(rated_by_id)
     }))
   end
 
@@ -762,7 +837,72 @@ class PersonDevelopment::Aggregate
     raise "Self and manager ratings are frozen during alignment" if @alignment_started
   end
 
+  # Domain invariant: a manager rating must be attributable to the recorded
+  # reporting manager or an active delegate.
+  #
+  # Fail-open cases (defer to the controller-side Pundit check):
+  # * non-"human" sources (seeded / system carry-forwards)
+  # * no recorded manager yet (manual tenant / pre-backfill) — `@manager_id` nil
+  #
+  # Rollout is two-stage: Stage 1 (current) logs divergence; Stage 2 will raise
+  # {CommandError}. See docs/guidelines/event-sourcing.md and the feature plan.
+  # Expiry is honoured here (via {#delegate_active?}), so the guard and the
+  # policy's `ManagerAssessmentDelegation.active` scope agree on lapsed grants.
+  #
+  # @param rated_by_id [String, nil]
+  # @param source [String]
+  def ensure_manager_authority!(rated_by_id, source)
+    return unless source == "human"
+    return if @manager_id.nil?
+    return if rated_by_id == @manager_id
+    return if delegate_active?(rated_by_id)
+
+    Rails.logger.warn(
+      "[manager-authority] PersonDev-#{@person_id}-#{@framework_id}: rated_by_id=#{rated_by_id.inspect} " \
+      "is neither the recorded manager (#{@manager_id.inspect}) nor an active delegate " \
+      "(#{@active_delegates.keys.inspect}). Allowed under Stage 1 soft guard."
+    )
+  end
+
+  # Whether a manager rating attributed to `rated_by_id` is being recorded via an
+  # active delegation rather than by the recorded reporting manager. Stamped on
+  # the rating event so the activity feed badges it accurately at event time
+  # (rather than reconstructing from current read-model state).
+  #
+  # @return [Boolean]
+  def rated_via_delegation?(rated_by_id)
+    rated_by_id.present? && rated_by_id != @manager_id && delegate_active?(rated_by_id)
+  end
+
+  # Whether the person currently holds a non-expired delegation. Wall-clock
+  # comparison is safe here because the guard runs at command time, not replay.
+  #
+  # @return [Boolean]
+  def delegate_active?(delegate_person_id)
+    return false unless @active_delegates.key?(delegate_person_id)
+
+    expires_at = @active_delegates[delegate_person_id]
+    return true if expires_at.blank?
+
+    parsed = expires_at.is_a?(Time) || expires_at.is_a?(ActiveSupport::TimeWithZone) ? expires_at : Time.zone.parse(expires_at.to_s)
+    parsed.nil? || parsed > Time.current
+  rescue ArgumentError
+    true # unparseable expiry → treat as open-ended rather than locking out
+  end
+
   # ── Event handlers ──
+
+  on PersonDevelopment::Events::ReportingManagerRecorded do |event|
+    @manager_id = event.data[:manager_id]
+  end
+
+  on PersonDevelopment::Events::ManagerRatingDelegated do |event|
+    @active_delegates[event.data[:delegate_person_id]] = event.data[:expires_at]
+  end
+
+  on PersonDevelopment::Events::ManagerRatingDelegationRevoked do |event|
+    @active_delegates.delete(event.data[:delegate_person_id])
+  end
 
   on PersonDevelopment::Events::PersonAssignedToFramework do |event|
     @person_id = event.data[:person_id]

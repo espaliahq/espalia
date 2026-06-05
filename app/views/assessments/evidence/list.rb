@@ -72,7 +72,7 @@ class Views::Assessments::Evidence::List < Views::Base
              "dark:hover:text-gray-200 transition-colors",
       aria: { label: "Add evidence" },
       data: {
-        action: "click->evidence-form#open",
+        action: "click->modal#open",
         evidence_form_capability_stable_id_param: @capability_stable_id,
         evidence_form_level_ordinal_param: @level_ordinal
       }

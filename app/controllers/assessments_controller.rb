@@ -61,6 +61,9 @@ class AssessmentsController < ApplicationController
         can_comment: viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
+        can_manage_delegates: policy.delegate_manager_rating?,
+        active_delegations: load_active_delegations(policy),
+        candidate_delegates: load_candidate_delegates(policy),
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -204,8 +207,24 @@ class AssessmentsController < ApplicationController
     return false unless current_person
     return true if current_user&.global_admin? || current_tenant_user&.admin?
     return true if @assignment.person_id == current_person.id
+    return true if active_rating_delegate?
 
     assessee_person&.managed_by?(current_person) || false
+  end
+
+  # Whether the current viewer holds an active manager-rating delegation for
+  # this assessment. A delegate is treated like a manager for visibility — they
+  # record manager ratings, so the activity feed and evidence must be visible to
+  # them. Memoised; cheap single lookup per request.
+  def active_rating_delegate?
+    return @active_rating_delegate if defined?(@active_rating_delegate)
+    return (@active_rating_delegate = false) unless current_person
+
+    @active_rating_delegate = ManagerAssessmentDelegation.active_delegate?(
+      person_id: @assignment.person_id,
+      framework_id: @assignment.framework_id,
+      delegate_person_id: current_person.id
+    )
   end
 
   # Whether the current viewer is permitted to record evidence on this
@@ -263,15 +282,63 @@ class AssessmentsController < ApplicationController
     %w[aligning aligned].include?(@assignment.current_open_cycle_participation&.status)
   end
 
-  # Loads framework assignments for the current person's direct reports.
+  # Active delegations for the assessment, loaded once and only when the viewer
+  # may manage them (avoids extra queries for the common case).
   #
-  # @return [Array<PersonFrameworkAssignment>]
+  # @param policy [AssessmentPolicy]
+  # @return [Array<ManagerAssessmentDelegation>]
+  def load_active_delegations(policy)
+    return @active_delegations if defined?(@active_delegations)
+
+    @active_delegations =
+      if policy.delegate_manager_rating?
+        ManagerAssessmentDelegation.active.for_assignment(@assignment).includes(:delegate).to_a
+      else
+        []
+      end
+  end
+
+  # Tenant people eligible to receive a delegation.
+  #
+  # @param policy [AssessmentPolicy]
+  # @return [Array<Person>]
+  def load_candidate_delegates(policy)
+    return [] unless policy.delegate_manager_rating?
+
+    ManagerAssessmentDelegation
+      .candidate_people(assignment: @assignment, actor_person_id: current_person.id).to_a
+  end
+
+  # Loads framework assignments the current person reviews: their direct
+  # reports, plus any assignment they hold an active manager-rating delegation
+  # for (e.g. a report seconded into their team).
+  #
+  # @return [ActiveRecord::Relation<PersonFrameworkAssignment>]
   def load_report_assignments
+    ids = (direct_report_assignment_ids + delegated_assignment_ids).uniq
+    return PersonFrameworkAssignment.none if ids.empty?
+
+    PersonFrameworkAssignment.where(id: ids).includes(:framework, :role, :level)
+  end
+
+  def direct_report_assignment_ids
     report_ids = current_person.direct_reports.pluck(:id)
     return [] if report_ids.empty?
 
-    PersonFrameworkAssignment.where(person_id: report_ids)
-      .includes(:framework, :role, :level)
+    PersonFrameworkAssignment.where(person_id: report_ids).ids
+  end
+
+  # Assignment ids the current person holds an active delegation to rate.
+  #
+  # @return [Array<String>]
+  def delegated_assignment_ids
+    pairs = ManagerAssessmentDelegation.active.for_delegate(current_person.id)
+      .pluck(:person_id, :framework_id)
+    return [] if pairs.empty?
+
+    scope = pairs.map { |pid, fid| PersonFrameworkAssignment.where(person_id: pid, framework_id: fid) }
+                 .reduce(:or)
+    scope.ids
   end
 
   # Cell-level focus param. Only meaningful when paired with `?capability=`;

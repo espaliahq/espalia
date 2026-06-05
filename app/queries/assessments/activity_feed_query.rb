@@ -57,6 +57,20 @@ class Assessments::ActivityFeedQuery
   # to anchor it to.
   CAPABILITIES_ORPHANED_KIND = "capabilities_orphaned"
 
+  # Assessment-authority events (framework-scoped, no capability coords).
+  # `reporting_manager_recorded` only fires on an actual manager change, so it
+  # is genuine history rather than per-sync noise.
+  AUTHORITY_KINDS = {
+    PersonDevelopment::Events::ManagerRatingDelegated          => "delegation_granted",
+    PersonDevelopment::Events::ManagerRatingDelegationRevoked  => "delegation_revoked",
+    PersonDevelopment::Events::ReportingManagerRecorded        => "reporting_manager_recorded"
+  }.freeze
+
+  # Authority kinds gated by the same privacy rule as manager ratings (they
+  # reveal manager-side process). `reporting_manager_recorded` is NOT gated —
+  # the assessee knows their own manager.
+  DELEGATION_KINDS = %w[delegation_granted delegation_revoked].freeze
+
   MANAGER_KINDS = %w[manager_rated manager_rating_revised manager_rating_cleared].freeze
 
   # Maps each attributable rating entry kind to the payload key carrying its
@@ -68,7 +82,9 @@ class Assessments::ActivityFeedQuery
     "manager_rating_revised" => :rated_by_id,
     "manager_rating_cleared" => :rated_by_id,
     "assessment_aligned"     => :aligned_by_id,
-    "alignment_cleared"      => :cleared_by_id
+    "alignment_cleared"      => :cleared_by_id,
+    "delegation_granted"     => :granted_by_id,
+    "delegation_revoked"     => :revoked_by_id
   }.freeze
 
   # @param assignment [PersonFrameworkAssignment]
@@ -92,7 +108,7 @@ class Assessments::ActivityFeedQuery
   # @return [Array<Entry>] reverse-chronological entries the viewer may see
   def call
     entries = rating_entries + relink_entries + evidence_entries +
-              alignment_entries + comment_entries + migration_entries
+              alignment_entries + comment_entries + migration_entries + authority_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -143,6 +159,8 @@ class Assessments::ActivityFeedQuery
       # falls back to a generic label.
       actor_id = data[ACTOR_ID_KEYS[kind]] if ACTOR_ID_KEYS.key?(kind)
       data = data.merge(actor_name: actor_names[actor_id]) if actor_id
+      # `via_delegation` is stamped on the event at write time (accurate at
+      # event time); historical events lack it → no badge.
       stable_id = data[:capability_stable_id]
       Entry.new(
         id: event.event_id,
@@ -165,12 +183,13 @@ class Assessments::ActivityFeedQuery
   # so the active tenant scope resolves them.
   def actor_names
     @actor_names ||= begin
-      ids = stream_events.filter_map do |event|
-        key = ACTOR_ID_KEYS[RATING_KINDS[event.class]]
-        next unless key
+      ids = stream_events.flat_map do |event|
+        kind = RATING_KINDS[event.class] || AUTHORITY_KINDS[event.class]
+        next [] unless kind
 
-        event.data[key] || event.data[key.to_s]
-      end.uniq
+        keys = [ ACTOR_ID_KEYS[kind], :delegate_person_id, :manager_id ].compact
+        keys.map { |key| event.data[key] || event.data[key.to_s] }
+      end.compact.uniq
       ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
     end
   end
@@ -373,6 +392,45 @@ class Assessments::ActivityFeedQuery
 
       per_cap + envelope
     end
+  end
+
+  # Reads the three assessment-authority events from the stream and emits one
+  # framework-scoped entry each. Names for the actor, the delegate, and (for
+  # reporting-manager changes) the new manager are merged into the payload.
+  def authority_entries
+    stream_events.filter_map do |event|
+      kind = AUTHORITY_KINDS[event.class]
+      next unless kind
+      next if hide_authority_entry?(kind)
+
+      data = event.data.with_indifferent_access
+      actor_id = data[ACTOR_ID_KEYS[kind]] if ACTOR_ID_KEYS.key?(kind)
+      data = data.merge(actor_name: actor_names[actor_id]) if actor_id
+      data = data.merge(delegate_name: actor_names[data[:delegate_person_id]]) if data[:delegate_person_id]
+      data = data.merge(manager_name: actor_names[data[:manager_id]]) if data[:manager_id]
+
+      Entry.new(
+        id: event.event_id,
+        kind: kind,
+        occurred_at: event_timestamp(event),
+        payload: data,
+        capability_stable_id: nil,
+        level_ordinal: nil,
+        cycle_id: nil,
+        capability_name: nil,
+        category_id: nil
+      )
+    end
+  end
+
+  def hide_authority_entry?(kind)
+    return false unless DELEGATION_KINDS.include?(kind)
+
+    # Delegation grant/revoke follow the manager-rating privacy gate.
+    return true unless @viewer_sees_all
+    return true if @context == :self && !@alignment_started
+
+    false
   end
 
   def hide_manager_rating?(kind)

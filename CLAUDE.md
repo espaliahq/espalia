@@ -318,11 +318,11 @@ test/
 
 - Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
 - Always update relevant documentation if functionality diverges from what is documented.
-- Commit per discrete change, creating a stacked PR
+- *CRITICAL* Commit per discrete change, creating a stacked commit, in *one* PR. Stack commits, do not stack PRs. 
 - `/coderabbit:review --base main` - Use CodeRabbit to review the change code vs main branch before commit, if using CodeRabbit CLI use the `--agent` flag
 - When creating PR, always track CI, always investigate code review and CodeRabbit suggestions and commit each fix as a separate commit in the PR. Always check for fresh code review comments after each commit. 
 - **`gh pr checks` does NOT reveal CodeRabbit findings.** Its CodeRabbit row reports the *check* status (e.g. "Review skipped" / "pass") which is independent of the review CodeRabbit posts as PR *review comments*. A green/"skipped" row can still hide actionable findings. To read them, fetch the reviews and inline comments explicitly: `gh pr view <n> --json reviews --jq '.reviews[] | select(.author.login=="coderabbitai") | .body'` and `gh api repos/{owner}/{repo}/pulls/<n>/comments`. Never conclude "no findings" from `gh pr checks` alone.
-- *CRITICAL* - Stack commits, do not stack PRs. It requires too much overhead (rebasing after previous PRs are merged, re-running CI)
+- When referring to a PR, always link to it to reduce having to scroll back to find link
 - **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
 - When referencing a PR, always link to it so to avoid having to scroll up to find the link
 

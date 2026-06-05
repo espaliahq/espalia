@@ -1,59 +1,36 @@
-// Example usage:
-// <div data-controller="evidence-form">
-//   ...modal contents with form / hidden fields...
-// </div>
+// Evidence-specific companion to the generic `modal` controller.
 //
-// Triggered from the per-cell "+ Add evidence" button:
-// <button data-action="click->evidence-form#open"
-//         data-evidence-form-capability-stable-id-param="<uuid>"
-//         data-evidence-form-level-ordinal-param="3">+ Add evidence</button>
+// Visibility (open/close/click-outside/scroll-lock) lives in `modal`. This
+// controller only prefills the shared evidence modal for whichever (capability,
+// level) cell triggered it, and toggles the custom-label field by type.
 //
-// The controller hosts a single page-level modal repurposed for whichever
-// (capability, level) cell triggered it, instead of rendering one modal
-// per cell. Body scroll is locked while open.
+// Mounted on the assessment page wrapper alongside `modal`:
+//   <div data-controller="modal evidence-form"
+//        data-action="modal:open@window->evidence-form#prefill">
+//
+// The per-cell trigger opens the shared modal and carries the coords:
+//   <button data-action="click->modal#open"
+//           data-evidence-form-capability-stable-id-param="<uuid>"
+//           data-evidence-form-level-ordinal-param="3">+ Add evidence</button>
 
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["modal", "panel", "form", "capabilityField", "levelField", "typeSelect", "customLabelWrapper"]
+  static targets = ["form", "capabilityField", "levelField", "typeSelect", "customLabelWrapper"]
 
-  connect() {
-    super.connect()
-    this.boundClickOutside = this.clickOutside.bind(this)
-  }
-
-  disconnect() {
-    document.removeEventListener("click", this.boundClickOutside, true)
-    document.body.style.overflow = ""
-    super.disconnect()
-  }
-
-  open(event) {
-    // Read coords directly from the trigger button's dataset rather than
-    // event.params — keeps the contract independent of Stimulus's param
-    // naming/transformation rules.
-    const trigger = event.currentTarget
-    const capabilityStableId = trigger?.dataset?.evidenceFormCapabilityStableIdParam
-    const levelOrdinal = trigger?.dataset?.evidenceFormLevelOrdinalParam
+  // Reacts to the modal:open event the `modal` controller dispatches. Reads the
+  // coords from the trigger's dataset (carried on event.detail.dataset). No-ops
+  // for modal opens that aren't evidence (e.g. the delegation modal).
+  prefill(event) {
+    const dataset = event.detail?.dataset || {}
+    const capabilityStableId = dataset.evidenceFormCapabilityStableIdParam
+    const levelOrdinal = dataset.evidenceFormLevelOrdinalParam
     if (!capabilityStableId || levelOrdinal == null || levelOrdinal === "") return
 
     this.formTarget.reset()
     this.capabilityFieldTarget.value = capabilityStableId
     this.levelFieldTarget.value = levelOrdinal
     this.syncCustomLabel()
-    this.show()
-  }
-
-  close() {
-    this.hide()
-  }
-
-  // turbo:submit-end fires after a Turbo-handled form submission settles.
-  // event.detail.success reflects 2xx status. Close the modal only on
-  // success so validation errors keep the form visible for the user to
-  // fix and retry.
-  submitted(event) {
-    if (event.detail?.success) this.hide()
   }
 
   typeChanged() {
@@ -62,38 +39,10 @@ export default class extends BaseController {
 
   // private
 
-  show() {
-    this.modalTarget.classList.remove("hidden")
-    this.modalTarget.classList.add("flex")
-    document.body.style.overflow = "hidden"
-    // Defer the click-outside listener so the same click event that opened
-    // the modal (which originates outside the panel) doesn't immediately
-    // close it again on the next listener pass.
-    queueMicrotask(() => {
-      document.addEventListener("click", this.boundClickOutside, true)
-    })
-    const focusable = this.modalTarget.querySelector("textarea, input:not([type='hidden'])")
-    focusable && focusable.focus()
-  }
-
-  hide() {
-    this.modalTarget.classList.add("hidden")
-    this.modalTarget.classList.remove("flex")
-    document.body.style.overflow = ""
-    document.removeEventListener("click", this.boundClickOutside, true)
-  }
-
   syncCustomLabel() {
     const isOther = this.typeSelectTarget.value === "other"
     this.customLabelWrapperTarget.classList.toggle("hidden", !isOther)
     const inputs = this.customLabelWrapperTarget.querySelectorAll("input")
     inputs.forEach((input) => { input.required = isOther })
-  }
-
-  clickOutside(event) {
-    if (this.panelTarget.contains(event.target)) return
-    // Ignore the trigger button itself — its own click is what opened us.
-    if (event.target.closest("[data-action*='evidence-form#open']")) return
-    this.hide()
   }
 }

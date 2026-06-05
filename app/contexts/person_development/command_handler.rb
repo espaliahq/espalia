@@ -55,6 +55,47 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Records the person's reporting manager on their stream (idempotent — no-op
+  # when unchanged). Populated from HRIS sync and the one-off backfill.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param manager_id [String, nil] UUID of the reporting manager
+  # @param source [String] "hris" or "backfill"
+  def record_reporting_manager(person_id, framework_id, manager_id, source: "hris")
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.record_reporting_manager(manager_id, source: source)
+    end
+  end
+
+  # Grants manager-rating authority for this person/framework to a delegate.
+  #
+  # @param person_id [String] UUID of the person being assessed
+  # @param framework_id [String] UUID of the framework
+  # @param delegate_person_id [String] UUID of the delegate
+  # @param granted_by_id [String] UUID of the granter
+  # @param expires_at [String, Time, nil] optional expiry
+  # @param reason [String, nil] optional note
+  def delegate_manager_rating(person_id, framework_id, delegate_person_id, granted_by_id:,
+                              expires_at: nil, reason: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.delegate_manager_rating(delegate_person_id, granted_by_id: granted_by_id,
+        expires_at: expires_at, reason: reason)
+    end
+  end
+
+  # Revokes a manager-rating delegation (non-destructive).
+  #
+  # @param person_id [String] UUID of the person being assessed
+  # @param framework_id [String] UUID of the framework
+  # @param delegate_person_id [String] UUID of the delegate
+  # @param revoked_by_id [String] UUID of the revoker
+  def revoke_manager_rating_delegation(person_id, framework_id, delegate_person_id, revoked_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.revoke_manager_rating_delegation(delegate_person_id, revoked_by_id: revoked_by_id)
+    end
+  end
+
   # Adds the person to an assessment cycle.
   #
   # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}

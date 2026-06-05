@@ -42,42 +42,19 @@ class Views::Assessments::Evidence::Form < Views::Base
   end
 
   def view_template
-    # NOTE: data-controller="evidence-form" intentionally lives on a higher
-    # ancestor (the page wrapper) — see Views::Assessments::ShowView. The
-    # trigger buttons inside the matrix frame are sibling-cousins of this
-    # modal, not descendants, so the controller must enclose both.
-    div(
-      id: "evidence-form-modal",
-      data: { evidence_form_target: "modal" },
-      class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
-      role: "dialog",
-      aria_modal: "true",
-      aria_labelledby: "evidence-form-title"
-    ) do
-      div(
-        class: "w-full max-w-md rounded-lg bg-white dark:bg-gray-900 p-5 shadow-xl",
-        data: { evidence_form_target: "panel" }
-      ) do
-        header
-        form_body
-      end
+    # NOTE: data-controller="modal evidence-form" intentionally lives on a
+    # higher ancestor (the page wrapper) — see Views::Assessments::ShowView. The
+    # trigger buttons inside the matrix frame are sibling-cousins of this modal,
+    # not descendants, so the controller must enclose both. The modal is
+    # rendered in embedded mode (no own controller); the page wrapper's `modal`
+    # controller owns its visibility.
+    render Components::Kit::Modal.new(id: "evidence-form-modal", title: "Add evidence",
+                                      standalone: false) do |modal|
+      modal.body { form_body }
     end
   end
 
   private
-
-  def header
-    div(class: "flex items-baseline justify-between mb-3") do
-      h2(id: "evidence-form-title",
-         class: "text-lg font-semibold text-gray-900 dark:text-white") { "Add evidence" }
-      button(
-        type: "button",
-        class: "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none",
-        data: { action: "click->evidence-form#close" },
-        aria: { label: "Close" }
-      ) { "×" }
-    end
-  end
 
   def form_body
     form(
@@ -85,7 +62,7 @@ class Views::Assessments::Evidence::Form < Views::Base
       method: "post",
       data: {
         evidence_form_target: "form",
-        action: "turbo:submit-end->evidence-form#submitted"
+        action: "turbo:submit-end->modal#submitted"
       }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
@@ -167,7 +144,7 @@ class Views::Assessments::Evidence::Form < Views::Base
         type: "button",
         class: "px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 " \
                "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800",
-        data: { action: "click->evidence-form#close" }
+        data: { action: "click->modal#close" }
       ) { "Cancel" }
       button(
         type: "submit",

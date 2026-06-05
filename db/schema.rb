@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_31_000004) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_05_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -365,6 +365,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_31_000004) do
     t.index ["tenant_id"], name: "index_framework_suggested_edits_on_tenant_id"
   end
 
+  create_table "manager_assessment_delegations", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "delegate_person_id", null: false
+    t.datetime "expires_at"
+    t.uuid "framework_id", null: false
+    t.uuid "granted_by_id", null: false
+    t.uuid "person_id", null: false
+    t.string "reason"
+    t.datetime "revoked_at"
+    t.uuid "revoked_by_id"
+    t.string "status", default: "active", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "delegate_person_id"], name: "idx_manager_assessment_delegations_on_delegate"
+    t.index ["tenant_id", "person_id", "framework_id", "delegate_person_id"], name: "idx_manager_assessment_delegations_unique", unique: true
+    t.index ["tenant_id"], name: "index_manager_assessment_delegations_on_tenant_id"
+  end
+
   create_table "mcp_pending_approvals", id: :uuid, default: nil, force: :cascade do |t|
     t.jsonb "arguments", default: {}, null: false
     t.uuid "client_application_id", null: false
@@ -501,6 +519,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_31_000004) do
     t.integer "version", null: false
   end
 
+  create_table "recorded_reporting_managers", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "manager_id", null: false
+    t.uuid "person_id", null: false
+    t.string "source", default: "hris", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "person_id", "framework_id"], name: "idx_recorded_reporting_managers_unique", unique: true
+    t.index ["tenant_id"], name: "index_recorded_reporting_managers_on_tenant_id"
+  end
+
   create_table "tenant_users", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "person_id"
@@ -567,6 +597,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_31_000004) do
   add_foreign_key "framework_suggested_edits", "people", column: "author_id", on_delete: :restrict
   add_foreign_key "framework_suggested_edits", "people", column: "reviewed_by", on_delete: :nullify
   add_foreign_key "framework_suggested_edits", "tenants"
+  add_foreign_key "manager_assessment_delegations", "tenants"
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"
   add_foreign_key "mcp_pending_approvals", "tenants"
   add_foreign_key "mcp_pending_approvals", "users"
@@ -584,6 +615,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_31_000004) do
   add_foreign_key "person_development_comments", "person_development_comments", column: "parent_id", on_delete: :restrict
   add_foreign_key "person_development_comments", "tenants"
   add_foreign_key "person_framework_assignments", "tenants"
+  add_foreign_key "recorded_reporting_managers", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"
