@@ -18,25 +18,45 @@ Assignment:
     ← migrate_framework_version RAISES if the current cycle's alignment is
       completed — a completed assessment is immutable (ADR-19).
 
-Evidence:
-  EvidenceRecorded { id, capability_stable_id, level_id, source, evidence_type,
+Evidence (one piece of evidence can be linked to MANY capability × level
+cells — multi-linkage. Content lives on EvidenceRecorded/Updated; the set of
+links is maintained by EvidenceLinkAdded/Removed):
+  EvidenceRecorded { id, capability_stable_id, level_ordinal, source, evidence_type,
                      custom_type_label?, title?, content, external_reference?, author_id }
+    ← Creates the item AND its FIRST link. The capability_stable_id/level_ordinal
+      here are the item's ORIGIN link (also the read-model EvidenceItem columns
+      the activity feed anchors on).
     source: self | manager | peer
     evidence_type: peer_feedback | project_outcome | code_review | design_review |
                    customer_feedback | incident_response | presentation | mentoring | other
     external_reference: { system, url?, external_id?, metadata? }
-  EvidenceRelinked { evidence_id, old_capability_stable_id, old_level_id,
-                     new_capability_stable_id, new_level_id, relinked_by, rationale }
+  EvidenceLinkAdded { evidence_id, capability_stable_id, level_ordinal,
+                      linked_by_id, rationale? }
+    ← Attaches the item to an additional cell; it then surfaces there too.
+  EvidenceLinkRemoved { evidence_id, capability_stable_id, level_ordinal,
+                        removed_by_id, reason? }
+    ← Detaches one link. DOMAIN INVARIANT: an active item must always keep ≥1
+      link — removing the last link is rejected (withdraw the item instead).
+  EvidenceRelinked { evidence_id, previous_capability_stable_id, previous_level_ordinal,
+                     new_capability_stable_id, new_level_ordinal, relinked_by_id, rationale? }
+    ← HISTORICAL ONLY — no longer emitted (the user-facing "move" action was
+      replaced by add-link + remove-link). Retained so replay reconstructs the
+      link set correctly (treated as remove previous + add new).
   EvidenceUpdated { evidence_id, title?, content, evidence_type,
                     custom_type_label?, external_reference?, edited_by_id }
     ← Carries the FULL post-edit value of every mutable field (snapshot, not a
       delta). Mutable scope is strictly the user-correctable content: title,
       content, evidence_type, custom_type_label, external_reference. The
-      capability/level coordinate is owned by EvidenceRelinked; source,
+      capability/level links are owned by the link events; source,
       author_id, and recorded_at are identity invariants and never change.
       Authorization is strictly author-only — no admin override — see
       EvidencePolicy#update?.
   EvidenceWithdrawn { evidence_id, reason, withdrawn_by }
+    ← Withdraws the item everywhere (all its links at once).
+
+  Link management (add_link / remove_link) authorization mirrors the retired
+  relink: author + assessee + manager chain + an active manager-rating
+  DELEGATE — see EvidencePolicy#add_link?/#remove_link?.
 
 Assessment cycle:
   AssessmentCycleOpened { cycle_id, cycle_name, cycle_type, framework_version_id }

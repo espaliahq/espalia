@@ -1,21 +1,22 @@
 # frozen_string_literal: true
 
-# Page-level modal for relinking an existing evidence item to a new
-# (capability, level) coordinate. Rendered once per assessment page;
-# the kebab "Relink" menu item on each evidence card opens it via the
-# evidence-relink-form Stimulus controller, priming the evidence_id +
-# current capability/level into the form's hidden + select fields.
+# Page-level modal for linking an existing evidence item to an ADDITIONAL
+# (capability, level) coordinate — one piece of evidence can demonstrate
+# several expectations. Rendered once per assessment page; the kebab "Link
+# to another capability" menu item on each evidence card opens it via the
+# evidence-link-form Stimulus controller, priming the evidence_id and the
+# originating cell (so the server re-renders the right list afterward).
 #
-# The capability list comes pre-grouped by category so the user can
-# scan to the new capability without leaving the modal. Levels match
-# the assessee's role — the same set the matrix renders columns for.
+# The capability list comes pre-grouped by category so the user can scan to
+# the target capability without leaving the modal. Levels match the
+# assessee's role — the same set the matrix renders columns for.
 #
-class Views::Assessments::Evidence::RelinkForm < Views::Base
-  # The form's action URL is filled in dynamically by
-  # `evidence-relink-form` Stimulus controller per click — each evidence
-  # item has a different `:id` in the URL — so the assignment id only
-  # needs to live as `data-evidence-relink-form-assessment-id-value` on
-  # the controller's element (set by ShowView/ManagerShowView).
+class Views::Assessments::Evidence::LinkForm < Views::Base
+  # The form's action URL is filled in dynamically by the
+  # `evidence-link-form` Stimulus controller per click — each evidence item
+  # has a different `:id` in the URL — so the assignment id only needs to
+  # live as `data-evidence-link-form-assessment-id-value` on the
+  # controller's element (set by ShowView/ManagerShowView).
   #
   # @param categories [Array<Hash>] from MatrixDataBuilder, [{ category:, capabilities: [...] }]
   # @param merged_levels [Array<Hash>] from MatrixDataBuilder
@@ -26,16 +27,16 @@ class Views::Assessments::Evidence::RelinkForm < Views::Base
 
   def view_template
     div(
-      id: "evidence-relink-modal",
-      data: { evidence_relink_form_target: "modal" },
+      id: "evidence-link-modal",
+      data: { evidence_link_form_target: "modal" },
       class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
       role: "dialog",
       aria_modal: "true",
-      aria_labelledby: "evidence-relink-form-title"
+      aria_labelledby: "evidence-link-form-title"
     ) do
       div(
         class: "w-full max-w-md rounded-lg bg-white dark:bg-gray-900 p-5 shadow-xl",
-        data: { evidence_relink_form_target: "panel" }
+        data: { evidence_link_form_target: "panel" }
       ) do
         header
         form_body
@@ -47,27 +48,32 @@ class Views::Assessments::Evidence::RelinkForm < Views::Base
 
   def header
     div(class: "flex items-baseline justify-between mb-3") do
-      h2(id: "evidence-relink-form-title",
-         class: "text-lg font-semibold text-gray-900 dark:text-white") { "Relink evidence" }
+      h2(id: "evidence-link-form-title",
+         class: "text-lg font-semibold text-gray-900 dark:text-white") { "Link evidence" }
       button(
         type: "button",
         class: "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none",
-        data: { action: "click->evidence-relink-form#close" },
+        data: { action: "click->evidence-link-form#close" },
         aria: { label: "Close" }
       ) { "×" }
     end
-    p(class: "mb-3 text-xs text-gray-600 dark:text-gray-300",
-      data: { evidence_relink_form_target: "currentLabel" }) { "" }
+    p(class: "mb-3 text-xs text-gray-600 dark:text-gray-300") do
+      "Attach this evidence to another capability × level. It will appear in both places."
+    end
   end
 
   def form_body
     form(
       action: "#",
       method: "post",
-      data: { evidence_relink_form_target: "form",
-              action: "submit->evidence-relink-form#submit" }
+      data: { evidence_link_form_target: "form",
+              action: "submit->evidence-link-form#submit" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      input(type: "hidden", name: "evidence[from_capability_stable_id]",
+            data: { evidence_link_form_target: "fromCapabilityField" })
+      input(type: "hidden", name: "evidence[from_level_ordinal]",
+            data: { evidence_link_form_target: "fromLevelField" })
       capability_field
       level_field
       rationale_field
@@ -77,13 +83,13 @@ class Views::Assessments::Evidence::RelinkForm < Views::Base
 
   def capability_field
     div(class: "mb-3") do
-      label(for: "evidence_relink_capability_field", class: label_classes) { "Move to capability" }
+      label(for: "evidence_link_capability_field", class: label_classes) { "Link to capability" }
       select(
-        id: "evidence_relink_capability_field",
-        name: "evidence[new_capability_stable_id]",
+        id: "evidence_link_capability_field",
+        name: "evidence[capability_stable_id]",
         class: input_classes,
         required: true,
-        data: { evidence_relink_form_target: "capabilitySelect" }
+        data: { evidence_link_form_target: "capabilitySelect" }
       ) do
         @categories.each do |cat_data|
           optgroup(label: cat_data[:category].name) do
@@ -99,13 +105,13 @@ class Views::Assessments::Evidence::RelinkForm < Views::Base
 
   def level_field
     div(class: "mb-3") do
-      label(for: "evidence_relink_level_field", class: label_classes) { "At level" }
+      label(for: "evidence_link_level_field", class: label_classes) { "At level" }
       select(
-        id: "evidence_relink_level_field",
-        name: "evidence[new_level_ordinal]",
+        id: "evidence_link_level_field",
+        name: "evidence[level_ordinal]",
         class: input_classes,
         required: true,
-        data: { evidence_relink_form_target: "levelSelect" }
+        data: { evidence_link_form_target: "levelSelect" }
       ) do
         @merged_levels.each do |level|
           option(value: level[:ordinal]) do
@@ -118,10 +124,10 @@ class Views::Assessments::Evidence::RelinkForm < Views::Base
 
   def rationale_field
     div(class: "mb-3") do
-      label(for: "evidence_relink_rationale_field", class: label_classes) do
-        "Why move it? (optional)"
+      label(for: "evidence_link_rationale_field", class: label_classes) do
+        "Why does it also apply here? (optional)"
       end
-      textarea(id: "evidence_relink_rationale_field",
+      textarea(id: "evidence_link_rationale_field",
                name: "evidence[rationale]",
                rows: 3, class: input_classes) { "" }
     end
@@ -133,12 +139,12 @@ class Views::Assessments::Evidence::RelinkForm < Views::Base
         type: "button",
         class: "px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 " \
                "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800",
-        data: { action: "click->evidence-relink-form#close" }
+        data: { action: "click->evidence-link-form#close" }
       ) { "Cancel" }
       button(
         type: "submit",
         class: "px-3 py-1.5 text-sm rounded-md bg-primary text-white hover:bg-primary/90"
-      ) { "Relink" }
+      ) { "Link evidence" }
     end
   end
 

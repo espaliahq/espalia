@@ -40,7 +40,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @tenants = tenants
   end
 
-  def can_render_relink_modal?
+  def can_render_link_modal?
     @viewer_person_id.present? && (@can_create_evidence || @can_relink_others_evidence)
   end
 
@@ -56,24 +56,30 @@ class Views::Assessments::ManagerShowView < Views::Base
         "activity-pane",
         ("modal" if @can_create_evidence),
         ("evidence-form" if @can_create_evidence),
-        ("evidence-relink-form" if can_render_relink_modal?),
+        ("evidence-link-form" if can_render_link_modal?),
         ("evidence-edit-form" if can_render_edit_modal?)
       ].compact.join(" ")
       esc_actions = [
         ("keydown.esc->modal#close" if @can_create_evidence),
         ("modal:open@window->evidence-form#prefill" if @can_create_evidence),
-        ("keydown.esc->evidence-relink-form#close" if can_render_relink_modal?),
+        ("keydown.esc->evidence-link-form#close" if can_render_link_modal?),
         ("keydown.esc->evidence-edit-form#close" if can_render_edit_modal?)
       ].compact.join(" ")
       data = { controller: controllers }
       data[:action] = esc_actions if esc_actions.present?
-      data[:evidence_relink_form_assessment_id_value] = @assignment.id if can_render_relink_modal?
+      data[:evidence_link_form_assessment_id_value] = @assignment.id if can_render_link_modal?
       data[:evidence_edit_form_assessment_id_value] = @assignment.id if can_render_edit_modal?
       div(data: data) do
         assessment_layout
-        render Views::Assessments::Evidence::Form.new(assessment_id: @assignment.id) if @can_create_evidence
-        if can_render_relink_modal?
-          render Views::Assessments::Evidence::RelinkForm.new(
+        if @can_create_evidence
+          render Views::Assessments::Evidence::Form.new(
+            assessment_id: @assignment.id,
+            categories: @matrix_data[:categories],
+            merged_levels: @matrix_data[:merged_levels]
+          )
+        end
+        if can_render_link_modal?
+          render Views::Assessments::Evidence::LinkForm.new(
             categories: @matrix_data[:categories],
             merged_levels: @matrix_data[:merged_levels]
           )

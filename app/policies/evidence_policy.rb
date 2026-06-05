@@ -12,8 +12,13 @@
 # - Record manager evidence: anyone in the assessee's manager hierarchy.
 # - Record peer evidence: any tenant member with a Person record.
 # - Withdraw: original author + tenant admin.
-# - Relink: original author + the assessee + anyone in their manager hierarchy
-#   + an active manager-rating delegate.
+# - Add link / remove link: original author + the assessee + anyone in
+#   their manager hierarchy + an active manager-rating delegate. Managing
+#   which capability × level an item is attached to is the same "where does
+#   this evidence belong?" domain judgement the (now retired) relink action
+#   gated — admins are excluded for the same reason (they lack the
+#   familiarity with the assessee's work to make that call), while a
+#   delegate (trusted to rate in the manager's place) is included.
 #
 # Evidence is NOT frozen during alignment — these checks are independent
 # of `participant.status`.
@@ -60,14 +65,30 @@ class EvidencePolicy < ApplicationPolicy
     record.author_id == person.id
   end
 
-  # Note the asymmetry with `withdraw?`: tenant admins can withdraw (treat
-  # as a content-neutral cleanup) but cannot relink — relinking reattributes
-  # evidence to a different capability/level, which is a domain judgement
-  # that requires familiarity with the assessee's work that admins generally
-  # lack. The author or someone in the assessee's chain should make that call.
+  # Whether the viewer may attach this evidence to an additional
+  # capability × level. See `can_manage_links?` for the actor model and
+  # the asymmetry with `withdraw?` (admins can withdraw but not decide
+  # where evidence belongs).
   #
   # @return [Boolean]
-  def relink?
+  def add_link? = can_manage_links?
+
+  # Whether the viewer may remove one of this evidence's capability × level
+  # links. Same actor model as `add_link?`. (The last-link invariant — an
+  # active item must keep ≥1 link — is enforced in the aggregate, not here.)
+  #
+  # @return [Boolean]
+  def remove_link? = can_manage_links?
+
+  private
+
+  # Author + the assessee + anyone in their manager hierarchy + an active
+  # manager-rating delegate. Tenant admins are intentionally excluded:
+  # deciding which capability/level a piece of evidence demonstrates is a
+  # domain judgement that requires familiarity with the assessee's work —
+  # which is exactly why a delegate (who the reporting manager trusted to
+  # rate in their place) IS included.
+  def can_manage_links?
     return false unless person.present?
     return false unless record.is_a?(EvidenceItem)
     return true if record.author_id == person.id
@@ -78,30 +99,16 @@ class EvidencePolicy < ApplicationPolicy
     assessee&.managed_by?(person) || false
   end
 
-  private
-
-  # An active manager-rating delegate is treated like a manager for evidence
-  # relinking (a delegate has full manager parity except starting/editing
-  # alignment). Mirrors {AssessmentPolicy#active_rating_delegate?}.
-  def active_rating_delegate?
-    return false unless person.present?
-    return false unless record.respond_to?(:framework_id) && record.framework_id
-
-    ManagerAssessmentDelegation.active_delegate?(
-      person_id: record.person_id,
-      framework_id: record.framework_id,
-      delegate_person_id: person.id
-    )
-  end
-
   # Whether the viewer can see evidence on the assessment as a whole.
   # The record may be a {PersonFrameworkAssignment} (collection-level) or
-  # an {EvidenceItem} (member-level) — both expose `person_id`, so the
-  # check resolves uniformly.
+  # an {EvidenceItem} (member-level) — both expose `person_id` and
+  # `framework_id`, so the check resolves uniformly. Active rating
+  # delegates see the assessee's evidence like a manager would.
   def view_assessment?
     return false unless person.present?
     return true if tenant_admin?
     return true if record.person_id == person.id
+    return true if active_rating_delegate?
 
     assessee = Person.find_by(id: record.person_id)
     assessee&.managed_by?(person) || false
@@ -118,5 +125,21 @@ class EvidencePolicy < ApplicationPolicy
 
     assessee = Person.find_by(id: record.person_id)
     assessee&.managed_by?(person) || false
+  end
+
+  # Whether the viewer holds an active manager-rating delegation for the
+  # assessee on this framework. Mirrors {AssessmentPolicy#active_rating_delegate?}
+  # so a delegate gets the same evidence reach (view + manage links) the
+  # reporting manager has. The record exposes `person_id` + `framework_id`
+  # whether it is an {EvidenceItem} or a {PersonFrameworkAssignment}.
+  def active_rating_delegate?
+    return false unless person.present?
+    return false unless record.respond_to?(:framework_id) && record.framework_id
+
+    ManagerAssessmentDelegation.active_delegate?(
+      person_id: record.person_id,
+      framework_id: record.framework_id,
+      delegate_person_id: person.id
+    )
   end
 end

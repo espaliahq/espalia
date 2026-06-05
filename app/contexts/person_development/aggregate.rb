@@ -43,7 +43,7 @@ class PersonDevelopment::Aggregate
     @self_ratings = {}    # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     @aligned_ratings = {} # [stable_id, level_ordinal] => frequency
-    @evidence = {}       # evidence_id => { capability_stable_id:, level_ordinal:, status: }
+    @evidence = {}       # evidence_id => { links: Set[[capability_stable_id, level_ordinal], ...], status: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
@@ -567,19 +567,22 @@ class PersonDevelopment::Aggregate
 
   # ── Evidence ──
   #
-  # Evidence is qualitative context anchored to a (capability_stable_id,
-  # level_ordinal) coordinate — the same coordinate as the behavioural
-  # expectation it's evidence for. It does not feed scoring (see
-  # ADR-10 / scoring-model.md) and does not freeze during alignment:
-  # add / relink / withdraw remain available regardless of cycle status.
-  # The aggregate must be assigned to a framework, but does not need to
-  # be in a cycle.
+  # Evidence is qualitative context anchored to one or more
+  # (capability_stable_id, level_ordinal) coordinates — the same coordinate
+  # as the behavioural expectation it's evidence for. A single piece of
+  # evidence can demonstrate several capability × level expectations, so it
+  # carries a SET of links. It does not feed scoring (see ADR-10 /
+  # scoring-model.md) and does not freeze during alignment: add link /
+  # remove link / withdraw remain available regardless of cycle status. The
+  # aggregate must be assigned to a framework, but does not need to be in a
+  # cycle.
 
-  # Records a new piece of evidence.
+  # Records a new piece of evidence with at least one (capability, level)
+  # link, plus any number of additional links applied atomically.
   #
   # @param evidence_id [String] caller-supplied UUID v7 (caller owns idempotency)
-  # @param capability_stable_id [String] stable UUID of the capability
-  # @param level_ordinal [Integer] the level being evidenced
+  # @param capability_stable_id [String] stable UUID of the capability (first link)
+  # @param level_ordinal [Integer] the level being evidenced (first link)
   # @param source [String] "self" | "manager" | "peer"
   # @param evidence_type [String] one of EVIDENCE_TYPES
   # @param content [String] the body of the evidence (required)
@@ -587,10 +590,14 @@ class PersonDevelopment::Aggregate
   # @param custom_type_label [String, nil] free text, only when evidence_type == "other"
   # @param title [String, nil] optional one-line summary
   # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
+  # @param additional_links [Array<Hash>] extra links, each
+  #   { capability_stable_id:, level_ordinal: }, applied as EvidenceLinkAdded
+  #   in the same aggregate transaction. Duplicates (of the first link or
+  #   each other) are rejected.
   # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
   def record_evidence(evidence_id, capability_stable_id:, level_ordinal:, source:, evidence_type:,
                       content:, author_id:, custom_type_label: nil, title: nil,
-                      external_reference: nil)
+                      external_reference: nil, additional_links: [])
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
@@ -613,36 +620,75 @@ class PersonDevelopment::Aggregate
       external_reference: external_reference,
       author_id: author_id
     }))
+
+    Array(additional_links).each do |link|
+      add_evidence_link(evidence_id,
+        capability_stable_id: link[:capability_stable_id],
+        level_ordinal: link[:level_ordinal],
+        linked_by_id: author_id)
+    end
   end
 
-  # Moves existing evidence to a different (capability, level) coordinate.
+  # Links an existing evidence item to an additional (capability, level)
+  # coordinate. The item then surfaces in that cell too.
   #
-  # @param evidence_id [String] UUID of the evidence to move
-  # @param new_capability_stable_id [String] target capability
-  # @param new_level_ordinal [Integer] target level
-  # @param relinked_by_id [String] UUID of the Person making the change
-  # @param rationale [String, nil] optional explanation of the move
+  # @param evidence_id [String] UUID of the evidence to link
+  # @param capability_stable_id [String] target capability
+  # @param level_ordinal [Integer] target level
+  # @param linked_by_id [String] UUID of the Person adding the link
+  # @param rationale [String, nil] optional explanation of the link
   # @raise [CommandError] if not assigned, evidence not found, withdrawn,
-  #   or target coordinate is unchanged
-  def relink_evidence(evidence_id, new_capability_stable_id:, new_level_ordinal:,
-                      relinked_by_id:, rationale: nil)
+  #   or already linked to that coordinate
+  def add_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, linked_by_id:, rationale: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
     raise CommandError, "No evidence with id #{evidence_id}" unless state
-    raise CommandError, "Cannot relink withdrawn evidence" if state[:status] == "withdrawn"
-    if state[:capability_stable_id] == new_capability_stable_id &&
-       state[:level_ordinal] == new_level_ordinal
-      raise CommandError, "Evidence is already at that coordinate"
+    raise CommandError, "Cannot link withdrawn evidence" if state[:status] == "withdrawn"
+    if state[:links].include?([ capability_stable_id, level_ordinal ])
+      raise CommandError, "Evidence is already linked to that coordinate"
     end
 
-    apply(PersonDevelopment::Events::EvidenceRelinked.new(data: {
+    apply(PersonDevelopment::Events::EvidenceLinkAdded.new(data: {
       evidence_id: evidence_id,
-      previous_capability_stable_id: state[:capability_stable_id],
-      previous_level_ordinal: state[:level_ordinal],
-      new_capability_stable_id: new_capability_stable_id,
-      new_level_ordinal: new_level_ordinal,
-      relinked_by_id: relinked_by_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      linked_by_id: linked_by_id,
       rationale: rationale
+    }))
+  end
+
+  # Removes one of an evidence item's (capability, level) links. The item
+  # stops appearing in that cell but keeps its other links.
+  #
+  # An active evidence item must always retain at least one link —
+  # removing the last link is rejected (withdraw the item instead). This
+  # is a domain invariant; the UI also prevents the action.
+  #
+  # @param evidence_id [String] UUID of the evidence to unlink
+  # @param capability_stable_id [String] the link's capability
+  # @param level_ordinal [Integer] the link's level
+  # @param removed_by_id [String] UUID of the Person removing the link
+  # @param reason [String, nil] optional explanation
+  # @raise [CommandError] if not assigned, evidence not found, withdrawn,
+  #   not linked to that coordinate, or it is the last remaining link
+  def remove_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, removed_by_id:, reason: nil)
+    ensure_assigned!
+    state = @evidence[evidence_id]
+    raise CommandError, "No evidence with id #{evidence_id}" unless state
+    raise CommandError, "Cannot unlink withdrawn evidence" if state[:status] == "withdrawn"
+    unless state[:links].include?([ capability_stable_id, level_ordinal ])
+      raise CommandError, "Evidence is not linked to that coordinate"
+    end
+    if state[:links].size <= 1
+      raise CommandError, "Cannot remove the only link; withdraw the evidence instead"
+    end
+
+    apply(PersonDevelopment::Events::EvidenceLinkRemoved.new(data: {
+      evidence_id: evidence_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      removed_by_id: removed_by_id,
+      reason: reason
     }))
   end
 
@@ -994,18 +1040,35 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::EvidenceRecorded do |event|
     @evidence[event.data[:evidence_id]] = {
-      capability_stable_id: event.data[:capability_stable_id],
-      level_ordinal: event.data[:level_ordinal],
+      links: Set.new([ [ event.data[:capability_stable_id], event.data[:level_ordinal] ] ]),
       status: "active"
     }
   end
 
+  on PersonDevelopment::Events::EvidenceLinkAdded do |event|
+    state = @evidence[event.data[:evidence_id]]
+    next unless state
+
+    state[:links] << [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+  end
+
+  on PersonDevelopment::Events::EvidenceLinkRemoved do |event|
+    state = @evidence[event.data[:evidence_id]]
+    next unless state
+
+    state[:links].delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
+  end
+
+  # Historical event — no longer emitted (the user-facing "move" action was
+  # dropped in favour of add-link + remove-link). Retained so replay of
+  # streams that contain it reconstructs the link set correctly: a relink is
+  # "remove the previous link, add the new one".
   on PersonDevelopment::Events::EvidenceRelinked do |event|
     state = @evidence[event.data[:evidence_id]]
     next unless state
 
-    state[:capability_stable_id] = event.data[:new_capability_stable_id]
-    state[:level_ordinal] = event.data[:new_level_ordinal]
+    state[:links].delete([ event.data[:previous_capability_stable_id], event.data[:previous_level_ordinal] ])
+    state[:links] << [ event.data[:new_capability_stable_id], event.data[:new_level_ordinal] ]
   end
 
   on PersonDevelopment::Events::EvidenceWithdrawn do |event|

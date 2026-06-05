@@ -142,17 +142,28 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
-  context "relinked evidence" do
+  # `EvidenceRelinked` is no longer emitted (the user-facing "move" action
+  # was dropped in favour of add-link + remove-link), but historical streams
+  # still contain it and the activity feed must keep rendering those entries.
+  # Inject the event directly to exercise that path.
+  context "relinked evidence (historical event)" do
     setup do
+      @new_cap_stable = SecureRandom.uuid_v7
+      event = PersonDevelopment::Events::EvidenceRelinked.new(
+        data: {
+          evidence_id: @evidence_id,
+          previous_capability_stable_id: @cap_sid, previous_level_ordinal: 2,
+          new_capability_stable_id: @new_cap_stable, new_level_ordinal: 4,
+          relinked_by_id: @assessee.id, rationale: "Better fit at L4"
+        },
+        metadata: { tenant_id: @tenant.id, person_id: @assessee.id, framework_id: @framework_id }
+      )
       ActsAsTenant.with_tenant(@tenant) do
-        @new_cap_stable = SecureRandom.uuid_v7
-        PersonDevelopment::CommandHandler.new.relink_evidence(
-          @assessee.id, @framework_id, @evidence_id,
-          new_capability_stable_id: @new_cap_stable,
-          new_level_ordinal: 4,
-          relinked_by_id: @assessee.id,
-          rationale: "Better fit at L4"
-        )
+        stream = EventStreamNaming.person_development_stream(@assessee.id, @framework_id)
+        Rails.configuration.event_store.append(event, stream_name: stream)
+        # Apply to the projection so the EvidenceItem origin columns move,
+        # matching how the live subscriber would have handled it historically.
+        PersonDevelopment::Projections::EvidenceCollection.new.call(event)
       end
       @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
         alignment_started: true)

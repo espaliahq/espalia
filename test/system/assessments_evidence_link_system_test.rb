@@ -2,7 +2,10 @@
 
 require "application_system_test_case"
 
-class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
+# Evidence multi-linkage: the kebab "Link to another capability" action
+# attaches one piece of evidence to a second capability × level, and
+# "Remove from this cell" is greyed out while it has only one link.
+class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
 
   setup do
@@ -72,57 +75,47 @@ class AssessmentsEvidenceRelinkSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  context "kebab menu + relink" do
-    should "open the kebab, show Relink + Withdraw, and persist a relink" do
+  context "kebab menu + link" do
+    should "link evidence to a second capability and show the also-linked indicator" do
       # Evidence rendering is gated on cell focus (`data-focused="true"`
-      # on the expanded `<td>`), so deep-link to the cell — capability
-      # alone gives capability focus, which collapses the expanded row
-      # to a near-zero strip and keeps the evidence list hidden.
+      # on the expanded `<td>`), so deep-link to the cell.
       visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
-      wait_for_stimulus "evidence-relink-form"
+      wait_for_stimulus "evidence-link-form"
       assert_selector "#evidence-#{@evidence_id}", visible: true
-      # The kebab uses the `dropdown` Stimulus controller; wait for it to
-      # connect on this card before clicking.
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
-      # The kebab dropdown is fundamentally hostile to Capybara visibility
-      # checks on starved CI runners: it lives inside an opacity-0 hover
-      # wrapper, the menu starts with .hidden, and the open path goes
-      # through stimulus-use's useTransition (which awaits rAF). Rather
-      # than fight all three, verify the menuitems exist in the DOM
-      # (visible: :all) and dispatch the Relink click directly — that's
-      # what we actually care about: the click fires the relink modal.
-      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Relink", visible: :all
+      # The menu lives in an opacity-0 hover wrapper behind useTransition —
+      # assert the items exist in the DOM and drive the action directly.
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem']",
+                      text: "Link to another capability", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw", visible: :all
+      # With only one link, "Remove from this cell" is rendered disabled.
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem'][aria-disabled='true']",
+                      text: "Remove from this cell", visible: :all
 
-      # Click Relink directly — the menuitem button has the
-      # `evidence-relink-form#open` Stimulus action; the click bypasses
-      # the dropdown's open/close lifecycle entirely.
       page.execute_script(<<~JS)
         document.querySelector(
-          "#evidence-#{@evidence_id} [data-action*='evidence-relink-form#open']"
+          "#evidence-#{@evidence_id} [data-action*='evidence-link-form#open']"
         ).click();
       JS
-      assert_selector "#evidence-relink-modal", visible: true
-      assert_selector "#evidence-relink-modal", text: "Currently at Critical Thinking · L1"
+      assert_selector "#evidence-link-modal", visible: true
 
-      # Submit a relink to cap2.
+      # Submit a link to cap2.
       page.execute_script(<<~JS)
-        const f = document.querySelector("#evidence-relink-modal form");
-        f.querySelector("#evidence_relink_capability_field").value = "#{@cap2_stable}";
-        f.querySelector("#evidence_relink_level_field").value = "1";
-        f.querySelector("#evidence_relink_rationale_field").value = "Better fit";
+        const f = document.querySelector("#evidence-link-modal form");
+        f.querySelector("#evidence_link_capability_field").value = "#{@cap2_stable}";
+        f.querySelector("#evidence_link_level_field").value = "1";
+        f.querySelector("#evidence_link_rationale_field").value = "Also applies";
         f.requestSubmit();
       JS
 
-      # Wait for the post-redirect rendering. The card layout renders all
-      # categories inline so the redirect URL may not carry `capability=`
-      # as a query param. Use the flash notice as the sentinel instead.
-      assert_text "Evidence relinked."
+      assert_text "Also linked to 1 other place"
 
       ActsAsTenant.with_tenant(@tenant) do
-        item = EvidenceItem.find(@evidence_id)
-        assert_equal @cap2_stable, item.capability_stable_id
+        links = EvidenceLink.active.where(evidence_id: @evidence_id)
+          .pluck(:capability_stable_id, :level_ordinal)
+        assert_includes links, [ @cap1_stable, 1 ]
+        assert_includes links, [ @cap2_stable, 1 ]
       end
     end
   end

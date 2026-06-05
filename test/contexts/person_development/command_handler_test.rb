@@ -494,7 +494,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @author_id = @author.id
     end
 
-    should "record, relink, and withdraw evidence end-to-end" do
+    should "record, link, unlink, and withdraw evidence end-to-end" do
       evidence_id = SecureRandom.uuid_v7
       cap_sid = SecureRandom.uuid_v7
       new_cap_sid = SecureRandom.uuid_v7
@@ -509,16 +509,24 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal cap_sid, item.capability_stable_id
       assert_equal 3, item.level_ordinal
       assert_equal "self", item.source
-      assert_equal "project_outcome", item.evidence_type
-      assert_equal "Shipped X", item.content
+      # The first link is materialised on EvidenceRecorded.
+      assert_equal [ [ cap_sid, 3 ] ],
+        EvidenceLink.active.where(evidence_id: evidence_id).pluck(:capability_stable_id, :level_ordinal)
 
-      @handler.relink_evidence(@person_id, @framework_id, evidence_id,
-        new_capability_stable_id: new_cap_sid, new_level_ordinal: 4,
-        relinked_by_id: @author_id, rationale: "Better fit")
+      @handler.add_evidence_link(@person_id, @framework_id, evidence_id,
+        capability_stable_id: new_cap_sid, level_ordinal: 4,
+        linked_by_id: @author_id, rationale: "Also applies")
 
-      item.reload
-      assert_equal new_cap_sid, item.capability_stable_id
-      assert_equal 4, item.level_ordinal
+      assert_equal [ [ cap_sid, 3 ], [ new_cap_sid, 4 ] ],
+        EvidenceLink.active.where(evidence_id: evidence_id).order(:linked_at)
+          .pluck(:capability_stable_id, :level_ordinal)
+
+      @handler.remove_evidence_link(@person_id, @framework_id, evidence_id,
+        capability_stable_id: cap_sid, level_ordinal: 3,
+        removed_by_id: @author_id, reason: "Mislinked")
+
+      assert_equal [ [ new_cap_sid, 4 ] ],
+        EvidenceLink.active.where(evidence_id: evidence_id).pluck(:capability_stable_id, :level_ordinal)
 
       @handler.withdraw_evidence(@person_id, @framework_id, evidence_id,
         withdrawn_by_id: @author_id, reason: "Wrong context")
@@ -532,7 +540,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       events = Rails.configuration.event_store.read.stream(stream).to_a
       kinds = events.map(&:class)
       assert_includes kinds, PersonDevelopment::Events::EvidenceRecorded
-      assert_includes kinds, PersonDevelopment::Events::EvidenceRelinked
+      assert_includes kinds, PersonDevelopment::Events::EvidenceLinkAdded
+      assert_includes kinds, PersonDevelopment::Events::EvidenceLinkRemoved
       assert_includes kinds, PersonDevelopment::Events::EvidenceWithdrawn
     end
 

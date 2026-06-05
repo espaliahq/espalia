@@ -27,10 +27,11 @@ class EvidencePolicyTest < ActiveSupport::TestCase
       assert policy(@assignment).create?
     end
 
-    should "allow relink of own evidence" do
+    should "allow link management of own evidence" do
       ActsAsTenant.with_tenant(@tenant) do
         item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @assessee)
-        assert policy(item).relink?
+        assert policy(item).add_link?
+        assert policy(item).remove_link?
       end
     end
 
@@ -50,10 +51,10 @@ class EvidencePolicyTest < ActiveSupport::TestCase
       assert policy(@assignment).create?
     end
 
-    should "allow relinking even of evidence they didn't author" do
+    should "allow link management even of evidence they did not author" do
       ActsAsTenant.with_tenant(@tenant) do
         item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @peer)
-        assert policy(item).relink?
+        assert policy(item).add_link?
       end
     end
   end
@@ -69,10 +70,10 @@ class EvidencePolicyTest < ActiveSupport::TestCase
       assert policy(@assignment).create?
     end
 
-    should "allow relinking evidence on the assessee" do
+    should "allow link management of evidence on the assessee" do
       ActsAsTenant.with_tenant(@tenant) do
         item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
-        assert policy(item).relink?
+        assert policy(item).add_link?
       end
     end
   end
@@ -131,10 +132,10 @@ class EvidencePolicyTest < ActiveSupport::TestCase
       end
     end
 
-    should "deny relink of evidence they didn't author on someone outside their chain" do
+    should "deny link management of evidence they did not author on someone outside their chain" do
       ActsAsTenant.with_tenant(@tenant) do
         item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
-        assert_not policy(item).relink?
+        assert_not policy(item).add_link?
       end
     end
 
@@ -142,34 +143,6 @@ class EvidencePolicyTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
         assert_not policy(item).update?
-      end
-    end
-  end
-
-  context "as an active rating delegate (not in chain)" do
-    setup do
-      @ctx = ctx_for(@peer)
-      ActsAsTenant.with_tenant(@tenant) do
-        create(:manager_assessment_delegation, tenant: @tenant, person_id: @assessee.id,
-          framework_id: @framework.framework_id, delegate_person_id: @peer.id,
-          granted_by_id: @manager.id)
-      end
-    end
-
-    should "allow relinking evidence they didn't author (manager parity)" do
-      ActsAsTenant.with_tenant(@tenant) do
-        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
-          framework_id: @framework.framework_id, author: @manager)
-        assert policy(item).relink?
-      end
-    end
-
-    should "deny relink once the delegation has expired" do
-      ActsAsTenant.with_tenant(@tenant) do
-        ManagerAssessmentDelegation.where(delegate_person_id: @peer.id).update_all(expires_at: 1.day.ago)
-        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
-          framework_id: @framework.framework_id, author: @manager)
-        assert_not policy(item).relink?
       end
     end
   end
@@ -186,7 +159,8 @@ class EvidencePolicyTest < ActiveSupport::TestCase
 
     should "view, create, and withdraw any evidence" do
       ActsAsTenant.with_tenant(@tenant) do
-        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @assignment.framework_id, author: @manager)
         assert policy(@assignment).show?
         assert policy(@assignment).create?
         assert policy(item).withdraw?
@@ -199,6 +173,51 @@ class EvidencePolicyTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id, author: @manager)
         assert_not policy(item).update?
+      end
+    end
+  end
+
+  context "as an active manager-rating delegate (outside the chain)" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # @peer is not in the assessee's manager chain, but holds an active
+        # delegation to rate them on this framework.
+        create(:manager_assessment_delegation,
+          tenant: @tenant, person_id: @assessee.id,
+          framework_id: @assignment.framework_id,
+          delegate_person_id: @peer.id, granted_by_id: @manager.id, status: "active")
+        @ctx = ctx_for(@peer)
+      end
+    end
+
+    should "view the assessment and manage links like a manager" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @assignment.framework_id, author: @manager)
+        assert policy(@assignment).show?
+        assert policy(@assignment).index?
+        assert policy(item).add_link?
+        assert policy(item).remove_link?
+      end
+    end
+
+    should "still NOT withdraw or update evidence they didn't author" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @assignment.framework_id, author: @manager)
+        assert_not policy(item).withdraw?
+        assert_not policy(item).update?
+      end
+    end
+
+    should "deny link management once the delegation has expired" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ManagerAssessmentDelegation.where(delegate_person_id: @peer.id)
+          .update_all(expires_at: 1.day.ago)
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @assignment.framework_id, author: @manager)
+        assert_not policy(item).add_link?
+        assert_not policy(item).remove_link?
       end
     end
   end
