@@ -55,7 +55,8 @@ class AssessmentPolicyDelegationTest < ActiveSupport::TestCase
     end
 
     should "deny manager rating once the delegation is expired" do
-      ManagerAssessmentDelegation.update_all(expires_at: 1.day.ago)
+      ManagerAssessmentDelegation.where(delegate_person_id: @delegate.id)
+        .update_all(expires_at: 1.day.ago)
       assert_not policy(@delegate).create_manager_rating?
     end
   end

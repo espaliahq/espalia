@@ -229,6 +229,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
             command_handler: command_handler,
             result: result
           )
+          record_reporting_manager(person: person, framework: framework, command_handler: command_handler)
         end
       end
     end
@@ -309,10 +310,23 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       command_handler.change_person_level(person.id, framework.framework_id, level.level_id)
       result[:level_changed] += 1
     end
+  end
 
-    # Record the reporting manager as a first-class fact on the stream so the
-    # aggregate / policy can gate manager-rating authority. Idempotent — a
-    # no-op when unchanged or when the person has no manager.
+  # Records the reporting manager as a first-class fact on the stream so the
+  # aggregate / policy can gate manager-rating authority. Runs for every touched
+  # person that has a framework assignment — independent of whether Pass 5's
+  # mapping succeeded — so a re-managed person whose title later becomes unmapped
+  # still gets a fresh recording. Idempotent: a no-op when unchanged, when the
+  # person has no manager, or when they have no assignment yet.
+  #
+  # @param person [Person]
+  # @param framework [FrameworkState::Framework]
+  # @param command_handler [PersonDevelopment::CommandHandler]
+  def record_reporting_manager(person:, framework:, command_handler:)
+    return unless PersonFrameworkAssignment.exists?(
+      person_id: person.id, framework_id: framework.framework_id
+    )
+
     command_handler.record_reporting_manager(
       person.id, framework.framework_id, person.manager_id, source: "hris"
     )

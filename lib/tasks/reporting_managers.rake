@@ -20,9 +20,13 @@ namespace :events do
 
     tenants.find_each do |tenant|
       ActsAsTenant.with_tenant(tenant) do
+        assignments = PersonFrameworkAssignment.where(tenant_id: tenant.id)
+        # One query for all managers instead of one per assignment.
+        managers = Person.where(id: assignments.select(:person_id)).pluck(:id, :manager_id).to_h
+
         Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
-          PersonFrameworkAssignment.where(tenant_id: tenant.id).find_each do |assignment|
-            manager_id = Person.where(id: assignment.person_id).pick(:manager_id)
+          assignments.find_each do |assignment|
+            manager_id = managers[assignment.person_id]
             next if manager_id.nil?
 
             handler.record_reporting_manager(

@@ -26,9 +26,10 @@ class Assessments::DelegationsController < ApplicationController
       }
     )
     render_frame
-  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError,
-         ActiveRecord::RecordNotFound => e
-    render_frame(error: e.message)
+  rescue ActiveRecord::RecordNotFound => e
+    render_frame(error: e.message, status: :not_found)
+  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
+    render_frame(error: e.message, status: :unprocessable_content)
   end
 
   # DELETE /assessments/:assessment_id/delegations/:id
@@ -41,9 +42,10 @@ class Assessments::DelegationsController < ApplicationController
       params: { assignment_id: @assignment.id, delegate_person_id: delegation.delegate_person_id }
     )
     render_frame
-  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError,
-         ActiveRecord::RecordNotFound => e
-    render_frame(error: e.message)
+  rescue ActiveRecord::RecordNotFound => e
+    render_frame(error: e.message, status: :not_found)
+  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
+    render_frame(error: e.message, status: :unprocessable_content)
   end
 
   private
@@ -61,14 +63,15 @@ class Assessments::DelegationsController < ApplicationController
   end
 
   # Re-renders just the `delegations-list` Turbo Frame so grant/revoke update
-  # in place inside the open modal.
-  def render_frame(error: nil)
+  # in place inside the open modal. Turbo renders the frame on 4xx too, so the
+  # error message still surfaces while the status reflects the failure.
+  def render_frame(error: nil, status: :ok)
     render Views::Assessments::Delegations::Frame.new(
       assignment: @assignment,
       active_delegations: active_delegations.includes(:delegate).to_a,
       candidate_delegates: candidate_delegates,
       error: error
-    )
+    ), status: status
   end
 
   def active_delegations

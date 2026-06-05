@@ -159,7 +159,8 @@ class Assessments::ActivityFeedQuery
       # falls back to a generic label.
       actor_id = data[ACTOR_ID_KEYS[kind]] if ACTOR_ID_KEYS.key?(kind)
       data = data.merge(actor_name: actor_names[actor_id]) if actor_id
-      data = data.merge(via_delegation: true) if MANAGER_KINDS.include?(kind) && via_delegation?(actor_id)
+      # `via_delegation` is stamped on the event at write time (accurate at
+      # event time); historical events lack it → no badge.
       stable_id = data[:capability_stable_id]
       Entry.new(
         id: event.event_id,
@@ -420,32 +421,6 @@ class Assessments::ActivityFeedQuery
         category_id: nil
       )
     end
-  end
-
-  # Whether a manager rating attributed to `actor_id` was recorded by a delegate
-  # rather than the reporting manager. Derived from the authority read models so
-  # the feed can badge it without changing the `ManagerRated` event.
-  def via_delegation?(actor_id)
-    return false if actor_id.blank?
-    return false if actor_id == recorded_manager_id
-
-    delegate_person_ids.include?(actor_id)
-  end
-
-  def recorded_manager_id
-    return @recorded_manager_id if defined?(@recorded_manager_id)
-
-    @recorded_manager_id = RecordedReportingManager.manager_id_for(
-      @assignment.person_id, @assignment.framework_id
-    )
-  end
-
-  # Currently-active delegates for this assignment. Active-only (not all-time)
-  # so a former delegate who later rated as the real manager isn't mislabelled.
-  def delegate_person_ids
-    @delegate_person_ids ||= ManagerAssessmentDelegation
-      .active.for_assignment(@assignment)
-      .pluck(:delegate_person_id).to_set
   end
 
   def hide_authority_entry?(kind)

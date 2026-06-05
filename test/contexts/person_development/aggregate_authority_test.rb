@@ -77,6 +77,16 @@ class PersonDevelopment::AggregateAuthorityTest < ActiveSupport::TestCase
         @aggregate.delegate_manager_rating(@person_id, granted_by_id: SecureRandom.uuid_v7)
       end
     end
+
+    should "allow renewing an expired delegation (idempotency is expiry-aware)" do
+      @aggregate.delegate_manager_rating(@delegate_id, granted_by_id: SecureRandom.uuid_v7,
+        expires_at: "2000-01-01T00:00:00Z")
+      before = @aggregate.unpublished_events.to_a.size
+
+      @aggregate.delegate_manager_rating(@delegate_id, granted_by_id: SecureRandom.uuid_v7,
+        expires_at: "2999-01-01T00:00:00Z")
+      assert_equal before + 1, @aggregate.unpublished_events.to_a.size
+    end
   end
 
   context "#revoke_manager_rating_delegation" do
@@ -127,6 +137,42 @@ class PersonDevelopment::AggregateAuthorityTest < ActiveSupport::TestCase
       @aggregate.rate_as_manager("cap-1", level_ordinal: 1, frequency: "some",
         cycle_id: @cycle_id, rated_by_id: SecureRandom.uuid_v7)
       assert_kind_of PersonDevelopment::Events::ManagerRated, @aggregate.unpublished_events.to_a.last
+    end
+
+    should "deny an expired delegate (guard honours expiry, agreeing with the policy)" do
+      @aggregate.record_reporting_manager(@manager_id)
+      @aggregate.delegate_manager_rating(@delegate_id, granted_by_id: @manager_id,
+        expires_at: "2000-01-01T00:00:00Z")
+      assert_not @aggregate.send(:delegate_active?, @delegate_id)
+    end
+
+    should "stamp via_delegation true for a delegate's rating, false for the manager's" do
+      @aggregate.record_reporting_manager(@manager_id)
+      @aggregate.delegate_manager_rating(@delegate_id, granted_by_id: @manager_id)
+
+      @aggregate.rate_as_manager("cap-1", level_ordinal: 1, frequency: "some",
+        cycle_id: @cycle_id, rated_by_id: @delegate_id)
+      assert_equal true, @aggregate.unpublished_events.to_a.last.data[:via_delegation]
+
+      @aggregate.rate_as_manager("cap-2", level_ordinal: 1, frequency: "some",
+        cycle_id: @cycle_id, rated_by_id: @manager_id)
+      assert_equal false, @aggregate.unpublished_events.to_a.last.data[:via_delegation]
+    end
+  end
+
+  context "#clear_manager_rating authority guard" do
+    setup do
+      @aggregate.join_cycle(@cycle_id, 1)
+      @aggregate.record_reporting_manager(@manager_id)
+      @aggregate.rate_as_manager("cap-1", level_ordinal: 1, frequency: "some",
+        cycle_id: @cycle_id, rated_by_id: @manager_id)
+    end
+
+    should "let the recorded manager clear" do
+      @aggregate.clear_manager_rating("cap-1", level_ordinal: 1, cycle_id: @cycle_id,
+        rated_by_id: @manager_id)
+      assert_kind_of PersonDevelopment::Events::ManagerRatingCleared,
+        @aggregate.unpublished_events.to_a.last
     end
   end
 end

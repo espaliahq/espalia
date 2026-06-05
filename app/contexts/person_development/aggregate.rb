@@ -36,7 +36,7 @@ class PersonDevelopment::Aggregate
     @level_id = nil
     @assigned = false
     @manager_id = nil       # recorded reporting manager (authoritative for rating authority)
-    @active_delegates = Set.new # person ids granted manager-rating authority
+    @active_delegates = {}   # delegate person id => expires_at (nil = open-ended)
     @current_cycle_id = nil
     @alignment_started = false
     @alignment_completed = false
@@ -155,7 +155,9 @@ class PersonDevelopment::Aggregate
   def delegate_manager_rating(delegate_person_id, granted_by_id:, expires_at: nil, reason: nil)
     raise CommandError, "Delegate is required" if delegate_person_id.blank?
     raise CommandError, "Cannot delegate to the assessee" if delegate_person_id == @person_id
-    return if @active_delegates.include?(delegate_person_id)
+    # Idempotent only against a still-active grant — an expired delegation can be
+    # renewed (a fresh event with a new expires_at).
+    return if delegate_active?(delegate_person_id)
 
     apply(PersonDevelopment::Events::ManagerRatingDelegated.new(data: {
       delegate_person_id: delegate_person_id,
@@ -173,7 +175,7 @@ class PersonDevelopment::Aggregate
   # @raise [CommandError] if no active delegation exists for the delegate
   def revoke_manager_rating_delegation(delegate_person_id, revoked_by_id:)
     raise CommandError, "No active delegation for this person" unless
-      @active_delegates.include?(delegate_person_id)
+      @active_delegates.key?(delegate_person_id)
 
     apply(PersonDevelopment::Events::ManagerRatingDelegationRevoked.new(data: {
       delegate_person_id: delegate_person_id,
@@ -351,7 +353,8 @@ class PersonDevelopment::Aggregate
       comment: comment,
       source: source,
       seeded_from_cycle_id: seeded_from_cycle_id,
-      rated_by_id: rated_by_id
+      rated_by_id: rated_by_id,
+      via_delegation: rated_via_delegation?(rated_by_id)
     }))
   end
 
@@ -381,7 +384,8 @@ class PersonDevelopment::Aggregate
       cycle_id: cycle_id,
       comment: comment,
       rationale: rationale,
-      rated_by_id: rated_by_id
+      rated_by_id: rated_by_id,
+      via_delegation: rated_via_delegation?(rated_by_id)
     }))
   end
 
@@ -395,6 +399,7 @@ class PersonDevelopment::Aggregate
   def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
+    ensure_manager_authority!(rated_by_id, "human")
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
 
@@ -402,7 +407,8 @@ class PersonDevelopment::Aggregate
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       cycle_id: cycle_id,
-      rated_by_id: rated_by_id
+      rated_by_id: rated_by_id,
+      via_delegation: rated_via_delegation?(rated_by_id)
     }))
   end
 
@@ -840,13 +846,8 @@ class PersonDevelopment::Aggregate
   #
   # Rollout is two-stage: Stage 1 (current) logs divergence; Stage 2 will raise
   # {CommandError}. See docs/guidelines/event-sourcing.md and the feature plan.
-  #
-  # NOTE for Stage 2: `@active_delegates` tracks membership only, not expiry —
-  # the policy's `ManagerAssessmentDelegation.active` scope additionally excludes
-  # lapsed (`expires_at`) delegations. Before flipping this guard to raise,
-  # teach the aggregate about expiry (track expires_at per delegate and compare
-  # against the command's wall-clock time) so the hard guard and Pundit agree on
-  # expired delegations.
+  # Expiry is honoured here (via {#delegate_active?}), so the guard and the
+  # policy's `ManagerAssessmentDelegation.active` scope agree on lapsed grants.
   #
   # @param rated_by_id [String, nil]
   # @param source [String]
@@ -854,13 +855,39 @@ class PersonDevelopment::Aggregate
     return unless source == "human"
     return if @manager_id.nil?
     return if rated_by_id == @manager_id
-    return if @active_delegates.include?(rated_by_id)
+    return if delegate_active?(rated_by_id)
 
     Rails.logger.warn(
       "[manager-authority] PersonDev-#{@person_id}-#{@framework_id}: rated_by_id=#{rated_by_id.inspect} " \
       "is neither the recorded manager (#{@manager_id.inspect}) nor an active delegate " \
-      "(#{@active_delegates.to_a.inspect}). Allowed under Stage 1 soft guard."
+      "(#{@active_delegates.keys.inspect}). Allowed under Stage 1 soft guard."
     )
+  end
+
+  # Whether a manager rating attributed to `rated_by_id` is being recorded via an
+  # active delegation rather than by the recorded reporting manager. Stamped on
+  # the rating event so the activity feed badges it accurately at event time
+  # (rather than reconstructing from current read-model state).
+  #
+  # @return [Boolean]
+  def rated_via_delegation?(rated_by_id)
+    rated_by_id.present? && rated_by_id != @manager_id && delegate_active?(rated_by_id)
+  end
+
+  # Whether the person currently holds a non-expired delegation. Wall-clock
+  # comparison is safe here because the guard runs at command time, not replay.
+  #
+  # @return [Boolean]
+  def delegate_active?(delegate_person_id)
+    return false unless @active_delegates.key?(delegate_person_id)
+
+    expires_at = @active_delegates[delegate_person_id]
+    return true if expires_at.blank?
+
+    parsed = expires_at.is_a?(Time) || expires_at.is_a?(ActiveSupport::TimeWithZone) ? expires_at : Time.zone.parse(expires_at.to_s)
+    parsed.nil? || parsed > Time.current
+  rescue ArgumentError
+    true # unparseable expiry → treat as open-ended rather than locking out
   end
 
   # ── Event handlers ──
@@ -870,7 +897,7 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::ManagerRatingDelegated do |event|
-    @active_delegates.add(event.data[:delegate_person_id])
+    @active_delegates[event.data[:delegate_person_id]] = event.data[:expires_at]
   end
 
   on PersonDevelopment::Events::ManagerRatingDelegationRevoked do |event|
