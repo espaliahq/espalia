@@ -164,8 +164,9 @@ class Views::Assessments::Evidence::Card < Views::Base
     end
   end
 
-  # Hover-revealed kebab menu that hosts both Relink and Withdraw, plus
-  # any future actions (copy link, edit). Uses the shared `dropdown`
+  # Hover-revealed kebab menu that hosts Edit, link management
+  # (Link to another capability / Remove from this cell), and Withdraw.
+  # Uses the shared `dropdown`
   # Stimulus controller — same one the user menu and framework explorer
   # use — so behaviour (click-outside close, transition, aria) is
   # consistent across the app.

@@ -114,8 +114,7 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       ActsAsTenant.with_tenant(@tenant) do
         links = EvidenceLink.active.where(evidence_id: @evidence_id)
           .pluck(:capability_stable_id, :level_ordinal)
-        assert_includes links, [ @cap1_stable, 1 ]
-        assert_includes links, [ @cap2_stable, 1 ]
+        assert_equal [ [ @cap1_stable, 1 ], [ @cap2_stable, 1 ] ].sort, links.sort
       end
     end
   end

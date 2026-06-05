@@ -53,8 +53,9 @@ class EvidencePolicy < ApplicationPolicy
   # Editing the user-correctable content of an evidence item is strictly
   # author-only — narrower than `withdraw?`. Admins do NOT get an override
   # because editing reframes the author's words, which is a domain judgement
-  # admins lack (matches `relink?`'s reasoning). Withdrawn items are not
-  # editable; relinks remain available for moving evidence around.
+  # admins lack (matches the link-management reasoning). Withdrawn items are
+  # not editable; add/remove link remain available for managing where
+  # evidence appears.
   #
   # @return [Boolean]
   def update?

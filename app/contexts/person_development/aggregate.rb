@@ -695,7 +695,8 @@ class PersonDevelopment::Aggregate
   # Edits the user-correctable fields of an existing evidence item.
   #
   # Mutable: `title`, `content`, `evidence_type` (+ `custom_type_label`),
-  # `external_reference`. Capability/level are owned by {#relink_evidence};
+  # `external_reference`. The capability/level links are owned by
+  # {#add_evidence_link} / {#remove_evidence_link};
   # `source`/`author_id`/`recorded_at` are identity invariants and never
   # change. The full post-edit value of every mutable field is recorded
   # on the event (snapshot, not a delta).
