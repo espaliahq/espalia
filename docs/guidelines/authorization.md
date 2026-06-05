@@ -98,9 +98,32 @@ Access to person development streams is based on the person/manager relationship
 | Action | Who |
 |--------|-----|
 | Self-rating | Person themselves (`record.person_id == person.id`) |
-| Manager rating | Person's direct manager (`assessee.manager_id == person.id`) |
-| View assessment | Person OR their manager |
+| Manager rating | Recorded reporting manager **OR an active rating delegate** |
+| View assessment | Person, their manager, **or an active delegate** (read-only alignment) |
+| Start / complete / record alignment | Reporting manager only — never a delegate |
+| Grant / revoke a rating delegation | Any ancestor manager (`Person#managed_by?`) or a tenant admin |
 | Growth plan | Person proposes, manager agrees |
+
+**Recorded-authoritative manager.** `manages_assessee?` reads the reporting
+manager captured on the PersonDevelopment stream
+(`RecordedReportingManager.manager_id_for(person, framework)`) and falls back to
+the live `Person.manager_id` only when nothing is recorded yet (manual /
+non-HRIS tenant, or pre-backfill). This keeps Pundit and the aggregate's
+manager-rating invariant deriving authority from one source so they can't
+diverge. Deliberate trade-off: in an HRIS tenant a freshly promoted manager
+can't rate until the next sync records them.
+
+**Delegated manager rating.** A reporting manager whose report is seconded into
+another team can delegate the manager *rating* (not alignment) to someone closer
+to the work. `create_manager_rating?` is `(manages_assessee? ||
+active_rating_delegate?) && individual_ratings_editable?`;
+`active_rating_delegate?` consults `ManagerAssessmentDelegation.active` (status +
+non-expired). Alignment predicates stay `manages_assessee?`-only, so a delegate
+rates but never starts, completes, or records alignment. Grant/revoke
+(`delegate_manager_rating?` / `revoke_manager_rating_delegation?`) reuse the
+manager-chain (`Person#managed_by?`) plus `tenant_admin?` — wider than the direct
+manager because a skip-level or HR may set one up. Delegate writes are still
+fully attributed (`rated_by_id`), and the rating event carries `via_delegation`.
 
 ## Policy Conventions
 
