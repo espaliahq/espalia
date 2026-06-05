@@ -8,6 +8,8 @@
 # separate entity.
 #
 class AssessmentsController < ApplicationController
+  include AssessmentVisibility
+
   before_action :require_person
   before_action :set_assignment, only: [ :show, :matrix, :scoring ]
 
@@ -199,33 +201,9 @@ class AssessmentsController < ApplicationController
     @assessee_person ||= Person.find_by(id: @assignment.person_id)
   end
 
-  # Whether the current viewer can see every active piece of evidence on the
-  # assessment, vs only their own peer-source contributions. Mirrors the
-  # gate inside {EvidencePolicy} — viewer is the assessee, anywhere in
-  # the assessee's manager chain, or a tenant admin.
-  def viewer_sees_all_evidence?
-    return false unless current_person
-    return true if current_user&.global_admin? || current_tenant_user&.admin?
-    return true if @assignment.person_id == current_person.id
-    return true if active_rating_delegate?
-
-    assessee_person&.managed_by?(current_person) || false
-  end
-
-  # Whether the current viewer holds an active manager-rating delegation for
-  # this assessment. A delegate is treated like a manager for visibility — they
-  # record manager ratings, so the activity feed and evidence must be visible to
-  # them. Memoised; cheap single lookup per request.
-  def active_rating_delegate?
-    return @active_rating_delegate if defined?(@active_rating_delegate)
-    return (@active_rating_delegate = false) unless current_person
-
-    @active_rating_delegate = ManagerAssessmentDelegation.active_delegate?(
-      person_id: @assignment.person_id,
-      framework_id: @assignment.framework_id,
-      delegate_person_id: current_person.id
-    )
-  end
+  # `viewer_sees_all_evidence?` + `active_rating_delegate?` are provided by the
+  # shared {AssessmentVisibility} concern so every assessment controller (page,
+  # activity frame, evidence frame) applies the same rule.
 
   # Whether the current viewer is permitted to record evidence on this
   # assessment. V1 allows any tenant member with a Person to record peer

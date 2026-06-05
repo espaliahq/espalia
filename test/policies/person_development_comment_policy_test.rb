@@ -93,6 +93,31 @@ class PersonDevelopmentCommentPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "as an active rating delegate (not in the chain)" do
+    setup do
+      @ctx = ctx_for(@peer)
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @framework.framework_id, delegate_person_id: @peer.id,
+          granted_by_id: @manager.id)
+      end
+    end
+
+    should "allow viewing and commenting on the assessment" do
+      assert policy(@assignment).index?
+      assert policy(@assignment).show?
+      assert policy(@assignment).create?
+    end
+
+    should "deny once the delegation has expired" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ManagerAssessmentDelegation.where(delegate_person_id: @peer.id)
+          .update_all(expires_at: 1.day.ago)
+      end
+      assert_not policy(@assignment).create?
+    end
+  end
+
   context "as a tenant admin" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

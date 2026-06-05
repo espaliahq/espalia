@@ -58,13 +58,26 @@ class PersonDevelopmentCommentPolicy < ApplicationPolicy
   private
 
   # The record may be a {PersonFrameworkAssignment} (collection-level) or
-  # a {PersonDevelopmentComment} (member-level). Both expose `person_id`.
+  # a {PersonDevelopmentComment} (member-level). Both expose `person_id` and
+  # `framework_id`.
   def view_assessment?
     return false unless person.present?
     return true if tenant_admin?
     return true if record.person_id == person.id
+    return true if active_rating_delegate?
 
     assessee = Person.find_by(id: record.person_id)
     assessee&.managed_by?(person) || false
+  end
+
+  # An active manager-rating delegate participates in the assessment like a
+  # manager, so they see and post comments. Mirrors
+  # {AssessmentPolicy#active_rating_delegate?}.
+  def active_rating_delegate?
+    ManagerAssessmentDelegation.active_delegate?(
+      person_id: record.person_id,
+      framework_id: record.framework_id,
+      delegate_person_id: person.id
+    )
   end
 end
