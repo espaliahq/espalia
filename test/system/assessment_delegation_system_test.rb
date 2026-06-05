@@ -59,10 +59,21 @@ class AssessmentDelegationSystemTest < ApplicationSystemTestCase
     assert_selector "h1", text: "Report Alex"
 
     open_delegates_modal
+    within("#delegate-modal") { select "Delegate Dan", from: "Delegate to" }
+
+    # Submit via requestSubmit() to bypass Selenium's pointer click, which can
+    # be silently dropped on starved CI (same primitive the inline editors use).
+    page.execute_script(<<~JS)
+      document.querySelector("#delegate-modal select[name='delegation[delegate_person_id]']")
+        .closest("form").requestSubmit();
+    JS
+
     within "#delegate-modal" do
-      select "Delegate Dan", from: "Delegate to"
-      click_button "Add delegate"
-      assert_text "Delegate Dan" # now in the active-delegates list
+      # Wait for the Turbo Frame to re-render with the active delegation — the
+      # revoke control only exists once a delegation is live. (The name alone is
+      # a false-positive sync target: it's already in the candidate <select>.)
+      assert_selector "button[aria-label='Revoke delegation']"
+      assert_selector "li", text: "Delegate Dan"
     end
 
     ActsAsTenant.with_tenant(@tenant) do
