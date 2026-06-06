@@ -2,9 +2,10 @@
 
 # Expansion panel below the level strip when a level chip is focused.
 #
-# Shows expectation text, interactive FrequencySelector (or read-only bar),
-# secondary perspective bars, illustrations, evidence, and comments for
-# the focused capability × level cell.
+# Shows expectation text, the inline FrequencyPill (interactive, or a
+# static pill when frozen/locked), divergent SecondaryRatingLines,
+# illustrations, evidence, and comments for the focused capability ×
+# level cell.
 #
 class Views::Assessments::CapabilityCardExpansion < Views::Base
   # @param cell_data [Hash] from MatrixDataBuilder

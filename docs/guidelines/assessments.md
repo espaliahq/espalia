@@ -248,7 +248,7 @@ The previous design rendered this as a percentage AND hid the badge entirely whe
 
 ### Level strip — `LevelStrip` + `LevelChip`
 
-A horizontal `flex` of `LevelChip`s, one per merged level ordinal. Each chip is colored by frequency × level position (same color rules the old matrix cells used). The person's level chip carries the "YOU" badge and a darker outline when focused. Click dispatches `click->matrix#focusChip`, which sets `?capability=` + `?level_ordinal=`, reloads the matrix frame, and smooth-scrolls the card under both sticky headers (unified + category section).
+A horizontal `flex` of `LevelChip`s, one per merged level ordinal. Each chip is colored by frequency × level position (same color rules the old matrix cells used). The assessee's current-level chip carries a badge — **"YOU" in self context, "CURRENT" in manager / alignment context** (the level belongs to the report, so "YOU" would mislead the manager) — and a darker outline when focused. Click dispatches `click->matrix#focusChip`, which sets `?capability=` + `?level_ordinal=`, reloads the matrix frame, and smooth-scrolls the card under both sticky headers (unified + category section).
 
 The chip strip wraps `overflow-x-auto -mx-4 px-4` so it scrolls horizontally on narrow viewports without breaking the card's padded edges.
 
@@ -294,7 +294,7 @@ The assessee must not see the manager's rating until alignment formally begins. 
 |---|---|
 | `MatrixDataBuilder` | Which scoring perspective is primary; whether manager/aligned data is scrubbed |
 | `HeroSummary` | Which `*_scoring` hash to render (`self_scoring` vs `manager_scoring` vs `aligned_scoring`); subject pronoun ("You're" vs "Alex is") |
-| `CapabilityCard` / `LevelChip` | Which `*_frequency` colors the chip; whether divergence dots show |
+| `CapabilityCard` / `LevelChip` | Which `*_frequency` colors the chip; whether the chip splits on disagreement |
 | `CapabilityCardExpansion` | Which perspective the `FrequencyPill` rates; which `SecondaryRatingLine`s render |
 | `FrequencyPill#form_action` | POST endpoint — `/ratings` (self) vs `/manager_ratings` (manager) vs `/alignment_ratings` (alignment) |
 
@@ -347,16 +347,18 @@ current state).
 
 ## Frequency rating vocabulary
 
-The four rating values share a single palette across every surface — inline pill, level chip, divergent-secondary dot — via `Views::Assessments::FrequencyPalette`. The palette walks a red → orange → amber → green ramp so the four states read as a clear gradient (worse → better) without relying on text. Data values (enum, events, DB, test fixtures) **never** change.
+The four rating values share a single palette across every surface — inline pill, level chip, divergent-secondary dot — via `Views::Assessments::FrequencyPalette`. The palette uses a red → yellow → green → blue scale: four **maximally-distinct hues** so adjacent states never blur. This replaced the old red → orange → amber → green ramp, whose middle two (orange "Some" vs amber "Most") were near-indistinguishable on small chips — and unusable in a diagonal split (see *Level chip coloring*). Data values (enum, events, DB, test fixtures) **never** change.
 
 | Enum | Sentence phrase | Compact label | Hue |
 |------|----|----|----|
 | `none` | Never | None | red |
-| `some` | Some of the time | Some | orange |
-| `occasional` | Most of the time | Most | amber |
-| `consistent` | Consistently | Consistently | green |
+| `some` | Some of the time | Some | yellow |
+| `occasional` | Most of the time | Most | green |
+| `consistent` | Consistently | Consistently | blue |
 
-The phrase reads inside the inline pill ("…explains reasoning. **Most of the time**"). The compact label is for tight spaces. The hue backs both pill and level chip so the strip and the inline pill agree pixel-for-pixel.
+Ordering is carried by **chip position** (E1…E8 left→right) and the **text label**, NOT by a single-axis colour gradient — so blue marking the top "Consistently" tier reads as a distinct band rather than "even greener than green". The phrase reads inside the inline pill ("…explains reasoning. **Most of the time**"); the compact label is for tight spaces. The hue backs both pill and level chip so the strip and the inline pill agree pixel-for-pixel.
+
+**Blue is only safe as a rating colour because the keyboard-focus ring and selected-state were moved off blue onto the brand teal (`--color-primary` = `#32c8c8`).** The chip and pill focus rings are `focus-visible:ring-primary`; without that move a blue "Consistently" chip would swallow its own focus ring, and blue already meant "selected" / `:performing`. The remaining blue use to watch when extending this: the hero's `:performing` performance-state accent — a separate surface (hero band, not chips), left as-is.
 
 ## Frequency pill (primary rating surface)
 
@@ -392,16 +394,30 @@ The wrapper carries a stable id `secondaries-<stable>-<ordinal>` so rating contr
 
 ## Level chip coloring
 
+The chip fill is the **rating language**; small corner glyphs (below) are a separate **content language**. The two never share a visual primitive.
+
 | Level position | Frequency | Background |
 |---|---|---|
-| Below person_level | Unrated | Muted green (assumed consistent) |
-| Below person_level | rated | Solid hue from the palette (red / orange / amber / green) |
+| Below person_level | Unrated | Light blue (assumed consistent — "Consistently" is blue, so the faint wash reads as assumed-consistent) |
+| Below person_level | rated | Solid hue from the palette (red / yellow / green / blue) |
 | At/above person_level | Unrated | Neutral gray |
 | At/above person_level | rated | Solid hue from the palette — same fill regardless of level position |
 
-**Rated chip fills are the exact `-500` (light) / `-400` (dark) shades the `FrequencyPalette` dots use everywhere else.** Same hue at the same saturation across pill / chip / divergence dot — the four ratings read as four distinct, equally-intense colours rather than four muddy near-identical tints. Text on rated chips uses `text-{hue}-950` in both modes for ~7–10:1 contrast against the saturated fill (WCAG AA on small text needs 4.5:1; lighter text tokens fail it on `amber-500` / `green-500`).
+**Rated chip fills are the exact `-500` (light) / `-400` (dark) shades the `FrequencyPalette` dots use everywhere else.** Same hue at the same saturation across pill / chip / divergence — the four ratings read as four distinct, equally-intense colours rather than four muddy near-identical tints. Text on rated chips uses `text-{hue}-950` in both modes for ~7–10:1 contrast against the saturated fill (WCAG AA on small text needs 4.5:1; lighter text tokens fail it on `yellow-500` / `green-500`).
 
-A small **divergence dot** appears on the chip when the primary perspective disagrees with any secondary the viewer can see. Full per-perspective values live in the expansion panel's `SecondaryRatingLine`s.
+### Misalignment → diagonal split (replaces the divergence dot)
+
+When two perspectives the viewer can see **disagree**, the chip paints a **diagonal split** instead of a solid fill: a `/` seam from bottom-left to top-right, with the **primary perspective in the top-left triangle** (the customary slot) and the diverging secondary bottom-right. Per context: manager view → **manager top-left, self bottom-right**; alignment (while unresolved) → **self top-left, manager bottom-right** (reading order, since the primary `aligned` value isn't set yet). Implemented as a base fill (the bottom-right colour) plus an absolute clip-path overlay (the top-left colour); the centered level code gets an opaque backing so it stays legible across the seam. A `data-split="true"` hook on the overlay supports testing.
+
+- **Why a split, not a coloured dot:** the *seam itself* is a shape signal — a split chip reads as "contested" regardless of the two colours, so it survives colour-blindness and the colours-too-close trap. It also shows *both values* in place.
+- **Partial ratings split too:** when one perspective has rated and the other hasn't, the chip splits the rated colour against **grey** for the missing slice — so "I rated, they haven't" doesn't masquerade as a mutual solid fill. Only when both agree (or a single-perspective context) does the chip render solid.
+- **Per context:** `:self` never splits (only one perspective visible). `:manager` splits on self-vs-manager. `:alignment` splits on self-vs-manager **until a recorded aligned value resolves the cell to a solid** — so a contested cell visibly snaps solid as you record agreement (this also fixed the old "both rated but the chip is grey" bug, since the aligned value was empty pre-resolution).
+
+### Evidence / comment → corner glyphs (replaces the slate/violet dots)
+
+Content indicators live in the chip's **bottom-right corner as glyphs** — a **paperclip** (evidence) and a **speech bubble** (comment), on one muted backing pill (`text-gray-600`, `data-glyph="evidence"` / `data-glyph="comment"`). They stay on the chips (not the expansion) so "which levels have backing" is visible *before* drilling in. Glyphs not dots: a shape says what it is without a colour legend and can't be confused with the frequency-colour fill.
+
+**The green rated-check ✓ was retired** — it read as "aligned" (it only ever meant "rated"), and the fill already encodes rated-vs-unrated. Full per-perspective values live in the expansion panel's `SecondaryRatingLine`s.
 
 ## Multi-perspective scoring
 
@@ -651,7 +667,7 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/views/assessments/assessment_matrix.rb` | Container that renders each `CategorySection` |
 | `app/views/assessments/capability_card.rb` | One card per capability — eyebrow, name, signed delta, level strip, expansion panel |
 | `app/views/assessments/level_strip.rb` | Horizontal flex of `LevelChip`s, scrolls horizontally on narrow |
-| `app/views/assessments/level_chip.rb` | One chip per level — color by frequency × level position, YOU badge, divergence dot |
+| `app/views/assessments/level_chip.rb` | One chip per level — solid fill by frequency, diagonal split on disagreement / partial rating (colour vs grey), evidence/comment glyphs, YOU/CURRENT current-level badge |
 | `app/views/assessments/capability_card_expansion.rb` | Focused-level panel — expectation sentence + inline FrequencyPill, divergent SecondaryRatingLines, illustrations, evidence, comments |
 | `app/views/assessments/frequency_palette.rb` | Shared 4-state colour palette + sentence phrases for pill / chip / dot |
 | `app/views/assessments/frequency_pill.rb` | Inline rating pill (interactive popover or static coloured span) |

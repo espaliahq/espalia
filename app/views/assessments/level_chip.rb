@@ -2,9 +2,24 @@
 
 # Single level chip in the horizontal assessment level strip.
 #
-# Colored by frequency × level position, carrying the Turbo Stream
-# target ID `cell-<stable_id>-<ordinal>` so rating controller
-# responses can replace individual chips in-place.
+# Carries the Turbo Stream target ID `cell-<stable_id>-<ordinal>` so
+# rating controller responses can replace individual chips in-place.
+#
+# The chip fill is the rating language; small corner glyphs are the
+# content language. The two never share a visual primitive:
+#
+# - **Fill** — solid colour keyed by the {FrequencyPalette} when a
+#   single perspective applies; a diagonal **split** (self top-left,
+#   manager bottom-right) when two visible perspectives disagree; a
+#   faint tint / grey when unrated. The diagonal seam *is* the
+#   misalignment signal — a split chip reads as "contested" regardless
+#   of the two colours, so it survives colour-blindness and the
+#   colours-too-close trap. (Replaces the former amber divergence dot.)
+# - **Glyphs** — a paperclip (evidence) and speech bubble (comment) in
+#   the bottom-right corner, so situational awareness ("which levels
+#   have backing") is visible before drilling in. (Replaces the former
+#   slate/violet activity dots and the green rated-check, which read as
+#   "aligned".)
 #
 class Views::Assessments::LevelChip < Views::Base
   # @param cell_data [Hash, nil] from MatrixDataBuilder
@@ -37,11 +52,10 @@ class Views::Assessments::LevelChip < Views::Base
         capability_stable_id: @capability_stable_id
       }
     ) do
-      span(class: "text-xs font-medium relative z-[1]") { @level_code }
-      you_badge if at_person_level?
-      rated_check if rated?
-      divergence_dot if divergent?
-      activity_dots if has_activity?
+      split_overlay if split?
+      level_code_label
+      current_level_badge if at_person_level?
+      activity_glyphs if has_activity?
     end
   end
 
@@ -52,14 +66,14 @@ class Views::Assessments::LevelChip < Views::Base
     # focus outline on Windows). Don't add `bg-transparent` / `text-
     # inherit` here — they're same-specificity utilities that win the
     # cascade against the chip_bg colours we actually want to paint
-    # (the class-string still resolves to e.g. `bg-green-500` but
+    # (the class-string still resolves to e.g. `bg-blue-500` but
     # rgba(0,0,0,0) paints). Tailwind preflight already neutralises
     # the UA button background; the chip_bg utility paints on top.
     base = "appearance-none " \
            "relative flex flex-col items-center justify-center " \
            "h-12 flex-1 min-w-[60px] rounded-lg cursor-pointer " \
            "transition-all border-2 " \
-           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 "
+           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 "
     if @focused
       base + "#{chip_bg} #{chip_text} #{focus_border} shadow-sm"
     else
@@ -71,11 +85,12 @@ class Views::Assessments::LevelChip < Views::Base
   # regardless of the surrounding card's inherited colour. Without this
   # the inherited text colour washes out against the tinted chip in
   # dark mode (Hard-Won Lesson: the chip fill is the only signal the
-  # eye gets — the code needs to stay legible on top of it).
+  # eye gets — the code needs to stay legible on top of it). Split
+  # chips override this with an opaque backing on the code itself.
   def chip_text
     freq = primary_frequency
     if freq.nil?
-      @ordinal < @person_level ? "text-green-900 dark:text-green-100" : "text-gray-700 dark:text-gray-200"
+      @ordinal < @person_level ? "text-blue-900 dark:text-blue-100" : "text-gray-700 dark:text-gray-200"
     else
       config = Views::Assessments::FrequencyPalette.config_for(freq)
       config ? config[:chip_txt] : "text-gray-700 dark:text-gray-200"
@@ -90,42 +105,140 @@ class Views::Assessments::LevelChip < Views::Base
   # doesn't read as one flat band of colour. Rated chips already carry
   # a solid fill so a transparent border there reads as edge enough.
   def idle_border
-    return "border-transparent" if rated?
+    return "border-transparent" if rated? || split?
 
     "border-gray-200 dark:border-gray-700"
   end
 
   # Screen-reader label spelling out which capability + level the chip
-  # rates, plus the current frequency value (or "unrated"). Without this
-  # an SR user just hears "Button — E3" with no context.
+  # rates, plus the current frequency value (or "unrated") and whether
+  # the visible perspectives disagree.
   def aria_label
-    freq = primary_frequency
-    base = at_person_level? ? "Focus #{@level_code} (your level)" : "Focus #{@level_code}"
-    rated = freq.present? ? humanise_frequency(freq) : "unrated"
-    parts = [ "#{base}, rated #{rated}" ]
+    level_note = @context == :self ? "your level" : "current level"
+    base = at_person_level? ? "Focus #{@level_code} (#{level_note})" : "Focus #{@level_code}"
+    parts = [ "#{base}, rated #{rated_description}" ]
+    parts << "self and manager differ" if split?
     parts << activity_title if has_activity?
     parts.join(", ")
+  end
+
+  def rated_description
+    freq = primary_frequency
+    freq.present? ? humanise_frequency(freq) : "unrated"
   end
 
   def humanise_frequency(freq)
     Views::Assessments::FrequencyPalette.phrase_for(freq).downcase
   end
 
-  # Chip background:
-  # - unrated below person's level → mint green (assumed-consistent,
-  #   since the person is operating at a higher level)
+  # Base chip background:
+  # - solid → palette colour for the resolved frequency
+  # - split → the manager (bottom-right) colour; {#split_overlay} paints
+  #   the self triangle on top
+  # - unrated below person's level → light blue (assumed-consistent,
+  #   since the person operates at a higher level). Blue because
+  #   "Consistently" is blue in the {FrequencyPalette}; this faint wash
+  #   reads as "assumed consistent" vs the solid blue-500 of a cell
+  #   actually rated consistent.
   # - unrated at/above person's level → neutral grey
-  # - rated cells → solid colour keyed by frequency via the shared
-  #   {FrequencyPalette}, so the strip and the inline pill agree
-  #   pixel-for-pixel.
   def chip_bg
-    freq = primary_frequency
-    if freq.nil?
-      @ordinal < @person_level ? "bg-green-100/60 dark:bg-green-900/40" : "bg-gray-100 dark:bg-gray-700"
+    case fill_state.first
+    when :solid
+      palette_bg(fill_state[1])
+    when :split
+      palette_bg(fill_state[2])
     else
-      config = Views::Assessments::FrequencyPalette.config_for(freq)
-      config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
+      @ordinal < @person_level ? "bg-blue-100/60 dark:bg-blue-900/40" : "bg-gray-100 dark:bg-gray-700"
     end
+  end
+
+  def palette_bg(frequency)
+    config = Views::Assessments::FrequencyPalette.config_for(frequency)
+    config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
+  end
+
+  # The primary perspective as the top-left triangle, painted over the
+  # base (secondary) fill via a clip-path. The "/" seam runs bottom-left
+  # → top-right; by convention the *primary* perspective takes the
+  # top-left slice (manager view: manager top-left, self bottom-right;
+  # alignment: self top-left, manager bottom-right — see {#compute_fill_state}).
+  def split_overlay
+    span(
+      class: "absolute inset-0 rounded-md #{palette_bg(fill_state[1])}",
+      style: "clip-path: polygon(0 0, 100% 0, 0 100%);",
+      data: { split: "true" },
+      aria: { hidden: "true" }
+    ) { }
+  end
+
+  # Level code. When the chip is split the code sits across the seam, so
+  # it gets an opaque backing to stay legible over whichever two colours
+  # meet underneath; otherwise the chip's own text colour suffices.
+  def level_code_label
+    if split?
+      span(class: "relative z-[1] px-1 rounded text-[11px] font-semibold " \
+                  "bg-white/85 dark:bg-gray-900/85 text-gray-900 dark:text-gray-50") { @level_code }
+    else
+      span(class: "text-xs font-medium relative z-[1]") { @level_code }
+    end
+  end
+
+  # The chip's fill state, derived once:
+  #   [:unrated]
+  #   [:solid, frequency]
+  #   [:split, top_left_frequency, bottom_right_frequency]
+  #
+  # The top-left slice is always the context's **primary** perspective
+  # (the customary place for it), the bottom-right the diverging
+  # secondary:
+  # - :manager   → primary is the manager → manager top-left, self bottom-right.
+  # - :alignment → primary is the aligned value; a recorded aligned
+  #   resolves the cell to :solid (no split). While unresolved there is
+  #   no primary among the two, so the perspectives being reconciled show
+  #   in reading order — self top-left, manager bottom-right — matching
+  #   the SecondaryRatingLine order.
+  # A split is only produced in :manager / :alignment context, where the
+  # viewer can see a second perspective. A split slice whose frequency is
+  # nil (one side rated, the other not) paints grey.
+  def fill_state
+    @fill_state ||= compute_fill_state
+  end
+
+  def compute_fill_state
+    return [ :unrated ] unless @cell_data
+
+    case @context
+    when :self
+      freq = @cell_data[:current_frequency]
+      freq.present? ? [ :solid, freq ] : [ :unrated ]
+    when :manager
+      paint_pair(top_left: @cell_data[:manager_frequency],
+                 bottom_right: @cell_data[:current_frequency])
+    when :alignment
+      aligned = @cell_data[:aligned_frequency]
+      return [ :solid, aligned ] if aligned.present?
+
+      paint_pair(top_left: @cell_data[:current_frequency],
+                 bottom_right: @cell_data[:manager_frequency])
+    else
+      [ :unrated ]
+    end
+  end
+
+  # Both absent → unrated. Both present and equal → solid (agreement).
+  # Otherwise → split: differing values, OR one perspective rated and the
+  # other not. A nil slice paints grey (via {#palette_bg}), so "I rated,
+  # they haven't" reads as colour-vs-grey rather than masquerading as a
+  # mutual solid.
+  def paint_pair(top_left:, bottom_right:)
+    return [ :unrated ] if top_left.nil? && bottom_right.nil?
+    return [ :solid, top_left ] if top_left == bottom_right
+
+    [ :split, top_left, bottom_right ]
+  end
+
+  def split?
+    fill_state.first == :split
   end
 
   def primary_frequency
@@ -146,74 +259,76 @@ class Views::Assessments::LevelChip < Views::Base
     primary_frequency.present?
   end
 
-  def divergent?
-    return false unless @cell_data
-
-    pf = primary_frequency
-    return false unless pf
-
-    secondaries = secondary_frequencies
-    secondaries.any? { |f| f.present? && f != pf }
-  end
-
-  def secondary_frequencies
-    return [] unless @cell_data
-
-    case @context
-    when :self
-      [ @cell_data[:manager_frequency], @cell_data[:aligned_frequency] ]
-    when :manager
-      [ @cell_data[:current_frequency], @cell_data[:aligned_frequency] ]
-    when :alignment
-      [ @cell_data[:current_frequency], @cell_data[:manager_frequency] ]
-    else
-      []
-    end.compact
-  end
-
-  def you_badge
+  # Marks the assessee's current level. Says "YOU" only in self context;
+  # from the manager / alignment perspective the level belongs to the
+  # report, so "YOU" would be misleading — use the neutral "CURRENT".
+  def current_level_badge
     span(class: "absolute -bottom-0.5 left-1/2 -translate-x-1/2 " \
                 "text-[9px] font-bold uppercase tracking-wider " \
                 "bg-gray-800 dark:bg-white text-white dark:text-gray-900 " \
-                "px-1.5 py-px rounded-sm") { "YOU" }
+                "px-1.5 py-px rounded-sm") { current_level_label }
   end
 
-  def rated_check
-    # Sits on a contrasting white/dark disc so the check clears AA against any
-    # level-chip fill (the chip colour varies by frequency × level position).
-    span(class: "absolute top-0.5 right-0.5 w-3 h-3 flex items-center justify-center " \
-                "rounded-full bg-white dark:bg-gray-900 shadow-sm") do
-      span(class: "text-[8px] text-green-700 dark:text-green-400") { "✓" }
-    end
+  def current_level_label
+    @context == :self ? "YOU" : "CURRENT"
   end
 
-  def divergence_dot
-    span(
-      class: "absolute top-0.5 left-0.5 w-2 h-2 rounded-full bg-amber-400 dark:bg-amber-500",
-      title: "Perspectives differ"
-    ) { }
-  end
-
-  # Tiny indicators in the bottom-right corner: one dot for evidence,
-  # one for comments. Both appear together when both kinds exist.
-  # Smaller and lower-saturation than the rated-check / divergence dot
-  # so they read as ambient texture rather than a primary affordance —
-  # the user clicks the chip for full detail, the dots just hint that
-  # there's something inside.
+  # Evidence / comment indicators in the bottom-right corner. Glyphs —
+  # paperclip (evidence), speech bubble (comment) — rather than coloured
+  # dots: a shape says what it is without a colour legend, and it can't
+  # be mistaken for the frequency-colour language used by the chip fill.
+  # Both sit on one muted backing pill so they stay legible over any
+  # fill while reading as ambient metadata, not a primary affordance.
   #
-  # The corners taken by other indicators: top-left (divergence dot),
-  # top-right (rated check), bottom-center (YOU badge). Bottom-right
-  # is the only free corner and stays clear of the centered YOU badge
-  # since both `right-0.5` (4px from edge) and the badge's
-  # `-translate-x-1/2` keep them on opposite sides of the chip.
-  def activity_dots
+  # Corners in use: top-left/bottom-right (split fill), bottom-center
+  # (YOU badge), bottom-right (these glyphs — clear of the centered YOU
+  # badge).
+  def activity_glyphs
     span(
-      class: "absolute bottom-0.5 right-0.5 flex items-center gap-0.5",
+      class: "absolute bottom-0.5 right-0.5 inline-flex items-center gap-0.5 " \
+             "rounded-full bg-white/85 dark:bg-gray-900/85 px-0.5 " \
+             "text-gray-600 dark:text-gray-300",
       title: activity_title,
       aria: { hidden: "true" }
     ) do
-      span(class: "w-1.5 h-1.5 rounded-full bg-slate-500 dark:bg-slate-400") { } if evidence_count.positive?
-      span(class: "w-1.5 h-1.5 rounded-full bg-violet-500 dark:bg-violet-400") { } if comment_count.positive?
+      evidence_glyph if evidence_count.positive?
+      comment_glyph if comment_count.positive?
+    end
+  end
+
+  def evidence_glyph
+    svg(
+      xmlns: "http://www.w3.org/2000/svg",
+      class: "w-2.5 h-2.5",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      stroke_width: "2",
+      data: { glyph: "evidence" }
+    ) do |s|
+      s.path(
+        stroke_linecap: "round",
+        stroke_linejoin: "round",
+        d: "M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
+      )
+    end
+  end
+
+  def comment_glyph
+    svg(
+      xmlns: "http://www.w3.org/2000/svg",
+      class: "w-2.5 h-2.5",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      stroke_width: "2",
+      data: { glyph: "comment" }
+    ) do |s|
+      s.path(
+        stroke_linecap: "round",
+        stroke_linejoin: "round",
+        d: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+      )
     end
   end
 

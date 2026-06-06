@@ -139,6 +139,61 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-agreed-sub-strip]"
     end
 
+    should "split the level chip diagonally when self and manager ratings disagree" do
+      # Report self-rated level 2 as "occasional" (Most) in setup; the
+      # manager rates "consistent" → the two visible perspectives differ,
+      # so the chip paints a diagonal split (self top-left, manager
+      # bottom-right) instead of the old amber divergence dot.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+
+      assert_selector "#cell-#{@cap_stable}-2 [data-split]", visible: :all
+    end
+
+    should "keep the level chip solid when self and manager ratings agree" do
+      # Manager rates the same value the report self-rated ("occasional")
+      # → no disagreement → a single solid fill, no split overlay.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+
+      assert_no_selector "#cell-#{@cap_stable}-2 [data-split]"
+      assert_selector "#cell-#{@cap_stable}-2.bg-green-500"
+    end
+
+    should "split the chip colour-vs-grey when only one perspective has rated" do
+      # Report self-rated level 2 in setup; the manager has not rated.
+      # The chip splits (self colour vs grey) rather than showing a solid
+      # fill that would look like a mutual rating.
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+
+      assert_selector "#cell-#{@cap_stable}-2 [data-split]", visible: :all
+    end
+
+    should "label the assessee's current level CURRENT, not YOU, for the manager" do
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+
+      within("#cell-#{@cap_stable}-2") do
+        assert_text "CURRENT"
+        assert_no_text "YOU"
+      end
+    end
+
     should "render the inline frequency pill in the focused card's expansion panel" do
       visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_selector "h1", text: "Report Alex"

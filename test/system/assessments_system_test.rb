@@ -647,22 +647,31 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "level chip colors" do
-    should "tint unrated below-level chips with assumed-consistent green" do
+    should "tint unrated below-level chips with assumed-consistent blue" do
       visit assessment_path(@assignment)
       # The unrated E1 chip (below person_level=2) should carry the
-      # assumed-consistent green tint — the person is at E2, so we
-      # assume they've cleared E1.
+      # assumed-consistent tint — the person is at E2, so we assume
+      # they've cleared E1. "Consistently" is blue in the palette, so
+      # the assumed-consistent wash is light blue.
       chip_classes = page.evaluate_script(
         "document.getElementById('cell-#{@cap1_stable}-1').className"
       )
-      assert_match(/bg-green/, chip_classes,
-        "Unrated below-level chip should carry assumed-consistent green tint. Classes: #{chip_classes}")
+      assert_match(/bg-blue/, chip_classes,
+        "Unrated below-level chip should carry assumed-consistent blue tint. Classes: #{chip_classes}")
+    end
+
+    should "label the person's own current level YOU in self context" do
+      visit assessment_path(@assignment)
+      within("#cell-#{@cap1_stable}-2") do
+        assert_text "YOU"
+      end
     end
 
     should "leave the at-person-level unrated chip neutral grey" do
       visit assessment_path(@assignment)
       # E2 is the person's level; with no rating it should be grey,
-      # not green (only BELOW-level cells get the mint tint).
+      # not tinted (only BELOW-level cells get the light-blue
+      # assumed-consistent tint).
       chip_classes = page.evaluate_script(
         "document.getElementById('cell-#{@cap1_stable}-2').className"
       )
@@ -672,7 +681,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     # Regression: the button-reset utilities added when chips were
     # promoted from <div> to <button> (`bg-transparent`) won the cascade
-    # against `bg-green-100/60` / `bg-gray-100` / etc — the class string
+    # against `bg-blue-100/60` / `bg-gray-100` / etc — the class string
     # still listed the chip colour but the computed background painted
     # transparent. The existing tests assert on className only and so
     # passed; this asserts on what actually paints.
@@ -684,7 +693,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       at_unrated    = bg.call("cell-#{@cap1_stable}-2")  # E2, person's level
 
       assert_no_match(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/i, below_unrated,
-        "Unrated below-level chip painted transparent — bg-green-* lost the cascade. Got: #{below_unrated}")
+        "Unrated below-level chip painted transparent — bg-blue-* lost the cascade. Got: #{below_unrated}")
       assert_no_match(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/i, at_unrated,
         "Unrated at-level chip painted transparent — bg-gray-* lost the cascade. Got: #{at_unrated}")
     end
@@ -1060,7 +1069,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
 
       # The chip color should update to reflect the new rating
-      assert_selector "#cell-#{@cap1_stable}-2.bg-green-500", wait: 5
+      # ("Consistently" is blue-500 in the FrequencyPalette).
+      assert_selector "#cell-#{@cap1_stable}-2.bg-blue-500", wait: 5
     end
 
     should "not jump scroll position when scrolling past the hero summary" do

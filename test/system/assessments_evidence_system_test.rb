@@ -194,12 +194,13 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
   end
 
   context "level chip activity indicators" do
-    # The level chip already shows: green ✓ for a rating, amber dot for
-    # cross-perspective divergence, YOU pill at the person's level. The
-    # dots in the bottom-right corner extend that vocabulary: a slate
-    # dot when there's evidence on the cell, a violet dot when there's
-    # a comment. Both appear together when both kinds exist.
-    should "render a slate dot when the cell has evidence" do
+    # The chip fill carries the rating language (solid colour, or a
+    # diagonal split when perspectives disagree); content is a separate
+    # glyph language in the bottom-right corner — a paperclip when the
+    # cell has evidence, a speech bubble when it has a comment. Both
+    # appear together when both kinds exist. Glyphs (not coloured dots)
+    # so they can't be mistaken for the frequency palette.
+    should "render an evidence glyph when the cell has evidence" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(
           @person.id, @framework_id, SecureRandom.uuid_v7,
@@ -214,11 +215,11 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
 
       chip = find("#cell-#{@cap_stable}-1")
-      assert chip.has_css?(".bg-slate-500", visible: :all),
-        "expected the level chip to show an evidence dot"
+      assert chip.has_css?("[data-glyph='evidence']", visible: :all),
+        "expected the level chip to show an evidence glyph"
     end
 
-    should "render a violet dot when the cell has a comment" do
+    should "render a comment glyph when the cell has a comment" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.post_comment(
           @person.id, @framework_id, SecureRandom.uuid_v7,
@@ -232,19 +233,19 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
 
       chip = find("#cell-#{@cap_stable}-1")
-      assert chip.has_css?(".bg-violet-500", visible: :all),
-        "expected the level chip to show a comment dot"
+      assert chip.has_css?("[data-glyph='comment']", visible: :all),
+        "expected the level chip to show a comment glyph"
     end
 
-    should "render no dot when the cell has neither evidence nor comments" do
+    should "render no glyph when the cell has neither evidence nor comments" do
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       chip = find("#cell-#{@cap_stable}-1")
-      assert chip.has_no_css?(".bg-slate-500", wait: 1),
-        "did not expect an evidence dot on a cell without evidence"
-      assert chip.has_no_css?(".bg-violet-500", wait: 1),
-        "did not expect a comment dot on a cell without comments"
+      assert chip.has_no_css?("[data-glyph='evidence']", wait: 1),
+        "did not expect an evidence glyph on a cell without evidence"
+      assert chip.has_no_css?("[data-glyph='comment']", wait: 1),
+        "did not expect a comment glyph on a cell without comments"
     end
   end
 end
