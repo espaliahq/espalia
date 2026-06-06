@@ -446,11 +446,33 @@ entry in the same change:
    (colour), `KIND_GROUP` (which filter chip: `ratings` / `evidence` /
    `comments` / `alignment` / `authority`), and `#summary_text` /
    `#secondary_text`.
-4. **Cover it** in `test/queries/assessments/activity_feed_query_test.rb`
+4. **Broadcast the sync signal** from the projection that materialises the
+   action so the feed updates in **real time** (see below).
+5. **Cover it** in `test/queries/assessments/activity_feed_query_test.rb`
    (entry emitted, anchored to the right cell, visibility-gated) and assert
    the `KIND_GROUP` so it lands under the intended filter.
 
 A new action with no feed entry is an incomplete feature, not a follow-up.
+
+### Real-time is part of coverage (NON-NEGOTIABLE)
+
+The activity feed must update **live for everyone — including the user who
+took the action**. The mechanism: the projection that writes the action's
+read model / handles its event calls `broadcast_assessment_sync(event)`,
+which nudges the `#assessment-sync-signal`; `assessment_sync_controller`
+then reloads the activity frame. Crucially, the activity frame reload is
+**exempt from the actor's self-suppression window** — the suppression only
+skips the matrix/scoring re-fetch (which would flicker and reset scroll),
+never the activity frame — so the actor sees their own entry appear too.
+
+Therefore **every projection that handles an on-screen assessment action
+MUST call `broadcast_assessment_sync` in its `call`** (guarded by
+`Projections::Replayer.replay_mode?` so rebuilds stay silent). Today that is
+`CurrentAssessment` (ratings / alignment), `EvidenceCollection` (evidence +
+links), `CommentThread` (comments), and `AssessmentAuthority` (delegation
+grant/revoke, reporting-manager). When you add a projection for a new
+assessment action, add the same broadcast — a feed entry that only appears
+on the next manual reload does not satisfy this rule.
 
 ## Real-Time Sync
 
