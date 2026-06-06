@@ -4,7 +4,7 @@ require "application_system_test_case"
 
 # Evidence multi-linkage: the kebab "Link to another capability" action
 # attaches one piece of evidence to a second capability × level, and
-# "Remove from this cell" is greyed out while it has only one link.
+# "Unlink from this capability" is greyed out while it has only one link.
 class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
 
@@ -89,9 +89,9 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']",
                       text: "Link to another capability", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw", visible: :all
-      # With only one link, "Remove from this cell" is rendered disabled.
+      # With only one link, "Unlink from this capability" is rendered disabled.
       assert_selector "#evidence-#{@evidence_id} [role='menuitem'][aria-disabled='true']",
-                      text: "Remove from this cell", visible: :all
+                      text: "Unlink from this capability", visible: :all
 
       page.execute_script(<<~JS)
         document.querySelector(

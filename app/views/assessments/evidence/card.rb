@@ -79,7 +79,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     [ count - 1, 0 ].max
   end
 
-  # Whether "remove from this cell" is allowed: managing links is permitted
+  # Whether "unlink from this capability" is allowed: managing links is permitted
   # AND this is not the item's only link (the last-link invariant — an
   # active item must keep ≥1 link — is also enforced in the aggregate).
   def can_remove_this_link?
@@ -165,7 +165,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   # Hover-revealed kebab menu that hosts Edit, link management
-  # (Link to another capability / Remove from this cell), and Withdraw.
+  # (Link to another capability / Unlink from this capability), and Withdraw.
   # Uses the shared `dropdown`
   # Stimulus controller — same one the user menu and framework explorer
   # use — so behaviour (click-outside close, transition, aria) is
@@ -253,8 +253,8 @@ class Views::Assessments::Evidence::Card < Views::Base
     ) { "Link to another capability" }
   end
 
-  # "Remove from this cell" — removes the link for the cell this card is
-  # rendered in. Greyed out (non-interactive) when this is the item's only
+  # "Unlink from this capability" — removes the link for the cell this card
+  # is rendered in. Greyed out (non-interactive) when this is the item's only
   # link: removing it is forbidden (withdraw instead). The aggregate is the
   # backstop for the same invariant.
   def remove_link_menu_item
@@ -267,15 +267,15 @@ class Views::Assessments::Evidence::Card < Views::Base
         class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
                "hover:bg-gray-100 dark:hover:bg-gray-700",
         role: "menuitem",
-        form: { data: { turbo_confirm: "Remove this evidence from this capability?" } }
-      ) { "Remove from this cell" }
+        form: { data: { turbo_confirm: "Unlink this evidence from this capability?" } }
+      ) { "Unlink from this capability" }
     else
       span(
         class: "block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-600 cursor-not-allowed",
         role: "menuitem",
         aria: { disabled: "true" },
         title: "This is the only place this evidence is linked — withdraw it instead."
-      ) { "Remove from this cell" }
+      ) { "Unlink from this capability" }
     end
   end
 

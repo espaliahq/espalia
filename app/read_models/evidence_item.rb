@@ -54,7 +54,7 @@ class EvidenceItem < ApplicationRecord
 
   # Transient (non-persisted) count of this item's ACTIVE links, populated
   # by the matrix/controller queries so views can render an "also linked to
-  # N other places" indicator and grey out "remove from this cell" when the
+  # N other places" indicator and grey out "unlink from this capability" when the
   # item has only one link. Nil when not loaded — treat as a single link.
   attr_accessor :active_link_count
 
