@@ -12,6 +12,7 @@
 #
 class Assessments::ManagerRatingsController < ApplicationController
   include Assessments::TurboStreamHelpers
+  include AssessmentVisibility
 
   before_action :require_person
   before_action :set_assignment
@@ -115,7 +116,9 @@ class Assessments::ManagerRatingsController < ApplicationController
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories,
       participant_status: @assignment.current_open_cycle_participation&.status,
-      context: :manager
+      context: :manager,
+      viewer_person_id: current_person&.id,
+      viewer_sees_all_evidence: viewer_sees_all_evidence?
     ).build
 
     category_id = find_category_id(capability_stable_id, matrix_data)
