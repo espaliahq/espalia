@@ -47,7 +47,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Service objects | @docs/guidelines/service-objects.md |
 | Authorization / permissions | @docs/guidelines/authorization.md |
 | Tests | @docs/guidelines/testing.md |
-| Manual UI validation (Chrome MCP) | @docs/guidelines/chrome-mcp.md |
+| Visual verification (Chrome MCP) — mandatory for front-end changes | @docs/guidelines/chrome-mcp.md |
 | Framework Explorer UX | @docs/guidelines/framework-explorer.md |
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
@@ -203,11 +203,13 @@ bin/rails test:system        # Run system tests (Capybara + Selenium)
 
 SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per action -> saves to tmp/screenshots/{TestClass}/{test_name}/{001_action.png} -> use /screenshot-test skill to run + visually examine results
 
-# Manual UI validation in a real browser via the chrome-devtools MCP — drive the
-# running app, reproduce UI bugs, check the console. Navigate to http://rails-app:3000
+# Visual verification in a real browser via the chrome-devtools MCP — the MANDATORY
+# visual pass for every front-end change (additional to system tests, never a
+# substitute), plus exploration and UI bug repro. Navigate to http://rails-app:3000
 # (NOT localhost — the browser is a separate container). Connection relies on the
 # socat forwarder started by .devcontainer/start-chrome-cdp-proxy.sh. Full setup,
-# the connect-failure fix, login, and gotchas: docs/guidelines/chrome-mcp.md
+# the connect-failure fix, login, viewports, and gotchas: docs/guidelines/chrome-mcp.md
+# See "Visual Verification (NON-NEGOTIABLE)" below.
 
 # Validation (NON-NEGOTIABLE)
 bin/rails development:precommit  # ALWAYS run before completing development work
@@ -220,6 +222,30 @@ bin/rubocop -a               # Auto-fix RuboCop issues
 ```
 
 > **CRITICAL**: Do NOT pipe test output (e.g. `bin/rails test | cat`). Run test commands directly.
+
+## Visual Verification (NON-NEGOTIABLE)
+
+System tests remain the **source of truth** and MUST represent every piece of
+functionality — this is unchanged (see [docs/guidelines/testing.md](docs/guidelines/testing.md),
+including responsive coverage at both viewports). **In addition**, every
+front-end change must be visually verified in a real browser via the
+`chrome-devtools` MCP before it is marked done.
+
+The two are complementary and neither discharges the other:
+
+- The **system test** proves the behaviour *keeps* working — it runs in CI and is
+  where coverage lives. CI does **not** run the MCP, so a Chrome MCP pass never
+  substitutes for writing/maintaining the test.
+- The **Chrome MCP pass** proves the change *actually looks and behaves right*
+  now — layout, contrast, console errors, Turbo/Stimulus behaviour against the
+  live app. A green suite never substitutes for laying eyes on the change.
+
+A front-end change is done only when **both** are true: a system test covers it
+AND you've visually verified it. Read
+[docs/guidelines/chrome-mcp.md](docs/guidelines/chrome-mcp.md) before driving the
+browser (dev URL, login, viewports, screenshot paths, gotchas). The
+`SCREENSHOTS=1` + `/screenshot-test` path remains available for a repeatable,
+suite-level artefact.
 
 ## Core Principles
 
@@ -305,6 +331,7 @@ test/
 | Business logic | Model methods or concerns (not services) |
 | Async work | Background job in `app/jobs/` |
 | New test | Shoulda + FactoryBot |
+| Verify a front-end change | System test (always) **+** Chrome MCP visual pass (mandatory) — see chrome-mcp.md |
 | Authorization | Pundit policy in `app/policies/`, every action calls `authorize` |
 | Translatable text | `jsonb :attr_translations` + `translates :attr` |
 | Complex JSON | `store_model` with type-safe models |
