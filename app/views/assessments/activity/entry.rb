@@ -21,6 +21,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_cleared"        => "bg-gray-400",
     "evidence_recorded"        => "bg-amber-500",
     "evidence_relinked"        => "bg-sky-500",
+    "evidence_linked"          => "bg-sky-500",
+    "evidence_unlinked"        => "bg-gray-400",
     "evidence_withdrawn"       => "bg-gray-400",
     "alignment_started"        => "bg-amber-500",
     "alignment_completed"      => "bg-green-600",
@@ -45,6 +47,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_cleared"       => "alignment",
     "evidence_recorded"       => "evidence",
     "evidence_relinked"       => "evidence",
+    "evidence_linked"         => "evidence",
+    "evidence_unlinked"       => "evidence",
     "evidence_withdrawn"      => "evidence",
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment",
@@ -160,6 +164,8 @@ class Views::Assessments::Activity::Entry < Views::Base
       actor_name ? "#{actor_name} cleared alignment on #{capability_label}" : "Cleared alignment on #{capability_label}"
     when "evidence_recorded"     then evidence_recorded_summary
     when "evidence_relinked"     then evidence_relinked_summary
+    when "evidence_linked"       then evidence_link_summary("Linked")
+    when "evidence_unlinked"     then evidence_link_summary("Unlinked", preposition: "from")
     when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
@@ -264,6 +270,14 @@ class Views::Assessments::Activity::Entry < Views::Base
     end
   end
 
+  # "Linked evidence to <cap · Lx>" / "Unlinked evidence from <cap · Lx>",
+  # quoting the evidence title when the query resolved one.
+  def evidence_link_summary(verb, preposition: "to")
+    title = payload_value(:evidence_title).to_s.strip.presence
+    subject = title ? "“#{title}”" : "evidence"
+    "#{verb} #{subject} #{preposition} #{capability_label}"
+  end
+
   # Secondary line carries the rating frequency (with comment if present)
   # for rating events, the body content for evidence-recorded, the
   # rationale for evidence-relinked, or the withdrawal reason for
@@ -276,8 +290,10 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_recorded"
       content = @entry.payload.respond_to?(:content) ? @entry.payload.content.to_s : ""
       content.strip.presence
-    when "evidence_relinked"
+    when "evidence_relinked", "evidence_linked"
       payload_value(:rationale).to_s.strip.presence
+    when "evidence_unlinked"
+      payload_value(:reason).to_s.strip.presence
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       reason.to_s.strip.presence

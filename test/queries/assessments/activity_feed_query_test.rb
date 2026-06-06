@@ -189,6 +189,49 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "evidence link add/remove" do
+    setup do
+      @other_cap = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.add_evidence_link(@assessee.id, @framework_id, @evidence_id,
+          capability_stable_id: @other_cap, level_ordinal: 3,
+          linked_by_id: @assessee.id, rationale: "Also applies here")
+        handler.remove_evidence_link(@assessee.id, @framework_id, @evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 2,
+          removed_by_id: @assessee.id, reason: "Mislinked")
+      end
+      @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
+        alignment_started: false)
+    end
+
+    should "emit an evidence_linked entry anchored to the new cell, grouped under evidence" do
+      linked = @entries.find { |e| e.kind == "evidence_linked" }
+      assert_not_nil linked
+      assert_equal @other_cap, linked.capability_stable_id
+      assert_equal 3, linked.level_ordinal
+      assert_equal "Also applies here", linked.payload[:rationale]
+      assert_equal "Launch", linked.payload[:evidence_title]
+      assert_equal "evidence", Views::Assessments::Activity::Entry::KIND_GROUP[linked.kind]
+    end
+
+    should "emit an evidence_unlinked entry anchored to the removed cell" do
+      unlinked = @entries.find { |e| e.kind == "evidence_unlinked" }
+      assert_not_nil unlinked
+      assert_equal @cap_sid, unlinked.capability_stable_id
+      assert_equal 2, unlinked.level_ordinal
+      assert_equal "Mislinked", unlinked.payload[:reason]
+    end
+
+    should "hide link changes a peer did not perform" do
+      entries = run_query(viewer: @peer, sees_all: false, context: :self,
+        alignment_started: false)
+      kinds = entries.map(&:kind)
+      refute_includes kinds, "evidence_linked"
+      refute_includes kinds, "evidence_unlinked"
+    end
+  end
+
   context "framework version migration" do
     setup do
       # Inject a FrameworkVersionMigrated event on the assessee's PD stream

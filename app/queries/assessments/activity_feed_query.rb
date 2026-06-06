@@ -8,8 +8,10 @@
 #   stream. Captures every rating change (self / manager / aligned) with
 #   the timestamp the event was emitted.
 # - {EvidenceItem} rows for evidence-recorded and evidence-withdrawn
-#   entries (relinks are folded into the recorded entry — the activity
-#   feed shows where the evidence currently lives).
+#   entries (the origin link is the recorded entry).
+# - `EvidenceLinkAdded` / `EvidenceLinkRemoved` events from the same RES
+#   stream for the multi-linkage `evidence_linked` / `evidence_unlinked`
+#   entries (a single item attached to / detached from additional cells).
 # - {AssessmentCycleProgress} rows for alignment milestones
 #   (`alignment_started_at`, `aligned_at`).
 #
@@ -43,6 +45,15 @@ class Assessments::ActivityFeedQuery
   # own entry kind (with from→to coords) rather than amending the
   # original `evidence_recorded` entry.
   RELINK_KIND = "evidence_relinked"
+
+  # Multi-linkage: a single piece of evidence can be attached to / detached
+  # from additional (capability, level) cells after it's recorded. These
+  # live on the RES stream as `EvidenceLinkAdded` / `EvidenceLinkRemoved`
+  # events (the first link is part of `evidence_recorded`), so the feed
+  # reads them from the stream like relinks. Rendered under the Evidence
+  # filter.
+  LINK_ADDED_KIND   = "evidence_linked"
+  LINK_REMOVED_KIND = "evidence_unlinked"
 
   # Per-capability re-keying entry — emitted for every mapping in a
   # `FrameworkVersionMigrated` event that has a survivor `to_stable_id`.
@@ -107,7 +118,7 @@ class Assessments::ActivityFeedQuery
 
   # @return [Array<Entry>] reverse-chronological entries the viewer may see
   def call
-    entries = rating_entries + relink_entries + evidence_entries +
+    entries = rating_entries + relink_entries + link_entries + evidence_entries +
               alignment_entries + comment_entries + migration_entries + authority_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
@@ -224,6 +235,50 @@ class Assessments::ActivityFeedQuery
         category_id: category_id_for(new_stable_id)
       )
     end
+  end
+
+  # Reads EvidenceLinkAdded / EvidenceLinkRemoved events and emits one feed
+  # entry each, anchored to the affected (capability, level) cell so the
+  # per-cell focus filter surfaces them. Peers without sees_all are filtered
+  # to link changes they themselves performed, mirroring the author gate on
+  # evidence_entries. The evidence's title (when present) is folded into the
+  # payload for the summary line.
+  def link_entries
+    return [] if !@viewer_sees_all && @viewer_person_id.nil?
+
+    stream_events.filter_map do |event|
+      case event
+      when PersonDevelopment::Events::EvidenceLinkAdded
+        build_link_entry(event, kind: LINK_ADDED_KIND, actor_key: :linked_by_id)
+      when PersonDevelopment::Events::EvidenceLinkRemoved
+        build_link_entry(event, kind: LINK_REMOVED_KIND, actor_key: :removed_by_id)
+      end
+    end
+  end
+
+  def build_link_entry(event, kind:, actor_key:)
+    data = event.data.with_indifferent_access
+    return nil if !@viewer_sees_all && data[actor_key] != @viewer_person_id
+
+    stable_id = data[:capability_stable_id]
+    Entry.new(
+      id: event.event_id,
+      kind: kind,
+      occurred_at: event_timestamp(event),
+      payload: data.merge(evidence_title: evidence_title_for(data[:evidence_id])),
+      capability_stable_id: stable_id,
+      level_ordinal: data[:level_ordinal],
+      cycle_id: nil,
+      capability_name: capability_name_for(stable_id),
+      category_id: category_id_for(stable_id)
+    )
+  end
+
+  # Best-effort title for the evidence behind a link entry (nil when the
+  # item has no title or has since been hard-deleted). Memoised per request.
+  def evidence_title_for(evidence_id)
+    (@evidence_titles ||= {})[evidence_id] ||=
+      EvidenceItem.where(id: evidence_id).pick(:title)
   end
 
   def evidence_entries
