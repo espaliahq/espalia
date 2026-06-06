@@ -265,15 +265,4 @@ class Assessments::EvidenceController < ApplicationController
     scope = scope.where(author_id: current_person.id) unless viewer_sees_all_evidence?
     scope.order(:recorded_at)
   end
-
-  def viewer_can_relink_others_evidence?
-    return false unless current_person
-    return true if @assignment.person_id == current_person.id
-
-    assessee_person&.managed_by?(current_person) || false
-  end
-
-  def assessee_person
-    @assessee_person ||= Person.find_by(id: @assignment.person_id)
-  end
 end

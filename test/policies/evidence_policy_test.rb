@@ -146,6 +146,34 @@ class EvidencePolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "as an active rating delegate (not in chain)" do
+    setup do
+      @ctx = ctx_for(@peer)
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @framework.framework_id, delegate_person_id: @peer.id,
+          granted_by_id: @manager.id)
+      end
+    end
+
+    should "allow relinking evidence they didn't author (manager parity)" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @framework.framework_id, author: @manager)
+        assert policy(item).relink?
+      end
+    end
+
+    should "deny relink once the delegation has expired" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ManagerAssessmentDelegation.where(delegate_person_id: @peer.id).update_all(expires_at: 1.day.ago)
+        item = create(:evidence_item, tenant: @tenant, person_id: @assessee.id,
+          framework_id: @framework.framework_id, author: @manager)
+        assert_not policy(item).relink?
+      end
+    end
+  end
+
   context "as a tenant admin (not in chain)" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

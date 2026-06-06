@@ -31,6 +31,20 @@ module AssessmentVisibility
     assessment_assessee&.managed_by?(current_person) || false
   end
 
+  # Whether the viewer may relink evidence they did NOT author — the assessee,
+  # anyone in their manager chain, or an active rating delegate (a delegate is
+  # treated like a manager for everything except starting/editing alignment).
+  # Authors always get relink on their own items via `Evidence::List#can_relink?`.
+  #
+  # @return [Boolean]
+  def viewer_can_relink_others_evidence?
+    return false unless current_person
+    return true if @assignment.person_id == current_person.id
+    return true if active_rating_delegate?
+
+    assessment_assessee&.managed_by?(current_person) || false
+  end
+
   # Whether the viewer holds an active manager-rating delegation for this
   # assessment. Memoised — one lookup per request.
   #

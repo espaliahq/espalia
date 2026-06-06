@@ -12,7 +12,8 @@
 # - Record manager evidence: anyone in the assessee's manager hierarchy.
 # - Record peer evidence: any tenant member with a Person record.
 # - Withdraw: original author + tenant admin.
-# - Relink: original author + the assessee + anyone in their manager hierarchy.
+# - Relink: original author + the assessee + anyone in their manager hierarchy
+#   + an active manager-rating delegate.
 #
 # Evidence is NOT frozen during alignment — these checks are independent
 # of `participant.status`.
@@ -71,12 +72,27 @@ class EvidencePolicy < ApplicationPolicy
     return false unless record.is_a?(EvidenceItem)
     return true if record.author_id == person.id
     return true if record.person_id == person.id
+    return true if active_rating_delegate?
 
     assessee = Person.find_by(id: record.person_id)
     assessee&.managed_by?(person) || false
   end
 
   private
+
+  # An active manager-rating delegate is treated like a manager for evidence
+  # relinking (a delegate has full manager parity except starting/editing
+  # alignment). Mirrors {AssessmentPolicy#active_rating_delegate?}.
+  def active_rating_delegate?
+    return false unless person.present?
+    return false unless record.respond_to?(:framework_id) && record.framework_id
+
+    ManagerAssessmentDelegation.active_delegate?(
+      person_id: record.person_id,
+      framework_id: record.framework_id,
+      delegate_person_id: person.id
+    )
+  end
 
   # Whether the viewer can see evidence on the assessment as a whole.
   # The record may be a {PersonFrameworkAssignment} (collection-level) or

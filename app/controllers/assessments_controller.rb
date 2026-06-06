@@ -195,15 +195,10 @@ class AssessmentsController < ApplicationController
     ).build
   end
 
-  # Memoised assessee lookup — both `viewer_sees_all_evidence?` and
-  # `viewer_can_relink_others_evidence?` reach for it on the same request.
-  def assessee_person
-    @assessee_person ||= Person.find_by(id: @assignment.person_id)
-  end
-
-  # `viewer_sees_all_evidence?` + `active_rating_delegate?` are provided by the
-  # shared {AssessmentVisibility} concern so every assessment controller (page,
-  # activity frame, evidence frame) applies the same rule.
+  # `viewer_sees_all_evidence?`, `viewer_can_relink_others_evidence?`, and
+  # `active_rating_delegate?` are provided by the shared {AssessmentVisibility}
+  # concern so every assessment controller (page, activity frame, evidence
+  # frame) applies the same rule.
 
   # Whether the current viewer is permitted to record evidence on this
   # assessment. V1 allows any tenant member with a Person to record peer
@@ -212,17 +207,6 @@ class AssessmentsController < ApplicationController
     return false unless current_person
 
     EvidencePolicy.new(pundit_user, @assignment).create?
-  end
-
-  # Whether the viewer may relink evidence they DIDN'T author. Mirrors
-  # {EvidencePolicy#relink?} for the non-author paths: assessee, or
-  # anywhere in their manager hierarchy. Authors always get relink on
-  # their own items via {Evidence::List#can_relink?}.
-  def viewer_can_relink_others_evidence?
-    return false unless current_person
-    return true if @assignment.person_id == current_person.id
-
-    assessee_person&.managed_by?(current_person) || false
   end
 
   # Whether the current viewer is permitted to post comments on this
