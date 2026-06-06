@@ -152,7 +152,9 @@ class Assessments::EvidenceController < ApplicationController
     from_cap = attrs[:from_capability_stable_id].presence || item.capability_stable_id
     from_level = Integer(attrs[:from_level_ordinal], exception: false) || item.level_ordinal
     respond_to do |format|
-      format.turbo_stream { render_evidence_list_stream(from_cap, from_level) }
+      format.turbo_stream do
+        render_item_cells_stream(item.id, extra_cells: [ [ from_cap, from_level ] ])
+      end
       format.html do
         redirect_to assessment_path(@assignment, redirect_params(from_cap, level_ordinal: from_level)),
           status: :see_other, notice: "Evidence linked."
@@ -192,7 +194,12 @@ class Assessments::EvidenceController < ApplicationController
     )
 
     respond_to do |format|
-      format.turbo_stream { render_evidence_list_stream(attrs[:capability_stable_id], level) }
+      format.turbo_stream do
+        # The removed cell is no longer an active link, so include it
+        # explicitly; the item's remaining cells re-render to refresh their
+        # "also linked to N" counts.
+        render_item_cells_stream(item.id, extra_cells: [ [ attrs[:capability_stable_id], level ] ])
+      end
       format.html do
         redirect_to assessment_path(@assignment,
                       redirect_params(attrs[:capability_stable_id], level_ordinal: level)),
@@ -303,12 +310,34 @@ class Assessments::EvidenceController < ApplicationController
   # `create` so the modal-driven submit updates the list in-place
   # without a full-page redirect.
   def render_evidence_list_stream(capability_stable_id, level_ordinal)
-    items = evidence_items_for(capability_stable_id, level_ordinal)
-    render turbo_stream: turbo_stream.replace(
+    render turbo_stream: cell_evidence_stream(capability_stable_id, level_ordinal)
+  end
+
+  # Re-renders EVERY cell an item touches after a link change, so a link
+  # added to / removed from another (visible) cell updates live and the
+  # "also linked to N other places" counts stay correct on all visible
+  # cells the item still appears in. `extra_cells` covers the cell the user
+  # acted from / the cell a link was just removed from (no longer an active
+  # link, so not in the active set). Turbo ignores stream targets not
+  # currently in the DOM, so off-screen cells are safely skipped.
+  #
+  # The acting user's own projection broadcast is suppressed (see
+  # assessment_sync_controller), so this response is what updates their view.
+  def render_item_cells_stream(evidence_id, extra_cells: [])
+    cells = EvidenceLink.active.where(evidence_id: evidence_id)
+      .pluck(:capability_stable_id, :level_ordinal)
+    streams = (cells + extra_cells).uniq.map do |cap, level|
+      cell_evidence_stream(cap, level)
+    end
+    render turbo_stream: streams
+  end
+
+  def cell_evidence_stream(capability_stable_id, level_ordinal)
+    turbo_stream.replace(
       "evidence-list-#{capability_stable_id}-#{level_ordinal}",
       render_to_string(
         Views::Assessments::Evidence::List.new(
-          items: items,
+          items: evidence_items_for(capability_stable_id, level_ordinal),
           assessment_id: @assignment.id,
           viewer_person_id: current_person.id,
           can_create: true,
