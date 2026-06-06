@@ -311,10 +311,17 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       assert_response :unprocessable_content
     end
 
-    should "reject a capability that is not in the assessment's framework on add_link" do
+    should "reject a capability from a different framework on add_link" do
+      foreign_cap = ActsAsTenant.with_tenant(@tenant) do
+        other_fw = SecureRandom.uuid_v7
+        create(:framework_state, framework_id: other_fw, name: "Other FW")
+        other_cat = create(:framework_capability_category, framework_id: other_fw, name: "Other", ordinal: 1)
+        create(:framework_capability, category_id: other_cat.category_id, name: "Foreign")
+      end
+
       sign_in @manager_user
       post add_link_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: { capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2 }
+        evidence: { capability_stable_id: foreign_cap.stable_id, level_ordinal: 2 }
       }
       assert_response :unprocessable_content
       assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "no foreign-cell link should be created"
