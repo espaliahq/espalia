@@ -1,10 +1,17 @@
-# Chrome MCP — Manual UI Validation
+# Chrome MCP — Visual Validation
 
 > Read this when: driving the running app in a real browser via the
-> `chrome-devtools` MCP — exploratory validation of a new front-end flow, or
-> reproducing a user-reported UI bug. This **complements** system tests; it does
-> not replace them. Encode anything you find as a Minitest system test (CI runs
-> those; it does not run the MCP).
+> `chrome-devtools` MCP — the **mandatory visual-verification pass** for any
+> front-end change, exploring a new flow, or reproducing a user-reported UI bug.
+>
+> **This is an *additional* gate, not a replacement for system tests.** System
+> tests remain the source of truth and MUST represent every piece of
+> functionality (see [testing.md](testing.md)). The system test proves the
+> behaviour *keeps* working under CI; the Chrome MCP pass proves it *actually
+> looks and behaves right* right now. A front-end change is done only when
+> **both** are true — a system test covers it AND you've laid eyes on it here.
+> CI runs the system tests; it does not run the MCP, so the MCP pass never
+> substitutes for writing one.
 
 ## How it's wired (devcontainer)
 
@@ -70,6 +77,39 @@ bin/rails runner 'a = Rails.application.credentials.dig(:admin, :user_1); puts a
 Then fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
 global admin in the `me&u` tenant, so it can reach every surface.
 
+## Standard viewports
+
+GrowthOS is a responsive **desktop-first** app — most surfaces (the matrix, the
+explorer three-pane, the assessment cards) are designed for the wide layout and
+collapse to overlays/stacks on narrow. Verify the desktop layout first, then do a
+mobile pass for anything with responsive behaviour. These mirror the
+`DESKTOP_SIZE` / `MOBILE_SIZE` constants the system tests use (see
+[testing.md → Responsive Behaviour Testing](testing.md)):
+
+```
+Desktop (primary):   resize_page  width=1400  height=1400
+Mobile  (iPhone):    resize_page  width=375   height=812
+```
+
+Any change that behaves differently across breakpoints (hidden/shown, sidebar vs
+overlay, collapsed vs expanded) must be eyeballed at **both** sizes here — and
+also pinned with a system test at both viewports per testing.md.
+
+## Screenshot paths
+
+When you capture visual evidence, save it under `./tmp/visual/<short-task-name>/`
+(workspace-relative, gitignored, inspectable from the IDE):
+
+```
+./tmp/visual/<short-task-name>/01-signin.png
+./tmp/visual/<short-task-name>/02-assessment.png
+```
+
+Pass `filePath:` to `take_screenshot` so the image lands on disk and you can
+`Read` it back as an image. Never write screenshots to a tracked path; avoid the
+absolute `/tmp/` (outside the workspace, harder to inspect). This is separate
+from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
+
 ## Workflow / tool tips
 
 - `new_page(url:)` opens a tab. A fresh headless-shell has none — calling
@@ -83,7 +123,12 @@ global admin in the `me&u` tenant, so it can reach every surface.
 - **`list_console_messages(types: ["error"])` after interactions** — surfaces
   JS/Turbo errors a snapshot won't show (this is how the Turbo-frame bug below
   was confirmed).
-- `take_screenshot(filePath: "/tmp/...")` to save visual evidence.
+- `take_screenshot(filePath: "./tmp/visual/<task>/NN.png")` to save visual
+  evidence — workspace-relative, never the absolute `/tmp/` (see *Screenshot
+  paths*).
+- **`evaluate_script` for cheap structural checks** — computed styles, scroll
+  dimensions, presence of text, hidden state. Don't screenshot to answer "did the
+  rating pill update?"; read the DOM.
 
 ## Gotchas learned
 
@@ -95,10 +140,27 @@ global admin in the `me&u` tenant, so it can reach every surface.
 - **CDP/Selenium `.text` reflects CSS `text-transform`.** An eyebrow styled
   `uppercase` reports `UPPERCASE` text — `wait_for`/assertions must match the
   rendered case (or key off an untransformed element like a link label).
+- **Seeded tenant state persists across sessions.** The `me&u` seed tenant
+  accumulates assessment state (cycles, ratings, evidence, alignment) as you
+  drive flows. A verification run that assumes a clean slate (an unrated
+  assessment, no open cycle) must reset first, e.g.:
+  `bin/rails runner 'ActsAsTenant.with_tenant(Tenant.find_by(slug: "me-u")) { ... }'`
+  scoped to the person/framework under test. Don't assert "fresh" UI against a
+  tenant another session already mutated.
 
-## Scope
+## Scope — required pass, never a substitute for coverage
 
-Exploratory validation and bug repro only. Regressions you find must be pinned
-with a Minitest **system test** (Capybara + Selenium) so CI guards them — e.g.
-the `data-turbo-frame="_top"` fix is covered by a Home→cohort click-through in
-`test/system/assessment_cycles/cohort_system_test.rb`.
+The Chrome MCP pass is **required** for every front-end change and is also the
+right tool for exploration and bug repro. What it is **not** is where coverage
+lives: it runs only in your turn, never in CI. So:
+
+- **Every behaviour — new or fixed — must be represented by a Minitest system
+  test** (Capybara + Selenium), at both viewports when responsive. That suite is
+  the source of truth and the only thing CI guards. The `data-turbo-frame="_top"`
+  fix, for instance, is pinned by a Home→cohort click-through in
+  `test/system/assessment_cycles/cohort_system_test.rb` — the Chrome MCP session
+  found it; the system test keeps it found.
+- **The visual pass is additional, not alternative.** "I verified it in Chrome
+  MCP" never discharges the obligation to write/maintain the system test, and a
+  green system test never discharges the obligation to lay eyes on the change
+  before marking it done. A front-end change needs both.
