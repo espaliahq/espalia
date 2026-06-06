@@ -86,7 +86,7 @@ mobile pass for anything with responsive behaviour. These mirror the
 `DESKTOP_SIZE` / `MOBILE_SIZE` constants the system tests use (see
 [testing.md → Responsive Behaviour Testing](testing.md)):
 
-```
+```text
 Desktop (primary):   resize_page  width=1400  height=1400
 Mobile  (iPhone):    resize_page  width=375   height=812
 ```
@@ -100,7 +100,7 @@ also pinned with a system test at both viewports per testing.md.
 When you capture visual evidence, save it under `./tmp/visual/<short-task-name>/`
 (workspace-relative, gitignored, inspectable from the IDE):
 
-```
+```text
 ./tmp/visual/<short-task-name>/01-signin.png
 ./tmp/visual/<short-task-name>/02-assessment.png
 ```
@@ -144,7 +144,7 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
   accumulates assessment state (cycles, ratings, evidence, alignment) as you
   drive flows. A verification run that assumes a clean slate (an unrated
   assessment, no open cycle) must reset first, e.g.:
-  `bin/rails runner 'ActsAsTenant.with_tenant(Tenant.find_by(slug: "me-u")) { ... }'`
+  `bin/rails runner 'ActsAsTenant.with_tenant(Tenant.find_by(slug: "meandu")) { ... }'`
   scoped to the person/framework under test. Don't assert "fresh" UI against a
   tenant another session already mutated.
 
