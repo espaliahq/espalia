@@ -17,8 +17,11 @@
 
 import { Controller } from "@hotwired/stimulus"
 
+// localStorage key remembering that the user dismissed the "solo" discovery tip.
+const SOLO_HINT_KEY = "growthos:explorer:soloHintDismissed"
+
 export default class extends Controller {
-  static targets = ["role", "group", "familyCheckbox", "trackButton", "childList"]
+  static targets = ["role", "group", "familyCheckbox", "trackButton", "childList", "hint"]
   static values = {
     track: { type: String, default: "both" },
     soloId: { type: String, default: "" }
@@ -26,6 +29,7 @@ export default class extends Controller {
 
   connect() {
     this.preSoloState = null
+    this.#initSoloHint()
   }
 
   // ── Actions ──
@@ -129,6 +133,26 @@ export default class extends Controller {
     this.#dispatchChanged()
   }
 
+  clearAll(event) {
+    event.preventDefault()
+
+    // Clearing always wins over solo mode: drop solo without restoring the
+    // pre-solo selection, since the intent is an empty starting point.
+    this.soloIdValue = ""
+    this.preSoloState = null
+
+    this.#allVisibleRoleCheckboxes().forEach(cb => { cb.checked = false })
+
+    this.#updateAllFamilyCheckboxes()
+    this.#dispatchChanged()
+  }
+
+  dismissHint(event) {
+    if (event) event.preventDefault()
+    this.#setSoloHintDismissed()
+    if (this.hasHintTarget) this.hintTarget.remove()
+  }
+
   filterTrack(event) {
     const track = event.currentTarget.dataset.track
     if (!track) return
@@ -158,6 +182,30 @@ export default class extends Controller {
   }
 
   // ── Private ──
+
+  // Hide the solo discovery tip if the user has dismissed it before.
+  // localStorage may throw (private mode, blocked storage) — fail open and
+  // just show the tip rather than break the controller.
+  #initSoloHint() {
+    if (!this.hasHintTarget) return
+    if (this.#soloHintDismissed()) this.hintTarget.remove()
+  }
+
+  #soloHintDismissed() {
+    try {
+      return localStorage.getItem(SOLO_HINT_KEY) === "1"
+    } catch {
+      return false
+    }
+  }
+
+  #setSoloHintDismissed() {
+    try {
+      localStorage.setItem(SOLO_HINT_KEY, "1")
+    } catch {
+      // Storage unavailable — tip will reappear next load, which is acceptable.
+    }
+  }
 
   #dispatchChanged() {
     const roleIds = this.#getSelectedRoleIds()
