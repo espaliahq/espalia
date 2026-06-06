@@ -675,8 +675,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       chip_classes = page.evaluate_script(
         "document.getElementById('cell-#{@cap1_stable}-2').className"
       )
-      assert_no_match(/bg-green/, chip_classes,
-        "Unrated at-person-level chip should be grey. Classes: #{chip_classes}")
+      assert_match(/bg-gray-100/, chip_classes,
+        "Unrated at-person-level chip should be neutral grey. Classes: #{chip_classes}")
+      assert_no_match(/bg-blue/, chip_classes,
+        "Unrated at-person-level chip must NOT get the below-level blue tint. Classes: #{chip_classes}")
     end
 
     # Regression: the button-reset utilities added when chips were
