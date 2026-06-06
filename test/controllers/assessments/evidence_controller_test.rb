@@ -252,7 +252,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  context "POST /assessments/:assessment_id/evidence/:id/relink" do
+  context "evidence links (add_link / remove_link)" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
         @new_cap = create(:framework_capability, category_id: @cat.category_id, name: "New Capability")
@@ -272,65 +272,83 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "let the original author relink their own evidence" do
+    should "let the original author add a link" do
       sign_in @manager_user
-      post relink_assessment_evidence_path(@assignment, @item.id), params: {
+      post add_link_assessment_evidence_path(@assignment, @item.id), params: {
         evidence: {
-          new_capability_stable_id: @new_cap.stable_id,
-          new_level_ordinal: 2,
-          rationale: "Better fit"
+          capability_stable_id: @new_cap.stable_id, level_ordinal: 2,
+          from_capability_stable_id: @cap.stable_id, from_level_ordinal: 2,
+          rationale: "Also applies"
         }
       }
       assert_response :redirect
-      assert_match "capability=#{@new_cap.stable_id}", response.location
-
-      ActsAsTenant.with_tenant(@tenant) do
-        @item.reload
-        assert_equal @new_cap.stable_id, @item.capability_stable_id
-        assert_equal 2, @item.level_ordinal
-      end
+      assert_equal [ [ @cap.stable_id, 2 ], [ @new_cap.stable_id, 2 ] ], active_links
     end
 
-    should "let the assessee relink evidence they didn't author" do
+    should "let the assessee add a link to evidence they didn't author" do
       sign_in @assessee_user
-      post relink_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: {
-          new_capability_stable_id: @new_cap.stable_id,
-          new_level_ordinal: 2
-        }
+      post add_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 2 }
       }
       assert_response :redirect
-
-      ActsAsTenant.with_tenant(@tenant) do
-        @item.reload
-        assert_equal @new_cap.stable_id, @item.capability_stable_id
-      end
+      assert_includes active_links, [ @new_cap.stable_id, 2 ]
     end
 
-    should "deny an unrelated peer" do
+    should "deny an unrelated peer from adding a link" do
       sign_in @peer_user
-      post relink_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: {
-          new_capability_stable_id: @new_cap.stable_id,
-          new_level_ordinal: 2
-        }
+      post add_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 2 }
       }
       assert_response :redirect
-      ActsAsTenant.with_tenant(@tenant) do
-        @item.reload
-        assert_equal @cap.stable_id, @item.capability_stable_id, "evidence should be unchanged"
-      end
+      assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "links should be unchanged"
     end
 
-    should "reject an invalid level_ordinal" do
+    should "reject an invalid level_ordinal on add_link" do
       sign_in @manager_user
-      post relink_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: {
-          new_capability_stable_id: @new_cap.stable_id,
-          new_level_ordinal: 99
-        }
+      post add_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 99 }
       }
       assert_response :unprocessable_content
+    end
+
+    should "reject a capability from a different framework on add_link" do
+      foreign_cap = ActsAsTenant.with_tenant(@tenant) do
+        other_fw = SecureRandom.uuid_v7
+        create(:framework_state, framework_id: other_fw, name: "Other FW")
+        other_cat = create(:framework_capability_category, framework_id: other_fw, name: "Other", ordinal: 1)
+        create(:framework_capability, category_id: other_cat.category_id, name: "Foreign")
+      end
+
+      sign_in @manager_user
+      post add_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: foreign_cap.stable_id, level_ordinal: 2 }
+      }
+      assert_response :unprocessable_content
+      assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "no foreign-cell link should be created"
+    end
+
+    should "remove a link when the item has more than one" do
+      sign_in @manager_user
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.add_evidence_link(
+          @assessee.id, @assignment.framework_id, @evidence_id,
+          capability_stable_id: @new_cap.stable_id, level_ordinal: 2, linked_by_id: @manager.id)
+      end
+
+      post remove_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: @cap.stable_id, level_ordinal: 2 }
+      }
+      assert_response :redirect
+      assert_equal [ [ @new_cap.stable_id, 2 ] ], active_links
+    end
+
+    should "surface the last-link guard and keep the link" do
+      sign_in @manager_user
+      post remove_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: @cap.stable_id, level_ordinal: 2 }
+      }
+      assert_response :redirect
+      assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "the only link must remain"
     end
   end
 
@@ -479,6 +497,13 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def active_links(evidence_id = @evidence_id)
+    ActsAsTenant.with_tenant(@tenant) do
+      EvidenceLink.active.where(evidence_id: evidence_id)
+        .order(:linked_at).pluck(:capability_stable_id, :level_ordinal)
+    end
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }

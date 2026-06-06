@@ -418,6 +418,62 @@ Each uses `PersonDevelopment::Scoring` with a different `perspective:` parameter
 
 Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_contributions_at_next_level` map keyed by stable_id. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
 
+## Activity feed coverage (NON-NEGOTIABLE)
+
+**Every action a user can take on the assessment screen MUST produce a
+representation in the activity feed.** The feed is the assessment's audit
+trail and shared narrative — if an action changes assessment state but leaves
+no entry, the other party (and the actor on reload) silently loses the story.
+
+This applies to ratings (self / manager / aligned + their revisions/clears),
+alignment milestones, comments, and **all evidence actions** — recording,
+editing, withdrawing, **and link add / remove** (`evidence_linked` /
+`evidence_unlinked`). When you add a new assessment action, you add its feed
+entry in the same change:
+
+1. **Source the entry.** Entries come from either the RES stream
+   (`Assessments::ActivityFeedQuery#stream_events`, e.g. rating / relink /
+   `EvidenceLinkAdded` / `EvidenceLinkRemoved` events) or a read model
+   (`EvidenceItem`, `PersonDevelopmentComment`, `AssessmentCycleProgress`).
+   Prefer the stream when the action is an event with no standalone read-model
+   row (link add/remove are events on the existing item, so they're read from
+   the stream like relinks).
+2. **Add the `_entries` method** to `ActivityFeedQuery` and include it in
+   `#call`. Anchor the `Entry` to the affected `(capability_stable_id,
+   level_ordinal)` so per-cell focus filtering surfaces it; honour the same
+   author/visibility gate as neighbouring entries (peers see only their own).
+3. **Register the kind** in `Views::Assessments::Activity::Entry` — `KIND_DOT`
+   (colour), `KIND_GROUP` (which filter chip: `ratings` / `evidence` /
+   `comments` / `alignment` / `authority`), and `#summary_text` /
+   `#secondary_text`.
+4. **Broadcast the sync signal** from the projection that materialises the
+   action so the feed updates in **real time** (see below).
+5. **Cover it** in `test/queries/assessments/activity_feed_query_test.rb`
+   (entry emitted, anchored to the right cell, visibility-gated) and assert
+   the `KIND_GROUP` so it lands under the intended filter.
+
+A new action with no feed entry is an incomplete feature, not a follow-up.
+
+### Real-time is part of coverage (NON-NEGOTIABLE)
+
+The activity feed must update **live for everyone — including the user who
+took the action**. The mechanism: the projection that writes the action's
+read model / handles its event calls `broadcast_assessment_sync(event)`,
+which nudges the `#assessment-sync-signal`; `assessment_sync_controller`
+then reloads the activity frame. Crucially, the activity frame reload is
+**exempt from the actor's self-suppression window** — the suppression only
+skips the matrix/scoring re-fetch (which would flicker and reset scroll),
+never the activity frame — so the actor sees their own entry appear too.
+
+Therefore **every projection that handles an on-screen assessment action
+MUST call `broadcast_assessment_sync` in its `call`** (guarded by
+`Projections::Replayer.replay_mode?` so rebuilds stay silent). Today that is
+`CurrentAssessment` (ratings / alignment), `EvidenceCollection` (evidence +
+links), `CommentThread` (comments), and `AssessmentAuthority` (delegation
+grant/revoke, reporting-manager). When you add a projection for a new
+assessment action, add the same broadcast — a feed entry that only appears
+on the next manual reload does not satisfy this rule.
+
 ## Real-Time Sync
 
 Rating changes by another viewer are broadcast via ActionCable. `assessment_sync_controller` observes a signal element for Turbo Stream replacements and triggers a frame reload:

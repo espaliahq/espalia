@@ -9,6 +9,14 @@ FactoryBot.define do
   # `assessment_level_ratings` / `person_framework_assignments` factories.
   # Tests that need person_id to reference a real Person can override.
   factory :evidence_item do
+    transient do
+      # In production the projection writes an active EvidenceLink for the
+      # origin coordinate alongside the item. Mirror that so factory-built
+      # items show up in the matrix / link-driven queries without each test
+      # creating the link by hand. Set to false for the bare item row.
+      with_link { true }
+    end
+
     association :tenant
     association :author, factory: :person
     person_id { SecureRandom.uuid_v7 }
@@ -20,5 +28,22 @@ FactoryBot.define do
     content { "Shipped the migration project on time." }
     link_status { "active" }
     recorded_at { Time.current }
+
+    after(:create) do |item, evaluator|
+      next unless evaluator.with_link
+      next if item.link_status != "active"
+
+      EvidenceLink.create!(
+        tenant_id: item.tenant_id,
+        evidence_id: item.id,
+        person_id: item.person_id,
+        framework_id: item.framework_id,
+        capability_stable_id: item.capability_stable_id,
+        level_ordinal: item.level_ordinal,
+        link_status: "active",
+        linked_by_id: item.author_id,
+        linked_at: item.recorded_at
+      )
+    end
   end
 end

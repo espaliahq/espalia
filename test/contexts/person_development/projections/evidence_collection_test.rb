@@ -48,6 +48,15 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_equal @author.id, item.author_id
         assert_equal "active", item.link_status
         assert_not_nil item.recorded_at
+
+        # The first link is materialised alongside the content row.
+        link = EvidenceLink.find_by(evidence_id: evidence_id)
+        assert_equal cap_sid, link.capability_stable_id
+        assert_equal 3, link.level_ordinal
+        assert_equal "active", link.link_status
+        assert_equal @author.id, link.linked_by_id
+        assert_equal @person_id, link.person_id
+        assert_equal @framework_id, link.framework_id
       end
     end
 
@@ -69,8 +78,97 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
     end
   end
 
-  context "EvidenceRelinked" do
-    should "update capability and level on the existing row" do
+  context "EvidenceLinkAdded" do
+    should "create an additional active link without touching the item content" do
+      evidence_id = SecureRandom.uuid_v7
+      cap_sid = SecureRandom.uuid_v7
+      cap_sid2 = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+        title: nil, content: "x", external_reference: nil, author_id: @author.id)
+
+      emit(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: evidence_id, capability_stable_id: cap_sid2, level_ordinal: 4,
+        linked_by_id: @author.id, rationale: "Also applies")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(evidence_id)
+        # Origin columns unchanged.
+        assert_equal cap_sid, item.capability_stable_id
+        assert_equal 2, item.level_ordinal
+
+        links = EvidenceLink.active.where(evidence_id: evidence_id).order(:linked_at)
+        assert_equal [ [ cap_sid, 2 ], [ cap_sid2, 4 ] ],
+          links.pluck(:capability_stable_id, :level_ordinal)
+      end
+    end
+
+    should "be idempotent on replay (re-applying leaves one active row)" do
+      evidence_id = SecureRandom.uuid_v7
+      cap_sid = SecureRandom.uuid_v7
+      cap_sid2 = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+        title: nil, content: "x", external_reference: nil, author_id: @author.id)
+
+      2.times do
+        emit(PersonDevelopment::Events::EvidenceLinkAdded,
+          evidence_id: evidence_id, capability_stable_id: cap_sid2, level_ordinal: 4,
+          linked_by_id: @author.id, rationale: nil)
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal 1, EvidenceLink.where(evidence_id: evidence_id,
+                                           capability_stable_id: cap_sid2, level_ordinal: 4).count
+      end
+    end
+  end
+
+  context "EvidenceLinkRemoved" do
+    should "soft-remove the link and leave the item active" do
+      evidence_id = SecureRandom.uuid_v7
+      cap_sid = SecureRandom.uuid_v7
+      cap_sid2 = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+        title: nil, content: "x", external_reference: nil, author_id: @author.id)
+      emit(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: evidence_id, capability_stable_id: cap_sid2, level_ordinal: 4,
+        linked_by_id: @author.id, rationale: nil)
+
+      emit(PersonDevelopment::Events::EvidenceLinkRemoved,
+        evidence_id: evidence_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        removed_by_id: @author.id, reason: "Mislinked")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "active", EvidenceItem.find(evidence_id).link_status
+        removed = EvidenceLink.find_by(evidence_id: evidence_id,
+                                       capability_stable_id: cap_sid, level_ordinal: 2)
+        assert_equal "removed", removed.link_status
+        assert_equal @author.id, removed.removed_by_id
+        assert_equal "Mislinked", removed.removal_reason
+        assert_equal [ [ cap_sid2, 4 ] ],
+          EvidenceLink.active.where(evidence_id: evidence_id).pluck(:capability_stable_id, :level_ordinal)
+      end
+    end
+
+    should "be a no-op when the link row is missing" do
+      assert_nothing_raised do
+        emit(PersonDevelopment::Events::EvidenceLinkRemoved,
+          evidence_id: SecureRandom.uuid_v7, capability_stable_id: SecureRandom.uuid_v7,
+          level_ordinal: 1, removed_by_id: @author.id, reason: nil)
+      end
+    end
+  end
+
+  context "EvidenceRelinked (historical replay)" do
+    should "remove the previous link, add the new one, and move the origin columns" do
       evidence_id = SecureRandom.uuid_v7
       cap_sid = SecureRandom.uuid_v7
       new_cap_sid = SecureRandom.uuid_v7
@@ -91,6 +189,11 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_equal new_cap_sid, item.capability_stable_id
         assert_equal 4, item.level_ordinal
         assert_equal "active", item.link_status
+
+        assert_equal "removed",
+          EvidenceLink.find_by(evidence_id: evidence_id, capability_stable_id: cap_sid).link_status
+        assert_equal [ [ new_cap_sid, 4 ] ],
+          EvidenceLink.active.where(evidence_id: evidence_id).pluck(:capability_stable_id, :level_ordinal)
       end
     end
 
@@ -191,7 +294,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         author_id: @author.id)
     end
 
-    should "re-key evidence rows for a same mapping" do
+    should "re-key evidence rows and links for a same mapping" do
       emit(PersonDevelopment::Events::FrameworkVersionMigrated,
         framework_id: @framework_id, old_version: 1, new_version: 2,
         mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
@@ -201,10 +304,12 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         item = EvidenceItem.find(@ev_id)
         assert_equal @to_stable_id, item.capability_stable_id
         assert_equal "active", item.link_status
+        assert_equal [ [ @to_stable_id, 3 ] ],
+          EvidenceLink.active.where(evidence_id: @ev_id).pluck(:capability_stable_id, :level_ordinal)
       end
     end
 
-    should "withdraw evidence rows for an archived mapping" do
+    should "withdraw a single-link item when its only link is archived" do
       emit(PersonDevelopment::Events::FrameworkVersionMigrated,
         framework_id: @framework_id, old_version: 1, new_version: 2,
         mappings: [ { from_stable_id: @from_stable_id, to_stable_id: nil,
@@ -212,10 +317,30 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
 
       ActsAsTenant.with_tenant(@tenant) do
         item = EvidenceItem.find(@ev_id)
-        assert_equal @from_stable_id, item.capability_stable_id
         assert_equal "withdrawn", item.link_status
-        assert_equal "framework_migration_archived", item.withdrawal_reason
+        assert_equal "framework_migration_orphaned", item.withdrawal_reason
         assert_not_nil item.withdrawn_at
+        assert_equal "removed",
+          EvidenceLink.find_by(evidence_id: @ev_id, capability_stable_id: @from_stable_id).link_status
+      end
+    end
+
+    should "keep a multi-link item active when only one of its links is archived" do
+      survivor_stable_id = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: @ev_id, capability_stable_id: survivor_stable_id, level_ordinal: 3,
+        linked_by_id: @author.id, rationale: nil)
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: nil,
+                      mapping_type: "archived", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@ev_id)
+        assert_equal "active", item.link_status
+        assert_equal [ [ survivor_stable_id, 3 ] ],
+          EvidenceLink.active.where(evidence_id: @ev_id).pluck(:capability_stable_id, :level_ordinal)
       end
     end
   end

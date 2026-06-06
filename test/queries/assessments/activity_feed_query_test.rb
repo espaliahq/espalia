@@ -142,17 +142,28 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
-  context "relinked evidence" do
+  # `EvidenceRelinked` is no longer emitted (the user-facing "move" action
+  # was dropped in favour of add-link + remove-link), but historical streams
+  # still contain it and the activity feed must keep rendering those entries.
+  # Inject the event directly to exercise that path.
+  context "relinked evidence (historical event)" do
     setup do
+      @new_cap_stable = SecureRandom.uuid_v7
+      event = PersonDevelopment::Events::EvidenceRelinked.new(
+        data: {
+          evidence_id: @evidence_id,
+          previous_capability_stable_id: @cap_sid, previous_level_ordinal: 2,
+          new_capability_stable_id: @new_cap_stable, new_level_ordinal: 4,
+          relinked_by_id: @assessee.id, rationale: "Better fit at L4"
+        },
+        metadata: { tenant_id: @tenant.id, person_id: @assessee.id, framework_id: @framework_id }
+      )
       ActsAsTenant.with_tenant(@tenant) do
-        @new_cap_stable = SecureRandom.uuid_v7
-        PersonDevelopment::CommandHandler.new.relink_evidence(
-          @assessee.id, @framework_id, @evidence_id,
-          new_capability_stable_id: @new_cap_stable,
-          new_level_ordinal: 4,
-          relinked_by_id: @assessee.id,
-          rationale: "Better fit at L4"
-        )
+        stream = EventStreamNaming.person_development_stream(@assessee.id, @framework_id)
+        Rails.configuration.event_store.append(event, stream_name: stream)
+        # Apply to the projection so the EvidenceItem origin columns move,
+        # matching how the live subscriber would have handled it historically.
+        PersonDevelopment::Projections::EvidenceCollection.new.call(event)
       end
       @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
         alignment_started: true)
@@ -175,6 +186,49 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal @cap_sid, relink.payload[:previous_capability_stable_id]
       assert_equal 2, relink.payload[:previous_level_ordinal]
       assert_equal "Better fit at L4", relink.payload[:rationale]
+    end
+  end
+
+  context "evidence link add/remove" do
+    setup do
+      @other_cap = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.add_evidence_link(@assessee.id, @framework_id, @evidence_id,
+          capability_stable_id: @other_cap, level_ordinal: 3,
+          linked_by_id: @assessee.id, rationale: "Also applies here")
+        handler.remove_evidence_link(@assessee.id, @framework_id, @evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 2,
+          removed_by_id: @assessee.id, reason: "Mislinked")
+      end
+      @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
+        alignment_started: false)
+    end
+
+    should "emit an evidence_linked entry anchored to the new cell, grouped under evidence" do
+      linked = @entries.find { |e| e.kind == "evidence_linked" }
+      assert_not_nil linked
+      assert_equal @other_cap, linked.capability_stable_id
+      assert_equal 3, linked.level_ordinal
+      assert_equal "Also applies here", linked.payload[:rationale]
+      assert_equal "Launch", linked.payload[:evidence_title]
+      assert_equal "evidence", Views::Assessments::Activity::Entry::KIND_GROUP[linked.kind]
+    end
+
+    should "emit an evidence_unlinked entry anchored to the removed cell" do
+      unlinked = @entries.find { |e| e.kind == "evidence_unlinked" }
+      assert_not_nil unlinked
+      assert_equal @cap_sid, unlinked.capability_stable_id
+      assert_equal 2, unlinked.level_ordinal
+      assert_equal "Mislinked", unlinked.payload[:reason]
+    end
+
+    should "hide link changes a peer did not perform" do
+      entries = run_query(viewer: @peer, sees_all: false, context: :self,
+        alignment_started: false)
+      kinds = entries.map(&:kind)
+      refute_includes kinds, "evidence_linked"
+      refute_includes kinds, "evidence_unlinked"
     end
   end
 

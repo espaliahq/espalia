@@ -38,6 +38,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_add_evidence_link",
+        "description" => "Link an existing evidence item to an additional capability × level.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "evidence_id"          => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "rationale"            => { "type" => "string" }
+          },
+          "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_align",
         "description" => "Record the aligned (agreed) frequency for one capability × level.",
         "inputSchema" => {
@@ -202,9 +223,31 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "custom_type_label"    => { "type" => "string" },
             "title"                => { "type" => "string" },
             "content"              => { "type" => "string" },
-            "external_reference"   => { "type" => "object" }
+            "external_reference"   => { "type" => "object" },
+            "additional_links"     => { "type" => "array" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_remove_evidence_link",
+        "description" => "Remove one capability × level link from an evidence item (it keeps its other links).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "evidence_id"          => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "reason"               => { "type" => "string" }
+          },
+          "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal],
           "additionalProperties" => false
         },
         "annotations" => {

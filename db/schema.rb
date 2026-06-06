@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_05_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -158,6 +158,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_000000) do
     t.index ["tenant_id", "person_id", "link_status"], name: "idx_evidence_items_tenant_person_status"
     t.index ["tenant_id"], name: "index_evidence_items_on_tenant_id"
     t.index ["withdrawn_by_id"], name: "idx_evidence_items_withdrawn_by_id", where: "(withdrawn_by_id IS NOT NULL)"
+  end
+
+  create_table "evidence_links", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "capability_stable_id", null: false
+    t.datetime "created_at", null: false
+    t.uuid "evidence_id", null: false
+    t.uuid "framework_id", null: false
+    t.integer "level_ordinal", null: false
+    t.string "link_status", default: "active", null: false
+    t.datetime "linked_at", null: false
+    t.uuid "linked_by_id"
+    t.uuid "person_id", null: false
+    t.text "removal_reason"
+    t.datetime "removed_at"
+    t.uuid "removed_by_id"
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evidence_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_links_natural_key", unique: true
+    t.index ["evidence_id"], name: "index_evidence_links_on_evidence_id"
+    t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal", "link_status"], name: "idx_evidence_links_anchor"
+    t.index ["tenant_id"], name: "index_evidence_links_on_tenant_id"
   end
 
   create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
@@ -582,6 +603,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_000000) do
   add_foreign_key "evidence_items", "people", column: "edited_by_id", on_delete: :nullify
   add_foreign_key "evidence_items", "people", column: "withdrawn_by_id", on_delete: :nullify
   add_foreign_key "evidence_items", "tenants"
+  add_foreign_key "evidence_links", "evidence_items", column: "evidence_id", on_delete: :cascade
+  add_foreign_key "evidence_links", "people", column: "linked_by_id", on_delete: :nullify
+  add_foreign_key "evidence_links", "people", column: "removed_by_id", on_delete: :nullify
+  add_foreign_key "evidence_links", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"

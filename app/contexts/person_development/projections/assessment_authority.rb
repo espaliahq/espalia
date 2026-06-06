@@ -39,6 +39,7 @@ class PersonDevelopment::Projections::AssessmentAuthority
   def call(event)
     with_tenant(event) do
       handle(event)
+      broadcast_assessment_sync(event)
     end
   end
 
@@ -95,6 +96,23 @@ class PersonDevelopment::Projections::AssessmentAuthority
       revoked_at: event.metadata[:timestamp] || Time.current,
       revoked_by_id: event.data[:revoked_by_id]
     )
+  end
+
+  # Nudges the assessment-sync signal so any open assessment view reloads
+  # its activity feed (delegation grant/revoke and reporting-manager changes
+  # are on-screen actions that must surface there in real time — see the
+  # activity-feed coverage rule in docs/guidelines/assessments.md).
+  # Suppressed during replay to avoid spamming live channels on a rebuild.
+  def broadcast_assessment_sync(event)
+    return if Projections::Replayer.replay_mode?
+
+    Turbo::StreamsChannel.broadcast_replace_to(
+      "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
+      target: "assessment-sync-signal",
+      html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+    )
+  rescue => e
+    Rails.logger.warn("[AssessmentAuthority] Broadcast failed: #{e.message}")
   end
 
   def with_tenant(event, &block)

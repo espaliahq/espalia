@@ -42,6 +42,14 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
       cycles_handler.define_cycle(@cycle_id, framework_id, "Q1", "regular", 1, defined_by: @manager.id)
       cycles_handler.enroll(@cycle_id, @report.id, enrolled_by: @manager.id)
 
+      # A capability that really exists, but in a DIFFERENT framework — used
+      # to exercise the cross-framework rejection (not just "id not found").
+      other_framework_id = SecureRandom.uuid_v7
+      create(:framework_state, framework_id: other_framework_id, name: "Other FW")
+      other_cat = create(:framework_capability_category,
+        framework_id: other_framework_id, name: "Other", ordinal: 1)
+      @foreign_cap = create(:framework_capability, category_id: other_cat.category_id, name: "Foreign")
+
       @framework_id = framework_id
       @report_assignment = PersonFrameworkAssignment.for_person(@report.id).first
     end
@@ -133,6 +141,20 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
         call_op(ctx: @report_ctx, level_ordinal: 99)
       end
       assert_match(/does not exist/, err.message)
+    end
+
+    should "reject a capability_stable_id from a different framework" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @report_ctx, capability_stable_id: @foreign_cap.stable_id)
+      end
+      assert_match(/does not belong to the assignment's framework/, err.message)
+    end
+
+    should "reject a capability_stable_id that does not exist at all" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @report_ctx, capability_stable_id: SecureRandom.uuid_v7)
+      end
+      assert_match(/does not belong to the assignment's framework/, err.message)
     end
 
     should "reject an unknown evidence_type at the parameter layer" do

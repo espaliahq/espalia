@@ -207,6 +207,12 @@ class Assessments::MatrixDataBuilder
   # (capability_stable_id, level_ordinal). Evidence has no cycle scope —
   # it's framework-wide context anchored to the behavioural expectation.
   #
+  # An item can be linked to several cells (multi-linkage), so the same
+  # {EvidenceItem} object can appear in more than one bucket. Each item
+  # carries its total active-link count (`active_link_count`) so the card
+  # can render an "also linked to N other places" indicator without an
+  # N+1.
+  #
   # Visibility:
   # - When `viewer_sees_all_evidence: true` (assessee, manager chain, or
   #   tenant admin): returns every active item for the person + framework.
@@ -219,16 +225,26 @@ class Assessments::MatrixDataBuilder
   def load_evidence
     return {} if @viewer_person_id.nil?
 
-    scope = EvidenceItem
+    items_scope = EvidenceItem
       .active
       .for_person(@person_id)
       .for_framework(@framework.framework_id)
-    scope = scope.where(author_id: @viewer_person_id) unless @viewer_sees_all_evidence
+      .includes(:author)
+    items_scope = items_scope.where(author_id: @viewer_person_id) unless @viewer_sees_all_evidence
+    items_by_id = items_scope.index_by(&:id)
+    return {} if items_by_id.empty?
 
-    scope.order(:recorded_at).each_with_object({}) do |item, h|
-      key = [ item.capability_stable_id, item.level_ordinal ]
-      (h[key] ||= []) << item
-    end
+    links = EvidenceLink.active.where(evidence_id: items_by_id.keys)
+    counts = links.group(:evidence_id).count
+
+    links.to_a
+      .sort_by { |link| items_by_id[link.evidence_id].recorded_at }
+      .each_with_object({}) do |link, h|
+        item = items_by_id[link.evidence_id]
+        item.active_link_count = counts[link.evidence_id]
+        key = [ link.capability_stable_id, link.level_ordinal ]
+        (h[key] ||= []) << item
+      end
   end
 
   # Loads comments visible to the current viewer, indexed by

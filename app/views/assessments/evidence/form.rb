@@ -37,8 +37,13 @@ class Views::Assessments::Evidence::Form < Views::Base
   ].freeze
 
   # @param assessment_id [String]
-  def initialize(assessment_id:)
+  # @param categories [Array<Hash>] from MatrixDataBuilder — used to populate
+  #   the optional "also applies to other capabilities" picker
+  # @param merged_levels [Array<Hash>] from MatrixDataBuilder
+  def initialize(assessment_id:, categories: [], merged_levels: [])
     @assessment_id = assessment_id
+    @categories = categories
+    @merged_levels = merged_levels
   end
 
   def view_template
@@ -76,7 +81,53 @@ class Views::Assessments::Evidence::Form < Views::Base
       title_field
       content_field
       external_reference_fields
+      additional_links_field
       footer
+    end
+  end
+
+  # Optional, collapsed-by-default picker letting the author attach the new
+  # evidence to extra capability × level cells at creation time. Each
+  # selected pair is appended (by the evidence-form Stimulus controller) as
+  # a hidden `evidence[additional_links][]` token; the common single-cell
+  # case stays one action. Only rendered when the framework data is present.
+  def additional_links_field
+    return if @categories.blank? || @merged_levels.blank?
+
+    details(class: "mb-3 rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2") do
+      summary(class: "cursor-pointer text-xs font-medium text-gray-700 dark:text-gray-300") do
+        "Also applies to other capabilities? (optional)"
+      end
+      div(class: "mt-2 grid grid-cols-[1fr_auto_auto] items-end gap-2") do
+        div do
+          label(for: "evidence_link_capability_picker", class: label_classes) { "Capability" }
+          select(id: "evidence_link_capability_picker", class: input_classes,
+                 data: { evidence_form_target: "linkCapabilitySelect" }) do
+            @categories.each do |cat_data|
+              optgroup(label: cat_data[:category].name) do
+                cat_data[:capabilities].each do |cap_data|
+                  cap = cap_data[:capability]
+                  option(value: cap.stable_id) { cap.name }
+                end
+              end
+            end
+          end
+        end
+        div do
+          label(for: "evidence_link_level_picker", class: label_classes) { "Level" }
+          select(id: "evidence_link_level_picker", class: input_classes,
+                 data: { evidence_form_target: "linkLevelSelect" }) do
+            @merged_levels.each do |level|
+              option(value: level[:ordinal]) { "L#{level[:ordinal]}" }
+            end
+          end
+        end
+        button(type: "button",
+               class: "px-2.5 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 " \
+                      "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800",
+               data: { action: "click->evidence-form#addLink" }) { "Add" }
+      end
+      div(class: "mt-2 flex flex-wrap gap-1.5", data: { evidence_form_target: "additionalLinks" })
     end
   end
 

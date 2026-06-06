@@ -1,21 +1,30 @@
 # frozen_string_literal: true
 
-# Projection read model for evidence captured against a (capability, level)
-# coordinate.
+# Projection read model for the CONTENT of a piece of evidence (type,
+# title, body, external reference, author, audit fields).
+#
+# The (capability, level) coordinates an item appears in live on
+# {EvidenceLink} — one item can demonstrate several capability × level
+# expectations. The `capability_stable_id` / `level_ordinal` columns here
+# are the item's ORIGIN link (where it was first recorded); the activity
+# feed anchors evidence-recorded/withdrawn entries on them. The assessment
+# matrix reads from {EvidenceLink} for the full set of cells.
 #
 # Materialised from PersonDevelopment evidence events
-# ({EvidenceRecorded}, {EvidenceRelinked}, {EvidenceWithdrawn}) by
+# ({EvidenceRecorded}, {EvidenceUpdated}, {EvidenceWithdrawn}, and the
+# link/relink events that touch {EvidenceLink}) by
 # {PersonDevelopment::Projections::EvidenceCollection}.
 #
 # Anchored to the same `(capability_stable_id, level_ordinal)` coordinate
-# as ratings — evidence accompanies the behavioural expectation it's
+# system as ratings — evidence accompanies the behavioural expectation it's
 # evidence for, not a particular role's level UUID. This keeps evidence
 # stable across role transitions and framework versions.
 #
 # Withdrawn evidence remains in the table with `link_status: "withdrawn"`
 # so the activity feed can render it (struck-through) and audit history
-# is preserved. Use the {.active} scope to count toward the in-cell
-# evidence badge or evidence-density reporting.
+# is preserved. Withdrawal hides the item in EVERY cell. Use the {.active}
+# scope to count toward the in-cell evidence badge or evidence-density
+# reporting.
 #
 class EvidenceItem < ApplicationRecord
   SOURCES = %w[self manager peer].freeze
@@ -39,8 +48,15 @@ class EvidenceItem < ApplicationRecord
   belongs_to :author, class_name: "Person", foreign_key: :author_id, inverse_of: false, optional: false
   belongs_to :withdrawn_by, class_name: "Person", foreign_key: :withdrawn_by_id, inverse_of: false, optional: true
   belongs_to :edited_by, class_name: "Person", foreign_key: :edited_by_id, inverse_of: false, optional: true
+  has_many :evidence_links, foreign_key: :evidence_id, inverse_of: :evidence_item, dependent: :delete_all
 
   attribute :external_reference, ExternalReference.to_type, default: -> { ExternalReference.new }
+
+  # Transient (non-persisted) count of this item's ACTIVE links, populated
+  # by the matrix/controller queries so views can render an "also linked to
+  # N other places" indicator and grey out "unlink from this capability" when the
+  # item has only one link. Nil when not loaded — treat as a single link.
+  attr_accessor :active_link_count
 
   validates :person_id, presence: true
   validates :framework_id, presence: true

@@ -23,12 +23,21 @@ class PersonDevelopment::Projections::EvidenceCollection
   # 2 — handles `FrameworkVersionMigrated`: re-keys evidence rows onto
   #     the survivor `to_stable_id` for same/evolved mappings, and
   #     withdraws orphans for archived/split.
-  CODE_VERSION = 2
+  # 3 — multi-linkage evidence. Writes the new `evidence_links` table
+  #     (one active link per cell an item appears in), so `reset!` now
+  #     truncates it too, and `EvidenceRecorded` / `EvidenceLinkAdded` /
+  #     `EvidenceLinkRemoved` / historical `EvidenceRelinked` /
+  #     `FrameworkVersionMigrated` maintain link rows. The
+  #     `evidence_items` content row (incl. its origin coordinate columns)
+  #     is unchanged from v2.
+  CODE_VERSION = 3
 
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events
     [
       PersonDevelopment::Events::EvidenceRecorded,
+      PersonDevelopment::Events::EvidenceLinkAdded,
+      PersonDevelopment::Events::EvidenceLinkRemoved,
       PersonDevelopment::Events::EvidenceRelinked,
       PersonDevelopment::Events::EvidenceUpdated,
       PersonDevelopment::Events::EvidenceWithdrawn,
@@ -42,6 +51,7 @@ class PersonDevelopment::Projections::EvidenceCollection
   # @param tenant [Tenant]
   def self.reset!(tenant:)
     ActsAsTenant.with_tenant(tenant) do
+      EvidenceLink.where(tenant_id: tenant.id).delete_all
       EvidenceItem.where(tenant_id: tenant.id).delete_all
     end
   end
@@ -59,6 +69,8 @@ class PersonDevelopment::Projections::EvidenceCollection
   def handle(event)
     case event
     when PersonDevelopment::Events::EvidenceRecorded then handle_recorded(event)
+    when PersonDevelopment::Events::EvidenceLinkAdded then handle_link_added(event)
+    when PersonDevelopment::Events::EvidenceLinkRemoved then handle_link_removed(event)
     when PersonDevelopment::Events::EvidenceRelinked then handle_relinked(event)
     when PersonDevelopment::Events::EvidenceUpdated then handle_updated(event)
     when PersonDevelopment::Events::EvidenceWithdrawn then handle_withdrawn(event)
@@ -66,34 +78,61 @@ class PersonDevelopment::Projections::EvidenceCollection
     end
   end
 
-  # Applies the migration mappings to this person's evidence rows.
-  # `same`/`evolved` re-key onto the survivor; `archived`/`split`
-  # withdraw the row (the underlying capability no longer exists in
-  # the published framework, so the evidence has nowhere to live).
-  # `new` is a no-op (no predecessor evidence).
+  # Applies the migration mappings to this person's evidence rows AND their
+  # links. `same`/`evolved` re-key both the item's origin column and the
+  # matching link rows onto the survivor; `archived`/`split` remove the
+  # matching link rows (the underlying capability is gone, so the evidence
+  # has nowhere to live there). An item is withdrawn only when it has NO
+  # remaining active links after the pass — multi-link items that still
+  # have a home survive. `new` is a no-op (no predecessor evidence).
   def handle_framework_version_migrated(event)
     person_id = event.metadata[:person_id]
     framework_id = event.data[:framework_id]
     timestamp = event.metadata[:timestamp] || Time.current
+    touched_evidence_ids = []
 
     event.data[:mappings].each do |mapping|
-      scope = EvidenceItem.where(
+      link_scope = EvidenceLink.where(
         person_id: person_id, framework_id: framework_id,
         capability_stable_id: mapping[:from_stable_id]
       )
+      item_scope = EvidenceItem.where(
+        person_id: person_id, framework_id: framework_id,
+        capability_stable_id: mapping[:from_stable_id]
+      )
+      touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
 
       case mapping[:mapping_type]
       when "same", "evolved"
-        scope.update_all(capability_stable_id: mapping[:to_stable_id])
+        link_scope.update_all(capability_stable_id: mapping[:to_stable_id])
+        item_scope.update_all(capability_stable_id: mapping[:to_stable_id])
       when "archived", "split"
-        scope.where(link_status: "active").update_all(
-          link_status: "withdrawn",
-          withdrawn_at: timestamp,
-          withdrawal_reason: "framework_migration_#{mapping[:mapping_type]}"
+        link_scope.where(link_status: "active").update_all(
+          link_status: "removed",
+          removed_at: timestamp,
+          removal_reason: "framework_migration_#{mapping[:mapping_type]}"
         )
       when "new"
         # No predecessor evidence to touch.
       end
+    end
+
+    withdraw_items_without_active_links(touched_evidence_ids.uniq, timestamp)
+  end
+
+  # After a migration pass that may have removed link rows, withdraw any
+  # touched item that has been left with zero active links.
+  def withdraw_items_without_active_links(evidence_ids, timestamp)
+    return if evidence_ids.empty?
+
+    EvidenceItem.where(id: evidence_ids, link_status: "active").find_each do |item|
+      next if item.evidence_links.active.exists?
+
+      item.update!(
+        link_status: "withdrawn",
+        withdrawn_at: timestamp,
+        withdrawal_reason: "framework_migration_orphaned"
+      )
     end
   end
 
@@ -119,16 +158,81 @@ class PersonDevelopment::Projections::EvidenceCollection
       recorded_at: event.metadata[:timestamp] || Time.current
     )
     item.save!
+
+    upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
+                linked_by_id: event.data[:author_id])
   end
 
+  def handle_link_added(event)
+    upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
+                linked_by_id: event.data[:linked_by_id])
+  end
+
+  def handle_link_removed(event)
+    link = EvidenceLink.find_by(
+      evidence_id: event.data[:evidence_id],
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal]
+    )
+    return unless link
+
+    link.update!(
+      link_status: "removed",
+      removed_at: event.metadata[:timestamp] || Time.current,
+      removed_by_id: event.data[:removed_by_id],
+      removal_reason: event.data[:reason]
+    )
+  end
+
+  # Historical event — no longer emitted. Replays as remove-previous-link
+  # + add-new-link on the link table, and moves the item's origin columns
+  # (preserving the pre-multi-link activity-feed anchor behaviour).
   def handle_relinked(event)
     item = EvidenceItem.find_by(id: event.data[:evidence_id])
     return unless item
+
+    previous = EvidenceLink.find_by(
+      evidence_id: event.data[:evidence_id],
+      capability_stable_id: event.data[:previous_capability_stable_id],
+      level_ordinal: event.data[:previous_level_ordinal]
+    )
+    previous&.update!(
+      link_status: "removed",
+      removed_at: event.metadata[:timestamp] || Time.current,
+      removal_reason: "relinked"
+    )
+
+    upsert_link(event, event.data[:new_capability_stable_id], event.data[:new_level_ordinal],
+                linked_by_id: event.data[:relinked_by_id])
 
     item.update!(
       capability_stable_id: event.data[:new_capability_stable_id],
       level_ordinal: event.data[:new_level_ordinal]
     )
+  end
+
+  # Upserts an active link row keyed by the natural key
+  # (evidence_id, capability_stable_id, level_ordinal). Idempotent for
+  # replay; re-activates a previously-removed link if the same coordinate
+  # is added again.
+  def upsert_link(event, capability_stable_id, level_ordinal, linked_by_id:)
+    link = EvidenceLink.find_or_initialize_by(
+      evidence_id: event.data[:evidence_id],
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal
+    )
+    link.assign_attributes(
+      tenant_id: event.metadata[:tenant_id],
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id],
+      link_status: "active",
+      linked_by_id: linked_by_id,
+      linked_at: event.metadata[:timestamp] || Time.current,
+      removed_at: nil,
+      removed_by_id: nil,
+      removal_reason: nil
+    )
+    link.save!
   end
 
   def handle_updated(event)

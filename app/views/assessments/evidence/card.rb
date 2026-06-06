@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
-# Renders a single evidence item inside the expanded cell of an
+# Renders a single evidence item inside one expanded cell of an
 # assessment matrix.
 #
 # Shows source dot (self/manager/peer), type label, optional title,
-# content, optional external-link chip, author + relative timestamp.
-# A hover-revealed action menu lets the author or anyone in the
-# assessee's manager chain withdraw the item; relink lives behind the
-# same menu.
+# content, optional external-link chip, author + relative timestamp, and —
+# when the item is attached to more than one cell — an "also linked to N
+# other places" indicator. A hover-revealed action menu lets the author or
+# anyone in the assessee's manager chain link the item to another
+# capability, remove it from THIS cell (greyed out when it's the item's
+# only link), or withdraw it everywhere.
 #
 class Views::Assessments::Evidence::Card < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
@@ -33,15 +35,20 @@ class Views::Assessments::Evidence::Card < Views::Base
   }.freeze
 
   # @param item [EvidenceItem]
-  # @param assessment_id [String] for routing the withdraw action
+  # @param assessment_id [String] for routing the actions
+  # @param current_capability_stable_id [String] the cell this card renders in
+  # @param current_level_ordinal [Integer] the cell this card renders in
   # @param can_withdraw [Boolean] whether the current viewer may withdraw this item
-  # @param can_relink [Boolean] whether the current viewer may relink this item
+  # @param can_manage_links [Boolean] whether the current viewer may add/remove this item's links
   # @param can_update [Boolean] whether the current viewer may edit this item
-  def initialize(item:, assessment_id:, can_withdraw: false, can_relink: false, can_update: false)
+  def initialize(item:, assessment_id:, current_capability_stable_id:, current_level_ordinal:,
+                 can_withdraw: false, can_manage_links: false, can_update: false)
     @item = item
     @assessment_id = assessment_id
+    @current_capability_stable_id = current_capability_stable_id
+    @current_level_ordinal = current_level_ordinal
     @can_withdraw = can_withdraw
-    @can_relink = can_relink
+    @can_manage_links = can_manage_links
     @can_update = can_update
   end
 
@@ -55,13 +62,36 @@ class Views::Assessments::Evidence::Card < Views::Base
         header_line
         title_line if @item.title.present?
         content_line
+        also_linked_line if other_link_count.positive?
         footer_line
       end
-      actions_menu if @can_withdraw || @can_relink || @can_update
+      actions_menu if @can_withdraw || @can_manage_links || @can_update
     end
   end
 
   private
+
+  # Active links other than the cell this card is rendered in.
+  def other_link_count
+    count = @item.active_link_count
+    return 0 if count.nil?
+
+    [ count - 1, 0 ].max
+  end
+
+  # Whether "unlink from this capability" is allowed: managing links is permitted
+  # AND this is not the item's only link (the last-link invariant — an
+  # active item must keep ≥1 link — is also enforced in the aggregate).
+  def can_remove_this_link?
+    @can_manage_links && @item.active_link_count.to_i > 1
+  end
+
+  def also_linked_line
+    div(class: "mt-1 text-[10px] text-gray-500 dark:text-gray-400 italic") do
+      n = other_link_count
+      plain "Also linked to #{n} other #{n == 1 ? 'place' : 'places'}"
+    end
+  end
 
   def source_dot
     color = SOURCE_DOT[@item.source] || "bg-gray-400"
@@ -134,8 +164,9 @@ class Views::Assessments::Evidence::Card < Views::Base
     end
   end
 
-  # Hover-revealed kebab menu that hosts both Relink and Withdraw, plus
-  # any future actions (copy link, edit). Uses the shared `dropdown`
+  # Hover-revealed kebab menu that hosts Edit, link management
+  # (Link to another capability / Unlink from this capability), and Withdraw.
+  # Uses the shared `dropdown`
   # Stimulus controller — same one the user menu and framework explorer
   # use — so behaviour (click-outside close, transition, aria) is
   # consistent across the app.
@@ -171,14 +202,15 @@ class Views::Assessments::Evidence::Card < Views::Base
 
   def kebab_menu
     div(
-      class: "hidden absolute right-0 mt-1 w-36 rounded-md border border-gray-200 " \
+      class: "hidden absolute right-0 mt-1 w-44 rounded-md border border-gray-200 " \
              "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-10 " \
              "py-1 text-xs",
       role: "menu",
       data: { dropdown_target: "menu" }
     ) do
       edit_menu_item if @can_update
-      relink_menu_item if @can_relink
+      link_menu_item if @can_manage_links
+      remove_link_menu_item if @can_manage_links
       withdraw_menu_item if @can_withdraw
     end
   end
@@ -203,19 +235,48 @@ class Views::Assessments::Evidence::Card < Views::Base
     ) { "Edit" }
   end
 
-  def relink_menu_item
+  # Opens the link modal to attach this evidence to another capability ×
+  # level. The modal posts to add_link with the originating cell (this
+  # card's coordinate) so the server re-renders the right list afterward.
+  def link_menu_item
     button(
       type: "button",
       class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
              "hover:bg-gray-100 dark:hover:bg-gray-700",
       role: "menuitem",
       data: {
-        action: "click->dropdown#close click->evidence-relink-form#open",
-        evidence_relink_form_evidence_id_param: @item.id,
-        evidence_relink_form_capability_stable_id_param: @item.capability_stable_id,
-        evidence_relink_form_level_ordinal_param: @item.level_ordinal
+        action: "click->dropdown#close click->evidence-link-form#open",
+        evidence_link_form_evidence_id_param: @item.id,
+        evidence_link_form_from_capability_stable_id_param: @current_capability_stable_id,
+        evidence_link_form_from_level_ordinal_param: @current_level_ordinal
       }
-    ) { "Relink" }
+    ) { "Link to another capability" }
+  end
+
+  # "Unlink from this capability" — removes the link for the cell this card
+  # is rendered in. Greyed out (non-interactive) when this is the item's only
+  # link: removing it is forbidden (withdraw instead). The aggregate is the
+  # backstop for the same invariant.
+  def remove_link_menu_item
+    if can_remove_this_link?
+      button_to(
+        remove_link_assessment_evidence_path(@assessment_id, @item.id),
+        params: { evidence: { capability_stable_id: @current_capability_stable_id,
+                              level_ordinal: @current_level_ordinal } },
+        method: :post,
+        class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
+               "hover:bg-gray-100 dark:hover:bg-gray-700",
+        role: "menuitem",
+        form: { data: { turbo_confirm: "Unlink this evidence from this capability?" } }
+      ) { "Unlink from this capability" }
+    else
+      span(
+        class: "block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-600 cursor-not-allowed",
+        role: "menuitem",
+        aria: { disabled: "true" },
+        title: "This is the only place this evidence is linked — withdraw it instead."
+      ) { "Unlink from this capability" }
+    end
   end
 
   def withdraw_menu_item

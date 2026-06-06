@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
-# Records, withdraws, and relinks evidence on a person's assessment.
+# Records, edits, withdraws, and manages the capability × level links of
+# evidence on a person's assessment. One piece of evidence can be linked
+# to several capability × level cells (multi-linkage).
 #
 # Source ("self" / "manager" / "peer") is inferred from the relationship
 # between the current viewer and the assessee — never trusted from the
@@ -20,11 +22,18 @@ class Assessments::EvidenceController < ApplicationController
 
     attrs = params.expect(evidence: [
       :capability_stable_id, :level_ordinal, :evidence_type, :custom_type_label,
-      :title, :content, external_reference: [ :system, :url, :external_id ]
+      :title, :content, external_reference: [ :system, :url, :external_id ],
+      additional_links: []
     ])
 
     level_ordinal = Integer(attrs[:level_ordinal], exception: false)
-    unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
+    unless level_ordinal && valid_evidence_cell?(attrs[:capability_stable_id], level_ordinal)
+      head :unprocessable_content
+      return
+    end
+
+    additional_links = parse_additional_links(attrs[:additional_links])
+    if additional_links == :invalid
       head :unprocessable_content
       return
     end
@@ -53,7 +62,8 @@ class Assessments::EvidenceController < ApplicationController
       title: attrs[:title].presence,
       content: attrs[:content].to_s,
       author_id: current_person.id,
-      external_reference: attrs[:external_reference]&.to_h
+      external_reference: attrs[:external_reference]&.to_h,
+      additional_links: additional_links
     )
 
     # Respond with turbo_stream so Turbo applies the update in place
@@ -113,36 +123,95 @@ class Assessments::EvidenceController < ApplicationController
       alert: "Could not update evidence: #{e.message}"
   end
 
-  # POST /assessments/:assessment_id/evidence/:id/relink
-  def relink
+  # POST /assessments/:assessment_id/evidence/:id/add_link
+  #
+  # Links the evidence to an additional (capability, level). Re-renders the
+  # ORIGINATING cell's evidence list (the cell the user acted from) via
+  # turbo_stream so the "also linked to N" indicator updates in place.
+  def add_link
     item = EvidenceItem.find(params.expect(:id))
-    authorize item, :relink?, policy_class: EvidencePolicy
+    authorize item, :add_link?, policy_class: EvidencePolicy
 
-    attrs = params.expect(evidence: [ :new_capability_stable_id, :new_level_ordinal, :rationale ])
+    attrs = params.expect(evidence: [ :capability_stable_id, :level_ordinal,
+                                      :from_capability_stable_id, :from_level_ordinal, :rationale ])
 
-    new_level = Integer(attrs[:new_level_ordinal], exception: false)
-    unless new_level && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: new_level)
+    target_level = Integer(attrs[:level_ordinal], exception: false)
+    unless target_level && valid_evidence_cell?(attrs[:capability_stable_id], target_level)
       head :unprocessable_content
       return
     end
 
-    PersonDevelopment::CommandHandler.new.relink_evidence(
+    PersonDevelopment::CommandHandler.new.add_evidence_link(
       @assignment.person_id, @assignment.framework_id, item.id,
-      new_capability_stable_id: attrs[:new_capability_stable_id],
-      new_level_ordinal: new_level,
-      relinked_by_id: current_person.id,
+      capability_stable_id: attrs[:capability_stable_id],
+      level_ordinal: target_level,
+      linked_by_id: current_person.id,
       rationale: attrs[:rationale].to_s.strip.presence
     )
 
-    redirect_to assessment_path(@assignment,
-                  redirect_params(attrs[:new_capability_stable_id], level_ordinal: new_level)),
-      status: :see_other, notice: "Evidence relinked."
+    from_cap = attrs[:from_capability_stable_id].presence || item.capability_stable_id
+    from_level = Integer(attrs[:from_level_ordinal], exception: false) || item.level_ordinal
+    respond_to do |format|
+      format.turbo_stream do
+        render_item_cells_stream(item.id, extra_cells: [ [ from_cap, from_level ] ])
+      end
+      format.html do
+        redirect_to assessment_path(@assignment, redirect_params(from_cap, level_ordinal: from_level)),
+          status: :see_other, notice: "Evidence linked."
+      end
+    end
   rescue ActiveRecord::RecordNotFound
     head :not_found
   rescue PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
-      alert: "Could not relink evidence: #{e.message}"
+      alert: "Could not link evidence: #{e.message}"
+  end
+
+  # POST /assessments/:assessment_id/evidence/:id/remove_link
+  #
+  # Removes one (capability, level) link; the item keeps its other links.
+  # Re-renders the cell the link was removed from so the item disappears
+  # from it in place.
+  def remove_link
+    item = EvidenceItem.find(params.expect(:id))
+    authorize item, :remove_link?, policy_class: EvidencePolicy
+
+    attrs = params.expect(evidence: [ :capability_stable_id, :level_ordinal, :reason ])
+
+    level = Integer(attrs[:level_ordinal], exception: false)
+    unless level
+      head :unprocessable_content
+      return
+    end
+
+    PersonDevelopment::CommandHandler.new.remove_evidence_link(
+      @assignment.person_id, @assignment.framework_id, item.id,
+      capability_stable_id: attrs[:capability_stable_id],
+      level_ordinal: level,
+      removed_by_id: current_person.id,
+      reason: attrs[:reason].to_s.strip.presence
+    )
+
+    respond_to do |format|
+      format.turbo_stream do
+        # The removed cell is no longer an active link, so include it
+        # explicitly; the item's remaining cells re-render to refresh their
+        # "also linked to N" counts.
+        render_item_cells_stream(item.id, extra_cells: [ [ attrs[:capability_stable_id], level ] ])
+      end
+      format.html do
+        redirect_to assessment_path(@assignment,
+                      redirect_params(attrs[:capability_stable_id], level_ordinal: level)),
+          status: :see_other, notice: "Evidence link removed."
+      end
+    end
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
+  rescue PersonDevelopment::Aggregate::CommandError => e
+    fallback = @assignment ? assessment_path(@assignment) : assessments_path
+    redirect_back fallback_location: fallback,
+      alert: "Could not remove evidence link: #{e.message}"
   end
 
   # DELETE /assessments/:assessment_id/evidence/:id
@@ -188,9 +257,11 @@ class Assessments::EvidenceController < ApplicationController
   # Evidence on yourself is "self"; on someone above you in the org chart
   # records "manager" (any chain depth); on anyone else, "peer".
   def infer_source
-    assessee = Person.find_by(id: @assignment.person_id)
+    assessee = assessment_assessee
     return "self"    if assessee&.id == current_person.id
     return "manager" if assessee&.managed_by?(current_person)
+    # An active rating delegate acts in the reporting manager's place.
+    return "manager" if active_rating_delegate?
 
     "peer"
   end
@@ -239,12 +310,34 @@ class Assessments::EvidenceController < ApplicationController
   # `create` so the modal-driven submit updates the list in-place
   # without a full-page redirect.
   def render_evidence_list_stream(capability_stable_id, level_ordinal)
-    items = evidence_items_for(capability_stable_id, level_ordinal)
-    render turbo_stream: turbo_stream.replace(
+    render turbo_stream: cell_evidence_stream(capability_stable_id, level_ordinal)
+  end
+
+  # Re-renders EVERY cell an item touches after a link change, so a link
+  # added to / removed from another (visible) cell updates live and the
+  # "also linked to N other places" counts stay correct on all visible
+  # cells the item still appears in. `extra_cells` covers the cell the user
+  # acted from / the cell a link was just removed from (no longer an active
+  # link, so not in the active set). Turbo ignores stream targets not
+  # currently in the DOM, so off-screen cells are safely skipped.
+  #
+  # The acting user's own projection broadcast is suppressed (see
+  # assessment_sync_controller), so this response is what updates their view.
+  def render_item_cells_stream(evidence_id, extra_cells: [])
+    cells = EvidenceLink.active.where(evidence_id: evidence_id)
+      .pluck(:capability_stable_id, :level_ordinal)
+    streams = (cells + extra_cells).uniq.map do |cap, level|
+      cell_evidence_stream(cap, level)
+    end
+    render turbo_stream: streams
+  end
+
+  def cell_evidence_stream(capability_stable_id, level_ordinal)
+    turbo_stream.replace(
       "evidence-list-#{capability_stable_id}-#{level_ordinal}",
       render_to_string(
         Views::Assessments::Evidence::List.new(
-          items: items,
+          items: evidence_items_for(capability_stable_id, level_ordinal),
           assessment_id: @assignment.id,
           viewer_person_id: current_person.id,
           can_create: true,
@@ -257,12 +350,59 @@ class Assessments::EvidenceController < ApplicationController
     )
   end
 
+  # Items linked to one (capability, level) cell, ordered by recording
+  # time, each carrying its total active-link count so the card can render
+  # the "also linked to N other places" indicator and gate "remove from
+  # this cell". Driven off {EvidenceLink} (an item appears in a cell when
+  # it has an active link there), not the item's origin columns.
   def evidence_items_for(capability_stable_id, level_ordinal)
-    scope = EvidenceItem.active
+    links = EvidenceLink.active
       .for_person(@assignment.person_id)
       .for_framework(@assignment.framework_id)
-      .where(capability_stable_id: capability_stable_id, level_ordinal: level_ordinal)
+      .for_cell(capability_stable_id, level_ordinal)
+    item_ids = links.pluck(:evidence_id)
+    return [] if item_ids.empty?
+
+    scope = EvidenceItem.active.where(id: item_ids).includes(:author)
     scope = scope.where(author_id: current_person.id) unless viewer_sees_all_evidence?
-    scope.order(:recorded_at)
+    items = scope.order(:recorded_at).to_a
+    counts = EvidenceLink.active.where(evidence_id: items.map(&:id)).group(:evidence_id).count
+    items.each { |item| item.active_link_count = counts[item.id] }
+    items
+  end
+
+  # Parses the optional `additional_links[]` array of "capStableId|level"
+  # tokens from the create form into the
+  # { capability_stable_id:, level_ordinal: } shape the command handler
+  # expects. Returns `:invalid` if any token is malformed or does not name a
+  # real cell in this assessment's matrix.
+  #
+  # `viewer_can_relink_others_evidence?` (used when re-rendering the evidence
+  # list) and the visibility helpers come from {AssessmentVisibility}.
+  def parse_additional_links(raw)
+    return [] if raw.blank?
+
+    Array(raw).reject(&:blank?).map do |token|
+      cap, level = token.to_s.split("|", 2)
+      level = Integer(level, exception: false)
+      return :invalid unless valid_evidence_cell?(cap, level)
+
+      { capability_stable_id: cap, level_ordinal: level }
+    end
+  end
+
+  # Whether (capability_stable_id, level_ordinal) is a real cell in THIS
+  # assessment's matrix: the capability belongs to the assignment's framework
+  # (`category_id_for` is framework-scoped, so a foreign / non-existent
+  # capability resolves to nil) AND the level exists for the role. Guards the
+  # write paths against crafted requests that would otherwise persist a link
+  # to a cell the matrix can't render or clean up. The remove path is left
+  # permissive so links onto archived/migrated capabilities can still be
+  # detached.
+  def valid_evidence_cell?(capability_stable_id, level_ordinal)
+    return false if capability_stable_id.blank? || level_ordinal.nil?
+
+    category_id_for(capability_stable_id).present? &&
+      FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
   end
 end

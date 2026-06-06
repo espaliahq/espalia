@@ -983,7 +983,45 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
-  context "#relink_evidence" do
+  context "record_evidence with additional_links" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @evidence_id = SecureRandom.uuid_v7
+      @cap_sid = SecureRandom.uuid_v7
+      @cap_sid2 = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+    end
+
+    should "apply EvidenceRecorded then one EvidenceLinkAdded per additional link" do
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+        evidence_type: "project_outcome", content: "x", author_id: @author_id,
+        additional_links: [
+          { capability_stable_id: @cap_sid2, level_ordinal: 4 },
+          { capability_stable_id: @cap_sid, level_ordinal: 2 }
+        ])
+
+      events = @aggregate.unpublished_events.to_a
+      recorded = events.select { |e| e.is_a?(PersonDevelopment::Events::EvidenceRecorded) }
+      added = events.select { |e| e.is_a?(PersonDevelopment::Events::EvidenceLinkAdded) }
+      assert_equal 1, recorded.size
+      assert_equal 2, added.size
+      assert_equal [ [ @cap_sid2, 4 ], [ @cap_sid, 2 ] ],
+        added.map { |e| [ e.data[:capability_stable_id], e.data[:level_ordinal] ] }
+    end
+
+    should "reject an additional link that duplicates the first link" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+          evidence_type: "project_outcome", content: "x", author_id: @author_id,
+          additional_links: [ { capability_stable_id: @cap_sid, level_ordinal: 3 } ])
+      end
+      assert_match /already linked to that coordinate/, err.message
+    end
+  end
+
+  context "#add_evidence_link / #remove_evidence_link" do
     setup do
       @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
       @evidence_id = SecureRandom.uuid_v7
@@ -995,61 +1033,104 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         evidence_type: "project_outcome", content: "x", author_id: @author_id)
     end
 
-    should "apply EvidenceRelinked with previous and new coords" do
-      @aggregate.relink_evidence(@evidence_id,
-        new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
-        relinked_by_id: @author_id, rationale: "Better fit")
+    should "apply EvidenceLinkAdded with the new coordinate" do
+      @aggregate.add_evidence_link(@evidence_id,
+        capability_stable_id: @new_cap_sid, level_ordinal: 4,
+        linked_by_id: @author_id, rationale: "Also applies")
 
       event = @aggregate.unpublished_events.to_a.last
-      assert_kind_of PersonDevelopment::Events::EvidenceRelinked, event
+      assert_kind_of PersonDevelopment::Events::EvidenceLinkAdded, event
       assert_equal @evidence_id, event.data[:evidence_id]
-      assert_equal @cap_sid, event.data[:previous_capability_stable_id]
-      assert_equal 3, event.data[:previous_level_ordinal]
-      assert_equal @new_cap_sid, event.data[:new_capability_stable_id]
-      assert_equal 4, event.data[:new_level_ordinal]
-      assert_equal "Better fit", event.data[:rationale]
+      assert_equal @new_cap_sid, event.data[:capability_stable_id]
+      assert_equal 4, event.data[:level_ordinal]
+      assert_equal "Also applies", event.data[:rationale]
     end
 
-    should "raise on unknown evidence_id" do
+    should "raise when adding a duplicate link" do
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
-        @aggregate.relink_evidence(SecureRandom.uuid_v7,
-          new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
-          relinked_by_id: @author_id)
+        @aggregate.add_evidence_link(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3, linked_by_id: @author_id)
       end
-      assert_match /No evidence with id/, err.message
+      assert_match /already linked to that coordinate/, err.message
     end
 
-    should "raise when target coord is unchanged" do
-      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
-        @aggregate.relink_evidence(@evidence_id,
-          new_capability_stable_id: @cap_sid, new_level_ordinal: 3,
-          relinked_by_id: @author_id)
-      end
-      assert_match /already at that coordinate/, err.message
-    end
-
-    should "raise when evidence has been withdrawn" do
+    should "raise when adding a link to withdrawn evidence" do
       @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
-        @aggregate.relink_evidence(@evidence_id,
-          new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
-          relinked_by_id: @author_id)
+        @aggregate.add_evidence_link(@evidence_id,
+          capability_stable_id: @new_cap_sid, level_ordinal: 4, linked_by_id: @author_id)
       end
       assert_match /withdrawn evidence/, err.message
     end
 
-    should "track new coords for subsequent operations" do
-      @aggregate.relink_evidence(@evidence_id,
-        new_capability_stable_id: @new_cap_sid, new_level_ordinal: 4,
-        relinked_by_id: @author_id)
+    should "apply EvidenceLinkRemoved when the item has more than one link" do
+      @aggregate.add_evidence_link(@evidence_id,
+        capability_stable_id: @new_cap_sid, level_ordinal: 4, linked_by_id: @author_id)
+      @aggregate.remove_evidence_link(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, removed_by_id: @author_id, reason: "Mislinked")
 
-      # A second relink to a different coord should now compare against
-      # (@new_cap_sid, 4) rather than the original. Going back to the
-      # ORIGINAL coord is fine — it's a different target now.
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceLinkRemoved, event
+      assert_equal @cap_sid, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal "Mislinked", event.data[:reason]
+    end
+
+    should "raise when removing a link the item does not have" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.remove_evidence_link(@evidence_id,
+          capability_stable_id: @new_cap_sid, level_ordinal: 4, removed_by_id: @author_id)
+      end
+      assert_match /not linked to that coordinate/, err.message
+    end
+
+    should "raise when removing the only remaining link" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.remove_evidence_link(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3, removed_by_id: @author_id)
+      end
+      assert_match /Cannot remove the only link/, err.message
+    end
+  end
+
+  context "historical EvidenceRelinked replay" do
+    should "reconstruct a single active link (remove previous, add new)" do
+      person_id = SecureRandom.uuid_v7
+      framework_id = SecureRandom.uuid_v7
+      evidence_id = SecureRandom.uuid_v7
+      cap_a = SecureRandom.uuid_v7
+      cap_b = SecureRandom.uuid_v7
+      author_id = SecureRandom.uuid_v7
+
+      stream = [
+        PersonDevelopment::Events::PersonAssignedToFramework.new(data: {
+          person_id: person_id, framework_id: framework_id,
+          role_id: @role_id, level_id: @level_id
+        }),
+        PersonDevelopment::Events::EvidenceRecorded.new(data: {
+          evidence_id: evidence_id, capability_stable_id: cap_a, level_ordinal: 3,
+          source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+          title: nil, content: "x", external_reference: nil, author_id: author_id
+        }),
+        PersonDevelopment::Events::EvidenceRelinked.new(data: {
+          evidence_id: evidence_id,
+          previous_capability_stable_id: cap_a, previous_level_ordinal: 3,
+          new_capability_stable_id: cap_b, new_level_ordinal: 4,
+          relinked_by_id: author_id, rationale: nil
+        })
+      ]
+      replayed = PersonDevelopment::Aggregate.new
+      stream.each { |event| replayed.apply(event) }
+
+      # The new coordinate is now the sole link, so adding it again raises
+      # (duplicate) while the old coordinate can be re-added freely.
+      assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        replayed.add_evidence_link(evidence_id,
+          capability_stable_id: cap_b, level_ordinal: 4, linked_by_id: author_id)
+      end
       assert_nothing_raised do
-        @aggregate.relink_evidence(@evidence_id,
-          new_capability_stable_id: @cap_sid, new_level_ordinal: 3,
-          relinked_by_id: @author_id)
+        replayed.add_evidence_link(evidence_id,
+          capability_stable_id: cap_a, level_ordinal: 3, linked_by_id: author_id)
       end
     end
   end

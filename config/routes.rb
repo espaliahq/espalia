@@ -109,7 +109,8 @@ Rails.application.routes.draw do
     resources :delegations, only: [ :create, :destroy ], controller: "assessments/delegations"
     resources :evidence, only: [ :create, :update, :destroy ], controller: "assessments/evidence" do
       member do
-        post :relink
+        post :add_link
+        post :remove_link
       end
     end
     resource :activity, only: [ :show ], controller: "assessments/activity"

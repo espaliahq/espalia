@@ -25,7 +25,12 @@ module ProjectionReplayHelpers
     ActsAsTenant.with_tenant(tenant) do
       case projection_class.name
       when "PersonDevelopment::Projections::EvidenceCollection"
-        { evidence_items: rows(EvidenceItem, natural_key_is_id: true) }
+        {
+          evidence_items: rows(EvidenceItem, natural_key_is_id: true),
+          # evidence_links uses a gen-style PK; its natural key is
+          # (evidence_id, capability_stable_id, level_ordinal).
+          evidence_links: rows(EvidenceLink)
+        }
 
       when "PersonDevelopment::Projections::CommentThread"
         {

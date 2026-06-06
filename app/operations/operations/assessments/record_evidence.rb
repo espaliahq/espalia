@@ -28,6 +28,11 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   parameter :title, String
   parameter :content, String, required: true
   parameter :external_reference, Hash    # { system:, url:, external_id: }
+  # Optional extra cells this evidence also demonstrates. Each entry:
+  # { capability_stable_id:, level_ordinal: }. The first link is the
+  # required capability_stable_id/level_ordinal above; these are applied
+  # atomically as additional links.
+  parameter :additional_links, Array
 
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
@@ -37,13 +42,17 @@ class Operations::Assessments::RecordEvidence < Operations::Base
 
   # @return [Hash] `{ evidence_id, person_id, framework_id,
   #   capability_stable_id, level_ordinal, evidence_type, source,
-  #   recorded_at }` — the durable identifying fields plus the
+  #   recorded_at, links }` — the durable identifying fields plus the
   #   resolved `source` so the LLM can confirm how the system
-  #   categorised the caller's relationship to the assessee.
+  #   categorised the caller's relationship to the assessee, and `links`
+  #   (every active `{ capability_stable_id, level_ordinal }` the item is
+  #   attached to).
   def perform
     validate_evidence_type_label!
     validate_external_reference!
     validate_level_ordinal!
+    validate_capability_in_framework!(params[:capability_stable_id])
+    additional_links = normalize_additional_links!
 
     evidence_id = SecureRandom.uuid_v7
     source = derive_source
@@ -58,7 +67,8 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       title: params[:title].presence,
       content: params[:content].to_s,
       author_id: context.person.id,
-      external_reference: params[:external_reference]
+      external_reference: params[:external_reference],
+      additional_links: additional_links
     )
 
     item = EvidenceItem.find(evidence_id)
@@ -70,14 +80,56 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       level_ordinal: item.level_ordinal,
       evidence_type: item.evidence_type,
       source: item.source,
-      recorded_at: item.recorded_at.iso8601
+      recorded_at: item.recorded_at.iso8601,
+      links: EvidenceLink.active.where(evidence_id: item.id).order(:linked_at).map do |link|
+        { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal }
+      end
     }
+  rescue PersonDevelopment::Aggregate::CommandError => e
+    raise Operations::Base::ParameterError, e.message
   end
 
   private
 
   def assignment
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
+  end
+
+  # Coerces + validates the optional additional_links param into the
+  # { capability_stable_id:, level_ordinal: } shape the command handler
+  # expects, validating each level_ordinal against the assignment's role.
+  def normalize_additional_links!
+    raw = params[:additional_links]
+    return [] if raw.blank?
+
+    raw.map do |entry|
+      entry = entry.to_h if entry.respond_to?(:to_h)
+      cap = entry["capability_stable_id"] || entry[:capability_stable_id]
+      level = entry["level_ordinal"] || entry[:level_ordinal]
+      if cap.blank? || level.blank?
+        raise Operations::Base::ParameterError,
+          "each additional_links entry needs capability_stable_id and level_ordinal"
+      end
+      level = Integer(level, exception: false)
+      validate_level_ordinal!(level)
+      validate_capability_in_framework!(cap)
+      { capability_stable_id: cap, level_ordinal: level }
+    end
+  end
+
+  # Guards against recording/linking evidence onto a capability outside this
+  # assessment's framework (the lookup is scoped to the assignment's
+  # framework, so a foreign / non-existent stable_id resolves to absent).
+  def validate_capability_in_framework!(capability_stable_id)
+    in_framework = FrameworkState::Capability
+      .joins(:category)
+      .where(stable_id: capability_stable_id)
+      .merge(FrameworkState::CapabilityCategory.where(framework_id: assignment.framework_id))
+      .exists?
+    return if in_framework
+
+    raise Operations::Base::ParameterError,
+      "capability_stable_id does not belong to the assignment's framework"
   end
 
   # The 'other' evidence_type carries a free-text label; the read model
@@ -103,14 +155,14 @@ class Operations::Assessments::RecordEvidence < Operations::Base
     raise Operations::Base::ParameterError, "invalid external_reference: #{candidate.errors.full_messages.join(", ")}"
   end
 
-  def validate_level_ordinal!
+  def validate_level_ordinal!(ordinal = params[:level_ordinal])
     exists = FrameworkState::Level.exists?(
-      role_id: assignment.role_id, ordinal: params[:level_ordinal]
+      role_id: assignment.role_id, ordinal: ordinal
     )
     return if exists
 
     raise Operations::Base::ParameterError,
-      "level_ordinal #{params[:level_ordinal]} does not exist for the assignment's role"
+      "level_ordinal #{ordinal} does not exist for the assignment's role"
   end
 
   # Same logic as EvidenceController#infer_source — derived from the

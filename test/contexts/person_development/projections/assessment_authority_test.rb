@@ -82,6 +82,23 @@ class PersonDevelopment::Projections::AssessmentAuthorityTest < ActiveSupport::T
     end
   end
 
+  context "real-time sync" do
+    # Mirrors how the other assessment projections broadcast — the test
+    # asserts the projection nudges the assessment-sync stream so an open
+    # assessment view reloads its activity feed live. Stubbed because the
+    # broadcast is a fire-and-forget side effect (rescued in the projection).
+    should "broadcast the assessment-sync signal on a delegation event" do
+      broadcasts = []
+      Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **_kw) { broadcasts << args }) do
+        emit(PersonDevelopment::Events::ManagerRatingDelegated,
+          delegate_person_id: @delegate_id, granted_by_id: @manager_id)
+      end
+
+      assert_equal 1, broadcasts.size
+      assert_equal [ "assessment_updates", @framework_id, @person_id ], broadcasts.first
+    end
+  end
+
   context "reset!" do
     should "truncate both owned tables for the tenant" do
       emit(PersonDevelopment::Events::ReportingManagerRecorded, manager_id: @manager_id, source: "hris")
