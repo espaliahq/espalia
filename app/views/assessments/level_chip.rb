@@ -117,9 +117,16 @@ class Views::Assessments::LevelChip < Views::Base
     level_note = @context == :self ? "your level" : "current level"
     base = at_person_level? ? "Focus #{@level_code} (#{level_note})" : "Focus #{@level_code}"
     parts = [ "#{base}, rated #{rated_description}" ]
-    parts << "self and manager differ" if split?
+    parts << split_note if split?
     parts << activity_title if has_activity?
     parts.join(", ")
+  end
+
+  # A split with both slices rated is a disagreement; a split with one
+  # slice nil is just one perspective rated so far.
+  def split_note
+    _state, top, bottom = fill_state
+    top && bottom ? "perspectives differ" : "only one perspective rated"
   end
 
   def rated_description
