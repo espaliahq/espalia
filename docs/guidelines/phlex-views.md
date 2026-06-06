@@ -98,6 +98,20 @@ Card(title: "User") do |card|
 end
 ```
 
+**Deferred slot blocks run in the CALLER's context, not the component's.** When a
+component stores a slot block to render later (e.g. `Kit::Modal` captures
+`body`/`trigger` and emits them inside its overlay markup), invoke it with
+`@block.call`, **never** `instance_exec(&@block)`. The block almost always calls
+methods/ivars on the view that rendered the component (`form_body`, `@assignment`,
+`render SomeView.new`); `instance_exec` rebinds `self` to the component and those
+break. Phlex shares the output buffer across the nested render, so `@block.call`
+still emits in the right position. A bare string returned from such a block is
+NOT auto-rendered (unlike a block passed directly to an element) — real slot
+bodies emit (call `render`/`p`/`form`), which is why this works in practice.
+`Kit::Modal` is the reference: standalone (own `modal` controller + a `trigger`
+slot) or embedded (`standalone: false` — overlay only, an ancestor provides the
+controller, for many remote triggers sharing one modal).
+
 ## Controller Rendering
 
 ```ruby

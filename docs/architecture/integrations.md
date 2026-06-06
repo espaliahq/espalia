@@ -41,9 +41,11 @@ No global singleton. The adapter reads both fields per tenant and constructs a f
 2. **Manager resolution** — second pass, builds `external_id → Person` map, sets `manager_id` from `reportsTo.id`.
 3. **Deactivation** — HRIS-sourced people not in the current response are marked `status: "inactive"`. Does not touch people from other HRIS sources.
 4. **Auto-link TenantUsers** — `TenantUser.where(person_id: nil)` is scanned; each is linked to a `Person` matching the user's email. This bridges Devise auth → Person domain entity.
-5. **Framework assignment** — dispatches one of four commands per touched person (see below).
+5. **Framework assignment + reporting-manager recording** — dispatches one of four assignment commands per touched person (see below), then records the reporting manager onto the person's stream.
 
 The entire Pass 5 loop is wrapped in `Rails.configuration.event_store.with_metadata(tenant_id: tenant.id)` so the `CurrentAssessment` projection can resolve tenant context when writing read models.
+
+**Reporting-manager recording (within Pass 5).** After the assignment dispatch, the loop calls `command_handler.record_reporting_manager(person_id, framework_id, person.manager_id, source: "hris")` for every touched person that **has a framework assignment** — run independently of whether the title-mapping branch above succeeded, so a re-managed person whose title later becomes unmapped still gets a fresh recording. The command is idempotent: a no-op when the recorded manager is unchanged or the person has no manager. This makes the reporting line a first-class fact on the PersonDevelopment stream (`ReportingManagerRecorded` → `RecordedReportingManager`), the authoritative source for manager-rating authority. A one-off `events:backfill_reporting_managers` rake task seeds existing streams from the live `Person.manager_id` before the Stage-2 hard guard ships.
 
 ### Role/level mapping
 

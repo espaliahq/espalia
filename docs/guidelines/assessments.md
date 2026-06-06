@@ -276,8 +276,10 @@ end
 
 Routes to:
 - **Self** (`context: :self`) → `ShowView` — person rates themselves. Manager and aligned ratings are hidden — see *Self-assessment privacy* below.
-- **Manager** (`context: :manager`) → `ManagerShowView` — manager rates their direct report.
-- **Alignment** (`context: :alignment`) → automatic once `cycle status ∈ {aligning, aligned}`. Both parties see all three rating perspectives. There is no opt-in URL param and no in-page toggle.
+- **Manager** (`context: :manager`) → `ManagerShowView` — manager rates their direct report. **An active rating delegate gets this same view** (`manager_viewing?` is true for them), so they review and rate exactly like the manager — minus the alignment actions.
+- **Alignment** (`context: :alignment`) → automatic once `cycle status ∈ {aligning, aligned}`. Both parties see all three rating perspectives. A delegate sees alignment **read-only** (`view_alignment?` includes active delegates) but can never record/start/complete it. There is no opt-in URL param and no in-page toggle.
+
+See *Manager-rating delegation* below for the full delegate model.
 
 ### Self-assessment privacy
 
@@ -295,6 +297,53 @@ The assessee must not see the manager's rating until alignment formally begins. 
 | `CapabilityCard` / `LevelChip` | Which `*_frequency` colors the chip; whether divergence dots show |
 | `CapabilityCardExpansion` | Which perspective the `FrequencyPill` rates; which `SecondaryRatingLine`s render |
 | `FrequencyPill#form_action` | POST endpoint — `/ratings` (self) vs `/manager_ratings` (manager) vs `/alignment_ratings` (alignment) |
+
+## Manager-rating delegation
+
+When a report is **seconded into another team**, their reporting manager loses
+direct visibility and can delegate the **manager rating** (but never alignment)
+to someone closer to the work. Authority is enforced in Pundit AND, as a
+defense-in-depth domain invariant, in the PersonDevelopment aggregate — see
+[authorization.md](authorization.md#assessment-permissions) and
+[person-development-aggregate.md](../architecture/person-development-aggregate.md).
+
+- **Who is the manager** is recorded-authoritative: `RecordedReportingManager`
+  (an event-sourced fact on the stream) is the source, with a live
+  `Person.manager_id` fallback when nothing is recorded.
+- **Delegate's experience** — the delegate sees the report in their index
+  ("Team Assessments", unioned by active delegation) and opens the same
+  `ManagerShowView`; they record manager ratings normally and see alignment
+  read-only once it starts. They are treated like a manager for activity-feed
+  visibility (`viewer_sees_all_evidence?` returns true for an active delegate)
+  so they see the very ratings they record.
+
+**Granting UI (manager view header).** The action cluster gains a **"Delegates ·
+N"** button shown only when `@can_manage_delegates` (`delegate_manager_rating?` —
+ancestor manager or tenant admin; the delegate never sees it). It opens a
+`Kit::Modal` (standalone) whose body is the `delegations-list` Turbo Frame:
+
+- A person `<select>` (candidates from
+  `ManagerAssessmentDelegation.candidate_people`, excluding assessee / granter /
+  current delegates) + optional `expires_at` + a submit.
+- An active-delegate list, each with a ✕ revoke (`data-turbo-confirm`).
+
+`Assessments::DelegationsController#create`/`#destroy` dispatch
+`Operations::Assessments::{DelegateManagerRating,RevokeManagerRatingDelegation}`
+(`approval :in_app`) and re-render the `delegations-list` frame so grant/revoke
+update **in place** without closing the modal (200 on success; 404/422 on
+failure — Turbo renders the frame either way). Expiry is **lazy** (filtered by
+the `active` scope at read time); an expired grant can be **renewed** (the
+aggregate's idempotency is expiry-aware).
+
+**Activity feed.** Three framework-scoped entry kinds surface under "All" only
+(no new filter chip — their `KIND_GROUP` is outside `CHIPS`):
+`delegation_granted`, `delegation_revoked` (manager-rating privacy gate —
+visible to manager + delegate, hidden from peers and from the assessee
+pre-alignment), and `reporting_manager_recorded` (not sensitive → visible to any
+viewer; only emitted on an actual manager change). A delegate's manager rating
+renders a **"(delegate)" badge**, driven by `via_delegation` stamped on the
+rating event at write time (accurate at event time — not reconstructed from
+current state).
 
 ## Frequency rating vocabulary
 
@@ -394,6 +443,8 @@ ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
 | `activity_feed_controller.js` | Listens for `matrix:focus-changed` and narrows entries by capability + level focus. |
 | `context_pane_controller.js` (shared with framework explorer) | Right-pane suggestion / activity panel state, URL focus sync. |
 | `continue_assessing_controller.js` | Bottom-line CTA — dispatches a window event with the next-unrated capability stable_id + level, picked up by `matrix_controller#focusUnrated`. |
+| `modal_controller.js` | Generic `Kit::Modal` controller — open/close, Esc, click-outside, body-scroll-lock; dispatches a window `modal:open` event so feature controllers can prefill. Hosts the Delegates modal (standalone) and the evidence modal (embedded, with `evidence-form` prefilling via `modal:open`). |
+| `evidence_form_controller.js` | Evidence-specific companion to `modal` — prefills capability/level/type from the `modal:open` dataset and toggles the custom-label field. Visibility lives in `modal`. |
 
 There is **no** `sticky_hero_controller.js`. The hero's collapse is pure CSS scroll-driven animation. See *Hero Summary — Collapse on scroll*.
 
@@ -407,8 +458,8 @@ enrolled → started → aligning → aligned → withdrawn
 
 | Status | Trigger | What's editable |
 |---|---|---|
-| `enrolled` | `PersonEnrolled` lands | Self + manager ratings |
-| `started` | First `SelfRated` / `ManagerRated` event with `source: "human"` | Self + manager ratings |
+| `enrolled` | `PersonEnrolled` lands | Self + manager ratings (incl. delegate) |
+| `started` | First `SelfRated` / `ManagerRated` event with `source: "human"` | Self + manager ratings (incl. delegate) |
 | `aligning` | Manager fires `AlignmentStarted` | Aligned values only — self + manager FROZEN |
 | `aligned` | Manager fires `FullAlignmentCompleted` | Nothing — all ratings frozen |
 | `withdrawn` | Person unenrolled or cycle closed | Nothing |
@@ -559,8 +610,12 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/views/assessments/activity/entry.rb` | Single entry — author, title, body, badges |
 | `app/views/assessments/activity/feed_frame_view.rb` | Turbo Frame wrapper for the activity feed |
 | `app/views/assessments/activity/pane_toggle.rb` | Activity button in the header — opens/closes the sidebar |
+| **Delegation** | |
+| `app/components/kit/modal.rb` | Reusable modal (standalone w/ trigger, or embedded); hosts the Delegates + evidence modals |
+| `app/views/assessments/delegations/frame.rb` | `delegations-list` Turbo Frame — add-form + active-delegate list (revoke) |
 | **Controllers** | |
-| `app/controllers/assessments_controller.rb` | show / index / matrix / scoring / activity — self/manager/alignment context routing |
+| `app/controllers/assessments_controller.rb` | show / index / matrix / scoring / activity — self/manager/alignment context routing; index unions delegated reports; show loads delegates |
+| `app/controllers/assessments/delegations_controller.rb` | Grant / revoke a manager-rating delegation (Turbo Frame; dispatches `Operations::Assessments::{Delegate,Revoke}…`) |
 | `app/controllers/assessments/ratings_controller.rb` | Self-rating POST (rate_self, revise, clear) |
 | `app/controllers/assessments/manager_ratings_controller.rb` | Manager-rating POST (rate_as_manager, revise, clear) |
 | `app/controllers/assessments/alignment_ratings_controller.rb` | Per-cell alignment POST (align_assessment) |
@@ -570,6 +625,8 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../architecture/adrs.md) |
 | `app/read_models/assessment_level_rating.rb` | Three-frequency read model (self / manager / aligned) |
 | `app/read_models/person_framework_assignment.rb` | Person-framework-role-level assignment |
+| `app/read_models/recorded_reporting_manager.rb` | Recorded reporting manager — authoritative for manager-rating authority |
+| `app/read_models/manager_assessment_delegation.rb` | Active/revoked rating delegations; `active` scope + `candidate_people` |
 | **JavaScript** | |
 | `app/javascript/controllers/matrix_controller.js` | Chip-click focus, smooth-scroll, URL sync, sibling dimming (shared with framework explorer) |
 | `app/javascript/controllers/category_nav_controller.js` | `--sticky-header-h` publish, chip-click scroll, active-chip detection on scroll |
@@ -577,6 +634,8 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/javascript/controllers/frequency_selector_controller.js` | Optimistic frequency button UI |
 | `app/javascript/controllers/activity_feed_controller.js` | Focus-narrowing on `matrix:focus-changed` |
 | `app/javascript/controllers/continue_assessing_controller.js` | Bottom-line CTA — dispatches focus-unrated event |
+| `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/click-outside; dispatches `modal:open` |
+| `app/javascript/controllers/evidence_form_controller.js` | Evidence prefill companion to `modal` (visibility lives in `modal`) |
 | **CSS** | |
 | `app/assets/tailwind/application.css` | `.hero-collapsible` scroll-driven animation (`animation-timeline: scroll(root)`) |
 | **Tests** | |
@@ -586,6 +645,10 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `test/system/assessments_activity_pane_system_test.rb` | Sidebar open/close + responsive behaviour |
 | `test/contexts/person_development/scoring_test.rb` | `performance_state` transition-point coverage; raw_contribution math |
 | `test/models/assessments/matrix_data_builder_test.rb` | Data shape + `capability_contributions_at_next_level` presence |
+| `test/system/assessment_delegation_system_test.rb` | Manager grants via modal → delegate reviews + rates → can't start alignment |
+| `test/policies/assessment_policy_delegation_test.rb` | Delegate rating, recorded-authoritative manager, grant/revoke gates |
+| `test/contexts/person_development/aggregate_authority_test.rb` | Reporting-manager recording, delegation commands, authority guard, `via_delegation` |
+| `test/queries/assessments/activity_feed_authority_test.rb` | Delegation/reporting entries, badge, privacy + delegate visibility |
 
 ## Keeping This Document Current
 

@@ -57,14 +57,51 @@ Self-assessment:
 
 Manager assessment:
   ManagerRated { capability_stable_id, level_ordinal, frequency, comment, source,
-                 seeded_from_cycle_id, rated_by_id? }
+                 seeded_from_cycle_id, rated_by_id?, via_delegation? }
     Same source / seeded_from_cycle_id semantics as SelfRated.
     ← rated_by_id: the manager who rated (a domain fact — the assessee's manager
       changes over time). nil for "seeded" carry-forwards and historical events.
       Projected to AssessmentLevelRating.manager_rated_by_id. See ADR-18.
-  ManagerRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale, rated_by_id? }
+    ← via_delegation: true when recorded by an active delegate rather than the
+      recorded reporting manager. Stamped at write time by the aggregate (which
+      knows @manager_id + @active_delegates) so the activity feed badges it
+      accurately at event time. Absent on historical events. See "Reporting line
+      & delegation" below.
+  ManagerRatingRevised { capability_stable_id, level_ordinal, frequency, comment, rationale, rated_by_id?, via_delegation? }
     ← Like SelfRatingRevised, always flips the row's source back to "human".
-  ManagerRatingCleared { capability_stable_id, level_ordinal, cycle_id, rated_by_id? }
+  ManagerRatingCleared { capability_stable_id, level_ordinal, cycle_id, rated_by_id?, via_delegation? }
+
+Reporting line & delegation:
+  ReportingManagerRecorded { manager_id, previous_manager_id?, source }
+    ← Makes "who is the person's reporting manager" a first-class, immutable
+      fact ON the stream (per person × framework), rather than reading the
+      mutable Person.manager_id at check time. source: "hris" | "backfill".
+    ← Idempotent: the aggregate no-ops when the manager is unchanged, so only an
+      actual change emits an event (low-volume, genuine history). Populated by
+      the HRIS sync (every touched person with an assignment) and a one-off
+      backfill (events:backfill_reporting_managers).
+    ← AUTHORITY SOURCE OF TRUTH. Both the aggregate's manager-rating invariant
+      (below) and AssessmentPolicy#manages_assessee? read the RECORDED value and
+      fall back to live Person.manager_id only when nothing is recorded yet
+      (manual / non-HRIS tenant, or pre-backfill).
+  ManagerRatingDelegated { delegate_person_id, granted_by_id, expires_at?, reason? }
+    ← Grants manager-RATING authority (not alignment) for one report on one
+      framework to another person — e.g. a report seconded into another team.
+      Does not require an open cycle; persists across cycles until revoked/lapsed.
+      Idempotent against a still-active grant; an expired grant can be renewed.
+  ManagerRatingDelegationRevoked { delegate_person_id, revoked_by_id }
+    ← Non-destructive: ratings the delegate already made remain (attributed to
+      them via rated_by_id); only future rating is stopped.
+
+  Manager-rating invariant (ensure_manager_authority!): a ManagerRated /
+  ManagerRatingRevised / ManagerRatingCleared must be attributable to the
+  recorded reporting manager (@manager_id) or a non-expired delegate
+  (@active_delegates, an id → expires_at map). Fail-open when the source is
+  non-"human" (seeded/system) or no manager is recorded. Two-stage rollout:
+  Stage 1 (current) LOGS divergence; Stage 2 will RAISE after the prod backfill
+  and clean divergence logs. Granter authority (ancestor manager or tenant
+  admin) is NOT checked here — that stays in Pundit, since the aggregate only
+  knows the direct recorded manager.
 
 Alignment lifecycle (per cycle):
   AlignmentStarted { cycle_id, started_by_id }
@@ -215,6 +252,27 @@ All evidence for a person. Updated synchronously.
 #   withdrawn_at, withdrawn_by_id, withdrawal_reason,
 #   edited_at, edited_by_id,
 #   recorded_at, created_at, updated_at
+```
+
+### Assessment Authority
+
+Reporting line + manager-rating delegations. Owned exclusively by
+`PersonDevelopment::Projections::AssessmentAuthority` (a dedicated projection,
+NOT folded into Current Assessment State, so it can be added without bumping
+that projection's CODE_VERSION). Read by `AssessmentPolicy` and the activity
+feed.
+
+```ruby
+# recorded_reporting_managers table (one row per tenant × person × framework):
+#   id, tenant_id, person_id, framework_id, manager_id, source (hris|backfill)
+#   → RecordedReportingManager.manager_id_for(person_id, framework_id)
+
+# manager_assessment_delegations table
+#   (one row per tenant × person × framework × delegate_person_id):
+#   id, tenant_id, person_id, framework_id, delegate_person_id, granted_by_id,
+#   revoked_by_id, status (active|revoked), reason, expires_at, revoked_at
+#   → scope .active = status "active" AND (expires_at IS NULL OR expires_at > now)
+#   → ManagerAssessmentDelegation.active_delegate?(person_id:, framework_id:, delegate_person_id:)
 ```
 
 ### Point-in-Time Assessment
