@@ -135,6 +135,13 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
       assert_match(/does not exist/, err.message)
     end
 
+    should "reject a capability_stable_id outside the assignment's framework" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @report_ctx, capability_stable_id: SecureRandom.uuid_v7)
+      end
+      assert_match(/does not belong to the assignment's framework/, err.message)
+    end
+
     should "reject an unknown evidence_type at the parameter layer" do
       assert_raises(Operations::Base::ParameterError) do
         call_op(ctx: @report_ctx, evidence_type: "telepathy")

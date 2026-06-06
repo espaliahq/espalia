@@ -91,6 +91,10 @@ class Views::Assessments::Evidence::LinkForm < Views::Base
         required: true,
         data: { evidence_link_form_target: "capabilitySelect" }
       ) do
+        # Empty, disabled placeholder so the browser doesn't silently
+        # pre-select the first capability — `required` then forces an
+        # explicit choice before the form will submit.
+        option(value: "", disabled: true, selected: true) { "Select a capability" }
         @categories.each do |cat_data|
           optgroup(label: cat_data[:category].name) do
             cat_data[:capabilities].each do |cap_data|
@@ -113,6 +117,7 @@ class Views::Assessments::Evidence::LinkForm < Views::Base
         required: true,
         data: { evidence_link_form_target: "levelSelect" }
       ) do
+        option(value: "", disabled: true, selected: true) { "Select a level" }
         @merged_levels.each do |level|
           option(value: level[:ordinal]) do
             "L#{level[:ordinal]} — #{level[:level_title].presence || level[:level_code]}"

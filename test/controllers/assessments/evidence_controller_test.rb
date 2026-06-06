@@ -311,6 +311,15 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       assert_response :unprocessable_content
     end
 
+    should "reject a capability that is not in the assessment's framework on add_link" do
+      sign_in @manager_user
+      post add_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2 }
+      }
+      assert_response :unprocessable_content
+      assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "no foreign-cell link should be created"
+    end
+
     should "remove a link when the item has more than one" do
       sign_in @manager_user
       ActsAsTenant.with_tenant(@tenant) do

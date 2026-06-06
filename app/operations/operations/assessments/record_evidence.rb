@@ -51,6 +51,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
     validate_evidence_type_label!
     validate_external_reference!
     validate_level_ordinal!
+    validate_capability_in_framework!(params[:capability_stable_id])
     additional_links = normalize_additional_links!
 
     evidence_id = SecureRandom.uuid_v7
@@ -111,8 +112,24 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       end
       level = Integer(level, exception: false)
       validate_level_ordinal!(level)
+      validate_capability_in_framework!(cap)
       { capability_stable_id: cap, level_ordinal: level }
     end
+  end
+
+  # Guards against recording/linking evidence onto a capability outside this
+  # assessment's framework (the lookup is scoped to the assignment's
+  # framework, so a foreign / non-existent stable_id resolves to absent).
+  def validate_capability_in_framework!(capability_stable_id)
+    in_framework = FrameworkState::Capability
+      .joins(:category)
+      .where(stable_id: capability_stable_id)
+      .merge(FrameworkState::CapabilityCategory.where(framework_id: assignment.framework_id))
+      .exists?
+    return if in_framework
+
+    raise Operations::Base::ParameterError,
+      "capability_stable_id does not belong to the assignment's framework"
   end
 
   # The 'other' evidence_type carries a free-text label; the read model

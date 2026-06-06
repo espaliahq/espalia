@@ -27,7 +27,7 @@ class Assessments::EvidenceController < ApplicationController
     ])
 
     level_ordinal = Integer(attrs[:level_ordinal], exception: false)
-    unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
+    unless level_ordinal && valid_evidence_cell?(attrs[:capability_stable_id], level_ordinal)
       head :unprocessable_content
       return
     end
@@ -136,7 +136,7 @@ class Assessments::EvidenceController < ApplicationController
                                       :from_capability_stable_id, :from_level_ordinal, :rationale ])
 
     target_level = Integer(attrs[:level_ordinal], exception: false)
-    unless target_level && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: target_level)
+    unless target_level && valid_evidence_cell?(attrs[:capability_stable_id], target_level)
       head :unprocessable_content
       return
     end
@@ -345,8 +345,8 @@ class Assessments::EvidenceController < ApplicationController
   # Parses the optional `additional_links[]` array of "capStableId|level"
   # tokens from the create form into the
   # { capability_stable_id:, level_ordinal: } shape the command handler
-  # expects. Returns `:invalid` if any token is malformed or names a level
-  # that doesn't exist for the assignment's role.
+  # expects. Returns `:invalid` if any token is malformed or does not name a
+  # real cell in this assessment's matrix.
   #
   # `viewer_can_relink_others_evidence?` (used when re-rendering the evidence
   # list) and the visibility helpers come from {AssessmentVisibility}.
@@ -356,10 +356,24 @@ class Assessments::EvidenceController < ApplicationController
     Array(raw).reject(&:blank?).map do |token|
       cap, level = token.to_s.split("|", 2)
       level = Integer(level, exception: false)
-      return :invalid if cap.blank? || level.nil?
-      return :invalid unless FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level)
+      return :invalid unless valid_evidence_cell?(cap, level)
 
       { capability_stable_id: cap, level_ordinal: level }
     end
+  end
+
+  # Whether (capability_stable_id, level_ordinal) is a real cell in THIS
+  # assessment's matrix: the capability belongs to the assignment's framework
+  # (`category_id_for` is framework-scoped, so a foreign / non-existent
+  # capability resolves to nil) AND the level exists for the role. Guards the
+  # write paths against crafted requests that would otherwise persist a link
+  # to a cell the matrix can't render or clean up. The remove path is left
+  # permissive so links onto archived/migrated capabilities can still be
+  # detached.
+  def valid_evidence_cell?(capability_stable_id, level_ordinal)
+    return false if capability_stable_id.blank? || level_ordinal.nil?
+
+    category_id_for(capability_stable_id).present? &&
+      FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
   end
 end
