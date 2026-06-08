@@ -114,6 +114,39 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "keep evidence and comment glyphs on the rated chip after rating" do
+      # Regression: the rating re-render rebuilt the chip without passing
+      # viewer_person_id / viewer_sees_all_evidence to the builder, so the
+      # rebuilt cell_data had zero evidence/comment counts and the chip lost
+      # its corner glyphs the moment you rated it.
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.record_evidence(
+          @person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "self", evidence_type: "project_outcome",
+          title: "Q1 launch", content: "Shipped Q1.", author_id: @person.id
+        )
+        handler.post_comment(
+          @person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          author_id: @person.id, body: "Worth a look."
+        )
+      end
+
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :success
+      assert_includes response.body, 'data-glyph="evidence"',
+        "Rated chip dropped its evidence glyph in the turbo-stream re-render."
+      assert_includes response.body, 'data-glyph="comment"',
+        "Rated chip dropped its comment glyph in the turbo-stream re-render."
+    end
+
     should "include scoring panel in turbo stream response" do
       sign_in @user
       post assessment_ratings_path(@assignment), params: {

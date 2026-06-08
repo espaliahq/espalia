@@ -81,7 +81,7 @@ class Views::Assessments::FrequencyPill < Views::Base
       class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium " \
              "#{pill_bg_classes} cursor-pointer " \
              "hover:brightness-95 dark:hover:brightness-110 transition " \
-             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
       data: { dropdown_target: "trigger", action: "dropdown#toggle" },
       aria: { label: "Rated #{phrase.downcase} — change", haspopup: "menu", expanded: "false" }
     ) do

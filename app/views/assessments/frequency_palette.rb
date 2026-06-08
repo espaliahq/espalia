@@ -4,9 +4,20 @@
 #
 # The same colours back the inline FrequencyPill, the level-strip
 # LevelChip, the divergent-secondary line, and any future surface
-# that reads a frequency. The palette intentionally walks a
-# red → orange → amber → green ramp so the four states read as
-# a clear gradient ("worse → better") regardless of text labels.
+# that reads a frequency. The palette walks a
+# red → yellow → green → blue scale — four maximally-distinct hues
+# so adjacent states never blur. This replaces the old
+# red → orange → amber → green ramp, whose middle two (orange "Some"
+# vs amber "Most") were near-indistinguishable on small chips and
+# in a diagonal split.
+#
+# Ordering is carried by chip position (E1…E8 left→right) and the
+# text label, NOT by a single-axis colour gradient — so blue marking
+# the top "Consistently" tier reads as a distinct band rather than
+# "even greener than green". Blue is only safe as a rating colour
+# because the keyboard-focus ring + selected-state were moved off
+# blue onto the brand teal (`ring-primary`); see LevelChip /
+# FrequencyPill.
 #
 # Each entry carries the rating's display phrase ("Most of the
 # time") plus class names for three intensities:
@@ -27,26 +38,26 @@ module Views::Assessments::FrequencyPalette
     "some" => {
       label:    "Some",
       phrase:   "Some of the time",
-      chip_bg:  "bg-orange-500 dark:bg-orange-400",
-      chip_txt: "text-orange-950",
-      pill_bg:  "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300",
-      dot:      "bg-orange-500 dark:bg-orange-400"
+      chip_bg:  "bg-yellow-500 dark:bg-yellow-400",
+      chip_txt: "text-yellow-950",
+      pill_bg:  "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300",
+      dot:      "bg-yellow-500 dark:bg-yellow-400"
     },
     "occasional" => {
       label:    "Most",
       phrase:   "Most of the time",
-      chip_bg:  "bg-amber-500 dark:bg-amber-400",
-      chip_txt: "text-amber-950",
-      pill_bg:  "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300",
-      dot:      "bg-amber-500 dark:bg-amber-400"
-    },
-    "consistent" => {
-      label:    "Consistently",
-      phrase:   "Consistently",
       chip_bg:  "bg-green-500 dark:bg-green-400",
       chip_txt: "text-green-950",
       pill_bg:  "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300",
       dot:      "bg-green-500 dark:bg-green-400"
+    },
+    "consistent" => {
+      label:    "Consistently",
+      phrase:   "Consistently",
+      chip_bg:  "bg-blue-500 dark:bg-blue-400",
+      chip_txt: "text-blue-950",
+      pill_bg:  "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300",
+      dot:      "bg-blue-500 dark:bg-blue-400"
     }
   }.freeze
 

@@ -8,6 +8,7 @@
 #
 class Assessments::RatingsController < ApplicationController
   include Assessments::TurboStreamHelpers
+  include AssessmentVisibility
 
   before_action :require_person
   before_action :set_assignment
@@ -111,7 +112,9 @@ class Assessments::RatingsController < ApplicationController
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: categories,
       participant_status: @assignment.current_open_cycle_participation&.status,
-      context: :self
+      context: :self,
+      viewer_person_id: current_person&.id,
+      viewer_sees_all_evidence: viewer_sees_all_evidence?
     ).build
 
     # Find the capability's category for targeted category header update
