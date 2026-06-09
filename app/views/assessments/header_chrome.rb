@@ -14,12 +14,11 @@ module Views::Assessments::HeaderChrome
     ) { "#{role.code}#{level.ordinal}" }
   end
 
-  def render_status_pill(participant_status:, has_open_cycle:)
-    case participant_status
-    when "aligning" then render Components::Kit::Badge.new("Aligning", variant: :warning)
-    when "aligned"  then render Components::Kit::Badge.new("Aligned", variant: :success)
-    else
-      render Components::Kit::Badge.new("In Progress", variant: :warning) if has_open_cycle
-    end
+  def render_status_pill(participant_status:, has_open_cycle:, current_level_complete: false)
+    render Views::Assessments::StatusPill.new(
+      participant_status: participant_status,
+      has_open_cycle: has_open_cycle,
+      current_level_complete: current_level_complete
+    )
   end
 end

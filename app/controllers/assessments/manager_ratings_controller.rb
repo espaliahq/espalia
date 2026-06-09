@@ -137,6 +137,17 @@ class Assessments::ManagerRatingsController < ApplicationController
 
     render turbo_stream: [
       turbo_stream.replace(
+        Views::Assessments::StatusPill::WRAPPER_ID,
+        render_to_string(
+          Views::Assessments::StatusPill.new(
+            participant_status: matrix_data[:participant_status],
+            has_open_cycle: @assignment.current_open_cycle.present?,
+            current_level_complete: matrix_data[:current_level_complete]
+          ),
+          layout: false
+        )
+      ),
+      turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
           Views::Assessments::LevelChip.new(

@@ -139,7 +139,8 @@ class Views::Assessments::ManagerShowView < Views::Base
           render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
           render_status_pill(
             participant_status: @matrix_data[:participant_status],
-            has_open_cycle: @assignment.current_open_cycle.present?
+            has_open_cycle: @assignment.current_open_cycle.present?,
+            current_level_complete: @matrix_data[:current_level_complete]
           )
         end
 
