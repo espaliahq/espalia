@@ -243,6 +243,24 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "status pill" do
+    should "flip to Assessment Complete once the manager rates every current-level cell" do
+      # The report has self-rated; the manager hasn't. Critical Thinking is the
+      # only E2-bound capability, so one manager rating completes the level.
+      visit assessment_path(@report_assignment)
+      assert_selector "#assessment-status-pill"
+      within("#assessment-status-pill") { assert_text "In Progress" }
+
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
+
+      # Updates live via the manager rating controller's Turbo Stream.
+      within("#assessment-status-pill") do
+        assert_text "Assessment Complete"
+        assert_no_text "In Progress"
+      end
+    end
+  end
+
   context "responsive behaviour" do
     should "show manager assessment index on mobile with team assessments visible" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)

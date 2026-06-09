@@ -545,8 +545,10 @@ Both flags also flow through the rating controllers' Turbo Stream responses so p
 
 **Header layout.** Both `ShowView` and `ManagerShowView` render a single-row header (`flex flex-wrap items-baseline gap-x-3 gap-y-1`):
 
-- **Self view** — H1 is the level title; shortcode chip is `"#{role.code}#{level.ordinal}"`; status pill (`In Progress` / `Aligning` / `Aligned`) when a cycle is open.
+- **Self view** — H1 is the level title; shortcode chip is `"#{role.code}#{level.ordinal}"`; status pill (`In Progress` / `Assessment Complete` / `Aligning` / `Aligned`) when a cycle is open.
 - **Manager view** — H1 is `assessee.name`; subtitle span renders the level title; same shortcode + status pill.
+
+**Status pill** (`Views::Assessments::StatusPill`, wrapped in `id="assessment-status-pill"` for Turbo replacement; the two header layouts share it via `HeaderChrome#render_status_pill`). The pill rewards finishing the current-level ratings *before* the manager-driven alignment phase: while a cycle is open and the participant is pre-alignment, it reads **"In Progress"** (amber) until **current-level coverage hits 100%** in the viewer's perspective, then **"Assessment Complete"** (green). "Complete" is `MatrixDataBuilder#current_level_complete?` — every capability with a cell at `person_level` rated under the context's primary frequency (self ratings for `:self`, manager for `:manager`); a role with no current-level cells is never complete. Because the pill lives in the static header (outside the scoring/matrix Turbo Frames), the self and manager rating controllers `turbo_stream.replace` it on every rating change so it flips live the moment the final cell is rated — no reload. `aligning`/`aligned` still win and show "Aligning"/"Aligned".
 
 **Action cluster (right side).** Manager view with status `started` shows "Start alignment" (form with `data-turbo-confirm`); status `aligning` shows "Mark alignment complete". Status `aligning` or `aligned` automatically renders in alignment mode — no toggle.
 
@@ -657,6 +659,8 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/views/assessments/show_view.rb` | Self-assessment shell — unified sticky header + main column + activity sidebar |
 | `app/views/assessments/manager_show_view.rb` | Manager assessment shell — same shape, different H1 + action cluster |
 | `app/views/assessments/index_view.rb` | Assessment list (own + direct reports) |
+| `app/views/assessments/status_pill.rb` | Header status pill — In Progress / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
+| `app/views/assessments/header_chrome.rb` | Shared header chrome (shortcode chip + `render_status_pill`) for both show views |
 | **Hero summary** | |
 | `app/views/assessments/hero_summary.rb` | Three-band hero card with state-driven middle band; renders inside the unified sticky header |
 | **Category navigation** | |
