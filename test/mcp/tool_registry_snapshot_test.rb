@@ -139,6 +139,44 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_delete_comment",
+        "description" => "Delete one of your own comments on an assessment (soft delete — preserves reply chains).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "comment_id"    => { "type" => "string" },
+            "reason"        => { "type" => "string" }
+          },
+          "required" => %w[assignment_id comment_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_edit_comment",
+        "description" => "Edit the body of one of your own comments on an assessment.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "comment_id"    => { "type" => "string" },
+            "body"          => { "type" => "string" }
+          },
+          "required" => %w[assignment_id comment_id body],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_evidence_list",
         "description" => "List active evidence on an assessment for one capability (optionally one level). " \
                          "Accepts either capability_id (version-specific) or stable_id (cross-version) in " \
@@ -187,6 +225,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "assessments_post_comment",
+        "description" => "Post a comment on a capability × level of an assessment (optionally as a reply).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "body"                 => { "type" => "string" },
+            "parent_id"            => { "type" => "string" }
+          },
+          "required" => %w[assignment_id capability_stable_id level_ordinal body],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
         }
       },
       {
@@ -308,6 +367,48 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "delegate_person_id" => { "type" => "string" }
           },
           "required" => %w[assignment_id delegate_person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_update_evidence",
+        "description" => "Edit an existing evidence item's type, title, content, and external reference.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"     => { "type" => "string" },
+            "evidence_id"       => { "type" => "string" },
+            "evidence_type"     => { "type" => "string", "enum" => EvidenceItem::EVIDENCE_TYPES },
+            "custom_type_label" => { "type" => "string" },
+            "title"             => { "type" => "string" },
+            "content"           => { "type" => "string" },
+            "external_reference" => { "type" => "object" }
+          },
+          "required" => %w[assignment_id evidence_id evidence_type content],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_withdraw_evidence",
+        "description" => "Withdraw an evidence item (soft delete — hides it everywhere, preserves history).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "evidence_id"   => { "type" => "string" },
+            "reason"        => { "type" => "string" }
+          },
+          "required" => %w[assignment_id evidence_id],
           "additionalProperties" => false
         },
         "annotations" => {
