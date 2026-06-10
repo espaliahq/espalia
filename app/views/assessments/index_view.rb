@@ -4,18 +4,27 @@
 # and their direct reports' assessments (manager view).
 #
 class Views::Assessments::IndexView < Views::Base
+  # Per-side completion state → [badge variant, label].
+  SIDE_STATES = {
+    complete: [ :success, "Complete" ],
+    in_progress: [ :warning, "In progress" ],
+    not_started: [ :default, "Not started" ]
+  }.freeze
+
   # @param assignments [Array<PersonFrameworkAssignment>] own assignments
   # @param report_assignments [Array<PersonFrameworkAssignment>] direct reports
   # @param report_people [Hash{String => Person}] preloaded person records by ID
   # @param open_cycles [Hash{Array(String, String) => AssessmentCycle}] preloaded open cycles keyed by [framework_id, person_id]
+  # @param card_statuses [Hash{Array(String, String) => Hash}] per-card status keyed by [framework_id, person_id]
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignments:, report_assignments: [], report_people: {}, open_cycles: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignments:, report_assignments: [], report_people: {}, open_cycles: {}, card_statuses: {}, user: nil, current_tenant: nil, tenants: [])
     @assignments = assignments
     @report_assignments = report_assignments
     @report_people = report_people
     @open_cycles = open_cycles
+    @card_statuses = card_statuses
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -87,7 +96,7 @@ class Views::Assessments::IndexView < Views::Base
             end
           end
         end
-        cycle_status_badge(cycle)
+        status_badges(assignment, show_manager: true)
       end
 
       if cycle&.name.present?
@@ -125,7 +134,7 @@ class Views::Assessments::IndexView < Views::Base
             end
           end
         end
-        cycle_status_badge(cycle)
+        status_badges(assignment, show_manager: false)
       end
 
       if cycle&.name.present?
@@ -152,11 +161,47 @@ class Views::Assessments::IndexView < Views::Base
     end
   end
 
-  def cycle_status_badge(cycle)
-    if cycle
-      render Components::Kit::Badge.new("In Progress", variant: :warning)
-    else
-      render Components::Kit::Badge.new("Not Started", variant: :default)
+  # Status block for a card. Reports show both parties (Self + Manager); a
+  # person's own card shows self-status only (the manager's progress stays
+  # private until alignment). Once alignment starts, a single phase chip
+  # replaces the per-side chips.
+  #
+  # @param assignment [PersonFrameworkAssignment]
+  # @param show_manager [Boolean]
+  def status_badges(assignment, show_manager:)
+    status = @card_statuses[[ assignment.framework_id, assignment.person_id ]]
+    return render(Components::Kit::Badge.new("Not Started", variant: :default)) if status.nil?
+
+    case status[:status]
+    when "aligning" then return render(Components::Kit::Badge.new("Aligning", variant: :warning))
+    when "aligned"  then return render(Components::Kit::Badge.new("Aligned", variant: :success))
+    end
+
+    div(class: "flex flex-col items-end gap-1") do
+      side_chip("Self", side_state(status[:self_complete], status[:self_any]))
+      if show_manager
+        side_chip("Manager", side_state(status[:manager_complete], status[:manager_any]))
+        if status[:self_complete] && status[:manager_complete]
+          span(class: "text-xs text-gray-500 dark:text-gray-400") { "Ready to align" }
+        end
+      end
+    end
+  end
+
+  # @return [Symbol] :complete | :in_progress | :not_started
+  def side_state(complete, any_rated)
+    return :complete if complete
+    return :in_progress if any_rated
+
+    :not_started
+  end
+
+  # One labelled side chip (e.g. "Self  In progress").
+  def side_chip(label, state)
+    variant, text = SIDE_STATES.fetch(state)
+    div(class: "flex items-center gap-1.5") do
+      span(class: "text-xs text-gray-500 dark:text-gray-400") { label }
+      render Components::Kit::Badge.new(text, variant: variant)
     end
   end
 

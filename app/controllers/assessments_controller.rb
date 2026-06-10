@@ -24,12 +24,14 @@ class AssessmentsController < ApplicationController
     all_assignments = @own_assignments.to_a + @report_assignments.to_a
     cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
     @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
+    @card_statuses = build_card_statuses(@open_cycles)
 
     render Views::Assessments::IndexView.new(
       assignments: @own_assignments,
       report_assignments: @report_assignments,
       report_people: @report_people,
       open_cycles: @open_cycles,
+      card_statuses: @card_statuses,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -281,6 +283,47 @@ class AssessmentsController < ApplicationController
     return PersonFrameworkAssignment.none if ids.empty?
 
     PersonFrameworkAssignment.where(id: ids).includes(:framework, :role, :level)
+  end
+
+  # Builds per-card status for the index, keyed by [framework_id, person_id].
+  # Combines the projected per-side completion (AssessmentCycleProgress) with a
+  # single cheap "any rating exists per side" query so the view can render the
+  # Not started / In progress / Complete tri-state without per-card work.
+  #
+  # @param open_cycles [Hash{Array(String,String) => AssessmentCycle}]
+  # @return [Hash{Array(String,String) => Hash}]
+  def build_card_statuses(open_cycles)
+    return {} if open_cycles.empty?
+
+    cycle_ids = open_cycles.values.map(&:cycle_id)
+    person_ids = open_cycles.keys.map(&:last)
+
+    progress = AssessmentCycleProgress
+      .where(cycle_id: cycle_ids, person_id: person_ids)
+      .index_by { |p| [ p.cycle_id, p.person_id ] }
+    rated = AssessmentLevelRating
+      .where(cycle_id: cycle_ids, person_id: person_ids)
+      .group(:cycle_id, :person_id)
+      .pluck(
+        :cycle_id, :person_id,
+        Arel.sql("COUNT(*) FILTER (WHERE self_rated_frequency IS NOT NULL)"),
+        Arel.sql("COUNT(*) FILTER (WHERE manager_rated_frequency IS NOT NULL)")
+      )
+      .each_with_object({}) do |(cid, pid, self_n, mgr_n), h|
+        h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive? }
+      end
+
+    open_cycles.each_with_object({}) do |((framework_id, person_id), cycle), statuses|
+      prog = progress[[ cycle.cycle_id, person_id ]]
+      any = rated[[ cycle.cycle_id, person_id ]] || {}
+      statuses[[ framework_id, person_id ]] = {
+        status: prog&.status,
+        self_complete: prog&.self_completed_at.present?,
+        manager_complete: prog&.manager_completed_at.present?,
+        self_any: any[:self_any] || false,
+        manager_any: any[:manager_any] || false
+      }
+    end
   end
 
   def direct_report_assignment_ids
