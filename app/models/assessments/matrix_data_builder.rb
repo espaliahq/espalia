@@ -96,7 +96,8 @@ class Assessments::MatrixDataBuilder
       rated_cells: count_rated_cells(categories),
       participant_status: @participant_status,
       individual_ratings_frozen: %w[aligning aligned].include?(@participant_status),
-      alignment_locked: @participant_status == "aligned"
+      alignment_locked: @participant_status == "aligned",
+      current_level_complete: current_level_complete?(categories)
     }
   end
 
@@ -448,6 +449,28 @@ class Assessments::MatrixDataBuilder
       c[:capabilities].sum do |cap|
         cap[:cells].count { |_, cell| cell[:current_frequency].present? }
       end
+    end
+  end
+
+  # Whether every capability with a cell at the person's current level has been
+  # rated in the viewer's perspective — the "Assessment Complete" signal. Same
+  # numerator/denominator as the hero's coverage gate, at full coverage. A role
+  # with no current-level cells is never "complete" (nothing to finish).
+  def current_level_complete?(categories)
+    cells = categories
+      .flat_map { |c| c[:capabilities] }
+      .filter_map { |cap| cap[:cells][@level.ordinal] }
+    return false if cells.empty?
+
+    cells.all? { |cell| primary_cell_frequency(cell).present? }
+  end
+
+  # The frequency that counts as "rated" for the active context.
+  def primary_cell_frequency(cell)
+    case @context
+    when :self      then cell[:current_frequency]
+    when :manager   then cell[:manager_frequency]
+    when :alignment then cell[:aligned_frequency]
     end
   end
 end

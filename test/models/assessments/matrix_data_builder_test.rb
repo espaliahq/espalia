@@ -247,7 +247,66 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
     end
   end
 
+  context "current-level completion" do
+    setup do
+      # A second current-level capability that starts unrated, so the role is
+      # not yet complete. (@capability is already rated at ordinal 2 in setup.)
+      @capability2 = create(:framework_capability,
+        category_id: @category.category_id, name: "Delivery")
+      create(:framework_capability_role_binding,
+        capability_id: @capability2.capability_id, role_id: @role.role_id)
+      (1..3).each do |i|
+        create(:framework_behavioural_expectation,
+          capability_id: @capability2.capability_id, level_ordinal: i,
+          description: "Delivery L#{i}")
+      end
+      @categories = FrameworkState::CapabilityCategory
+        .where(framework_id: @framework.framework_id)
+        .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
+        .order(:ordinal)
+    end
+
+    should "be false while a current-level cell is unrated (:self)" do
+      assert_not build_completion(:self)[:current_level_complete]
+    end
+
+    should "be true once every current-level cell is rated (:self)" do
+      rate_capability2(self_rated_frequency: "some")
+      assert build_completion(:self)[:current_level_complete]
+    end
+
+    should "key off the active context's perspective" do
+      # Only a self rating is added for the second capability.
+      rate_capability2(self_rated_frequency: "some")
+      assert build_completion(:self)[:current_level_complete]
+      # Manager perspective is still missing the second capability's rating.
+      assert_not build_completion(:manager)[:current_level_complete]
+    end
+
+    should "be false when the current level has no cells" do
+      empty_level = create(:framework_level,
+        role_id: @role.role_id, ordinal: 4, title: "Engineer 4", code: "E4")
+      assert_not build_completion(:self, level: empty_level)[:current_level_complete]
+    end
+  end
+
   private
+
+  def rate_capability2(**frequencies)
+    create(:assessment_level_rating,
+      tenant: @tenant, person_id: @person_id,
+      framework_id: @framework.framework_id, cycle_id: @cycle_id,
+      capability_stable_id: @capability2.stable_id, level_ordinal: 2,
+      **frequencies)
+  end
+
+  def build_completion(context, level: @level)
+    Assessments::MatrixDataBuilder.new(
+      framework: @framework, role: @role, level: level,
+      person_id: @person_id, cycle_id: @cycle_id, categories: @categories,
+      context: context
+    ).build
+  end
 
   def build_self_data
     Assessments::MatrixDataBuilder.new(

@@ -243,6 +243,49 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "team assessments list status" do
+    should "show both parties on a report card and reach Ready to align" do
+      # The report self-rated the only current-level capability in setup, so the
+      # Self side is already complete; the manager hasn't rated yet.
+      visit assessments_path
+      assert_text "Team Assessments"
+      assert_text "Self"
+      assert_text "Manager"
+      assert_text "Not started"
+
+      # Manager completes their side → both complete → Ready to align.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent",
+          cycle_id: @cycle_id, rated_by_id: @manager.id
+        )
+      end
+
+      visit assessments_path
+      assert_text "Ready to align"
+      assert_no_text "Not started"
+    end
+  end
+
+  context "status pill" do
+    should "flip to Assessment Complete once the manager rates every current-level cell" do
+      # The report has self-rated; the manager hasn't. Critical Thinking is the
+      # only E2-bound capability, so one manager rating completes the level.
+      visit assessment_path(@report_assignment)
+      assert_selector "#assessment-status-pill"
+      within("#assessment-status-pill") { assert_text "In Progress" }
+
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistently")
+
+      # Updates live via the manager rating controller's Turbo Stream.
+      within("#assessment-status-pill") do
+        assert_text "Assessment Complete"
+        assert_no_text "In Progress"
+      end
+    end
+  end
+
   context "responsive behaviour" do
     should "show manager assessment index on mobile with team assessments visible" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)

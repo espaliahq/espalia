@@ -117,11 +117,14 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "assessment index" do
-    should "show framework assignment card" do
+    should "show framework assignment card with self status (own card hides manager)" do
       visit assessments_path
       assert_text "My Assessments"
       assert_text "me&u 2025 Career Framework"
-      assert_text "In Progress"
+      # Own card shows the Self chip only — no manager progress pre-alignment.
+      assert_text "Self"
+      assert_text "Not started"
+      assert_no_text "Manager"
     end
   end
 
@@ -1229,6 +1232,28 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "The matrix frame should NOT reload on the rater's own click — " \
         "got #{load_count} reload(s). Suppression in assessment_sync " \
         "is broken."
+    end
+  end
+
+  context "status pill" do
+    should "flip from In Progress to Assessment Complete when the last current-level cell is rated" do
+      # Pre-rate cap1 at E2 so only cap3 (the other E2-bound capability) is
+      # left — cap2 has no level-2 cell and doesn't count toward coverage.
+      rate_to_unlock_hero
+
+      visit assessment_path(@assignment)
+      assert_selector "#assessment-status-pill"
+      within("#assessment-status-pill") { assert_text "In Progress" }
+
+      # Rate the remaining current-level capability via the UI. The header
+      # pill lives outside the matrix frame, so it must update live via the
+      # rating controller's Turbo Stream — no page reload.
+      click_rating_frequency("#rating-#{@cap3_stable}-2", "Consistently")
+
+      within("#assessment-status-pill") do
+        assert_text "Assessment Complete"
+        assert_no_text "In Progress"
+      end
     end
   end
 

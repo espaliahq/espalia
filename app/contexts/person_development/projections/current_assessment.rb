@@ -41,7 +41,7 @@ class PersonDevelopment::Projections::CurrentAssessment
   # `aligned_framework_version`: historical ManagerRated/Revised,
   # AssessmentAligned, and FullAlignmentCompleted events carry no value for
   # these, so a rebuild writes nil — identical to the column defaults.
-  CODE_VERSION = 3
+  CODE_VERSION = 4
 
   # All event classes this projection handles.
   #
@@ -260,6 +260,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
+    refresh_completion(event)
     broadcast_assessment_sync(event)
   end
 
@@ -271,6 +272,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.source = "human"
     rating.save!
     touch_progress_started(event)
+    refresh_completion(event)
     broadcast_assessment_sync(event)
   end
 
@@ -279,6 +281,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_frequency = nil
     rating.self_rated_comment = nil
     rating.save!
+    refresh_completion(event)
     broadcast_assessment_sync(event)
   end
 
@@ -291,6 +294,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
+    refresh_completion(event)
     broadcast_assessment_sync(event)
   end
 
@@ -303,6 +307,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.source = "human"
     rating.save!
     touch_progress_started(event)
+    refresh_completion(event)
     broadcast_assessment_sync(event)
   end
 
@@ -312,6 +317,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_comment = nil
     rating.manager_rated_by_id = nil
     rating.save!
+    refresh_completion(event)
     broadcast_assessment_sync(event)
   end
 
@@ -453,6 +459,45 @@ class PersonDevelopment::Projections::CurrentAssessment
       status: "started",
       updated_at: now
     )
+  end
+
+  # Recomputes current-level coverage for both perspectives after a rating
+  # change and stamps the per-side completion timestamps the /assessments list
+  # reads. `status` is left as the lifecycle phase — completion lives in the
+  # two timestamp columns because the two sides complete independently.
+  #
+  # The original completion time is preserved across later edits that stay
+  # complete; the timestamp is cleared the moment coverage drops below complete.
+  # Replay-safe (no broadcast).
+  #
+  # Known limitation: a FrameworkVersionMigrated that changes the current-level
+  # cell set without a subsequent rating can leave a stale flag until the next
+  # rating — acceptable while migrations are rare and the migration UI is
+  # deferred.
+  def refresh_completion(event)
+    progress = find_progress(event)
+    return unless progress
+
+    coverage = Assessments::LevelCoverage.new(
+      person_id: event.metadata[:person_id],
+      framework_id: event.metadata[:framework_id],
+      cycle_id: event.data[:cycle_id]
+    ).call
+    now = event.metadata[:timestamp] || Time.current
+
+    progress.update_columns(
+      self_completed_at: completion_timestamp(progress.self_completed_at, coverage[:self_complete], now),
+      manager_completed_at: completion_timestamp(progress.manager_completed_at, coverage[:manager_complete], now),
+      updated_at: now
+    )
+  end
+
+  # @return [Time, nil] existing time if still complete, `now` on first
+  #   completion, nil when not complete.
+  def completion_timestamp(existing, complete, now)
+    return nil unless complete
+
+    existing || now
   end
 
   # Broadcasts a sync signal to all viewers of this assessment.
