@@ -191,6 +191,67 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#unassign_from_framework" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+    end
+
+    should "apply PersonUnassignedFromFramework with the previous role/level" do
+      @aggregate.unassign_from_framework(reason: "data_correction")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::PersonUnassignedFromFramework, event
+      assert_equal @role_id, event.data[:previous_role_id]
+      assert_equal @level_id, event.data[:previous_level_id]
+      assert_equal "data_correction", event.data[:reason]
+    end
+
+    should "default the reason to manual and capture unassigned_by when provided" do
+      actor = SecureRandom.uuid_v7
+      @aggregate.unassign_from_framework(unassigned_by: actor)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal "manual", event.data[:reason]
+      assert_equal actor, event.data[:unassigned_by]
+    end
+
+    should "clear assignment so the person can be re-assigned afterward" do
+      @aggregate.unassign_from_framework
+
+      # Re-assigning would raise "already assigned" if @assigned were still set.
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      assert_kind_of PersonDevelopment::Events::PersonAssignedToFramework,
+                     @aggregate.unpublished_events.to_a.last
+    end
+
+    should "raise if not assigned" do
+      aggregate = PersonDevelopment::Aggregate.new
+      err = assert_raises(RuntimeError) do
+        aggregate.unassign_from_framework
+      end
+      assert_match /not yet assigned/, err.message
+    end
+
+    should "raise while still enrolled in a cycle" do
+      @aggregate.join_cycle(SecureRandom.uuid_v7, 1)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.unassign_from_framework
+      end
+      assert_match /enrolled in a cycle/, err.message
+    end
+
+    should "allow unassign once the person has left the cycle" do
+      cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(cycle_id, 1)
+      @aggregate.leave_cycle(cycle_id, "unenrolled")
+
+      @aggregate.unassign_from_framework
+      assert_kind_of PersonDevelopment::Events::PersonUnassignedFromFramework,
+                     @aggregate.unpublished_events.to_a.last
+    end
+  end
+
   # ── Assessment Cycle Membership ──
 
   context "#join_cycle" do
