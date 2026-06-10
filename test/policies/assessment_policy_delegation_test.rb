@@ -96,4 +96,16 @@ class AssessmentPolicyDelegationTest < ActiveSupport::TestCase
       assert policy(@manager).create_manager_rating?
     end
   end
+
+  context "unassign?" do
+    should "permit a tenant admin" do
+      assert policy(@delegate, admin: true).unassign?
+    end
+
+    should "deny the assessee, their manager, and a skip-level manager" do
+      assert_not policy(@person).unassign?
+      assert_not policy(@manager).unassign?
+      assert_not policy(@skip).unassign?
+    end
+  end
 end
