@@ -632,7 +632,75 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "per-side completion tracking" do
+    setup do
+      # A single current-level capability so one rating completes the level.
+      ActsAsTenant.with_tenant(@tenant) do
+        role_family = create(:framework_role_family, framework_id: @framework_id)
+        @role = create(:framework_role, role_family_id: role_family.role_family_id, code: "E", track: "ic")
+        @level = create(:framework_level, role_id: @role.role_id, ordinal: 2, code: "E2")
+        category = create(:framework_capability_category, framework_id: @framework_id, ordinal: 1)
+        @cap = create(:framework_capability, category_id: category.category_id)
+        create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: @role.role_id)
+        create(:framework_behavioural_expectation, capability_id: @cap.capability_id, level_ordinal: 2)
+        create(:person_framework_assignment,
+          tenant: @tenant, person_id: @person_id, framework_id: @framework_id,
+          role_id: @role.role_id, level_id: @level.level_id)
+      end
+    end
+
+    should "stamp self_completed_at when the last current-level self rating lands" do
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: "consistent", cycle_id: @cycle_id)
+
+      progress = reload_progress
+      assert_not_nil progress.self_completed_at
+      assert_nil progress.manager_completed_at, "manager side untouched"
+      assert_equal "started", progress.status, "status stays the phase"
+    end
+
+    should "stamp manager_completed_at independently of self" do
+      emit(PersonDevelopment::Events::ManagerRated,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: "occasional", cycle_id: @cycle_id, rated_by_id: SecureRandom.uuid_v7)
+
+      progress = reload_progress
+      assert_not_nil progress.manager_completed_at
+      assert_nil progress.self_completed_at
+    end
+
+    should "clear self_completed_at when a rating is removed" do
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: "consistent", cycle_id: @cycle_id)
+      assert_not_nil reload_progress.self_completed_at
+
+      emit(PersonDevelopment::Events::SelfRatingCleared,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, cycle_id: @cycle_id)
+      assert_nil reload_progress.self_completed_at
+    end
+
+    should "preserve the original completion timestamp across edits that stay complete" do
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: "consistent", cycle_id: @cycle_id)
+      first = reload_progress.self_completed_at
+
+      emit(PersonDevelopment::Events::SelfRatingRevised,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: "some", cycle_id: @cycle_id)
+      assert_equal first, reload_progress.self_completed_at
+    end
+  end
+
   private
+
+  def reload_progress
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+    end
+  end
 
   # Emits an event through the projection with person/framework metadata.
   #

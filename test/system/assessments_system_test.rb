@@ -117,11 +117,14 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "assessment index" do
-    should "show framework assignment card" do
+    should "show framework assignment card with self status (own card hides manager)" do
       visit assessments_path
       assert_text "My Assessments"
       assert_text "me&u 2025 Career Framework"
-      assert_text "In Progress"
+      # Own card shows the Self chip only — no manager progress pre-alignment.
+      assert_text "Self"
+      assert_text "Not started"
+      assert_no_text "Manager"
     end
   end
 
