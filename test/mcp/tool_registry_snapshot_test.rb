@@ -98,6 +98,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_comments_list",
+        "description" => "List active comment threads on an assessment for one capability (optionally one level). " \
+                         "Accepts either capability_id (version-specific) or stable_id (cross-version) in the " \
+                         "capability_stable_id argument. Top-level comments carry their replies nested.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" }
+          },
+          "required" => %w[assignment_id capability_stable_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
         "name" => "assessments_delegate_manager_rating",
         "description" => "Delegate manager-rating authority for one of your reports to another person.",
         "inputSchema" => {
@@ -115,6 +136,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => false,
           "destructiveHint" => false,
           "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_evidence_list",
+        "description" => "List active evidence on an assessment for one capability (optionally one level). " \
+                         "Accepts either capability_id (version-specific) or stable_id (cross-version) in " \
+                         "the capability_stable_id argument. Each item carries its full set of linked cells.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" }
+          },
+          "required" => %w[assignment_id capability_stable_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
         }
       },
       {
