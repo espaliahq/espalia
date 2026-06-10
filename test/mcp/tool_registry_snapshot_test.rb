@@ -140,7 +140,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_delete_comment",
-        "description" => "Delete one of your own comments on an assessment (soft delete — preserves reply chains).",
+        "description" => "Delete a comment on an assessment (soft delete — preserves reply chains; author or tenant admin).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

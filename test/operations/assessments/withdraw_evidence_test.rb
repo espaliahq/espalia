@@ -52,6 +52,17 @@ class Operations::Assessments::WithdrawEvidenceTest < ActiveSupport::TestCase
     assert reloaded.withdrawn?
   end
 
+  should "permit a tenant admin to withdraw another person's evidence" do
+    admin_user = create(:user)
+    ActsAsTenant.with_tenant(@tenant) do
+      admin_person = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+      tu = create(:tenant_user, tenant: @tenant, user: admin_user, person: admin_person, role: :admin)
+      ctx = AuthorizationContext.new(user: admin_user, tenant_user: tu, person: admin_person)
+      result = call_op(context: ctx)
+      assert_equal "withdrawn", result[:status]
+    end
+  end
+
   should "deny a peer who is not author, manager, or admin" do
     other_user = create(:user)
     ActsAsTenant.with_tenant(@tenant) do

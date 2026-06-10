@@ -9,7 +9,7 @@
 # Write — :mcp_client approval. Deletion is a soft, audited, primarily
 # author-scoped action; the same friction as posting it is appropriate.
 class Operations::Assessments::DeleteComment < Operations::Base
-  description "Delete one of your own comments on an assessment (soft delete — preserves reply chains)."
+  description "Delete a comment on an assessment (soft delete — preserves reply chains; author or tenant admin)."
   category :write
   approval :mcp_client
 
