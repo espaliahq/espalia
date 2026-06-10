@@ -107,6 +107,21 @@ up tool call (`frameworks_capability_get`).
 
 A real framework is ~5–15KB at this depth instead of 50KB+ flat.
 
+The same rule shapes the assessment drill-down. `assessments_capability_get`
+returns the capability detail plus a compact per-level **ratings** overlay
+— it deliberately does NOT inline evidence bodies or comment threads (both
+can be large and would poison context). Reaching those is one more
+follow-up call: `assessments_evidence_list` and `assessments_comments_list`,
+each scoped to a capability (optionally one level). So the read traversal is
+`assessments_mine → assessments_get → assessments_capability_get →
+{assessments_evidence_list, assessments_comments_list}`. Both leaf tools are
+`:none`-approval reads gated by the same view policy as the rest of the
+assessment surface (`EvidencePolicy#index?` / `PersonDevelopmentCommentPolicy#index?`
+— assessee + manager chain + active rating delegate + tenant admin; peers
+are denied), return active rows only (withdrawn evidence / removed links /
+soft-deleted comments are omitted), and accept either a `capability_id` or a
+cross-version `stable_id` in the `capability_stable_id` argument.
+
 ### 4. Shape parity via shared serializers
 
 Assessment payloads are **strict supersets** of framework payloads —
