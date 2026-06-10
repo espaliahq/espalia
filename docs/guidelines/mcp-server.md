@@ -122,6 +122,19 @@ are denied), return active rows only (withdrawn evidence / removed links /
 soft-deleted comments are omitted), and accept either a `capability_id` or a
 cross-version `stable_id` in the `capability_stable_id` argument.
 
+Evidence and comments are full **read + write** surfaces over MCP, not
+read-only feeds. Beyond recording/linking evidence, an agent can edit and
+withdraw it (`assessments_update_evidence`, `assessments_withdraw_evidence`)
+and run the comment conversation end to end (`assessments_post_comment`,
+`assessments_edit_comment`, `assessments_delete_comment`). All five are
+`:write`/`:mcp_client`, dispatch through the same command handler and Pundit
+policies as the web controllers (author-only edits; author + admin
+withdraw/delete; view-gated posting), and model their soft deletes the same
+way (withdrawn evidence / `status: "deleted"` comments stay for audit). The
+guiding rule when completing a surface: if the web can do it, the MCP write
+tool should exist too — a half-exposed feature (write with no read, or
+create with no edit/withdraw) is the gap to avoid.
+
 ### 4. Shape parity via shared serializers
 
 Assessment payloads are **strict supersets** of framework payloads —
