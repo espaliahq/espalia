@@ -37,10 +37,13 @@ class Operations::Assessments::EvidenceList < Operations::Base
   #   is every active `{ capability_stable_id, level_ordinal }` the item is
   #   attached to — so a multi-linked item shows where else it counts.
   def perform
+    found = items
+    links_by_evidence = active_links_for(found.map(&:id))
+
     {
       capability_stable_id: capability.stable_id,
       level_ordinal: params[:level_ordinal],
-      evidence: items.map { |item| item_payload(item) }
+      evidence: found.map { |item| item_payload(item, links_by_evidence[item.id] || []) }
     }
   end
 
@@ -81,7 +84,7 @@ class Operations::Assessments::EvidenceList < Operations::Base
     EvidenceItem.active.where(id: item_ids).includes(:author).order(:recorded_at).to_a
   end
 
-  def item_payload(item)
+  def item_payload(item, links)
     {
       evidence_id: item.id,
       evidence_type: item.evidence_type,
@@ -93,14 +96,16 @@ class Operations::Assessments::EvidenceList < Operations::Base
       external_reference: external_reference_payload(item),
       recorded_at: item.recorded_at&.iso8601,
       edited_at: item.edited_at&.iso8601,
-      links: active_links_for(item.id)
+      links: links.map { |link| { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal } }
     }
   end
 
-  def active_links_for(evidence_id)
-    EvidenceLink.active.where(evidence_id: evidence_id).order(:linked_at).map do |link|
-      { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal }
-    end
+  # All active links for the given items, grouped by evidence_id and ordered
+  # by link time — one query for the whole set rather than one per item.
+  def active_links_for(evidence_ids)
+    return {} if evidence_ids.empty?
+
+    EvidenceLink.active.where(evidence_id: evidence_ids).order(:linked_at).group_by(&:evidence_id)
   end
 
   # The StoreModel is always present (defaults to a blank instance); only
