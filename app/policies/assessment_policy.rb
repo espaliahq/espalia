@@ -44,6 +44,14 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def revoke_manager_rating_delegation? = delegate_manager_rating?
 
+  # Remove a person's framework assignment entirely. A destructive
+  # org-structure change — the same kind of authority HRIS-driven
+  # (un)assignment carries — so it is gated to tenant admins, not the
+  # assessee or their manager.
+  #
+  # @return [Boolean]
+  def unassign? = tenant_admin?
+
   # Either the assessee or their manager can record an alignment, but only
   # while the cycle is in the `aligning` lifecycle state — i.e. the manager
   # has explicitly started alignment.

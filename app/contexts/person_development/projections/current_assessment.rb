@@ -41,6 +41,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   # `aligned_framework_version`: historical ManagerRated/Revised,
   # AssessmentAligned, and FullAlignmentCompleted events carry no value for
   # these, so a rebuild writes nil — identical to the column defaults.
+  #
+  # Not bumped for `PersonUnassignedFromFramework`: a brand-new event type
+  # with zero historical instances in the stream, so a rebuild produces
+  # identical state (additive handler, `reset!` truncate set unchanged).
   CODE_VERSION = 4
 
   # All event classes this projection handles.
@@ -51,6 +55,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::PersonAssignedToFramework,
       PersonDevelopment::Events::PersonRoleChanged,
       PersonDevelopment::Events::PersonLevelChanged,
+      PersonDevelopment::Events::PersonUnassignedFromFramework,
       PersonDevelopment::Events::JoinedAssessmentCycle,
       PersonDevelopment::Events::LeftAssessmentCycle,
       PersonDevelopment::Events::SelfRated,
@@ -94,6 +99,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::PersonAssignedToFramework then handle_assigned(event)
     when PersonDevelopment::Events::PersonRoleChanged then handle_role_changed(event)
     when PersonDevelopment::Events::PersonLevelChanged then handle_level_changed(event)
+    when PersonDevelopment::Events::PersonUnassignedFromFramework then handle_unassigned(event)
     when PersonDevelopment::Events::JoinedAssessmentCycle then handle_joined_cycle(event)
     when PersonDevelopment::Events::LeftAssessmentCycle then handle_left_cycle(event)
     when PersonDevelopment::Events::SelfRated then handle_self_rated(event)
@@ -211,6 +217,14 @@ class PersonDevelopment::Projections::CurrentAssessment
     return unless assignment
 
     assignment.update!(level_id: event.data[:new_level_id])
+  end
+
+  # Removes the assignment row entirely. The PersonUnassignedFromFramework
+  # event is the durable audit trail; the read model only reflects "currently
+  # assigned", so a hard delete keeps every assignment query clean. Idempotent
+  # — a no-op if the row is already gone.
+  def handle_unassigned(event)
+    find_assignment(event)&.destroy!
   end
 
   # On (re-)joining a cycle:

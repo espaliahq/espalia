@@ -116,6 +116,37 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Removes the person's framework assignment entirely — the exit from the
+  # assign → change_role → change_level lifecycle. Used when the person's real
+  # role no longer maps to any framework role, or to correct an erroneous
+  # assignment. The PersonUnassignedFromFramework event preserves the full
+  # history; only the read-model row is removed, and the person may be
+  # re-assigned later (the {#assign_to_framework} guard keys off `@assigned`).
+  #
+  # Blocked while the person is enrolled in an open cycle: cycle membership is
+  # manager-driven (see {AssessmentCycles::Aggregate}), so the caller must
+  # unenroll first rather than have an unassign silently orphan in-flight
+  # rating/evidence work. This keeps the cross-stream effect explicit.
+  #
+  # @param reason [String] why the assignment was removed (e.g. "manual",
+  #   "role_unmapped", "data_correction")
+  # @param unassigned_by [String, nil] UUID of the Person who triggered it;
+  #   nil for system-driven actions
+  # @raise [RuntimeError] if not assigned, or if still enrolled in a cycle
+  def unassign_from_framework(reason: "manual", unassigned_by: nil)
+    ensure_assigned!
+    unless @current_cycle_id.nil?
+      raise "Cannot unassign while enrolled in a cycle; leave the cycle first"
+    end
+
+    apply(PersonDevelopment::Events::PersonUnassignedFromFramework.new(data: {
+      previous_role_id: @role_id,
+      previous_level_id: @level_id,
+      reason: reason,
+      unassigned_by: unassigned_by
+    }))
+  end
+
   # ── Reporting manager ──
 
   # Records the person's reporting manager as a first-class domain fact.
@@ -966,6 +997,12 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::PersonLevelChanged do |event|
     @level_id = event.data[:new_level_id]
+  end
+
+  on PersonDevelopment::Events::PersonUnassignedFromFramework do |_event|
+    @role_id = nil
+    @level_id = nil
+    @assigned = false
   end
 
   on PersonDevelopment::Events::FrameworkVersionMigrated do |event|

@@ -96,6 +96,34 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "PersonUnassignedFromFramework" do
+    should "delete the assignment row" do
+      role = SecureRandom.uuid_v7
+      level = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::PersonAssignedToFramework,
+        person_id: @person_id, framework_id: @framework_id,
+        role_id: role, level_id: level)
+
+      emit(PersonDevelopment::Events::PersonUnassignedFromFramework,
+        previous_role_id: role, previous_level_id: level, reason: "data_correction")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil PersonFrameworkAssignment.find_by(
+          person_id: @person_id, framework_id: @framework_id
+        )
+      end
+    end
+
+    should "be a no-op when no assignment row exists" do
+      assert_nothing_raised do
+        emit(PersonDevelopment::Events::PersonUnassignedFromFramework,
+          previous_role_id: SecureRandom.uuid_v7,
+          previous_level_id: SecureRandom.uuid_v7, reason: "manual")
+      end
+    end
+  end
+
   context "JoinedAssessmentCycle / LeftAssessmentCycle" do
     should "be no-ops on the PersonFrameworkAssignment (participant is authoritative)" do
       role_id = SecureRandom.uuid_v7

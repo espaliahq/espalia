@@ -376,6 +376,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_unassign",
+        "description" => "Remove a person's framework assignment (when their real role no longer maps to a framework role).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "reason"        => { "type" => "string" }
+          },
+          "required" => %w[assignment_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => true,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_update_evidence",
         "description" => "Edit an existing evidence item's type, title, content, and external reference.",
         "inputSchema" => {

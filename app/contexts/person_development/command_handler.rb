@@ -55,6 +55,22 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Removes a person's framework assignment entirely (the exit from the
+  # assign → change_role → change_level lifecycle). The full history stays on
+  # the stream; only the assignment read-model row is removed.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param reason [String] why the assignment was removed
+  # @param unassigned_by [String, nil] UUID of the Person who triggered it;
+  #   nil for system-driven actions
+  # @raise [RuntimeError] if not assigned, or still enrolled in a cycle
+  def unassign_from_framework(person_id, framework_id, reason: "manual", unassigned_by: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.unassign_from_framework(reason: reason, unassigned_by: unassigned_by)
+    end
+  end
+
   # Records the person's reporting manager on their stream (idempotent — no-op
   # when unchanged). Populated from HRIS sync and the one-off backfill.
   #

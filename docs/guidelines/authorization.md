@@ -102,6 +102,7 @@ Access to person development streams is based on the person/manager relationship
 | View assessment | Person, their manager, **or an active delegate** (read-only alignment) |
 | Start / complete / record alignment | Reporting manager only — never a delegate |
 | Grant / revoke a rating delegation | Any ancestor manager (`Person#managed_by?`) or a tenant admin |
+| Unassign from framework (`unassign?`) | Tenant admin only — a destructive org-structure change, not the assessee or their manager |
 | Growth plan | Person proposes, manager agrees |
 
 **Recorded-authoritative manager.** `manages_assessee?` reads the reporting

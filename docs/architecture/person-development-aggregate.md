@@ -13,10 +13,20 @@ Assignment:
   PersonAssignedToFramework { framework_id, role_id, level_id, assigned_by? }
   PersonRoleChanged { previous_role_id, new_role_id, previous_level_id, new_level_id, reason, changed_by? }
   PersonLevelChanged { previous_level_id, new_level_id, reason, changed_by? }
-    ← assigned_by / changed_by are nil for system-driven HRIS syncs (provenance
-      is then the metadata layer: acting_via: :hris + correlation_id). See ADR-18.
+  PersonUnassignedFromFramework { previous_role_id?, previous_level_id?, reason, unassigned_by? }
+    ← assigned_by / changed_by / unassigned_by are nil for system-driven HRIS syncs
+      (provenance is then the metadata layer: acting_via: :hris + correlation_id). See ADR-18.
     ← migrate_framework_version RAISES if the current cycle's alignment is
       completed — a completed assessment is immutable (ADR-19).
+    ← unassign_from_framework is the EXIT from the assign → change_role → change_level
+      lifecycle: it removes the assignment entirely (used when the real role no longer
+      maps to a framework role, or to correct an erroneous assignment). Guards:
+      ensure_assigned! AND refuses while @current_cycle_id is set — unenroll first
+      (cycle membership is manager-driven) so no in-flight rating/evidence is orphaned.
+      Clears @assigned, so the person can be re-assigned afterward. The CurrentAssessment
+      projection deletes the PersonFrameworkAssignment row; the event is the audit trail.
+      MUST stay an explicit action — never auto-fired by HRIS on an unmapped title
+      (unmapped titles are skipped + tracked, deliberately non-destructive).
 
 Evidence (one piece of evidence can be linked to MANY capability × level
 cells — multi-linkage. Content lives on EvidenceRecorded/Updated; the set of
