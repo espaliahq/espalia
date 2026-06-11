@@ -74,6 +74,7 @@ class Frameworks::MatrixDataBuilder
       selected_roles: @selected_roles,
       merged_levels: merged_levels,
       categories: categories,
+      track_filter: @track_filter,
       search_query: @search_query,
       in_scope_capability_count: @in_scope_capability_count,
       matched_capability_count: categories.sum { |c| c[:capabilities].size }

@@ -207,6 +207,11 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_not_includes role_codes, "E"
         assert_includes role_codes, "EM"
       end
+
+      should "echo the active track filter (drives the no-match reset links)" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], track_filter: "ic")
+        assert_equal "ic", result[:track_filter]
+      end
     end
 
     context "empty selection" do

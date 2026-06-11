@@ -108,12 +108,18 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   end
 
   # Full-page path back to the explorer (mode-aware) with the given role
-  # scope and no query — drives both escape links above.
+  # scope and no query — drives both escape links above. Preserves the active
+  # track filter (the only other URL-encoded axis; role-family scope is carried
+  # by `roles[]`) so clearing the search doesn't silently reset IC/Mgmt.
   def reset_path(role_ids)
+    params = { roles: role_ids }
+    track = @matrix_data[:track_filter]
+    params[:track] = track if track.present? && track != "both"
+
     if @mode == :edit
-      edit_framework_path(@framework_id, roles: role_ids)
+      edit_framework_path(@framework_id, **params)
     else
-      framework_path(@framework_id, roles: role_ids)
+      framework_path(@framework_id, **params)
     end
   end
 end
