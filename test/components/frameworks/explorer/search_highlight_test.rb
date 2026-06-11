@@ -2,25 +2,27 @@
 
 require "test_helper"
 
-# Unit-tests the SearchHighlight concern via a minimal Phlex harness, so the
-# highlight logic (token matching, case-insensitivity, overlap merging,
-# escaping) is exercised without the matrix frames' view-context needs.
-class Views::Frameworks::Explorer::SearchHighlightTest < ActiveSupport::TestCase
-  class Harness < Phlex::HTML
-    include Views::Frameworks::Explorer::Concerns::SearchHighlight
+# Minimal Phlex host for the concern under test — a top-level qualified class
+# (not nested) per the repo's `class Module::ClassName` convention.
+class Views::Frameworks::Explorer::SearchHighlightTestHarness < Phlex::HTML
+  include Views::Frameworks::Explorer::Concerns::SearchHighlight
 
-    def initialize(text:, query:)
-      @text = text
-      @query = query
-    end
-
-    def view_template
-      span { render_highlighted(@text, @query) }
-    end
+  def initialize(text:, query:)
+    @text = text
+    @query = query
   end
 
+  def view_template
+    span { render_highlighted(@text, @query) }
+  end
+end
+
+# Unit-tests the SearchHighlight concern via the harness above, so the highlight
+# logic (token matching, case-insensitivity, overlap merging, escaping) is
+# exercised without the matrix frames' view-context needs.
+class Views::Frameworks::Explorer::SearchHighlightTest < ActiveSupport::TestCase
   def render_highlighted(text, query)
-    Harness.new(text: text, query: query).call
+    Views::Frameworks::Explorer::SearchHighlightTestHarness.new(text: text, query: query).call
   end
 
   context "search highlighting" do
