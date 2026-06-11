@@ -62,6 +62,15 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       eid2 = SecureRandom.uuid_v7
       handler.set_behavioural_expectation(@framework_id, eid2, SecureRandom.uuid_v7, cap_id, 2, "Identifies root causes")
 
+      # ── Second capability in its own category (for text-filter coverage) ──
+      collab_cat_id = SecureRandom.uuid_v7
+      collab_cap_id = SecureRandom.uuid_v7
+      handler.add_capability_category(@framework_id, collab_cat_id, "Collaboration", ordinal: 2)
+      handler.add_capability(@framework_id, collab_cap_id, SecureRandom.uuid_v7, collab_cat_id, "Stakeholder Management")
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, collab_cap_id, @pd_role_id)
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, collab_cap_id, @eng_role_id)
+      handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, collab_cap_id, 1, "Builds trust with partners")
+
       # Publish v1 so shape-changing events land in the read model.
       # Note: rebuild wipes child read models and replays events, so direct
       # read-model-only updates (department) must happen AFTER publish.
@@ -328,5 +337,93 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Role pane should close
       assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
     end
+  end
+
+  context "text filter" do
+    should "narrow the matrix to matching capabilities on desktop" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit framework_path(@framework_id)
+      assert_text "Strategic Thinking"
+      assert_text "Stakeholder Management"
+      wait_for_stimulus "framework-search"
+
+      filter_capabilities "Stakeholder"
+
+      assert_text "Stakeholder Management"
+      assert_no_text "Strategic Thinking"
+      # In-frame summary reports the match count live
+      assert_text "Showing 1 of 2"
+      # The matched term is highlighted in the capability name
+      assert_selector "mark", text: "Stakeholder"
+    end
+
+    should "show a no-matches state with escape links when nothing matches" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit framework_path(@framework_id)
+      assert_text "Strategic Thinking"
+      wait_for_stimulus "framework-search"
+
+      filter_capabilities "zzznomatch"
+
+      assert_text "No capabilities match"
+      assert_no_text "Strategic Thinking"
+      assert_link "Clear search"
+      assert_link "Show all roles"
+    end
+
+    should "restore the full matrix when the filter is cleared" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit framework_path(@framework_id)
+      wait_for_stimulus "framework-search"
+
+      filter_capabilities "Stakeholder"
+      assert_no_text "Strategic Thinking"
+
+      # Clear via the inline × button (JS-dispatched to dodge dropped clicks)
+      page.execute_script(
+        "document.querySelector(\"[data-framework-search-target='clear']\").click()"
+      )
+
+      assert_text "Strategic Thinking"
+      assert_text "Stakeholder Management"
+    end
+
+    should "compose with the role filter, preserving role scope" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit framework_path(@framework_id, roles: [ @pd_role_id ])
+      assert_selector "th", text: "Associate Product Designer"
+      wait_for_stimulus "framework-search"
+
+      filter_capabilities "Stakeholder"
+
+      assert_text "Stakeholder Management"
+      assert_no_text "Strategic Thinking"
+      # Role scope survives the text filter — PD column header still present,
+      # and the roles param stays in the browser URL.
+      assert_selector "th", text: "Associate Product Designer"
+      assert_includes page.current_url, "roles%5B%5D=#{@pd_role_id}"
+    end
+
+    should "narrow the matrix on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit framework_path(@framework_id)
+      assert_text "Strategic Thinking"
+      wait_for_stimulus "framework-search"
+
+      filter_capabilities "Stakeholder"
+
+      assert_text "Stakeholder Management"
+      assert_no_text "Strategic Thinking"
+    end
+  end
+
+  private
+
+  # Types into the explorer's text filter. Uses the search input's type
+  # attribute (stable, single instance) and waits for the debounced
+  # Turbo-frame fetch to settle via the caller's subsequent assertion.
+  def filter_capabilities(text)
+    input = find("input[type='search']")
+    input.set(text)
   end
 end

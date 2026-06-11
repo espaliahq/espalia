@@ -69,7 +69,8 @@ class FrameworksController < ApplicationController
       pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count,
       mode: mode,
       can_edit: fw_policy.edit?,
-      current_person_id: current_person&.id&.to_s
+      current_person_id: current_person&.id&.to_s,
+      search_query: resolved_search_query
     )
   end
 
@@ -118,7 +119,8 @@ class FrameworksController < ApplicationController
       track_filter: resolved_track_filter,
       mode: mode,
       pending_suggestions: pending_suggestions,
-      pending_illustration_creates: pending_illustration_creates
+      pending_illustration_creates: pending_illustration_creates,
+      search_query: resolved_search_query
     ).build
 
     [ graph, matrix_data ]
@@ -131,6 +133,14 @@ class FrameworksController < ApplicationController
 
   def resolved_track_filter
     params[:track].presence || "both"
+  end
+
+  # Free-text matrix filter (see {Frameworks::MatrixDataBuilder}). Trimmed;
+  # blank collapses to nil so the builder treats it as "not searching".
+  #
+  # @return [String, nil]
+  def resolved_search_query
+    params[:q].to_s.strip.presence
   end
 
   # Loads pending suggestion maps for the matrix visual affordance.

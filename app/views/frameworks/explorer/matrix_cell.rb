@@ -13,11 +13,14 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # @param ordinal [Integer] the level ordinal for this column
   # @param framework_id [String] UUID — required when mode is :edit for the expectation edit URL
   # @param mode [Symbol] :view or :edit
-  def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view)
+  # @param search_query [String, nil] active text filter — highlighted in the
+  #   expectation text
+  def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view, search_query: nil)
     @cell_data = cell_data
     @ordinal = ordinal
     @framework_id = framework_id
     @mode = mode
+    @search_query = search_query
   end
 
   def view_template
@@ -53,7 +56,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
       framework_id: @framework_id,
       mode: @mode,
       pending_edit_count: pending_count,
-      pending_edit: @cell_data[:pending_edit]
+      pending_edit: @cell_data[:pending_edit],
+      search_query: @search_query
     )
 
     if @mode == :edit && expectation.respond_to?(:added_in_draft) && expectation.added_in_draft

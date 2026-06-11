@@ -8,6 +8,7 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::InlineEditable
+  include Views::Frameworks::Explorer::Concerns::SearchHighlight
 
   # @param category [FrameworkState::CapabilityCategory, Frameworks::ExplorerGraph::CapabilityCategory]
   # @param framework_id [String]
@@ -16,12 +17,16 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   # @param pending_edit [Hash, nil] latest pending edit descriptor
   #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
   #   name renders as an inline diff instead of the plain value.
-  def initialize(category:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil)
+  # @param search_query [String, nil] active text filter — match terms are
+  #   highlighted in the name (skipped when a pending-edit diff is shown).
+  def initialize(category:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil,
+                 search_query: nil)
     @category = category
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
+    @search_query = search_query
   end
 
   def view_template
@@ -43,7 +48,7 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
         render_inline_diff(original: @category.name, pending_edit: @pending_edit)
       end
     else
-      span(class: "#{base} #{decoration}".strip) { @category.name }
+      span(class: "#{base} #{decoration}".strip) { render_highlighted(@category.name, @search_query) }
     end
   end
 

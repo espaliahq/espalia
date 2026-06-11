@@ -15,7 +15,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param roles_by_id [Hash] { role_id => Role } — passed through to rows to avoid per-cell AR lookups
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil)
+                 roles_by_id: {}, current_person_id: nil, search_query: nil)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
@@ -26,6 +26,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @mode = mode
     @roles_by_id = roles_by_id
     @current_person_id = current_person_id
+    @search_query = search_query
   end
 
   def view_template
@@ -85,7 +86,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
               framework_id: @framework_id,
               mode: @mode,
               pending_edit_count: @category_pending_count,
-              pending_edit: @category_pending_edit
+              pending_edit: @category_pending_edit,
+              search_query: @search_query
             )
 
             span(class: "text-xs text-gray-600 dark:text-gray-300") do
@@ -106,7 +108,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         framework_id: @framework_id,
         mode: @mode,
         roles_by_id: @roles_by_id,
-        current_person_id: @current_person_id
+        current_person_id: @current_person_id,
+        search_query: @search_query
       )
     end
   end

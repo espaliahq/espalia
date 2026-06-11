@@ -31,8 +31,17 @@ class Frameworks::MatrixDataBuilder
   #   consumed by the inline-diff decoration helper. `nil` when the entity has
   #   only pending deletes or no pending text edits.
   # @param pending_illustration_creates [Hash] pre-queried map { parent_id => [SuggestedEdit, ...] } for pending creates
+  # @param search_query [String, nil] free-text filter applied *within* the
+  #   current role scope. Matches (token-AND, case-insensitive) against each
+  #   capability's category name/description, capability name/description, and
+  #   the text of its visible behavioural expectations. Illustrations are
+  #   deliberately excluded — they're numerous, verbose, and hidden until a
+  #   row is expanded, so matching them dilutes results and produces matches
+  #   the user can't see. Every surface searched here is visible in the
+  #   compact matrix. Role dimming is untouched — a dimmed-but-matching
+  #   capability still shows.
   def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both",
-                 mode: :view, pending_suggestions: {}, pending_illustration_creates: {})
+                 mode: :view, pending_suggestions: {}, pending_illustration_creates: {}, search_query: nil)
     @framework = framework
     @role_families = role_families
     @categories = categories
@@ -41,25 +50,42 @@ class Frameworks::MatrixDataBuilder
     @mode = mode
     @pending_suggestions = pending_suggestions
     @pending_illustration_creates = pending_illustration_creates
+    @search_query = search_query.to_s.strip.presence
+    @search_tokens = @search_query.to_s.downcase.split
   end
 
   # Builds the matrix data structure.
   #
-  # @return [Hash] with keys :selected_roles, :merged_levels, :categories
+  # @return [Hash] with keys :selected_roles, :merged_levels, :categories,
+  #   :search_query (echo, nil when not searching), :in_scope_capability_count
+  #   (role-scoped, before the text filter) and :matched_capability_count
+  #   (after the text filter) — the in-frame "Showing N of M" banner uses the
+  #   latter two; the header stat shows :in_scope_capability_count.
   def build
     @selected_roles = resolve_selected_roles
     merged_levels = build_merged_levels(@selected_roles)
     family_role_ids = build_family_role_ids(@selected_roles)
     selected_role_id_set = @selected_roles.map(&:role_id).to_set
 
+    @in_scope_capability_count = 0
+    categories = build_categories(merged_levels, family_role_ids, selected_role_id_set)
+
     {
       selected_roles: @selected_roles,
       merged_levels: merged_levels,
-      categories: build_categories(merged_levels, family_role_ids, selected_role_id_set)
+      categories: categories,
+      track_filter: @track_filter,
+      search_query: @search_query,
+      in_scope_capability_count: @in_scope_capability_count,
+      matched_capability_count: categories.sum { |c| c[:capabilities].size }
     }
   end
 
   private
+
+  def searching?
+    @search_tokens.any?
+  end
 
   # Filters roles by selected IDs and track filter from the eager-loaded role families.
   #
@@ -144,6 +170,8 @@ class Frameworks::MatrixDataBuilder
 
     @categories.filter_map do |category|
       capabilities = build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
+      @in_scope_capability_count += capabilities.size
+      capabilities = filter_by_search(category, capabilities) if searching?
       next if capabilities.empty?
 
       {
@@ -252,6 +280,33 @@ class Frameworks::MatrixDataBuilder
       latest = pending_latest_edit("role_illustration", ill.illustration_id)
       h[ill.illustration_id] = latest if latest
     end
+  end
+
+  # Keeps only capabilities whose searchable text contains *every* query
+  # token (case-insensitive substring). Operates after the role/family
+  # filter, so the text search narrows within the current role scope and
+  # never resurfaces a capability the role filter excluded.
+  #
+  # @return [Array<Hash>]
+  def filter_by_search(category, capabilities)
+    capabilities.select do |cap_data|
+      haystack = searchable_text(cap_data, category)
+      @search_tokens.all? { |token| haystack.include?(token) }
+    end
+  end
+
+  # Builds the lowercased haystack matched against the query tokens: the
+  # capability's own name/description, its category name/description (so a
+  # query on the category surfaces all of its capabilities), and the text of
+  # every visible behavioural expectation. Illustrations are intentionally
+  # NOT included — see the `search_query` note on #initialize.
+  #
+  # @return [String]
+  def searchable_text(cap_data, category)
+    cap = cap_data[:capability]
+    parts = [ category.name, category.description, cap.name, cap.description ]
+    cap_data[:cells].each_value { |cell| parts << cell[:expectation].description }
+    parts.compact.join(" ").downcase
   end
 
   def pending_count(entity_type, entity_id)

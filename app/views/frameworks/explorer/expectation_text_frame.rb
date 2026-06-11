@@ -9,6 +9,7 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::InlineEditable
+  include Views::Frameworks::Explorer::Concerns::SearchHighlight
 
   # @param expectation [FrameworkState::BehaviouralExpectation, Frameworks::ExplorerGraph::BehaviouralExpectation]
   # @param framework_id [String]
@@ -17,12 +18,16 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
   # @param pending_edit [Hash, nil] latest pending edit descriptor
   #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
   #   description renders as an inline diff instead of the plain value.
-  def initialize(expectation:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil)
+  # @param search_query [String, nil] active text filter — match terms are
+  #   highlighted in the description (skipped when a pending-edit diff is shown).
+  def initialize(expectation:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil,
+                 search_query: nil)
     @expectation = expectation
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
+    @search_query = search_query
   end
 
   def view_template
@@ -48,7 +53,7 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
         render_inline_diff(original: @expectation.description, pending_edit: @pending_edit)
       end
     else
-      p(class: "#{base} #{decoration}".strip) { @expectation.description }
+      p(class: "#{base} #{decoration}".strip) { render_highlighted(@expectation.description, @search_query) }
     end
   end
 

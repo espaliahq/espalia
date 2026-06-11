@@ -14,6 +14,7 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::InlineEditable
+  include Views::Frameworks::Explorer::Concerns::SearchHighlight
 
   # @param capability [FrameworkState::Capability, Frameworks::ExplorerGraph::Capability]
   # @param framework_id [String]
@@ -22,12 +23,16 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   # @param pending_edit [Hash, nil] latest pending edit descriptor
   #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
   #   name renders as an inline diff instead of the plain value.
-  def initialize(capability:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil)
+  # @param search_query [String, nil] active text filter — match terms are
+  #   highlighted in the name (skipped when a pending-edit diff is shown).
+  def initialize(capability:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil,
+                 search_query: nil)
     @capability = capability
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
+    @search_query = search_query
   end
 
   def view_template
@@ -49,7 +54,7 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
         render_inline_diff(original: @capability.name, pending_edit: @pending_edit)
       end
     else
-      span(class: "#{base} #{decoration}".strip) { @capability.name }
+      span(class: "#{base} #{decoration}".strip) { render_highlighted(@capability.name, @search_query) }
     end
   end
 

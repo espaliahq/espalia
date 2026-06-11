@@ -168,16 +168,37 @@ export default class extends BaseController {
 
   updateSelection(event) {
     const { roleIds, track } = event.detail
+    this.#rebuildMatrixFrame({ roleIds, track })
+  }
+
+  // Free-text filter changed (framework-search:changed). The text query is
+  // an orthogonal axis to role/track: merge it with the role scope currently
+  // in the browser URL so neither filter clobbers the other.
+  updateSearch(event) {
+    const { query } = event.detail || {}
+    this.#rebuildMatrixFrame({ query: query ?? "" })
+  }
+
+  // Rebuilds the matrix Turbo Frame src from the three filter axes. Any axis
+  // not supplied by the caller is read back from the browser URL, so a change
+  // to one axis (role selection OR text query) preserves the others.
+  #rebuildMatrixFrame({ roleIds, track, query } = {}) {
     if (!this.hasFrameTarget || !this.basePathValue) return
 
+    const current = new URL(window.location)
+    const resolvedRoleIds = roleIds ?? current.searchParams.getAll("roles[]")
+    const resolvedTrack = track ?? (current.searchParams.get("track") || "both")
+    const resolvedQuery = query ?? (current.searchParams.get("q") || "")
+
     const url = new URL(this.basePathValue, window.location.origin)
-    roleIds.forEach(id => url.searchParams.append("roles[]", id))
-    url.searchParams.set("track", track)
+    resolvedRoleIds.forEach(id => url.searchParams.append("roles[]", id))
+    url.searchParams.set("track", resolvedTrack)
+    if (resolvedQuery) url.searchParams.set("q", resolvedQuery)
 
     this.frameTarget.src = url.toString()
 
     // Update browser URL for shareability
-    this.#updateBrowserUrl(roleIds, track)
+    this.#updateBrowserUrl(resolvedRoleIds, resolvedTrack, resolvedQuery)
   }
 
   // ── Category Collapse ──
@@ -1566,11 +1587,13 @@ export default class extends BaseController {
     }
   }
 
-  #updateBrowserUrl(roleIds, track) {
+  #updateBrowserUrl(roleIds, track, query = "") {
     const url = new URL(window.location)
     url.searchParams.delete("roles[]")
     roleIds.forEach(id => url.searchParams.append("roles[]", id))
     url.searchParams.set("track", track)
+    if (query) url.searchParams.set("q", query)
+    else url.searchParams.delete("q")
     window.history.pushState({}, "", url)
   }
 

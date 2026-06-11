@@ -19,10 +19,11 @@ class Views::Frameworks::ShowView < Views::Base
   # @param pending_suggestion_count [Integer] count for the suggestions toggle badge
   # @param mode [Symbol] :view (default) or :edit — gates inline-edit affordances and sets context-pane default-open
   # @param can_edit [Boolean] whether the current user can reach edit mode — controls mode switcher visibility
+  # @param search_query [String, nil] active free-text matrix filter (echoed into the search box)
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
                  pending_suggestion_count: 0, mode: :view, can_edit: false,
-                 current_person_id: nil)
+                 current_person_id: nil, search_query: nil)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -36,6 +37,7 @@ class Views::Frameworks::ShowView < Views::Base
     @mode = mode
     @can_edit = can_edit
     @current_person_id = current_person_id
+    @search_query = search_query
   end
 
   def view_template
@@ -193,9 +195,11 @@ class Views::Frameworks::ShowView < Views::Base
   def stats_bar
     role_count = @matrix_data[:selected_roles].size
     level_count = @matrix_data[:merged_levels].size
-    cap_count = @matrix_data[:categories].sum { |c| c[:capabilities].size }
 
-    div(class: "mt-3 flex items-center gap-6 text-sm text-gray-600 dark:text-gray-300") do
+    cap_count = @matrix_data[:in_scope_capability_count] ||
+                @matrix_data[:categories].sum { |c| c[:capabilities].size }
+
+    div(class: "mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-300") do
       # Roles stat doubles as the toggle button for the role pane
       button(
         type: "button",
@@ -223,7 +227,61 @@ class Views::Frameworks::ShowView < Views::Base
       end
       stat_item("Levels", level_count)
       stat_item("Capabilities", cap_count)
+      search_box
       suggestions_toggle if @mode == :edit
+    end
+  end
+
+  # Free-text matrix filter. Composes with (does not replace) the role/track
+  # selection — the matrix controller merges the query with the current role
+  # scope from the browser URL. Lives in the header so it reads as a separate
+  # axis from the role tree. Dispatches `framework-search:changed` (window);
+  # `matrix#updateSearch` rebuilds the matrix Turbo Frame.
+  def search_box
+    div(
+      class: "relative ml-auto w-64 max-sm:w-full",
+      data: { controller: "framework-search" }
+    ) do
+      div(class: "pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5") do
+        svg(
+          class: "w-4 h-4 text-gray-400", fill: "none", viewBox: "0 0 24 24",
+          stroke: "currentColor", stroke_width: "2"
+        ) do |s|
+          s.path(stroke_linecap: "round", stroke_linejoin: "round",
+                 d: "M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z")
+        end
+      end
+      input(
+        type: "search",
+        value: @search_query,
+        placeholder: "Filter capabilities…",
+        autocomplete: "off",
+        aria_label: "Filter capabilities by text",
+        class: "w-full rounded-md border border-gray-200 dark:border-gray-700 " \
+               "bg-white dark:bg-gray-800 py-1.5 pl-8 pr-8 text-sm " \
+               "text-gray-900 dark:text-white placeholder:text-gray-400 " \
+               "focus:border-primary focus:ring-1 focus:ring-primary focus:outline-hidden " \
+               "[&::-webkit-search-cancel-button]:appearance-none",
+        data: {
+          framework_search_target: "input",
+          action: "input->framework-search#onInput keydown->framework-search#onKeydown"
+        }
+      )
+      button(
+        type: "button",
+        class: "absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 " \
+               "hover:text-gray-600 dark:hover:text-gray-200 #{'hidden' if @search_query.blank?}",
+        aria_label: "Clear filter",
+        data: {
+          framework_search_target: "clear",
+          action: "framework-search#clear"
+        }
+      ) do
+        svg(class: "w-4 h-4", fill: "none", viewBox: "0 0 24 24",
+            stroke: "currentColor", stroke_width: "2") do |s|
+          s.path(stroke_linecap: "round", stroke_linejoin: "round", d: "M6 18L18 6M6 6l12 12")
+        end
+      end
     end
   end
 
@@ -234,7 +292,7 @@ class Views::Frameworks::ShowView < Views::Base
   def suggestions_toggle
     button(
       type: "button",
-      class: "ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-md " \
+      class: "flex items-center gap-1.5 px-2.5 py-1 rounded-md " \
              "bg-gray-100 dark:bg-gray-800 " \
              "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
       data: {
@@ -266,6 +324,7 @@ class Views::Frameworks::ShowView < Views::Base
         controller: "matrix",
         matrix_base_path_value: matrix_framework_path(@framework.framework_id),
         action: "tree:changed->matrix#updateSelection " \
+                "framework-search:changed@window->matrix#updateSearch " \
                 "suggestion:navigate@window->matrix#navigateToEntity"
       }
     ) do
