@@ -8,6 +8,7 @@
 #
 class Views::Frameworks::Explorer::MatrixRow < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::SearchHighlight
 
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
@@ -17,7 +18,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
   #   don't each fire a `FrameworkState::Role.find_by` query
   def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil)
+                 roles_by_id: {}, current_person_id: nil, search_query: nil)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
@@ -25,6 +26,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @mode = mode
     @roles_by_id = roles_by_id
     @current_person_id = current_person_id
+    @search_query = search_query
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -69,11 +71,12 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               framework_id: @framework_id,
               mode: @mode,
               pending_edit_count: @capability_pending_count,
-              pending_edit: @capability_pending_edit
+              pending_edit: @capability_pending_edit,
+              search_query: @search_query
             )
             draft_state_badge if @mode == :edit
             p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-1") do
-              @capability.description
+              render_highlighted(@capability.description, @search_query)
             end if @capability.description.present?
           end
         end
@@ -85,7 +88,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           cell_data: @cells[level[:ordinal]],
           ordinal: level[:ordinal],
           framework_id: @framework_id,
-          mode: @mode
+          mode: @mode,
+          search_query: @search_query
         )
       end
     end

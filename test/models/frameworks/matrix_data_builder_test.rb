@@ -335,6 +335,100 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
       end
     end
 
+    context "search filter" do
+      should "report no search query and full count when not searching" do
+        result = build_matrix(selected_role_ids: [])
+
+        assert_nil result[:search_query]
+        assert_equal 2, result[:in_scope_capability_count]
+        assert_equal 2, result[:matched_capability_count]
+      end
+
+      should "filter by capability name within the role scope" do
+        result = build_matrix(selected_role_ids: [], search_query: "visual")
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
+        assert_equal [ "Visual Design" ], cap_names
+        assert_equal "visual", result[:search_query]
+        assert_equal 2, result[:in_scope_capability_count]
+        assert_equal 1, result[:matched_capability_count]
+      end
+
+      should "be case-insensitive" do
+        result = build_matrix(selected_role_ids: [], search_query: "VISUAL")
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
+        assert_equal [ "Visual Design" ], cap_names
+      end
+
+      should "match against expectation text" do
+        # "Level 2 expectation" exists only on Strategic Thinking
+        result = build_matrix(selected_role_ids: [], search_query: "level 2")
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
+        assert_includes cap_names, "Strategic Thinking"
+        assert_not_includes cap_names, "Visual Design"
+      end
+
+      should "not match against illustration text (visible compact surfaces only)" do
+        # "illustration" appears only in illustration descriptions, never in a
+        # name / description / expectation — so it must not surface anything.
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ],
+          search_query: "illustration"
+        )
+
+        assert_empty result[:categories]
+        assert_equal 0, result[:matched_capability_count]
+      end
+
+      should "surface every capability in a category whose name matches" do
+        # Category is "Thinking" — a query on it surfaces both capabilities
+        result = build_matrix(selected_role_ids: [], search_query: "thinking")
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }.sort
+        assert_equal [ "Strategic Thinking", "Visual Design" ], cap_names
+      end
+
+      should "require every token to match (AND semantics)" do
+        result = build_matrix(selected_role_ids: [], search_query: "visual nonexistentword")
+
+        assert_empty result[:categories]
+        assert_equal 0, result[:matched_capability_count]
+      end
+
+      should "return no categories when nothing matches" do
+        result = build_matrix(selected_role_ids: [], search_query: "zzzznomatch")
+
+        assert_empty result[:categories]
+        assert_equal 2, result[:in_scope_capability_count]
+        assert_equal 0, result[:matched_capability_count]
+      end
+
+      should "keep dimmed-but-matching capabilities (search layers over role dimming)" do
+        # Team Management is bound to mgmt only — dimmed (not bound_to_selected)
+        # when only the IC role is selected, but still in the same family.
+        create(:framework_capability,
+          category_id: @category.category_id, name: "Team Management").then do |cap|
+          create(:framework_capability_role_binding,
+            capability_id: cap.capability_id, role_id: @mgmt_role.role_id)
+        end
+        categories = @framework.capability_categories
+          .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
+          .order(:ordinal)
+
+        result = build_matrix(
+          selected_role_ids: [ @ic_role.role_id ],
+          categories: categories,
+          search_query: "team"
+        )
+
+        team = find_capability(result, "Team Management")
+        assert team, "dimmed-but-matching capability should still appear"
+        assert_not team[:bound_to_selected], "it stays dimmed — search doesn't change role binding"
+      end
+    end
+
     context "empty categories" do
       should "skip categories with no matching capabilities" do
         # Select only design role — Thinking category has "Strategic Thinking" bound to eng only
@@ -351,7 +445,8 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
   private
 
   def build_matrix(selected_role_ids:, track_filter: "both", categories: nil,
-                   pending_suggestions: {}, pending_illustration_creates: {})
+                   pending_suggestions: {}, pending_illustration_creates: {},
+                   search_query: nil)
     Frameworks::MatrixDataBuilder.new(
       framework: @framework,
       role_families: @role_families,
@@ -359,7 +454,8 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
       selected_role_ids: selected_role_ids,
       track_filter: track_filter,
       pending_suggestions: pending_suggestions,
-      pending_illustration_creates: pending_illustration_creates
+      pending_illustration_creates: pending_illustration_creates,
+      search_query: search_query
     ).build
   end
 

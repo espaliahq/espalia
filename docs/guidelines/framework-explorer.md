@@ -154,6 +154,57 @@ Not all capabilities apply to all roles. The matrix shows:
 - **Dimmed (opacity-50)**: capabilities bound to other roles in the same role families — provides context without noise
 - **Hidden**: capabilities from unrelated role families — excluded entirely
 
+### 4a. Text filter (capability search)
+
+A free-text filter in the stats-bar header narrows the matrix to capabilities
+matching a query. It is a **second, orthogonal axis** to the role/track filter,
+not a replacement — the two compose with **AND** semantics.
+
+- **Composition.** The text filter applies *within* the current role scope. A
+  change to one axis preserves the other: `matrix_controller#updateSearch` reads
+  the role/track params back from the browser URL before rebuilding the frame
+  `src`, and `#updateSelection` reads `q` back the same way. Both end at the
+  shared `#rebuildMatrixFrame({ roleIds, track, query })`.
+- **Dimming is untouched (layered axes).** A dimmed-but-matching capability
+  (bound to a same-family role you didn't select) still renders, still dimmed.
+  Search adds a "matches the query" signal on top of the existing
+  bound/dimmed/hidden vocabulary — it never changes `bound_to_selected`.
+- **Match scope = visible compact surfaces only.** `MatrixDataBuilder#searchable_text`
+  matches (token-AND, case-insensitive) against category name/description,
+  capability name/description, and **behavioural-expectation text**.
+  **Illustrations are deliberately excluded** — they're numerous, verbose, and
+  hidden until a row is expanded, so matching them both dilutes results
+  (a one-word mention in one example surfaces the whole capability) and produces
+  matches the user can't see. Every surface searched is visible in the compact
+  matrix, so every match reason is on-screen. A query on a *category* name
+  surfaces all of its capabilities (the category text is part of each
+  capability's haystack).
+- **Match highlighting.** Every matched surface marks the query terms with a
+  `<mark>` (amber). The `SearchHighlight` concern (`render_highlighted(text,
+  query)`) is mixed into the capability-name / category-name / expectation-text
+  frames and the capability-description line, and threaded the raw query down
+  the render chain (`Matrix → MatrixCategoryGroup → MatrixRow → {CapabilityNameFrame,
+  MatrixCell → ExpectationTextFrame}`). It builds Phlex text + `mark` nodes (never
+  raw HTML, so the query can't inject markup), token-matches case-insensitively,
+  and merges overlapping spans so marks never nest. Highlighting is skipped when
+  a pending-edit inline **diff** is being shown for that entity (the diff wins).
+- **Live result count lives inside the frame.** The "Showing N of M capabilities
+  matching …" banner is rendered by `Matrix` *inside* the Turbo Frame, because
+  the stats-bar header sits **outside** the frame and a frame-only reload can't
+  update it. (The header's "N Capabilities" stat uses the role-scoped
+  `in_scope_capability_count`, which is query-independent, so it stays stable.)
+- **No-matches state** offers escapes along both axes — "Clear search" (drop the
+  query, keep the role scope) and "Show all roles" (reset both) — each breaking
+  out of the frame via `data-turbo-frame="_top"` so the header input + browser
+  URL reset cleanly.
+- **Interaction.** `framework_search_controller` debounces keystrokes (250ms via
+  `useDebounce`) and dispatches a window-scoped `framework-search:changed`
+  event; Esc and the inline × clear immediately. `q` is URL-synced alongside
+  `roles[]` / `track` for shareable/bookmarkable filtered views. The native
+  WebKit search-cancel button is suppressed (`[&::-webkit-search-cancel-button]:appearance-none`)
+  so only the custom × shows. On mobile the box drops to its own full-width line
+  (`max-sm:w-full` + `flex-wrap` on the stats bar).
+
 ### 5. Progressive Disclosure (Three Levels)
 
 1. **Category** — collapsible group header (click to show/hide all capabilities in category)
@@ -321,8 +372,18 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 - **Track filter** (IC / Management / Both — hides roles, updates family state)
 - **Event dispatch** (`tree:changed` with `{roleIds, track}`, bubbles to parent)
 
+### framework_search_controller.js
+Lives on the stats-bar search box. Debounces keystrokes (250ms, `useDebounce`)
+and dispatches the window-scoped `framework-search:changed` event with the
+trimmed query; Esc and the inline × clear immediately. Toggles the × affordance
+on input. Does NOT touch the matrix or URL itself — that's `matrix_controller`'s
+job via `updateSearch`. See §4a.
+
 ### matrix_controller.js
 - **Turbo Frame update** (builds URL from selection, sets frame src)
+- **Text-filter update** (`updateSearch` on `framework-search:changed`) — merges
+  the query with the role/track scope read back from the browser URL, via the
+  shared `#rebuildMatrixFrame`. See §4a.
 - **Category collapse** (sibling row walking — triggered by chevron button only; the category name runs `focusCategory`)
 - **Row expansion** (toggle hidden expanded row by capability ID). Dispatches `matrix:focus-changed` with `level: "capability"` on expand, `level: "framework"` on collapse.
 - **Cell focus** (`focusCell` on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"`. Ignores clicks that land on interactive children (buttons, links, inputs, forms, `[contenteditable]`) so inline editors inside the cell don't accidentally toggle focus.
@@ -359,6 +420,7 @@ Segmented Editing / Suggesting toggle in the header. Reads and writes the `frame
 | Event | Source | Detail |
 |-------|--------|--------|
 | `tree:changed` | `tree_controller` | `{ roleIds: string[], track: "ic" \| "management" \| "both" }` |
+| `framework-search:changed` | `framework_search_controller` | `{ query: string }` — trimmed text filter; triggers `matrix_controller#updateSearch` (window-scoped, since the search box sits outside the matrix element). See §4a. |
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 | `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null }` — triggers `matrix_controller#navigateToEntity` |
 | `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
@@ -462,6 +524,7 @@ The context pane currently shows suggested edits. Future content types — comme
 | `app/views/frameworks/explorer/category_name_frame.rb` | Category name + edit-mode inline editor |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
+| `app/views/frameworks/explorer/concerns/search_highlight.rb` | Phlex `<mark>` highlighting of search-match terms (§4a) — safe, token-AND, overlap-merged |
 | `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form |
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, pending-suggestion counts + latest-edit descriptors) |
@@ -471,6 +534,7 @@ The context pane currently shows suggested edits. Future content types — comme
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
 | `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
 | `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync |
+| `app/javascript/controllers/framework_search_controller.js` | Stats-bar text filter — debounced input → `framework-search:changed` (§4a) |
 | `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for suggestion panel |
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) |
 | `app/controllers/frameworks/suggestions_controller.rb` | Suggestion list + panel-layout branch |
@@ -484,7 +548,8 @@ The context pane currently shows suggested edits. Future content types — comme
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |
-| `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests |
+| `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests (incl. text-filter scope + counts) |
+| `test/components/frameworks/explorer/search_highlight_test.rb` | `<mark>` highlight concern unit tests |
 | `test/models/frameworks/matrix_data_builder_mode_test.rb` | `mode:` filter unit tests |
 | `test/models/frameworks/suggestion_diff_test.rb` | Inline-diff algorithm unit tests (examples, density fallback, graphemes, whitespace) |
 | `test/queries/frameworks/focused_suggestions_query_test.rb` | Focus filter unit tests |
