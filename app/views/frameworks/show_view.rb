@@ -24,7 +24,7 @@ class Views::Frameworks::ShowView < Views::Base
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
                  pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
-                 current_person_id: nil, search_query: nil)
+                 can_archive: false, current_person_id: nil, search_query: nil)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -38,6 +38,7 @@ class Views::Frameworks::ShowView < Views::Base
     @mode = mode
     @can_edit = can_edit
     @can_publish = can_publish
+    @can_archive = can_archive
     @current_person_id = current_person_id
     @search_query = search_query
   end
@@ -402,7 +403,8 @@ class Views::Frameworks::ShowView < Views::Base
           selected_role_ids: @selected_role_ids,
           framework_id: @framework.framework_id,
           mode: @mode,
-          current_person_id: @current_person_id
+          current_person_id: @current_person_id,
+          can_archive: @can_archive
         )
       end
     end

@@ -278,6 +278,39 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "archiving a capability via the row kebab" do
+    should "not show the kebab in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      expand_matrix_row("tr[data-capability-id]")
+      assert_no_selector "button[aria-label='Capability actions']"
+    end
+
+    should "open the kebab, reach the archive form, and archive with a mapping" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      expand_matrix_row("tr[data-capability-id]")
+
+      # Kebab lives in the expanded row; open it via a JS-dispatched click
+      # (Selenium pointer clicks on matrix toggles flake on starved CI).
+      assert_selector "button[aria-label='Capability actions']"
+      page.execute_script(<<~JS)
+        document.querySelector("button[aria-label='Capability actions']").click();
+      JS
+
+      click_link_with_js_fallback("Archive capability", expect_text: "Archive “Strategic Thinking”")
+
+      # Retire with no survivor (single-capability fixture).
+      select "Archived — retired with no replacement (ratings surface to relink)",
+             from: "Migration mapping"
+      click_button_with_js_fallback("Archive capability", expect_text: "Archived")
+
+      assert_text "Archived"
+      # Draft auto-opened by the archive; the pill reflects it.
+      assert_text(/draft/i)
+    end
+  end
+
   context "inline diff for pending text edits" do
     should "render added and removed spans when a small pending edit exists on a capability name" do
       capability = FrameworkState::Capability.first

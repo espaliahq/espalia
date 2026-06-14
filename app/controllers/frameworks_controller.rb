@@ -70,6 +70,7 @@ class FrameworksController < ApplicationController
       mode: mode,
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
+      can_archive: mode == :edit && fw_policy.archive_capability?,
       current_person_id: current_person&.id&.to_s,
       search_query: resolved_search_query
     )
@@ -83,7 +84,8 @@ class FrameworksController < ApplicationController
       matrix_data: matrix_data,
       selected_role_ids: parse_role_ids,
       mode: mode,
-      current_person_id: current_person&.id&.to_s
+      current_person_id: current_person&.id&.to_s,
+      can_archive: mode == :edit && policy(@framework).archive_capability?
     ), layout: false
   end
 
