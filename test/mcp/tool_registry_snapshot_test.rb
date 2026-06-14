@@ -544,6 +544,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_recent_activity",
+        "description" => "Recent framework activity (suggestions, draft/version lifecycle, structural and " \
+          "editorial edits, collaborator changes) — metadata only, most-recent first.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "limit" => { "type" => "integer" }
+          },
+          "required" => [ "framework_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "reporting_cycle_cohort",
         "description" => "Aggregate progress for an assessment cycle across the caller's org subtree " \
           "(admins see the whole cycle): the self/manager/aligned funnel, lifecycle status " \

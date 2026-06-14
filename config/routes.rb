@@ -137,6 +137,7 @@ Rails.application.routes.draw do
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
     resource :publication, only: [ :new, :create ], controller: "frameworks/publications"
     resources :migration_mappings, only: [ :create ], controller: "frameworks/migration_mappings"
+    resource :activity, only: [ :show ], controller: "frameworks/activity"
     resources :collaborators,
               only: [ :index, :create, :destroy ],
               controller: "frameworks/collaborators" do

@@ -1,0 +1,243 @@
+# frozen_string_literal: true
+
+# Renders a single framework activity feed entry.
+#
+# Each entry kind has a short summary line, an optional where-in-the-framework
+# context line (never truncated — see framework-explorer.md §9), and a footer
+# (actor · timestamp). Capability/category-anchored entries are clickable —
+# they navigate the explorer matrix to the entity, reusing the context pane's
+# `focusSuggestion` handler.
+#
+# Internal categorisations (review tiers, entity-type codes) are never
+# surfaced — they serve the system, not the user.
+#
+class Views::Frameworks::Activity::Entry < Views::Base
+  include Phlex::Rails::Helpers::TimeAgoInWords
+
+  ENTITY_TYPE_LABELS = Views::Frameworks::Suggestions::IndexView::ENTITY_TYPE_LABELS
+
+  KIND_DOT = {
+    "suggestion_edit"           => "bg-sky-500",
+    "suggestion_create"         => "bg-sky-500",
+    "suggestion_delete"         => "bg-sky-500",
+    "suggestion_amended"        => "bg-sky-500",
+    "suggestion_approved"       => "bg-green-600",
+    "suggestion_rejected"       => "bg-gray-400",
+    "suggestion_withdrawn"      => "bg-gray-400",
+    "capability_added"          => "bg-emerald-500",
+    "capability_archived"       => "bg-amber-500",
+    "capability_updated"        => "bg-indigo-500",
+    "category_added"            => "bg-emerald-500",
+    "category_archived"         => "bg-amber-500",
+    "category_updated"          => "bg-indigo-500",
+    "expectation_updated"       => "bg-indigo-500",
+    "illustration_added"        => "bg-indigo-500",
+    "illustration_updated"      => "bg-indigo-500",
+    "illustration_removed"      => "bg-gray-400",
+    "draft_opened"              => "bg-purple-500",
+    "version_published"         => "bg-green-600",
+    "migration_mapping_defined" => "bg-purple-500",
+    "collaborator_added"        => "bg-indigo-500",
+    "collaborator_role_changed" => "bg-indigo-500",
+    "collaborator_removed"      => "bg-gray-400"
+  }.freeze
+
+  # Maps each kind to one of the five filter-chip groups.
+  KIND_GROUP = {
+    "suggestion_edit"           => "suggestions",
+    "suggestion_create"         => "suggestions",
+    "suggestion_delete"         => "suggestions",
+    "suggestion_amended"        => "suggestions",
+    "suggestion_approved"       => "suggestions",
+    "suggestion_rejected"       => "suggestions",
+    "suggestion_withdrawn"      => "suggestions",
+    "capability_updated"        => "edits",
+    "category_updated"          => "edits",
+    "expectation_updated"       => "edits",
+    "illustration_added"        => "edits",
+    "illustration_updated"      => "edits",
+    "illustration_removed"      => "edits",
+    "capability_added"          => "structural",
+    "capability_archived"       => "structural",
+    "category_added"            => "structural",
+    "category_archived"         => "structural",
+    "draft_opened"              => "lifecycle",
+    "version_published"         => "lifecycle",
+    "migration_mapping_defined" => "lifecycle",
+    "collaborator_added"        => "collaborators",
+    "collaborator_role_changed" => "collaborators",
+    "collaborator_removed"      => "collaborators"
+  }.freeze
+
+  # @param entry [Frameworks::ActivityFeedQuery::Entry]
+  def initialize(entry:)
+    @entry = entry
+  end
+
+  def view_template
+    li(
+      id: "framework-activity-#{dom_safe_id}",
+      class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
+             "transition-colors data-[hidden=true]:hidden " \
+             "#{navigable_classes if navigable?}",
+      tabindex: (navigable? ? "0" : nil),
+      role: (navigable? ? "button" : nil),
+      data: entry_data
+    ) do
+      span(class: "mt-1 w-2 h-2 rounded-full shrink-0 #{dot_class}") { }
+      div(class: "min-w-0 flex-1") do
+        p(class: "font-medium text-gray-900 dark:text-gray-100") { summary_text }
+        context_line if context_text
+        secondary_line if secondary_text
+        footer
+      end
+    end
+  end
+
+  private
+
+  def dom_safe_id
+    @entry.id.to_s.gsub(/[^a-zA-Z0-9_-]/, "-")
+  end
+
+  def dot_class
+    KIND_DOT[@entry.kind] || "bg-gray-400"
+  end
+
+  def kind_group
+    KIND_GROUP[@entry.kind] || "lifecycle"
+  end
+
+  # Anchored entries navigate the matrix to their capability/category.
+  def navigable?
+    @entry.capability_id.present? || @entry.category_id.present?
+  end
+
+  def navigable_classes
+    "cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-700/40 " \
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+  end
+
+  def entry_data
+    base = { framework_activity_target: "entry", kind_group: kind_group }
+    if navigable?
+      base[:action] = "click->context-pane#focusSuggestion " \
+                      "keydown.enter->context-pane#focusSuggestion " \
+                      "keydown.space->context-pane#focusSuggestion"
+      if @entry.capability_id.present?
+        base[:nav_level] = "capability"
+        base[:nav_capability_id] = @entry.capability_id
+      else
+        base[:nav_level] = "category"
+      end
+      base[:nav_category_id] = @entry.category_id if @entry.category_id.present?
+    end
+    base
+  end
+
+  def context_line
+    p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") { context_text }
+  end
+
+  def secondary_line
+    p(class: "mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2") { secondary_text }
+  end
+
+  def footer
+    div(class: "mt-1 text-[10px] text-gray-500 dark:text-gray-400") do
+      bits = [ actor_name, time_ago ].compact
+      span { bits.join(" · ") }
+    end
+  end
+
+  def time_ago
+    @entry.occurred_at ? "#{time_ago_in_words(@entry.occurred_at)} ago" : nil
+  end
+
+  def actor_name
+    @entry.actor_name.to_s.strip.presence
+  end
+
+  # ── Summary (the action) ──
+
+  def summary_text
+    case @entry.kind
+    when "suggestion_edit"     then "Suggested an edit to #{entity_word}"
+    when "suggestion_create"   then "Proposed a new #{entity_word}"
+    when "suggestion_delete"   then "Proposed removing #{entity_word}"
+    when "suggestion_amended"  then "Amended a #{entity_word} suggestion"
+    when "suggestion_approved" then "Approved a #{entity_word} suggestion"
+    when "suggestion_rejected" then "Rejected a #{entity_word} suggestion"
+    when "suggestion_withdrawn" then "Withdrew a #{entity_word} suggestion"
+    when "capability_added"    then "Added a capability"
+    when "capability_archived" then "Archived a capability"
+    when "capability_updated"  then "Updated a capability"
+    when "category_added"      then "Added a category"
+    when "category_archived"   then "Archived a category"
+    when "category_updated"    then "Updated a category"
+    when "expectation_updated" then "Updated an expectation"
+    when "illustration_added"  then "Added an illustration"
+    when "illustration_updated" then "Updated an illustration"
+    when "illustration_removed" then "Removed an illustration"
+    when "draft_opened"        then draft_opened_summary
+    when "version_published"   then "Published v#{payload_value(:version)}"
+    when "migration_mapping_defined" then "Defined a migration mapping"
+    when "collaborator_added"  then "Added a collaborator (#{collaborator_role})"
+    when "collaborator_role_changed" then "Changed a collaborator's role to #{payload_value(:new_role)&.humanize}"
+    when "collaborator_removed" then "Removed a collaborator"
+    else @entry.kind.humanize
+    end
+  end
+
+  def draft_opened_summary
+    base = "Opened draft v#{payload_value(:target_version)}"
+    payload_value(:auto_opened) ? "#{base} (auto)" : base
+  end
+
+  # Entity word for suggestion summaries — the human label of the suggestion's
+  # target entity type (e.g. "Capability", "Illustration"), lowercased so it
+  # reads inline.
+  def entity_word
+    type = payload_value(:suggestion_entity_type)
+    ENTITY_TYPE_LABELS.fetch(type, type.to_s.humanize.presence || "change").downcase
+  end
+
+  def collaborator_role
+    payload_value(:collaborator_role)&.humanize || "collaborator"
+  end
+
+  # ── Context line (where in the framework) — never truncated ──
+
+  def context_text
+    cap = @entry.capability_name.to_s.strip.presence
+    cat = payload_value(:category_name).to_s.strip.presence
+    if cap && cat
+      "#{cat} · #{cap}"
+    elsif cap
+      cap
+    elsif cat
+      cat
+    end
+  end
+
+  # ── Secondary line (preview / detail) ──
+
+  def secondary_text
+    case @entry.kind
+    when "suggestion_edit", "suggestion_amended"
+      payload_value(:suggested_value) || payload_value(:new_suggested_value)
+    when "suggestion_approved", "suggestion_rejected"
+      payload_value(:comment)
+    when "expectation_updated", "illustration_updated"
+      payload_value(:new_description)
+    when "migration_mapping_defined"
+      payload_value(:reason)
+    end.to_s.strip.presence
+  end
+
+  def payload_value(key)
+    return nil unless @entry.payload.respond_to?(:[])
+
+    @entry.payload[key] || @entry.payload[key.to_s]
+  end
+end

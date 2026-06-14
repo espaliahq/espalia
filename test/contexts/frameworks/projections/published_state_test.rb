@@ -866,7 +866,63 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "real-time activity broadcast" do
+    should "broadcast on a feed-relevant event carrying framework_id" do
+      event = Frameworks::Events::CapabilityUpdated.new(
+        data: { framework_id: @framework_id, capability_id: SecureRandom.uuid_v7, name: "X" },
+        metadata: { tenant_id: @tenant.id })
+
+      broadcasts = capture_activity_broadcasts { @projection.send(:broadcast_framework_activity, event) }
+      assert_equal [ [ "framework_activity", @framework_id ] ], broadcasts
+    end
+
+    should "not broadcast for an event the feed does not surface" do
+      event = Frameworks::Events::RoleAdded.new(
+        data: { framework_id: @framework_id, role_id: SecureRandom.uuid_v7 },
+        metadata: { tenant_id: @tenant.id })
+
+      broadcasts = capture_activity_broadcasts { @projection.send(:broadcast_framework_activity, event) }
+      assert_empty broadcasts
+    end
+
+    should "resolve framework_id from the SuggestedEdit row for a resolved-suggestion event" do
+      sid = SecureRandom.uuid_v7
+      within_tenant do
+        create(:framework_suggested_edit, tenant: @tenant, framework_id: @framework_id,
+          suggestion_id: sid, author_id: @author_person.id)
+      end
+      event = Frameworks::Events::SuggestionApproved.new(
+        data: { suggestion_id: sid, reviewer_id: @author_person.id },
+        metadata: { tenant_id: @tenant.id })
+
+      broadcasts = within_tenant do
+        capture_activity_broadcasts { @projection.send(:broadcast_framework_activity, event) }
+      end
+      assert_equal [ [ "framework_activity", @framework_id ] ], broadcasts
+    end
+
+    should "stay silent during replay" do
+      event = Frameworks::Events::CapabilityUpdated.new(
+        data: { framework_id: @framework_id, capability_id: SecureRandom.uuid_v7, name: "X" },
+        metadata: { tenant_id: @tenant.id })
+
+      broadcasts = capture_activity_broadcasts do
+        Projections::Replayer.with_replay_mode { @projection.send(:broadcast_framework_activity, event) }
+      end
+      assert_empty broadcasts
+    end
+  end
+
   private
+
+  # Captures the positional args of every Turbo broadcast emitted in the block.
+  def capture_activity_broadcasts
+    broadcasts = []
+    Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **_kw) { broadcasts << args }) do
+      yield
+    end
+    broadcasts
+  end
 
   # Emits an event through the projection.
   #
