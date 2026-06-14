@@ -76,7 +76,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               search_query: @search_query
             )
             draft_state_badge if @mode == :edit
-            p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-1") do
+            p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
               render_highlighted(@capability.description, @search_query)
             end if @capability.description.present?
           end
