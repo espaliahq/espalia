@@ -131,9 +131,12 @@ Rails.application.routes.draw do
     end
     resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
     resources :capabilities, only: [ :update ], controller: "frameworks/capabilities"
+    resources :capability_archives, only: [ :create ], controller: "frameworks/capability_archives"
     resources :categories,   only: [ :update ], controller: "frameworks/categories"
     resources :expectations, only: [ :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
+    resource :publication, only: [ :new, :create ], controller: "frameworks/publications"
+    resources :migration_mappings, only: [ :create ], controller: "frameworks/migration_mappings"
     resources :collaborators,
               only: [ :index, :create, :destroy ],
               controller: "frameworks/collaborators" do

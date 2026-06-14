@@ -436,6 +436,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_archive_capability",
+        "description" => "Archive a capability, optionally recording its migration mapping (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "capability_id" => { "type" => "string" },
+            "reason" => { "type" => "string" },
+            "mapping_type" => { "type" => "string", "enum" => %w[same evolved split archived new] },
+            "to_stable_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id capability_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_capability_get",
         "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {
@@ -451,6 +472,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "frameworks_define_migration_mapping",
+        "description" => "Define or edit a capability migration mapping for the current draft (owner/editor only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "from_stable_id" => { "type" => "string" },
+            "mapping_type" => { "type" => "string", "enum" => %w[same evolved split archived new] },
+            "to_stable_id" => { "type" => "string" },
+            "mapping_id" => { "type" => "string" },
+            "reason" => { "type" => "string" }
+          },
+          "required" => %w[framework_id from_stable_id mapping_type],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {
@@ -481,6 +524,23 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "frameworks_publish_version",
+        "description" => "Publish the current draft as a new framework version (owner/editor only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" }
+          },
+          "required" => [ "framework_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {

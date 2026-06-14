@@ -12,12 +12,14 @@ class Views::Frameworks::MatrixFrameView < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param current_person_id [String, nil] viewing person — used to decide
   #   author-specific affordances (e.g. amend their own pending illustration)
-  def initialize(framework:, matrix_data:, selected_role_ids:, mode: :view, current_person_id: nil)
+  def initialize(framework:, matrix_data:, selected_role_ids:, mode: :view,
+                 current_person_id: nil, can_archive: false)
     @framework = framework
     @matrix_data = matrix_data
     @selected_role_ids = selected_role_ids
     @mode = mode
     @current_person_id = current_person_id
+    @can_archive = can_archive
   end
 
   def view_template
@@ -27,7 +29,8 @@ class Views::Frameworks::MatrixFrameView < Views::Base
         selected_role_ids: @selected_role_ids,
         framework_id: @framework.framework_id,
         mode: @mode,
-        current_person_id: @current_person_id
+        current_person_id: @current_person_id,
+        can_archive: @can_archive
       )
     end
   end

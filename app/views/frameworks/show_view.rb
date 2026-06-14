@@ -19,11 +19,12 @@ class Views::Frameworks::ShowView < Views::Base
   # @param pending_suggestion_count [Integer] count for the suggestions toggle badge
   # @param mode [Symbol] :view (default) or :edit — gates inline-edit affordances and sets context-pane default-open
   # @param can_edit [Boolean] whether the current user can reach edit mode — controls mode switcher visibility
+  # @param can_publish [Boolean] whether the current user can publish the draft — controls the Publish button
   # @param search_query [String, nil] active free-text matrix filter (echoed into the search box)
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
-                 pending_suggestion_count: 0, mode: :view, can_edit: false,
-                 current_person_id: nil, search_query: nil)
+                 pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
+                 can_archive: false, archive_survivors: [], current_person_id: nil, search_query: nil)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -36,6 +37,9 @@ class Views::Frameworks::ShowView < Views::Base
     @pending_suggestion_count = pending_suggestion_count
     @mode = mode
     @can_edit = can_edit
+    @can_publish = can_publish
+    @can_archive = can_archive
+    @archive_survivors = archive_survivors
     @current_person_id = current_person_id
     @search_query = search_query
   end
@@ -44,14 +48,34 @@ class Views::Frameworks::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: {
-        controller: "framework-explorer",
-        action: "tree:changed->framework-explorer#updateRoleCount"
-      }) do
+      div(data: explorer_root_data) do
         framework_header
         explorer_layout
+        # Shared archive modal — opened by each capability row's kebab. The
+        # `modal` controller (above) must be an ancestor of both the kebab
+        # triggers (in the matrix) and this dialog.
+        if archive_modal?
+          render Views::Frameworks::Explorer::ArchiveModal.new(
+            framework_id: @framework.framework_id, survivors: @archive_survivors
+          )
+        end
       end
     end
+  end
+
+  # Whether the shared archive modal (+ its `modal` controller) renders.
+  def archive_modal? = @mode == :edit && @can_archive
+
+  # data-controller/action for the explorer root, adding the `modal`
+  # controller + Esc-to-close only when the archive modal is present.
+  def explorer_root_data
+    controllers = [ "framework-explorer" ]
+    actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
+    if archive_modal?
+      controllers << "modal"
+      actions << "keydown.esc@window->modal#close"
+    end
+    { controller: controllers.join(" "), action: actions.join(" ") }
   end
 
   private
@@ -71,6 +95,7 @@ class Views::Frameworks::ShowView < Views::Base
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )
+            draft_badge if @mode == :edit && @framework.draft?
             edit_mode_badge if @mode == :edit
           end
         end
@@ -78,6 +103,7 @@ class Views::Frameworks::ShowView < Views::Base
         div(class: "flex items-center gap-2") do
           edit_suggest_toggle if @mode == :edit
           mode_switcher if @can_edit
+          publish_button if @mode == :edit && @framework.draft? && @can_publish
           settings_link if @is_admin
         end
       end
@@ -126,6 +152,31 @@ class Views::Frameworks::ShowView < Views::Base
   # from the blue version badge.
   def edit_mode_badge
     render Components::Kit::Badge.new("Edit mode", variant: :warning)
+  end
+
+  # Draft status pill — edit mode only, only when an unpublished draft is
+  # open. Teal to stay distinct from the blue published-version badge and
+  # the amber edit-mode badge. Drafts are the normal working state (we roll
+  # forward, always editing toward the next version), so this is an ambient
+  # status, not a warning. Never rendered in view mode — viewers must not
+  # learn a draft exists. Edit mode already requires FrameworkPolicy#edit?,
+  # so gating on @mode == :edit is sufficient.
+  def draft_badge
+    render Components::Kit::Badge.new("v#{@framework.draft_version} draft", variant: :primary)
+  end
+
+  # Publish the current draft — owner/editor only, edit mode, draft open.
+  # Sits to the right of "Exit edit mode". Links to the publish-review page
+  # where the owner/editor validates the as-we-go migration mappings before
+  # confirming — the review page is the deliberate confirmation step (no
+  # inline dialog).
+  def publish_button
+    a(
+      href: new_framework_publication_path(@framework.framework_id),
+      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
+             "bg-primary text-white hover:bg-primary/90 transition-colors",
+      title: "Review and publish v#{@framework.draft_version}"
+    ) { "Publish v#{@framework.draft_version}" }
   end
 
   # Mode switcher pill — always rendered when the user can reach edit mode,
@@ -363,7 +414,8 @@ class Views::Frameworks::ShowView < Views::Base
           selected_role_ids: @selected_role_ids,
           framework_id: @framework.framework_id,
           mode: @mode,
-          current_person_id: @current_person_id
+          current_person_id: @current_person_id,
+          can_archive: @can_archive
         )
       end
     end

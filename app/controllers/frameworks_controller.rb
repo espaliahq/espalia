@@ -55,6 +55,7 @@ class FrameworksController < ApplicationController
     graph, matrix_data = load_explorer_matrix(mode: mode)
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
     fw_policy = policy(@framework)
+    can_archive = mode == :edit && fw_policy.archive_capability?
 
     render Views::Frameworks::ShowView.new(
       framework: graph,
@@ -69,6 +70,9 @@ class FrameworksController < ApplicationController
       pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count,
       mode: mode,
       can_edit: fw_policy.edit?,
+      can_publish: fw_policy.publish?,
+      can_archive: can_archive,
+      archive_survivors: can_archive ? archive_survivors(graph) : [],
       current_person_id: current_person&.id&.to_s,
       search_query: resolved_search_query
     )
@@ -82,7 +86,8 @@ class FrameworksController < ApplicationController
       matrix_data: matrix_data,
       selected_role_ids: parse_role_ids,
       mode: mode,
-      current_person_id: current_person&.id&.to_s
+      current_person_id: current_person&.id&.to_s,
+      can_archive: mode == :edit && policy(@framework).archive_capability?
     ), layout: false
   end
 
@@ -90,6 +95,15 @@ class FrameworksController < ApplicationController
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:id))
   rescue ActiveRecord::RecordNotFound
     redirect_to frameworks_path
+  end
+
+  # Survivor candidates for the archive modal's Evolve mapping — every
+  # capability not itself being retired, as { name:, stable_id: }.
+  def archive_survivors(graph)
+    graph.capability_categories.flat_map(&:capabilities)
+      .reject(&:pending_archive)
+      .map { |c| { name: c.name, stable_id: c.stable_id } }
+      .sort_by { |c| c[:name] }
   end
 
   # Builds the matrix data consumed by the explorer. Sources structural

@@ -296,18 +296,22 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       assert_match /not found/, err.message
     end
 
-    should "raise outside a draft" do
+    should "auto-open a draft when run outside one" do
       fresh = Frameworks::Aggregate.new
       fid = SecureRandom.uuid_v7
       fresh.create(fid, "Demo")
       cat_id = SecureRandom.uuid_v7
       fresh.add_capability_category(fid, cat_id, "Empty")
       fresh.publish_version(fid, "tester")
+      assert_not fresh.draft_in_progress
 
-      err = assert_raises(RuntimeError) do
-        fresh.archive_capability_category(fid, cat_id, reason: "test")
-      end
-      assert_match /No draft in progress/, err.message
+      fresh.archive_capability_category(fid, cat_id, reason: "test")
+
+      assert fresh.draft_in_progress
+      assert_equal 2, fresh.draft_version
+      assert(fresh.unpublished_events.to_a.any? do |e|
+        e.is_a?(Frameworks::Events::DraftVersionStarted) && e.data[:auto_opened]
+      end)
     end
 
     should "block subsequent add_capability calls in the archived category" do
@@ -675,9 +679,15 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
-  # ── Shape-changing command draft guard ──
+  # ── Shape-changing commands auto-open a draft ──
+  #
+  # Drafts are the normal forward-rolling state: a structural command issued
+  # outside a draft auto-opens one (target_version = current + 1, auto_opened)
+  # rather than raising, mirroring the suggestion-approval auto-open path.
+  # publish_version / define_migration_mapping keep their own inline guards
+  # (they must NOT auto-open) — covered separately above.
 
-  context "shape-changing command draft guard" do
+  context "shape-changing commands auto-open a draft" do
     setup do
       @fresh = Frameworks::Aggregate.new
       @fresh.create(@framework_id, "Test")
@@ -685,62 +695,52 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       @rid = SecureRandom.uuid_v7
       @cat_id = SecureRandom.uuid_v7
       @cap_id = SecureRandom.uuid_v7
+      @level_id = SecureRandom.uuid_v7
+      @binding_id = SecureRandom.uuid_v7
       @fresh.add_role_family(@framework_id, @rfid, "RF")
       @fresh.add_role(@framework_id, @rid, @rfid, "R", "R", "ic")
+      @fresh.add_level(@framework_id, @level_id, @rid, 1, "L1", "R1")
       @fresh.add_capability_category(@framework_id, @cat_id, "Cat")
       @fresh.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, @cat_id, "Cap")
+      @fresh.create_capability_role_binding(@framework_id, @binding_id, @cap_id, @rid)
       @fresh.publish_version(@framework_id, "user-1") # close bootstrap, no draft
+      assert_not @fresh.draft_in_progress
     end
 
-    should "add_level raises outside a draft" do
-      err = assert_raises(RuntimeError) do
-        @fresh.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 1, "L1", "R1")
-      end
-      assert_match /No draft in progress/, err.message
+    should "add_level auto-opens a draft" do
+      @fresh.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 2, "L2", "R2")
+      assert_auto_opened(@fresh, Frameworks::Events::LevelAdded)
     end
 
-    should "add_capability raises outside a draft" do
-      err = assert_raises(RuntimeError) do
-        @fresh.add_capability(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cat_id, "New")
-      end
-      assert_match /No draft in progress/, err.message
+    should "add_capability auto-opens a draft" do
+      @fresh.add_capability(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cat_id, "New")
+      assert_auto_opened(@fresh, Frameworks::Events::CapabilityAdded)
     end
 
-    should "archive_capability raises outside a draft" do
-      err = assert_raises(RuntimeError) do
-        @fresh.archive_capability(@framework_id, @cap_id, reason: "test")
-      end
-      assert_match /No draft in progress/, err.message
+    should "archive_capability auto-opens a draft" do
+      @fresh.archive_capability(@framework_id, @cap_id, reason: "test")
+      assert_auto_opened(@fresh, Frameworks::Events::CapabilityArchived)
     end
 
-    should "create_capability_role_binding raises outside a draft" do
-      err = assert_raises(RuntimeError) do
-        @fresh.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid)
-      end
-      assert_match /No draft in progress/, err.message
+    should "create_capability_role_binding auto-opens a draft" do
+      @fresh.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid)
+      assert_auto_opened(@fresh, Frameworks::Events::CapabilityRoleBindingCreated)
     end
 
-    should "remove_capability_role_binding raises outside a draft" do
-      err = assert_raises(RuntimeError) do
-        @fresh.remove_capability_role_binding(@framework_id, SecureRandom.uuid_v7)
-      end
-      assert_match /No draft in progress/, err.message
+    should "remove_capability_role_binding auto-opens a draft" do
+      @fresh.remove_capability_role_binding(@framework_id, @binding_id)
+      assert_auto_opened(@fresh, Frameworks::Events::CapabilityRoleBindingRemoved)
     end
 
-    should "set_behavioural_expectation raises outside a draft" do
-      err = assert_raises(RuntimeError) do
-        @fresh.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
-                                           @cap_id, 1, "desc")
-      end
-      assert_match /No draft in progress/, err.message
+    should "set_behavioural_expectation auto-opens a draft" do
+      @fresh.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                         @cap_id, 1, "desc")
+      assert_auto_opened(@fresh, Frameworks::Events::BehaviouralExpectationSet)
     end
 
-    should "change_level_ordinal raises outside a draft" do
-      # No level exists at this point in setup; guard fires before the lookup
-      err = assert_raises(RuntimeError) do
-        @fresh.change_level_ordinal(@framework_id, SecureRandom.uuid_v7, 5, reason: "test")
-      end
-      assert_match /No draft in progress/, err.message
+    should "change_level_ordinal auto-opens a draft" do
+      @fresh.change_level_ordinal(@framework_id, @level_id, 5, reason: "test")
+      assert_auto_opened(@fresh, Frameworks::Events::LevelOrdinalChanged)
     end
   end
 
@@ -933,5 +933,25 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
         fresh.publish_version(@framework_id, "user-1")
       end
     end
+  end
+
+  private
+
+  # Asserts a structural command auto-opened a draft (target_version = 2,
+  # auto_opened flag set) and then applied its own event on top.
+  #
+  # @param aggregate [Frameworks::Aggregate]
+  # @param event_class [Class] the structural event the command should emit
+  def assert_auto_opened(aggregate, event_class)
+    assert aggregate.draft_in_progress, "expected a draft to be auto-opened"
+    assert_equal 2, aggregate.draft_version
+
+    events = aggregate.unpublished_events.to_a
+    opened = events.find do |e|
+      e.is_a?(Frameworks::Events::DraftVersionStarted) && e.data[:auto_opened]
+    end
+    assert opened, "expected an auto_opened DraftVersionStarted event"
+    assert_equal 2, opened.data[:target_version]
+    assert(events.any? { |e| e.is_a?(event_class) }, "expected a #{event_class} event after auto-open")
   end
 end

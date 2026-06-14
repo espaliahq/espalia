@@ -51,6 +51,32 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def view_suggestions? = tenant_admin? || framework_collaborator_can_suggest?
 
+  # Publish the current draft as a new framework version. Restricted to
+  # tenant admins and collaborators with publish rights (owner / editor) —
+  # publishing fires cross-stream assessment migrations, rebuilds the
+  # published projection, and rolls open assessment cycles, so it is a
+  # narrower bar than editing or suggesting.
+  #
+  # @return [Boolean]
+  def publish? = tenant_admin? || framework_collaborator_can_publish?
+
+  # Define / edit a capability migration mapping for the current draft.
+  # Same bar as publishing: the owner / editor validates (and may override)
+  # the as-we-go mapping choices at the publish gate.
+  #
+  # @return [Boolean]
+  def define_migration_mapping? = publish?
+
+  # Direct structural edits to the framework (archive a capability, etc.).
+  # Edit-rights bar — owner/editor/leads or tenant admin — distinct from the
+  # broader suggest bar (#edit?) and the narrower publish bar (#publish?).
+  #
+  # @return [Boolean]
+  def edit_structure? = tenant_admin? || framework_collaborator_can_edit?
+
+  # @return [Boolean]
+  def archive_capability? = edit_structure?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]
@@ -86,5 +112,15 @@ class FrameworkPolicy < ApplicationPolicy
     return false unless person.present?
 
     can_suggest?
+  end
+
+  # Checks whether the current person holds a collaborator role that grants
+  # publish rights (owner / editor) on this framework.
+  #
+  # @return [Boolean]
+  def framework_collaborator_can_publish?
+    return false unless person.present?
+
+    can_publish?
   end
 end

@@ -51,6 +51,18 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.view_suggestions?
     end
 
+    should "deny publish without collaborator role" do
+      assert_not policy.publish?
+    end
+
+    should "deny define_migration_mapping without collaborator role" do
+      assert_not policy.define_migration_mapping?
+    end
+
+    should "deny archive_capability without collaborator role" do
+      assert_not policy.archive_capability?
+    end
+
     should "deny settings" do
       assert_not policy.settings?
     end
@@ -112,6 +124,14 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "allow edit_matrix" do
       assert policy.edit_matrix?
     end
+
+    should "allow publish" do
+      assert policy.publish?
+    end
+
+    should "allow define_migration_mapping" do
+      assert policy.define_migration_mapping?
+    end
   end
 
   context "as a global admin" do
@@ -169,8 +189,53 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.edit?
     end
 
+    should "allow publish (editor has publish rights)" do
+      assert policy.publish?
+    end
+
+    should "allow define_migration_mapping (editor has publish rights)" do
+      assert policy.define_migration_mapping?
+    end
+
+    should "allow archive_capability (editor has edit rights)" do
+      assert policy.archive_capability?
+    end
+
     should "deny settings (requires tenant admin)" do
       assert_not policy.settings?
+    end
+  end
+
+  context "as a framework collaborator with a non-publish edit role" do
+    setup do
+      @user = create(:user)
+      @person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @user.email)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: p, role: :member)
+        create(:framework_collaborator,
+               tenant: @tenant,
+               framework_id: @framework.framework_id,
+               person_id: p.id,
+               role: "role_lead")
+        p
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
+    end
+
+    should "allow edit (can suggest)" do
+      assert policy.edit?
+    end
+
+    should "deny publish (publish is narrower than edit)" do
+      assert_not policy.publish?
+    end
+
+    should "deny define_migration_mapping" do
+      assert_not policy.define_migration_mapping?
+    end
+
+    should "allow archive_capability (edit-rights bar, broader than publish)" do
+      assert policy.archive_capability?
     end
   end
 
@@ -208,6 +273,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
 
     should "deny edit" do
       assert_not policy.edit?
+    end
+
+    should "deny publish" do
+      assert_not policy.publish?
     end
   end
 
@@ -289,6 +358,9 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.view_suggestions?
       assert_not policy.edit?
       assert_not policy.edit_matrix?
+      assert_not policy.publish?
+      assert_not policy.define_migration_mapping?
+      assert_not policy.archive_capability?
     end
   end
 

@@ -232,6 +232,87 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "draft status pill" do
+    should "not show the draft pill when no draft is open (edit mode)" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+      assert_no_text(/draft/i)
+    end
+
+    context "with an open draft" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          Frameworks::CommandHandler.new.start_draft(@framework_id, 2, "test")
+        end
+      end
+
+      should "show the draft pill in edit mode" do
+        sign_in_as(@admin_user)
+        visit edit_framework_path(@framework_id)
+        assert_text "v2 draft"
+      end
+
+      should "never reveal the draft in view mode" do
+        sign_in_as(@admin_user)
+        visit framework_path(@framework_id)
+        assert_text "Strategic Thinking"
+        assert_no_text(/draft/i)
+      end
+
+      should "show the Publish button for an admin and publish via the review page" do
+        sign_in_as(@admin_user)
+        visit edit_framework_path(@framework_id)
+        assert_text "v2 draft"
+
+        # Publish now routes to the review page (no archived caps here), then
+        # the owner confirms.
+        click_link_with_js_fallback("Publish v2", expect_text: "No capabilities are being retired")
+        click_button_with_js_fallback("Confirm & publish v2", expect_text: "Published v2")
+
+        # Draft is published: the flash confirms, the draft pill is gone.
+        assert_text "Published v2"
+        assert_no_text "v2 draft"
+      end
+    end
+  end
+
+  context "archiving a capability via the row kebab" do
+    should "not show the kebab in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_no_selector "button[aria-label='Capability actions']"
+    end
+
+    should "open the archive modal from the kebab and archive with a mapping" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # Kebab is hover-revealed in the capability name cell; JS-click it to
+      # open the shared archive modal (Selenium pointer clicks on the
+      # opacity-0 control flake on starved CI).
+      assert_selector "button[aria-label='Capability actions']", visible: :all
+      page.execute_script(<<~JS)
+        document.querySelector("button[aria-label='Capability actions']").click();
+      JS
+
+      assert_selector "#archive-capability-modal", visible: true
+      within "#archive-capability-modal" do
+        assert_text "Strategic Thinking"
+        # Retire with no survivor (single-capability fixture).
+        select "Archive — retire with no replacement", from: "Migration mapping"
+      end
+
+      # Submit via the JS-fallback helper — the modal submit is a navigation
+      # click that can be dropped on starved CI.
+      click_button_with_js_fallback("Archive capability", expect_text: "Archived")
+      assert_text "Archived"
+      # Draft auto-opened by the archive; the pill reflects it.
+      assert_text(/draft/i)
+    end
+  end
+
   context "inline diff for pending text edits" do
     should "render added and removed spans when a small pending edit exists on a capability name" do
       capability = FrameworkState::Capability.first

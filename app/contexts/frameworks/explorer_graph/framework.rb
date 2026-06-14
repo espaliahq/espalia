@@ -22,6 +22,13 @@ Frameworks::ExplorerGraph::Framework = Data.define(
   :role_families,
   :capability_categories
 ) do
+  # Whether an unpublished draft is currently open on this framework.
+  # Mirrors {FrameworkState::Framework#draft?} so views can read the same
+  # predicate off either representation.
+  #
+  # @return [Boolean]
+  def draft? = draft_in_progress
+
   # @return [ActiveRecord::Relation<FrameworkState::SuggestedEdit>]
   def suggested_edits
     FrameworkState::SuggestedEdit.where(framework_id: framework_id)

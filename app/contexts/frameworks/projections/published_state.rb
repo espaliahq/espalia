@@ -180,9 +180,20 @@ class Frameworks::Projections::PublishedState
   def handle_migration_mapping_defined(event) # rubocop:disable Metrics/MethodLength
     # Find the framework to get the draft version
     framework = find_framework(event)
-    FrameworkState::MigrationMapping.create!(
+    # Upsert by mapping_id: re-defining a mapping with the same id (the
+    # owner/editor editing an as-we-go choice on the publish-review screen)
+    # updates the existing row in place rather than colliding on the unique
+    # mapping_id index. Historically every mapping_id was unique, so this is
+    # identical to create! on replay — no CODE_VERSION bump.
+    record = FrameworkState::MigrationMapping.find_or_initialize_by(mapping_id: event.data[:mapping_id])
+    # Defence-in-depth: a mapping_id is globally unique, so an existing row for
+    # a different framework means id reuse — refuse rather than silently
+    # reassign the row across frameworks and corrupt mapping history.
+    if record.persisted? && record.framework_id != event.data[:framework_id]
+      raise "MigrationMapping #{event.data[:mapping_id]} already belongs to another framework"
+    end
+    record.update!(
       framework_id: event.data[:framework_id],
-      mapping_id: event.data[:mapping_id],
       published_version: framework.draft_version || 0,
       from_stable_id: event.data[:from_stable_id],
       to_stable_id: event.data[:to_stable_id],
