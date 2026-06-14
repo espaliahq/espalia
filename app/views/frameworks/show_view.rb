@@ -145,27 +145,17 @@ class Views::Frameworks::ShowView < Views::Base
   end
 
   # Publish the current draft — owner/editor only, edit mode, draft open.
-  # Sits to the right of "Exit edit mode". Publishing is irreversible (it
-  # rebuilds the published projection and migrates in-flight assessments),
-  # so it is guarded by a Turbo confirm dialog.
+  # Sits to the right of "Exit edit mode". Links to the publish-review page
+  # where the owner/editor validates the as-we-go migration mappings before
+  # confirming — the review page is the deliberate confirmation step (no
+  # inline dialog).
   def publish_button
-    form(
-      action: framework_publication_path(@framework.framework_id),
-      method: "post",
-      class: "inline",
-      data: {
-        turbo_confirm: "Publish v#{@framework.draft_version}? This makes the draft live " \
-                       "and migrates in-flight assessments. This cannot be undone."
-      }
-    ) do
-      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
-               "bg-primary text-white hover:bg-primary/90 transition-colors",
-        title: "Publish v#{@framework.draft_version}"
-      ) { "Publish v#{@framework.draft_version}" }
-    end
+    a(
+      href: new_framework_publication_path(@framework.framework_id),
+      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
+             "bg-primary text-white hover:bg-primary/90 transition-colors",
+      title: "Review and publish v#{@framework.draft_version}"
+    ) { "Publish v#{@framework.draft_version}" }
   end
 
   # Mode switcher pill — always rendered when the user can reach edit mode,

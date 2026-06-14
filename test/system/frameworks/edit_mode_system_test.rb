@@ -260,16 +260,15 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_no_text(/draft/i)
       end
 
-      should "show the Publish button for an admin and publish the draft" do
+      should "show the Publish button for an admin and publish via the review page" do
         sign_in_as(@admin_user)
         visit edit_framework_path(@framework_id)
         assert_text "v2 draft"
 
-        # The Publish form carries a data-turbo-confirm; auto_confirm resolves
-        # it synchronously, click_with_retry guards the dropped-click flake.
-        click_with_retry(expect_text: "Published v2") do
-          auto_confirm { click_button "Publish v2" }
-        end
+        # Publish now routes to the review page (no archived caps here), then
+        # the owner confirms.
+        click_link_with_js_fallback("Publish v2", expect_text: "No capabilities are being retired")
+        click_button_with_js_fallback("Confirm & publish v2", expect_text: "Published v2")
 
         # Draft is published: the flash confirms, the draft pill is gone.
         assert_text "Published v2"
