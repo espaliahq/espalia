@@ -484,6 +484,23 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_publish_version",
+        "description" => "Publish the current draft as a new framework version (owner/editor only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" }
+          },
+          "required" => [ "framework_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "reporting_cycle_cohort",
         "description" => "Aggregate progress for an assessment cycle across the caller's org subtree " \
           "(admins see the whole cycle): the self/manager/aligned funnel, lifecycle status " \

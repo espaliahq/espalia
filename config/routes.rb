@@ -134,6 +134,7 @@ Rails.application.routes.draw do
     resources :categories,   only: [ :update ], controller: "frameworks/categories"
     resources :expectations, only: [ :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
+    resource :publication, only: [ :create ], controller: "frameworks/publications"
     resources :collaborators,
               only: [ :index, :create, :destroy ],
               controller: "frameworks/collaborators" do

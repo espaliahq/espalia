@@ -69,6 +69,7 @@ class FrameworksController < ApplicationController
       pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count,
       mode: mode,
       can_edit: fw_policy.edit?,
+      can_publish: fw_policy.publish?,
       current_person_id: current_person&.id&.to_s,
       search_query: resolved_search_query
     )

@@ -19,10 +19,11 @@ class Views::Frameworks::ShowView < Views::Base
   # @param pending_suggestion_count [Integer] count for the suggestions toggle badge
   # @param mode [Symbol] :view (default) or :edit — gates inline-edit affordances and sets context-pane default-open
   # @param can_edit [Boolean] whether the current user can reach edit mode — controls mode switcher visibility
+  # @param can_publish [Boolean] whether the current user can publish the draft — controls the Publish button
   # @param search_query [String, nil] active free-text matrix filter (echoed into the search box)
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
-                 pending_suggestion_count: 0, mode: :view, can_edit: false,
+                 pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
                  current_person_id: nil, search_query: nil)
     @framework = framework
     @role_families = role_families
@@ -36,6 +37,7 @@ class Views::Frameworks::ShowView < Views::Base
     @pending_suggestion_count = pending_suggestion_count
     @mode = mode
     @can_edit = can_edit
+    @can_publish = can_publish
     @current_person_id = current_person_id
     @search_query = search_query
   end
@@ -79,6 +81,7 @@ class Views::Frameworks::ShowView < Views::Base
         div(class: "flex items-center gap-2") do
           edit_suggest_toggle if @mode == :edit
           mode_switcher if @can_edit
+          publish_button if @mode == :edit && @framework.draft? && @can_publish
           settings_link if @is_admin
         end
       end
@@ -138,6 +141,30 @@ class Views::Frameworks::ShowView < Views::Base
   # so gating on @mode == :edit is sufficient.
   def draft_badge
     render Components::Kit::Badge.new("v#{@framework.draft_version} draft", variant: :primary)
+  end
+
+  # Publish the current draft — owner/editor only, edit mode, draft open.
+  # Sits to the right of "Exit edit mode". Publishing is irreversible (it
+  # rebuilds the published projection and migrates in-flight assessments),
+  # so it is guarded by a Turbo confirm dialog.
+  def publish_button
+    form(
+      action: framework_publication_path(@framework.framework_id),
+      method: "post",
+      class: "inline",
+      data: {
+        turbo_confirm: "Publish v#{@framework.draft_version}? This makes the draft live " \
+                       "and migrates in-flight assessments. This cannot be undone."
+      }
+    ) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      button(
+        type: "submit",
+        class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
+               "bg-primary text-white hover:bg-primary/90 transition-colors",
+        title: "Publish v#{@framework.draft_version}"
+      ) { "Publish v#{@framework.draft_version}" }
+    end
   end
 
   # Mode switcher pill — always rendered when the user can reach edit mode,

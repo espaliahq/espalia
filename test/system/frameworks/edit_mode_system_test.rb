@@ -259,6 +259,22 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_text "Strategic Thinking"
         assert_no_text(/draft/i)
       end
+
+      should "show the Publish button for an admin and publish the draft" do
+        sign_in_as(@admin_user)
+        visit edit_framework_path(@framework_id)
+        assert_text "v2 draft"
+
+        # The Publish form carries a data-turbo-confirm; auto_confirm resolves
+        # it synchronously, click_with_retry guards the dropped-click flake.
+        click_with_retry(expect_text: "Published v2") do
+          auto_confirm { click_button "Publish v2" }
+        end
+
+        # Draft is published: the flash confirms, the draft pill is gone.
+        assert_text "Published v2"
+        assert_no_text "v2 draft"
+      end
     end
   end
 
