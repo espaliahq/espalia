@@ -71,6 +71,7 @@ class Views::Frameworks::ShowView < Views::Base
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )
+            draft_badge if @mode == :edit && @framework.draft?
             edit_mode_badge if @mode == :edit
           end
         end
@@ -126,6 +127,17 @@ class Views::Frameworks::ShowView < Views::Base
   # from the blue version badge.
   def edit_mode_badge
     render Components::Kit::Badge.new("Edit mode", variant: :warning)
+  end
+
+  # Draft status pill — edit mode only, only when an unpublished draft is
+  # open. Teal to stay distinct from the blue published-version badge and
+  # the amber edit-mode badge. Drafts are the normal working state (we roll
+  # forward, always editing toward the next version), so this is an ambient
+  # status, not a warning. Never rendered in view mode — viewers must not
+  # learn a draft exists. Edit mode already requires FrameworkPolicy#edit?,
+  # so gating on @mode == :edit is sufficient.
+  def draft_badge
+    render Components::Kit::Badge.new("v#{@framework.draft_version} draft", variant: :primary)
   end
 
   # Mode switcher pill — always rendered when the user can reach edit mode,

@@ -232,6 +232,36 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "draft status pill" do
+    should "not show the draft pill when no draft is open (edit mode)" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+      assert_no_text(/draft/i)
+    end
+
+    context "with an open draft" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          Frameworks::CommandHandler.new.start_draft(@framework_id, 2, "test")
+        end
+      end
+
+      should "show the draft pill in edit mode" do
+        sign_in_as(@admin_user)
+        visit edit_framework_path(@framework_id)
+        assert_text "v2 draft"
+      end
+
+      should "never reveal the draft in view mode" do
+        sign_in_as(@admin_user)
+        visit framework_path(@framework_id)
+        assert_text "Strategic Thinking"
+        assert_no_text(/draft/i)
+      end
+    end
+  end
+
   context "inline diff for pending text edits" do
     should "render added and removed spans when a small pending edit exists on a capability name" do
       capability = FrameworkState::Capability.first
