@@ -974,10 +974,29 @@ class Frameworks::Aggregate
   # commands (commands that alter the (capability_stable_id, level_ordinal)
   # rating grid — see docs/architecture/framework-aggregate.md).
   #
-  # @raise [RuntimeError] if no draft is in progress
+  # Guarantees a draft is open before a shape-changing command applies its
+  # event. If none is in progress, auto-opens one (mirroring
+  # {#maybe_auto_open_draft_for} on the suggestion-approval path) rather than
+  # raising — drafts are the normal forward-rolling working state: every
+  # structural edit just stages into the next version, and the owner/editor
+  # publishes when ready. No discard; we roll forward.
+  #
+  # `started_by` is left nil on this path — the editor's identity is carried
+  # on the event's metadata (`actor_id`, stamped by {AuditMetadata} at the
+  # operation boundary), which is the canonical provenance for structural /
+  # lifecycle events (see the attribution invariant in event-sourcing.md).
+  # Threading an actor through all eight structural command signatures buys
+  # nothing the metadata doesn't already record.
   def ensure_draft_in_progress!
     ensure_created!
-    raise "No draft in progress — call start_draft first" unless @draft_in_progress
+    return if @draft_in_progress
+
+    apply(Frameworks::Events::DraftVersionStarted.new(data: {
+      framework_id: @framework_id,
+      target_version: @current_version + 1,
+      started_by: nil,
+      auto_opened: true
+    }))
   end
 
   # Auto-opens an implicit draft when approving a shape-changing suggestion
