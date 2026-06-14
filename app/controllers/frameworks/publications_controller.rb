@@ -56,13 +56,20 @@ class Frameworks::PublicationsController < ApplicationController
   # current mapping, if one was recorded as-we-go. Sourced from the edit-mode
   # graph (the archive is deferred from the published read model during draft).
   def retiring_capabilities
-    graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
-            Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
     mappings = mappings_by_from_stable_id
 
-    graph.capability_categories.flat_map(&:capabilities)
+    graph_capabilities
       .select { |c| c.pending_archive && !c.added_in_draft }
       .map { |c| { capability: c, mapping: mappings[c.stable_id] } }
+  end
+
+  # All capability nodes from the edit-mode graph, loaded once per request.
+  def graph_capabilities
+    @graph_capabilities ||= begin
+      graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
+              Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
+      graph.capability_categories.flat_map(&:capabilities)
+    end
   end
 
   def mappings_by_from_stable_id
@@ -74,9 +81,7 @@ class Frameworks::PublicationsController < ApplicationController
   # Capabilities that will exist post-publish (not being retired) — survivor
   # candidates for evolved/split mappings.
   def survivor_candidates
-    graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
-            Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
-    graph.capability_categories.flat_map(&:capabilities)
+    graph_capabilities
       .reject(&:pending_archive)
       .map { |c| { name: c.name, stable_id: c.stable_id } }
       .sort_by { |c| c[:name] }
