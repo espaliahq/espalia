@@ -59,6 +59,25 @@ class Operations::Frameworks::PublishVersionTest < ActiveSupport::TestCase
         assert_match(/no draft/i, error.message)
       end
     end
+
+    should "refuse to publish while an archived capability lacks a migration mapping" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        cat_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        handler.add_capability_category(@framework_id, cat_id, "Thinking")
+        handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Legacy")
+        handler.publish_version(@framework_id, "seed")                 # v1; cap pre-draft
+        handler.archive_capability(@framework_id, cap_id, reason: "x") # auto-opens v2, no mapping
+
+        error = assert_raises(RuntimeError) do
+          Operations::Frameworks::PublishVersion.call(
+            context: @admin_ctx, params: { framework_id: @framework_id }
+          )
+        end
+        assert_match(/lack migration mappings/i, error.message)
+      end
+    end
   end
 
   context "as a plain tenant member" do

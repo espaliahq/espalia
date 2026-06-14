@@ -302,9 +302,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_text "Strategic Thinking"
         # Retire with no survivor (single-capability fixture).
         select "Archive — retire with no replacement", from: "Migration mapping"
-        click_button "Archive capability"
       end
 
+      # Submit via the JS-fallback helper — the modal submit is a navigation
+      # click that can be dropped on starved CI.
+      click_button_with_js_fallback("Archive capability", expect_text: "Archived")
       assert_text "Archived"
       # Draft auto-opened by the archive; the pill reflects it.
       assert_text(/draft/i)

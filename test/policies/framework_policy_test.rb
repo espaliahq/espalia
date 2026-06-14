@@ -360,6 +360,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.edit_matrix?
       assert_not policy.publish?
       assert_not policy.define_migration_mapping?
+      assert_not policy.archive_capability?
     end
   end
 
