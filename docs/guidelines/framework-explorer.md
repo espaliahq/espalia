@@ -398,6 +398,7 @@ Lives on the right-hand `<aside>` element. Sole owner of:
 - **Panel frame src** (`#suggestion-panel`). Rebuilds the frame URL whenever focus, role selection, or a fresh suggestion submission occurs. Short-circuits when the computed URL equals the current `src` to prevent duplicate fetches. Forces a reload on `onSuggestionSubmitted` so a just-landed pending row surfaces even if the URL didn't change.
 - **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=` via `history.pushState()`; removes them when focus returns to `framework`.
 - **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch. Unconditionally primes the frame `src` on connect because the pane is visible from initial render in edit mode (no lazy-until-open grace period — see Hard-Won Lesson 14).
+- **Live reload**. Observes the hidden `#framework-activity-sync-signal` element (a `signal` target). `PublishedState#broadcast_framework_activity` replaces it on every feed-relevant event via the per-framework `framework_activity` Turbo stream; the observer reloads the feed frame unconditionally (no self-suppression — the feed frame is the only thing that re-fetches, so there's no matrix flicker, and the actor should see their own entry). Mirrors `assessment_sync_controller`.
 
 Listens at window scope for:
 - `tree:changed@window->context-pane#onTreeChanged`
@@ -507,11 +508,23 @@ narrative — the direct analogue of the assessment screen's activity feed (see
 [assessments.md](assessments.md) → *Activity feed coverage*). Suggested edits were
 the first content type; the feed covers the **whole framework lifecycle**.
 
-> **Current state / direction.** The pane historically rendered suggestions only
-> (`Suggestions::PanelFrame` via `FocusedSuggestionsQuery`). It is being
-> generalised into `Frameworks::ActivityFeedQuery` + `Views::Frameworks::Activity::*`
-> so that *every* framework action surfaces here. New work follows the rule below;
-> the suggestion list remains as one filter group within the feed.
+> **Current state.** The pane renders the full activity feed via
+> `Frameworks::ActivityFeedQuery` + `Views::Frameworks::Activity::*`, served by
+> `Frameworks::ActivityController#show` (`GET /frameworks/:id/activity`) into the
+> `#suggestion-panel` Turbo Frame. Suggestions are one filter group within it
+> (chips: All / Suggestions / Edits / Structural / Lifecycle / Collaborators).
+> The first increment covers the suggestion lifecycle (submitted / amended /
+> approved / rejected / withdrawn), the draft/version lifecycle (draft opened
+> incl. `auto_opened`, version published, migration mapping defined), structural
+> (capability/category add · archive), editorial (capability / category /
+> expectation / illustration updated), and collaborator (added / role changed /
+> removed). The feed updates live for every edit-mode viewer (incl. the actor):
+> `PublishedState#broadcast_framework_activity` nudges a per-framework Turbo
+> stream and `context_pane_controller` reloads the feed frame on the sync signal.
+> Still deferred (note when adding): role/level/binding structural events,
+> reorders, and threaded suggestion comments (`SuggestionCommented` unwired). The
+> historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
+> standalone suggestion index, not the pane.
 
 **Every action a user can take on a framework MUST produce an entry in the
 activity feed.** That includes the full suggestion lifecycle (submitted /
@@ -578,15 +591,23 @@ line (§9).
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, pending-suggestion counts + latest-edit descriptors) |
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
-| `app/views/frameworks/suggestions/panel_frame.rb` | Context pane Turbo Frame content (focused suggestion list + focus header + "Show all" clear link + empty state) |
+| `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — retained for the standalone suggestion index, no longer the context pane |
+| `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + "Show all" clear link + filter chips + entry list + empty state) |
+| `app/views/frameworks/activity/entry.rb` | One activity entry — `KIND_DOT` / `KIND_GROUP`, summary + context line + actor·timestamp footer, matrix-navigation data attrs |
+| `app/views/frameworks/activity/filter_chips.rb` | All / Suggestions / Edits / Structural / Lifecycle / Collaborators (client-side filter) |
+| `app/javascript/controllers/framework_activity_controller.js` | Client-side filter-chip toggling of visible entry groups |
 | `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
 | `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
-| `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync |
+| `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync + activity-sync-signal observer (live reload) |
 | `app/javascript/controllers/framework_search_controller.js` | Stats-bar text filter — debounced input → `framework-search:changed` (§4a) |
-| `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for suggestion panel |
+| `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor` |
+| `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for the standalone suggestion index |
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) |
-| `app/controllers/frameworks/suggestions_controller.rb` | Suggestion list + panel-layout branch |
+| `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed) |
+| `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
+| `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
+| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + (legacy) panel-layout branch |
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH/POST) |
 | `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name (PATCH) |
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name (PATCH) |
