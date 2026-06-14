@@ -97,6 +97,10 @@ export default class extends BaseController {
   // Handles click on a suggestion row body — dispatches a navigation event
   // so the matrix controller can expand the relevant row and scroll to it.
   focusSuggestion(event) {
+    // Stop the space key from scrolling the page when a keyboard user
+    // activates a navigable entry (role="button" rows). No-op for clicks.
+    if (event.type === "keydown") event.preventDefault()
+
     const el = event.currentTarget
     const detail = {
       level: el.dataset.navLevel || "framework",

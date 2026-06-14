@@ -79,7 +79,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
       id: "framework-activity-#{dom_safe_id}",
       class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
              "transition-colors data-[hidden=true]:hidden " \
-             "#{'cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-700/40' if navigable?}",
+             "#{navigable_classes if navigable?}",
+      tabindex: (navigable? ? "0" : nil),
+      role: (navigable? ? "button" : nil),
       data: entry_data
     ) do
       span(class: "mt-1 w-2 h-2 rounded-full shrink-0 #{dot_class}") { }
@@ -111,10 +113,17 @@ class Views::Frameworks::Activity::Entry < Views::Base
     @entry.capability_id.present? || @entry.category_id.present?
   end
 
+  def navigable_classes
+    "cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-700/40 " \
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+  end
+
   def entry_data
     base = { framework_activity_target: "entry", kind_group: kind_group }
     if navigable?
-      base[:action] = "click->context-pane#focusSuggestion"
+      base[:action] = "click->context-pane#focusSuggestion " \
+                      "keydown.enter->context-pane#focusSuggestion " \
+                      "keydown.space->context-pane#focusSuggestion"
       if @entry.capability_id.present?
         base[:nav_level] = "capability"
         base[:nav_capability_id] = @entry.capability_id
