@@ -378,7 +378,7 @@ class Views::Frameworks::ShowView < Views::Base
       class: "flex -mx-6 -mb-6 h-[calc(100vh-12rem)] border-t border-gray-200 dark:border-gray-700",
       data: {
         controller: "matrix",
-        matrix_base_path_value: matrix_framework_path(@framework.framework_id),
+        matrix_base_path_value: matrix_base_path,
         action: "tree:changed->matrix#updateSelection " \
                 "framework-search:changed@window->matrix#updateSearch " \
                 "suggestion:navigate@window->matrix#navigateToEntity"
@@ -387,6 +387,18 @@ class Views::Frameworks::ShowView < Views::Base
       left_pane
       main_pane
       right_pane_placeholder if @mode == :edit
+    end
+  end
+
+  # Matrix Turbo Frame endpoint the role/text filters re-fetch from. Must
+  # match the current mode — filtering in edit mode has to keep hitting the
+  # edit matrix, otherwise a filter (or clearing one) silently drops the
+  # explorer back to published/view state.
+  def matrix_base_path
+    if @mode == :edit
+      edit_matrix_framework_path(@framework.framework_id)
+    else
+      matrix_framework_path(@framework.framework_id)
     end
   end
 
