@@ -67,6 +67,16 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def define_migration_mapping? = publish?
 
+  # Direct structural edits to the framework (archive a capability, etc.).
+  # Edit-rights bar — owner/editor/leads or tenant admin — distinct from the
+  # broader suggest bar (#edit?) and the narrower publish bar (#publish?).
+  #
+  # @return [Boolean]
+  def edit_structure? = tenant_admin? || framework_collaborator_can_edit?
+
+  # @return [Boolean]
+  def archive_capability? = edit_structure?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]
