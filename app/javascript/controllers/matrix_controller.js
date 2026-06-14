@@ -227,6 +227,14 @@ export default class extends BaseController {
   // ── Row Expansion ──
 
   toggleRow(event) {
+    // Ignore clicks on interactive children (the inline-edit pencil, the
+    // row-actions kebab, inline forms, links) so editing or opening the
+    // actions menu doesn't also toggle the row. The expand/collapse chevron
+    // is an <svg> (not an interactive element), so it still falls through.
+    if (event.target.closest("button, a, input, textarea, select, form, [data-controller~='dropdown']")) {
+      return
+    }
+
     const row = event.currentTarget
     const capId = row.dataset.capabilityId
     if (!capId) return
@@ -279,11 +287,11 @@ export default class extends BaseController {
         levelOrdinal: null,
         expectationId: null
       })
-      // Bring the freshly-expanded row + its expanded `<tr>` into
-      // view. With Stimulus accordions, a row near the bottom of the
-      // viewport can have its expanded content cut off — scroll the
-      // expanded `<tr>` so its bottom edge is visible.
-      this.#scrollExpandedRowIntoView(expandedRow)
+      // Anchor the capability's *top* (the compact row) just below the
+      // sticky chrome so expanding never scrolls the viewport away from the
+      // capability name. The compact row carries `scroll-mt` matching the
+      // sticky column + category header height.
+      this.#anchorCapabilityTop(row)
     } else {
       this.#setFocus({ level: "framework" })
     }
@@ -293,13 +301,15 @@ export default class extends BaseController {
   // `block: "nearest"` to avoid yanking the page when the row is
   // already onscreen, but ensures the expanded content's bottom edge
   // doesn't sit below the viewport.
-  #scrollExpandedRowIntoView(expandedRow) {
-    if (!expandedRow) return
-    // Defer to the next animation frame so the browser has a chance to
-    // apply the layout change (un-hide the row, set col widths, etc.)
-    // before computing scroll position.
+  #anchorCapabilityTop(compactRow) {
+    if (!compactRow) return
+    // Defer to the next animation frame so the browser has applied the
+    // layout change (un-hide the expanded row) before scrolling. `block:
+    // "start"` aligns the compact row's top to the scrollport top; the
+    // row's `scroll-mt` leaves room for the sticky column + category
+    // headers so the capability name lands just beneath them.
     requestAnimationFrame(() => {
-      expandedRow.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" })
+      compactRow.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" })
     })
   }
 

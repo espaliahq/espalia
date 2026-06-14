@@ -44,7 +44,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
   def compact_row
     tr(
-      class: "#{@bound ? '' : 'opacity-50'} group cursor-pointer " \
+      class: "#{@bound ? '' : 'opacity-50'} group cursor-pointer scroll-mt-20 " \
              "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
       data: {
         action: "click->matrix#toggleRow",
