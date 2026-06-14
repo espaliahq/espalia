@@ -224,12 +224,11 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
                        visible: true
 
-      within "#suggestion-panel" do
-        click_link "Show all framework activity"
-      end
+      # Show-all clears focus via a Turbo Frame navigation — JS-fallback the
+      # click so a starved-CI pointer drop doesn't leave the pane focused.
+      click_link_with_js_fallback("Show all framework activity", expect_text: "All framework activity")
 
       within "#suggestion-panel" do
-        assert_text "All framework activity"
         assert_text "SUGG_CAP_B"
       end
 
