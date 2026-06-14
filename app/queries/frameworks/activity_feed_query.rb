@@ -120,6 +120,24 @@ class Frameworks::ActivityFeedQuery
   # @return [Symbol] effective focus after validation
   attr_reader :focus
 
+  # Human-readable descriptor for the panel header — mirrors
+  # {Frameworks::FocusedSuggestionsQuery#descriptor}.
+  #
+  # @return [Hash] { level:, category_name:, capability_name:, level_label: }
+  def descriptor
+    case @focus
+    when :category
+      { level: :category, category_name: category_name_for(@category_id) }
+    when :capability
+      { level: :capability, capability_name: capability_name_for(@capability_id) }
+    when :cell
+      { level: :cell, capability_name: capability_name_for(@capability_id),
+        level_label: "L#{@level_ordinal}" }
+    else
+      { level: :framework }
+    end
+  end
+
   private
 
   def build_entry(event)

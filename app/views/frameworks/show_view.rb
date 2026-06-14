@@ -279,7 +279,7 @@ class Views::Frameworks::ShowView < Views::Base
       stat_item("Levels", level_count)
       stat_item("Capabilities", cap_count)
       search_box
-      suggestions_toggle if @mode == :edit
+      activity_toggle if @mode == :edit
     end
   end
 
@@ -337,10 +337,12 @@ class Views::Frameworks::ShowView < Views::Base
   end
 
   # Rendered only in edit mode. View mode hides both the toggle and the
-  # pane entirely — viewers have no business with the in-flight
-  # suggestion feed, and the grid itself already suppresses pending-edit
-  # decorations in view mode (see FrameworksController#load_explorer_matrix).
-  def suggestions_toggle
+  # pane entirely — viewers have no business with the in-flight activity
+  # feed, and the grid itself already suppresses pending-edit decorations
+  # in view mode (see FrameworksController#load_explorer_matrix). The badge
+  # surfaces the pending-suggestion count (the actionable subset) without
+  # claiming to be the whole feed.
+  def activity_toggle
     button(
       type: "button",
       class: "flex items-center gap-1.5 px-2.5 py-1 rounded-md " \
@@ -350,12 +352,15 @@ class Views::Frameworks::ShowView < Views::Base
         action: "framework-explorer#toggleContextPane",
         framework_explorer_target: "contextPaneToggle"
       },
-      title: "Toggle suggestions panel"
+      title: "Toggle activity feed"
     ) do
-      span(class: "font-semibold text-gray-900 dark:text-white") do
-        @pending_suggestion_count.to_s
+      span(class: "font-semibold text-gray-900 dark:text-white") { "Activity" }
+      if @pending_suggestion_count.positive?
+        span(class: "inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 " \
+                    "px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-200") do
+          "#{@pending_suggestion_count} pending"
+        end
       end
-      span { " #{'Suggestion'.pluralize(@pending_suggestion_count)}" }
     end
   end
 
@@ -431,7 +436,7 @@ class Views::Frameworks::ShowView < Views::Base
       data: {
         framework_explorer_target: "contextPane",
         controller: "context-pane",
-        context_pane_base_path_value: framework_suggestions_path(@framework.framework_id),
+        context_pane_base_path_value: framework_activity_path(@framework.framework_id),
         context_pane_initial_role_ids_value: @selected_role_ids.to_json,
         context_pane_initial_track_value: @track_filter,
         action: "tree:changed@window->context-pane#onTreeChanged " \
@@ -449,7 +454,7 @@ class Views::Frameworks::ShowView < Views::Base
         data: { context_pane_target: "frame" }
       ) do
         div(class: "p-6 text-center text-gray-600 dark:text-gray-300 text-sm") do
-          p { "Loading suggestions\u2026" }
+          p { "Loading activity\u2026" }
         end
       end
     end

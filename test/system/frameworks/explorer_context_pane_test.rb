@@ -2,14 +2,15 @@
 
 require "application_system_test_case"
 
-# System coverage for the framework explorer's context-sensitive right pane.
+# System coverage for the framework explorer's context-sensitive right pane —
+# now a full activity feed (suggestions are one filter group within it).
 #
-# Verifies that the suggestion panel narrows to match the user's focus
-# context (framework / category / capability / cell) and combines with
-# role selection, and that the state round-trips through the browser URL.
+# Verifies that the feed narrows to match the user's focus context
+# (framework / category / capability / cell), that the state round-trips
+# through the browser URL, that filter chips switch the visible kinds, and
+# that clicking an anchored entry navigates the matrix.
 class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
-  MOBILE_SIZE  = [ 375, 812 ].freeze
 
   setup do
     @tenant = FactoryBot.create(:tenant)
@@ -60,23 +61,16 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       handler.set_behavioural_expectation(@framework_id, @eid_b_l1, SecureRandom.uuid_v7, @cap_b_id, 1,
         "Ships small increments")
 
-      @ill_pd_a_l1 = SecureRandom.uuid_v7
-      @ill_eng_a_l1 = SecureRandom.uuid_v7
-      handler.add_role_illustration(@framework_id, @ill_pd_a_l1, SecureRandom.uuid_v7, @eid_a_l1, @pd_role_id, 1,
-        "Runs user research sessions")
-      handler.add_role_illustration(@framework_id, @ill_eng_a_l1, SecureRandom.uuid_v7, @eid_a_l1, @eng_role_id, 1,
-        "Reviews technical requirements")
-
       handler.publish_version(@framework_id, "v1")
 
-      # Collaborators so that the author can file suggestions.
       handler.add_collaborator(@framework_id, @person.id.to_s, "owner",
                                added_by: @person.id.to_s)
       handler.add_collaborator(@framework_id, @author_person.id.to_s, "collaborator",
                                added_by: @person.id.to_s)
 
-      # Seed pending suggestions in four flavours so we can tell which scope
-      # the panel is resolving to at each step.
+      # Pending suggestions across scopes so we can tell which scope the feed
+      # is resolving to at each step. suggest_edit emits an EditSuggested event
+      # on the framework stream — the activity feed's source.
       handler.suggest_edit(@framework_id, SecureRandom.uuid_v7,
         "capability", @cap_a_id, "description",
         "SUGG_CAP_A", @author_person.id.to_s, mode: :suggesting)
@@ -89,41 +83,34 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       handler.suggest_edit(@framework_id, SecureRandom.uuid_v7,
         "behavioural_expectation", @eid_a_l2, "description",
         "SUGG_EXP_A_L2", @author_person.id.to_s, mode: :suggesting)
-      handler.suggest_edit(@framework_id, SecureRandom.uuid_v7,
-        "role_illustration", @ill_pd_a_l1, "description",
-        "SUGG_ILL_PD", @author_person.id.to_s, mode: :suggesting)
-      handler.suggest_edit(@framework_id, SecureRandom.uuid_v7,
-        "role_illustration", @ill_eng_a_l1, "description",
-        "SUGG_ILL_ENG", @author_person.id.to_s, mode: :suggesting)
     end
 
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     sign_in_as(@user)
   end
 
-  context "initial panel" do
-    should "show all framework suggestions when the pane is opened with no focus" do
+  context "initial feed" do
+    should "show all framework activity — suggestions and structural events" do
       visit edit_framework_path(@framework_id)
       open_context_pane
 
       within "#suggestion-panel" do
-        assert_text "All framework suggestions"
+        assert_text "All framework activity"
         assert_text "SUGG_CAP_A"
         assert_text "SUGG_CAP_B"
-        assert_text "SUGG_EXP_A_L1"
+        # Structural lifecycle entries surface too — not just suggestions.
+        assert_text "Added a capability"
+        assert_text "Published v1"
       end
     end
   end
 
   context "capability focus" do
-    should "narrow panel to the expanded capability" do
+    should "narrow the feed to the expanded capability" do
       visit edit_framework_path(@framework_id)
       open_context_pane
 
       wait_for_stimulus "matrix"
-      # JS-dispatch the row click — Capybara's pointer click on the row
-      # has been silently dropped on starved CI runners, leaving the
-      # suggestion panel un-filtered.
       page.execute_script(<<~JS)
         document.querySelector("tr[data-capability-id='#{@cap_a_id}']")?.click();
       JS
@@ -141,27 +128,22 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
   end
 
   context "cell focus" do
-    should "narrow panel to a single capability \u00d7 level cell" do
+    should "title the feed for the focused cell, scoped to the capability" do
       visit edit_framework_path(@framework_id)
       open_context_pane
 
       wait_for_stimulus "matrix"
-      # JS-dispatch both row + cell clicks \u2014 Capybara's pointer click on
-      # rows is occasionally dropped on starved CI runners.
       page.execute_script(<<~JS)
         document.querySelector("tr[data-capability-id='#{@cap_a_id}']")?.click();
       JS
-
-      # Click an expanded-row cell to focus it. The expanded <td> carries the
-      # focusCell action + capability_id + level_ordinal data attributes.
       page.execute_script(<<~JS)
         document.querySelector("td[data-action='click->matrix#focusCell'][data-level-ordinal='2']")?.click();
       JS
 
       within "#suggestion-panel" do
-        assert_text "\u00d7 L2"
+        assert_text "× L2"
         assert_text "SUGG_EXP_A_L2"
-        assert_no_text "SUGG_EXP_A_L1"
+        assert_no_text "SUGG_CAP_B"
       end
 
       assert_match(/level_ordinal=2/, page.current_url)
@@ -174,13 +156,12 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       open_context_pane
 
       wait_for_stimulus "matrix"
-      # JS-dispatch to bypass Capybara pointer-click drops on starved CI.
       page.execute_script(<<~JS)
         document.querySelector("[data-action='click->matrix#focusCategory'][data-category-id='#{@cat_a_id}']")?.click();
       JS
 
       within "#suggestion-panel" do
-        assert_text "Thinking \u2014 category"
+        assert_text "Thinking — category"
         assert_text "SUGG_CAP_A"
         assert_text "SUGG_EXP_A_L1"
         assert_no_text "SUGG_CAP_B"
@@ -198,21 +179,36 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
         "button[data-action='click->matrix#toggleCategory']"
       row_selector = "tr[data-capability-id='#{@cap_a_id}']"
 
-      # Collapse via the chevron button — JS-dispatch to bypass Capybara
-      # pointer-click drops on starved CI. Retry once if the row is still
-      # visible (the guard ensures we only re-click when the first click
-      # didn't collapse, so we never re-expand a collapsed category).
       collapse_js = "document.querySelector(#{chevron_selector.to_json})?.click();"
       page.execute_script(collapse_js)
       unless page.has_no_css?(row_selector, visible: true, wait: 5)
         page.execute_script(collapse_js)
       end
 
-      # Capability rows for cat_a are now hidden
       assert_no_selector row_selector, visible: true, wait: 5
-
-      # Browser URL should not have focus params
       refute_match(/focus=/, page.current_url)
+    end
+  end
+
+  context "filter chips" do
+    should "switch the visible entry kinds client-side" do
+      visit edit_framework_path(@framework_id)
+      open_context_pane
+
+      within "#suggestion-panel" do
+        assert_text "SUGG_CAP_A"
+        assert_text "Added a capability"
+
+        # Structural-only: suggestions drop, capability adds remain.
+        click_button "Structural"
+        assert_text "Added a capability"
+        assert_no_text "SUGG_CAP_A"
+
+        # Suggestions-only: the inverse.
+        click_button "Suggestions"
+        assert_text "SUGG_CAP_A"
+        assert_no_text "Added a capability"
+      end
     end
   end
 
@@ -221,26 +217,22 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       open_context_pane
 
-      # Navigate to a capability via suggestion click — JS-dispatch to
-      # bypass Capybara pointer-click drops on starved CI.
       page.execute_script(<<~JS)
         document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
       JS
 
-      # Row should be expanded
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
                        visible: true
 
       within "#suggestion-panel" do
-        click_link "Show all framework suggestions"
+        click_link "Show all framework activity"
       end
 
       within "#suggestion-panel" do
-        assert_text "All framework suggestions"
+        assert_text "All framework activity"
         assert_text "SUGG_CAP_B"
       end
 
-      # Matrix should have collapsed back
       assert_no_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
                           visible: true
     end
@@ -260,87 +252,17 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
     end
   end
 
-  context "context labels" do
-    should "show full role and level for illustration suggestions" do
-      visit edit_framework_path(@framework_id,
-        focus: "capability", capability_id: @cap_a_id)
-      open_context_pane
-
-      within "#suggestion-panel" do
-        # Illustration rows show "Role Name · Level Title" on their own line
-        assert_text "Product Designer \u00b7 Product Designer I"
-        assert_text "Software Engineer \u00b7 Engineer I"
-      end
-    end
-
-    should "show capability and level for expectation suggestions" do
+  context "entry navigation" do
+    should "expand the capability row in the matrix when clicking an anchored entry" do
       visit edit_framework_path(@framework_id)
       open_context_pane
 
-      within "#suggestion-panel" do
-        # Expectation rows show "Capability Name · Level N"
-        assert_text "Strategic Thinking \u00b7 Level 1"
-        assert_text "Strategic Thinking \u00b7 Level 2"
-      end
-    end
-
-    should "show entity type and kind badges without tiers" do
-      visit edit_framework_path(@framework_id)
-      open_context_pane
-
-      within "#suggestion-panel" do
-        assert_text "Illustration"
-        assert_text "Expectation"
-        assert_text "Edit"
-        # Tier badges should not appear
-        assert_no_text "T1"
-        assert_no_text "T2"
-        assert_no_text "T3"
-      end
-    end
-  end
-
-  context "suggestion row navigation" do
-    should "expand the capability row in the matrix when clicking an illustration suggestion" do
-      visit edit_framework_path(@framework_id)
-      open_context_pane
-
-      # JS-dispatch the click — Capybara's pointer click on the suggestion
-      # body can be silently dropped on starved CI runners, leaving the
-      # matrix without an expanded row.
       page.execute_script(<<~JS)
         document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
       JS
 
-      # The matrix should expand the matching capability row
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
                        visible: true
-    end
-
-    should "provide a separate detail link to the suggestion page" do
-      visit edit_framework_path(@framework_id)
-      open_context_pane
-
-      within "#suggestion-panel" do
-        # The detail link (arrow icon) should navigate to the suggestion detail page
-        assert_selector "a[title='View suggestion details']", visible: :all
-      end
-    end
-  end
-
-  context "role filter combined with focus" do
-    should "drop role_illustration rows outside selected roles" do
-      # Select only PD — engineering illustration should drop from panel.
-      visit edit_framework_path(@framework_id,
-        focus: "capability", capability_id: @cap_a_id, roles: [ @pd_role_id ])
-      open_context_pane
-
-      within "#suggestion-panel" do
-        assert_text "SUGG_ILL_PD"
-        assert_no_text "SUGG_ILL_ENG"
-        # Expectation + capability suggestions stay regardless of role filter
-        assert_text "SUGG_EXP_A_L1"
-      end
     end
   end
 

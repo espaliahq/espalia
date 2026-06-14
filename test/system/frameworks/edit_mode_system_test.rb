@@ -237,7 +237,10 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
       assert_text "Edit mode"
-      assert_no_text(/draft/i)
+      # Target the draft *pill* (e.g. "v2 draft"), not page-wide text — the
+      # activity feed legitimately mentions "Opened draft v1" as a lifecycle
+      # entry, which an /draft/i page scan would wrongly catch.
+      assert_no_text(/v\d+ draft/i)
     end
 
     context "with an open draft" do
