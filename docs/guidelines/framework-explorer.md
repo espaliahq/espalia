@@ -500,10 +500,59 @@ The moment the aggregate became the source for `ExplorerGraph` (see the snapshot
 
 After a submit lands, the inline-edit controllers (`Illustrations`, `Capabilities`, `Categories`, `Expectations`) render a fresh turbo-frame containing the post-edit entity. If they pass `pending_edit_count: 0` (or omit it), the wavy-underline decoration doesn't appear — even though a pending suggestion just got created in Suggesting mode. Each response must re-query `FrameworkState::SuggestedEdit.pending` for the entity and thread the count into the frame constructor, so the user sees the pending decoration land immediately without a reload. The `MatrixDataBuilder` path would pick this up on the next full render, but for the in-place Turbo swap the controller has to do it itself.
 
-## Future Extension Points
+## Activity feed coverage (NON-NEGOTIABLE)
 
-### Context Pane: Comments & Activity Feed
-The context pane currently shows suggested edits. Future content types — comments, activity log, evidence — will reuse the same focus protocol (`matrix:focus-changed` event, `FocusedSuggestionsQuery`-style in-memory filtering) and row anatomy (entity badge + kind badge, context line, preview). Each content type should follow the same principle: no internal categorisations in the UI, always show where-in-the-framework context, never truncate the context line.
+The context pane is the framework's **activity feed** — its audit trail and shared
+narrative — the direct analogue of the assessment screen's activity feed (see
+[assessments.md](assessments.md) → *Activity feed coverage*). Suggested edits were
+the first content type; the feed covers the **whole framework lifecycle**.
+
+> **Current state / direction.** The pane historically rendered suggestions only
+> (`Suggestions::PanelFrame` via `FocusedSuggestionsQuery`). It is being
+> generalised into `Frameworks::ActivityFeedQuery` + `Views::Frameworks::Activity::*`
+> so that *every* framework action surfaces here. New work follows the rule below;
+> the suggestion list remains as one filter group within the feed.
+
+**Every action a user can take on a framework MUST produce an entry in the
+activity feed.** That includes the full suggestion lifecycle (submitted /
+amended / approved / rejected / withdrawn / **commented**), direct editorial
+edits, structural changes (capability/category/role/level/binding add · archive ·
+reorder), the draft lifecycle (**draft opened** — incl. `auto_opened` —, **version
+published**, **migration mapping defined**), and collaborator add / change /
+remove. When you add a new framework action you add its feed entry in the same
+change:
+
+1. **Source the entry** — from the framework RES stream
+   (`Frameworks::ActivityFeedQuery#stream_events`) or a read model. Prefer the
+   stream for events with no standalone read-model row (draft opened, version
+   published, suggestion approved/commented, migration mapping defined).
+2. **Anchor it** to the affected `(category / capability / expectation / level)`
+   coordinates so the existing focus protocol (`matrix:focus-changed` +
+   `FocusedSuggestionsQuery`-style in-memory `Set` filtering) narrows it. Honour
+   the same collaborator visibility gate as neighbouring entries. Framework-level
+   events (draft/version/collaborator) carry no matrix coordinates and surface
+   only at framework focus — mirroring how `role` / `role_family` / `level`
+   suggestions already behave (§9, entity coverage).
+3. **Register the kind** in `Views::Frameworks::Activity::Entry` — `KIND_DOT`
+   (colour), `KIND_GROUP` (filter chip: suggestions / edits / structural /
+   lifecycle / collaborators), and summary + secondary text. Never surface
+   internal categorisations (review tiers T1/T2/T3, entity type codes) — they
+   serve the system, not the user (§9).
+4. **Broadcast the sync signal** from the projection that materialises the action
+   so the feed updates **live for everyone including the actor** (the actor's own
+   entry is exempt from self-suppression, exactly like the assessment feed).
+   Guard the broadcast with `Projections::Replayer.replay_mode?` so rebuilds stay
+   silent (see [event-sourcing.md](event-sourcing.md)).
+5. **Cover it** in `test/queries/frameworks/activity_feed_query_test.rb` (entry
+   emitted, anchored to the right coordinates, visibility-gated) and assert its
+   `KIND_GROUP` so it lands under the intended filter.
+
+A new framework action with no feed entry is an incomplete feature, not a
+follow-up.
+
+Each content type follows the same row principles: no internal categorisations in
+the UI, always show where-in-the-framework context, never truncate the context
+line (§9).
 
 ## File Reference
 
