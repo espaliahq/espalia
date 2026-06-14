@@ -281,28 +281,29 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     should "not show the kebab in view mode" do
       sign_in_as(@admin_user)
       visit framework_path(@framework_id)
-      expand_matrix_row("tr[data-capability-id]")
       assert_no_selector "button[aria-label='Capability actions']"
     end
 
-    should "open the kebab, reach the archive form, and archive with a mapping" do
+    should "open the archive modal from the kebab and archive with a mapping" do
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
-      expand_matrix_row("tr[data-capability-id]")
+      wait_for_stimulus "matrix"
 
-      # Kebab lives in the expanded row; open it via a JS-dispatched click
-      # (Selenium pointer clicks on matrix toggles flake on starved CI).
-      assert_selector "button[aria-label='Capability actions']"
+      # Kebab is hover-revealed in the capability name cell; JS-click it to
+      # open the shared archive modal (Selenium pointer clicks on the
+      # opacity-0 control flake on starved CI).
+      assert_selector "button[aria-label='Capability actions']", visible: :all
       page.execute_script(<<~JS)
         document.querySelector("button[aria-label='Capability actions']").click();
       JS
 
-      click_link_with_js_fallback("Archive capability", expect_text: "Archive “Strategic Thinking”")
-
-      # Retire with no survivor (single-capability fixture).
-      select "Archived — retired with no replacement (ratings surface to relink)",
-             from: "Migration mapping"
-      click_button_with_js_fallback("Archive capability", expect_text: "Archived")
+      assert_selector "#archive-capability-modal", visible: true
+      within "#archive-capability-modal" do
+        assert_text "Strategic Thinking"
+        # Retire with no survivor (single-capability fixture).
+        select "Archive — retire with no replacement", from: "Migration mapping"
+        click_button "Archive capability"
+      end
 
       assert_text "Archived"
       # Draft auto-opened by the archive; the pill reflects it.

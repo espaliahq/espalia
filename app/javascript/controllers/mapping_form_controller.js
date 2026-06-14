@@ -13,7 +13,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["type", "survivor"]
-  static values = { survivorTypes: { type: Array, default: ["evolved", "split"] } }
+  static values = { survivorTypes: { type: Array, default: ["evolved"] } }
 
   connect() {
     this.typeChanged()

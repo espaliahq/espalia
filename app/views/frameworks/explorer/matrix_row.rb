@@ -67,14 +67,17 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           end
 
           div do
-            render Views::Frameworks::Explorer::CapabilityNameFrame.new(
-              capability: @capability,
-              framework_id: @framework_id,
-              mode: @mode,
-              pending_edit_count: @capability_pending_count,
-              pending_edit: @capability_pending_edit,
-              search_query: @search_query
-            )
+            div(class: "flex items-start gap-1") do
+              render Views::Frameworks::Explorer::CapabilityNameFrame.new(
+                capability: @capability,
+                framework_id: @framework_id,
+                mode: @mode,
+                pending_edit_count: @capability_pending_count,
+                pending_edit: @capability_pending_edit,
+                search_query: @search_query
+              )
+              archive_kebab if show_archive_kebab?
+            end
             draft_state_badge if @mode == :edit
             p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
               render_highlighted(@capability.description, @search_query)
@@ -118,11 +121,10 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       class: "hidden",
       data: { matrix_target: "expandedRow", capability_id: @capability.capability_id }
     ) do
-      # Sticky column — hosts the edit-mode row-actions kebab (Archive, …).
+      # Empty sticky column (row-actions kebab lives in the compact row, by
+      # the capability name).
       td(class: "sticky left-0 z-[2] bg-blue-50/30 dark:bg-blue-900/10 " \
-                "border-b border-r border-gray-100 dark:border-gray-800 px-3 py-2 align-top") do
-        archive_kebab if show_archive_kebab?
-      end
+                "border-b border-r border-gray-100 dark:border-gray-800") { }
 
       # Expanded cells with full illustrations
       @merged_levels.each do |level|
@@ -132,45 +134,40 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   end
 
   # Row-actions kebab — edit mode, edit-rights holders, and only while the
-  # capability isn't already staged for archive. Lives in the expanded row so
-  # it's revealed only when the user drills into a capability.
+  # capability isn't already staged for archive. Hover-revealed next to the
+  # capability-name pencil; opens the shared archive modal (see
+  # Views::Frameworks::Explorer::ArchiveModal). The capability's id/name and
+  # whether it needs a migration mapping (pre-draft vs added-in-draft) ride on
+  # the trigger dataset, which the modal's archive-form controller reads.
   def show_archive_kebab?
     @mode == :edit && @can_archive &&
       !(@capability.respond_to?(:pending_archive) && @capability.pending_archive)
   end
 
   def archive_kebab
-    div(class: "relative inline-block", data: { controller: "dropdown" }) do
-      button(
-        type: "button",
-        class: "inline-flex items-center justify-center w-6 h-6 rounded text-gray-400 " \
-               "hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/60 dark:hover:bg-gray-700/60",
-        data: { action: "dropdown#toggle", dropdown_target: "trigger" },
-        aria_label: "Capability actions", aria_haspopup: "menu", aria_expanded: "false"
-      ) do
-        svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
-          s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
-                    "6a2 2 0 100 4 2 2 0 000-4z")
-        end
-      end
-      div(
-        class: "hidden absolute left-0 mt-1 w-44 rounded-md bg-white dark:bg-gray-800 " \
-               "shadow-lg ring-1 ring-black/5 dark:ring-white/10 z-20 py-1",
-        role: "menu",
-        data: { dropdown_target: "menu" }
-      ) do
-        a(
-          href: new_framework_capability_archive_path(@framework_id, @capability.capability_id),
-          class: "block px-3 py-1.5 text-sm text-red-700 dark:text-red-300 " \
-                 "hover:bg-red-50 dark:hover:bg-red-900/20",
-          role: "menuitem",
-          # Full-page navigation — must break out of the matrix Turbo Frame,
-          # else Turbo looks for a #framework-matrix frame in the archive page
-          # and renders "Content missing" (lazy-frame trap).
-          data: { turbo_frame: "_top" }
-        ) { "Archive capability…" }
+    button(
+      type: "button",
+      class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
+             "inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
+             "text-gray-400 hover:text-primary",
+      data: {
+        action: "click->modal#open",
+        archive_capability_id: @capability.capability_id,
+        archive_capability_name: @capability.name,
+        archive_stable_id: @capability.stable_id,
+        archive_needs_mapping: (!archive_added_in_draft?).to_s
+      },
+      aria_label: "Capability actions"
+    ) do
+      svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
+        s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
+                  "6a2 2 0 100 4 2 2 0 000-4z")
       end
     end
+  end
+
+  def archive_added_in_draft?
+    @capability.respond_to?(:added_in_draft) && @capability.added_in_draft
   end
 
   def expanded_cell(ordinal) # rubocop:disable Metrics/MethodLength

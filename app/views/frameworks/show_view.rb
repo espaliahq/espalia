@@ -24,7 +24,7 @@ class Views::Frameworks::ShowView < Views::Base
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
                  pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
-                 can_archive: false, current_person_id: nil, search_query: nil)
+                 can_archive: false, archive_survivors: [], current_person_id: nil, search_query: nil)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -39,6 +39,7 @@ class Views::Frameworks::ShowView < Views::Base
     @can_edit = can_edit
     @can_publish = can_publish
     @can_archive = can_archive
+    @archive_survivors = archive_survivors
     @current_person_id = current_person_id
     @search_query = search_query
   end
@@ -47,14 +48,34 @@ class Views::Frameworks::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: {
-        controller: "framework-explorer",
-        action: "tree:changed->framework-explorer#updateRoleCount"
-      }) do
+      div(data: explorer_root_data) do
         framework_header
         explorer_layout
+        # Shared archive modal — opened by each capability row's kebab. The
+        # `modal` controller (above) must be an ancestor of both the kebab
+        # triggers (in the matrix) and this dialog.
+        if archive_modal?
+          render Views::Frameworks::Explorer::ArchiveModal.new(
+            framework_id: @framework.framework_id, survivors: @archive_survivors
+          )
+        end
       end
     end
+  end
+
+  # Whether the shared archive modal (+ its `modal` controller) renders.
+  def archive_modal? = @mode == :edit && @can_archive
+
+  # data-controller/action for the explorer root, adding the `modal`
+  # controller + Esc-to-close only when the archive modal is present.
+  def explorer_root_data
+    controllers = [ "framework-explorer" ]
+    actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
+    if archive_modal?
+      controllers << "modal"
+      actions << "keydown.esc@window->modal#close"
+    end
+    { controller: controllers.join(" "), action: actions.join(" ") }
   end
 
   private

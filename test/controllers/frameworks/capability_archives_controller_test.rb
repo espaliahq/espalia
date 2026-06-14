@@ -29,30 +29,15 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
     ActsAsTenant.with_tenant(@tenant) { FrameworkState::Framework.find_by!(framework_id: @framework_id) }
   end
 
-  context "GET new" do
-    should "render the archive form for an edit-rights holder" do
-      sign_in @admin_user
-      get new_framework_capability_archive_path(@framework_id, @cap_id)
-
-      assert_response :success
-      assert_includes response.body, "Archive"
-      assert_includes response.body, "Migration mapping"  # pre-draft cap needs a mapping
-    end
-
-    should "redirect a plain member (not authorized)" do
-      sign_in @member_user
-      get new_framework_capability_archive_path(@framework_id, @cap_id)
-
-      assert_redirected_to root_path
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
-    end
+  def post_archive(user, archive)
+    sign_in user
+    post framework_capability_archives_path(framework_id: @framework_id), params: { archive: archive }
   end
 
   context "POST create" do
     should "archive with an evolved mapping, auto-open a draft, and record the mapping" do
-      sign_in @admin_user
-      post framework_capability_archive_path(@framework_id, @cap_id),
-           params: { archive: { reason: "Retired", mapping_type: "evolved", to_stable_id: @survivor_stable } }
+      post_archive(@admin_user,
+        { capability_id: @cap_id, reason: "Retired", mapping_type: "evolved", to_stable_id: @survivor_stable })
 
       assert_redirected_to edit_framework_path(@framework_id)
       assert_match(/Archived/, flash[:notice])
@@ -65,13 +50,22 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
       assert_equal "evolved", mapping.mapping_type
     end
 
-    should "redirect a plain member (not authorized)" do
-      sign_in @member_user
-      post framework_capability_archive_path(@framework_id, @cap_id),
-           params: { archive: { reason: "x", mapping_type: "archived" } }
+    should "archive with no survivor for an archived mapping" do
+      post_archive(@admin_user, { capability_id: @cap_id, reason: "Retired", mapping_type: "archived" })
+
+      assert_redirected_to edit_framework_path(@framework_id)
+      mapping = ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::MigrationMapping.find_by(framework_id: @framework_id, mapping_type: "archived")
+      end
+      assert_not_nil mapping
+      assert_nil mapping.to_stable_id
+    end
+
+    should "redirect a plain member (not authorized) and not open a draft" do
+      post_archive(@member_user, { capability_id: @cap_id, reason: "x", mapping_type: "archived" })
 
       assert_redirected_to root_path
-      assert framework.draft_in_progress == false
+      assert_not framework.draft_in_progress
     end
   end
 

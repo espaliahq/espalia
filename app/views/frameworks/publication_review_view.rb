@@ -9,7 +9,6 @@ class Views::Frameworks::PublicationReviewView < Views::Base
   # surviving capability is wired to the mapping-form Stimulus controller.
   MAPPING_TYPES = [
     [ "evolved", "Evolved — into a survivor" ],
-    [ "split", "Split — into a survivor" ],
     [ "archived", "Archived — no replacement" ]
   ].freeze
 
