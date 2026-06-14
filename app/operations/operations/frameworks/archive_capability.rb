@@ -32,6 +32,15 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
 
   # @return [Hash] { framework_id:, capability_id:, stable_id:, mapping_type: }
   def perform
+    # Validate the mapping combo BEFORE archiving so we never persist the
+    # archive and then fail on the mapping (which would leave the capability
+    # archived without a mapping). Mirrors DefineMigrationMapping's guard.
+    if Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES.include?(params[:mapping_type]) &&
+       params[:to_stable_id].blank?
+      raise Operations::Base::ParameterError,
+            "#{params[:mapping_type]} mapping requires a surviving capability (to_stable_id)"
+    end
+
     handler = Frameworks::CommandHandler.new
     handler.archive_capability(framework.framework_id, capability.capability_id, reason: params[:reason])
 

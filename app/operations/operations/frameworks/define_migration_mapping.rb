@@ -19,6 +19,9 @@ class Operations::Frameworks::DefineMigrationMapping < Operations::Base
 
   # mapping_types whose ratings warrant a reassessment flag downstream.
   REASSESS_TYPES = %w[evolved split].freeze
+  # mapping_types that carry ratings to a surviving capability — they require
+  # a `to_stable_id`; `archived` / `new` / `same` must not (it is ignored).
+  SURVIVOR_TYPES = %w[evolved split].freeze
 
   parameter :framework_id,   String, required: true
   parameter :from_stable_id, String, required: true
@@ -34,6 +37,11 @@ class Operations::Frameworks::DefineMigrationMapping < Operations::Base
 
   # @return [Hash] { framework_id:, mapping_id:, from_stable_id:, to_stable_id:, mapping_type: }
   def perform
+    if SURVIVOR_TYPES.include?(params[:mapping_type]) && params[:to_stable_id].blank?
+      raise Operations::Base::ParameterError,
+            "#{params[:mapping_type]} mapping requires a surviving capability (to_stable_id)"
+    end
+
     mapping_id = params[:mapping_id].presence || SecureRandom.uuid_v7
 
     Frameworks::CommandHandler.new.define_migration_mapping(

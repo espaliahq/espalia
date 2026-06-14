@@ -71,6 +71,21 @@ class Operations::Frameworks::DefineMigrationMappingTest < ActiveSupport::TestCa
     end
   end
 
+  context "validation" do
+    should "reject an evolved mapping with no surviving capability" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::DefineMigrationMapping.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, from_stable_id: @from, mapping_type: "evolved" }
+          )
+        end
+        assert_match(/surviving capability/i, error.message)
+        assert_equal 0, mappings.count
+      end
+    end
+  end
+
   context "as a plain tenant member" do
     should "be denied" do
       ActsAsTenant.with_tenant(@tenant) do
