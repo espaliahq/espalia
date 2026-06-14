@@ -43,11 +43,15 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
           end
           clear_focus_link if focused?
         end
+        # Links to the standalone suggestion-review index — name the
+        # destination, since the feed itself covers more than suggestions and
+        # there is no separate full-activity index page.
         a(
           href: framework_suggestions_path(@framework.framework_id),
           class: "text-xs text-primary hover:text-primary/80 shrink-0",
-          data: { turbo_frame: "_top" }
-        ) { "View all" }
+          data: { turbo_frame: "_top" },
+          title: "Open the full suggestion-review page"
+        ) { "All suggestions" }
       end
       div(class: "mt-2") { render Views::Frameworks::Activity::FilterChips.new }
     end
