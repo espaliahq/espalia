@@ -33,9 +33,14 @@ export default class extends Controller {
   }
 
   typeChanged() {
-    if (!this.hasSurvivorTarget || !this.hasTypeTarget) return
-    const needsSurvivor = this.survivorTypesValue.includes(this.typeTarget.value)
+    if (!this.hasSurvivorTarget) return
+    const needsSurvivor =
+      this._mappingActive && this.hasTypeTarget && this.survivorTypesValue.includes(this.typeTarget.value)
     this.survivorTarget.classList.toggle("hidden", !needsSurvivor)
+    // Disabled controls don't submit — so a hidden survivor never sends a
+    // stale to_stable_id (e.g. after switching Evolve → Archive).
+    const select = this.survivorTarget.querySelector("select")
+    if (select) select.disabled = !needsSurvivor
   }
 
   // private
@@ -49,10 +54,14 @@ export default class extends Controller {
     if (this.hasTitleTarget) {
       this.titleTarget.textContent = data.archiveCapabilityName || "this capability"
     }
+    // A capability added in the current draft needs no migration mapping; hide
+    // AND disable the mapping controls so they don't submit a spurious mapping
+    // (a hidden-but-enabled select still posts its value).
+    this._mappingActive = data.archiveNeedsMapping === "true"
     if (this.hasMappingSectionTarget) {
-      const needsMapping = data.archiveNeedsMapping === "true"
-      this.mappingSectionTarget.classList.toggle("hidden", !needsMapping)
+      this.mappingSectionTarget.classList.toggle("hidden", !this._mappingActive)
     }
+    if (this.hasTypeTarget) this.typeTarget.disabled = !this._mappingActive
     this.#hideSelfFromSurvivors(data.archiveStableId)
     this.typeChanged()
   }
