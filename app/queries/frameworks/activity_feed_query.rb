@@ -98,23 +98,28 @@ class Frameworks::ActivityFeedQuery
   # @param capability_id [String, nil]
   # @param level_ordinal [Integer, nil] accepted for URL parity; the feed
   #   anchors at capability granularity, so cell focus narrows by capability
+  # @param limit [Integer, nil] cap on the number of (most-recent) entries
+  #   returned; nil returns the full feed (the explorer panel's default)
   # @param event_store [RailsEventStore::Client] override for tests
   def initialize(framework:, focus: :framework, category_id: nil,
-                 capability_id: nil, level_ordinal: nil,
+                 capability_id: nil, level_ordinal: nil, limit: nil,
                  event_store: Rails.configuration.event_store)
     @framework = framework
     @category_id = category_id
     @capability_id = capability_id
     @level_ordinal = level_ordinal
+    @limit = limit
     @focus = resolve_focus(focus, category_id: category_id, capability_id: capability_id)
     @event_store = event_store
   end
 
-  # @return [Array<Entry>] reverse-chronological entries
+  # @return [Array<Entry>] reverse-chronological entries (capped at `limit`)
   def call
     entries = stream_events.filter_map { |event| build_entry(event) }
     entries.select! { |entry| match_focus?(entry) }
-    entries.sort_by { |entry| entry.occurred_at || Time.at(0) }.reverse
+    entries.sort_by! { |entry| entry.occurred_at || Time.at(0) }
+    entries.reverse!
+    @limit ? entries.first(@limit) : entries
   end
 
   # @return [Symbol] effective focus after validation

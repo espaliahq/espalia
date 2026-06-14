@@ -29,6 +29,8 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     @reviewer = create(:person, tenant: @tenant, name: "Rita Reviewer")
   end
 
+  teardown { ActsAsTenant.current_tenant = nil }
+
   # Appends a raw event to the framework stream with tenant + actor metadata.
   def append(event_class, data:, actor_id: nil)
     event = event_class.new(data: { framework_id: @fwid }.merge(data),
@@ -186,6 +188,17 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       kinds = entries.map(&:kind)
       assert_operator kinds.index("capability_archived"), :<, kinds.index("capability_updated"),
         "most recent (archived) should come first"
+    end
+  end
+
+  context "limit" do
+    should "cap to the most-recent N entries when given a limit" do
+      append(Frameworks::Events::CapabilityUpdated, data: { capability_id: @cap.capability_id, name: "first" })
+      append(Frameworks::Events::CapabilityArchived, data: { capability_id: @cap.capability_id, reason: "second" })
+
+      result = entries(limit: 1)
+      assert_equal 1, result.size
+      assert_equal "capability_archived", result.first.kind, "the single entry is the most recent"
     end
   end
 end

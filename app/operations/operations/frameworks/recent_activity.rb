@@ -23,7 +23,7 @@ class Operations::Frameworks::RecentActivity < Operations::Base
   end
 
   def perform
-    entries = Frameworks::ActivityFeedQuery.new(framework: framework).call.first(limit)
+    entries = Frameworks::ActivityFeedQuery.new(framework: framework, limit: limit).call
 
     { framework_id: params[:framework_id], activity: entries.map { |entry| serialize(entry) } }
   end
