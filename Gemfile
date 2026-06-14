@@ -28,7 +28,7 @@ gem "devise", "~> 5.0.3"
 # tokens, and authorization_code-only grants to meet the MCP spec's
 # OAuth-2.1-aligned posture without needing a 2.1-native gem. See
 # config/initializers/doorkeeper.rb.
-gem "doorkeeper", "~> 5.7"
+gem "doorkeeper", "~> 5.9"
 
 # Throttles abuse-prone endpoints (specifically MCP Dynamic Client
 # Registration at POST /oauth/register, which is public and DB-writing).
