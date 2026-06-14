@@ -444,6 +444,13 @@ class Views::Frameworks::ShowView < Views::Base
                 "suggestion:submitted@window->context-pane#onSuggestionSubmitted"
       }
     ) do
+      # Live sync: any framework activity event broadcasts a replace of the
+      # signal element below; the context-pane controller observes it and
+      # reloads the feed frame for every edit-mode viewer (incl. the actor).
+      turbo_stream_from "framework_activity", @framework.framework_id
+      div(id: "framework-activity-sync-signal", class: "hidden",
+          data: { context_pane_target: "signal" })
+
       # No `src:` — the context-pane Stimulus controller sets the src on
       # connect with any focus/role params applied. Avoids a race where the
       # auto-fetch with an unfocused URL lands before the controller primes

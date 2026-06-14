@@ -21,7 +21,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame"]
+  static targets = ["frame", "signal"]
   static values = {
     basePath: String,
     initialRoleIds: { type: Array, default: [] },
@@ -47,11 +47,14 @@ export default class extends BaseController {
     // disconnect to avoid leaks on Turbo navigations.
     this.onPopState = () => this.#hydrateFromUrl()
     window.addEventListener("popstate", this.onPopState)
+
+    this.#observeSyncSignal()
   }
 
   disconnect() {
     super.disconnect()
     window.removeEventListener("popstate", this.onPopState)
+    this._syncObserver?.disconnect()
   }
 
   onTreeChanged(event) {
@@ -106,6 +109,23 @@ export default class extends BaseController {
   }
 
   // private
+
+  // Reloads the feed frame whenever a framework activity event broadcasts a
+  // replacement of the hidden sync-signal element. Mirrors the assessment
+  // sync controller — the reload is unconditional (no self-suppression): the
+  // feed frame is the only thing that re-fetches, so there's no matrix flicker
+  // or scroll reset to guard against, and the actor should see their own entry.
+  #observeSyncSignal() {
+    if (!this.hasSignalTarget) return
+
+    this._syncObserver = new MutationObserver(() => {
+      if (this.hasFrameTarget) this.frameTarget.reload()
+    })
+    this._syncObserver.observe(this.signalTarget.parentElement, {
+      childList: true,
+      subtree: false
+    })
+  }
 
   // Reads focus params from the browser URL into state. Called on connect
   // AND on popstate — browser back/forward can remove params just as

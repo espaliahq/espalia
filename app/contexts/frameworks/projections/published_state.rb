@@ -109,6 +109,7 @@ class Frameworks::Projections::PublishedState
   def call(event)
     with_tenant(event) do
       handle(event)
+      broadcast_framework_activity(event)
     end
   end
 
@@ -747,5 +748,45 @@ class Frameworks::Projections::PublishedState
   def with_tenant(event, &block)
     tenant = Tenant.find(event.metadata[:tenant_id])
     ActsAsTenant.with_tenant(tenant, &block)
+  end
+
+  # Nudges the framework activity feed for every edit-mode viewer of this
+  # framework so the explorer's context pane reloads live — for everyone,
+  # including the actor (the actor's own reload is the activity frame, never
+  # the matrix, so there's no flicker to suppress). Fires only for events the
+  # activity feed surfaces; resolved-suggestion events (approve/reject/withdraw/
+  # amend) carry no framework_id in their payload, so we resolve it from the
+  # just-upserted SuggestedEdit row. Suppressed during replay so rebuilds stay
+  # silent (see docs/guidelines/event-sourcing.md). Called inside `with_tenant`
+  # so the SuggestedEdit fallback lookup is tenant-scoped.
+  #
+  # @param event [RubyEventStore::Event]
+  def broadcast_framework_activity(event)
+    return if Projections::Replayer.replay_mode?
+    return unless Frameworks::ActivityFeedQuery::KINDS.key?(event.class)
+
+    framework_id = framework_id_for_broadcast(event)
+    return unless framework_id
+
+    Turbo::StreamsChannel.broadcast_replace_to(
+      "framework_activity", framework_id,
+      target: "framework-activity-sync-signal", html: activity_signal_html
+    )
+  rescue => e
+    # A broadcast failure must never break the projection's write path.
+    Rails.logger.warn("[PublishedState] Activity broadcast failed: #{e.message}")
+  end
+
+  def activity_signal_html
+    "<div id=\"framework-activity-sync-signal\" class=\"hidden\" " \
+      "data-context-pane-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+  end
+
+  # Resolved-suggestion events (approve/reject/withdraw/amend) carry no
+  # framework_id in their payload, so fall back to the just-upserted
+  # SuggestedEdit row (tenant-scoped — called inside `with_tenant`).
+  def framework_id_for_broadcast(event)
+    event.data[:framework_id] ||
+      FrameworkState::SuggestedEdit.find_by(suggestion_id: event.data[:suggestion_id])&.framework_id
   end
 end
