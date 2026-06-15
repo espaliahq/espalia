@@ -36,34 +36,54 @@ class Frameworks::CapabilitiesController < ApplicationController
 
   # PATCH /frameworks/:framework_id/capabilities/:id
   #
-  # The turbo-frame response only knows how to re-render the capability name
-  # (CapabilityNameFrame). Only accept `name` here — description edits need
-  # their own endpoint + frame when that UI is built.
+  # Inline edit of a capability's `name` or `description` (whichever field the
+  # inline editor submitted), routed through suggest_edit so audit + approval
+  # rules are consistent. The turbo-frame response re-renders the matching
+  # frame (name or description).
   def update
     authorize @framework, :suggest_edit?
-    new_name = params.expect(capability: [ :name ])[:name]
-    return head(:unprocessable_content) if new_name.blank?
+    field, value = edited_field
+    return head(:unprocessable_content) unless field
 
     Frameworks::CommandHandler.new.suggest_edit(
       @framework.framework_id, SecureRandom.uuid_v7,
       "capability", @capability.capability_id,
-      "name", new_name, resolve_author_id,
+      field, value, resolve_author_id,
       mode: framework_edit_mode
     )
 
     @capability.reload
-    render Views::Frameworks::Explorer::CapabilityNameFrame.new(
-      capability: @capability,
-      framework_id: @framework.framework_id,
-      mode: :edit,
-      pending_edit_count: pending_edits_on_capability,
-      pending_edit: latest_pending_edit
-    ), layout: false
+    render frame_for(field), layout: false
   rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
   end
 
   private
+
+  # The single field the inline editor submitted. `name` must be present;
+  # `description` may be blank (clearing it). Returns [field, value] or [nil, nil].
+  def edited_field
+    permitted = params.expect(capability: [ :name, :description ])
+    if permitted.key?(:name)
+      permitted[:name].blank? ? [ nil, nil ] : [ "name", permitted[:name] ]
+    elsif permitted.key?(:description)
+      [ "description", permitted[:description].to_s ]
+    else
+      [ nil, nil ]
+    end
+  end
+
+  def frame_for(field)
+    common = {
+      capability: @capability, framework_id: @framework.framework_id, mode: :edit,
+      pending_edit_count: pending_count_for(field), pending_edit: latest_pending_edit_for(field)
+    }
+    if field == "description"
+      Views::Frameworks::Explorer::CapabilityDescriptionFrame.new(**common)
+    else
+      Views::Frameworks::Explorer::CapabilityNameFrame.new(**common)
+    end
+  end
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:framework_id))
@@ -87,12 +107,12 @@ class Frameworks::CapabilitiesController < ApplicationController
     current_person.id.to_s
   end
 
-  def pending_edits_on_capability
-    pending_edits_scope.count
+  def pending_count_for(field)
+    pending_edits_scope.where(field: field).count
   end
 
-  def latest_pending_edit
-    edit = pending_edits_scope.edits.where(field: "name").order(created_at: :desc).first
+  def latest_pending_edit_for(field)
+    edit = pending_edits_scope.edits.where(field: field).order(created_at: :desc).first
     return nil unless edit
 
     { suggested_value: edit.suggested_value,

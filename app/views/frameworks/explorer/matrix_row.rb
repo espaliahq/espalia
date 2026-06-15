@@ -79,9 +79,17 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               archive_kebab if show_archive_kebab?
             end
             draft_state_badge if @mode == :edit
-            p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
-              render_highlighted(@capability.description, @search_query)
-            end if @capability.description.present?
+            # Description: inline-editable in edit mode (also shown when blank,
+            # as an "Add a description…" affordance). View mode renders it only
+            # when present.
+            if @mode == :edit || @capability.description.present?
+              render Views::Frameworks::Explorer::CapabilityDescriptionFrame.new(
+                capability: @capability,
+                framework_id: @framework_id,
+                mode: @mode,
+                search_query: @search_query
+              )
+            end
           end
         end
       end

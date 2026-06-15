@@ -104,6 +104,18 @@ class Frameworks::CapabilitiesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "PATCH /frameworks/:framework_id/capabilities/:id (description)" do
+    should "edit the description and return the description frame" do
+      sign_in @user
+      patch framework_capability_path(framework_id: @framework_id, id: @cap_id),
+            params: { capability: { description: "Considers long-term impact." } }
+
+      assert_response :success
+      assert_includes response.body, "capability-description-#{@cap_id}"
+      assert_includes response.body, "Considers long-term impact."
+    end
+  end
+
   private
 
   def sign_in(user)

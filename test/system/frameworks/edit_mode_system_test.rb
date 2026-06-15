@@ -153,6 +153,31 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "Sharper Strategic Thinking"
       assert_no_text "Strategic Thinking", exact: true
     end
+
+    should "submit a capability description edit and swap the frame" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      cap_id = FrameworkState::Capability.first.capability_id
+      editor = find("turbo-frame#capability-description-#{cap_id} > div")
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
+        editor
+      )
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
+        editor
+      )
+      page.execute_script(<<~JS, editor)
+        const ta = arguments[0].querySelector("textarea[name='capability[description]']");
+        ta.value = "Balances competing priorities.";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+
+      assert_text "Balances competing priorities."
+    end
   end
 
   context "Editing / Suggesting toggle" do
