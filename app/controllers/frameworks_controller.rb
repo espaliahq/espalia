@@ -55,7 +55,7 @@ class FrameworksController < ApplicationController
     graph, matrix_data = load_explorer_matrix(mode: mode)
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
     fw_policy = policy(@framework)
-    can_edit_structure = mode == :edit && fw_policy.archive_capability?
+    can_edit_structure = mode == :edit && fw_policy.edit_structure?
 
     render Views::Frameworks::ShowView.new(
       framework: graph,
@@ -88,7 +88,7 @@ class FrameworksController < ApplicationController
       selected_role_ids: parse_role_ids,
       mode: mode,
       current_person_id: current_person&.id&.to_s,
-      can_edit_structure: mode == :edit && policy(@framework).archive_capability?
+      can_edit_structure: mode == :edit && policy(@framework).edit_structure?
     ), layout: false
   end
 
