@@ -72,13 +72,18 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
   end
 
-  # Scope the capability lookup through its category to the authorized
-  # framework — a tenant can hold several frameworks, so capability_id alone
-  # is not safe (see mcp-server.md, hard-won lesson 5).
+  # Resolve from the explorer graph (NOT the published read model) so a
+  # capability added in the current draft — deferred from FrameworkState::Capability
+  # but present in the graph — can still be archived. The graph is per-framework,
+  # so finding the id in it scopes the lookup to the authorized framework.
   def capability
-    @capability ||= FrameworkState::Capability
-      .joins(:category)
-      .where(framework_capability_categories: { framework_id: framework.framework_id })
-      .find_by!(capability_id: params[:capability_id])
+    @capability ||= explorer_graph.capability_categories.flat_map(&:capabilities)
+      .find { |c| c.capability_id == params[:capability_id] } ||
+      raise(ActiveRecord::RecordNotFound, "capability #{params[:capability_id]} not found in this framework")
+  end
+
+  def explorer_graph
+    @explorer_graph ||= Frameworks::ExplorerGraph.load(framework.framework_id) ||
+                        Frameworks::ExplorerGraph.rebuild(framework.framework_id)
   end
 end

@@ -114,6 +114,28 @@ class Frameworks::CapabilitiesControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "capability-description-#{@cap_id}"
       assert_includes response.body, "Considers long-term impact."
     end
+
+    should "inline-edit a draft-added capability (resolved from the graph, not 404)" do
+      draft_cap_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        # Add a capability — shape-changing, so it auto-opens a draft and is
+        # deferred from the published read model until publish.
+        Frameworks::CommandHandler.new.add_capability(
+          @framework_id, draft_cap_id, SecureRandom.uuid_v7,
+          FrameworkState::CapabilityCategory.first.category_id, "Draft Cap"
+        )
+        assert_nil FrameworkState::Capability.find_by(capability_id: draft_cap_id),
+                   "precondition: draft-added cap is not in the published read model"
+      end
+
+      sign_in @user
+      patch framework_capability_path(framework_id: @framework_id, id: draft_cap_id),
+            params: { capability: { description: "Drafted inline." } }
+
+      assert_response :success
+      assert_includes response.body, "capability-description-#{draft_cap_id}"
+      assert_includes response.body, "Drafted inline."
+    end
   end
 
   private

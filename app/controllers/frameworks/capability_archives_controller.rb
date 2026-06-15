@@ -46,12 +46,14 @@ class Frameworks::CapabilityArchivesController < ApplicationController
 
   # Scope the capability lookup through its category to the authorized
   # framework — capability_id alone is not safe across a tenant's frameworks.
+  # Resolve from the explorer graph (NOT the published read model) so a
+  # capability added in the current draft can be archived too. The graph is
+  # per-framework, so finding the id in it scopes to the authorized framework.
   def set_capability
-    @capability = FrameworkState::Capability.joins(:category).find_by!(
-      capability_id: archive_params[:capability_id],
-      framework_capability_categories: { framework_id: @framework.framework_id }
-    )
-  rescue ActiveRecord::RecordNotFound
-    redirect_to edit_framework_path(@framework.framework_id)
+    graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
+            Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
+    @capability = graph.capability_categories.flat_map(&:capabilities)
+      .find { |c| c.capability_id == archive_params[:capability_id] }
+    redirect_to edit_framework_path(@framework.framework_id) unless @capability
   end
 end

@@ -81,6 +81,29 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
     end
   end
 
+  context "archiving a draft-added capability" do
+    should "resolve it from the graph (deferred from the read model) and archive it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        new_cap_id = SecureRandom.uuid_v7
+        Frameworks::CommandHandler.new.add_capability(
+          @framework_id, new_cap_id, SecureRandom.uuid_v7,
+          FrameworkState::CapabilityCategory.first.category_id, "Draft Cap"
+        )
+        # Shape-changing add — deferred from the published read model.
+        assert_nil FrameworkState::Capability.find_by(capability_id: new_cap_id)
+
+        result = Operations::Frameworks::ArchiveCapability.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, capability_id: new_cap_id, reason: "oops" }
+        )
+        assert_equal new_cap_id, result[:capability_id]
+
+        # Added and archived in the same draft needs no migration mapping — publish succeeds.
+        assert_nothing_raised { Frameworks::CommandHandler.new.publish_version(@framework_id, "seed") }
+      end
+    end
+  end
+
   context "as a plain tenant member" do
     should "be denied" do
       ActsAsTenant.with_tenant(@tenant) do

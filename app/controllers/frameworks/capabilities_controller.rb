@@ -52,7 +52,6 @@ class Frameworks::CapabilitiesController < ApplicationController
       mode: framework_edit_mode
     )
 
-    @capability.reload
     render frame_for(field), layout: false
   rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
@@ -74,8 +73,12 @@ class Frameworks::CapabilitiesController < ApplicationController
   end
 
   def frame_for(field)
+    # Re-resolve from a fresh graph — an auto-approved edit rewrote the
+    # snapshot; in suggesting mode the value is unchanged and the pending
+    # decoration carries the diff.
     common = {
-      capability: @capability, framework_id: @framework.framework_id, mode: :edit,
+      capability: graph_capability(@capability.capability_id, reload: true) || @capability,
+      framework_id: @framework.framework_id, mode: :edit,
       pending_edit_count: pending_count_for(field), pending_edit: latest_pending_edit_for(field)
     }
     if field == "description"
@@ -91,16 +94,25 @@ class Frameworks::CapabilitiesController < ApplicationController
     head :not_found
   end
 
+  # Resolve the capability from the explorer graph, NOT the published read
+  # model — a capability added in the current draft is deferred from
+  # FrameworkState::Capability (shape-changing) but lives in the graph, and
+  # must still be inline-editable. The graph is per-framework, so finding the
+  # id in it also scopes the lookup to the authorized framework.
   def set_capability
-    # Scope to the current framework so a request for framework A can't
-    # target a capability that belongs to framework B in the same tenant.
-    @capability = FrameworkState::Capability.joins(:category)
-      .find_by!(
-        capability_id: params.expect(:id),
-        framework_capability_categories: { framework_id: @framework.framework_id }
-      )
-  rescue ActiveRecord::RecordNotFound
-    head :not_found
+    @capability = graph_capability(params.expect(:id))
+    head :not_found unless @capability
+  end
+
+  def graph_capability(capability_id, reload: false)
+    @explorer_graph = nil if reload
+    explorer_graph.capability_categories.flat_map(&:capabilities)
+      .find { |c| c.capability_id == capability_id }
+  end
+
+  def explorer_graph
+    @explorer_graph ||= Frameworks::ExplorerGraph.load(@framework.framework_id) ||
+                        Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
   end
 
   def resolve_author_id
