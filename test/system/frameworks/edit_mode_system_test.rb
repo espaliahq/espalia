@@ -232,6 +232,41 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "filtering in edit mode" do
+    # Regression: the matrix Turbo Frame re-fetch on filter used the
+    # view-mode `/matrix` endpoint regardless of mode, so applying (or
+    # clearing) a role/text filter silently dropped the explorer back to
+    # published/view state — losing the inline-editor affordances.
+    should "keep the matrix in edit mode after a text filter and after clearing it" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # The frame re-fetches from the edit-matrix endpoint, never view mode.
+      assert_selector "turbo-frame#framework-matrix"
+      assert_match %r{/edit/matrix},
+        find("[data-controller='matrix']")["data-matrix-base-path-value"]
+
+      # Apply a text filter that matches the capability. Set the value via JS
+      # + input/change events — Selenium's send_keys drops characters on
+      # starved CI, and the debounced filter assertion below depends on the
+      # exact query (see docs/guidelines/testing.md → inline-editor form submits).
+      set_search_query "Strategic"
+      assert_text "Strategic Thinking"
+
+      # Still edit mode: expanding the row reveals the inline editors that
+      # only render in edit mode.
+      expand_matrix_row("tr[data-capability-id]")
+      assert_selector "li[data-controller='inline-editor']"
+
+      # Clear the filter — must remain in edit mode.
+      set_search_query ""
+      assert_text "Strategic Thinking"
+      expand_matrix_row("tr[data-capability-id]")
+      assert_selector "li[data-controller='inline-editor']"
+    end
+  end
+
   context "draft status pill" do
     should "not show the draft pill when no draft is open (edit mode)" do
       sign_in_as(@admin_user)
@@ -385,5 +420,22 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_selector "span.decoration-sky-400", text: "s"
       end
     end
+  end
+
+  private
+
+  # Sets the framework-explorer capability search box to `query` via a JS
+  # value assignment + input/change events. Selenium's send_keys drops
+  # characters on starved CI runners, and the debounced filter assertions
+  # depend on the exact query landing — JS assignment is deterministic and
+  # the dispatched `input` event still drives `framework_search_controller`.
+  def set_search_query(query)
+    input = find("[data-framework-search-target='input']")
+    page.execute_script(<<~JS, input, query)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
   end
 end
