@@ -55,7 +55,7 @@ class FrameworksController < ApplicationController
     graph, matrix_data = load_explorer_matrix(mode: mode)
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
     fw_policy = policy(@framework)
-    can_archive = mode == :edit && fw_policy.archive_capability?
+    can_edit_structure = mode == :edit && fw_policy.archive_capability?
 
     render Views::Frameworks::ShowView.new(
       framework: graph,
@@ -71,8 +71,9 @@ class FrameworksController < ApplicationController
       mode: mode,
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
-      can_archive: can_archive,
-      archive_survivors: can_archive ? archive_survivors(graph) : [],
+      can_edit_structure: can_edit_structure,
+      archive_survivors: can_edit_structure ? archive_survivors(graph) : [],
+      roles: can_edit_structure ? framework_roles(graph) : [],
       current_person_id: current_person&.id&.to_s,
       search_query: resolved_search_query
     )
@@ -87,7 +88,7 @@ class FrameworksController < ApplicationController
       selected_role_ids: parse_role_ids,
       mode: mode,
       current_person_id: current_person&.id&.to_s,
-      can_archive: mode == :edit && policy(@framework).archive_capability?
+      can_edit_structure: mode == :edit && policy(@framework).archive_capability?
     ), layout: false
   end
 
@@ -95,6 +96,13 @@ class FrameworksController < ApplicationController
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:id))
   rescue ActiveRecord::RecordNotFound
     redirect_to frameworks_path
+  end
+
+  # Role binding candidates for the add-capability modal, as { id:, label: }.
+  def framework_roles(graph)
+    graph.role_families.flat_map(&:roles)
+      .map { |r| { id: r.role_id, label: r.name } }
+      .sort_by { |r| r[:label] }
   end
 
   # Survivor candidates for the archive modal's Evolve mapping — every

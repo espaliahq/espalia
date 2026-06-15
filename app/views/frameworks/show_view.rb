@@ -24,7 +24,8 @@ class Views::Frameworks::ShowView < Views::Base
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
                  pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
-                 can_archive: false, archive_survivors: [], current_person_id: nil, search_query: nil)
+                 can_edit_structure: false, archive_survivors: [], roles: [],
+                 current_person_id: nil, search_query: nil)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -38,8 +39,9 @@ class Views::Frameworks::ShowView < Views::Base
     @mode = mode
     @can_edit = can_edit
     @can_publish = can_publish
-    @can_archive = can_archive
+    @can_edit_structure = can_edit_structure
     @archive_survivors = archive_survivors
+    @roles = roles
     @current_person_id = current_person_id
     @search_query = search_query
   end
@@ -51,27 +53,39 @@ class Views::Frameworks::ShowView < Views::Base
       div(data: explorer_root_data) do
         framework_header
         explorer_layout
-        # Shared archive modal — opened by each capability row's kebab. The
-        # `modal` controller (above) must be an ancestor of both the kebab
-        # triggers (in the matrix) and this dialog.
-        if archive_modal?
-          render Views::Frameworks::Explorer::ArchiveModal.new(
-            framework_id: @framework.framework_id, survivors: @archive_survivors
-          )
-        end
+        structural_modals
       end
     end
   end
 
-  # Whether the shared archive modal (+ its `modal` controller) renders.
-  def archive_modal? = @mode == :edit && @can_archive
+  # The shared structural-edit modals (archive / add capability / add
+  # category). All are opened by triggers in the matrix + header; the `modal`
+  # controller (on the root, see #explorer_root_data) must be an ancestor of
+  # both the triggers and these dialogs, and each trigger names its overlay via
+  # `data-modal-target-id`.
+  def structural_modals
+    return unless structural_modals?
+
+    render Views::Frameworks::Explorer::ArchiveModal.new(
+      framework_id: @framework.framework_id, survivors: @archive_survivors
+    )
+    render Views::Frameworks::Explorer::AddCapabilityModal.new(
+      framework_id: @framework.framework_id, roles: @roles
+    )
+    render Views::Frameworks::Explorer::AddCategoryModal.new(
+      framework_id: @framework.framework_id
+    )
+  end
+
+  # Whether the shared structural-edit modals (+ the `modal` controller) render.
+  def structural_modals? = @mode == :edit && @can_edit_structure
 
   # data-controller/action for the explorer root, adding the `modal`
-  # controller + Esc-to-close only when the archive modal is present.
+  # controller + Esc-to-close only when the structural modals are present.
   def explorer_root_data
     controllers = [ "framework-explorer" ]
     actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
-    if archive_modal?
+    if structural_modals?
       controllers << "modal"
       actions << "keydown.esc@window->modal#close"
     end
@@ -278,8 +292,23 @@ class Views::Frameworks::ShowView < Views::Base
       end
       stat_item("Levels", level_count)
       stat_item("Capabilities", cap_count)
+      add_category_button if structural_modals?
       search_box
       activity_toggle if @mode == :edit
+    end
+  end
+
+  # "+ Add category" — opens the shared add-category modal. Edit mode +
+  # edit-rights only (same bar as the row kebab).
+  def add_category_button
+    button(
+      type: "button",
+      class: "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-medium " \
+             "text-primary hover:bg-primary/10 transition-colors",
+      data: { action: "click->modal#open", modal_target_id: "add-category-modal" }
+    ) do
+      span(class: "text-base leading-none") { "+" }
+      plain "Add category"
     end
   end
 
@@ -432,7 +461,7 @@ class Views::Frameworks::ShowView < Views::Base
           framework_id: @framework.framework_id,
           mode: @mode,
           current_person_id: @current_person_id,
-          can_archive: @can_archive
+          can_edit_structure: @can_edit_structure
         )
       end
     end

@@ -15,7 +15,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param roles_by_id [Hash] { role_id => Role } — passed through to rows to avoid per-cell AR lookups
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_archive: false)
+                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
@@ -27,15 +27,42 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @roles_by_id = roles_by_id
     @current_person_id = current_person_id
     @search_query = search_query
-    @can_archive = can_archive
+    @can_edit_structure = can_edit_structure
   end
 
   def view_template
     category_header
     capability_rows
+    add_capability_row if @mode == :edit && @can_edit_structure
   end
 
   private
+
+  # "+ Add capability" row at the foot of the category — opens the shared
+  # add-capability modal, naming this category via the trigger dataset.
+  def add_capability_row
+    tr do
+      td(
+        colspan: @merged_levels.size + 1,
+        class: "sticky left-0 px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 " \
+               "bg-white dark:bg-gray-900"
+      ) do
+        button(
+          type: "button",
+          class: "inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline",
+          data: {
+            action: "click->modal#open",
+            modal_target_id: "add-capability-modal",
+            add_category_id: @category.category_id,
+            add_category_name: @category.name
+          }
+        ) do
+          span(class: "text-sm leading-none") { "+" }
+          plain "Add capability"
+        end
+      end
+    end
+  end
 
   def category_header
     col_count = @merged_levels.size + 1 # +1 for capability name column
@@ -111,7 +138,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         roles_by_id: @roles_by_id,
         current_person_id: @current_person_id,
         search_query: @search_query,
-        can_archive: @can_archive
+        can_edit_structure: @can_edit_structure
       )
     end
   end

@@ -18,7 +18,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
   #   don't each fire a `FrameworkState::Role.find_by` query
   def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_archive: false)
+                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
@@ -27,7 +27,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @roles_by_id = roles_by_id
     @current_person_id = current_person_id
     @search_query = search_query
-    @can_archive = can_archive
+    @can_edit_structure = can_edit_structure
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -140,7 +140,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # whether it needs a migration mapping (pre-draft vs added-in-draft) ride on
   # the trigger dataset, which the modal's archive-form controller reads.
   def show_archive_kebab?
-    @mode == :edit && @can_archive &&
+    @mode == :edit && @can_edit_structure &&
       !(@capability.respond_to?(:pending_archive) && @capability.pending_archive)
   end
 
@@ -152,6 +152,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
              "text-gray-400 hover:text-primary",
       data: {
         action: "click->modal#open",
+        modal_target_id: "archive-capability-modal",
         archive_capability_id: @capability.capability_id,
         archive_capability_name: @capability.name,
         archive_stable_id: @capability.stable_id,

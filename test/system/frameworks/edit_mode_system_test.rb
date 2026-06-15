@@ -315,6 +315,49 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "adding structural content" do
+    should "not show the add affordances in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_no_selector "button[data-modal-target-id='add-category-modal']"
+      assert_no_selector "button[data-modal-target-id='add-capability-modal']"
+    end
+
+    should "add a category via the modal" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-category-modal']\").click();"
+      )
+      assert_selector "#add-category-modal", visible: true
+      within "#add-category-modal" do
+        fill_in "add_category_name", with: "Delivery & Craft"
+      end
+      click_button_with_js_fallback("Add category", expect_text: "Added category")
+      assert_text "Added category"
+    end
+
+    should "add a capability (with a role) via the modal, prefilled with its category" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-capability-modal']\").click();"
+      )
+      assert_selector "#add-capability-modal", visible: true
+      within "#add-capability-modal" do
+        assert_text "Thinking" # category name prefilled from the trigger
+        fill_in "add_capability_name", with: "Systems Design"
+        check "Software Engineer"
+      end
+      click_button_with_js_fallback("Add capability", expect_text: "Added")
+      assert_text "Added"
+    end
+  end
+
   context "archiving a capability via the row kebab" do
     should "not show the kebab in view mode" do
       sign_in_as(@admin_user)

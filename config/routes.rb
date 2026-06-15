@@ -130,9 +130,9 @@ Rails.application.routes.draw do
       get "edit/matrix" => "frameworks#edit_matrix", as: :edit_matrix
     end
     resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
-    resources :capabilities, only: [ :update ], controller: "frameworks/capabilities"
+    resources :capabilities, only: [ :create, :update ], controller: "frameworks/capabilities"
     resources :capability_archives, only: [ :create ], controller: "frameworks/capability_archives"
-    resources :categories,   only: [ :update ], controller: "frameworks/categories"
+    resources :categories,   only: [ :create, :update ], controller: "frameworks/categories"
     resources :expectations, only: [ :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
     resource :publication, only: [ :new, :create ], controller: "frameworks/publications"

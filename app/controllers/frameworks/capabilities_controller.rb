@@ -9,7 +9,30 @@ class Frameworks::CapabilitiesController < ApplicationController
   include FrameworkEditMode
 
   before_action :set_framework
-  before_action :set_capability
+  before_action :set_capability, only: [ :update ]
+
+  # POST /frameworks/:framework_id/capabilities
+  #
+  # Adds a new capability to a category (and optionally binds it to roles) via
+  # the shared add-capability modal. Restricted to edit-rights holders.
+  def create
+    authorize @framework, :add_capability?
+    attrs = params.expect(capability: [ :category_id, :name, :description, { role_ids: [] } ])
+
+    Operations::Frameworks::AddCapability.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        category_id: attrs[:category_id],
+        name: attrs[:name],
+        description: attrs[:description].presence,
+        role_ids: Array(attrs[:role_ids]).compact_blank
+      }
+    )
+    redirect_to edit_framework_path(@framework.framework_id), notice: "Added “#{attrs[:name]}”."
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+  end
 
   # PATCH /frameworks/:framework_id/capabilities/:id
   #
