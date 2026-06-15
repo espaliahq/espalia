@@ -68,7 +68,7 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
       if @roles.empty?
         p(class: "text-xs text-gray-500 dark:text-gray-400") { "No roles defined yet." }
       else
-        div(class: "mt-1 flex flex-wrap gap-x-4 gap-y-1") do
+        div(class: "mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5") do
           @roles.each { |role| role_checkbox(role) }
         end
       end
