@@ -422,8 +422,20 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
   # Types into the explorer's text filter. Uses the search input's type
   # attribute (stable, single instance) and waits for the debounced
   # Turbo-frame fetch to settle via the caller's subsequent assertion.
+  # Sets the framework-search input value via JS and fires input/change
+  # events so the debounced Stimulus listener picks up the query.
+  # Capybara's `input.set` calls Selenium's send_keys under the hood,
+  # which has been observed to drop characters on starved CI runners,
+  # leaving the filter on a substring of the query and the assertion
+  # below seeing the unfiltered matrix (see run #27491279793). Mirrors
+  # the `set_search_query` helper in edit_mode_system_test.rb.
   def filter_capabilities(text)
     input = find("input[type='search']")
-    input.set(text)
+    page.execute_script(<<~JS, input, text)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
   end
 end

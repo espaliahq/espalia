@@ -135,6 +135,17 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # the field selectors are present and not stale.
     visit new_user_session_path unless page.has_field?("Email", wait: 0)
 
+    # Explicitly wait for the email input to be present before filling.
+    # Capybara's `visit` can return on a starved CI runner before the
+    # rendered page has settled (recurring after Capybara.reset_sessions!
+    # mid-test, see AlignmentAssessments "assessee experience during
+    # alignment" runs #27393468272 / #27490859327 / #27495673118 /
+    # #27514458883). Without this wait, `fill_in` below races against
+    # an empty document and fails with the misleading "Unable to find
+    # field 'Email' that is not disabled" — Capybara's standard error
+    # text when no enabled match exists yet.
+    assert_selector "input#user_email", visible: true
+
     fill_in "Email", with: email
     fill_in "Password", with: password
     click_button "Log in"
@@ -145,6 +156,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # entirely so a starved CI runner can't drop the submission.
   def submit_sign_in_form_via_js(email, password)
     visit new_user_session_path unless page.has_field?("Email", wait: 0)
+    assert_selector "input#user_email", visible: true
 
     fill_in "Email", with: email
     fill_in "Password", with: password
