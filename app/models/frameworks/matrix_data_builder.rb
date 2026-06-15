@@ -172,7 +172,11 @@ class Frameworks::MatrixDataBuilder
       capabilities = build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
       @in_scope_capability_count += capabilities.size
       capabilities = filter_by_search(category, capabilities) if searching?
-      next if capabilities.empty?
+      # Drop empty categories in view mode (clean published view) and while
+      # searching. Keep them in edit mode so a freshly-added (still empty)
+      # category stays visible — otherwise its "+ Add capability" affordance
+      # vanishes and there's no way to populate it.
+      next if capabilities.empty? && (@mode != :edit || searching?)
 
       {
         category: category,

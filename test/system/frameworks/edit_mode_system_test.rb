@@ -362,6 +362,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       end
       click_button_with_js_fallback("Add category", expect_text: "Added category")
       assert_text "Added category"
+      # The new (still empty) category must stay visible in edit mode so it can
+      # be populated — otherwise its "+ Add capability" affordance vanishes.
+      assert_text "Delivery & Craft"
     end
 
     should "add a capability (with a role) via the modal, prefilled with its category" do

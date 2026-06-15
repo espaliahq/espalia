@@ -128,19 +128,43 @@ class Frameworks::MatrixDataBuilderModeTest < ActiveSupport::TestCase
     end
   end
 
+  context "empty categories" do
+    setup do
+      @empty_category = CapabilityCategory.new(
+        category_id: SecureRandom.uuid_v7, name: "Brand New", description: nil,
+        ordinal: 2, deficit_threshold: nil, overperformance_cap: nil,
+        status: "active", capabilities: []
+      )
+    end
+
+    should "keep an empty category in edit mode (so it can be populated)" do
+      names = build_with([ @category, @empty_category ], mode: :edit)[:categories].map { |c| c[:category].name }
+      assert_includes names, "Brand New"
+    end
+
+    should "drop an empty category in view mode" do
+      names = build_with([ @category, @empty_category ], mode: :view)[:categories].map { |c| c[:category].name }
+      assert_not_includes names, "Brand New"
+    end
+  end
+
   private
 
   def build(mode:)
+    build_with([ @category ], mode: mode)
+  end
+
+  def build_with(categories, mode:)
     Frameworks::MatrixDataBuilder.new(
       framework: Framework.new(
         framework_id: SecureRandom.uuid_v7, name: "Test",
         current_published_version: 1, draft_in_progress: true,
         draft_version: 2,
         role_families: [ @role_family ],
-        capability_categories: [ @category ]
+        capability_categories: categories
       ),
       role_families: [ @role_family ],
-      categories: [ @category ],
+      categories: categories,
       selected_role_ids: [ @role_id ],
       mode: mode
     ).build
