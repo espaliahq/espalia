@@ -61,6 +61,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
 
     should "deny archive_capability without collaborator role" do
       assert_not policy.archive_capability?
+      assert_not policy.add_capability?
+      assert_not policy.add_category?
     end
 
     should "deny settings" do
@@ -132,6 +134,11 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "allow define_migration_mapping" do
       assert policy.define_migration_mapping?
     end
+
+    should "allow add_capability and add_category" do
+      assert policy.add_capability?
+      assert policy.add_category?
+    end
   end
 
   context "as a global admin" do
@@ -199,6 +206,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
 
     should "allow archive_capability (editor has edit rights)" do
       assert policy.archive_capability?
+      assert policy.add_capability?
+      assert policy.add_category?
     end
 
     should "deny settings (requires tenant admin)" do
@@ -236,6 +245,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
 
     should "allow archive_capability (edit-rights bar, broader than publish)" do
       assert policy.archive_capability?
+      assert policy.add_capability?
+      assert policy.add_category?
     end
   end
 
@@ -361,6 +372,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.publish?
       assert_not policy.define_migration_mapping?
       assert_not policy.archive_capability?
+      assert_not policy.add_capability?
+      assert_not policy.add_category?
     end
   end
 
