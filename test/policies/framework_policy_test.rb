@@ -378,6 +378,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.archive_capability?
       assert_not policy.add_capability?
       assert_not policy.add_category?
+      assert_not policy.archive_category?
     end
   end
 
