@@ -157,7 +157,7 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
 
       wait_for_stimulus "matrix"
       page.execute_script(<<~JS)
-        document.querySelector("[data-action='click->matrix#focusCategory'][data-category-id='#{@cat_a_id}']")?.click();
+        document.querySelector("[data-action*='matrix#focusCategory'][data-category-id='#{@cat_a_id}']")?.click();
       JS
 
       within "#suggestion-panel" do

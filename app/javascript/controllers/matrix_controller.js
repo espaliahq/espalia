@@ -325,6 +325,12 @@ export default class extends BaseController {
   // ── Category focus ── (framework explorer)
 
   focusCategory(event) {
+    // Ignore events on interactive children (the inline-edit pencil + its
+    // form/textarea live inside the focus target) so editing the category name
+    // — or typing in its editor — never also toggles category focus. Mirrors
+    // focusCell's guard.
+    if (event.target.closest("button, a, input, textarea, select, form, [contenteditable]")) return
+
     event.stopPropagation()
     const target = event.currentTarget
     const categoryId = target.dataset.categoryId

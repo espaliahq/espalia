@@ -111,13 +111,19 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
             # of the full-width category header, which scrolls off-screen on a
             # matrix with many level columns.
             div(class: "flex items-center gap-1") do
-              # Button (not span) so keyboard + assistive-tech users can reach
-              # the focus action.
-              button(
-                type: "button",
+              # A span with role=button — NOT a <button> — so the edit-mode name
+              # frame (which nests an inline-editor <form> + pencil <button>) is
+              # valid HTML inside it. A <button> ancestor makes the browser
+              # reparent that nested interactive content out, which both breaks
+              # the name's inline editor and distorts the header layout.
+              # focusCategory ignores clicks on those interactive children, and
+              # keydown.enter keeps the focus action keyboard-reachable.
+              span(
+                role: "button",
+                tabindex: "0",
                 class: "flex items-center gap-2 cursor-pointer hover:underline text-left",
                 data: {
-                  action: "click->matrix#focusCategory",
+                  action: "click->matrix#focusCategory keydown.enter->matrix#focusCategory",
                   category_id: @category.category_id
                 }
               ) do
