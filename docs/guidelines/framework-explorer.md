@@ -848,7 +848,7 @@ line (§9).
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side |
-| `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback) — hosts the 3 shared structural modals (Lesson 19) |
+| `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback) — hosts the 4 shared structural modals + the reject-suggestion modal (Lesson 19) |
 | `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
