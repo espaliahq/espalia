@@ -102,8 +102,11 @@ class Frameworks::CategoriesController < ApplicationController
     current_person.id.to_s
   end
 
+  # Count from the same `.edits` scope the latest-edit query uses, so the badge
+  # count and the rendered inline diff can't diverge (creates/deletes carry a
+  # nil field so they're excluded either way — this just keeps the two aligned).
   def pending_count_for(field)
-    pending_edits_scope.where(field: field).count
+    pending_edits_scope.edits.where(field: field).count
   end
 
   def latest_pending_edit_for(field)
