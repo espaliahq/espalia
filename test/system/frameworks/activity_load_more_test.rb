@@ -72,4 +72,35 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
       assert_no_text "#{cap} events"
     end
   end
+
+  should "keep the active filter applied to entries appended by load-older" do
+    visit edit_framework_path(@framework_id)
+    toggle_context_pane
+
+    cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
+    within "#suggestion-panel" do
+      assert_selector "#framework-activity-list > li", count: cap
+    end
+
+    # Filter to "Suggestions" — the setup creates none (all padding is
+    # structural capability_added), so every entry should hide.
+    page.execute_script(
+      "document.querySelector(\"button[data-framework-activity-filter-param='suggestions']\").click()"
+    )
+    within "#suggestion-panel" do
+      assert_no_selector "#framework-activity-list > li", visible: true
+    end
+
+    page.execute_script(
+      "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
+    )
+
+    within "#suggestion-panel" do
+      # The older batch appended (total grew past the first cap)…
+      assert_selector "#framework-activity-list > li", visible: :all, minimum: cap + 1
+      # …and the appended entries honour the active "Suggestions" filter — still
+      # nothing visible. Before the fix the new entries ignored the filter.
+      assert_no_selector "#framework-activity-list > li", visible: true
+    end
+  end
 end
