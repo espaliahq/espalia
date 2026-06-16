@@ -83,10 +83,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
             # as an "Add a description…" affordance). View mode renders it only
             # when present.
             if @mode == :edit || @capability.description.present?
+              desc_pending = @capability_data[:description_pending_edit]
               render Views::Frameworks::Explorer::CapabilityDescriptionFrame.new(
                 capability: @capability,
                 framework_id: @framework_id,
                 mode: @mode,
+                pending_edit: desc_pending,
+                pending_edit_count: desc_pending ? 1 : 0,
                 search_query: @search_query
               )
             end

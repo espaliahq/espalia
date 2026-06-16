@@ -58,8 +58,14 @@ class Views::Frameworks::Explorer::CapabilityDescriptionFrame < Views::Base
     div(class: "group/ine flex items-start gap-1 #{TEXT_CLASSES}",
         data: { controller: "inline-editor" }) do
       div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
-        if @capability.description.present?
-          span(class: suggestion_text_classes(pending_edit_count: @pending_edit_count)) { decorated_description }
+        if @pending_edit
+          # A pending edit renders as the inline diff (its own decoration);
+          # don't also apply the wavy-underline class.
+          span { render_inline_diff(original: @capability.description.to_s, pending_edit: @pending_edit) }
+        elsif @capability.description.present?
+          span(class: suggestion_text_classes(pending_edit_count: @pending_edit_count)) do
+            render_highlighted(@capability.description.to_s, @search_query)
+          end
         else
           span(class: "italic text-gray-400 dark:text-gray-500") { "Add a description…" }
         end

@@ -187,35 +187,29 @@ class FrameworksController < ApplicationController
     [ suggestions, creates ]
   end
 
-  # Iterates pending suggestions once, aggregating counts and capturing
-  # the latest edit per entity for the four inline-diff text fields.
-  TEXT_EDIT_FIELDS = {
-    "capability_category" => "name",
-    "capability" => "name",
-    "behavioural_expectation" => "description",
-    "role_illustration" => "description"
-  }.freeze
-  private_constant :TEXT_EDIT_FIELDS
-
+  # Iterates pending suggestions once, aggregating the per-entity count and the
+  # latest edit *per field* — so each inline-diff frame (capability name AND
+  # description, category name, expectation/illustration description) can pick
+  # the latest edit on its own field.
   def build_suggestions_map(scope)
     suggestions = {}
     # find_each ignores any scoped `order`, so we pick the latest edit per
-    # entity by comparing created_at inside the loop rather than relying on
-    # iteration order.
+    # entity+field by comparing created_at inside the loop rather than relying
+    # on iteration order.
     scope.find_each do |edit|
       key = [ edit.target_entity_type, edit.target_entity_id ]
-      entry = suggestions[key] ||= { count: 0, latest_edit: nil }
+      entry = suggestions[key] ||= { count: 0, latest_by_field: {} }
       entry[:count] += 1
 
-      next unless edit.kind == "edit" && TEXT_EDIT_FIELDS[edit.target_entity_type] == edit.field
+      next unless edit.kind == "edit" && edit.field.present?
 
-      current = entry[:latest_edit]
+      current = entry[:latest_by_field][edit.field]
       if current
         next if current[:created_at] > edit.created_at
         next if current[:created_at] == edit.created_at && current[:id] >= edit.id
       end
 
-      entry[:latest_edit] = {
+      entry[:latest_by_field][edit.field] = {
         id: edit.id,
         suggested_value: edit.suggested_value,
         suggestion_id: edit.suggestion_id,

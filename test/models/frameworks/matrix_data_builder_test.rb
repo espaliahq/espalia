@@ -248,9 +248,9 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         pending_map = {
           [ "behavioural_expectation", eid ] => {
             count: 2,
-            latest_edit: { suggested_value: "Updated expectation",
-                           suggestion_id: SecureRandom.uuid_v7,
-                           created_at: Time.current }
+            latest_by_field: { "description" => { suggested_value: "Updated expectation",
+                                                  suggestion_id: SecureRandom.uuid_v7,
+                                                  created_at: Time.current } }
           }
         }
 
@@ -270,11 +270,11 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
       should "include pending counts for category and capability" do
         pending_map = {
           [ "capability_category", @category.category_id ] =>
-            { count: 1, latest_edit: { suggested_value: "Thinking v2",
-                                       suggestion_id: SecureRandom.uuid_v7,
-                                       created_at: Time.current } },
+            { count: 1, latest_by_field: { "name" => { suggested_value: "Thinking v2",
+                                                       suggestion_id: SecureRandom.uuid_v7,
+                                                       created_at: Time.current } } },
           [ "capability", @capability.capability_id ] =>
-            { count: 3, latest_edit: nil }
+            { count: 3, latest_by_field: {} }
         }
 
         result = build_matrix(
@@ -290,14 +290,31 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_nil cap[:pending_edit]
       end
 
+      should "surface the latest pending edit for a capability description (its own field)" do
+        pending_map = {
+          [ "capability", @capability.capability_id ] => {
+            count: 1,
+            latest_by_field: { "description" => { suggested_value: "Sharper description",
+                                                  suggestion_id: SecureRandom.uuid_v7,
+                                                  created_at: Time.current } }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        cap = find_capability(result, "Strategic Thinking")
+
+        assert_equal "Sharper description", cap[:description_pending_edit][:suggested_value]
+        assert_nil cap[:pending_edit], "a description edit must not surface as the name pending_edit"
+      end
+
       should "include illustration pending edit counts and latest edit" do
         illustration = @expectations[0].illustrations.first
         pending_map = {
           [ "role_illustration", illustration.illustration_id ] => {
             count: 1,
-            latest_edit: { suggested_value: "Proposed illustration",
-                           suggestion_id: SecureRandom.uuid_v7,
-                           created_at: Time.current }
+            latest_by_field: { "description" => { suggested_value: "Proposed illustration",
+                                                  suggestion_id: SecureRandom.uuid_v7,
+                                                  created_at: Time.current } }
           }
         }
 

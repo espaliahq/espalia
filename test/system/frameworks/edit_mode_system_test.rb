@@ -491,6 +491,29 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_selector "span.decoration-sky-400", text: "s"
       end
     end
+
+    should "render the inline diff on a capability description on full render" do
+      capability = FrameworkState::Capability.first
+      FactoryBot.create(:framework_suggested_edit,
+        tenant: @tenant,
+        framework_id: @framework_id,
+        target_entity_type: "capability",
+        target_entity_id: capability.capability_id,
+        field: "description",
+        current_value: capability.description.to_s,
+        suggested_value: "Considers long-term impact",
+        kind: "edit",
+        status: "pending")
+
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      # The suggested description must decorate on a full matrix render — not
+      # only on the controller re-render right after submitting.
+      within "turbo-frame#capability-description-#{capability.capability_id}" do
+        assert_selector "span.decoration-sky-400", text: "Considers long-term impact"
+      end
+    end
   end
 
   private
