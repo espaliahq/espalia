@@ -428,12 +428,17 @@ types — they inherit it for free.
    (One-pending-suggestion-per-author-per-field is enforced upstream by the
    `InlineSuggestedEdits` amend-on-consecutive-edit concern; multi-author stacking
    on the same field is unchanged.)
-2. **Primary action inline (one-click) for the low-regret case; needs-input /
-   destructive actions via a modal.** Here: **Approve** of a shape-preserving edit
-   is one click (applies live, reversible by another edit); **Reject** always
-   opens the shared reject modal so the reviewer can add an **optional, surfaced**
-   reason. Shape-changing approvals (create/delete — not yet reachable) route to
-   the modal/detail page — a dormant seam (`Entry#action_row`'s else branch).
+2. **Primary action inline (one-click); Reject via a modal — for *every*
+   actionable kind.** **Approve** is one click; **Reject** opens the shared reject
+   modal for an **optional, surfaced** reason. This now covers create/delete
+   proposals too, not just shape-preserving edits — a deletion proposal is as
+   visible and one-click to action as an edit (approving it stages the
+   add/archive into a draft; the publish step remains the `:in_app` gate, so it's
+   still recoverable before the version is cut). Earlier, create/delete fell back
+   to a muted detail-page "Review" link — easy to miss for the seed/MCP-created
+   deletions that are reachable today; `Entry#action_row` keys on
+   `suggestion_id.present?` and the else-branch `review_link` is now only a
+   defensive fallback for a future actionable kind without an inline form.
 3. **Every action dispatches an `Operations::*` class** (web + MCP parity). The
    four lifecycle ops are `:mcp_client`; the web's inline-vs-modal split is pure
    UX, decoupled from the MCP approval category.

@@ -123,11 +123,15 @@ class Views::Frameworks::Activity::Entry < Views::Base
       @approval_authority.can_approve?(@entry.suggestion_entity_type)
   end
 
-  # Inline approve + modal reject for edits (shape-preserving). Create/delete
-  # proposals (shape-changing, not yet reachable from the UI) fall back to a
-  # "Review" link to the detail page — the dormant seam for those kinds.
+  # Inline approve + modal reject for every actionable suggestion kind — edits
+  # and amendments (shape-preserving, apply live) AND create/delete proposals
+  # (shape-changing: approval stages the add/archive into a draft, deferred
+  # until the separate publish gate). All four route through the same approve
+  # endpoint + reject modal, so a deletion proposal is as visible and one-click
+  # to action as an edit — no muted "Review" link to miss. The else branch is a
+  # defensive fallback for any future actionable kind without an inline form.
   def action_row
-    if @entry.kind == "suggestion_edit" || @entry.kind == "suggestion_amended"
+    if @entry.suggestion_id.present?
       div(
         class: "mt-1.5 flex items-center gap-2",
         data: {
