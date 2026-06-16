@@ -25,7 +25,8 @@ A segmented pill in the edit-mode header lets contributors flip between two subm
 Plumbing:
 - Persisted client-side in a 1-year cookie `framework_edit_mode` (`editing` | `suggesting`). Single global cookie — applies across frameworks.
 - [`app/controllers/concerns/framework_edit_mode.rb`](../../app/controllers/concerns/framework_edit_mode.rb) reads the cookie server-side and returns `:editing` / `:suggesting`.
-- The four inline-edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`) `include FrameworkEditMode` and pass `mode: framework_edit_mode` to `Frameworks::CommandHandler#suggest_edit` / `#suggest_create`. (`CapabilitiesController#update` **and** `CategoriesController#update` each handle **name or description** — whichever field the inline editor submitted — re-rendering the matching frame.)
+- The four inline-edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`) `include FrameworkEditMode` and dispatch via the shared [`InlineSuggestedEdits`](../../app/controllers/concerns/inline_suggested_edits.rb) concern (`submit_inline_suggested_edit`), passing `mode: framework_edit_mode`. (`CapabilitiesController#update` **and** `CategoriesController#update` each handle **name or description** — whichever field the inline editor submitted — re-rendering the matching frame.)
+- **Consecutive edits by the same author amend, they don't stack.** When the author already has a *pending* edit on the same `(entity, field)`, `submit_inline_suggested_edit` routes the new value through `#amend_suggestion` (→ `SuggestionAmended`) instead of a second `#suggest_edit`. So in Suggesting mode (and for any non-authority user) a field carries **one** pending suggestion per author — the all-suggestions page and activity feed never show consecutive duplicate suggestions on the same field by the same person; the 2nd+ edit renders as a distinct "Amended a … suggestion" feed entry. (In Editing mode an authority-holder's edit auto-approves immediately, so no pending suggestion lingers to amend — each applied change is its own audit event. Different authors still produce separate pending suggestions on the same field, so the §10 "stacked edits" multi-author case is unchanged.)
 - `SuggestionsController#create` (the explicit "propose a change" endpoint for full-form creates/deletes) is intentionally **not** wired — it always submits as pending regardless of the toggle.
 - Stimulus controller [`edit_mode_toggle_controller.js`](../../app/javascript/controllers/edit_mode_toggle_controller.js) writes the cookie and swaps `aria-pressed` + the caller-supplied active/inactive classes when clicked. No server round-trip on select; the cookie is picked up on the next form submission.
 
@@ -406,7 +407,7 @@ types — they inherit it for free.
 
 **Five invariants (apply the pattern, don't reinvent it):**
 
-1. **Actionable iff `pending? && viewer-has-authority`, computed server-side.**
+1. **Actionable iff `pending? && latest-proposal && viewer-has-authority`, computed server-side.**
    An unauthorised viewer never receives the controls (no client-side hiding). The
    feed query overlays each suggestion entry with `suggestion_status` +
    `suggestion_entity_type`; the controller computes a per-viewer
@@ -415,6 +416,18 @@ types — they inherit it for free.
    Tier routing has one source of truth: `FrameworkSuggestionPolicy.review_tier`
    (entity → tier) + `FrameworkState::Collaborator::CONTENT_APPROVE_ROLES`
    (tier → roles).
+   **Amended suggestions: the action lives on the *latest* proposal.** A suggestion's
+   feed entries are its original `suggestion_edit` plus one `suggestion_amended`
+   per amendment — all sharing one `suggestion_id`. `ActivityFeedQuery#flag_superseded_proposals`
+   walks the newest-first entries and flags every proposal but the most recent per
+   `suggestion_id` as `superseded`; `Entry#actionable?` requires `!superseded`, so
+   exactly one entry (the latest amendment, showing the up-to-date value) carries
+   Approve/Reject — approving an out-of-date proposal is pointless. `suggestion_amended`
+   is in `ACTIONABLE_KINDS` and `action_row` renders the same inline approve + modal
+   reject as `suggestion_edit` (its proposed value is under `:new_suggested_value`).
+   (One-pending-suggestion-per-author-per-field is enforced upstream by the
+   `InlineSuggestedEdits` amend-on-consecutive-edit concern; multi-author stacking
+   on the same field is unchanged.)
 2. **Primary action inline (one-click) for the low-regret case; needs-input /
    destructive actions via a modal.** Here: **Approve** of a shape-preserving edit
    is one click (applies live, reversible by another edit); **Reject** always
@@ -848,6 +861,7 @@ line (§9).
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11) |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
+| `app/controllers/concerns/inline_suggested_edits.rb` | `submit_inline_suggested_edit` — amends the author's pending edit on a field (→ `SuggestionAmended`) or creates a fresh suggestion; prevents consecutive duplicate suggestions |
 | `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side |
 | `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback) — hosts the 4 shared structural modals + the reject-suggestion modal (Lesson 19) |
 | `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |

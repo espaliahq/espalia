@@ -83,6 +83,35 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "capability", entry.suggestion_entity_type
     end
 
+    should "flag the original edit as superseded once amended, leaving the amendment live" do
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: @suggestion_id, target_entity_type: "capability",
+                target_entity_id: @cap.capability_id, field: "description",
+                suggested_value: "First", author_id: @actor.id },
+        actor_id: @actor.id)
+      append(Frameworks::Events::SuggestionAmended,
+        data: { suggestion_id: @suggestion_id, new_suggested_value: "Second", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      edit = entries.find { |e| e.kind == "suggestion_edit" }
+      amended = entries.find { |e| e.kind == "suggestion_amended" }
+      assert edit, "expected the original edit entry"
+      assert amended, "expected the amendment entry"
+      assert edit.superseded, "the original edit must be flagged superseded once amended"
+      assert_not amended.superseded, "the latest amendment is the live, actionable proposal"
+    end
+
+    should "leave a lone (un-amended) edit un-superseded" do
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: @suggestion_id, target_entity_type: "capability",
+                target_entity_id: @cap.capability_id, field: "description",
+                suggested_value: "Only", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      edit = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_not edit.superseded
+    end
+
     should "anchor approved/withdrawn lifecycle events via the SuggestedEdit row" do
       append(Frameworks::Events::SuggestionApproved,
         data: { suggestion_id: @suggestion_id, reviewer_id: @reviewer.id },
