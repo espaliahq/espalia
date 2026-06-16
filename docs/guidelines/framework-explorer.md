@@ -820,7 +820,7 @@ line (§9).
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
-| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + (legacy) panel-layout branch |
+| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; approve/reject/amend/withdraw dispatch `Operations::Frameworks::*`. approve/reject are format-aware — `inline=1` (feed/grid) → 204, else redirect (§12) |
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH/POST) |
 | `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name **or** description (PATCH); add a capability (POST → `AddCapability`). Resolves the capability from the graph (incl. draft-added — Lesson 17) |
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name (PATCH); add a category (POST → `AddCategory`) |
