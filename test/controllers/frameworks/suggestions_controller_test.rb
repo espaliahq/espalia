@@ -224,6 +224,19 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       follow_redirect!
       assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
+
+    should "answer 204 (no redirect) for an inline approve from the feed/grid" do
+      sign_in @admin_user
+      post approve_framework_suggestion_path(
+        framework_id: @framework_id, id: @illustration_suggestion_id, inline: 1
+      )
+
+      assert_response :no_content
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "approved",
+                     FrameworkState::SuggestedEdit.find_by(suggestion_id: @illustration_suggestion_id).status
+      end
+    end
   end
 
   context "POST /frameworks/:framework_id/suggestions/:id/reject" do
@@ -252,6 +265,19 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       follow_redirect!
       assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+
+    should "answer 204 (no redirect) for an inline reject with a reason" do
+      sign_in @admin_user
+      post reject_framework_suggestion_path(
+        framework_id: @framework_id, id: @illustration_suggestion_id, inline: 1
+      ), params: { comment: "off-strategy" }
+
+      assert_response :no_content
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "rejected",
+                     FrameworkState::SuggestedEdit.find_by(suggestion_id: @illustration_suggestion_id).status
+      end
     end
   end
 

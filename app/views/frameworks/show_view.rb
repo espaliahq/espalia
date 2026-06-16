@@ -54,8 +54,20 @@ class Views::Frameworks::ShowView < Views::Base
         framework_header
         explorer_layout
         structural_modals
+        reject_suggestion_modal if @mode == :edit
       end
     end
+  end
+
+  # The reject-suggestion modal backing the actionable activity feed. Edit mode
+  # only (where the feed lives); rendered for every edit-mode viewer — the
+  # entry's Reject button is itself authority-gated, so an unauthorised viewer
+  # simply never opens it. Shares the root `modal` controller (see
+  # #explorer_root_data) with the structural modals.
+  def reject_suggestion_modal
+    render Views::Frameworks::Explorer::RejectSuggestionModal.new(
+      framework_id: @framework.framework_id
+    )
   end
 
   # The shared structural-edit modals (archive / add capability / add
@@ -81,11 +93,13 @@ class Views::Frameworks::ShowView < Views::Base
   def structural_modals? = @mode == :edit && @can_edit_structure
 
   # data-controller/action for the explorer root, adding the `modal`
-  # controller + Esc-to-close only when the structural modals are present.
+  # controller + Esc-to-close in edit mode — it hosts both the structural
+  # modals (when can_edit_structure) and the always-present reject-suggestion
+  # modal (the actionable feed).
   def explorer_root_data
     controllers = [ "framework-explorer" ]
     actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
-    if structural_modals?
+    if @mode == :edit
       controllers << "modal"
       actions << "keydown.esc@window->modal#close"
     end
@@ -410,7 +424,8 @@ class Views::Frameworks::ShowView < Views::Base
         matrix_base_path_value: matrix_base_path,
         action: "tree:changed->matrix#updateSelection " \
                 "framework-search:changed@window->matrix#updateSearch " \
-                "suggestion:navigate@window->matrix#navigateToEntity"
+                "suggestion:navigate@window->matrix#navigateToEntity " \
+                "suggestion:resolved@window->matrix#refresh"
       }
     ) do
       left_pane

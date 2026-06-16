@@ -173,29 +173,31 @@ class Frameworks::SuggestionsController < ApplicationController
 
   private
 
-  # Approve/reject are reachable both from the suggestion detail page (HTML,
-  # wants a redirect) and from the inline activity feed / matrix grid
-  # (Turbo/JSON, wants a quiet 200 — the feed reloads off the activity
-  # broadcast and the grid refreshes client-side on the `suggestion:resolved`
-  # event). Branch on the requested format.
+  # Approve/reject are reachable both from the suggestion detail page (wants a
+  # redirect + flash) and from the inline activity feed / matrix grid (wants a
+  # quiet no-op response — the feed reloads off the activity broadcast and the
+  # grid refreshes client-side on the `suggestion:resolved` event). The inline
+  # surfaces flag themselves with `inline=1`; everything else (incl. the
+  # Turbo-driven detail page) redirects. 204 keeps Turbo from navigating or
+  # blanking the modal/page on the inline path.
+  def inline_request?
+    params[:inline].present?
+  end
+
   def respond_to_resolution(notice:)
-    respond_to do |format|
-      format.html do
-        redirect_to framework_suggestions_path(@framework.framework_id), notice: notice
-      end
-      format.any(:turbo_stream, :json) { head :ok }
+    if inline_request?
+      head :no_content
+    else
+      redirect_to framework_suggestions_path(@framework.framework_id), notice: notice
     end
   end
 
   def respond_to_failure(error)
-    respond_to do |format|
-      format.html do
-        redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
-                    alert: error.message
-      end
-      format.any(:turbo_stream, :json) do
-        render plain: error.message, status: :unprocessable_content
-      end
+    if inline_request?
+      render plain: error.message, status: :unprocessable_content
+    else
+      redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
+                  alert: error.message
     end
   end
 
