@@ -435,6 +435,21 @@ the form at the suggestion's reject endpoint (a `__SID__` path template).
 keyboard) — cheaper and more robust than `stopPropagation` (which would also kill
 the `modal#open` listener that fires during bubbling).
 
+**Two surfaces, one machinery.** The same pattern drives a second surface: the
+**matrix row-actions kebab** (`MatrixRow`, a `Kit::Dropdown`). When a capability
+has a pending name / description edit the viewer can approve, the kebab gains
+**Approve / Reject «field» change** items (alongside **Archive…** for
+edit-structure holders). They reuse the *exact* same pieces — `suggestion-action`
+(inline approve, `inline=1` → 204), the root reject modal, and
+`suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
+the feed are the same operation with the same live-update wiring (the feed
+reloads via broadcast either way). The per-viewer authority is threaded into the
+matrix the same way `can_edit_structure` is: controller → `Matrix` →
+`MatrixCategoryGroup` → `MatrixRow`. `matrix#toggleRow` already ignores clicks
+inside `[data-controller~='dropdown']`, so opening the kebab never expands the
+row. Expectation / illustration edits are not (yet) on the grid kebab — the feed
+covers those.
+
 ### 7. Responsive Behaviour
 
 | Viewport | Role Tree | Matrix | Toggle Button |
@@ -755,7 +770,7 @@ line (§9).
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows |
-| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row |
+| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Archive (§12) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2) |
 | `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |

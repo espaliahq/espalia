@@ -25,7 +25,8 @@ class Views::Frameworks::ShowView < Views::Base
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
                  pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
                  can_edit_structure: false, archive_survivors: [], roles: [],
-                 current_person_id: nil, search_query: nil)
+                 current_person_id: nil, search_query: nil,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -44,6 +45,7 @@ class Views::Frameworks::ShowView < Views::Base
     @roles = roles
     @current_person_id = current_person_id
     @search_query = search_query
+    @approval_authority = approval_authority
   end
 
   def view_template
@@ -476,7 +478,8 @@ class Views::Frameworks::ShowView < Views::Base
           framework_id: @framework.framework_id,
           mode: @mode,
           current_person_id: @current_person_id,
-          can_edit_structure: @can_edit_structure
+          can_edit_structure: @can_edit_structure,
+          approval_authority: @approval_authority
         )
       end
     end

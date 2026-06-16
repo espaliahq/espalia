@@ -72,6 +72,7 @@ class FrameworksController < ApplicationController
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
       can_edit_structure: can_edit_structure,
+      approval_authority: suggestion_approval_authority(mode),
       archive_survivors: can_edit_structure ? archive_survivors(graph) : [],
       roles: can_edit_structure ? framework_roles(graph) : [],
       current_person_id: current_person&.id&.to_s,
@@ -88,8 +89,22 @@ class FrameworksController < ApplicationController
       selected_role_ids: parse_role_ids,
       mode: mode,
       current_person_id: current_person&.id&.to_s,
-      can_edit_structure: mode == :edit && policy(@framework).edit_structure?
+      can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
+      approval_authority: suggestion_approval_authority(mode)
     ), layout: false
+  end
+
+  # Per-viewer suggestion-approval authority, so the matrix row kebab can offer
+  # inline approve/reject for a capability's pending edits (same value object the
+  # activity feed uses). Only meaningful in edit mode — the kebab is edit-only.
+  def suggestion_approval_authority(mode)
+    return Frameworks::SuggestionApprovalAuthority.none unless mode == :edit
+
+    Frameworks::SuggestionApprovalAuthority.for(
+      framework_id: @framework.framework_id,
+      person: current_person,
+      tenant_admin: current_user&.global_admin? || current_tenant_user&.admin? || false
+    )
   end
 
   def set_framework

@@ -18,7 +18,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
   #   don't each fire a `FrameworkState::Role.find_by` query
   def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false)
+                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
@@ -28,11 +29,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @current_person_id = current_person_id
     @search_query = search_query
     @can_edit_structure = can_edit_structure
+    @approval_authority = approval_authority
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
     @capability_pending_count = capability_data[:pending_suggestion_count] || 0
     @capability_pending_edit = capability_data[:pending_edit]
+    @description_pending_edit = capability_data[:description_pending_edit]
   end
 
   def view_template
@@ -76,7 +79,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 pending_edit: @capability_pending_edit,
                 search_query: @search_query
               )
-              archive_kebab if show_archive_kebab?
+              row_actions_kebab if show_row_kebab?
             end
             draft_state_badge if @mode == :edit
             # Description: inline-editable in edit mode (also shown when blank,
@@ -144,23 +147,96 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     end
   end
 
-  # Row-actions kebab — edit mode, edit-rights holders, and only while the
-  # capability isn't already staged for archive. Hover-revealed next to the
-  # capability-name pencil; opens the shared archive modal (see
-  # Views::Frameworks::Explorer::ArchiveModal). The capability's id/name and
-  # whether it needs a migration mapping (pre-draft vs added-in-draft) ride on
-  # the trigger dataset, which the modal's archive-form controller reads.
-  def show_archive_kebab?
-    @mode == :edit && @can_edit_structure &&
-      !(@capability.respond_to?(:pending_archive) && @capability.pending_archive)
+  # Row-actions kebab — edit mode, hover-revealed next to the capability-name
+  # pencil. A dropdown menu (Kit::Dropdown) gathering the actions available on
+  # this capability for this viewer: inline Approve / Reject of its pending
+  # name / description edits (approval authority — the actionable-feed pattern,
+  # framework-explorer.md §12), plus Archive (edit-structure rights). The kebab
+  # renders only when at least one action applies.
+  #
+  # toggleRow ignores clicks inside `[data-controller~='dropdown']`, so opening
+  # the menu never also expands the row.
+  def show_row_kebab?
+    @mode == :edit && (show_archive_action? || capability_edit_actions.any?)
   end
 
-  def archive_kebab
+  # Archive is gated on edit-structure rights and hidden once staged for archive.
+  def show_archive_action?
+    @can_edit_structure && !(@capability.respond_to?(:pending_archive) && @capability.pending_archive)
+  end
+
+  # Pending name / description edits the viewer may approve, as
+  # { field_label:, suggestion_id:, preview: }. Both are tier-2 ("capability").
+  def capability_edit_actions
+    return [] unless @approval_authority.can_approve?("capability")
+
+    [
+      edit_action("name", @capability_pending_edit),
+      edit_action("description", @description_pending_edit)
+    ].compact
+  end
+
+  def edit_action(field_label, descriptor)
+    return nil unless descriptor && descriptor[:suggestion_id]
+
+    { field_label: field_label,
+      suggestion_id: descriptor[:suggestion_id],
+      preview: descriptor[:suggested_value].to_s }
+  end
+
+  def row_actions_kebab
+    render Components::Kit::Dropdown.new(align: :left) do |dd|
+      dd.trigger do
+        span(
+          class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
+                 "inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
+                 "text-gray-400 hover:text-primary",
+          aria_label: "Capability actions"
+        ) do
+          svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
+            s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
+                      "6a2 2 0 100 4 2 2 0 000-4z")
+          end
+        end
+      end
+      dd.menu do
+        capability_edit_actions.each { |action| kebab_edit_items(action) }
+        kebab_archive_item if show_archive_action?
+      end
+    end
+  end
+
+  # Approve (inline POST) + Reject (shared modal) for one pending field edit.
+  # Reuses the actionable-feed machinery: suggestion_action#approve and the
+  # reject-suggestion modal, both flagged inline=1 so the controller answers 204
+  # and `suggestion:resolved` refreshes the matrix.
+  def kebab_edit_items(action)
     button(
-      type: "button",
-      class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
-             "inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
-             "text-gray-400 hover:text-primary",
+      type: "button", role: "menuitem", class: kebab_item_classes("text-green-700 dark:text-green-400"),
+      data: {
+        controller: "suggestion-action",
+        suggestion_action_approve_url_value:
+          approve_framework_suggestion_path(@framework_id, action[:suggestion_id], inline: 1),
+        action: "suggestion-action#approve"
+      }
+    ) { "Approve #{action[:field_label]} change" }
+
+    button(
+      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
+      data: {
+        action: "click->modal#open",
+        modal_target_id: "reject-suggestion-modal",
+        reject_suggestion_id: action[:suggestion_id],
+        reject_framework_id: @framework_id,
+        reject_entity_label: "capability #{action[:field_label]}",
+        reject_preview: action[:preview]
+      }
+    ) { "Reject #{action[:field_label]} change" }
+  end
+
+  def kebab_archive_item
+    button(
+      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
       data: {
         action: "click->modal#open",
         modal_target_id: "archive-capability-modal",
@@ -168,14 +244,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
         archive_capability_name: @capability.name,
         archive_stable_id: @capability.stable_id,
         archive_needs_mapping: (!archive_added_in_draft?).to_s
-      },
-      aria_label: "Capability actions"
-    ) do
-      svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
-        s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
-                  "6a2 2 0 100 4 2 2 0 000-4z")
-      end
-    end
+      }
+    ) { "Archive…" }
+  end
+
+  def kebab_item_classes(tone)
+    "block w-full text-left px-4 py-2 text-sm #{tone} " \
+      "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
   end
 
   def archive_added_in_draft?

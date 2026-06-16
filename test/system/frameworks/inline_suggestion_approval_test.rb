@@ -102,6 +102,27 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       end
     end
 
+    should "approve a capability edit from the matrix row kebab" do
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_selector "tr[data-capability-id='#{@cap_id}']"
+
+      # Open the row-actions dropdown, then approve the pending description edit.
+      page.execute_script(
+        "document.querySelector(\"tr[data-capability-id='#{@cap_id}'] " \
+        "button[data-dropdown-target='trigger']\").click()"
+      )
+      assert_text "Approve description change"
+      page.execute_script(
+        "document.querySelector(\"tr[data-capability-id='#{@cap_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
+      )
+
+      wait_for_status("approved")
+      assert_equal "A sharper capability description",
+                   FrameworkState::Capability.find_by(capability_id: @cap_id).description
+    end
+
     should "reject a suggestion via the modal with an optional reason" do
       visit edit_framework_path(@framework_id)
       toggle_context_pane

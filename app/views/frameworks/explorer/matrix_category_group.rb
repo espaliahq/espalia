@@ -15,7 +15,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param roles_by_id [Hash] { role_id => Role } — passed through to rows to avoid per-cell AR lookups
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false)
+                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
@@ -28,6 +29,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @current_person_id = current_person_id
     @search_query = search_query
     @can_edit_structure = can_edit_structure
+    @approval_authority = approval_authority
   end
 
   def view_template
@@ -138,7 +140,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         roles_by_id: @roles_by_id,
         current_person_id: @current_person_id,
         search_query: @search_query,
-        can_edit_structure: @can_edit_structure
+        can_edit_structure: @can_edit_structure,
+        approval_authority: @approval_authority
       )
     end
   end
