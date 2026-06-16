@@ -102,7 +102,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
         rows: "3",
         name: "illustration[description]",
         data: { inline_editor_target: "input" }
-      ) { @illustration.description }
+      ) { (@pending_edit ? @pending_edit[:suggested_value] : @illustration.description).to_s }
 
       div(class: "flex gap-1 mt-1") do
         button(

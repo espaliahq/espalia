@@ -512,6 +512,10 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # only on the controller re-render right after submitting.
       within "turbo-frame#capability-description-#{capability.capability_id}" do
         assert_selector "span.decoration-sky-400", text: "Considers long-term impact"
+        # The inline editor is pre-filled with the pending proposal (so editing
+        # refines it), not the original value.
+        textarea = find("textarea[name='capability[description]']", visible: :all)
+        assert_equal "Considers long-term impact", textarea.value
       end
     end
   end

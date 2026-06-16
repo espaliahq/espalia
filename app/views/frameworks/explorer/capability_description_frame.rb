@@ -74,7 +74,7 @@ class Views::Frameworks::Explorer::CapabilityDescriptionFrame < Views::Base
       render_inline_editor_form(
         action: framework_capability_path(framework_id: @framework_id, id: @capability.capability_id),
         field_name: "capability[description]",
-        current_value: @capability.description.to_s,
+        current_value: inline_editor_value(@capability.description, @pending_edit),
         rows: 3
       )
     end

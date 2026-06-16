@@ -63,7 +63,7 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
       render_inline_editor_form(
         action: framework_category_path(framework_id: @framework_id, id: @category.category_id),
         field_name: "capability_category[name]",
-        current_value: @category.name,
+        current_value: inline_editor_value(@category.name, @pending_edit),
         rows: 1
       )
     end
