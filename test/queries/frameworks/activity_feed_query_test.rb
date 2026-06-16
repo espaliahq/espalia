@@ -214,4 +214,31 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "capability_archived", result.first.kind, "the single entry is the most recent"
     end
   end
+
+  context "read cap" do
+    should "read only the most-recent STREAM_READ_LIMIT events (older activity drops off)" do
+      cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
+
+      # Oldest event first, then enough newer ones to push it past the cap.
+      events = [ Frameworks::Events::CapabilityAdded.new(
+        data: { framework_id: @fwid, capability_id: SecureRandom.uuid_v7, name: "OLDEST" },
+        metadata: { tenant_id: @tenant.id }
+      ) ]
+      (cap + 5).times do
+        events << Frameworks::Events::CapabilityAdded.new(
+          data: { framework_id: @fwid, capability_id: SecureRandom.uuid_v7, name: "newer" },
+          metadata: { tenant_id: @tenant.id }
+        )
+      end
+      # append (not publish) writes raw events without dispatching the
+      # synchronous projection — we're exercising the read query, not the
+      # write side, and the minimal payloads aren't valid for the projection.
+      Rails.configuration.event_store.append(events, stream_name: EventStreamNaming.framework_stream(@fwid))
+
+      result = entries
+      assert_operator result.size, :<=, cap, "feed must not exceed the read cap"
+      assert_nil result.find { |e| e.payload[:name] == "OLDEST" },
+        "an event older than the read cap must not appear in the feed"
+    end
+  end
 end

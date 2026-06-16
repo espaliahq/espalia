@@ -91,6 +91,12 @@ class Frameworks::ActivityFeedQuery
 
   FOCUS_LEVELS = %i[framework category capability cell].freeze
 
+  # Upper bound on how many of the most-recent stream events the feed reads.
+  # Keeps each reload O(cap), not O(framework history). See #stream_events for
+  # the recency trade-off. ~250 comfortably covers a panel's worth of recent
+  # activity (the panel is scrollable but not infinite).
+  STREAM_READ_LIMIT = 250
+
   UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
   # @param framework [FrameworkState::Framework]
@@ -249,10 +255,27 @@ class Frameworks::ActivityFeedQuery
 
   # ── Stream ──
 
+  # Read only the most-recent slice of the stream, newest-first. The feed is a
+  # recency-ordered narrative, so reading the whole stream is needless O(history)
+  # work that dominates latency on a mature framework (a 1636-event framework
+  # reads in ~240ms and builds 1000+ entries). Bounding the read to the most
+  # recent STREAM_READ_LIMIT events makes every reload O(cap) instead.
+  #
+  # Trade-off: an activity older than the cap drops off the feed. Pending
+  # suggestions older than the window are therefore not actionable *from the
+  # feed* — but they remain visible (and approvable) on the matrix grid (the
+  # inline diff is shown regardless of age) and on the standalone suggestion
+  # index, so no review path is lost.
   def stream_events
-    @stream_events ||= @event_store.read.stream(
-      EventStreamNaming.framework_stream(@framework.framework_id)
-    ).to_a
+    @stream_events ||= @event_store.read
+      .stream(EventStreamNaming.framework_stream(@framework.framework_id))
+      .backward.limit(read_limit).to_a
+  end
+
+  # How many of the most-recent events to read. Never less than the requested
+  # display `limit` (so a caller asking for N most-recent always gets N).
+  def read_limit
+    [ @limit.to_i, STREAM_READ_LIMIT ].max
   end
 
   def event_timestamp(event)
