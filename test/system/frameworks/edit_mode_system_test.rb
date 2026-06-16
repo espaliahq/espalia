@@ -178,6 +178,63 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       assert_text "Balances competing priorities."
     end
+
+    should "keep the category-name inline editor intact inside the focus target" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      cat_id = FrameworkState::CapabilityCategory.first.category_id
+      editor = find("turbo-frame#category-name-#{cat_id} > div")
+      # Regression: the focus target wrapping the name must be a role=button
+      # span, not a <button> — a <button> ancestor makes the browser reparent
+      # the nested inline-editor form/pencil out, breaking name editing. Assert
+      # the form + pencil survive inside the inline-editor controller.
+      assert editor.has_css?("form[action*='/categories/#{cat_id}']", visible: :all)
+      assert editor.has_css?("[data-action*='inline-editor#startEdit']", visible: :all)
+
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
+        editor
+      )
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
+        editor
+      )
+      page.execute_script(<<~JS, editor)
+        const ta = arguments[0].querySelector("textarea[name='capability_category[name]']");
+        ta.value = "Cognition & Judgement";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+
+      assert_text "Cognition & Judgement"
+    end
+
+    should "submit a category description edit and swap the frame" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      cat_id = FrameworkState::CapabilityCategory.first.category_id
+      editor = find("turbo-frame#category-description-#{cat_id} > div")
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
+        editor
+      )
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
+        editor
+      )
+      page.execute_script(<<~JS, editor)
+        const ta = arguments[0].querySelector("textarea[name='capability_category[description]']");
+        ta.value = "How we reason and decide.";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+
+      assert_text "How we reason and decide."
+    end
   end
 
   context "Editing / Suggesting toggle" do
@@ -434,6 +491,52 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       click_button_with_js_fallback("Archive capability", expect_text: "Archived")
       assert_text "Archived"
       # Draft auto-opened by the archive; the pill reflects it.
+      assert_text(/draft/i)
+    end
+  end
+
+  context "archiving a category via the header kebab" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @empty_cat = SecureRandom.uuid_v7
+        # Shape-preserving add — applies live, no draft needed; an empty
+        # category is the archivable case (the aggregate refuses a non-empty one).
+        Frameworks::CommandHandler.new.add_capability_category(
+          @framework_id, @empty_cat, "Retire Me", ordinal: 2
+        )
+      end
+    end
+
+    should "only offer the archive kebab on the empty category, not the populated one" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      assert_text "Retire Me"
+      # Only the empty category exposes the kebab; the populated "Thinking" does
+      # not — so exactly one archive-category control renders, and it's the empty one.
+      assert_selector "button[aria-label='Archive category']", count: 1, visible: :all
+      assert_selector "button[data-archive-category-id='#{@empty_cat}']", visible: :all
+    end
+
+    should "open the archive-category modal from the kebab and archive the empty category" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_text "Retire Me"
+
+      # Hover-revealed (opacity-0) button — JS-click to avoid pointer-drop flake.
+      page.execute_script(<<~JS)
+        document.querySelector("button[data-archive-category-id='#{@empty_cat}']").click();
+      JS
+      assert_selector "#archive-category-modal", visible: true
+      within "#archive-category-modal" do
+        assert_text "Retire Me" # name prefilled from the trigger dataset
+      end
+
+      click_button_with_js_fallback("Archive category", expect_text: "Archived")
+      assert_text "Archived"
+      # Archiving is shape-changing — a draft auto-opens.
       assert_text(/draft/i)
     end
   end

@@ -290,6 +290,46 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_nil cap[:pending_edit]
       end
 
+      should "surface the latest pending edit for a category description (its own field)" do
+        pending_map = {
+          [ "capability_category", @category.category_id ] => {
+            count: 1,
+            latest_by_field: { "description" => { suggested_value: "How we reason and decide",
+                                                  suggestion_id: SecureRandom.uuid_v7,
+                                                  created_at: Time.current } }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        category = result[:categories].first
+
+        assert_equal "How we reason and decide", category[:description_pending_edit][:suggested_value]
+        assert_nil category[:pending_edit], "a description edit must not surface as the name pending_edit"
+      end
+
+      should "flag a category holding active capabilities as not archivable" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
+        assert_equal false, result[:categories].first[:archivable]
+      end
+
+      should "flag an empty category as archivable (edit mode keeps it visible)" do
+        empty = create(:framework_capability_category,
+          framework_id: @category.framework_id, name: "Empty", ordinal: 9)
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], categories: [ empty ], mode: :edit)
+        category = result[:categories].find { |c| c[:category].name == "Empty" }
+        assert_equal true, category[:archivable]
+      end
+
+      should "drop an archived category from the matrix in both modes" do
+        archived = create(:framework_capability_category,
+          framework_id: @category.framework_id, name: "Gone", ordinal: 9, status: "archived")
+        %i[view edit].each do |mode|
+          result = build_matrix(selected_role_ids: [ @ic_role.role_id ], categories: [ archived ], mode: mode)
+          assert_nil result[:categories].find { |c| c[:category].name == "Gone" },
+                     "archived category must not render in #{mode} mode"
+        end
+      end
+
       should "surface the latest pending edit for a capability description (its own field)" do
         pending_map = {
           [ "capability", @capability.capability_id ] => {
@@ -468,13 +508,14 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
 
   def build_matrix(selected_role_ids:, track_filter: "both", categories: nil,
                    pending_suggestions: {}, pending_illustration_creates: {},
-                   search_query: nil)
+                   search_query: nil, mode: :view)
     Frameworks::MatrixDataBuilder.new(
       framework: @framework,
       role_families: @role_families,
       categories: categories || @categories,
       selected_role_ids: selected_role_ids,
       track_filter: track_filter,
+      mode: mode,
       pending_suggestions: pending_suggestions,
       pending_illustration_creates: pending_illustration_creates,
       search_query: search_query

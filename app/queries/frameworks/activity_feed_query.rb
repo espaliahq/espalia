@@ -29,7 +29,13 @@ class Frameworks::ActivityFeedQuery
   Entry = Struct.new(:id, :kind, :occurred_at, :payload, :actor_name,
                      :category_id, :capability_id, :capability_name,
                      :suggestion_id, :suggestion_status, :suggestion_entity_type,
+                     :superseded,
                      keyword_init: true)
+
+  # Proposal events for one suggestion (the original edit + each amendment).
+  # Only the most recent of these carries the approve/reject action — see
+  # #flag_superseded_proposals.
+  PROPOSAL_KINDS = %w[suggestion_edit suggestion_amended].freeze
 
   # Event class → feed kind string. Drives both which events become feed
   # entries and the kind the view renders. Events not in this map (e.g.
@@ -130,7 +136,27 @@ class Frameworks::ActivityFeedQuery
     entries.select! { |entry| match_focus?(entry) }
     entries.sort_by! { |entry| entry.occurred_at || Time.at(0) }
     entries.reverse!
+    flag_superseded_proposals(entries)
     @limit ? entries.first(@limit) : entries
+  end
+
+  # Flags every proposal entry (edit / amendment) that has been superseded by a
+  # more recent proposal on the same suggestion, so the approve/reject action
+  # lands only on the latest one — approving an out-of-date proposal is
+  # pointless. `entries` is newest-first here, so the first proposal seen per
+  # suggestion_id is the live one and the rest are superseded. (An amendment is
+  # always newer than its original edit, so the two arrive together in the same
+  # recent batch; the marking is therefore correct for the cases that matter.)
+  #
+  # @param entries [Array<Entry>] newest-first
+  # @return [void]
+  def flag_superseded_proposals(entries)
+    seen = Set.new
+    entries.each do |entry|
+      next unless entry.suggestion_id && PROPOSAL_KINDS.include?(entry.kind)
+
+      entry.superseded = true unless seen.add?(entry.suggestion_id)
+    end
   end
 
   # Whether the stream holds events older than this batch — i.e. there is more

@@ -6,6 +6,7 @@
 #
 class Frameworks::CategoriesController < ApplicationController
   include FrameworkEditMode
+  include InlineSuggestedEdits
 
   before_action :set_framework
   before_action :set_category, only: [ :update ]
@@ -33,34 +34,53 @@ class Frameworks::CategoriesController < ApplicationController
 
   # PATCH /frameworks/:framework_id/categories/:id
   #
-  # Only `name` is accepted — the turbo-frame response re-renders
-  # CategoryNameFrame. Description edits need their own endpoint + frame
-  # when the UI for it exists.
+  # Inline edit of a category's `name` or `description` (whichever field the
+  # inline editor submitted), routed through suggest_edit so audit + approval
+  # rules are consistent. The turbo-frame response re-renders the matching
+  # frame (name or description).
   def update
     authorize @framework, :suggest_edit?
-    new_name = params.expect(capability_category: [ :name ])[:name]
-    return head(:unprocessable_content) if new_name.blank?
+    field, value = edited_field
+    return head(:unprocessable_content) unless field
 
-    Frameworks::CommandHandler.new.suggest_edit(
-      @framework.framework_id, SecureRandom.uuid_v7,
-      "capability_category", @category.category_id,
-      "name", new_name, resolve_author_id,
-      mode: framework_edit_mode
+    submit_inline_suggested_edit(
+      framework_id: @framework.framework_id,
+      entity_type: "capability_category", entity_id: @category.category_id,
+      field: field, value: value, author_id: resolve_author_id, mode: framework_edit_mode
     )
 
     @category.reload
-    render Views::Frameworks::Explorer::CategoryNameFrame.new(
-      category: @category,
-      framework_id: @framework.framework_id,
-      mode: :edit,
-      pending_edit_count: pending_edits_on_category,
-      pending_edit: latest_pending_edit
-    ), layout: false
+    render frame_for(field), layout: false
   rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
   end
 
   private
+
+  # The single field the inline editor submitted. `name` must be present;
+  # `description` may be blank (clearing it). Returns [field, value] or [nil, nil].
+  def edited_field
+    permitted = params.expect(capability_category: [ :name, :description ])
+    if permitted.key?(:name)
+      permitted[:name].blank? ? [ nil, nil ] : [ "name", permitted[:name] ]
+    elsif permitted.key?(:description)
+      [ "description", permitted[:description].to_s ]
+    else
+      [ nil, nil ]
+    end
+  end
+
+  def frame_for(field)
+    common = {
+      category: @category, framework_id: @framework.framework_id, mode: :edit,
+      pending_edit_count: pending_count_for(field), pending_edit: latest_pending_edit_for(field)
+    }
+    if field == "description"
+      Views::Frameworks::Explorer::CategoryDescriptionFrame.new(**common)
+    else
+      Views::Frameworks::Explorer::CategoryNameFrame.new(**common)
+    end
+  end
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:framework_id))
@@ -82,12 +102,15 @@ class Frameworks::CategoriesController < ApplicationController
     current_person.id.to_s
   end
 
-  def pending_edits_on_category
-    pending_edits_scope.count
+  # Count from the same `.edits` scope the latest-edit query uses, so the badge
+  # count and the rendered inline diff can't diverge (creates/deletes carry a
+  # nil field so they're excluded either way — this just keeps the two aligned).
+  def pending_count_for(field)
+    pending_edits_scope.edits.where(field: field).count
   end
 
-  def latest_pending_edit
-    edit = pending_edits_scope.edits.where(field: "name").order(created_at: :desc).first
+  def latest_pending_edit_for(field)
+    edit = pending_edits_scope.edits.where(field: field).order(created_at: :desc).first
     return nil unless edit
 
     { suggested_value: edit.suggested_value,

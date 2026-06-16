@@ -8,6 +8,7 @@
 #
 class Frameworks::ExpectationsController < ApplicationController
   include FrameworkEditMode
+  include InlineSuggestedEdits
 
   before_action :set_framework
   before_action :set_expectation
@@ -18,11 +19,10 @@ class Frameworks::ExpectationsController < ApplicationController
     new_description = params.expect(behavioural_expectation: [ :description ])[:description]
     return head(:unprocessable_content) if new_description.blank?
 
-    Frameworks::CommandHandler.new.suggest_edit(
-      @framework.framework_id, SecureRandom.uuid_v7,
-      "behavioural_expectation", @expectation.expectation_id,
-      "description", new_description, resolve_author_id,
-      mode: framework_edit_mode
+    submit_inline_suggested_edit(
+      framework_id: @framework.framework_id,
+      entity_type: "behavioural_expectation", entity_id: @expectation.expectation_id,
+      field: "description", value: new_description, author_id: resolve_author_id, mode: framework_edit_mode
     )
 
     @expectation.reload

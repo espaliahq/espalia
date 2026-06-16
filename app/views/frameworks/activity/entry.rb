@@ -103,28 +103,35 @@ class Views::Frameworks::Activity::Entry < Views::Base
 
   private
 
-  # Suggestion-submission kinds whose entry carries the suggestion's *current*
-  # status — the natural single anchor for the actionable row (one per
-  # suggestion). Lifecycle kinds (amended/approved/rejected/withdrawn) are
-  # narrative only.
-  ACTIONABLE_KINDS = %w[suggestion_edit suggestion_create suggestion_delete].freeze
+  # Suggestion kinds whose entry can carry the approve/reject action. The
+  # original edit AND each amendment qualify — but the query flags all but the
+  # most recent proposal per suggestion as `superseded`, so exactly one entry
+  # (the latest, showing the up-to-date value) is actionable. approved /
+  # rejected / withdrawn are narrative only.
+  ACTIONABLE_KINDS = %w[suggestion_edit suggestion_amended suggestion_create suggestion_delete].freeze
 
-  # An entry is actionable when its suggestion is still pending AND the viewer's
-  # precomputed authority clears the suggestion's review tier. Computed
+  # An entry is actionable when its suggestion is still pending, this is the
+  # latest proposal on it (not superseded by a newer amendment), AND the
+  # viewer's precomputed authority clears the suggestion's review tier. Computed
   # server-side — an unauthorised viewer never receives the controls.
   def actionable?
     @framework_id.present? &&
       ACTIONABLE_KINDS.include?(@entry.kind) &&
+      !@entry.superseded &&
       @entry.suggestion_status == "pending" &&
       @entry.suggestion_entity_type.present? &&
       @approval_authority.can_approve?(@entry.suggestion_entity_type)
   end
 
-  # Inline approve + modal reject for edits (shape-preserving). Create/delete
-  # proposals (shape-changing, not yet reachable from the UI) fall back to a
-  # "Review" link to the detail page — the dormant seam for those kinds.
+  # Inline approve + modal reject for every actionable suggestion kind — edits
+  # and amendments (shape-preserving, apply live) AND create/delete proposals
+  # (shape-changing: approval stages the add/archive into a draft, deferred
+  # until the separate publish gate). All four route through the same approve
+  # endpoint + reject modal, so a deletion proposal is as visible and one-click
+  # to action as an edit — no muted "Review" link to miss. The else branch is a
+  # defensive fallback for any future actionable kind without an inline form.
   def action_row
-    if @entry.kind == "suggestion_edit"
+    if @entry.suggestion_id.present?
       div(
         class: "mt-1.5 flex items-center gap-2",
         data: {
@@ -180,7 +187,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
   # The proposed value, shown in the reject modal so the reviewer sees what
   # they're declining.
   def reject_preview
-    payload_value(:suggested_value).to_s.strip.presence
+    # Amendments carry the proposed value under :new_suggested_value.
+    (payload_value(:suggested_value) || payload_value(:new_suggested_value)).to_s.strip.presence
   end
 
   def dom_safe_id

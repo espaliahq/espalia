@@ -34,13 +34,24 @@ export default class extends BaseController {
     this.#applyState()
   }
 
+  // Re-apply the active filter to entries appended after a "Load older
+  // activity" fetch. Those arrive server-rendered (unfiltered) via a Turbo
+  // Stream append; without this they'd ignore the current chip selection.
+  // Stimulus fires this as each new entry target connects.
+  entryTargetConnected(entry) {
+    this.#applyTo(entry)
+  }
+
   // private
 
   #applyState() {
-    this.entryTargets.forEach(entry => {
-      const visible = this.filter === "all" || entry.dataset.kindGroup === this.filter
-      entry.dataset.hidden = visible ? "false" : "true"
-    })
+    this.entryTargets.forEach(entry => this.#applyTo(entry))
+  }
+
+  #applyTo(entry) {
+    const filter = this.filter || "all"
+    const visible = filter === "all" || entry.dataset.kindGroup === filter
+    entry.dataset.hidden = visible ? "false" : "true"
   }
 
   #paintFilterChips() {

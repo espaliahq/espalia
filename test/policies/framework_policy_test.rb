@@ -63,6 +63,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.archive_capability?
       assert_not policy.add_capability?
       assert_not policy.add_category?
+      assert_not policy.archive_category?
     end
 
     should "deny settings" do
@@ -138,6 +139,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "allow add_capability and add_category" do
       assert policy.add_capability?
       assert policy.add_category?
+      assert policy.archive_category?
     end
   end
 
@@ -208,6 +210,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.archive_capability?
       assert policy.add_capability?
       assert policy.add_category?
+      assert policy.archive_category?
     end
 
     should "deny settings (requires tenant admin)" do
@@ -247,6 +250,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.archive_capability?
       assert policy.add_capability?
       assert policy.add_category?
+      assert policy.archive_category?
     end
   end
 
@@ -374,6 +378,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.archive_capability?
       assert_not policy.add_capability?
       assert_not policy.add_category?
+      assert_not policy.archive_category?
     end
   end
 

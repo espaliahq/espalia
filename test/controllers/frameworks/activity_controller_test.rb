@@ -49,6 +49,27 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
       assert_match "Added a capability", response.body
     end
 
+    should "give a pending deletion the same inline approve/reject as an edit (no muted Review link)" do
+      delete_sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_delete(
+          @framework_id, delete_sid, "capability", @cap_id,
+          author_id: @admin_person.id.to_s, rationale: "Redundant", mode: :suggesting)
+      end
+
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel")
+
+      assert_response :success
+      assert_match "Proposed removing", response.body
+      # The deletion proposal carries the prominent inline approve control…
+      assert_select(
+        "[data-controller='suggestion-action'][data-suggestion-action-approve-url-value*='#{delete_sid}']"
+      )
+      # …and no entry falls back to the muted detail-page "Review" link.
+      assert_select "a", { text: "Review", count: 0 }
+    end
+
     should "narrow to a capability under capability focus" do
       sign_in @admin_user
       get framework_activity_path(@framework_id, layout: "panel",

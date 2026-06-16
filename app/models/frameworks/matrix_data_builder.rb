@@ -170,6 +170,13 @@ class Frameworks::MatrixDataBuilder
     ordinals = merged_levels.map { |l| l[:ordinal] }
 
     @categories.filter_map do |category|
+      # An archived category leaves the matrix entirely (both modes). The
+      # aggregate flips its status to "archived" the moment the archive event
+      # applies; archiving an *empty* category alters no visible cells, so
+      # dropping it early (rather than carrying a "pending archive" badge like a
+      # capability does) keeps the grid clean without changing any ratings.
+      next if category_archived?(category)
+
       capabilities = build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
       @in_scope_capability_count += capabilities.size
       capabilities = filter_by_search(category, capabilities) if searching?
@@ -182,9 +189,36 @@ class Frameworks::MatrixDataBuilder
       {
         category: category,
         capabilities: capabilities,
+        archivable: category_archivable?(category),
         pending_suggestion_count: pending_count("capability_category", category.category_id),
-        pending_edit: pending_latest_edit("capability_category", category.category_id, "name")
+        pending_edit: pending_latest_edit("capability_category", category.category_id, "name"),
+        description_pending_edit: pending_latest_edit("capability_category", category.category_id, "description")
       }
+    end
+  end
+
+  # Whether the category itself has been archived (status flipped by the
+  # aggregate on CapabilityCategoryArchived). Such categories drop out of the
+  # matrix in both modes — see #build_categories.
+  #
+  # @return [Boolean]
+  def category_archived?(category)
+    category.respond_to?(:status) && category.status.to_s == "archived"
+  end
+
+  # Whether the category can be archived: it holds no genuinely-active
+  # capability. Mirrors the aggregate's guard (Frameworks::Aggregate
+  # #archive_capability_category, which rejects while active capabilities
+  # remain) — measured against the *full* capability set, not the role-filtered
+  # view, so a category that merely looks empty under the current role filter
+  # isn't offered for archive while it still has capabilities elsewhere. A
+  # capability staged for archive in the open draft (`pending_archive` in the
+  # graph; already `:archived` in aggregate state) does not block.
+  #
+  # @return [Boolean]
+  def category_archivable?(category)
+    category.capabilities.none? do |c|
+      c.status == "active" && !(c.respond_to?(:pending_archive) && c.pending_archive)
     end
   end
 
