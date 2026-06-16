@@ -15,6 +15,11 @@
 // Embedded usage (many remote triggers share one modal): place
 // data-controller="modal" on a common ancestor; remote triggers fire
 // data-action="click->modal#open".
+//
+// Multiple modals under one controller: when more than one overlay sits under
+// the same `modal` controller, each trigger must name which to open via
+// `data-modal-target-id="<overlay id>"`. With a single overlay and no such
+// attribute, it falls back to that overlay (backward-compatible).
 
 import BaseController from "controllers/base_controller"
 
@@ -34,8 +39,10 @@ export default class extends BaseController {
 
   open(event) {
     const trigger = event.currentTarget
+    this.activeOverlay = this.#resolveOverlay(trigger)
+    if (!this.activeOverlay) return
     window.dispatchEvent(new CustomEvent("modal:open", {
-      detail: { id: this.hasOverlayTarget ? this.overlayTarget.id : null, dataset: trigger?.dataset || {} }
+      detail: { id: this.activeOverlay.id, dataset: trigger?.dataset || {} }
     }))
     this.show()
   }
@@ -52,28 +59,45 @@ export default class extends BaseController {
 
   // private
 
+  // Pick the overlay a trigger targets: by `data-modal-target-id` when set
+  // (required once >1 overlay shares this controller), else the lone overlay.
+  #resolveOverlay(trigger) {
+    const id = trigger?.dataset?.modalTargetId
+    if (id) return this.overlayTargets.find((o) => o.id === id) || null
+    return this.hasOverlayTarget ? this.overlayTarget : null
+  }
+
+  #activePanel() {
+    return this.activeOverlay?.querySelector("[data-modal-target='panel']")
+  }
+
   show() {
-    this.overlayTarget.classList.remove("hidden")
-    this.overlayTarget.classList.add("flex")
+    const overlay = this.activeOverlay
+    if (!overlay) return
+    overlay.classList.remove("hidden")
+    overlay.classList.add("flex")
     document.body.style.overflow = "hidden"
     // Defer so the click that opened us (originating outside the panel) does
     // not immediately close it on the next listener pass.
     queueMicrotask(() => {
       document.addEventListener("click", this.boundClickOutside, true)
     })
-    const focusable = this.overlayTarget.querySelector("textarea, input:not([type='hidden']), select")
+    const focusable = overlay.querySelector("textarea, input:not([type='hidden']), select")
     focusable && focusable.focus()
   }
 
   hide() {
-    this.overlayTarget.classList.add("hidden")
-    this.overlayTarget.classList.remove("flex")
+    const overlay = this.activeOverlay
+    if (!overlay) return
+    overlay.classList.add("hidden")
+    overlay.classList.remove("flex")
     document.body.style.overflow = ""
     document.removeEventListener("click", this.boundClickOutside, true)
   }
 
   clickOutside(event) {
-    if (this.panelTarget.contains(event.target)) return
+    const panel = this.#activePanel()
+    if (panel && panel.contains(event.target)) return
     // Ignore any open-trigger — its own click is what opened us.
     if (event.target.closest("[data-action*='modal#open']")) return
     this.hide()

@@ -68,7 +68,7 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
       render_inline_editor_form(
         action: framework_expectation_path(framework_id: @framework_id, id: @expectation.expectation_id),
         field_name: "behavioural_expectation[description]",
-        current_value: @expectation.description,
+        current_value: inline_editor_value(@expectation.description, @pending_edit),
         rows: 3
       )
     end

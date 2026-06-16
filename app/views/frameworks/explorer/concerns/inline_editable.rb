@@ -52,6 +52,18 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
     end
   end
 
+  # The value to pre-fill the inline editor with. When a pending suggested edit
+  # exists on the field, seed the box with its *proposed* value so the user
+  # refines the proposal (matching the inline diff already shown) rather than
+  # starting over from the persisted value.
+  #
+  # @param current_value [Object] the persisted value
+  # @param pending_edit [Hash, nil] latest pending edit descriptor ({ suggested_value: })
+  # @return [String]
+  def inline_editor_value(current_value, pending_edit)
+    (pending_edit ? pending_edit[:suggested_value] : current_value).to_s
+  end
+
   # Renders the edit-mode form. Hidden until `inline-editor#startEdit` reveals
   # it. Turbo handles the PATCH submission and swaps the frame on response.
   #

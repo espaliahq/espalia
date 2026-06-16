@@ -11,7 +11,7 @@ The Framework Explorer is a two- or three-pane interactive view for browsing car
 The explorer has two modes, both backed by the same components:
 
 - **View mode** (`GET /frameworks/:id`) — published state only. No inline editors, no pending-suggestion decorations on the grid, no context pane. The `.flex` layout has two panes (role tree + matrix).
-- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability / category / expectation / illustration text, "+ Add illustration" affordances, draft-only and pending-archive badges, the amber "Edit mode" header badge, and the context (suggestions) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin.
+- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability name / **capability description** / category / expectation / illustration text, "+ Add illustration" affordances, draft-only and pending-archive badges, the amber "Edit mode" header badge, and the context (suggestions/activity) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin. **Structural edits** (add capability/category, the row-actions archive kebab, the draft pill, the Publish button) need the narrower `#edit_structure?` / `#publish?` bar — see §11.
 
 Both modes read structural data from the same `Frameworks::ExplorerGraph` snapshot (see [docs/architecture/framework-edit-mode-benchmarks.md](../architecture/framework-edit-mode-benchmarks.md)). A `mode: :view | :edit` kwarg is threaded from `ShowView` down through `Matrix`, `MatrixCategoryGroup`, `MatrixRow`, `MatrixCell`, and each entity's inline-edit frame. The `MatrixDataBuilder` filters out `added_in_draft` entities in view mode — matching `PublishedState`'s event-deferral semantics from ADR-16.
 
@@ -25,7 +25,7 @@ A segmented pill in the edit-mode header lets contributors flip between two subm
 Plumbing:
 - Persisted client-side in a 1-year cookie `framework_edit_mode` (`editing` | `suggesting`). Single global cookie — applies across frameworks.
 - [`app/controllers/concerns/framework_edit_mode.rb`](../../app/controllers/concerns/framework_edit_mode.rb) reads the cookie server-side and returns `:editing` / `:suggesting`.
-- The four inline-edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`) `include FrameworkEditMode` and pass `mode: framework_edit_mode` to `Frameworks::CommandHandler#suggest_edit` / `#suggest_create`.
+- The four inline-edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`) `include FrameworkEditMode` and pass `mode: framework_edit_mode` to `Frameworks::CommandHandler#suggest_edit` / `#suggest_create`. (`CapabilitiesController#update` handles **name or description** — whichever field the inline editor submitted — re-rendering the matching frame.)
 - `SuggestionsController#create` (the explicit "propose a change" endpoint for full-form creates/deletes) is intentionally **not** wired — it always submits as pending regardless of the toggle.
 - Stimulus controller [`edit_mode_toggle_controller.js`](../../app/javascript/controllers/edit_mode_toggle_controller.js) writes the cookie and swaps `aria-pressed` + the caller-supplied active/inactive classes when clicked. No server round-trip on select; the cookie is picked up on the next form submission.
 
@@ -78,9 +78,10 @@ User toggles role checkbox
 PageLayout
 └── div[data-controller="framework-explorer"]
     ├── framework_header
-    │   ├── back link, framework name, version badge, "Edit mode" badge (edit only)
-    │   └── right cluster: edit-suggest toggle (edit only) + mode switcher + settings link
-    ├── stats_bar (role count toggle, levels, capabilities; "N Suggestions" toggle — edit only)
+    │   ├── back link, framework name, version badge, draft pill + "Edit mode" badge (edit only)
+    │   └── right cluster: edit-suggest toggle + mode switcher + Publish button (edit + can_publish) + settings link
+    ├── stats_bar (role count toggle, levels, capabilities; "+ Add category" + "N Suggestions" toggle — edit only)
+    ├── ArchiveModal / AddCapabilityModal / AddCategoryModal (edit + can_edit_structure; data-controller="modal")
     └── explorer_layout[data-controller="matrix"]
         ├── aside[data-controller="tree"]  ← left pane (role tree)
         │   └── RoleTree
@@ -93,16 +94,18 @@ PageLayout
         │               ├── category header row (sticky)
         │               │   ├── chevron button → matrix#toggleCategory
         │               │   └── CategoryNameFrame (edit: inline editor; view: plain name)
-        │               └── MatrixRow (per capability)
-        │                   ├── compact row (click → matrix#toggleRow)
-        │                   │   ├── CapabilityNameFrame (edit: inline editor)
-        │                   │   └── MatrixCell × N
-        │                   │       └── ExpectationTextFrame (edit: inline editor)
-        │                   └── expanded row (illustrations, hidden)
-        │                       └── expanded td (click → matrix#focusCell)
-        │                           ├── IllustrationFrame (edit: pencil + inline editor)
-        │                           ├── PendingIllustrationFrame (ghost; edit mode only)
-        │                           └── NewIllustrationFrame ("+ Add"; edit mode only)
+        │               ├── MatrixRow (per capability)
+        │               │   ├── compact row (click → matrix#toggleRow)
+        │               │   │   ├── CapabilityNameFrame (edit: inline editor) + archive kebab (hover)
+        │               │   │   ├── CapabilityDescriptionFrame (edit: inline editor; "Add a description…" when blank)
+        │               │   │   └── MatrixCell × N
+        │               │   │       └── ExpectationTextFrame (edit: inline editor)
+        │               │   └── expanded row (illustrations, hidden)
+        │               │       └── expanded td (click → matrix#focusCell)
+        │               │           ├── IllustrationFrame (edit: pencil + inline editor)
+        │               │           ├── PendingIllustrationFrame (ghost; edit mode only)
+        │               │           └── NewIllustrationFrame ("+ Add"; edit mode only)
+        │               └── "+ Add capability" row (edit + can_edit_structure → opens AddCapabilityModal)
         └── aside[data-controller="context-pane"]  ← right pane (edit mode only)
             └── turbo-frame#suggestion-panel (Suggestions::PanelFrame)
 ```
@@ -317,13 +320,14 @@ See `app/models/frameworks/suggestion_diff.rb` for the algorithm and `test/model
 - `PENDING_DELETE_CLASSES` — red strikethrough on the entity wrapper (applied when `pending_delete_count > 0`). Delete wins over edit if both are non-zero.
 - `PENDING_EDIT_CLASSES` — legacy amber wavy underline retained as a wrapper-level fallback when an entity has a pending edit but no `pending_edit` payload is available (e.g. a future entity type that hasn't been wired through the map yet). Not expected to render on the four text-edit sites in normal operation.
 
-**Where the inline diff is applied** — four sites, each fed by `MatrixDataBuilder` from the two-part `pending_suggestions` map `{ count:, latest_edit: }`:
+**Where the inline diff is applied** — five sites, each fed by `MatrixDataBuilder` from the `pending_suggestions` map `{ count:, latest_by_field: { field => descriptor } }`. The map tracks the latest pending edit **per field** (not one field per entity), so a capability's name AND description each decorate independently:
 
 | Component | Decorated text | Count source | Diff payload source |
 |-----------|----------------|--------------|---------------------|
-| `MatrixCategoryGroup` → `CategoryNameFrame` | Category name (sticky category header) | `category_data[:pending_suggestion_count]` | `category_data[:pending_edit]` |
-| `MatrixRow` → `CapabilityNameFrame` | Capability name (compact row, sticky left column) | `capability_data[:pending_suggestion_count]` | `capability_data[:pending_edit]` |
-| `MatrixCell` → `ExpectationTextFrame` | Expectation text (compact cell) | `cell_data[:pending_suggestion_count]` | `cell_data[:pending_edit]` |
+| `MatrixCategoryGroup` → `CategoryNameFrame` | Category name (sticky category header) | `category_data[:pending_suggestion_count]` | `category_data[:pending_edit]` (field `name`) |
+| `MatrixRow` → `CapabilityNameFrame` | Capability name (compact row, sticky left column) | `capability_data[:pending_suggestion_count]` | `capability_data[:pending_edit]` (field `name`) |
+| `MatrixRow` → `CapabilityDescriptionFrame` | Capability description (compact row, under the name) | `capability_data[:pending_suggestion_count]` | `capability_data[:description_pending_edit]` (field `description`) |
+| `MatrixCell` → `ExpectationTextFrame` | Expectation text (compact cell) | `cell_data[:pending_suggestion_count]` | `cell_data[:pending_edit]` (field `description`) |
 | `MatrixRow` → `IllustrationFrame` | Illustration text (expanded row) | `cell_data[:illustration_pending_edits][illustration_id]` | `cell_data[:illustration_pending_edit_details][illustration_id]` |
 
 **InlineIndicator pill** (`app/views/frameworks/suggestions/inline_indicator.rb`) — small amber "N pending" count badge. Currently rendered **only** by `MatrixCell`, and **only** when `pending_suggestion_count >= 2`. With the inline diff visible, the pill's job shifts: it tells reviewers that more proposals exist on this expectation than the one currently shown interleaved. Category / capability / illustration rows do not render the pill.
@@ -332,7 +336,119 @@ See `app/models/frameworks/suggestion_diff.rb` for the algorithm and `test/model
 
 **Controller-side hydration after a submit.** When an inline edit lands via one of the four edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`), the re-rendered turbo-frame response re-queries the latest pending `SuggestedEdit` for the entity and passes it in as `pending_edit:`, so the inline diff appears immediately in Suggesting mode without a page reload. Hard-Won Lesson 16 (controller responses must re-query the pending count) now extends to the latest edit's `suggested_value` as well.
 
-**Data source invariants** — all pending counts *and* the `latest_edit` descriptors are pre-aggregated by `FrameworksController#load_pending_suggestion_maps` in a single indexed pass over `framework_suggested_edits`. `MatrixDataBuilder` and every view component operate in memory; no view queries the database for suggestion data.
+**Data source invariants** — all pending counts *and* the per-field `latest_by_field` descriptors are pre-aggregated by `FrameworksController#build_suggestions_map` (via `#load_pending_suggestion_maps`) in a single indexed pass over `framework_suggested_edits`. `MatrixDataBuilder` and every view component operate in memory; no view queries the database for suggestion data.
+
+**Inline editor seeds with the pending proposal.** When a field has a pending edit, opening its inline editor pre-fills the textarea with the **proposed** value (not the persisted one), so the user refines the proposal that's already shown as the diff — see the shared `inline_editable.rb#inline_editor_value(current_value, pending_edit)` helper, used by every inline-edit frame (capability name + description, category name, expectation text, illustration). The `inline_editor_controller`'s cancel restores the textarea to this server-rendered `defaultValue`, so cancel returns to the proposal too.
+
+### 11. Structural editing (add / archive / publish)
+
+Edit mode exposes direct structural edits, gated on a **narrower bar than the
+suggest bar**: `FrameworkPolicy#edit_structure?` (owner / editor / leads, or
+tenant admin) — distinct from `#edit?` (any collaborator with suggest rights,
+which is all that's needed to *reach* edit mode). The controller computes it
+once and threads it as `can_edit_structure` through `ShowView → Matrix →
+MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / editor).
+
+**Affordances:**
+- **"+ Add category"** — in the stats bar (header). Opens the add-category modal.
+- **"+ Add capability"** — at the foot of each category group. Opens the
+  add-capability modal, prefilled with that category; it captures name +
+  description + which **roles** the capability applies to (so it's visible in
+  the role-filtered matrix — a capability bound to no role is hidden).
+- **Row-actions kebab (⋮)** — hover-revealed beside the capability-name pencil
+  (expanded affordance set; today: Archive). Opens the archive modal, which
+  captures the migration mapping **as-we-go** (Evolve / Archive; *split* is a
+  separate future action). Owner/editor validate the mapping at the publish gate.
+- **Draft pill** (`vN draft`, teal) + **Publish button** — header, edit-mode +
+  draft-open only; Publish links to the publish-review page where mappings are
+  validated before the version is cut. (Draft lifecycle: see ADR-16/17.)
+
+**Shared modals under one `modal` controller.** Archive, add-capability, and
+add-category are three embedded `Kit::Modal`s on the explorer root, all driven by
+a single `modal` Stimulus controller. Each trigger names its overlay via
+`data-modal-target-id="<overlay id>"`; the controller opens that overlay (falling
+back to the lone overlay when a page has only one — so the assessment evidence /
+delegation modals are unchanged). Feature controllers prefill from the
+`modal:open` event's `dataset`: `add_capability_form` (category id/name),
+`archive_form` (capability id/name, needs-mapping, hides self from survivors),
+`mapping_form` (toggles the survivor select by mapping type).
+
+**Operations-first (web + MCP parity).** Add/archive/publish/mapping all dispatch
+`Operations::Frameworks::*` (`AddCapability`, `AddCategory`, `ArchiveCapability`,
+`DefineMigrationMapping`, `PublishVersion`) so the web controllers and the MCP
+tools share one implementation (the house rule). `AddCategory` is
+shape-preserving (applies live). `AddCapability`/`ArchiveCapability` are
+shape-changing → they **auto-open a draft** and the affected capability is
+**deferred from the published read model until publish** (see Hard-Won Lesson 17).
+
+### 12. Actionable feed entries (inline suggestion review) — the recurring pattern
+
+The activity feed is not just a narrative log — a **pending suggestion's
+submission entry is *actionable*** for a reviewer who can clear its tier. This is
+the canonical instance of a reusable **"actionable feed entry"** pattern: an
+entry that both narrates *and* offers the action inline, with a modal escape
+hatch for the cases that need input. The same pattern applies to the assessment
+feed (see [assessments.md](assessments.md)) and to future suggestion entity
+types — they inherit it for free.
+
+**Five invariants (apply the pattern, don't reinvent it):**
+
+1. **Actionable iff `pending? && viewer-has-authority`, computed server-side.**
+   An unauthorised viewer never receives the controls (no client-side hiding). The
+   feed query overlays each suggestion entry with `suggestion_status` +
+   `suggestion_entity_type`; the controller computes a per-viewer
+   `Frameworks::SuggestionApprovalAuthority` **once** (not a policy per entry) and
+   threads it to the entry, which gates on `authority.can_approve?(entity_type)`.
+   Tier routing has one source of truth: `FrameworkSuggestionPolicy.review_tier`
+   (entity → tier) + `FrameworkState::Collaborator::CONTENT_APPROVE_ROLES`
+   (tier → roles).
+2. **Primary action inline (one-click) for the low-regret case; needs-input /
+   destructive actions via a modal.** Here: **Approve** of a shape-preserving edit
+   is one click (applies live, reversible by another edit); **Reject** always
+   opens the shared reject modal so the reviewer can add an **optional, surfaced**
+   reason. Shape-changing approvals (create/delete — not yet reachable) route to
+   the modal/detail page — a dormant seam (`Entry#action_row`'s else branch).
+3. **Every action dispatches an `Operations::*` class** (web + MCP parity). The
+   four lifecycle ops are `:mcp_client`; the web's inline-vs-modal split is pure
+   UX, decoupled from the MCP approval category.
+4. **Resolution updates every affected frame and broadcasts live.** Approve/reject
+   answer **204** (flagged `inline=1`) so Turbo neither navigates nor blanks the
+   modal. The **feed** reloads off the existing activity broadcast
+   (`broadcast_framework_activity`, replay-guarded; the actor sees their own
+   resolution). The acting user's **matrix** refreshes client-side: the action
+   dispatches a window `suggestion:resolved` → `matrix#refresh` (re-fetches the
+   frame with the current filter axes) so the inline diff clears. Matrix refresh
+   is acting-user-only by design — feed-live / matrix-not (Hard-Won Lesson 21).
+5. **No internal categorisations surfaced** — review tiers stay invisible (§9).
+
+**Modal placement (load-bearing):** the reject modal lives on the **explorer
+root**, not inside `#suggestion-panel` — a frame reload (which the feed does on
+every resolution) would otherwise destroy an open modal. It shares the root
+`modal` controller with the structural modals (Lesson 19); the `modal` controller
+is therefore present for **all** edit-mode viewers, not just `can_edit_structure`
+holders. `reject_suggestion_form` prefills it from the trigger dataset and points
+the form at the suggestion's reject endpoint (a `__SID__` path template).
+
+**Click-vs-navigate:** an entry row is itself a navigable button
+(`context-pane#focusSuggestion`). The action controls must not also navigate, so
+`focusSuggestion` bails when the event target is a `button`/`a` (mouse or
+keyboard) — cheaper and more robust than `stopPropagation` (which would also kill
+the `modal#open` listener that fires during bubbling).
+
+**Two surfaces, one machinery.** The same pattern drives a second surface: the
+**matrix row-actions kebab** (`MatrixRow`, a `Kit::Dropdown`). When a capability
+has a pending name / description edit the viewer can approve, the kebab gains
+**Approve / Reject «field» change** items (alongside **Archive…** for
+edit-structure holders). They reuse the *exact* same pieces — `suggestion-action`
+(inline approve, `inline=1` → 204), the root reject modal, and
+`suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
+the feed are the same operation with the same live-update wiring (the feed
+reloads via broadcast either way). The per-viewer authority is threaded into the
+matrix the same way `can_edit_structure` is: controller → `Matrix` →
+`MatrixCategoryGroup` → `MatrixRow`. `matrix#toggleRow` already ignores clicks
+inside `[data-controller~='dropdown']`, so opening the kebab never expands the
+row. Expectation / illustration edits are not (yet) on the grid kebab — the feed
+covers those.
 
 ### 7. Responsive Behaviour
 
@@ -389,6 +505,7 @@ job via `updateSearch`. See §4a.
 - **Cell focus** (`focusCell` on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"`. Ignores clicks that land on interactive children (buttons, links, inputs, forms, `[contenteditable]`) so inline editors inside the cell don't accidentally toggle focus.
 - **Category focus** (`focusCategory` on the category name span). Dispatches `matrix:focus-changed` with `level: "category"`. Re-click clears to framework focus.
 - **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header.
+- **Resolution refresh** (`refresh` on `suggestion:resolved`) — re-fetches the matrix frame with the current filter axes so an inline approve/reject in the feed clears the now-resolved inline diff for the acting user (§12, Hard-Won Lesson 21).
 - **URL sync** (pushState for shareability — explorer uses role/track params)
 - **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
@@ -409,12 +526,18 @@ Also dispatches:
 - **`suggestion:navigate`** — fired by `focusSuggestion` when the user clicks a suggestion row body. Reads `data-nav-*` attributes from the clicked element and dispatches to window for `matrix_controller` to handle.
 
 ### inline_editor_controller.js
-Wraps every inline-edit site (IllustrationFrame, PendingIllustrationFrame, NewIllustrationFrame, CapabilityNameFrame, CategoryNameFrame, ExpectationTextFrame).
-- **Display / form toggle** — `startEdit` hides the display target and reveals the form; `cancel` restores display and resets the textarea to its `defaultValue`.
+Wraps every inline-edit site (IllustrationFrame, PendingIllustrationFrame, NewIllustrationFrame, CapabilityNameFrame, CapabilityDescriptionFrame, CategoryNameFrame, ExpectationTextFrame).
+- **Display / form toggle** — `startEdit` hides the display target and reveals the form; `cancel` restores display and resets the textarea to its `defaultValue` (the server-rendered value, which is the **pending proposal** when one exists — see §10).
 - **Post-submit signal** — on `turbo:submit-end` (bound via `data-action="turbo:submit-end->inline-editor#submitted"` on each form), dispatches a window-scoped `suggestion:submitted` event if the submission succeeded. `context_pane_controller` listens for it and reloads the suggestions panel so a just-landed pending row appears without a page refresh.
 
 ### edit_mode_toggle_controller.js (edit mode only)
 Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
+
+### suggestion_action_controller.js (edit mode only)
+Wraps the inline **Approve** button on an actionable feed entry. `approve` POSTs to the suggestion's approve endpoint (`inline=1` → 204) via `@rails/request.js`; on success dispatches the window `suggestion:resolved` event (→ `matrix#refresh`) and leaves the feed to reload off the activity broadcast. Reject is *not* handled here — it always opens the shared modal (§12).
+
+### reject_suggestion_form_controller.js (edit mode only)
+Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `rejectSuggestionId`, points the form at that suggestion's reject endpoint (a `__SID__` path template), fills the entity label + proposed-value preview, and clears the reason. On a successful submit it dispatches `suggestion:resolved`. The modal closes via `modal#submitted`; the feed reloads via broadcast (§12).
 
 ### Event contracts
 
@@ -425,6 +548,7 @@ Segmented Editing / Suggesting toggle in the header. Reads and writes the `frame
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 | `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null }` — triggers `matrix_controller#navigateToEntity` |
 | `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
+| `suggestion:resolved` | `suggestion_action_controller` (approve) / `reject_suggestion_form_controller` (reject) | no detail — fired on a successful inline approve/reject. Triggers `matrix_controller#refresh` so the acting user's grid drops the now-resolved inline diff. The feed reloads separately via the activity broadcast (§12, Hard-Won Lesson 21). |
 
 ## Hard-Won Lessons
 
@@ -501,6 +625,75 @@ The moment the aggregate became the source for `ExplorerGraph` (see the snapshot
 
 After a submit lands, the inline-edit controllers (`Illustrations`, `Capabilities`, `Categories`, `Expectations`) render a fresh turbo-frame containing the post-edit entity. If they pass `pending_edit_count: 0` (or omit it), the wavy-underline decoration doesn't appear — even though a pending suggestion just got created in Suggesting mode. Each response must re-query `FrameworkState::SuggestedEdit.pending` for the entity and thread the count into the frame constructor, so the user sees the pending decoration land immediately without a reload. The `MatrixDataBuilder` path would pick this up on the next full render, but for the in-place Turbo swap the controller has to do it itself.
 
+### 17. Inline-editing / archiving a draft-added capability must resolve from the graph, not the read model
+
+`add_capability` is **shape-changing**, so a capability added in the current
+draft is **deferred from the published `FrameworkState::Capability` read model**
+until publish — but it renders in the edit-mode matrix (sourced from the
+`ExplorerGraph`). The inline-edit (`CapabilitiesController#set_capability`) and
+archive (`Operations::Frameworks::ArchiveCapability#capability`,
+`CapabilityArchivesController#set_capability`) paths originally looked the
+capability up in the AR read model → `404` / silent dead-end on a freshly-added
+capability you could see on screen. Fix: resolve from the `ExplorerGraph`
+(`graph.capability_categories.flat_map(&:capabilities).find { … }`), which
+includes draft-added entities. The graph is per-framework, so finding the id in
+it also scopes the lookup to the authorized framework. After an auto-approved
+edit, re-resolve from a **fresh** graph load (the snapshot was rewritten).
+Categories don't have this problem — `add_capability_category` is
+shape-preserving (applies live), so a new category is in the read model at once.
+
+### 18. Empty categories must stay visible in edit mode
+
+`MatrixDataBuilder#build_categories` drops categories with no visible
+capabilities (`next if capabilities.empty?`) — correct for the clean view mode,
+but it made a freshly-added (still empty) category **vanish**, with no way to add
+capabilities to it. Keep empty categories **in edit mode** (still dropped in view
+mode and while searching): `next if capabilities.empty? && (@mode != :edit ||
+searching?)`.
+
+### 19. Multiple modals under one `modal` controller need `data-modal-target-id`
+
+The shared `modal` Stimulus controller originally assumed one overlay per
+controller-ancestor. The explorer now hosts three (archive / add-capability /
+add-category), and their triggers all live inside the same matrix — you can't
+nest a second `modal` controller (the inner one wins for everything beneath it).
+So `modal#open` resolves the overlay by the trigger's `data-modal-target-id`,
+falling back to the single `overlayTarget` when none is set. The fallback is
+load-bearing: it keeps existing single-modal callers (assessment evidence /
+delegation) working unchanged — but once >1 overlay shares a controller, **every**
+trigger must name its overlay or it opens the wrong (first) one.
+
+### 20. One endpoint, two surfaces — branch on an explicit marker, not request format
+
+`SuggestionsController#approve`/`reject` serve both the suggestion **detail page**
+(wants a redirect + flash) and the **inline feed/grid** (wants a quiet no-op). The
+first instinct — `respond_to` on `format.html` vs `format.turbo_stream` — is
+**wrong**: the detail-page forms are Turbo-driven (they carry `data-turbo-confirm`),
+so they submit with the same `Accept: text/vnd.turbo-stream.html` as the inline
+surfaces. Branching on format routed the detail page into the inline (`head :ok`)
+arm and it silently stopped redirecting. Fix: the inline surfaces flag themselves
+with an explicit `inline=1` param; everything else (incl. the Turbo detail page)
+redirects. The lesson generalises: when two callers of one action want different
+responses but can't be told apart by format, pass an explicit intent marker.
+
+### 21. Inline resolution must answer 204, and the matrix refreshes client-side
+
+Two halves of the "actionable feed entry" wiring that are easy to get wrong:
+
+- **204, not 200.** A Turbo form submit (the reject modal) that gets a `200` with
+  an empty body makes Turbo Drive render the empty body — **blanking the page**.
+  `head :no_content` (204) makes Turbo do nothing: the modal closes via
+  `turbo:submit-end` and the page is untouched. (The approve path uses
+  `@rails/request.js`, which doesn't navigate regardless, but 204 is correct there
+  too.)
+- **Feed-live, matrix-not.** The feed reloads for everyone via the activity
+  broadcast, but the matrix deliberately does **not** live-reload (it would flicker
+  / reset scroll for other viewers mid-edit). So an inline approve must refresh the
+  **acting user's** matrix itself — a window `suggestion:resolved` event →
+  `matrix#refresh` (re-fetch with the current `roles[]`/`track`/`q` axes). Other
+  viewers pick up the applied edit on their next interaction. Symmetric: a future
+  grid-side approve must refresh the feed the same way.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -521,6 +714,12 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > removed). The feed updates live for every edit-mode viewer (incl. the actor):
 > `PublishedState#broadcast_framework_activity` nudges a per-framework Turbo
 > stream and `context_pane_controller` reloads the feed frame on the sync signal.
+> **Recency cap + load-older:** the feed reads only the most-recent
+> `ActivityFeedQuery::STREAM_READ_LIMIT` events; when more exist *at framework
+> focus*, a "Load older activity" footer appends the next (older) batch via a
+> Turbo Stream and bumps the running count — cursor-paginated on `before:` (the
+> oldest loaded event id) with a `loaded` running total. `activity_more_controller`
+> issues the request; a live broadcast reload resets to the most-recent batch.
 > Still deferred (note when adding): role/level/binding structural events,
 > reorders, and threaded suggestion comments (`SuggestionCommented` unwired). The
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
@@ -577,23 +776,37 @@ line (§9).
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows |
-| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row |
+| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Archive (§12) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2) |
 | `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
 | `app/views/frameworks/explorer/capability_name_frame.rb` | Capability name + edit-mode inline editor |
+| `app/views/frameworks/explorer/capability_description_frame.rb` | Capability description + edit-mode inline editor ("Add a description…" when blank) |
 | `app/views/frameworks/explorer/category_name_frame.rb` | Category name + edit-mode inline editor |
+| `app/views/frameworks/explorer/archive_modal.rb` | Shared archive modal (capability + as-we-go migration mapping) — opened by the row kebab |
+| `app/views/frameworks/explorer/add_capability_modal.rb` | Shared add-capability modal (name + description + role bindings) |
+| `app/views/frameworks/explorer/add_category_modal.rb` | Shared add-category modal (name + description) |
+| `app/views/frameworks/publication_review_view.rb` | Publish-review page — validate/override migration mappings, then cut the version |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
 | `app/views/frameworks/explorer/concerns/search_highlight.rb` | Phlex `<mark>` highlighting of search-match terms (§4a) — safe, token-AND, overlap-merged |
-| `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form |
+| `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form; `inline_editor_value` seeds the box with the pending proposal |
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
-| `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, pending-suggestion counts + latest-edit descriptors) |
+| `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, keep empty categories in edit mode, per-field `latest_by_field` pending-edit descriptors) |
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
 | `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — retained for the standalone suggestion index, no longer the context pane |
-| `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + "Show all" clear link + filter chips + entry list + empty state) |
-| `app/views/frameworks/activity/entry.rb` | One activity entry — `KIND_DOT` / `KIND_GROUP`, summary + context line + actor·timestamp footer, matrix-navigation data attrs |
+| `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + count + "Show all" clear link + filter chips + entry list + load-older footer + empty state) |
+| `app/views/frameworks/activity/load_more.rb` | "Load older activity" footer (`#framework-activity-load-more`) — indication + affordance for the next batch |
+| `app/views/frameworks/activity/count.rb` | Loaded-entry count (`#framework-activity-count`) — replaced by the load-older Turbo Stream |
+| `app/views/frameworks/activity/show.turbo_stream.erb` | Load-older response — append older entries + replace the footer + the count |
+| `app/javascript/controllers/activity_more_controller.js` | "Load older" — GET next batch as a Turbo Stream via `@rails/request.js` |
+| `app/views/frameworks/activity/entry.rb` | One activity entry — `KIND_DOT` / `KIND_GROUP`, summary + context line + actor·timestamp footer, matrix-navigation data attrs, **inline Approve / Reject action row when pending + viewer-authorised** (§12) |
+| `app/views/frameworks/explorer/reject_suggestion_modal.rb` | Shared reject-suggestion modal (optional reason) — explorer root, edit mode (§12) |
+| `app/models/frameworks/suggestion_approval_authority.rb` | Per-viewer approval authority value object — computed once, gates the actionable feed (§12) |
+| `app/operations/operations/frameworks/{approve,reject,amend,withdraw}_suggestion.rb` | Shared web + MCP suggestion-lifecycle operations (§12) |
+| `app/javascript/controllers/suggestion_action_controller.js` | Inline approve — POSTs `inline=1`, dispatches `suggestion:resolved` (§12) |
+| `app/javascript/controllers/reject_suggestion_form_controller.js` | Prefills the reject modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12) |
 | `app/views/frameworks/activity/filter_chips.rb` | All / Suggestions / Edits / Structural / Lifecycle / Collaborators (client-side filter) |
 | `app/javascript/controllers/framework_activity_controller.js` | Client-side filter-chip toggling of visible entry groups |
 | `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
@@ -604,17 +817,23 @@ line (§9).
 | `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor` |
 | `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for the standalone suggestion index |
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) |
-| `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed) |
+| `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
-| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + (legacy) panel-layout branch |
+| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; approve/reject/amend/withdraw dispatch `Operations::Frameworks::*`. approve/reject are format-aware — `inline=1` (feed/grid) → 204, else redirect (§12) |
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH/POST) |
-| `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name (PATCH) |
-| `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name (PATCH) |
+| `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name **or** description (PATCH); add a capability (POST → `AddCapability`). Resolves the capability from the graph (incl. draft-added — Lesson 17) |
+| `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name (PATCH); add a category (POST → `AddCategory`) |
 | `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH) |
-| `app/policies/framework_policy.rb` | `edit?` / `edit_matrix?` predicates for the edit route |
+| `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
+| `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
+| `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
+| `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11) |
+| `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side |
+| `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback) — hosts the 3 shared structural modals (Lesson 19) |
+| `app/javascript/controllers/{add_capability_form,archive_form,mapping_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |

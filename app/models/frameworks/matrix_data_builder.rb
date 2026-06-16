@@ -24,12 +24,13 @@ class Frameworks::MatrixDataBuilder
   # @param track_filter [String] "ic", "management", or "both"
   # @param mode [Symbol] `:view` (default) hides draft-only entities matching PublishedState semantics; `:edit` includes them
   # @param pending_suggestions [Hash] pre-queried map
-  #   `{ [entity_type, entity_id] => { count:, latest_edit: } }`. `latest_edit`
-  #   carries `{ suggested_value:, suggestion_id:, created_at: }` for the most
-  #   recent pending `kind: "edit"` on the four text fields (category name,
-  #   capability name, expectation description, illustration description) —
-  #   consumed by the inline-diff decoration helper. `nil` when the entity has
-  #   only pending deletes or no pending text edits.
+  #   `{ [entity_type, entity_id] => { count:, latest_by_field: { field => desc } } }`.
+  #   Each `desc` is `{ suggested_value:, suggestion_id:, created_at:, id: }` for
+  #   the most recent pending `kind: "edit"` on that field — so the capability
+  #   name AND description frames (and category name, expectation/illustration
+  #   description) each pick their own field. Consumed by the inline-diff
+  #   decoration helper; `latest_by_field` is empty when the entity has only
+  #   pending deletes or no pending text edits.
   # @param pending_illustration_creates [Hash] pre-queried map { parent_id => [SuggestedEdit, ...] } for pending creates
   # @param search_query [String, nil] free-text filter applied *within* the
   #   current role scope. Matches (token-AND, case-insensitive) against each
@@ -172,13 +173,17 @@ class Frameworks::MatrixDataBuilder
       capabilities = build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
       @in_scope_capability_count += capabilities.size
       capabilities = filter_by_search(category, capabilities) if searching?
-      next if capabilities.empty?
+      # Drop empty categories in view mode (clean published view) and while
+      # searching. Keep them in edit mode so a freshly-added (still empty)
+      # category stays visible — otherwise its "+ Add capability" affordance
+      # vanishes and there's no way to populate it.
+      next if capabilities.empty? && (@mode != :edit || searching?)
 
       {
         category: category,
         capabilities: capabilities,
         pending_suggestion_count: pending_count("capability_category", category.category_id),
-        pending_edit: pending_latest_edit("capability_category", category.category_id)
+        pending_edit: pending_latest_edit("capability_category", category.category_id, "name")
       }
     end
   end
@@ -204,7 +209,8 @@ class Frameworks::MatrixDataBuilder
         bound_to_selected: bound_to_selected,
         cells: cells,
         pending_suggestion_count: pending_count("capability", capability.capability_id),
-        pending_edit: pending_latest_edit("capability", capability.capability_id)
+        pending_edit: pending_latest_edit("capability", capability.capability_id, "name"),
+        description_pending_edit: pending_latest_edit("capability", capability.capability_id, "description")
       }
     end
   end
@@ -250,7 +256,7 @@ class Frameworks::MatrixDataBuilder
         illustrations_by_role: illustrations_by_role,
         bound_selected_role_ids: bound_selected_role_ids,
         pending_suggestion_count: pending_count("behavioural_expectation", expectation.expectation_id),
-        pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id),
+        pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id, "description"),
         illustration_pending_edits: illustration_pending_edits(illustrations),
         illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
         pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
@@ -277,7 +283,7 @@ class Frameworks::MatrixDataBuilder
   # @return [Hash<String, Hash>]
   def illustration_pending_edit_details(illustrations)
     illustrations.each_with_object({}) do |ill, h|
-      latest = pending_latest_edit("role_illustration", ill.illustration_id)
+      latest = pending_latest_edit("role_illustration", ill.illustration_id, "description")
       h[ill.illustration_id] = latest if latest
     end
   end
@@ -314,8 +320,11 @@ class Frameworks::MatrixDataBuilder
     entry ? entry[:count] : 0
   end
 
-  def pending_latest_edit(entity_type, entity_id)
+  # Latest pending edit on a specific text field of an entity (used to render
+  # the inline diff). The map carries the latest edit per field, so the name
+  # frame and the description frame each pick their own.
+  def pending_latest_edit(entity_type, entity_id, field)
     entry = @pending_suggestions[[ entity_type, entity_id ]]
-    entry && entry[:latest_edit]
+    entry && entry[:latest_by_field] && entry[:latest_by_field][field]
   end
 end

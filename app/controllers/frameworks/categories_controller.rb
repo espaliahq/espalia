@@ -8,7 +8,28 @@ class Frameworks::CategoriesController < ApplicationController
   include FrameworkEditMode
 
   before_action :set_framework
-  before_action :set_category
+  before_action :set_category, only: [ :update ]
+
+  # POST /frameworks/:framework_id/categories
+  #
+  # Adds a new (empty) capability category via the shared add-category modal.
+  # Restricted to edit-rights holders.
+  def create
+    authorize @framework, :add_category?
+    attrs = params.expect(category: [ :name, :description ])
+
+    Operations::Frameworks::AddCategory.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        name: attrs[:name],
+        description: attrs[:description].presence
+      }
+    )
+    redirect_to edit_framework_path(@framework.framework_id), notice: "Added category “#{attrs[:name]}”."
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+  end
 
   # PATCH /frameworks/:framework_id/categories/:id
   #

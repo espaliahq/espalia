@@ -77,6 +77,12 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def archive_capability? = edit_structure?
 
+  # @return [Boolean]
+  def add_capability? = edit_structure?
+
+  # @return [Boolean]
+  def add_category? = edit_structure?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]

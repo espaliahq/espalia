@@ -69,7 +69,7 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
       render_inline_editor_form(
         action: framework_capability_path(framework_id: @framework_id, id: @capability.capability_id),
         field_name: "capability[name]",
-        current_value: @capability.name,
+        current_value: inline_editor_value(@capability.name, @pending_edit),
         rows: 2
       )
     end

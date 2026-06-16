@@ -436,6 +436,86 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_add_capability",
+        "description" => "Add a capability to a category, optionally binding it to roles (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "category_id" => { "type" => "string" },
+            "name" => { "type" => "string" },
+            "description" => { "type" => "string" },
+            "role_ids" => { "type" => "array" }
+          },
+          "required" => %w[framework_id category_id name],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_add_category",
+        "description" => "Add a capability category to a framework (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "name" => { "type" => "string" },
+            "description" => { "type" => "string" },
+            "ordinal" => { "type" => "integer" }
+          },
+          "required" => %w[framework_id name],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_amend_suggestion",
+        "description" => "Revise your own pending framework suggested edit (author only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"    => { "type" => "string" },
+            "suggestion_id"   => { "type" => "string" },
+            "suggested_value" => { "type" => "string" },
+            "rationale"       => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id suggested_value],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_approve_suggestion",
+        "description" => "Approve a pending framework suggested edit (tier authority required).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"  => { "type" => "string" },
+            "suggestion_id" => { "type" => "string" },
+            "comment"       => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_archive_capability",
         "description" => "Archive a capability, optionally recording its migration mapping (owner/editor/lead only).",
         "inputSchema" => {
@@ -560,6 +640,43 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "frameworks_reject_suggestion",
+        "description" => "Reject a pending framework suggested edit, optionally with a reason (tier authority required).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"  => { "type" => "string" },
+            "suggestion_id" => { "type" => "string" },
+            "comment"       => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_withdraw_suggestion",
+        "description" => "Withdraw your own pending framework suggested edit (author only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"  => { "type" => "string" },
+            "suggestion_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {

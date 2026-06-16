@@ -55,7 +55,7 @@ class FrameworksController < ApplicationController
     graph, matrix_data = load_explorer_matrix(mode: mode)
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
     fw_policy = policy(@framework)
-    can_archive = mode == :edit && fw_policy.archive_capability?
+    can_edit_structure = mode == :edit && fw_policy.edit_structure?
 
     render Views::Frameworks::ShowView.new(
       framework: graph,
@@ -71,8 +71,10 @@ class FrameworksController < ApplicationController
       mode: mode,
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
-      can_archive: can_archive,
-      archive_survivors: can_archive ? archive_survivors(graph) : [],
+      can_edit_structure: can_edit_structure,
+      approval_authority: suggestion_approval_authority(mode),
+      archive_survivors: can_edit_structure ? archive_survivors(graph) : [],
+      roles: can_edit_structure ? framework_roles(graph) : [],
       current_person_id: current_person&.id&.to_s,
       search_query: resolved_search_query
     )
@@ -87,14 +89,35 @@ class FrameworksController < ApplicationController
       selected_role_ids: parse_role_ids,
       mode: mode,
       current_person_id: current_person&.id&.to_s,
-      can_archive: mode == :edit && policy(@framework).archive_capability?
+      can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
+      approval_authority: suggestion_approval_authority(mode)
     ), layout: false
+  end
+
+  # Per-viewer suggestion-approval authority, so the matrix row kebab can offer
+  # inline approve/reject for a capability's pending edits (same value object the
+  # activity feed uses). Only meaningful in edit mode — the kebab is edit-only.
+  def suggestion_approval_authority(mode)
+    return Frameworks::SuggestionApprovalAuthority.none unless mode == :edit
+
+    Frameworks::SuggestionApprovalAuthority.for(
+      framework_id: @framework.framework_id,
+      person: current_person,
+      tenant_admin: current_user&.global_admin? || current_tenant_user&.admin? || false
+    )
   end
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:id))
   rescue ActiveRecord::RecordNotFound
     redirect_to frameworks_path
+  end
+
+  # Role binding candidates for the add-capability modal, as { id:, label: }.
+  def framework_roles(graph)
+    graph.role_families.flat_map(&:roles)
+      .map { |r| { id: r.role_id, label: r.name } }
+      .sort_by { |r| r[:label] }
   end
 
   # Survivor candidates for the archive modal's Evolve mapping — every
@@ -179,35 +202,29 @@ class FrameworksController < ApplicationController
     [ suggestions, creates ]
   end
 
-  # Iterates pending suggestions once, aggregating counts and capturing
-  # the latest edit per entity for the four inline-diff text fields.
-  TEXT_EDIT_FIELDS = {
-    "capability_category" => "name",
-    "capability" => "name",
-    "behavioural_expectation" => "description",
-    "role_illustration" => "description"
-  }.freeze
-  private_constant :TEXT_EDIT_FIELDS
-
+  # Iterates pending suggestions once, aggregating the per-entity count and the
+  # latest edit *per field* — so each inline-diff frame (capability name AND
+  # description, category name, expectation/illustration description) can pick
+  # the latest edit on its own field.
   def build_suggestions_map(scope)
     suggestions = {}
     # find_each ignores any scoped `order`, so we pick the latest edit per
-    # entity by comparing created_at inside the loop rather than relying on
-    # iteration order.
+    # entity+field by comparing created_at inside the loop rather than relying
+    # on iteration order.
     scope.find_each do |edit|
       key = [ edit.target_entity_type, edit.target_entity_id ]
-      entry = suggestions[key] ||= { count: 0, latest_edit: nil }
+      entry = suggestions[key] ||= { count: 0, latest_by_field: {} }
       entry[:count] += 1
 
-      next unless edit.kind == "edit" && TEXT_EDIT_FIELDS[edit.target_entity_type] == edit.field
+      next unless edit.kind == "edit" && edit.field.present?
 
-      current = entry[:latest_edit]
+      current = entry[:latest_by_field][edit.field]
       if current
         next if current[:created_at] > edit.created_at
         next if current[:created_at] == edit.created_at && current[:id] >= edit.id
       end
 
-      entry[:latest_edit] = {
+      entry[:latest_by_field][edit.field] = {
         id: edit.id,
         suggested_value: edit.suggested_value,
         suggestion_id: edit.suggestion_id,

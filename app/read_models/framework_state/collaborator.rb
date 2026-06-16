@@ -24,6 +24,11 @@ class FrameworkState::Collaborator < ApplicationRecord
   EDIT_ROLES = %w[owner editor role_family_lead role_lead capability_category_lead capability_lead].freeze
   SUGGEST_ROLES = %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator].freeze
   PUBLISH_ROLES = %w[owner editor].freeze
+  # Roles that may approve tier-2 (capability/category descriptions) and tier-3
+  # (behavioural expectations) suggested edits. Tier 1 (illustrations) uses the
+  # broader EDIT_ROLES. Single source of truth for FrameworkSuggestionPolicy and
+  # the activity feed's per-viewer approval authority.
+  CONTENT_APPROVE_ROLES = %w[owner editor capability_category_lead capability_lead].freeze
 
   validates :framework_id, presence: true
   validates :person_id, presence: true
@@ -34,4 +39,5 @@ class FrameworkState::Collaborator < ApplicationRecord
   scope :with_edit_rights, -> { where(role: EDIT_ROLES) }
   scope :with_suggest_rights, -> { where(role: SUGGEST_ROLES) }
   scope :with_publish_rights, -> { where(role: PUBLISH_ROLES) }
+  scope :with_content_approve_rights, -> { where(role: CONTENT_APPROVE_ROLES) }
 end

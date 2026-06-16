@@ -13,6 +13,21 @@
 class FrameworkSuggestionPolicy < ApplicationPolicy
   include FrameworkCollaboratorPermissions
 
+  # Maps a suggestion's target entity type to its review tier (1, 2, or 3).
+  # The single source of truth for tier routing — the activity feed reuses it
+  # to decide, per entry, whether the viewer's authority clears the tier
+  # (see Frameworks::ActivityController#suggestion_approval_authority).
+  #
+  # @param entity_type [String]
+  # @return [Integer]
+  def self.review_tier(entity_type)
+    case entity_type
+    when "role_illustration" then 1
+    when "behavioural_expectation" then 3
+    else 2
+    end
+  end
+
   # @return [Boolean]
   def index? = tenant_admin? || framework_collaborator_can_suggest?
 
@@ -43,15 +58,9 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
 
   private
 
-  # Maps the suggestion's target entity type to its review tier (1, 2, or 3).
-  #
   # @return [Integer]
   def review_tier
-    case record.target_entity_type
-    when "role_illustration" then 1
-    when "behavioural_expectation" then 3
-    else 2
-    end
+    self.class.review_tier(record.target_entity_type)
   end
 
   # author_id is a foreign key to people(id) — see CreateFrameworkSuggestedEdits.

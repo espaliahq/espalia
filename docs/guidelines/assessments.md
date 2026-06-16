@@ -441,6 +441,15 @@ representation in the activity feed.** The feed is the assessment's audit
 trail and shared narrative — if an action changes assessment state but leaves
 no entry, the other party (and the actor on reload) silently loses the story.
 
+> **Actionable entries.** When an assessment feed entry should let the viewer
+> *act* on it inline (the way the framework feed lets a reviewer approve a
+> pending suggestion), follow the **"actionable feed entry" pattern** documented
+> in [framework-explorer.md §12](framework-explorer.md): actionable iff
+> `pending? && viewer-authorised` (server-computed), primary action inline +
+> needs-input/destructive via a root-mounted modal, every action through an
+> `Operations::*` class, 204 responses, and a live resolution that refreshes
+> every affected frame. Don't reinvent it.
+
 This applies to ratings (self / manager / aligned + their revisions/clears),
 alignment milestones, comments, and **all evidence actions** — recording,
 editing, withdrawing, **and link add / remove** (`evidence_linked` /

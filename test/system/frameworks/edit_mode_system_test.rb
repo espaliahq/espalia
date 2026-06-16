@@ -153,6 +153,31 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "Sharper Strategic Thinking"
       assert_no_text "Strategic Thinking", exact: true
     end
+
+    should "submit a capability description edit and swap the frame" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      cap_id = FrameworkState::Capability.first.capability_id
+      editor = find("turbo-frame#capability-description-#{cap_id} > div")
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
+        editor
+      )
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
+        editor
+      )
+      page.execute_script(<<~JS, editor)
+        const ta = arguments[0].querySelector("textarea[name='capability[description]']");
+        ta.value = "Balances competing priorities.";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+
+      assert_text "Balances competing priorities."
+    end
   end
 
   context "Editing / Suggesting toggle" do
@@ -325,6 +350,52 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "adding structural content" do
+    should "not show the add affordances in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_no_selector "button[data-modal-target-id='add-category-modal']"
+      assert_no_selector "button[data-modal-target-id='add-capability-modal']"
+    end
+
+    should "add a category via the modal" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-category-modal']\").click();"
+      )
+      assert_selector "#add-category-modal", visible: true
+      within "#add-category-modal" do
+        fill_in "add_category_name", with: "Delivery & Craft"
+      end
+      click_button_with_js_fallback("Add category", expect_text: "Added category")
+      assert_text "Added category"
+      # The new (still empty) category must stay visible in edit mode so it can
+      # be populated — otherwise its "+ Add capability" affordance vanishes.
+      assert_text "Delivery & Craft"
+    end
+
+    should "add a capability (with a role) via the modal, prefilled with its category" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-capability-modal']\").click();"
+      )
+      assert_selector "#add-capability-modal", visible: true
+      within "#add-capability-modal" do
+        assert_text "Thinking" # category name prefilled from the trigger
+        fill_in "add_capability_name", with: "Systems Design"
+        check "Software Engineer"
+      end
+      click_button_with_js_fallback("Add capability", expect_text: "Added")
+      assert_text "Added"
+    end
+  end
+
   context "archiving a capability via the row kebab" do
     should "not show the kebab in view mode" do
       sign_in_as(@admin_user)
@@ -337,12 +408,18 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      # Kebab is hover-revealed in the capability name cell; JS-click it to
-      # open the shared archive modal (Selenium pointer clicks on the
-      # opacity-0 control flake on starved CI).
+      # Kebab is a hover-revealed dropdown in the capability name cell; JS-click
+      # the trigger to open the menu, then the "Archive…" item to open the shared
+      # archive modal (Selenium pointer clicks on the opacity-0 control flake on
+      # starved CI).
       assert_selector "button[aria-label='Capability actions']", visible: :all
       page.execute_script(<<~JS)
         document.querySelector("button[aria-label='Capability actions']").click();
+      JS
+      assert_text "Archive…"
+      page.execute_script(<<~JS)
+        [...document.querySelectorAll("[role='menuitem']")]
+          .find((b) => b.textContent.trim().startsWith("Archive")).click();
       JS
 
       assert_selector "#archive-capability-modal", visible: true
@@ -428,6 +505,33 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       within "turbo-frame#illustration-#{illustration.illustration_id}" do
         # Added "s" at the end renders as a sky-blue wavy span.
         assert_selector "span.decoration-sky-400", text: "s"
+      end
+    end
+
+    should "render the inline diff on a capability description on full render" do
+      capability = FrameworkState::Capability.first
+      FactoryBot.create(:framework_suggested_edit,
+        tenant: @tenant,
+        framework_id: @framework_id,
+        target_entity_type: "capability",
+        target_entity_id: capability.capability_id,
+        field: "description",
+        current_value: capability.description.to_s,
+        suggested_value: "Considers long-term impact",
+        kind: "edit",
+        status: "pending")
+
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      # The suggested description must decorate on a full matrix render — not
+      # only on the controller re-render right after submitting.
+      within "turbo-frame#capability-description-#{capability.capability_id}" do
+        assert_selector "span.decoration-sky-400", text: "Considers long-term impact"
+        # The inline editor is pre-filled with the pending proposal (so editing
+        # refines it), not the original value.
+        textarea = find("textarea[name='capability[description]']", visible: :all)
+        assert_equal "Considers long-term impact", textarea.value
       end
     end
   end
