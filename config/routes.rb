@@ -133,6 +133,7 @@ Rails.application.routes.draw do
     resources :capabilities, only: [ :create, :update ], controller: "frameworks/capabilities"
     resources :capability_archives, only: [ :create ], controller: "frameworks/capability_archives"
     resources :categories,   only: [ :create, :update ], controller: "frameworks/categories"
+    resources :category_archives, only: [ :create ], controller: "frameworks/category_archives"
     resources :expectations, only: [ :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
     resource :publication, only: [ :new, :create ], controller: "frameworks/publications"

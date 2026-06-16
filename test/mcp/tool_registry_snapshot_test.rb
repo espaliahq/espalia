@@ -537,6 +537,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_archive_category",
+        "description" => "Archive an (empty) capability category (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "category_id" => { "type" => "string" },
+            "reason" => { "type" => "string" }
+          },
+          "required" => %w[framework_id category_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_capability_get",
         "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {

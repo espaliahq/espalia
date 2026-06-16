@@ -81,7 +81,7 @@ PageLayout
     │   ├── back link, framework name, version badge, draft pill + "Edit mode" badge (edit only)
     │   └── right cluster: edit-suggest toggle + mode switcher + Publish button (edit + can_publish) + settings link
     ├── stats_bar (role count toggle, levels, capabilities; "+ Add category" + "N Suggestions" toggle — edit only)
-    ├── ArchiveModal / AddCapabilityModal / AddCategoryModal (edit + can_edit_structure; data-controller="modal")
+    ├── ArchiveModal / AddCapabilityModal / AddCategoryModal / ArchiveCategoryModal (edit + can_edit_structure; data-controller="modal")
     └── explorer_layout[data-controller="matrix"]
         ├── aside[data-controller="tree"]  ← left pane (role tree)
         │   └── RoleTree
@@ -361,27 +361,37 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   (expanded affordance set; today: Archive). Opens the archive modal, which
   captures the migration mapping **as-we-go** (Evolve / Archive; *split* is a
   separate future action). Owner/editor validate the mapping at the publish gate.
+- **Archive-category kebab** — hover-revealed at the right of the category
+  header, **only for an empty category** (the aggregate refuses to archive one
+  that still holds active capabilities, so we don't offer it otherwise —
+  `MatrixDataBuilder` computes `archivable` against the full, non-role-filtered
+  capability set). Opens the archive-category modal — a plain confirm + optional
+  reason, with **no migration mapping** (categories carry no ratings).
 - **Draft pill** (`vN draft`, teal) + **Publish button** — header, edit-mode +
   draft-open only; Publish links to the publish-review page where mappings are
   validated before the version is cut. (Draft lifecycle: see ADR-16/17.)
 
-**Shared modals under one `modal` controller.** Archive, add-capability, and
-add-category are three embedded `Kit::Modal`s on the explorer root, all driven by
-a single `modal` Stimulus controller. Each trigger names its overlay via
-`data-modal-target-id="<overlay id>"`; the controller opens that overlay (falling
-back to the lone overlay when a page has only one — so the assessment evidence /
-delegation modals are unchanged). Feature controllers prefill from the
-`modal:open` event's `dataset`: `add_capability_form` (category id/name),
-`archive_form` (capability id/name, needs-mapping, hides self from survivors),
-`mapping_form` (toggles the survivor select by mapping type).
+**Shared modals under one `modal` controller.** Archive(-capability),
+add-capability, add-category, and archive-category are four embedded `Kit::Modal`s
+on the explorer root, all driven by a single `modal` Stimulus controller. Each
+trigger names its overlay via `data-modal-target-id="<overlay id>"`; the
+controller opens that overlay (falling back to the lone overlay when a page has
+only one — so the assessment evidence / delegation modals are unchanged). Feature
+controllers prefill from the `modal:open` event's `dataset`: `add_capability_form`
+(category id/name), `archive_form` (capability id/name, needs-mapping, hides self
+from survivors), `mapping_form` (toggles the survivor select by mapping type),
+`archive_category_form` (category id/name — no mapping).
 
 **Operations-first (web + MCP parity).** Add/archive/publish/mapping all dispatch
 `Operations::Frameworks::*` (`AddCapability`, `AddCategory`, `ArchiveCapability`,
-`DefineMigrationMapping`, `PublishVersion`) so the web controllers and the MCP
-tools share one implementation (the house rule). `AddCategory` is
-shape-preserving (applies live). `AddCapability`/`ArchiveCapability` are
-shape-changing → they **auto-open a draft** and the affected capability is
-**deferred from the published read model until publish** (see Hard-Won Lesson 17).
+`ArchiveCategory`, `DefineMigrationMapping`, `PublishVersion`) so the web
+controllers and the MCP tools share one implementation (the house rule).
+`AddCategory` is shape-preserving (applies live).
+`AddCapability`/`ArchiveCapability`/`ArchiveCategory` are shape-changing → they
+**auto-open a draft** and the affected entity is **deferred from the published
+read model until publish** (see Hard-Won Lesson 17). `ArchiveCategory` has no
+migration mapping (categories carry no ratings) but the aggregate rejects it
+while active capabilities remain — empty the category first.
 
 ### 12. Actionable feed entries (inline suggestion review) — the recurring pattern
 
@@ -656,9 +666,10 @@ searching?)`.
 ### 19. Multiple modals under one `modal` controller need `data-modal-target-id`
 
 The shared `modal` Stimulus controller originally assumed one overlay per
-controller-ancestor. The explorer now hosts three (archive / add-capability /
-add-category), and their triggers all live inside the same matrix — you can't
-nest a second `modal` controller (the inner one wins for everything beneath it).
+controller-ancestor. The explorer now hosts four (archive-capability /
+add-capability / add-category / archive-category) plus the reject-suggestion
+modal, and their triggers all live inside the same matrix — you can't nest a
+second `modal` controller (the inner one wins for everything beneath it).
 So `modal#open` resolves the overlay by the trigger's `data-modal-target-id`,
 falling back to the single `overlayTarget` when none is set. The fallback is
 load-bearing: it keeps existing single-modal callers (assessment evidence /
@@ -790,6 +801,7 @@ line (§9).
 | `app/views/frameworks/explorer/archive_modal.rb` | Shared archive modal (capability + as-we-go migration mapping) — opened by the row kebab |
 | `app/views/frameworks/explorer/add_capability_modal.rb` | Shared add-capability modal (name + description + role bindings) |
 | `app/views/frameworks/explorer/add_category_modal.rb` | Shared add-category modal (name + description) |
+| `app/views/frameworks/explorer/archive_category_modal.rb` | Shared archive-category modal (confirm + optional reason; no migration mapping) — opened by the header kebab |
 | `app/views/frameworks/publication_review_view.rb` | Publish-review page — validate/override migration mappings, then cut the version |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
@@ -829,14 +841,15 @@ line (§9).
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name **or** description (PATCH); add a category (POST → `AddCategory`) |
 | `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH) |
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
+| `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
-| `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11) |
+| `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11) |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side |
 | `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback) — hosts the 3 shared structural modals (Lesson 19) |
-| `app/javascript/controllers/{add_capability_form,archive_form,mapping_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
+| `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |

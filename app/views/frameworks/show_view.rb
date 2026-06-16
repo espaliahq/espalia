@@ -89,6 +89,9 @@ class Views::Frameworks::ShowView < Views::Base
     render Views::Frameworks::Explorer::AddCategoryModal.new(
       framework_id: @framework.framework_id
     )
+    render Views::Frameworks::Explorer::ArchiveCategoryModal.new(
+      framework_id: @framework.framework_id
+    )
   end
 
   # Whether the shared structural-edit modals (+ the `modal` controller) render.

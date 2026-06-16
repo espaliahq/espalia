@@ -463,6 +463,52 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "archiving a category via the header kebab" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @empty_cat = SecureRandom.uuid_v7
+        # Shape-preserving add — applies live, no draft needed; an empty
+        # category is the archivable case (the aggregate refuses a non-empty one).
+        Frameworks::CommandHandler.new.add_capability_category(
+          @framework_id, @empty_cat, "Retire Me", ordinal: 2
+        )
+      end
+    end
+
+    should "only offer the archive kebab on the empty category, not the populated one" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      assert_text "Retire Me"
+      # Only the empty category exposes the kebab; the populated "Thinking" does
+      # not — so exactly one archive-category control renders, and it's the empty one.
+      assert_selector "button[aria-label='Archive category']", count: 1, visible: :all
+      assert_selector "button[data-archive-category-id='#{@empty_cat}']", visible: :all
+    end
+
+    should "open the archive-category modal from the kebab and archive the empty category" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_text "Retire Me"
+
+      # Hover-revealed (opacity-0) button — JS-click to avoid pointer-drop flake.
+      page.execute_script(<<~JS)
+        document.querySelector("button[data-archive-category-id='#{@empty_cat}']").click();
+      JS
+      assert_selector "#archive-category-modal", visible: true
+      within "#archive-category-modal" do
+        assert_text "Retire Me" # name prefilled from the trigger dataset
+      end
+
+      click_button_with_js_fallback("Archive category", expect_text: "Archived")
+      assert_text "Archived"
+      # Archiving is shape-changing — a draft auto-opens.
+      assert_text(/draft/i)
+    end
+  end
+
   context "inline diff for pending text edits" do
     should "render added and removed spans when a small pending edit exists on a capability name" do
       capability = FrameworkState::Capability.first

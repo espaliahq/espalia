@@ -22,6 +22,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @category_pending_count = category_data[:pending_suggestion_count] || 0
     @category_pending_edit = category_data[:pending_edit]
     @category_description_pending_edit = category_data[:description_pending_edit]
+    @category_archivable = category_data[:archivable]
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
@@ -81,7 +82,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         colspan: col_count,
         class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
       ) do
-        div(class: "flex items-start gap-2") do
+        div(class: "group flex items-start gap-2") do
           # Chevron collapses/expands the category rows
           button(
             type: "button",
@@ -143,7 +144,46 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
               )
             end
           end
+
+          archive_category_kebab if show_archive_category_kebab?
         end
+      end
+    end
+  end
+
+  # Archive affordance — edit mode, edit-structure rights, and only when the
+  # category holds no active capabilities (the aggregate refuses otherwise, so
+  # we don't offer it). Hover-revealed at the right of the header; opens the
+  # shared archive-category modal, naming this category via the trigger dataset.
+  def show_archive_category_kebab?
+    @mode == :edit && @can_edit_structure && @category_archivable
+  end
+
+  def archive_category_kebab
+    button(
+      type: "button",
+      class: "ml-auto mt-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 " \
+             "transition-opacity inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
+             "text-gray-400 hover:text-primary",
+      data: {
+        action: "click->modal#open",
+        modal_target_id: "archive-category-modal",
+        archive_category_id: @category.category_id,
+        archive_category_name: @category.name
+      },
+      aria_label: "Archive category"
+    ) do
+      svg(
+        class: "w-4 h-4", fill: "none", viewBox: "0 0 24 24",
+        stroke: "currentColor", stroke_width: "2"
+      ) do |s|
+        s.path(
+          stroke_linecap: "round", stroke_linejoin: "round",
+          d: "M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 " \
+             "01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 " \
+             "1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 " \
+             "1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+        )
       end
     end
   end
