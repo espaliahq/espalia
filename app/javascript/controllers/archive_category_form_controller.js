@@ -12,7 +12,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["categoryId", "title"]
+  static targets = ["categoryId", "title", "reason"]
 
   connect() {
     this._onOpen = this.#onOpen.bind(this)
@@ -34,5 +34,8 @@ export default class extends Controller {
     if (this.hasTitleTarget) {
       this.titleTarget.textContent = data.archiveCategoryName || "this category"
     }
+    // Clear any reason left over from a previous open (the modal is shared
+    // across categories — a stale reason must not ride along to the next one).
+    if (this.hasReasonTarget) this.reasonTarget.value = ""
   }
 }

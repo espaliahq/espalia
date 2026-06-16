@@ -55,7 +55,8 @@ class Views::Frameworks::Explorer::ArchiveCategoryModal < Views::Base
             class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Reason" }
       textarea(
         id: "archive_category_reason", name: "archive[reason]", rows: "2",
-        class: field_classes, placeholder: "Why is this category being retired?"
+        class: field_classes, placeholder: "Why is this category being retired?",
+        data: { archive_category_form_target: "reason" }
       )
     end
   end
