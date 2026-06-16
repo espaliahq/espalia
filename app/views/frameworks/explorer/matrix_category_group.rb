@@ -106,28 +106,36 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
           # Name + count row, with the (optionally inline-editable) description
           # stacked underneath — aligned under the name, past the chevron.
           div(class: "min-w-0") do
-            # Category name + count are the focus hit target. Button (not span)
-            # so keyboard + assistive-tech users can reach the focus action.
-            button(
-              type: "button",
-              class: "flex items-center gap-2 cursor-pointer hover:underline text-left",
-              data: {
-                action: "click->matrix#focusCategory",
-                category_id: @category.category_id
-              }
-            ) do
-              render Views::Frameworks::Explorer::CategoryNameFrame.new(
-                category: @category,
-                framework_id: @framework_id,
-                mode: @mode,
-                pending_edit_count: @category_pending_count,
-                pending_edit: @category_pending_edit,
-                search_query: @search_query
-              )
+            # Name + count (the focus hit target) and the archive kebab share one
+            # row. The kebab sits next to the name — NOT pushed to the far right
+            # of the full-width category header, which scrolls off-screen on a
+            # matrix with many level columns.
+            div(class: "flex items-center gap-1") do
+              # Button (not span) so keyboard + assistive-tech users can reach
+              # the focus action.
+              button(
+                type: "button",
+                class: "flex items-center gap-2 cursor-pointer hover:underline text-left",
+                data: {
+                  action: "click->matrix#focusCategory",
+                  category_id: @category.category_id
+                }
+              ) do
+                render Views::Frameworks::Explorer::CategoryNameFrame.new(
+                  category: @category,
+                  framework_id: @framework_id,
+                  mode: @mode,
+                  pending_edit_count: @category_pending_count,
+                  pending_edit: @category_pending_edit,
+                  search_query: @search_query
+                )
 
-              span(class: "text-xs text-gray-600 dark:text-gray-300") do
-                "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+                span(class: "text-xs text-gray-600 dark:text-gray-300") do
+                  "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+                end
               end
+
+              archive_category_kebab if show_archive_category_kebab?
             end
 
             # Description: inline-editable in edit mode (also shown when blank,
@@ -144,8 +152,6 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
               )
             end
           end
-
-          archive_category_kebab if show_archive_category_kebab?
         end
       end
     end
@@ -162,7 +168,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   def archive_category_kebab
     button(
       type: "button",
-      class: "ml-auto mt-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 " \
+      class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 " \
              "transition-opacity inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
              "text-gray-400 hover:text-primary",
       data: {

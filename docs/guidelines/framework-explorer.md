@@ -361,8 +361,9 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   (expanded affordance set; today: Archive). Opens the archive modal, which
   captures the migration mapping **as-we-go** (Evolve / Archive; *split* is a
   separate future action). Owner/editor validate the mapping at the publish gate.
-- **Archive-category kebab** — hover-revealed at the right of the category
-  header, **only for an empty category** (the aggregate refuses to archive one
+- **Archive-category kebab** — hover-revealed next to the category **name**
+  (not the far right of the full-width header, which scrolls off-screen on a
+  matrix with many level columns), **only for an empty category** (the aggregate refuses to archive one
   that still holds active capabilities, so we don't offer it otherwise —
   `MatrixDataBuilder` computes `archivable` against the full, non-role-filtered
   capability set). Opens the archive-category modal — a plain confirm + optional
