@@ -183,7 +183,8 @@ class Frameworks::MatrixDataBuilder
         category: category,
         capabilities: capabilities,
         pending_suggestion_count: pending_count("capability_category", category.category_id),
-        pending_edit: pending_latest_edit("capability_category", category.category_id, "name")
+        pending_edit: pending_latest_edit("capability_category", category.category_id, "name"),
+        description_pending_edit: pending_latest_edit("capability_category", category.category_id, "description")
       }
     end
   end

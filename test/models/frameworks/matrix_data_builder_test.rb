@@ -290,6 +290,23 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_nil cap[:pending_edit]
       end
 
+      should "surface the latest pending edit for a category description (its own field)" do
+        pending_map = {
+          [ "capability_category", @category.category_id ] => {
+            count: 1,
+            latest_by_field: { "description" => { suggested_value: "How we reason and decide",
+                                                  suggestion_id: SecureRandom.uuid_v7,
+                                                  created_at: Time.current } }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        category = result[:categories].first
+
+        assert_equal "How we reason and decide", category[:description_pending_edit][:suggested_value]
+        assert_nil category[:pending_edit], "a description edit must not surface as the name pending_edit"
+      end
+
       should "surface the latest pending edit for a capability description (its own field)" do
         pending_map = {
           [ "capability", @capability.capability_id ] => {

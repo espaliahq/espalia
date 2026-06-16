@@ -21,6 +21,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
     @category_pending_edit = category_data[:pending_edit]
+    @category_description_pending_edit = category_data[:description_pending_edit]
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
@@ -80,11 +81,11 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         colspan: col_count,
         class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
       ) do
-        div(class: "flex items-center gap-2") do
+        div(class: "flex items-start gap-2") do
           # Chevron collapses/expands the category rows
           button(
             type: "button",
-            class: "flex items-center justify-center w-4 h-4 cursor-pointer rounded " \
+            class: "flex items-center justify-center w-4 h-4 mt-0.5 cursor-pointer rounded " \
                    "hover:bg-gray-200 dark:hover:bg-gray-700",
             data: {
               action: "click->matrix#toggleCategory",
@@ -101,27 +102,45 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
             end
           end
 
-          # Category name + count are the focus hit target. Button (not span)
-          # so keyboard + assistive-tech users can reach the focus action.
-          button(
-            type: "button",
-            class: "flex items-center gap-2 cursor-pointer hover:underline text-left",
-            data: {
-              action: "click->matrix#focusCategory",
-              category_id: @category.category_id
-            }
-          ) do
-            render Views::Frameworks::Explorer::CategoryNameFrame.new(
-              category: @category,
-              framework_id: @framework_id,
-              mode: @mode,
-              pending_edit_count: @category_pending_count,
-              pending_edit: @category_pending_edit,
-              search_query: @search_query
-            )
+          # Name + count row, with the (optionally inline-editable) description
+          # stacked underneath — aligned under the name, past the chevron.
+          div(class: "min-w-0") do
+            # Category name + count are the focus hit target. Button (not span)
+            # so keyboard + assistive-tech users can reach the focus action.
+            button(
+              type: "button",
+              class: "flex items-center gap-2 cursor-pointer hover:underline text-left",
+              data: {
+                action: "click->matrix#focusCategory",
+                category_id: @category.category_id
+              }
+            ) do
+              render Views::Frameworks::Explorer::CategoryNameFrame.new(
+                category: @category,
+                framework_id: @framework_id,
+                mode: @mode,
+                pending_edit_count: @category_pending_count,
+                pending_edit: @category_pending_edit,
+                search_query: @search_query
+              )
 
-            span(class: "text-xs text-gray-600 dark:text-gray-300") do
-              "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+              span(class: "text-xs text-gray-600 dark:text-gray-300") do
+                "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
+              end
+            end
+
+            # Description: inline-editable in edit mode (also shown when blank,
+            # as an "Add a description…" affordance). View mode renders it only
+            # when present.
+            if @mode == :edit || @category.description.present?
+              render Views::Frameworks::Explorer::CategoryDescriptionFrame.new(
+                category: @category,
+                framework_id: @framework_id,
+                mode: @mode,
+                pending_edit: @category_description_pending_edit,
+                pending_edit_count: @category_description_pending_edit ? 1 : 0,
+                search_query: @search_query
+              )
             end
           end
         end

@@ -38,6 +38,34 @@ class Frameworks::CategoriesControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Cognition &amp; Thinking"
     end
 
+    should "submit a description suggest_edit and return the re-rendered description frame" do
+      sign_in @user
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { description: "How we reason and decide." } }
+
+      assert_response :success
+      assert_includes response.body, "category-description-#{@cat_id}"
+      assert_includes response.body, "How we reason and decide."
+    end
+
+    should "keep a description edit pending when the suggesting cookie is set" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { description: "Proposed description" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        suggestion = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id,
+          target_entity_type: "capability_category",
+          target_entity_id: @cat_id,
+          field: "description"
+        ).last
+        assert_equal "pending", suggestion.status
+        assert_equal "Proposed description", suggestion.suggested_value
+      end
+    end
+
     should "keep the edit pending when the suggesting cookie is set" do
       sign_in @user
       cookies[:framework_edit_mode] = "suggesting"

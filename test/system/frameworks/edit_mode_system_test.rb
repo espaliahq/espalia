@@ -178,6 +178,31 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       assert_text "Balances competing priorities."
     end
+
+    should "submit a category description edit and swap the frame" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      cat_id = FrameworkState::CapabilityCategory.first.category_id
+      editor = find("turbo-frame#category-description-#{cat_id} > div")
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
+        editor
+      )
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
+        editor
+      )
+      page.execute_script(<<~JS, editor)
+        const ta = arguments[0].querySelector("textarea[name='capability_category[description]']");
+        ta.value = "How we reason and decide.";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
+      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+
+      assert_text "How we reason and decide."
+    end
   end
 
   context "Editing / Suggesting toggle" do
