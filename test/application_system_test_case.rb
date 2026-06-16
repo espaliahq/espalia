@@ -127,13 +127,39 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   private
 
+  # Ensures the browser is sitting on a freshly-rendered Devise sign-in form
+  # before a sign_in attempt tries to fill its fields. Two recurring failure
+  # modes this guards against:
+  #
+  # 1. `visit new_user_session_path` returns on a starved CI runner before
+  #    the rendered page has settled — fill_in then races an empty document.
+  # 2. After `Capybara.reset_sessions!` mid-test, a leftover authenticated
+  #    session can survive the reset on some Selenium configurations;
+  #    Devise then redirects /users/sign_in to root for the still-signed-in
+  #    user, so the form never renders. (Surfaced in AlignmentAssessments
+  #    "assessee experience during alignment" runs #27393468272 /
+  #    #27490859327 / #27495673118 / #27514458883.)
+  #
+  # Strategy: visit if the form isn't already on the page, wait for the
+  # input to appear, and if it doesn't, explicitly delete cookies + revisit
+  # before failing — covers both the timing race and the carryover-session
+  # race in one place.
+  def ensure_sign_in_form_loaded
+    visit new_user_session_path unless page.has_field?("Email", wait: 0)
+    return if page.has_selector?("input#user_email", visible: true, wait: 2)
+
+    # The visit didn't produce a sign-in form — most likely a leftover
+    # session redirected us. Force a clean slate and try once more.
+    page.driver.browser.manage.delete_all_cookies
+    visit new_user_session_path
+    assert_selector "input#user_email", visible: true
+  end
+
   # Re-fills email/password and clicks Log in. Idempotent — Devise's sign-in
   # form is rendered fresh on every GET, so re-filling clears any partial
   # state from a dropped first attempt.
   def submit_sign_in_form(email, password)
-    # If a dropped click left us mid-form, navigate back to a fresh form so
-    # the field selectors are present and not stale.
-    visit new_user_session_path unless page.has_field?("Email", wait: 0)
+    ensure_sign_in_form_loaded
 
     fill_in "Email", with: email
     fill_in "Password", with: password
@@ -144,7 +170,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # +form.requestSubmit()+ — bypasses Selenium's synthetic pointer click
   # entirely so a starved CI runner can't drop the submission.
   def submit_sign_in_form_via_js(email, password)
-    visit new_user_session_path unless page.has_field?("Email", wait: 0)
+    ensure_sign_in_form_loaded
 
     fill_in "Email", with: email
     fill_in "Password", with: password

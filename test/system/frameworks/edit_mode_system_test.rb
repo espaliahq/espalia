@@ -278,6 +278,14 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # exact query (see docs/guidelines/testing.md → inline-editor form submits).
       set_search_query "Strategic"
       assert_text "Strategic Thinking"
+      # The filter triggers a Turbo Frame fetch; wait for the new frame to
+      # finish loading and for Stimulus to re-attach to the swapped DOM
+      # before expanding. Without this, expand_matrix_row can click an
+      # old row whose toggle handler is mid-replacement, leaving the
+      # expanded-row content (and its inline-editor li) hidden when the
+      # assertion below fires.
+      assert_selector "turbo-frame#framework-matrix[complete]", visible: :all
+      wait_for_stimulus "matrix"
 
       # Still edit mode: expanding the row reveals the inline editors that
       # only render in edit mode.
@@ -287,6 +295,8 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # Clear the filter — must remain in edit mode.
       set_search_query ""
       assert_text "Strategic Thinking"
+      assert_selector "turbo-frame#framework-matrix[complete]", visible: :all
+      wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id]")
       assert_selector "li[data-controller='inline-editor']"
     end
