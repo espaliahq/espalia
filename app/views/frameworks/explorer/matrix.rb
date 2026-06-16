@@ -11,13 +11,15 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
   # @param mode [Symbol] :view or :edit
   def initialize(matrix_data:, selected_role_ids:, framework_id:, mode: :view,
-                 current_person_id: nil, can_edit_structure: false)
+                 current_person_id: nil, can_edit_structure: false,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @matrix_data = matrix_data
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
     @mode = mode
     @current_person_id = current_person_id
     @can_edit_structure = can_edit_structure
+    @approval_authority = approval_authority
     @merged_levels = matrix_data[:merged_levels]
     @categories = matrix_data[:categories]
     # Prebuild role lookup so expanded cells don't hit AR once per bound
@@ -71,7 +73,8 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             roles_by_id: @roles_by_id,
             current_person_id: @current_person_id,
             search_query: @matrix_data[:search_query],
-            can_edit_structure: @can_edit_structure
+            can_edit_structure: @can_edit_structure,
+            approval_authority: @approval_authority
           )
         end
       end

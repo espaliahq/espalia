@@ -59,6 +59,46 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "load older (pagination)" do
+    setup do
+      cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
+      events = Array.new(cap + 5) do |i|
+        Frameworks::Events::CapabilityAdded.new(
+          data: { framework_id: @framework_id, capability_id: SecureRandom.uuid_v7, name: "bulk-#{i}" },
+          metadata: { tenant_id: @tenant.id }
+        )
+      end
+      ActsAsTenant.with_tenant(@tenant) do
+        Rails.configuration.event_store.append(events, stream_name: EventStreamNaming.framework_stream(@framework_id))
+      end
+      sign_in @admin_user
+    end
+
+    should "render a load-older affordance when the stream exceeds the read cap" do
+      get framework_activity_path(@framework_id, layout: "panel")
+
+      assert_response :success
+      assert_select "#framework-activity-list"
+      assert_select "#framework-activity-load-more [data-controller='activity-more']"
+      assert_match "Load older activity", response.body
+    end
+
+    should "append the older batch and swap the footer for a Turbo Stream request" do
+      newest = ActsAsTenant.with_tenant(@tenant) do
+        Rails.configuration.event_store.read
+          .stream(EventStreamNaming.framework_stream(@framework_id)).backward.limit(1).first.event_id
+      end
+
+      get framework_activity_path(@framework_id, before: newest),
+        headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :success
+      assert_match(/<turbo-stream action="append" target="framework-activity-list">/, response.body)
+      assert_match(/<turbo-stream action="replace" target="framework-activity-load-more">/, response.body)
+      assert_match(/<turbo-stream action="replace" target="framework-activity-count">/, response.body)
+    end
+  end
+
   context "as a non-member" do
     should "deny access" do
       sign_in @outsider_user

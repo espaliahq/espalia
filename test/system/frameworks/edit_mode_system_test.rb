@@ -398,12 +398,18 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
 
-      # Kebab is hover-revealed in the capability name cell; JS-click it to
-      # open the shared archive modal (Selenium pointer clicks on the
-      # opacity-0 control flake on starved CI).
+      # Kebab is a hover-revealed dropdown in the capability name cell; JS-click
+      # the trigger to open the menu, then the "Archive…" item to open the shared
+      # archive modal (Selenium pointer clicks on the opacity-0 control flake on
+      # starved CI).
       assert_selector "button[aria-label='Capability actions']", visible: :all
       page.execute_script(<<~JS)
         document.querySelector("button[aria-label='Capability actions']").click();
+      JS
+      assert_text "Archive…"
+      page.execute_script(<<~JS)
+        [...document.querySelectorAll("[role='menuitem']")]
+          .find((b) => b.textContent.trim().startsWith("Archive")).click();
       JS
 
       assert_selector "#archive-capability-modal", visible: true

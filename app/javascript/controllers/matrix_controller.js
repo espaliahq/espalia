@@ -179,6 +179,15 @@ export default class extends BaseController {
     this.#rebuildMatrixFrame({ query: query ?? "" })
   }
 
+  // Re-fetch the matrix frame with the current filter axes unchanged. Called
+  // after an inline suggestion approve/reject resolves a pending edit, so the
+  // acting user's grid drops the stale inline diff and shows the applied value.
+  // Acting-user-only by design — the feed live-reloads for everyone, the matrix
+  // does not (see framework-explorer.md: feed-live/matrix-not).
+  refresh() {
+    this.#rebuildMatrixFrame()
+  }
+
   // Rebuilds the matrix Turbo Frame src from the three filter axes. Any axis
   // not supplied by the caller is read back from the browser URL, so a change
   // to one axis (role selection OR text query) preserves the others.

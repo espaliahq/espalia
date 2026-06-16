@@ -70,8 +70,14 @@ class Views::Frameworks::Activity::Entry < Views::Base
   }.freeze
 
   # @param entry [Frameworks::ActivityFeedQuery::Entry]
-  def initialize(entry:)
+  # @param framework_id [String, nil] needed by inline action affordances
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
+  #   authority; an entry is actionable only when its suggestion is pending AND
+  #   the viewer can approve its tier
+  def initialize(entry:, framework_id: nil, approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @entry = entry
+    @framework_id = framework_id
+    @approval_authority = approval_authority
   end
 
   def view_template
@@ -90,11 +96,92 @@ class Views::Frameworks::Activity::Entry < Views::Base
         context_line if context_text
         secondary_line if secondary_text
         footer
+        action_row if actionable?
       end
     end
   end
 
   private
+
+  # Suggestion-submission kinds whose entry carries the suggestion's *current*
+  # status — the natural single anchor for the actionable row (one per
+  # suggestion). Lifecycle kinds (amended/approved/rejected/withdrawn) are
+  # narrative only.
+  ACTIONABLE_KINDS = %w[suggestion_edit suggestion_create suggestion_delete].freeze
+
+  # An entry is actionable when its suggestion is still pending AND the viewer's
+  # precomputed authority clears the suggestion's review tier. Computed
+  # server-side — an unauthorised viewer never receives the controls.
+  def actionable?
+    @framework_id.present? &&
+      ACTIONABLE_KINDS.include?(@entry.kind) &&
+      @entry.suggestion_status == "pending" &&
+      @entry.suggestion_entity_type.present? &&
+      @approval_authority.can_approve?(@entry.suggestion_entity_type)
+  end
+
+  # Inline approve + modal reject for edits (shape-preserving). Create/delete
+  # proposals (shape-changing, not yet reachable from the UI) fall back to a
+  # "Review" link to the detail page — the dormant seam for those kinds.
+  def action_row
+    if @entry.kind == "suggestion_edit"
+      div(
+        class: "mt-1.5 flex items-center gap-2",
+        data: {
+          controller: "suggestion-action",
+          suggestion_action_approve_url_value:
+            approve_framework_suggestion_path(@framework_id, @entry.suggestion_id, inline: 1)
+        }
+      ) do
+        approve_button
+        reject_button
+      end
+    else
+      div(class: "mt-1.5") { review_link }
+    end
+  end
+
+  def approve_button
+    button(
+      type: "button",
+      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
+             "bg-green-600 text-white hover:bg-green-700 transition-colors " \
+             "disabled:opacity-50 disabled:cursor-not-allowed",
+      data: { action: "suggestion-action#approve" }
+    ) { "Approve" }
+  end
+
+  def reject_button
+    button(
+      type: "button",
+      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
+             "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 " \
+             "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
+      data: {
+        action: "click->modal#open",
+        modal_target_id: "reject-suggestion-modal",
+        reject_suggestion_id: @entry.suggestion_id,
+        reject_framework_id: @framework_id,
+        reject_entity_label: entity_word,
+        reject_preview: reject_preview
+      }
+    ) { "Reject" }
+  end
+
+  def review_link
+    a(
+      href: framework_suggestion_path(@framework_id, @entry.suggestion_id),
+      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
+             "text-primary hover:bg-primary/10 transition-colors",
+      data: { turbo_frame: "_top" }
+    ) { "Review" }
+  end
+
+  # The proposed value, shown in the reject modal so the reviewer sees what
+  # they're declining.
+  def reject_preview
+    payload_value(:suggested_value).to_s.strip.presence
+  end
 
   def dom_safe_id
     @entry.id.to_s.gsub(/[^a-zA-Z0-9_-]/, "-")

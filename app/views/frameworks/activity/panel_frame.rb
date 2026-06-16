@@ -15,11 +15,19 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
   # @param entries [Array<Frameworks::ActivityFeedQuery::Entry>] reverse-chronological
   # @param focus_descriptor [Hash] { level:, category_name:, capability_name:, level_label: }
   # @param clear_path [String, nil] URL that clears focus (framework-wide feed)
-  def initialize(framework:, entries:, focus_descriptor: { level: :framework }, clear_path: nil)
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
+  #   approval authority; drives whether a pending-suggestion entry is actionable
+  def initialize(framework:, entries:, focus_descriptor: { level: :framework }, clear_path: nil,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none,
+                 has_more: false, load_more_path: nil, total_loaded: nil)
     @framework = framework
     @entries = entries
     @focus_descriptor = focus_descriptor
     @clear_path = clear_path
+    @approval_authority = approval_authority
+    @has_more = has_more
+    @load_more_path = load_more_path
+    @total_loaded = total_loaded || entries.size
   end
 
   def view_template
@@ -38,9 +46,9 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
       div(class: "flex items-start justify-between gap-2") do
         div(class: "min-w-0 flex-1") do
           h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") { focus_title }
-          p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
-            "#{@entries.size} #{@entries.size == 1 ? 'event' : 'events'}"
-          end
+          # Count reflects entries loaded so far (running total across batches);
+          # the "load older" Turbo Stream replaces this with the new total.
+          render Views::Frameworks::Activity::Count.new(total: @total_loaded)
           clear_focus_link if focused?
         end
         # Links to the standalone suggestion-review index — name the
@@ -92,9 +100,19 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
       if @entries.empty?
         empty_state
       else
-        ul(class: "space-y-1") do
-          @entries.each { |entry| render Views::Frameworks::Activity::Entry.new(entry: entry) }
+        # Stable id so the "load older" Turbo Stream can append the next batch.
+        ul(id: "framework-activity-list", class: "space-y-1") do
+          @entries.each do |entry|
+            render Views::Frameworks::Activity::Entry.new(
+              entry: entry,
+              framework_id: @framework.framework_id,
+              approval_authority: @approval_authority
+            )
+          end
         end
+        render Views::Frameworks::Activity::LoadMore.new(
+          has_more: @has_more, load_more_path: @load_more_path
+        )
       end
     end
   end

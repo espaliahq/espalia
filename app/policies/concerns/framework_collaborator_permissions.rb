@@ -49,10 +49,8 @@ module FrameworkCollaboratorPermissions
     case tier
     when 1
       collaborator_roles.with_edit_rights.exists?
-    when 2
-      collaborator_roles.where(role: %w[owner editor capability_category_lead capability_lead]).exists?
-    when 3
-      collaborator_roles.where(role: %w[owner editor capability_category_lead capability_lead]).exists?
+    when 2, 3
+      collaborator_roles.with_content_approve_rights.exists?
     else
       false
     end

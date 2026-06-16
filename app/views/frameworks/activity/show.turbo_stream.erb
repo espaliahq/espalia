@@ -1,0 +1,19 @@
+<%# "Load older activity" response: append the older batch to the feed list and %>
+<%# swap the load-more footer for the next cursor (or empty it when exhausted). %>
+<%= turbo_stream.append "framework-activity-list" do %>
+  <% @entries.each do |entry| %>
+    <%= render Views::Frameworks::Activity::Entry.new(
+          entry: entry,
+          framework_id: @framework.framework_id,
+          approval_authority: @approval_authority
+        ) %>
+  <% end %>
+<% end %>
+<%= turbo_stream.replace "framework-activity-load-more" do %>
+  <%= render Views::Frameworks::Activity::LoadMore.new(
+        has_more: @has_more, load_more_path: @load_more_path
+      ) %>
+<% end %>
+<%= turbo_stream.replace "framework-activity-count" do %>
+  <%= render Views::Frameworks::Activity::Count.new(total: @total_loaded) %>
+<% end %>

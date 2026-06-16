@@ -89,39 +89,43 @@ class Frameworks::SuggestionsController < ApplicationController
   end
 
   # POST /frameworks/:framework_id/suggestions/:id/approve
+  #
+  # HTML (detail page) → redirect; Turbo/JSON (inline feed / grid) → head :ok.
+  # The feed reloads itself off the activity broadcast; the grid refreshes
+  # client-side on the response — see framework-explorer.md (actionable feed).
   def approve
     authorize @suggestion, :approve?
 
-    Frameworks::CommandHandler.new.approve_suggestion(
-      @framework.framework_id,
-      @suggestion.suggestion_id,
-      current_person.id.to_s,
-      comment: params[:comment].presence
+    Operations::Frameworks::ApproveSuggestion.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        suggestion_id: @suggestion.suggestion_id,
+        comment: params[:comment].presence
+      }
     )
 
-    redirect_to framework_suggestions_path(@framework.framework_id),
-                notice: "Suggestion approved."
-  rescue RuntimeError => e
-    redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
-                alert: e.message
+    respond_to_resolution(notice: "Suggestion approved.")
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    respond_to_failure(e)
   end
 
   # POST /frameworks/:framework_id/suggestions/:id/reject
   def reject
     authorize @suggestion, :reject?
 
-    Frameworks::CommandHandler.new.reject_suggestion(
-      @framework.framework_id,
-      @suggestion.suggestion_id,
-      current_person.id.to_s,
-      comment: params[:comment].presence
+    Operations::Frameworks::RejectSuggestion.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        suggestion_id: @suggestion.suggestion_id,
+        comment: params[:comment].presence
+      }
     )
 
-    redirect_to framework_suggestions_path(@framework.framework_id),
-                notice: "Suggestion rejected."
-  rescue RuntimeError => e
-    redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
-                alert: e.message
+    respond_to_resolution(notice: "Suggestion rejected.")
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    respond_to_failure(e)
   end
 
   # PATCH /frameworks/:framework_id/suggestions/:id/amend
@@ -130,17 +134,19 @@ class Frameworks::SuggestionsController < ApplicationController
 
     amendment = params.expect(suggestion: [ :suggested_value, :rationale ])
 
-    Frameworks::CommandHandler.new.amend_suggestion(
-      @framework.framework_id,
-      @suggestion.suggestion_id,
-      amendment[:suggested_value],
-      current_person.id.to_s,
-      rationale: amendment[:rationale].presence
+    Operations::Frameworks::AmendSuggestion.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        suggestion_id: @suggestion.suggestion_id,
+        suggested_value: amendment[:suggested_value],
+        rationale: amendment[:rationale].presence
+      }
     )
 
     redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
                 notice: "Suggestion updated."
-  rescue RuntimeError => e
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
                 alert: e.message
   end
@@ -149,21 +155,51 @@ class Frameworks::SuggestionsController < ApplicationController
   def destroy
     authorize @suggestion, :withdraw?
 
-    Frameworks::CommandHandler.new.withdraw_suggestion(
-      @framework.framework_id,
-      @suggestion.suggestion_id,
-      current_person.id.to_s
+    Operations::Frameworks::WithdrawSuggestion.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        suggestion_id: @suggestion.suggestion_id
+      }
     )
 
     redirect_to framework_suggestions_path(@framework.framework_id),
                 status: :see_other,
                 notice: "Suggestion withdrawn."
-  rescue RuntimeError => e
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
                 alert: e.message
   end
 
   private
+
+  # Approve/reject are reachable both from the suggestion detail page (wants a
+  # redirect + flash) and from the inline activity feed / matrix grid (wants a
+  # quiet no-op response — the feed reloads off the activity broadcast and the
+  # grid refreshes client-side on the `suggestion:resolved` event). The inline
+  # surfaces flag themselves with `inline=1`; everything else (incl. the
+  # Turbo-driven detail page) redirects. 204 keeps Turbo from navigating or
+  # blanking the modal/page on the inline path.
+  def inline_request?
+    params[:inline].present?
+  end
+
+  def respond_to_resolution(notice:)
+    if inline_request?
+      head :no_content
+    else
+      redirect_to framework_suggestions_path(@framework.framework_id), notice: notice
+    end
+  end
+
+  def respond_to_failure(error)
+    if inline_request?
+      render plain: error.message, status: :unprocessable_content
+    else
+      redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
+                  alert: error.message
+    end
+  end
 
   def render_index
     scope = @framework.suggested_edits

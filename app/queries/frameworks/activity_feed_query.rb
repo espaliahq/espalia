@@ -28,6 +28,7 @@
 class Frameworks::ActivityFeedQuery
   Entry = Struct.new(:id, :kind, :occurred_at, :payload, :actor_name,
                      :category_id, :capability_id, :capability_name,
+                     :suggestion_id, :suggestion_status, :suggestion_entity_type,
                      keyword_init: true)
 
   # Event class → feed kind string. Drives both which events become feed
@@ -90,6 +91,12 @@ class Frameworks::ActivityFeedQuery
 
   FOCUS_LEVELS = %i[framework category capability cell].freeze
 
+  # Upper bound on how many of the most-recent stream events the feed reads.
+  # Keeps each reload O(cap), not O(framework history). See #stream_events for
+  # the recency trade-off. ~250 comfortably covers a panel's worth of recent
+  # activity (the panel is scrollable but not infinite).
+  STREAM_READ_LIMIT = 250
+
   UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
   # @param framework [FrameworkState::Framework]
@@ -100,15 +107,19 @@ class Frameworks::ActivityFeedQuery
   #   anchors at capability granularity, so cell focus narrows by capability
   # @param limit [Integer, nil] cap on the number of (most-recent) entries
   #   returned; nil returns the full feed (the explorer panel's default)
+  # @param before [String, nil] cursor — an event id; reads the batch of events
+  #   *older* than it (the "load older activity" pagination). nil reads the most
+  #   recent batch.
   # @param event_store [RailsEventStore::Client] override for tests
   def initialize(framework:, focus: :framework, category_id: nil,
-                 capability_id: nil, level_ordinal: nil, limit: nil,
+                 capability_id: nil, level_ordinal: nil, limit: nil, before: nil,
                  event_store: Rails.configuration.event_store)
     @framework = framework
     @category_id = category_id
     @capability_id = capability_id
     @level_ordinal = level_ordinal
     @limit = limit
+    @before = before
     @focus = resolve_focus(focus, category_id: category_id, capability_id: capability_id)
     @event_store = event_store
   end
@@ -120,6 +131,23 @@ class Frameworks::ActivityFeedQuery
     entries.sort_by! { |entry| entry.occurred_at || Time.at(0) }
     entries.reverse!
     @limit ? entries.first(@limit) : entries
+  end
+
+  # Whether the stream holds events older than this batch — i.e. there is more
+  # to load. Event-level (not entry-level): the panel only surfaces "load older"
+  # at framework focus, where every event is a candidate entry.
+  #
+  # @return [Boolean]
+  def has_more?
+    read_result[:has_more]
+  end
+
+  # Cursor to pass as `before:` for the next (older) batch — the id of the
+  # oldest event in this batch.
+  #
+  # @return [String, nil]
+  def next_cursor
+    read_result[:next_cursor]
   end
 
   # @return [Symbol] effective focus after validation
@@ -153,6 +181,8 @@ class Frameworks::ActivityFeedQuery
     anchor = anchor_for(kind, data)
     capability_id = anchor[:capability_id]
     category_id = anchor[:category_id]
+    suggestion_id = data[:suggestion_id] if SUGGESTION_KINDS.include?(kind)
+    meta = suggestion_id ? suggestion_meta[suggestion_id] : nil
 
     Entry.new(
       id: event.event_id,
@@ -162,7 +192,10 @@ class Frameworks::ActivityFeedQuery
       actor_name: actor_names[actor_id_for(event, kind)],
       category_id: category_id,
       capability_id: capability_id,
-      capability_name: capability_name_for(capability_id)
+      capability_name: capability_name_for(capability_id),
+      suggestion_id: suggestion_id,
+      suggestion_status: meta&.dig(:suggestion_status),
+      suggestion_entity_type: meta&.dig(:suggestion_entity_type)
     )
   end
 
@@ -243,10 +276,43 @@ class Frameworks::ActivityFeedQuery
 
   # ── Stream ──
 
+  # Read only the most-recent slice of the stream, newest-first. The feed is a
+  # recency-ordered narrative, so reading the whole stream is needless O(history)
+  # work that dominates latency on a mature framework (a 1636-event framework
+  # reads in ~240ms and builds 1000+ entries). Bounding the read to the most
+  # recent STREAM_READ_LIMIT events makes every reload O(cap) instead.
+  #
+  # Trade-off: an activity older than the cap drops off the feed. Pending
+  # suggestions older than the window are therefore not actionable *from the
+  # feed* — but they remain visible (and approvable) on the matrix grid (the
+  # inline diff is shown regardless of age) and on the standalone suggestion
+  # index, so no review path is lost.
   def stream_events
-    @stream_events ||= @event_store.read.stream(
-      EventStreamNaming.framework_stream(@framework.framework_id)
-    ).to_a
+    read_result[:events]
+  end
+
+  # Single backward read of the stream, newest-first, optionally from a cursor.
+  # Reads one more than the batch size to detect whether older events remain
+  # (cheaper than a separate count): if the read came back full+1, there's more,
+  # and we keep the batch-sized slice. The cursor for the next batch is the
+  # oldest event we keep.
+  def read_result
+    @read_result ||= begin
+      scope = @event_store.read
+        .stream(EventStreamNaming.framework_stream(@framework.framework_id))
+        .backward
+      scope = scope.from(@before) if @before
+      raw = scope.limit(read_limit + 1).to_a
+
+      events = raw.first(read_limit)
+      { events: events, has_more: raw.size > read_limit, next_cursor: events.last&.event_id }
+    end
+  end
+
+  # How many of the most-recent events to read per batch. Never less than the
+  # requested display `limit` (so a caller asking for N most-recent always gets N).
+  def read_limit
+    [ @limit.to_i, STREAM_READ_LIMIT ].max
   end
 
   def event_timestamp(event)
@@ -329,15 +395,17 @@ class Frameworks::ActivityFeedQuery
     end
   end
 
-  # {suggestion_id => { entity_type:, entity_label:, field: }} so the view can
+  # {suggestion_id => { entity_type:, kind:, field:, status: }} so the view can
   # describe a resolved suggestion ("Approved an edit to Capability description")
-  # without re-deriving it from the (absent) lifecycle-event payload.
+  # without re-deriving it from the (absent) lifecycle-event payload, and decide
+  # whether a still-pending suggestion is actionable (status + entity tier).
   def suggestion_meta
     @suggestion_meta ||= suggested_edits.to_h do |s|
       [ s.suggestion_id,
         { suggestion_entity_type: s.target_entity_type,
           suggestion_kind: s.kind,
-          suggestion_field: s.field } ]
+          suggestion_field: s.field,
+          suggestion_status: s.status } ]
     end
   end
 

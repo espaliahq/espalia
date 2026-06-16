@@ -70,6 +70,19 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "capability", entry.payload[:suggestion_entity_type]
     end
 
+    should "carry the suggestion id, status, and entity type for the actionable overlay" do
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: @suggestion_id, target_entity_type: "capability",
+                target_entity_id: @cap.capability_id, field: "description",
+                suggested_value: "Better text", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal @suggestion_id, entry.suggestion_id
+      assert_equal "pending", entry.suggestion_status
+      assert_equal "capability", entry.suggestion_entity_type
+    end
+
     should "anchor approved/withdrawn lifecycle events via the SuggestedEdit row" do
       append(Frameworks::Events::SuggestionApproved,
         data: { suggestion_id: @suggestion_id, reviewer_id: @reviewer.id },
@@ -199,6 +212,53 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       result = entries(limit: 1)
       assert_equal 1, result.size
       assert_equal "capability_archived", result.first.kind, "the single entry is the most recent"
+    end
+  end
+
+  context "read cap" do
+    should "read only the most-recent STREAM_READ_LIMIT events (older activity drops off)" do
+      cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
+
+      # Oldest event first, then enough newer ones to push it past the cap.
+      events = [ Frameworks::Events::CapabilityAdded.new(
+        data: { framework_id: @fwid, capability_id: SecureRandom.uuid_v7, name: "OLDEST" },
+        metadata: { tenant_id: @tenant.id }
+      ) ]
+      (cap + 5).times do
+        events << Frameworks::Events::CapabilityAdded.new(
+          data: { framework_id: @fwid, capability_id: SecureRandom.uuid_v7, name: "newer" },
+          metadata: { tenant_id: @tenant.id }
+        )
+      end
+      # append (not publish) writes raw events without dispatching the
+      # synchronous projection — we're exercising the read query, not the
+      # write side, and the minimal payloads aren't valid for the projection.
+      Rails.configuration.event_store.append(events, stream_name: EventStreamNaming.framework_stream(@fwid))
+
+      result = entries
+      assert_operator result.size, :<=, cap, "feed must not exceed the read cap"
+      assert_nil result.find { |e| e.payload[:name] == "OLDEST" },
+        "an event older than the read cap must not appear in the feed"
+    end
+
+    should "report has_more + a cursor, and the next batch returns older, non-overlapping entries" do
+      cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
+      events = Array.new(cap + 3) do |i|
+        Frameworks::Events::CapabilityAdded.new(
+          data: { framework_id: @fwid, capability_id: SecureRandom.uuid_v7, name: "cap-#{i}" },
+          metadata: { tenant_id: @tenant.id }
+        )
+      end
+      Rails.configuration.event_store.append(events, stream_name: EventStreamNaming.framework_stream(@fwid))
+
+      first_q = Frameworks::ActivityFeedQuery.new(framework: @framework)
+      first = first_q.call
+      assert first_q.has_more?, "first batch should report more remaining"
+      assert first_q.next_cursor.present?, "first batch should expose a cursor"
+
+      second = Frameworks::ActivityFeedQuery.new(framework: @framework, before: first_q.next_cursor).call
+      assert second.any?, "the next batch should return older entries"
+      assert_empty(first.map(&:id) & second.map(&:id), "batches must not overlap")
     end
   end
 end
