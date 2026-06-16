@@ -70,8 +70,14 @@ class Views::Frameworks::Activity::Entry < Views::Base
   }.freeze
 
   # @param entry [Frameworks::ActivityFeedQuery::Entry]
-  def initialize(entry:)
+  # @param framework_id [String, nil] needed by inline action affordances
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
+  #   authority; an entry is actionable only when its suggestion is pending AND
+  #   the viewer can approve its tier
+  def initialize(entry:, framework_id: nil, approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @entry = entry
+    @framework_id = framework_id
+    @approval_authority = approval_authority
   end
 
   def view_template

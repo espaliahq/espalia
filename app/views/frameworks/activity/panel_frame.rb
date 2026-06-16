@@ -15,11 +15,15 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
   # @param entries [Array<Frameworks::ActivityFeedQuery::Entry>] reverse-chronological
   # @param focus_descriptor [Hash] { level:, category_name:, capability_name:, level_label: }
   # @param clear_path [String, nil] URL that clears focus (framework-wide feed)
-  def initialize(framework:, entries:, focus_descriptor: { level: :framework }, clear_path: nil)
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
+  #   approval authority; drives whether a pending-suggestion entry is actionable
+  def initialize(framework:, entries:, focus_descriptor: { level: :framework }, clear_path: nil,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @framework = framework
     @entries = entries
     @focus_descriptor = focus_descriptor
     @clear_path = clear_path
+    @approval_authority = approval_authority
   end
 
   def view_template
@@ -93,7 +97,13 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
         empty_state
       else
         ul(class: "space-y-1") do
-          @entries.each { |entry| render Views::Frameworks::Activity::Entry.new(entry: entry) }
+          @entries.each do |entry|
+            render Views::Frameworks::Activity::Entry.new(
+              entry: entry,
+              framework_id: @framework.framework_id,
+              approval_authority: @approval_authority
+            )
+          end
         end
       end
     end

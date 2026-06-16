@@ -70,6 +70,19 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "capability", entry.payload[:suggestion_entity_type]
     end
 
+    should "carry the suggestion id, status, and entity type for the actionable overlay" do
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: @suggestion_id, target_entity_type: "capability",
+                target_entity_id: @cap.capability_id, field: "description",
+                suggested_value: "Better text", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal @suggestion_id, entry.suggestion_id
+      assert_equal "pending", entry.suggestion_status
+      assert_equal "capability", entry.suggestion_entity_type
+    end
+
     should "anchor approved/withdrawn lifecycle events via the SuggestedEdit row" do
       append(Frameworks::Events::SuggestionApproved,
         data: { suggestion_id: @suggestion_id, reviewer_id: @reviewer.id },

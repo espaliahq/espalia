@@ -28,6 +28,7 @@
 class Frameworks::ActivityFeedQuery
   Entry = Struct.new(:id, :kind, :occurred_at, :payload, :actor_name,
                      :category_id, :capability_id, :capability_name,
+                     :suggestion_id, :suggestion_status, :suggestion_entity_type,
                      keyword_init: true)
 
   # Event class → feed kind string. Drives both which events become feed
@@ -153,6 +154,8 @@ class Frameworks::ActivityFeedQuery
     anchor = anchor_for(kind, data)
     capability_id = anchor[:capability_id]
     category_id = anchor[:category_id]
+    suggestion_id = data[:suggestion_id] if SUGGESTION_KINDS.include?(kind)
+    meta = suggestion_id ? suggestion_meta[suggestion_id] : nil
 
     Entry.new(
       id: event.event_id,
@@ -162,7 +165,10 @@ class Frameworks::ActivityFeedQuery
       actor_name: actor_names[actor_id_for(event, kind)],
       category_id: category_id,
       capability_id: capability_id,
-      capability_name: capability_name_for(capability_id)
+      capability_name: capability_name_for(capability_id),
+      suggestion_id: suggestion_id,
+      suggestion_status: meta&.dig(:suggestion_status),
+      suggestion_entity_type: meta&.dig(:suggestion_entity_type)
     )
   end
 
@@ -329,15 +335,17 @@ class Frameworks::ActivityFeedQuery
     end
   end
 
-  # {suggestion_id => { entity_type:, entity_label:, field: }} so the view can
+  # {suggestion_id => { entity_type:, kind:, field:, status: }} so the view can
   # describe a resolved suggestion ("Approved an edit to Capability description")
-  # without re-deriving it from the (absent) lifecycle-event payload.
+  # without re-deriving it from the (absent) lifecycle-event payload, and decide
+  # whether a still-pending suggestion is actionable (status + entity tier).
   def suggestion_meta
     @suggestion_meta ||= suggested_edits.to_h do |s|
       [ s.suggestion_id,
         { suggestion_entity_type: s.target_entity_type,
           suggestion_kind: s.kind,
-          suggestion_field: s.field } ]
+          suggestion_field: s.field,
+          suggestion_status: s.status } ]
     end
   end
 
