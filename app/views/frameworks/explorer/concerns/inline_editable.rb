@@ -72,8 +72,13 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
   # @param current_value [String]
   # @param rows [Integer] textarea rows (default 2)
   def render_inline_editor_form(action:, field_name:, current_value:, rows: 2)
+    # Give the form a comfortable fixed width so editing a long sentence isn't
+    # cramped. Without it the form sits in a shrink-to-content inline-flex /
+    # flex container sized to the (often short) display text, and the textarea's
+    # `w-full` collapses to that narrow width. Capped at the viewport so it
+    # doesn't overflow on mobile or in the sticky left column.
     form(
-      class: "hidden",
+      class: "hidden w-80 sm:w-96 max-w-[85vw]",
       method: "post",
       action: action,
       data: {
