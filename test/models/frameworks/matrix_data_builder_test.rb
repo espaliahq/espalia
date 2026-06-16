@@ -423,6 +423,35 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_equal [ "Visual Design" ], cap_names
       end
 
+      should "match a capability's pending suggested-edit value in edit mode" do
+        pending_map = {
+          [ "capability", @capability.capability_id ] => {
+            count: 1,
+            latest_by_field: { "description" => { suggested_value: "Zorkmid proposed text",
+                                                  suggestion_id: SecureRandom.uuid_v7, created_at: Time.current } }
+          }
+        }
+        result = build_matrix(selected_role_ids: [], search_query: "zorkmid",
+                              pending_suggestions: pending_map, mode: :edit)
+
+        cap_names = result[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
+        assert_equal [ "Strategic Thinking" ], cap_names
+      end
+
+      should "not match a pending suggested-edit value in view mode" do
+        pending_map = {
+          [ "capability", @capability.capability_id ] => {
+            count: 1,
+            latest_by_field: { "description" => { suggested_value: "Zorkmid proposed text",
+                                                  suggestion_id: SecureRandom.uuid_v7, created_at: Time.current } }
+          }
+        }
+        result = build_matrix(selected_role_ids: [], search_query: "zorkmid",
+                              pending_suggestions: pending_map, mode: :view)
+
+        assert_equal 0, result[:matched_capability_count]
+      end
+
       should "match against expectation text" do
         # "Level 2 expectation" exists only on Strategic Thinking
         result = build_matrix(selected_role_ids: [], search_query: "level 2")

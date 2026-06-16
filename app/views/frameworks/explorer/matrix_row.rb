@@ -36,6 +36,10 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @capability_pending_count = capability_data[:pending_suggestion_count] || 0
     @capability_pending_edit = capability_data[:pending_edit]
     @description_pending_edit = capability_data[:description_pending_edit]
+    # Struck through (edit mode only) when the capability is staged for archive
+    # in the open draft — the "going away on publish" affordance. Still carries
+    # the "Pending archive" badge for the explicit label.
+    @struck = @mode == :edit && @capability.respond_to?(:pending_archive) && @capability.pending_archive
   end
 
   def view_template
@@ -45,9 +49,18 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
   private
 
+  # Red line-through across the whole row when the capability is staged for
+  # archive. Applied to each cell (`[&>td]`) rather than the <tr>, because
+  # text-decoration doesn't reliably propagate from a table-row to its cells.
+  STRIKETHROUGH_CLASSES = "[&>td]:line-through [&>td]:decoration-red-400 [&>td]:decoration-2"
+
+  def strikethrough_classes
+    @struck ? STRIKETHROUGH_CLASSES : ""
+  end
+
   def compact_row
     tr(
-      class: "#{@bound ? '' : 'opacity-50'} group cursor-pointer scroll-mt-20 " \
+      class: "#{@bound ? '' : 'opacity-50'} #{strikethrough_classes} group cursor-pointer scroll-mt-20 " \
              "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
       data: {
         action: "click->matrix#toggleRow",
@@ -132,7 +145,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
   def expanded_row
     tr(
-      class: "hidden",
+      class: "hidden #{strikethrough_classes}",
       data: { matrix_target: "expandedRow", capability_id: @capability.capability_id }
     ) do
       # Empty sticky column (row-actions kebab lives in the compact row, by

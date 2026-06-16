@@ -183,7 +183,12 @@ not a replacement — the two compose with **AND** semantics.
   matches the user can't see. Every surface searched is visible in the compact
   matrix, so every match reason is on-screen. A query on a *category* name
   surfaces all of its capabilities (the category text is part of each
-  capability's haystack).
+  capability's haystack). **In edit mode the proposed values of pending
+  suggested edits are folded into the haystack too** (`pending_suggested_values`,
+  latest-per-field from the suggestions map), so searching for text that exists
+  only in an unapproved proposal still surfaces the capability — the on-screen
+  inline diff is the match reason. View mode never sees these (its suggestions
+  map is empty).
 - **Match highlighting.** Every matched surface marks the query terms with a
   `<mark>` (amber). The `SearchHighlight` concern (`render_highlighted(text,
   query)`) is mixed into the capability-name / category-name / expectation-text
@@ -362,6 +367,12 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   (expanded affordance set; today: Archive). Opens the archive modal, which
   captures the migration mapping **as-we-go** (Evolve / Archive; *split* is a
   separate future action). Owner/editor validate the mapping at the publish gate.
+  Once staged, the capability keeps its **"Pending archive" badge** AND the whole
+  row renders **struck through** (red line-through, edit mode only — see
+  `MatrixRow::STRIKETHROUGH_CLASSES`, applied per-cell via `[&>td]:` because
+  `text-decoration` doesn't propagate reliably from a `<tr>` to its cells). View
+  mode shows the capability un-struck (it's still in the published version until
+  publish).
 - **Archive-category kebab** — hover-revealed next to the category **name**
   (not the far right of the full-width header, which scrolls off-screen on a
   matrix with many level columns), **only for an empty category** (the aggregate refuses to archive one
