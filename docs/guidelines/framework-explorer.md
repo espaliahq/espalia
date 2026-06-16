@@ -381,6 +381,60 @@ shape-preserving (applies live). `AddCapability`/`ArchiveCapability` are
 shape-changing → they **auto-open a draft** and the affected capability is
 **deferred from the published read model until publish** (see Hard-Won Lesson 17).
 
+### 12. Actionable feed entries (inline suggestion review) — the recurring pattern
+
+The activity feed is not just a narrative log — a **pending suggestion's
+submission entry is *actionable*** for a reviewer who can clear its tier. This is
+the canonical instance of a reusable **"actionable feed entry"** pattern: an
+entry that both narrates *and* offers the action inline, with a modal escape
+hatch for the cases that need input. The same pattern applies to the assessment
+feed (see [assessments.md](assessments.md)) and to future suggestion entity
+types — they inherit it for free.
+
+**Five invariants (apply the pattern, don't reinvent it):**
+
+1. **Actionable iff `pending? && viewer-has-authority`, computed server-side.**
+   An unauthorised viewer never receives the controls (no client-side hiding). The
+   feed query overlays each suggestion entry with `suggestion_status` +
+   `suggestion_entity_type`; the controller computes a per-viewer
+   `Frameworks::SuggestionApprovalAuthority` **once** (not a policy per entry) and
+   threads it to the entry, which gates on `authority.can_approve?(entity_type)`.
+   Tier routing has one source of truth: `FrameworkSuggestionPolicy.review_tier`
+   (entity → tier) + `FrameworkState::Collaborator::CONTENT_APPROVE_ROLES`
+   (tier → roles).
+2. **Primary action inline (one-click) for the low-regret case; needs-input /
+   destructive actions via a modal.** Here: **Approve** of a shape-preserving edit
+   is one click (applies live, reversible by another edit); **Reject** always
+   opens the shared reject modal so the reviewer can add an **optional, surfaced**
+   reason. Shape-changing approvals (create/delete — not yet reachable) route to
+   the modal/detail page — a dormant seam (`Entry#action_row`'s else branch).
+3. **Every action dispatches an `Operations::*` class** (web + MCP parity). The
+   four lifecycle ops are `:mcp_client`; the web's inline-vs-modal split is pure
+   UX, decoupled from the MCP approval category.
+4. **Resolution updates every affected frame and broadcasts live.** Approve/reject
+   answer **204** (flagged `inline=1`) so Turbo neither navigates nor blanks the
+   modal. The **feed** reloads off the existing activity broadcast
+   (`broadcast_framework_activity`, replay-guarded; the actor sees their own
+   resolution). The acting user's **matrix** refreshes client-side: the action
+   dispatches a window `suggestion:resolved` → `matrix#refresh` (re-fetches the
+   frame with the current filter axes) so the inline diff clears. Matrix refresh
+   is acting-user-only by design — feed-live / matrix-not (Hard-Won Lesson 21).
+5. **No internal categorisations surfaced** — review tiers stay invisible (§9).
+
+**Modal placement (load-bearing):** the reject modal lives on the **explorer
+root**, not inside `#suggestion-panel` — a frame reload (which the feed does on
+every resolution) would otherwise destroy an open modal. It shares the root
+`modal` controller with the structural modals (Lesson 19); the `modal` controller
+is therefore present for **all** edit-mode viewers, not just `can_edit_structure`
+holders. `reject_suggestion_form` prefills it from the trigger dataset and points
+the form at the suggestion's reject endpoint (a `__SID__` path template).
+
+**Click-vs-navigate:** an entry row is itself a navigable button
+(`context-pane#focusSuggestion`). The action controls must not also navigate, so
+`focusSuggestion` bails when the event target is a `button`/`a` (mouse or
+keyboard) — cheaper and more robust than `stopPropagation` (which would also kill
+the `modal#open` listener that fires during bubbling).
+
 ### 7. Responsive Behaviour
 
 | Viewport | Role Tree | Matrix | Toggle Button |
@@ -436,6 +490,7 @@ job via `updateSearch`. See §4a.
 - **Cell focus** (`focusCell` on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"`. Ignores clicks that land on interactive children (buttons, links, inputs, forms, `[contenteditable]`) so inline editors inside the cell don't accidentally toggle focus.
 - **Category focus** (`focusCategory` on the category name span). Dispatches `matrix:focus-changed` with `level: "category"`. Re-click clears to framework focus.
 - **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header.
+- **Resolution refresh** (`refresh` on `suggestion:resolved`) — re-fetches the matrix frame with the current filter axes so an inline approve/reject in the feed clears the now-resolved inline diff for the acting user (§12, Hard-Won Lesson 21).
 - **URL sync** (pushState for shareability — explorer uses role/track params)
 - **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
@@ -463,6 +518,12 @@ Wraps every inline-edit site (IllustrationFrame, PendingIllustrationFrame, NewIl
 ### edit_mode_toggle_controller.js (edit mode only)
 Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
 
+### suggestion_action_controller.js (edit mode only)
+Wraps the inline **Approve** button on an actionable feed entry. `approve` POSTs to the suggestion's approve endpoint (`inline=1` → 204) via `@rails/request.js`; on success dispatches the window `suggestion:resolved` event (→ `matrix#refresh`) and leaves the feed to reload off the activity broadcast. Reject is *not* handled here — it always opens the shared modal (§12).
+
+### reject_suggestion_form_controller.js (edit mode only)
+Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `rejectSuggestionId`, points the form at that suggestion's reject endpoint (a `__SID__` path template), fills the entity label + proposed-value preview, and clears the reason. On a successful submit it dispatches `suggestion:resolved`. The modal closes via `modal#submitted`; the feed reloads via broadcast (§12).
+
 ### Event contracts
 
 | Event | Source | Detail |
@@ -472,6 +533,7 @@ Segmented Editing / Suggesting toggle in the header. Reads and writes the `frame
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 | `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null }` — triggers `matrix_controller#navigateToEntity` |
 | `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
+| `suggestion:resolved` | `suggestion_action_controller` (approve) / `reject_suggestion_form_controller` (reject) | no detail — fired on a successful inline approve/reject. Triggers `matrix_controller#refresh` so the acting user's grid drops the now-resolved inline diff. The feed reloads separately via the activity broadcast (§12, Hard-Won Lesson 21). |
 
 ## Hard-Won Lessons
 
@@ -586,6 +648,37 @@ load-bearing: it keeps existing single-modal callers (assessment evidence /
 delegation) working unchanged — but once >1 overlay shares a controller, **every**
 trigger must name its overlay or it opens the wrong (first) one.
 
+### 20. One endpoint, two surfaces — branch on an explicit marker, not request format
+
+`SuggestionsController#approve`/`reject` serve both the suggestion **detail page**
+(wants a redirect + flash) and the **inline feed/grid** (wants a quiet no-op). The
+first instinct — `respond_to` on `format.html` vs `format.turbo_stream` — is
+**wrong**: the detail-page forms are Turbo-driven (they carry `data-turbo-confirm`),
+so they submit with the same `Accept: text/vnd.turbo-stream.html` as the inline
+surfaces. Branching on format routed the detail page into the inline (`head :ok`)
+arm and it silently stopped redirecting. Fix: the inline surfaces flag themselves
+with an explicit `inline=1` param; everything else (incl. the Turbo detail page)
+redirects. The lesson generalises: when two callers of one action want different
+responses but can't be told apart by format, pass an explicit intent marker.
+
+### 21. Inline resolution must answer 204, and the matrix refreshes client-side
+
+Two halves of the "actionable feed entry" wiring that are easy to get wrong:
+
+- **204, not 200.** A Turbo form submit (the reject modal) that gets a `200` with
+  an empty body makes Turbo Drive render the empty body — **blanking the page**.
+  `head :no_content` (204) makes Turbo do nothing: the modal closes via
+  `turbo:submit-end` and the page is untouched. (The approve path uses
+  `@rails/request.js`, which doesn't navigate regardless, but 204 is correct there
+  too.)
+- **Feed-live, matrix-not.** The feed reloads for everyone via the activity
+  broadcast, but the matrix deliberately does **not** live-reload (it would flicker
+  / reset scroll for other viewers mid-edit). So an inline approve must refresh the
+  **acting user's** matrix itself — a window `suggestion:resolved` event →
+  `matrix#refresh` (re-fetch with the current `roles[]`/`track`/`q` axes). Other
+  viewers pick up the applied edit on their next interaction. Symmetric: a future
+  grid-side approve must refresh the feed the same way.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -683,7 +776,12 @@ line (§9).
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
 | `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — retained for the standalone suggestion index, no longer the context pane |
 | `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + "Show all" clear link + filter chips + entry list + empty state) |
-| `app/views/frameworks/activity/entry.rb` | One activity entry — `KIND_DOT` / `KIND_GROUP`, summary + context line + actor·timestamp footer, matrix-navigation data attrs |
+| `app/views/frameworks/activity/entry.rb` | One activity entry — `KIND_DOT` / `KIND_GROUP`, summary + context line + actor·timestamp footer, matrix-navigation data attrs, **inline Approve / Reject action row when pending + viewer-authorised** (§12) |
+| `app/views/frameworks/explorer/reject_suggestion_modal.rb` | Shared reject-suggestion modal (optional reason) — explorer root, edit mode (§12) |
+| `app/models/frameworks/suggestion_approval_authority.rb` | Per-viewer approval authority value object — computed once, gates the actionable feed (§12) |
+| `app/operations/operations/frameworks/{approve,reject,amend,withdraw}_suggestion.rb` | Shared web + MCP suggestion-lifecycle operations (§12) |
+| `app/javascript/controllers/suggestion_action_controller.js` | Inline approve — POSTs `inline=1`, dispatches `suggestion:resolved` (§12) |
+| `app/javascript/controllers/reject_suggestion_form_controller.js` | Prefills the reject modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12) |
 | `app/views/frameworks/activity/filter_chips.rb` | All / Suggestions / Edits / Structural / Lifecycle / Collaborators (client-side filter) |
 | `app/javascript/controllers/framework_activity_controller.js` | Client-side filter-chip toggling of visible entry groups |
 | `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
