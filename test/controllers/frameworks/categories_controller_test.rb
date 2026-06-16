@@ -48,6 +48,50 @@ class Frameworks::CategoriesControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "How we reason and decide."
     end
 
+    should "amend the author's pending suggestion on a consecutive edit, not stack a new one" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { name: "First proposal" } }
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { name: "Second proposal" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        pending = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id, target_entity_type: "capability_category",
+          target_entity_id: @cat_id, field: "name", status: "pending"
+        )
+        assert_equal 1, pending.count, "consecutive edits by the same author must amend, not stack"
+        assert_equal "Second proposal", pending.first.suggested_value
+
+        # The amend is recorded as a SuggestionAmended event (not a second EditSuggested).
+        stream = Rails.configuration.event_store.read
+          .stream(EventStreamNaming.framework_stream(@framework_id)).to_a
+        assert_equal 1, stream.count { |e| e.is_a?(Frameworks::Events::EditSuggested) && e.data[:field] == "name" }
+        assert_equal 1, stream.count { |e| e.is_a?(Frameworks::Events::SuggestionAmended) }
+      end
+    end
+
+    should "not amend across different fields (name vs description are separate suggestions)" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { name: "New name" } }
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { description: "New description" } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        scope = FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id, target_entity_type: "capability_category",
+          target_entity_id: @cat_id, status: "pending"
+        )
+        assert_equal 1, scope.where(field: "name").count
+        assert_equal 1, scope.where(field: "description").count
+      end
+    end
+
     should "keep a description edit pending when the suggesting cookie is set" do
       sign_in @user
       cookies[:framework_edit_mode] = "suggesting"

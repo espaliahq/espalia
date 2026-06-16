@@ -4,6 +4,7 @@
 #
 class Frameworks::IllustrationsController < ApplicationController
   include FrameworkEditMode
+  include InlineSuggestedEdits
 
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
@@ -51,18 +52,12 @@ class Frameworks::IllustrationsController < ApplicationController
   # PATCH /frameworks/:framework_id/illustrations/:id
   def update
     authorize @framework, :suggest_edit?
-    suggestion_id = SecureRandom.uuid_v7
     new_description = params.expect(illustration: [ :description ])[:description]
 
-    Frameworks::CommandHandler.new.suggest_edit(
-      @framework.framework_id,
-      suggestion_id,
-      "role_illustration",
-      @illustration.illustration_id,
-      "description",
-      new_description,
-      resolve_author_id,
-      mode: framework_edit_mode
+    submit_inline_suggested_edit(
+      framework_id: @framework.framework_id,
+      entity_type: "role_illustration", entity_id: @illustration.illustration_id,
+      field: "description", value: new_description, author_id: resolve_author_id, mode: framework_edit_mode
     )
 
     @illustration.reload

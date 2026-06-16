@@ -7,6 +7,7 @@
 #
 class Frameworks::CapabilitiesController < ApplicationController
   include FrameworkEditMode
+  include InlineSuggestedEdits
 
   before_action :set_framework
   before_action :set_capability, only: [ :update ]
@@ -45,11 +46,10 @@ class Frameworks::CapabilitiesController < ApplicationController
     field, value = edited_field
     return head(:unprocessable_content) unless field
 
-    Frameworks::CommandHandler.new.suggest_edit(
-      @framework.framework_id, SecureRandom.uuid_v7,
-      "capability", @capability.capability_id,
-      field, value, resolve_author_id,
-      mode: framework_edit_mode
+    submit_inline_suggested_edit(
+      framework_id: @framework.framework_id,
+      entity_type: "capability", entity_id: @capability.capability_id,
+      field: field, value: value, author_id: resolve_author_id, mode: framework_edit_mode
     )
 
     render frame_for(field), layout: false
