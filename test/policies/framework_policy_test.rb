@@ -250,6 +250,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.archive_capability?
       assert policy.add_capability?
       assert policy.add_category?
+      assert policy.archive_category?
     end
   end
 
