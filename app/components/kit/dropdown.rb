@@ -45,11 +45,13 @@ class Components::Kit::Dropdown < Components::Base
 
   # Renders the trigger button that toggles the dropdown.
   #
+  # @param label [String, nil] accessible name for an icon-only trigger
+  #   (sets aria-label so the button isn't nameless to screen readers)
   # @yield The content to display inside the trigger button
-  def trigger(&block)
+  def trigger(label: nil, &block)
     button(
       type: "button",
-      aria: { haspopup: "true", expanded: "false" },
+      aria: { haspopup: "true", expanded: "false", label: label }.compact,
       data: { action: "dropdown#toggle", dropdown_target: "trigger" },
       class: "inline-flex items-center focus:outline-hidden"
     ) do

@@ -107,15 +107,19 @@ class Frameworks::ActivityFeedQuery
   #   anchors at capability granularity, so cell focus narrows by capability
   # @param limit [Integer, nil] cap on the number of (most-recent) entries
   #   returned; nil returns the full feed (the explorer panel's default)
+  # @param before [String, nil] cursor — an event id; reads the batch of events
+  #   *older* than it (the "load older activity" pagination). nil reads the most
+  #   recent batch.
   # @param event_store [RailsEventStore::Client] override for tests
   def initialize(framework:, focus: :framework, category_id: nil,
-                 capability_id: nil, level_ordinal: nil, limit: nil,
+                 capability_id: nil, level_ordinal: nil, limit: nil, before: nil,
                  event_store: Rails.configuration.event_store)
     @framework = framework
     @category_id = category_id
     @capability_id = capability_id
     @level_ordinal = level_ordinal
     @limit = limit
+    @before = before
     @focus = resolve_focus(focus, category_id: category_id, capability_id: capability_id)
     @event_store = event_store
   end
@@ -127,6 +131,23 @@ class Frameworks::ActivityFeedQuery
     entries.sort_by! { |entry| entry.occurred_at || Time.at(0) }
     entries.reverse!
     @limit ? entries.first(@limit) : entries
+  end
+
+  # Whether the stream holds events older than this batch — i.e. there is more
+  # to load. Event-level (not entry-level): the panel only surfaces "load older"
+  # at framework focus, where every event is a candidate entry.
+  #
+  # @return [Boolean]
+  def has_more?
+    read_result[:has_more]
+  end
+
+  # Cursor to pass as `before:` for the next (older) batch — the id of the
+  # oldest event in this batch.
+  #
+  # @return [String, nil]
+  def next_cursor
+    read_result[:next_cursor]
   end
 
   # @return [Symbol] effective focus after validation
@@ -267,13 +288,29 @@ class Frameworks::ActivityFeedQuery
   # inline diff is shown regardless of age) and on the standalone suggestion
   # index, so no review path is lost.
   def stream_events
-    @stream_events ||= @event_store.read
-      .stream(EventStreamNaming.framework_stream(@framework.framework_id))
-      .backward.limit(read_limit).to_a
+    read_result[:events]
   end
 
-  # How many of the most-recent events to read. Never less than the requested
-  # display `limit` (so a caller asking for N most-recent always gets N).
+  # Single backward read of the stream, newest-first, optionally from a cursor.
+  # Reads one more than the batch size to detect whether older events remain
+  # (cheaper than a separate count): if the read came back full+1, there's more,
+  # and we keep the batch-sized slice. The cursor for the next batch is the
+  # oldest event we keep.
+  def read_result
+    @read_result ||= begin
+      scope = @event_store.read
+        .stream(EventStreamNaming.framework_stream(@framework.framework_id))
+        .backward
+      scope = scope.from(@before) if @before
+      raw = scope.limit(read_limit + 1).to_a
+
+      events = raw.first(read_limit)
+      { events: events, has_more: raw.size > read_limit, next_cursor: events.last&.event_id }
+    end
+  end
+
+  # How many of the most-recent events to read per batch. Never less than the
+  # requested display `limit` (so a caller asking for N most-recent always gets N).
   def read_limit
     [ @limit.to_i, STREAM_READ_LIMIT ].max
   end

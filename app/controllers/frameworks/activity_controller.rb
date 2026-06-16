@@ -10,6 +10,11 @@ class Frameworks::ActivityController < ApplicationController
   before_action :set_framework
 
   # GET /frameworks/:framework_id/activity
+  #
+  # Two response shapes:
+  # - Turbo Frame / HTML (initial load, broadcast reload) → the full PanelFrame.
+  # - Turbo Stream (the "load older" button, via @rails/request.js) → append the
+  #   older batch to the list and swap the load-more footer for the next cursor.
   def show
     authorize @framework, :view_suggestions?
 
@@ -18,19 +23,59 @@ class Frameworks::ActivityController < ApplicationController
       focus: focus_param,
       category_id: params[:category_id].presence,
       capability_id: params[:capability_id].presence,
-      level_ordinal: params[:level_ordinal].presence&.to_i
+      level_ordinal: params[:level_ordinal].presence&.to_i,
+      before: params[:before].presence
     )
 
-    render Views::Frameworks::Activity::PanelFrame.new(
-      framework: @framework,
-      entries: query.call,
-      focus_descriptor: query.descriptor,
-      clear_path: framework_activity_path(@framework.framework_id, layout: "panel"),
-      approval_authority: approval_authority
-    ), layout: false
+    @entries = query.call
+    @approval_authority = approval_authority
+    # "Load older" is only meaningful for the unfiltered feed — a focused view is
+    # already a small, recency-covered slice (avoids sparse/empty appended batches).
+    @has_more = query.has_more? && query.focus == :framework
+    @next_cursor = query.next_cursor
+    # Running total of entries loaded so far (carried across batches via `loaded`)
+    # so the header count stays accurate as older batches are appended.
+    @total_loaded = params[:loaded].to_i + @entries.size
+    @load_more_path = compute_load_more_path
+
+    respond_to do |format|
+      format.turbo_stream
+      format.any do
+        render Views::Frameworks::Activity::PanelFrame.new(
+          framework: @framework,
+          entries: @entries,
+          focus_descriptor: query.descriptor,
+          clear_path: framework_activity_path(@framework.framework_id, layout: "panel"),
+          approval_authority: @approval_authority,
+          has_more: @has_more,
+          load_more_path: @load_more_path,
+          total_loaded: @total_loaded
+        ), layout: false
+      end
+    end
   end
 
   private
+
+  # URL for the next (older) batch — preserves the active focus/role scope so
+  # pagination stays within the same view.
+  def compute_load_more_path
+    return nil unless @has_more
+
+    framework_activity_path(@framework.framework_id, **feed_scope_params,
+      before: @next_cursor, loaded: @total_loaded)
+  end
+
+  # The focus/role params that scope the feed, echoed onto the load-more URL.
+  def feed_scope_params
+    {
+      focus: params[:focus].presence,
+      category_id: params[:category_id].presence,
+      capability_id: params[:capability_id].presence,
+      level_ordinal: params[:level_ordinal].presence,
+      roles: Array.wrap(params[:roles]).select(&:present?).presence
+    }.compact
+  end
 
   # Per-viewer approval authority, computed once so the actionable feed never
   # instantiates a policy per pending-suggestion entry.

@@ -240,5 +240,25 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_nil result.find { |e| e.payload[:name] == "OLDEST" },
         "an event older than the read cap must not appear in the feed"
     end
+
+    should "report has_more + a cursor, and the next batch returns older, non-overlapping entries" do
+      cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
+      events = Array.new(cap + 3) do |i|
+        Frameworks::Events::CapabilityAdded.new(
+          data: { framework_id: @fwid, capability_id: SecureRandom.uuid_v7, name: "cap-#{i}" },
+          metadata: { tenant_id: @tenant.id }
+        )
+      end
+      Rails.configuration.event_store.append(events, stream_name: EventStreamNaming.framework_stream(@fwid))
+
+      first_q = Frameworks::ActivityFeedQuery.new(framework: @framework)
+      first = first_q.call
+      assert first_q.has_more?, "first batch should report more remaining"
+      assert first_q.next_cursor.present?, "first batch should expose a cursor"
+
+      second = Frameworks::ActivityFeedQuery.new(framework: @framework, before: first_q.next_cursor).call
+      assert second.any?, "the next batch should return older entries"
+      assert_empty(first.map(&:id) & second.map(&:id), "batches must not overlap")
+    end
   end
 end

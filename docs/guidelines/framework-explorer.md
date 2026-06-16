@@ -714,6 +714,12 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > removed). The feed updates live for every edit-mode viewer (incl. the actor):
 > `PublishedState#broadcast_framework_activity` nudges a per-framework Turbo
 > stream and `context_pane_controller` reloads the feed frame on the sync signal.
+> **Recency cap + load-older:** the feed reads only the most-recent
+> `ActivityFeedQuery::STREAM_READ_LIMIT` events; when more exist *at framework
+> focus*, a "Load older activity" footer appends the next (older) batch via a
+> Turbo Stream and bumps the running count — cursor-paginated on `before:` (the
+> oldest loaded event id) with a `loaded` running total. `activity_more_controller`
+> issues the request; a live broadcast reload resets to the most-recent batch.
 > Still deferred (note when adding): role/level/binding structural events,
 > reorders, and threaded suggestion comments (`SuggestionCommented` unwired). The
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
@@ -790,7 +796,11 @@ line (§9).
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, keep empty categories in edit mode, per-field `latest_by_field` pending-edit descriptors) |
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
 | `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — retained for the standalone suggestion index, no longer the context pane |
-| `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + "Show all" clear link + filter chips + entry list + empty state) |
+| `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + count + "Show all" clear link + filter chips + entry list + load-older footer + empty state) |
+| `app/views/frameworks/activity/load_more.rb` | "Load older activity" footer (`#framework-activity-load-more`) — indication + affordance for the next batch |
+| `app/views/frameworks/activity/count.rb` | Loaded-entry count (`#framework-activity-count`) — replaced by the load-older Turbo Stream |
+| `app/views/frameworks/activity/show.turbo_stream.erb` | Load-older response — append older entries + replace the footer + the count |
+| `app/javascript/controllers/activity_more_controller.js` | "Load older" — GET next batch as a Turbo Stream via `@rails/request.js` |
 | `app/views/frameworks/activity/entry.rb` | One activity entry — `KIND_DOT` / `KIND_GROUP`, summary + context line + actor·timestamp footer, matrix-navigation data attrs, **inline Approve / Reject action row when pending + viewer-authorised** (§12) |
 | `app/views/frameworks/explorer/reject_suggestion_modal.rb` | Shared reject-suggestion modal (optional reason) — explorer root, edit mode (§12) |
 | `app/models/frameworks/suggestion_approval_authority.rb` | Per-viewer approval authority value object — computed once, gates the actionable feed (§12) |
@@ -807,7 +817,7 @@ line (§9).
 | `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor` |
 | `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for the standalone suggestion index |
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) |
-| `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed) |
+| `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
 | `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + (legacy) panel-layout branch |
