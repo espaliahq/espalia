@@ -706,6 +706,51 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
       assert_kind_of Frameworks::Events::EntityDeletionSuggested, last_event
     end
 
+    should "raise if the same author already has a pending deletion for the entity" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "capability", @cap_id, author_id: @author_id
+      )
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.suggest_delete(
+          @framework_id, SecureRandom.uuid_v7,
+          "capability", @cap_id, author_id: @author_id
+        )
+      end
+      assert_match /already proposed/, err.message
+    end
+
+    should "allow a competing deletion from a different author" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "capability", @cap_id, author_id: @author_id
+      )
+
+      # Different authors can still each propose a deletion (auto-reject on
+      # approval resolves the competition).
+      assert_nothing_raised do
+        @aggregate.suggest_delete(
+          @framework_id, SecureRandom.uuid_v7,
+          "capability", @cap_id, author_id: SecureRandom.uuid_v7
+        )
+      end
+    end
+
+    should "allow the same author to delete a different entity" do
+      @aggregate.suggest_delete(
+        @framework_id, @suggestion_id,
+        "capability", @cap_id, author_id: @author_id
+      )
+
+      assert_nothing_raised do
+        @aggregate.suggest_delete(
+          @framework_id, SecureRandom.uuid_v7,
+          "role_illustration", @ill_id, author_id: @author_id
+        )
+      end
+    end
+
     should "raise if suggestion_id already exists" do
       @aggregate.suggest_delete(
         @framework_id, @suggestion_id,

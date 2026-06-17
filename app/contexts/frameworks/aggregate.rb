@@ -762,6 +762,7 @@ class Frameworks::Aggregate
     raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
     raise_unless_entity_exists!(target_entity_type, target_entity_id)
     raise_unless_deletable!(target_entity_type)
+    raise_if_deletion_already_pending!(target_entity_type, target_entity_id, author_id)
 
     apply(Frameworks::Events::EntityDeletionSuggested.new(data: {
       framework_id: framework_id,
@@ -1521,6 +1522,22 @@ class Frameworks::Aggregate
     return if DELETABLE_ENTITY_TYPES.include?(entity_type)
 
     raise "Cannot suggest deletion for #{entity_type} — no delete command available"
+  end
+
+  # An author may hold at most one pending deletion per entity — a delete is
+  # the whole proposal (no value to amend), so a second one from the same author
+  # is pure duplication. Different authors can still propose competing deletes
+  # (resolved by auto-reject on approval); this only blocks a repeat from the
+  # same person.
+  def raise_if_deletion_already_pending!(entity_type, entity_id, author_id)
+    return unless @pending_edits.values.any? do |s|
+      s[:kind] == :delete &&
+        s[:target_entity_type] == entity_type &&
+        s[:target_entity_id] == entity_id &&
+        s[:author_id] == author_id
+    end
+
+    raise "You have already proposed deleting #{entity_type} #{entity_id}"
   end
 
   # Dispatches the matching add_* command for an approved creation suggestion.
