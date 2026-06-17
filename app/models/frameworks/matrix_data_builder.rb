@@ -338,15 +338,38 @@ class Frameworks::MatrixDataBuilder
   # Builds the lowercased haystack matched against the query tokens: the
   # capability's own name/description, its category name/description (so a
   # query on the category surfaces all of its capabilities), and the text of
-  # every visible behavioural expectation. Illustrations are intentionally
-  # NOT included — see the `search_query` note on #initialize.
+  # every visible behavioural expectation. In edit mode the proposed values of
+  # pending suggested edits are folded in too, so searching for text that only
+  # exists in an unapproved proposal still surfaces the capability. Illustrations
+  # are intentionally NOT included — see the `search_query` note on #initialize.
   #
   # @return [String]
   def searchable_text(cap_data, category)
     cap = cap_data[:capability]
     parts = [ category.name, category.description, cap.name, cap.description ]
     cap_data[:cells].each_value { |cell| parts << cell[:expectation].description }
+
+    if @mode == :edit
+      parts.concat(pending_suggested_values("capability_category", category.category_id))
+      parts.concat(pending_suggested_values("capability", cap.capability_id))
+      cap_data[:cells].each_value do |cell|
+        parts.concat(pending_suggested_values("behavioural_expectation", cell[:expectation].expectation_id))
+      end
+    end
+
     parts.compact.join(" ").downcase
+  end
+
+  # Proposed values of an entity's pending suggested edits (latest per field).
+  # Empty in view mode (the suggestions map is empty there) and for entities
+  # with no pending edits.
+  #
+  # @return [Array<String>]
+  def pending_suggested_values(entity_type, entity_id)
+    entry = @pending_suggestions[[ entity_type, entity_id ]]
+    return [] unless entry && entry[:latest_by_field]
+
+    entry[:latest_by_field].values.map { |desc| desc[:suggested_value] }
   end
 
   def pending_count(entity_type, entity_id)

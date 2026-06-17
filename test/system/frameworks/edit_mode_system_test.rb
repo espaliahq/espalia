@@ -495,6 +495,38 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "strikethrough for a capability staged for archive" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @struck_cap = FrameworkState::Capability.first.capability_id
+        Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+          Frameworks::CommandHandler.new.archive_capability(@framework_id, @struck_cap, reason: "going away")
+        end
+      end
+    end
+
+    should "strike the row through in edit mode" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_selector "tr[data-capability-id='#{@struck_cap}']"
+      assert_text "Pending archive"
+      decoration = page.evaluate_script(
+        "getComputedStyle(document.querySelector(\"tr[data-capability-id='#{@struck_cap}'] > td\")).textDecorationLine"
+      )
+      assert_equal "line-through", decoration
+    end
+
+    should "not strike the row in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_selector "tr[data-capability-id='#{@struck_cap}']"
+      decoration = page.evaluate_script(
+        "getComputedStyle(document.querySelector(\"tr[data-capability-id='#{@struck_cap}'] > td\")).textDecorationLine"
+      )
+      assert_equal "none", decoration
+    end
+  end
+
   context "archiving a category via the header kebab" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
