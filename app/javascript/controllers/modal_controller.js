@@ -90,6 +90,9 @@ export default class extends BaseController {
     // immediately close it on the next listener pass.
     if (this.dismissOnOutsideClickValue) {
       queueMicrotask(() => {
+        // The modal may have been closed (or the controller disconnected)
+        // before this microtask ran — don't re-attach a stale global listener.
+        if (!this.activeOverlay || this.activeOverlay.classList.contains("hidden")) return
         document.addEventListener("click", this.boundClickOutside, true)
       })
     }
