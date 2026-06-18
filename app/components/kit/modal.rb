@@ -51,7 +51,7 @@ class Components::Kit::Modal < Components::Base
     if @standalone
       div(class: "relative inline-block text-left",
           data: { controller: "modal", action: "keydown.esc@window->modal#close",
-                  modal_dismiss_on_outside_click_value: @dismiss_on_outside_click.to_s }) do
+                  modal_dismiss_on_outside_click_value: (@dismiss_on_outside_click ? "true" : "false") }) do
         yield(self)
         dialog
       end
