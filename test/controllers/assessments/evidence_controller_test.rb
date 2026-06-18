@@ -250,6 +250,19 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       }
       assert_redirected_to new_user_session_path
     end
+
+    should "respond 404 (not 500) when the assignment id does not exist" do
+      sign_in @assessee_user
+      post assessment_evidence_index_path(SecureRandom.uuid_v7), params: {
+        evidence: {
+          capability_stable_id: @cap.stable_id,
+          level_ordinal: 2,
+          evidence_type: "project_outcome",
+          content: "x"
+        }
+      }
+      assert_response :not_found
+    end
   end
 
   context "evidence links (add_link / remove_link)" do

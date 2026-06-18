@@ -15,6 +15,14 @@
 class ManagerAssessmentDelegation < ApplicationRecord
   STATUSES = %w[active revoked].freeze
 
+  # The primary key is the externally-addressed identity (`DELETE
+  # /assessments/:assessment_id/delegations/:id`). Derive it deterministically
+  # from the natural key so a projection rebuild reproduces the same id rather
+  # than reissuing a random one and breaking the revoke link. See
+  # {DeterministicId}.
+  include DeterministicId
+  deterministic_id_from :person_id, :framework_id, :delegate_person_id
+
   acts_as_tenant :tenant
 
   belongs_to :tenant

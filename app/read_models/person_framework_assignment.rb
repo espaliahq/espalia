@@ -15,6 +15,14 @@
 # @see AssessmentCycleParticipation
 #
 class PersonFrameworkAssignment < ApplicationRecord
+  # The primary key is the externally-addressed identity (`/assessments/:id`,
+  # all nested assessment routes, the `assessment://<id>` MCP resource, and
+  # every assessment Operation). Derive it deterministically from the natural
+  # key so a projection rebuild reproduces the same id instead of reissuing a
+  # random one and breaking in-flight URLs. See {DeterministicId}.
+  include DeterministicId
+  deterministic_id_from :person_id, :framework_id
+
   # Pundit policy lookup: use AssessmentPolicy
   def self.policy_class
     AssessmentPolicy

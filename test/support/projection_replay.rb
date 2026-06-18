@@ -13,20 +13,26 @@
 # to catch, so the matching pair must be updated together when read models
 # evolve.
 #
-# `id` is excluded by default because most read-model tables use
-# `gen_random_uuid()` to auto-generate primary keys — that PK is
-# non-deterministic across replays, but every table preserves a stable
-# natural identifier (`cycle_id`, `framework_id`, `(cycle_id, person_id)`,
-# etc.) which keeps content unique. For tables where the projection
-# explicitly assigns the row PK from event data (e.g. `EvidenceItem`
-# sets `id: event.data[:evidence_id]`), opt in via `natural_key_is_id: true`.
+# `id` is excluded by default because some read-model tables still mint a
+# random PK at projection time — that PK is non-deterministic across replays,
+# but every table preserves a stable natural identifier (`cycle_id`,
+# `framework_id`, `(cycle_id, person_id)`, etc.) which keeps content unique.
+#
+# For tables whose PK IS rebuild-stable — either set explicitly from event
+# data (`EvidenceItem` ← `event.data[:evidence_id]`) or derived
+# deterministically from the natural key ({DeterministicId}, e.g.
+# `PersonFrameworkAssignment`, `ManagerAssessmentDelegation`) — opt in via
+# `stable_id: true`. The round-trip test then asserts the PK is reproduced
+# identically across `reset!` + replay, so a regression (a reverted concern,
+# a random PK on a new externally-addressable table) fails CI rather than
+# silently reissuing externally-referenced ids.
 module ProjectionReplayHelpers
   def snapshot_read_models(projection_class, tenant)
     ActsAsTenant.with_tenant(tenant) do
       case projection_class.name
       when "PersonDevelopment::Projections::EvidenceCollection"
         {
-          evidence_items: rows(EvidenceItem, natural_key_is_id: true),
+          evidence_items: rows(EvidenceItem, stable_id: true),
           # evidence_links uses a gen-style PK; its natural key is
           # (evidence_id, capability_stable_id, level_ordinal).
           evidence_links: rows(EvidenceLink)
@@ -34,13 +40,15 @@ module ProjectionReplayHelpers
 
       when "PersonDevelopment::Projections::CommentThread"
         {
-          person_development_comments: rows(PersonDevelopmentComment, natural_key_is_id: true)
+          person_development_comments: rows(PersonDevelopmentComment, stable_id: true)
         }
 
       when "PersonDevelopment::Projections::AssessmentAuthority"
         {
           recorded_reporting_managers:    rows(RecordedReportingManager),
-          manager_assessment_delegations: rows(ManagerAssessmentDelegation)
+          # PK derived deterministically from the natural key — assert it
+          # survives reset! + replay (DeterministicId).
+          manager_assessment_delegations: rows(ManagerAssessmentDelegation, stable_id: true)
         }
 
       when "Frameworks::Projections::PublishedState"
@@ -61,7 +69,9 @@ module ProjectionReplayHelpers
 
       when "PersonDevelopment::Projections::CurrentAssessment"
         {
-          assignments:              rows(PersonFrameworkAssignment),
+          # PK derived deterministically from (person_id, framework_id) —
+          # assert it survives reset! + replay (DeterministicId).
+          assignments:              rows(PersonFrameworkAssignment, stable_id: true),
           assessment_level_ratings: rows(AssessmentLevelRating),
           progress:                 rows(AssessmentCycleProgress)
         }
@@ -83,8 +93,8 @@ module ProjectionReplayHelpers
   IGNORED_COLUMNS = %w[created_at updated_at].freeze
   ID_COLUMN       = "id"
 
-  def rows(scope, natural_key_is_id: false)
-    ignored = IGNORED_COLUMNS + (natural_key_is_id ? [] : [ ID_COLUMN ])
+  def rows(scope, stable_id: false)
+    ignored = IGNORED_COLUMNS + (stable_id ? [] : [ ID_COLUMN ])
     scope.all.map { |r| r.attributes.except(*ignored) }.sort_by { |attrs| attrs.to_json }
   end
 end

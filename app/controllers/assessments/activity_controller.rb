@@ -37,17 +37,17 @@ class Assessments::ActivityController < ApplicationController
   def require_person
     return if current_person
 
-    # `throw :abort` halts the before_action chain so subsequent callbacks
-    # (e.g. set_assignment) don't run and risk a DoubleRenderError.
+    # Rendering halts the before_action chain (Rails checks `performed?`), so
+    # set_assignment won't run. Do NOT `throw :abort` — the around_action
+    # `wrap_with_audit_metadata` (ApplicationController) wraps these callbacks,
+    # and the throw escapes its `yield` uncaught, turning a 403 into a 500.
     head :forbidden
-    throw :abort
   end
 
   def set_assignment
     @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
-    throw :abort
   end
 
   def assessment_context

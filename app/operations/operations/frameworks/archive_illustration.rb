@@ -39,6 +39,7 @@ class Operations::Frameworks::ArchiveIllustration < Operations::Base
         framework.framework_id, illustration.illustration_id, reason: params[:reason]
       )
     else
+      require_author!
       Frameworks::CommandHandler.new.suggest_delete(
         framework.framework_id, SecureRandom.uuid_v7, "role_illustration", illustration.illustration_id,
         author_id: author_id, rationale: params[:reason], mode: :suggesting
@@ -67,6 +68,18 @@ class Operations::Frameworks::ArchiveIllustration < Operations::Base
 
   def author_id
     context.person&.id&.to_s
+  end
+
+  # A pending suggestion must be attributable. `suggest_edit?` permits a
+  # tenant_admin who has no linked Person, so guard the suggestion branch —
+  # otherwise the aggregate would `.compact` the nil author into an
+  # unattributed suggestion (breaking the per-author dedup + "proposed by"
+  # rendering). The direct-removal branch needs no author.
+  def require_author!
+    return if author_id.present?
+
+    raise Operations::Base::ParameterError,
+          "Proposing an archive requires a linked person; this account has none."
   end
 
   def framework

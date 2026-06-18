@@ -105,6 +105,29 @@ class Operations::Frameworks::ArchiveIllustrationTest < ActiveSupport::TestCase
     end
   end
 
+  context "as a tenant admin with no linked person, in suggesting mode" do
+    setup do
+      @adminless_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        @adminless_tu = create(:tenant_user, tenant: @tenant, user: @adminless_user, role: :admin, person: nil)
+      end
+      @adminless_ctx = AuthorizationContext.new(user: @adminless_user, tenant_user: @adminless_tu, person: nil)
+    end
+
+    should "refuse to create an unattributed suggestion" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::ArchiveIllustration.call(
+            context: @adminless_ctx,
+            params: { framework_id: @framework_id, illustration_id: @ill_id, mode: "suggesting" }
+          )
+        end
+        assert_equal 0, pending_archive_suggestions.count
+        assert_not_nil illustration
+      end
+    end
+  end
+
   context "with an illustration belonging to a different framework" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

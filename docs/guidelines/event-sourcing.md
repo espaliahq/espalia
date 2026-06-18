@@ -88,6 +88,21 @@ Rebuild ordering:
 - **`rebuild_all`** uses `Projections::GlobalReplayer.replay_all` — truncate everything up front, replay all events in global insertion order. Order in `Projections::Registry::REPLAYABLE` is conventional only; correctness comes from the live event order.
 - **Sequential selective rebuilds** (running `rebuild[name]` back-to-back, or `REBUILD_ON_DEPLOY=a,b`): no semantic ordering requirement today because each projection owns its tables. The registry order is preserved as a defensive convention.
 
+## Externally-addressable read-model identity must be deterministic
+
+**Any read-model row addressed from outside by its primary key — a REST route param, an MCP resource URI (`assessment://<id>`), a bookmark, an id an MCP client cached — MUST have a PK that is a pure function of event-sourced data, so `reset!` + replay reproduces the same id.** A row whose PK is minted fresh at projection time (the default `SecureRandom.uuid_v7` from `ApplicationRecord`) gets a *new* id on every rebuild; every URL that captured the old id then 404s. This caused a production incident (evidence POSTed to a now-stale `PersonFrameworkAssignment` id surfaced as a 500).
+
+Two compliant patterns:
+
+1. **PK == an event-carried id.** The creating event carries an id minted at command time (`EvidenceItem` ← `evidence_id`, `PersonDevelopmentComment` ← `comment_id`); the projection sets `find_or_initialize_by(id: event.data[:…])`.
+2. **PK derived deterministically from the natural key** via the [`DeterministicId`](../../app/models/concerns/deterministic_id.rb) concern — `deterministic_id_from :person_id, :framework_id` → `id = UUIDv5(namespace, "Model:val/val")`. Use when there's no single event id but the natural key is stable and singular (`PersonFrameworkAssignment`, `ManagerAssessmentDelegation`).
+
+A read model addressed only by an **event-sourced domain column** (`framework_id`, `capability_id`, `cycle_id`, …) is already stable — routes use that column, not the surrogate PK, so the random PK never escapes.
+
+When adding a read model, decide its external-identity strategy deliberately. The `DeterministicId` derivation (namespace, attribute set, order, format) is **frozen once any row exists in production** — historical rows' ids depend on it, so changing it reissues them on the next rebuild. Treat it like an immutable event shape.
+
+**Enforced by the round-trip guard.** `ProjectionReplayHelpers#rows(scope, stable_id: true)` includes `id` in the snapshot for stable-PK tables, and the projection round-trip tests assert the snapshot is identical across `reset!` + replay. A reverted concern or a new addressable table with a random PK fails CI rather than silently reissuing ids.
+
 ## Replay-mode side-effect suppression
 
 Replay must not produce side effects beyond writing read models — no Turbo broadcasts, no job enqueuing, no ActionCable, no outbound HTTP.
