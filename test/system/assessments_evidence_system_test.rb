@@ -191,6 +191,38 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
         "document.querySelector(\"#evidence-form-modal input[name='evidence[level_ordinal]']\")?.value"
       )
     end
+
+    # The evidence modal holds unsaved input — a stray background click must
+    # NOT discard it. Esc still closes it (deliberate keypress, kept for
+    # accessibility). See modal_controller.js `dismissOnOutsideClick`.
+    should "stay open on an outside click but close on Esc" do
+      visit assessment_path(@assignment)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(<<~JS)
+        const btn = document.querySelector(
+          "[data-action~='click->modal#open']" +
+          "[data-evidence-form-capability-stable-id-param='#{@cap_stable}']" +
+          "[data-evidence-form-level-ordinal-param='1']"
+        );
+        btn?.click();
+      JS
+      assert_selector "#evidence-form-modal.flex", visible: true
+
+      # A real MouseEvent on the backdrop (outside the panel) — the click-outside
+      # gesture that previously dismissed the modal and lost the form.
+      page.execute_script(<<~JS)
+        document.querySelector("#evidence-form-modal").dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+        );
+      JS
+      assert_selector "#evidence-form-modal.flex", visible: true,
+        wait: 1
+
+      # Esc remains an intentional dismissal.
+      find("#evidence_content_field").send_keys(:escape)
+      assert_no_selector "#evidence-form-modal.flex"
+    end
   end
 
   context "level chip activity indicators" do

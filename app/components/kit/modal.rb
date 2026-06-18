@@ -33,17 +33,25 @@ class Components::Kit::Modal < Components::Base
   # @param title [String] heading text
   # @param size [Symbol] :sm, :md, or :lg
   # @param standalone [Boolean] render an own `modal` controller + trigger slot
-  def initialize(id:, title:, size: :md, standalone: true)
+  # @param dismiss_on_outside_click [Boolean] allow a background click to close
+  #   the modal. Defaults to false so transactional modals (those holding
+  #   unsaved input) can't be discarded by accident — they close via the ×
+  #   button, Cancel, Esc, or a successful submit. Set true only for purely
+  #   informational modals. (Embedded modals — `standalone: false` — read this
+  #   value from the host element carrying `data-controller="modal"` instead.)
+  def initialize(id:, title:, size: :md, standalone: true, dismiss_on_outside_click: false)
     @id = id
     @title = title
     @size = size
     @standalone = standalone
+    @dismiss_on_outside_click = dismiss_on_outside_click
   end
 
   def view_template(&block)
     if @standalone
       div(class: "relative inline-block text-left",
-          data: { controller: "modal", action: "keydown.esc@window->modal#close" }) do
+          data: { controller: "modal", action: "keydown.esc@window->modal#close",
+                  modal_dismiss_on_outside_click_value: (@dismiss_on_outside_click ? "true" : "false") }) do
         yield(self)
         dialog
       end

@@ -524,7 +524,7 @@ ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
 | `activity_feed_controller.js` | Listens for `matrix:focus-changed` and narrows entries by capability + level focus. |
 | `context_pane_controller.js` (shared with framework explorer) | Right-pane suggestion / activity panel state, URL focus sync. |
 | `continue_assessing_controller.js` | Bottom-line CTA — dispatches a window event with the next-unrated capability stable_id + level, picked up by `matrix_controller#focusUnrated`. |
-| `modal_controller.js` | Generic `Kit::Modal` controller — open/close, Esc, click-outside, body-scroll-lock; dispatches a window `modal:open` event so feature controllers can prefill. Hosts the Delegates modal (standalone) and the evidence modal (embedded, with `evidence-form` prefilling via `modal:open`). |
+| `modal_controller.js` | Generic `Kit::Modal` controller — open/close, Esc, body-scroll-lock; dispatches a window `modal:open` event so feature controllers can prefill. **Outside-click dismissal is opt-in** (`dismissOnOutsideClick` value, default off) so a stray background click can't discard a half-filled transactional form — modals close via the × button, Cancel, Esc, or a successful submit. Hosts the Delegates modal (standalone) and the evidence modal (embedded, with `evidence-form` prefilling via `modal:open`). |
 | `evidence_form_controller.js` | Evidence-specific companion to `modal` — prefills capability/level/type from the `modal:open` dataset and toggles the custom-label field. Visibility lives in `modal`. |
 
 There is **no** `sticky_hero_controller.js`. The hero's collapse is pure CSS scroll-driven animation. See *Hero Summary — Collapse on scroll*.
@@ -724,7 +724,7 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/javascript/controllers/frequency_selector_controller.js` | Optimistic frequency button UI |
 | `app/javascript/controllers/activity_feed_controller.js` | Focus-narrowing on `matrix:focus-changed` |
 | `app/javascript/controllers/continue_assessing_controller.js` | Bottom-line CTA — dispatches focus-unrated event |
-| `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/click-outside; dispatches `modal:open` |
+| `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/Esc; opt-in outside-click dismissal (`dismissOnOutsideClick`, default off); dispatches `modal:open` |
 | `app/javascript/controllers/evidence_form_controller.js` | Evidence prefill companion to `modal` (visibility lives in `modal`) |
 | **CSS** | |
 | `app/assets/tailwind/application.css` | `.hero-collapsible` scroll-driven animation (`animation-timeline: scroll(root)`) |

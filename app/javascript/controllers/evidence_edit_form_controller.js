@@ -20,6 +20,11 @@
 // stamps the form's action URL, prefills every field, and shows the
 // modal. Submission is a PATCH (set via the form's `_method` hidden
 // field) to /assessments/:assessment_id/evidence/:id.
+//
+// This is a transactional modal: it is NOT dismissed by an outside click (that
+// would discard the in-progress edit by accident). It closes only via the ×
+// button, Cancel, Esc (wired on the host element in the show views), or a
+// successful submit.
 
 import BaseController from "controllers/base_controller"
 
@@ -34,11 +39,9 @@ export default class extends BaseController {
 
   connect() {
     super.connect()
-    this.boundClickOutside = this.clickOutside.bind(this)
   }
 
   disconnect() {
-    document.removeEventListener("click", this.boundClickOutside, true)
     document.body.style.overflow = ""
     super.disconnect()
   }
@@ -77,9 +80,6 @@ export default class extends BaseController {
     this.modalTarget.classList.remove("hidden")
     this.modalTarget.classList.add("flex")
     document.body.style.overflow = "hidden"
-    queueMicrotask(() => {
-      document.addEventListener("click", this.boundClickOutside, true)
-    })
     const focusable = this.modalTarget.querySelector("textarea, input:not([type='hidden']), select")
     focusable && focusable.focus()
   }
@@ -88,7 +88,6 @@ export default class extends BaseController {
     this.modalTarget.classList.add("hidden")
     this.modalTarget.classList.remove("flex")
     document.body.style.overflow = ""
-    document.removeEventListener("click", this.boundClickOutside, true)
     this.returnFocusElement?.focus()
     this.returnFocusElement = null
   }
@@ -97,14 +96,6 @@ export default class extends BaseController {
     const isOther = this.typeSelectTarget.value === "other"
     this.customLabelWrapperTarget.classList.toggle("hidden", !isOther)
     this.customLabelFieldTarget.required = isOther
-  }
-
-  clickOutside(event) {
-    const target = event.target
-    if (!(target instanceof Element)) return
-    if (this.panelTarget.contains(target)) return
-    if (target.closest("[data-action*='evidence-edit-form#open']")) return
-    this.hide()
   }
 
   #updatePath(evidenceId) {
