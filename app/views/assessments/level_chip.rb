@@ -142,11 +142,14 @@ class Views::Assessments::LevelChip < Views::Base
   # - solid → palette colour for the resolved frequency
   # - split → the manager (bottom-right) colour; {#split_overlay} paints
   #   the self triangle on top
-  # - unrated below person's level → light blue (assumed-consistent,
+  # - unrated below person's level → mid blue (assumed-consistent,
   #   since the person operates at a higher level). Blue because
-  #   "Consistently" is blue in the {FrequencyPalette}; this faint wash
-  #   reads as "assumed consistent" vs the solid blue-500 of a cell
-  #   actually rated consistent.
+  #   "Consistently" is blue in the {FrequencyPalette}; this clearly-blue
+  #   tint reads as "consistent" at a glance, while staying a shade
+  #   lighter than the solid blue-500/400 of a cell actually rated
+  #   consistent so the two remain distinguishable. The earlier
+  #   blue-100/60 wash was so faint people didn't register it as a
+  #   consistent rating at all.
   # - unrated at/above person's level → neutral grey
   def chip_bg
     case fill_state.first
@@ -155,7 +158,7 @@ class Views::Assessments::LevelChip < Views::Base
     when :split
       palette_bg(fill_state[2])
     else
-      @ordinal < @person_level ? "bg-blue-100/60 dark:bg-blue-900/40" : "bg-gray-100 dark:bg-gray-700"
+      @ordinal < @person_level ? "bg-blue-300 dark:bg-blue-700" : "bg-gray-100 dark:bg-gray-700"
     end
   end
 
