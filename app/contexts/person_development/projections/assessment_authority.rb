@@ -14,7 +14,15 @@
 #
 class PersonDevelopment::Projections::AssessmentAuthority
   PROJECTION_NAME = "person_development/assessment_authority"
-  CODE_VERSION = 1
+  # 2 — `ManagerAssessmentDelegation` now derives its primary key
+  #     deterministically from `(person_id, framework_id, delegate_person_id)`
+  #     via {DeterministicId}, instead of a random `uuid_v7` minted at
+  #     projection time. A rebuild re-keys every delegation row to its
+  #     deterministic id (one-time PK churn; thereafter stable). Requires a
+  #     rebuild (REBUILD_ON_DEPLOY=person_development/assessment_authority).
+  #     `RecordedReportingManager` is unaffected (not externally addressed by
+  #     PK), but shares this projection's rebuild.
+  CODE_VERSION = 2
 
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events
