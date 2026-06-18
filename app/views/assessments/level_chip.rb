@@ -22,6 +22,17 @@
 #   "aligned".)
 #
 class Views::Assessments::LevelChip < Views::Base
+  # Fill for a below-level cell whose rating is the assumed-consistent
+  # default. Clearly blue ("Consistently" is blue in the palette), but a
+  # shade lighter than the solid blue-500 of an explicit "Consistently"
+  # so an assumed value stays distinguishable from a rated one.
+  ASSUMED_CONSISTENT_BG = "bg-blue-300 dark:bg-blue-700"
+
+  # Sentinel marking a split slice whose value is the assumed-consistent
+  # default (an unrated perspective on a below-level cell) rather than an
+  # explicit frequency — so it paints {ASSUMED_CONSISTENT_BG}, not grey.
+  ASSUMED = :assumed_consistent
+
   # @param cell_data [Hash, nil] from MatrixDataBuilder
   # @param capability_stable_id [String]
   # @param ordinal [Integer]
@@ -122,10 +133,14 @@ class Views::Assessments::LevelChip < Views::Base
     parts.join(", ")
   end
 
-  # A split with both slices rated is a disagreement; a split with one
-  # slice nil is just one perspective rated so far.
+  # A split with both slices explicitly rated is a disagreement; a split
+  # where one slice is the assumed-consistent default reads as the rated
+  # perspective diverging from the assumed value; a split with one slice
+  # nil is just one perspective rated so far.
   def split_note
     _state, top, bottom = fill_state
+    return "the unrated perspective is assumed consistent" if top == ASSUMED || bottom == ASSUMED
+
     top && bottom ? "perspectives differ" : "only one perspective rated"
   end
 
@@ -158,11 +173,13 @@ class Views::Assessments::LevelChip < Views::Base
     when :split
       palette_bg(fill_state[2])
     else
-      @ordinal < @person_level ? "bg-blue-300 dark:bg-blue-700" : "bg-gray-100 dark:bg-gray-700"
+      @ordinal < @person_level ? ASSUMED_CONSISTENT_BG : "bg-gray-100 dark:bg-gray-700"
     end
   end
 
   def palette_bg(frequency)
+    return ASSUMED_CONSISTENT_BG if frequency == ASSUMED
+
     config = Views::Assessments::FrequencyPalette.config_for(frequency)
     config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
   end
@@ -235,16 +252,38 @@ class Views::Assessments::LevelChip < Views::Base
     end
   end
 
-  # Both absent → unrated. Both present and equal → solid (agreement).
-  # Otherwise → split: differing values, OR one perspective rated and the
-  # other not. A nil slice paints grey (via {#palette_bg}), so "I rated,
-  # they haven't" reads as colour-vs-grey rather than masquerading as a
-  # mutual solid.
+  # Both absent → unrated. Otherwise resolve each slice — an unrated
+  # perspective on a cell BELOW the person's level defaults to
+  # assumed-consistent (the same default the solo chip and the scoring
+  # use), but only when the counterpart WAS rated (a cell with neither
+  # perspective rated stays the lighter solo "assumed" tint via the
+  # :unrated branch, so it doesn't masquerade as a solid rated cell).
+  #
+  # Solid only when both slices are explicit AND equal — {ASSUMED} is a
+  # symbol, so it never equals a frequency string. An explicitly-rated
+  # "consistent" therefore still splits against an assumed-consistent
+  # default, showing the two blue shades (solid blue-500 vs the lighter
+  # assumed blue) in their perspective positions rather than collapsing to
+  # one fill. A slice left nil (an unrated perspective at/above the
+  # person's level, where there's no default) paints grey — so "I rated,
+  # they haven't" reads as colour-vs-grey above the person's level.
   def paint_pair(top_left:, bottom_right:)
     return [ :unrated ] if top_left.nil? && bottom_right.nil?
-    return [ :solid, top_left ] if top_left == bottom_right
 
-    [ :split, top_left, bottom_right ]
+    top    = top_left || assumed_default(counterpart: bottom_right)
+    bottom = bottom_right || assumed_default(counterpart: top_left)
+
+    return [ :solid, top ] if top == bottom
+
+    [ :split, top, bottom ]
+  end
+
+  # The {ASSUMED} default for an unrated slice whose counterpart was rated,
+  # on a below-level cell; otherwise nil (no default → paints grey).
+  def assumed_default(counterpart:)
+    return nil if counterpart.nil?
+
+    @ordinal < @person_level ? ASSUMED : nil
   end
 
   def split?
