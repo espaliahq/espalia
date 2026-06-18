@@ -15,7 +15,8 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
     @collab_user = create(:user)
 
     ActsAsTenant.with_tenant(@tenant) do
-      @admin_tu = create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
+      @admin_person = create(:person, tenant: @tenant, email: @admin_user.email)
+      @admin_tu = create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
       @member_tu = create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
 
       # A plain collaborator: suggest rights, but no approval authority on
@@ -36,7 +37,7 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
       handler.publish_version(@framework_id, "seed") # v1; no draft, caps are pre-draft
     end
 
-    @admin_ctx = AuthorizationContext.new(user: @admin_user, tenant_user: @admin_tu, person: nil)
+    @admin_ctx = AuthorizationContext.new(user: @admin_user, tenant_user: @admin_tu, person: @admin_person)
     @member_ctx = AuthorizationContext.new(user: @member_user, tenant_user: @member_tu, person: nil)
     @collab_ctx = AuthorizationContext.new(user: @collab_user, tenant_user: @collab_tu, person: @collab_person)
   end
@@ -121,8 +122,9 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
   context "as an authority-holder in suggesting mode" do
     should "propose the archive instead of applying it directly" do
       ActsAsTenant.with_tenant(@tenant) do
+        # @admin_ctx CAN approve — proves the suggesting toggle overrides authority.
         result = Operations::Frameworks::ArchiveCapability.call(
-          context: @collab_ctx, # collaborator can suggest; but mode also forces it
+          context: @admin_ctx,
           params: { framework_id: @framework_id, capability_id: @cap_id, reason: "Retire", mode: "suggesting" }
         )
 
