@@ -129,6 +129,14 @@ class Assessments::CommentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :unprocessable_content
     end
 
+    should "respond 404 (not 500) when the assignment id does not exist" do
+      sign_in @assessee_user
+      post assessment_comments_path(SecureRandom.uuid_v7), params: {
+        comment: { capability_stable_id: @cap.stable_id, level_ordinal: 2, body: "x" }
+      }
+      assert_response :not_found
+    end
+
     should "let a reply target another reply (multi-level threading)" do
       sign_in @assessee_user
       cell = { capability_stable_id: @cap.stable_id, level_ordinal: 2 }

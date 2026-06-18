@@ -242,15 +242,17 @@ class Assessments::EvidenceController < ApplicationController
   def require_person
     return if current_person
 
+    # Rendering halts the before_action chain (Rails checks `performed?`), so
+    # set_assignment won't run. Do NOT `throw :abort` — the around_action
+    # `wrap_with_audit_metadata` (ApplicationController) wraps these callbacks,
+    # and the throw escapes its `yield` uncaught, turning a 403 into a 500.
     head :forbidden
-    throw :abort
   end
 
   def set_assignment
     @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
-    throw :abort
   end
 
   # Determines source from the viewer's relationship to the assessee.

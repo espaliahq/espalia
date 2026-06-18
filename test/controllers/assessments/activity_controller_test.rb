@@ -106,6 +106,12 @@ class Assessments::ActivityControllerTest < ActionDispatch::IntegrationTest
       get assessment_activity_path(@assignment)
       assert_redirected_to new_user_session_path
     end
+
+    should "respond 404 (not 500) when the assignment id does not exist" do
+      sign_in @user
+      get assessment_activity_path(SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
   end
 
   private
