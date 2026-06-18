@@ -184,6 +184,52 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#cell-#{@cap_stable}-2 [data-split]", visible: :all
     end
 
+    should "split a below-level chip against the assumed-consistent blue, not grey" do
+      # The report sits at level 2, so level 1 is below their level — an
+      # unrated perspective there defaults to assumed-consistent. The
+      # manager rates level 1 "occasional" (Most) while the report has not
+      # self-rated level 1, so the chip splits manager-colour vs the
+      # report's *assumed-consistent blue* default — never grey, which
+      # would wrongly read as "unrated".
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "occasional", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+
+      assert_selector "#cell-#{@cap_stable}-1 [data-split]", visible: :all
+      # Base fill (the report's assumed-consistent slice) is blue, not grey.
+      assert_selector "#cell-#{@cap_stable}-1.bg-blue-300"
+      assert_no_selector "#cell-#{@cap_stable}-1.bg-gray-100"
+    end
+
+    should "split explicit-consistent against assumed-consistent as two blue shades" do
+      # Manager rates level 1 (below the report's level 2) "consistent" —
+      # the report has not self-rated level 1, so its perspective defaults
+      # to assumed-consistent. The two values agree on "consistent" but one
+      # is explicit and one assumed, so the chip must still SPLIT, showing
+      # the solid blue-500 (manager) against the lighter assumed blue-300
+      # (self) in their positions — never a single solid fill.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+
+      # Manager's explicit slice (top-left overlay) is solid blue-500.
+      assert_selector "#cell-#{@cap_stable}-1 [data-split].bg-blue-500", visible: :all
+      # Report's assumed slice (chip base) is the lighter blue-300.
+      assert_selector "#cell-#{@cap_stable}-1.bg-blue-300"
+    end
+
     should "label the assessee's current level CURRENT, not YOU, for the manager" do
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"

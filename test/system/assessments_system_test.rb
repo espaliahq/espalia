@@ -655,7 +655,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # The unrated E1 chip (below person_level=2) should carry the
       # assumed-consistent tint — the person is at E2, so we assume
       # they've cleared E1. "Consistently" is blue in the palette, so
-      # the assumed-consistent wash is light blue.
+      # the assumed-consistent fill is a clearly-blue tint.
       chip_classes = page.evaluate_script(
         "document.getElementById('cell-#{@cap1_stable}-1').className"
       )
@@ -686,7 +686,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     # Regression: the button-reset utilities added when chips were
     # promoted from <div> to <button> (`bg-transparent`) won the cascade
-    # against `bg-blue-100/60` / `bg-gray-100` / etc — the class string
+    # against `bg-blue-300` / `bg-gray-100` / etc — the class string
     # still listed the chip colour but the computed background painted
     # transparent. The existing tests assert on className only and so
     # passed; this asserts on what actually paints.
