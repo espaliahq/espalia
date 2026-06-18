@@ -164,8 +164,9 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # pencil. A dropdown menu (Kit::Dropdown) gathering the actions available on
   # this capability for this viewer: inline Approve / Reject of its pending
   # name / description edits (approval authority — the actionable-feed pattern,
-  # framework-explorer.md §12), plus Archive (edit-structure rights). The kebab
-  # renders only when at least one action applies.
+  # framework-explorer.md §12), plus Archive (any suggest-rights viewer — the
+  # Operation decides direct-vs-suggestion). The kebab renders only when at least
+  # one action applies.
   #
   # toggleRow ignores clicks inside `[data-controller~='dropdown']`, so opening
   # the menu never also expands the row.
