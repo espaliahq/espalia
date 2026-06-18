@@ -45,7 +45,15 @@ class PersonDevelopment::Projections::CurrentAssessment
   # Not bumped for `PersonUnassignedFromFramework`: a brand-new event type
   # with zero historical instances in the stream, so a rebuild produces
   # identical state (additive handler, `reset!` truncate set unchanged).
-  CODE_VERSION = 4
+  #
+  # 5 — `PersonFrameworkAssignment` now derives its primary key
+  #     deterministically from `(person_id, framework_id)` via
+  #     {DeterministicId}, instead of a random `uuid_v7` minted at projection
+  #     time. A rebuild therefore re-keys every assignment row to its
+  #     deterministic id (one-time PK churn; thereafter stable across all
+  #     rebuilds). Requires a rebuild
+  #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  CODE_VERSION = 5
 
   # All event classes this projection handles.
   #
