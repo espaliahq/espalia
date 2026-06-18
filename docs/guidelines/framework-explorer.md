@@ -407,6 +407,12 @@ controllers prefill from the `modal:open` event's `dataset`: `add_capability_for
 from survivors), `mapping_form` (toggles the survivor select by mapping type),
 `archive_category_form` (category id/name — no mapping).
 
+These modals hold unsaved input (names, descriptions, migration mappings,
+reject reasons), so outside-click dismissal is **off** — the explorer root's
+`modal` controller leaves `dismissOnOutsideClick` at its default (false), so a
+stray background click can't discard a half-filled structural form. They close
+via the × button, Cancel, Esc, or a successful submit.
+
 **Operations-first (web + MCP parity).** Add/archive/publish/mapping all dispatch
 `Operations::Frameworks::*` (`AddCapability`, `AddCategory`, `ArchiveCapability`,
 `ArchiveCategory`, `DefineMigrationMapping`, `PublishVersion`) so the web

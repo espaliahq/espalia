@@ -1,10 +1,17 @@
 // Generic modal controller backing Components::Kit::Modal.
 //
-// Owns visibility only: open/close, body-scroll-lock, click-outside, and
-// (via the host element's keydown.esc action) Esc-to-close. On open it
-// dispatches a window `modal:open` CustomEvent carrying the triggering
-// element's dataset, so a sibling feature controller can prefill form fields
-// without this controller knowing their shape.
+// Owns visibility only: open/close, body-scroll-lock, and (via the host
+// element's keydown.esc action) Esc-to-close. On open it dispatches a window
+// `modal:open` CustomEvent carrying the triggering element's dataset, so a
+// sibling feature controller can prefill form fields without this controller
+// knowing their shape.
+//
+// Click-outside dismissal is OPT-IN via the `dismissOnOutsideClick` value
+// (default false). Transactional modals (anything holding unsaved user input)
+// must leave it off so a stray background click can't discard the form — they
+// close only through the × button, a Cancel action, Esc, or a successful
+// submit. Set it true only for purely informational modals where an outside
+// click is a safe, expected dismissal.
 //
 // Standalone usage (co-located trigger):
 //   <div data-controller="modal" data-action="keydown.esc@window->modal#close">
@@ -25,6 +32,7 @@ import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
   static targets = ["overlay", "panel"]
+  static values = { dismissOnOutsideClick: Boolean }
 
   connect() {
     super.connect()
@@ -77,11 +85,14 @@ export default class extends BaseController {
     overlay.classList.remove("hidden")
     overlay.classList.add("flex")
     document.body.style.overflow = "hidden"
-    // Defer so the click that opened us (originating outside the panel) does
-    // not immediately close it on the next listener pass.
-    queueMicrotask(() => {
-      document.addEventListener("click", this.boundClickOutside, true)
-    })
+    // Click-outside is opt-in (informational modals only). Defer registration
+    // so the click that opened us (originating outside the panel) does not
+    // immediately close it on the next listener pass.
+    if (this.dismissOnOutsideClickValue) {
+      queueMicrotask(() => {
+        document.addEventListener("click", this.boundClickOutside, true)
+      })
+    }
     const focusable = overlay.querySelector("textarea, input:not([type='hidden']), select")
     focusable && focusable.focus()
   }

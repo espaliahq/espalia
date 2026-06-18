@@ -29,6 +29,21 @@ class Components::Kit::ModalTest < ActiveSupport::TestCase
       assert_includes html, 'data-action="click->modal#close"'
       assert_includes html, "Demo"
     end
+
+    # Outside-click dismissal is opt-in so transactional modals can't be
+    # discarded by a stray background click.
+    should "not enable outside-click dismissal by default" do
+      assert_includes standalone_modal, 'data-modal-dismiss-on-outside-click-value="false"'
+    end
+
+    should "enable outside-click dismissal when opted in" do
+      html = Components::Kit::Modal.new(id: "demo-modal", title: "Demo",
+                                        dismiss_on_outside_click: true).call do |m|
+        m.trigger { "Open" }
+        m.body { } # rubocop:disable Lint/EmptyBlock
+      end
+      assert_includes html, 'data-modal-dismiss-on-outside-click-value="true"'
+    end
   end
 
   context "Components::Kit::Modal (embedded)" do
