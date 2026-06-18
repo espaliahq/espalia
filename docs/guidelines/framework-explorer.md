@@ -380,8 +380,11 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   `MatrixRow::STRIKETHROUGH_CLASSES`, applied per-cell via `[&>td]:` because
   `text-decoration` doesn't propagate reliably from a `<tr>` to its cells). View
   mode shows the capability un-struck (it's still in the published version until
-  publish). *(Stage 1 — capabilities; illustrations get the same unified Archive
-  in a follow-up. See [docs/handoffs/unify-archive-operation.md](../handoffs/unify-archive-operation.md).)*
+  publish). *(Illustrations get the same unified, toggle-driven Archive — a
+  hover-revealed archive control on each illustration in the expanded row
+  (`IllustrationFrame`) → `Operations::Frameworks::ArchiveIllustration`: direct
+  `remove_role_illustration` vs `suggest_delete("role_illustration")`, no
+  migration mapping since illustrations carry no ratings.)*
 - **Archive-category kebab** — hover-revealed next to the category **name**
   (not the far right of the full-width header, which scrolls off-screen on a
   matrix with many level columns), **only for an empty category** (the aggregate refuses to archive one
@@ -881,9 +884,10 @@ line (§9).
 | `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH) |
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
+| `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
-| `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11) |
+| `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/controllers/concerns/inline_suggested_edits.rb` | `submit_inline_suggested_edit` — amends the author's pending edit on a field (→ `SuggestionAmended`) or creates a fresh suggestion; prevents consecutive duplicate suggestions |

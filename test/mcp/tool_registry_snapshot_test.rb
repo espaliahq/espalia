@@ -557,6 +557,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_archive_illustration",
+        "description" => "Archive a role illustration — removed directly with approval rights in editing mode, else proposed as a suggestion.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "illustration_id" => { "type" => "string" },
+            "reason" => { "type" => "string" },
+            "mode" => { "type" => "string", "enum" => %w[editing suggesting] }
+          },
+          "required" => %w[framework_id illustration_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_capability_get",
         "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {

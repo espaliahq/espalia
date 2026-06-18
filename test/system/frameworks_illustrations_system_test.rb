@@ -77,8 +77,12 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       # click — on slow CI runners the button click is silently dropped, but
       # invoking the form's submit method synchronously bypasses Selenium's
       # pointer hit-testing entirely and the data-turbo-stream response is
-      # guaranteed to fire.
-      page.execute_script("arguments[0].querySelector('form').requestSubmit();", ill_li)
+      # guaranteed to fire. Target the edit form specifically — the li now also
+      # carries the hover-revealed archive form, so a bare querySelector("form")
+      # would submit that instead and trip its confirm dialog.
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').requestSubmit();", ill_li
+      )
 
       assert_text "Proactively seeks guidance and asks clarifying questions"
       assert_no_text "Seeks guidance from tech lead"
@@ -102,6 +106,32 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
       # Edit form hidden, display mode restored — original text visible
       assert_text "Seeks guidance from tech lead"
+    end
+  end
+
+  context "archiving an illustration" do
+    should "remove the illustration directly for an approver in editing mode" do
+      visit edit_framework_path(@framework_id)
+
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Seeks guidance from tech lead"
+
+      # The hover-revealed archive control posts a tiny confirm-guarded form.
+      # Stub the confirm to true and submit it synchronously (the archive form
+      # is the one in the display region — not the inline-editor edit form).
+      ill_li = find("li[data-controller='inline-editor']", match: :first)
+      auto_confirm do
+        page.execute_script(
+          "arguments[0].querySelector(\"form[action*='illustration_archives']\").requestSubmit();", ill_li
+        )
+      end
+
+      # Redirected back to edit mode; the removal applied live (illustrations
+      # carry no ratings, so it is shape-preserving). Re-expanding the row
+      # proves the illustration is gone, not merely collapsed.
+      assert_text "Strategic Thinking"
+      expand_matrix_row("tr[data-capability-id]")
+      assert_no_text "Seeks guidance from tech lead"
     end
   end
 
