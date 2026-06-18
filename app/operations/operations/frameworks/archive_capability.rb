@@ -44,6 +44,7 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
     if archived
       handler.archive_capability(framework.framework_id, capability.capability_id, reason: params[:reason])
     else
+      require_author!
       # mode: :suggesting forces a pending proposal — this operation has already
       # made the direct-vs-suggest decision (via approval_authority), so the
       # command handler must NOT re-decide and auto-approve.
@@ -91,6 +92,18 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
 
   def author_id
     context.person&.id&.to_s
+  end
+
+  # A pending suggestion must be attributable. `suggest_edit?` permits a
+  # tenant_admin with no linked Person, so guard the suggestion branch —
+  # otherwise the aggregate `.compact`s the nil author into an unattributed
+  # suggestion (breaking the per-author dedup + "proposed by" rendering). The
+  # direct-archive branch needs no author.
+  def require_author!
+    return if author_id.present?
+
+    raise Operations::Base::ParameterError,
+          "Proposing an archive requires a linked person; this account has none."
   end
 
   def can_define_mapping?
