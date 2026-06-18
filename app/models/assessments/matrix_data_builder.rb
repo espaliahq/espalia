@@ -146,6 +146,7 @@ class Assessments::MatrixDataBuilder
       {
         category: category,
         deficit_threshold: category.deficit_threshold,
+        person_level: @level.ordinal,
         capabilities: capabilities
       }
     end

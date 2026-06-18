@@ -8,6 +8,12 @@
 # follows the current `:self` / `:manager` / `:alignment` context so the
 # count reflects what the viewer is actually rating.
 #
+# The count reflects only the cell at the person's **current level**
+# (`category_data[:person_level]`) — one cell per capability, matching the
+# hero coverage gate and the "Assessment Complete" pill. Counting every
+# level's cell would inflate the total far beyond the capabilities the
+# viewer is actually being asked to rate.
+#
 module Views::Assessments::Concerns::RatedCount
   CONTEXT_FREQUENCY_KEYS = {
     self:      :current_frequency,
@@ -20,13 +26,15 @@ module Views::Assessments::Concerns::RatedCount
   # @return [Hash{Symbol => Integer}] { rated:, total: }
   def category_rated_count(category_data, context)
     freq_key = CONTEXT_FREQUENCY_KEYS[context] || :current_frequency
+    person_level = category_data[:person_level]
     rated = 0
     total = 0
     category_data[:capabilities].each do |cap|
-      cap[:cells].each_value do |cell|
-        total += 1
-        rated += 1 if cell[freq_key].present?
-      end
+      cell = cap[:cells][person_level]
+      next unless cell
+
+      total += 1
+      rated += 1 if cell[freq_key].present?
     end
     { rated: rated, total: total }
   end
