@@ -1,22 +1,27 @@
 # frozen_string_literal: true
 
-# Archives a capability and, in the same action, records the migration
-# mapping for its existing ratings — the "map as-we-go" flow. The person
-# archiving makes the call with the freshest context; the owner/editor
-# validates (and may override) it on the publish-review screen.
+# Archives a capability — the single removal operation. Whether it applies
+# directly or lands as a pending **suggestion** is driven by the edit/suggest
+# toggle plus the actor's authority, mirroring inline edits:
 #
-# A capability that was added in the current draft has nothing to migrate,
-# so the caller omits the mapping params and only the archive is dispatched.
-# For a pre-draft capability the caller supplies `mapping_type` (+ a survivor
-# `to_stable_id` for same/evolved/split); the mapping is keyed off the
-# capability's own stable_id. Archiving also auto-opens a draft if none is
-# open (see Frameworks::Aggregate#ensure_draft_in_progress!).
+#   editing mode  + can approve a capability suggestion → archive directly
+#   suggesting mode, OR no approval authority           → archive suggestion
 #
-# Write — :mcp_client. It stages a structural change into the open draft;
-# the live impact (and the assessment migration) happens at publish, which
-# is :in_app. Restricted to edit-rights holders (FrameworkPolicy#archive_capability?).
+# The two branches use different commands so the *direct* path stays a single
+# `CapabilityArchived` event (no suggestion lifecycle to double-narrate in the
+# feed); the suggestion path proposes the same archive, which on approval runs
+# the very same `archive_capability` command.
+#
+# Migration mapping is optional in both branches: the archiver/suggester may
+# record it as-we-go (when they have mapping authority); otherwise the
+# owner/editor supplies & validates it at the publish-review gate. A capability
+# added in the current draft has nothing to migrate, so the caller omits it.
+#
+# Write — :mcp_client. Restricted to suggest-rights holders
+# (FrameworkPolicy#suggest_edit?); the *direct* branch additionally requires
+# capability-tier approval authority, otherwise it falls back to a suggestion.
 class Operations::Frameworks::ArchiveCapability < Operations::Base
-  description "Archive a capability, optionally recording its migration mapping (owner/editor/lead only)."
+  description "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion."
   category :write
   approval :mcp_client
 
@@ -25,36 +30,80 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
   parameter :reason,        String
   parameter :mapping_type,  String, allowed: %w[same evolved split archived new]
   parameter :to_stable_id,  String
+  parameter :mode,          String, allowed: %w[editing suggesting]
 
   def policy_check
-    authorize framework, :archive_capability?
+    authorize framework, :suggest_edit?
   end
 
-  # @return [Hash] { framework_id:, capability_id:, stable_id:, mapping_type: }
+  # @return [Hash] { framework_id:, capability_id:, stable_id:, archived:, mapping_type: }
   def perform
-    # Validate the mapping combo BEFORE archiving so we never persist the
-    # archive and then fail on the mapping (which would leave the capability
-    # archived without a mapping). Mirrors DefineMigrationMapping's guard.
-    if Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES.include?(params[:mapping_type]) &&
-       params[:to_stable_id].blank?
-      raise Operations::Base::ParameterError,
-            "#{params[:mapping_type]} mapping requires a surviving capability (to_stable_id)"
+    validate_mapping_combo!
+
+    archived = archive_directly?
+    if archived
+      handler.archive_capability(framework.framework_id, capability.capability_id, reason: params[:reason])
+    else
+      # mode: :suggesting forces a pending proposal — this operation has already
+      # made the direct-vs-suggest decision (via approval_authority), so the
+      # command handler must NOT re-decide and auto-approve.
+      handler.suggest_delete(
+        framework.framework_id, SecureRandom.uuid_v7, "capability", capability.capability_id,
+        author_id: author_id, rationale: params[:reason], mode: :suggesting
+      )
     end
 
-    handler = Frameworks::CommandHandler.new
-    handler.archive_capability(framework.framework_id, capability.capability_id, reason: params[:reason])
-
-    define_mapping if params[:mapping_type].present?
+    # Record the mapping only when one was supplied AND the actor may define it
+    # (owner/editor). A lead or plain suggester can't — their mapping is deferred
+    # to the publish-review gate rather than erroring the archive.
+    define_mapping if params[:mapping_type].present? && can_define_mapping?
 
     {
       framework_id: framework.framework_id,
       capability_id: capability.capability_id,
       stable_id: capability.stable_id,
+      archived: archived,
       mapping_type: params[:mapping_type]
     }
   end
 
   private
+
+  def handler
+    @handler ||= Frameworks::CommandHandler.new
+  end
+
+  # Direct archive only when the toggle is "editing" AND the actor can approve a
+  # capability-tier suggestion (owner / editor / category-lead / capability-lead,
+  # or tenant admin). Otherwise the archive is proposed for review. `mode`
+  # defaults to editing when unset (e.g. MCP), so authority alone decides there.
+  def archive_directly?
+    params[:mode].to_s != "suggesting" && approval_authority.can_approve?("capability")
+  end
+
+  def approval_authority
+    @approval_authority ||= Frameworks::SuggestionApprovalAuthority.for(
+      framework_id: framework.framework_id,
+      person: context.person,
+      tenant_admin: context.user&.global_admin? || context.tenant_user&.admin? || false
+    )
+  end
+
+  def author_id
+    context.person&.id&.to_s
+  end
+
+  def can_define_mapping?
+    FrameworkPolicy.new(context, framework).define_migration_mapping?
+  end
+
+  def validate_mapping_combo!
+    return unless Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES.include?(params[:mapping_type]) &&
+                  params[:to_stable_id].blank?
+
+    raise Operations::Base::ParameterError,
+          "#{params[:mapping_type]} mapping requires a surviving capability (to_stable_id)"
+  end
 
   def define_mapping
     Operations::Frameworks::DefineMigrationMapping.call(

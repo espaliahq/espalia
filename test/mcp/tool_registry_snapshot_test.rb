@@ -517,7 +517,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_archive_capability",
-        "description" => "Archive a capability, optionally recording its migration mapping (owner/editor/lead only).",
+        "description" => "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -525,7 +525,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "capability_id" => { "type" => "string" },
             "reason" => { "type" => "string" },
             "mapping_type" => { "type" => "string", "enum" => %w[same evolved split archived new] },
-            "to_stable_id" => { "type" => "string" }
+            "to_stable_id" => { "type" => "string" },
+            "mode" => { "type" => "string", "enum" => %w[editing suggesting] }
           },
           "required" => %w[framework_id capability_id],
           "additionalProperties" => false

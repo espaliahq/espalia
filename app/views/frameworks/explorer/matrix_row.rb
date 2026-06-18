@@ -173,9 +173,12 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @mode == :edit && (show_archive_action? || capability_edit_actions.any?)
   end
 
-  # Archive is gated on edit-structure rights and hidden once staged for archive.
+  # Archive is offered to any edit-mode (suggest-rights) viewer and hidden once
+  # already staged for archive. The Operation decides — from the edit/suggest
+  # toggle + the viewer's authority — whether it applies directly or lands as a
+  # pending archive suggestion, so the kebab no longer gates on edit_structure.
   def show_archive_action?
-    @can_edit_structure && !(@capability.respond_to?(:pending_archive) && @capability.pending_archive)
+    !(@capability.respond_to?(:pending_archive) && @capability.pending_archive)
   end
 
   # Pending name / description edits the viewer may approve, as

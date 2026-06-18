@@ -363,16 +363,25 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   add-capability modal, prefilled with that category; it captures name +
   description + which **roles** the capability applies to (so it's visible in
   the role-filtered matrix — a capability bound to no role is hidden).
-- **Row-actions kebab (⋮)** — hover-revealed beside the capability-name pencil
-  (expanded affordance set; today: Archive). Opens the archive modal, which
-  captures the migration mapping **as-we-go** (Evolve / Archive; *split* is a
-  separate future action). Owner/editor validate the mapping at the publish gate.
-  Once staged, the capability keeps its **"Pending archive" badge** AND the whole
-  row renders **struck through** (red line-through, edit mode only — see
+- **Row-actions kebab (⋮) → Archive** — hover-revealed beside the capability-name
+  pencil; offered to **any suggest-rights (edit-mode) viewer**, not just
+  edit-structure holders. "Archive" is the single removal operation — there is no
+  separate "delete". Opens the archive modal; the `Operations::Frameworks::ArchiveCapability`
+  operation then decides, from the **edit/suggest toggle + the viewer's
+  authority** (mirroring inline edits), whether it **applies directly**
+  (editing + can-approve-capability → `archive_capability`, one `CapabilityArchived`)
+  or lands as a **pending archive suggestion** (suggesting, or no approval rights
+  → `suggest_delete`, which on approval runs the same `archive_capability`). The
+  modal captures the migration mapping **as-we-go** (Evolve / Archive; *split* is
+  a separate future action) when the actor can define one (owner/editor);
+  otherwise it's optional/deferred to the publish gate. Once **directly** staged,
+  the capability keeps its **"Pending archive" badge** AND the whole row renders
+  **struck through** (red line-through, edit mode only — see
   `MatrixRow::STRIKETHROUGH_CLASSES`, applied per-cell via `[&>td]:` because
   `text-decoration` doesn't propagate reliably from a `<tr>` to its cells). View
   mode shows the capability un-struck (it's still in the published version until
-  publish).
+  publish). *(Stage 1 — capabilities; illustrations get the same unified Archive
+  in a follow-up. See [docs/handoffs/unify-archive-operation.md](../handoffs/unify-archive-operation.md).)*
 - **Archive-category kebab** — hover-revealed next to the category **name**
   (not the far right of the full-width header, which scrolls off-screen on a
   matrix with many level columns), **only for an empty category** (the aggregate refuses to archive one

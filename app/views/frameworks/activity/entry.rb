@@ -259,7 +259,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     case @entry.kind
     when "suggestion_edit"     then "Suggested an edit to #{entity_word}"
     when "suggestion_create"   then "Proposed a new #{entity_word}"
-    when "suggestion_delete"   then "Proposed removing #{entity_word}"
+    when "suggestion_delete"   then "Proposed archiving #{entity_word}"
     when "suggestion_amended"  then "Amended a #{entity_word} suggestion"
     when "suggestion_approved" then "Approved a #{entity_word} suggestion"
     when "suggestion_rejected" then "Rejected a #{entity_word} suggestion"

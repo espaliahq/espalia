@@ -61,7 +61,7 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
       get framework_activity_path(@framework_id, layout: "panel")
 
       assert_response :success
-      assert_match "Proposed removing", response.body
+      assert_match "Proposed archiving", response.body
       # The deletion proposal carries the prominent inline approve control…
       assert_select(
         "[data-controller='suggestion-action'][data-suggestion-action-approve-url-value*='#{delete_sid}']"
