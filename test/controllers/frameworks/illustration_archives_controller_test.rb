@@ -78,5 +78,37 @@ class Frameworks::IllustrationArchivesControllerTest < ActionDispatch::Integrati
       assert_redirected_to root_path
       assert_not_nil illustration
     end
+
+    should "redirect with an alert when the illustration belongs to another framework" do
+      other_ill_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        other_fw = SecureRandom.uuid_v7
+        h = Frameworks::CommandHandler.new
+        h.create_framework(other_fw, "Design")
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        h.add_role_family(other_fw, rfid, "Design")
+        h.add_role(other_fw, rid, rfid, "Product Designer", "PD", "ic")
+        h.add_level(other_fw, SecureRandom.uuid_v7, rid, 1, "PD1", "PD1")
+        cat = SecureRandom.uuid_v7
+        cap = SecureRandom.uuid_v7
+        eid = SecureRandom.uuid_v7
+        h.add_capability_category(other_fw, cat, "Craft")
+        h.add_capability(other_fw, cap, SecureRandom.uuid_v7, cat, "Visual Design")
+        h.set_behavioural_expectation(other_fw, eid, SecureRandom.uuid_v7, cap, 1, "Sketches")
+        h.add_role_illustration(other_fw, other_ill_id, SecureRandom.uuid_v7, eid, rid, 1, "Whiteboards")
+        h.publish_version(other_fw, "seed")
+      end
+
+      sign_in @admin_user
+      post framework_illustration_archives_path(framework_id: @framework_id),
+           params: { archive: { illustration_id: other_ill_id } }
+
+      assert_redirected_to edit_framework_path(@framework_id)
+      assert_not_nil flash[:alert]
+      assert_not_nil ActsAsTenant.with_tenant(@tenant) {
+        FrameworkState::RoleIllustration.find_by(illustration_id: other_ill_id)
+      }
+    end
   end
 end

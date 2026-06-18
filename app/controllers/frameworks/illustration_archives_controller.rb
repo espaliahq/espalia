@@ -30,7 +30,10 @@ class Frameworks::IllustrationArchivesController < ApplicationController
 
     notice = result[:archived] ? "Archived the illustration." : "Proposed archiving the illustration."
     redirect_to edit_framework_path(@framework.framework_id), notice: notice
-  rescue Operations::Base::ParameterError, RuntimeError => e
+  rescue Operations::Base::ParameterError, RuntimeError, ActiveRecord::RecordNotFound => e
+    # RecordNotFound covers a stale / concurrent submit or a cross-framework
+    # id that the framework-scoped Operation lookup rejects — redirect with an
+    # alert rather than surfacing a 500.
     redirect_to edit_framework_path(@framework.framework_id), alert: e.message
   end
 
