@@ -104,4 +104,41 @@ class Operations::Frameworks::ArchiveIllustrationTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "with an illustration belonging to a different framework" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @other_framework_id = SecureRandom.uuid_v7
+        @other_ill_id = SecureRandom.uuid_v7
+        h = Frameworks::CommandHandler.new
+        h.create_framework(@other_framework_id, "Design")
+        rfid = SecureRandom.uuid_v7
+        rid = SecureRandom.uuid_v7
+        h.add_role_family(@other_framework_id, rfid, "Design")
+        h.add_role(@other_framework_id, rid, rfid, "Product Designer", "PD", "ic")
+        h.add_level(@other_framework_id, SecureRandom.uuid_v7, rid, 1, "PD1", "PD1")
+        cat_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        eid = SecureRandom.uuid_v7
+        h.add_capability_category(@other_framework_id, cat_id, "Craft")
+        h.add_capability(@other_framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Visual Design")
+        h.set_behavioural_expectation(@other_framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Sketches")
+        h.add_role_illustration(@other_framework_id, @other_ill_id, SecureRandom.uuid_v7, eid, rid, 1, "Whiteboards")
+        h.publish_version(@other_framework_id, "seed")
+      end
+    end
+
+    should "raise RecordNotFound rather than archive across frameworks" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_raises(ActiveRecord::RecordNotFound) do
+          Operations::Frameworks::ArchiveIllustration.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, illustration_id: @other_ill_id }
+          )
+        end
+        assert_not_nil FrameworkState::RoleIllustration.find_by(illustration_id: @other_ill_id),
+                       "the other framework's illustration must be untouched"
+      end
+    end
+  end
 end

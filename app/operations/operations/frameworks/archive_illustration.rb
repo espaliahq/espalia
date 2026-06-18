@@ -73,11 +73,17 @@ class Operations::Frameworks::ArchiveIllustration < Operations::Base
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
   end
 
-  # The illustration's framework membership is enforced by the aggregate
-  # (raise_unless_entity_exists! only knows this framework's illustrations), so
-  # a tenant-scoped lookup here is safe — a mismatched id raises on dispatch.
+  # Scope the lookup to THIS framework (illustration → role → role_family →
+  # framework_id) rather than resolving by illustration_id alone. A mismatched
+  # { framework_id, illustration_id } pair raises a deterministic
+  # RecordNotFound here at the operation boundary, instead of being deferred to
+  # downstream command handling — same framework-scoping discipline the
+  # capability lookup uses (see mcp-server.md, Hard-Won Lesson 5).
   def illustration
-    @illustration ||= FrameworkState::RoleIllustration.find_by(illustration_id: params[:illustration_id]) ||
+    @illustration ||= FrameworkState::RoleIllustration
+      .joins(role: :role_family)
+      .where(framework_role_families: { framework_id: params[:framework_id] })
+      .find_by(illustration_id: params[:illustration_id]) ||
       raise(ActiveRecord::RecordNotFound, "illustration #{params[:illustration_id]} not found")
   end
 end
