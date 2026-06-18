@@ -176,7 +176,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   def suggestion_meta_row(suggestion)
     div(class: "flex items-center gap-2 mb-2") do
       render Components::Kit::Badge.new(entity_label(suggestion))
-      render Components::Kit::Badge.new(suggestion.kind, variant: kind_variant(suggestion.kind))
+      render Components::Kit::Badge.new(kind_label(suggestion.kind), variant: kind_variant(suggestion.kind))
       if suggestion.kind == "edit" && suggestion.field.present?
         span(class: "text-xs text-gray-600 dark:text-gray-300") do
           "field: #{suggestion.field}"
@@ -230,6 +230,15 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
     when "delete" then :warning
     else :info
     end
+  end
+
+  # User-facing label for a suggestion kind. A delete-kind suggestion proposes
+  # archiving the entity (the canonical operation), so it reads "archive".
+  #
+  # @param kind [String] "edit", "create", or "delete"
+  # @return [String]
+  def kind_label(kind)
+    kind == "delete" ? "archive" : kind
   end
 
   def suggestion_footer(suggestion)

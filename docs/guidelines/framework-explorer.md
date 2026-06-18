@@ -11,7 +11,7 @@ The Framework Explorer is a two- or three-pane interactive view for browsing car
 The explorer has two modes, both backed by the same components:
 
 - **View mode** (`GET /frameworks/:id`) — published state only. No inline editors, no pending-suggestion decorations on the grid, no context pane. The `.flex` layout has two panes (role tree + matrix).
-- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability name / **capability description** / category / expectation / illustration text, "+ Add illustration" affordances, draft-only and pending-archive badges, the amber "Edit mode" header badge, and the context (suggestions/activity) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin. **Structural edits** (add capability/category, the row-actions archive kebab, the draft pill, the Publish button) need the narrower `#edit_structure?` / `#publish?` bar — see §11.
+- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability name / **capability description** / category / expectation / illustration text, "+ Add illustration" affordances, draft-only and pending-archive badges, the amber "Edit mode" header badge, and the context (suggestions/activity) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin. **Structural edits** (add capability/category, the draft pill, the Publish button) need the narrower `#edit_structure?` / `#publish?` bar — see §11. The row-actions **Archive** is offered to any suggest-rights viewer (it applies directly or proposes a suggestion per the edit/suggest toggle + authority — §11).
 
 Both modes read structural data from the same `Frameworks::ExplorerGraph` snapshot (see [docs/architecture/framework-edit-mode-benchmarks.md](../architecture/framework-edit-mode-benchmarks.md)). A `mode: :view | :edit` kwarg is threaded from `ShowView` down through `Matrix`, `MatrixCategoryGroup`, `MatrixRow`, `MatrixCell`, and each entity's inline-edit frame. The `MatrixDataBuilder` filters out `added_in_draft` entities in view mode — matching `PublishedState`'s event-deferral semantics from ADR-16.
 
@@ -363,16 +363,25 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   add-capability modal, prefilled with that category; it captures name +
   description + which **roles** the capability applies to (so it's visible in
   the role-filtered matrix — a capability bound to no role is hidden).
-- **Row-actions kebab (⋮)** — hover-revealed beside the capability-name pencil
-  (expanded affordance set; today: Archive). Opens the archive modal, which
-  captures the migration mapping **as-we-go** (Evolve / Archive; *split* is a
-  separate future action). Owner/editor validate the mapping at the publish gate.
-  Once staged, the capability keeps its **"Pending archive" badge** AND the whole
-  row renders **struck through** (red line-through, edit mode only — see
+- **Row-actions kebab (⋮) → Archive** — hover-revealed beside the capability-name
+  pencil; offered to **any suggest-rights (edit-mode) viewer**, not just
+  edit-structure holders. "Archive" is the single removal operation — there is no
+  separate "delete". Opens the archive modal; the `Operations::Frameworks::ArchiveCapability`
+  operation then decides, from the **edit/suggest toggle + the viewer's
+  authority** (mirroring inline edits), whether it **applies directly**
+  (editing + can-approve-capability → `archive_capability`, one `CapabilityArchived`)
+  or lands as a **pending archive suggestion** (suggesting, or no approval rights
+  → `suggest_delete`, which on approval runs the same `archive_capability`). The
+  modal captures the migration mapping **as-we-go** (Evolve / Archive; *split* is
+  a separate future action) when the actor can define one (owner/editor);
+  otherwise it's optional/deferred to the publish gate. Once **directly** staged,
+  the capability keeps its **"Pending archive" badge** AND the whole row renders
+  **struck through** (red line-through, edit mode only — see
   `MatrixRow::STRIKETHROUGH_CLASSES`, applied per-cell via `[&>td]:` because
   `text-decoration` doesn't propagate reliably from a `<tr>` to its cells). View
   mode shows the capability un-struck (it's still in the published version until
-  publish).
+  publish). *(Stage 1 — capabilities; illustrations get the same unified Archive
+  in a follow-up. See [docs/handoffs/unify-archive-operation.md](../handoffs/unify-archive-operation.md).)*
 - **Archive-category kebab** — hover-revealed next to the category **name**
   (not the far right of the full-width header, which scrolls off-screen on a
   matrix with many level columns), **only for an empty category** (the aggregate refuses to archive one
@@ -480,8 +489,8 @@ the `modal#open` listener that fires during bubbling).
 **Two surfaces, one machinery.** The same pattern drives a second surface: the
 **matrix row-actions kebab** (`MatrixRow`, a `Kit::Dropdown`). When a capability
 has a pending name / description edit the viewer can approve, the kebab gains
-**Approve / Reject «field» change** items (alongside **Archive…** for
-edit-structure holders). They reuse the *exact* same pieces — `suggestion-action`
+**Approve / Reject «field» change** items (alongside **Archive…**, offered to
+any suggest-rights viewer — see §11). They reuse the *exact* same pieces — `suggestion-action`
 (inline approve, `inline=1` → 204), the root reject modal, and
 `suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
 the feed are the same operation with the same live-update wiring (the feed

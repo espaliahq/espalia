@@ -12,9 +12,17 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
     @admin_user = create(:user)
     @member_user = create(:user)
 
+    @collab_user = create(:user)
+
     ActsAsTenant.with_tenant(@tenant) do
-      @admin_tu = create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
+      @admin_person = create(:person, tenant: @tenant, email: @admin_user.email)
+      @admin_tu = create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
       @member_tu = create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
+
+      # A plain collaborator: suggest rights, but no approval authority on
+      # capabilities — so their archive lands as a suggestion, not a direct one.
+      @collab_person = create(:person, tenant: @tenant)
+      @collab_tu = create(:tenant_user, tenant: @tenant, user: @collab_user, role: :member, person: @collab_person)
 
       @framework_id = SecureRandom.uuid_v7
       @cap_id = SecureRandom.uuid_v7
@@ -25,11 +33,18 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
       handler.add_capability_category(@framework_id, cat_id, "Thinking")
       handler.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, cat_id, "Legacy Systems")
       handler.add_capability(@framework_id, SecureRandom.uuid_v7, @survivor_stable, cat_id, "Platform Eng")
+      handler.add_collaborator(@framework_id, @collab_person.id.to_s, "collaborator", added_by: @collab_person.id.to_s)
       handler.publish_version(@framework_id, "seed") # v1; no draft, caps are pre-draft
     end
 
-    @admin_ctx = AuthorizationContext.new(user: @admin_user, tenant_user: @admin_tu, person: nil)
+    @admin_ctx = AuthorizationContext.new(user: @admin_user, tenant_user: @admin_tu, person: @admin_person)
     @member_ctx = AuthorizationContext.new(user: @member_user, tenant_user: @member_tu, person: nil)
+    @collab_ctx = AuthorizationContext.new(user: @collab_user, tenant_user: @collab_tu, person: @collab_person)
+  end
+
+  def pending_archive_suggestions
+    FrameworkState::SuggestedEdit.where(framework_id: @framework_id, kind: "delete",
+                                        target_entity_id: @cap_id, status: "pending")
   end
 
   def framework
@@ -104,7 +119,63 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
     end
   end
 
-  context "as a plain tenant member" do
+  context "as an authority-holder in suggesting mode" do
+    should "propose the archive instead of applying it directly" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # @admin_ctx CAN approve — proves the suggesting toggle overrides authority.
+        result = Operations::Frameworks::ArchiveCapability.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, capability_id: @cap_id, reason: "Retire", mode: "suggesting" }
+        )
+
+        assert_equal false, result[:archived]
+        assert_equal 1, pending_archive_suggestions.count
+        # Nothing archived, no draft opened — it's only a proposal.
+        assert_not framework.draft_in_progress
+        assert_equal "active", FrameworkState::Capability.find_by(capability_id: @cap_id).status
+      end
+    end
+  end
+
+  context "as a collaborator without approval authority (editing mode)" do
+    should "propose the archive (no authority to apply directly)" do
+      ActsAsTenant.with_tenant(@tenant) do
+        result = Operations::Frameworks::ArchiveCapability.call(
+          context: @collab_ctx,
+          params: { framework_id: @framework_id, capability_id: @cap_id, reason: "Retire", mode: "editing" }
+        )
+
+        assert_equal false, result[:archived]
+        assert_equal 1, pending_archive_suggestions.count
+      end
+    end
+
+    should "apply the same archive once an approver approves the proposal" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Operations::Frameworks::ArchiveCapability.call(
+          context: @collab_ctx,
+          params: { framework_id: @framework_id, capability_id: @cap_id, reason: "Retire", mode: "editing" }
+        )
+        suggestion_id = pending_archive_suggestions.first.suggestion_id
+
+        Operations::Frameworks::ApproveSuggestion.call(
+          context: @admin_ctx, params: { framework_id: @framework_id, suggestion_id: suggestion_id }
+        )
+
+        # Approval runs the very same archive command — a CapabilityArchived
+        # event is staged into the (now auto-opened) draft. (Publishing it would
+        # need a migration mapping; that's the publish gate's job, tested above.)
+        assert framework.draft_in_progress
+        stream = Rails.configuration.event_store.read
+          .stream(EventStreamNaming.framework_stream(@framework_id)).to_a
+        assert(stream.any? { |e|
+          e.is_a?(Frameworks::Events::CapabilityArchived) && e.data[:capability_id] == @cap_id
+        }, "expected the approval to stage a CapabilityArchived for the capability")
+      end
+    end
+  end
+
+  context "as a plain tenant member (no suggest rights)" do
     should "be denied" do
       ActsAsTenant.with_tenant(@tenant) do
         assert_raises(Pundit::NotAuthorizedError) do

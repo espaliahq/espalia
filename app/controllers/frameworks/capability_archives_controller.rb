@@ -1,33 +1,37 @@
 # frozen_string_literal: true
 
 # Archives a capability from the explorer's edit-mode row-actions kebab,
-# submitted by the archive modal. Captures the migration mapping as-we-go for
-# a pre-draft capability (the owner/editor validates/overrides it on the
-# publish-review screen). A capability added in the current draft has nothing
-# to migrate, so the modal omits the mapping fields.
+# submitted by the archive modal. The Operation decides — from the edit/suggest
+# toggle (framework_edit_mode) plus the actor's authority — whether the archive
+# applies directly or lands as a pending suggestion, so the kebab is offered to
+# any suggest-rights holder. Migration mapping is captured as-we-go when
+# present; otherwise it's validated at the publish-review screen.
 #
-# Restricted to edit-rights holders via FrameworkPolicy#archive_capability?.
+# Restricted to suggest-rights holders via FrameworkPolicy#suggest_edit?.
 class Frameworks::CapabilityArchivesController < ApplicationController
+  include FrameworkEditMode
+
   before_action :set_framework
   before_action :set_capability
 
   # POST /frameworks/:framework_id/capability_archives
   def create
-    authorize @framework, :archive_capability?
+    authorize @framework, :suggest_edit?
 
-    Operations::Frameworks::ArchiveCapability.call(
+    result = Operations::Frameworks::ArchiveCapability.call(
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
         capability_id: @capability.capability_id,
         reason: archive_params[:reason].presence,
         mapping_type: archive_params[:mapping_type].presence,
-        to_stable_id: archive_params[:to_stable_id].presence
+        to_stable_id: archive_params[:to_stable_id].presence,
+        mode: framework_edit_mode.to_s
       }
     )
 
-    redirect_to edit_framework_path(@framework.framework_id),
-                notice: "Archived “#{@capability.name}”."
+    notice = result[:archived] ? "Archived “#{@capability.name}”." : "Proposed archiving “#{@capability.name}”."
+    redirect_to edit_framework_path(@framework.framework_id), notice: notice
   rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to edit_framework_path(@framework.framework_id), alert: e.message
   end

@@ -9,7 +9,8 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
     @member_user = create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
+      @admin_person = create(:person, tenant: @tenant, email: @admin_user.email)
+      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
       create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
 
       @framework_id = SecureRandom.uuid_v7
@@ -59,6 +60,24 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
       end
       assert_not_nil mapping
       assert_nil mapping.to_stable_id
+    end
+
+    should "propose (not apply) the archive when the suggesting cookie is set" do
+      sign_in @admin_user
+      cookies[:framework_edit_mode] = "suggesting"
+      post framework_capability_archives_path(framework_id: @framework_id),
+           params: { archive: { capability_id: @cap_id, reason: "Retire" } }
+
+      assert_redirected_to edit_framework_path(@framework_id)
+      assert_match(/Proposed archiving/, flash[:notice])
+      assert_not framework.draft_in_progress, "a proposal must not open a draft"
+
+      pending = ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::SuggestedEdit.where(
+          framework_id: @framework_id, kind: "delete", target_entity_id: @cap_id, status: "pending"
+        ).count
+      end
+      assert_equal 1, pending
     end
 
     should "redirect a plain member (not authorized) and not open a draft" do

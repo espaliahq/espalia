@@ -87,7 +87,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   def header_title
     case @suggestion.kind
     when "create" then "Suggested creation"
-    when "delete" then "Suggested deletion"
+    when "delete" then "Suggested archive"
     else "Suggested edit"
     end
   end
@@ -204,7 +204,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   end
 
   def delete_diff_card
-    render Components::Kit::Card.new(title: "Proposed deletion") do |card|
+    render Components::Kit::Card.new(title: "Proposed archive") do |card|
       card.body do
         diff_column("Will be removed", @suggestion.current_value, color: :red)
       end
