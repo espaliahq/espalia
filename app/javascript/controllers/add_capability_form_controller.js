@@ -4,15 +4,21 @@
 // the category id into the hidden field and the category name into the title.
 //
 // Usage:
-//   <form data-controller="add-capability-form">
+//   <form data-controller="add-capability-form" data-action="submit->add-capability-form#validateRoles">
 //     <input data-add-capability-form-target="categoryId">
 //     <span  data-add-capability-form-target="categoryName"></span>
+//     <input type="checkbox" name="capability[role_ids][]" data-add-capability-form-target="role">
+//     <p data-add-capability-form-target="rolesError" class="hidden"></p>
 //   </form>
+//
+// On submit it blocks if no role is selected — a capability bound to no role is
+// hidden from the role-filtered matrix, so at least one binding is required
+// (the server enforces the same in AddCapability).
 
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["categoryId", "categoryName"]
+  static targets = ["categoryId", "categoryName", "role", "rolesError"]
 
   connect() {
     this._onOpen = this.#onOpen.bind(this)
@@ -21,6 +27,16 @@ export default class extends Controller {
 
   disconnect() {
     window.removeEventListener("modal:open", this._onOpen)
+  }
+
+  // Block submission unless at least one role is checked.
+  validateRoles(event) {
+    if (this.roleTargets.some((cb) => cb.checked)) {
+      if (this.hasRolesErrorTarget) this.rolesErrorTarget.classList.add("hidden")
+      return
+    }
+    event.preventDefault()
+    if (this.hasRolesErrorTarget) this.rolesErrorTarget.classList.remove("hidden")
   }
 
   // private
@@ -34,5 +50,7 @@ export default class extends Controller {
     if (this.hasCategoryNameTarget) {
       this.categoryNameTarget.textContent = data.addCategoryName || "this category"
     }
+    // Reset the error each time the modal opens.
+    if (this.hasRolesErrorTarget) this.rolesErrorTarget.classList.add("hidden")
   }
 }

@@ -437,7 +437,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_add_capability",
-        "description" => "Add a capability to a category, optionally binding it to roles (owner/editor/lead only).",
+        "description" => "Add a capability to a category, binding it to one or more roles (owner/editor/lead only).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
