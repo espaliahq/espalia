@@ -100,7 +100,7 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
       label(class: "text-[11px] text-gray-500 dark:text-gray-400") { "Weight" }
       input(
         type: "number", name: "binding[weight]", value: format_weight(binding.weight),
-        step: "0.1", min: "0.1",
+        step: "any", min: "0.1",
         class: "w-16 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " \
                "px-2 py-1 text-sm text-gray-900 dark:text-white " \
                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
@@ -175,7 +175,7 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
     div(class: "shrink-0") do
       label(class: "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5") { "Weight" }
       input(
-        type: "number", name: "binding[weight]", value: "1.0", step: "0.1", min: "0.1",
+        type: "number", name: "binding[weight]", value: "1.0", step: "any", min: "0.1",
         class: "w-16 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " \
                "px-2 py-1.5 text-sm text-gray-900 dark:text-white " \
                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
