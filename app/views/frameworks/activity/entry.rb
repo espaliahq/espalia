@@ -318,13 +318,14 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def context_text
     cap = @entry.capability_name.to_s.strip.presence
     cat = payload_value(:category_name).to_s.strip.presence
-    if cap && cat
-      "#{cat} · #{cap}"
-    elsif cap
-      cap
-    elsif cat
-      cat
-    end
+    base =
+      if cap && cat then "#{cat} · #{cap}"
+      elsif cap then cap
+      elsif cat then cat
+      end
+    # Expectation entries pin the level too ("Category · Capability · L2").
+    level = payload_value(:expectation_level)
+    base && level.present? ? "#{base} · L#{level}" : base
   end
 
   # ── Secondary line (preview / detail) ──

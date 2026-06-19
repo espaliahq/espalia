@@ -293,6 +293,65 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  # A draft-added capability/expectation isn't in the published read model yet,
+  # but the feed must still name it (from the creating event in the window).
+  context "draft-entity naming and expectation levels" do
+    setup do
+      @draft_cap_id = SecureRandom.uuid_v7
+      @role = create(:framework_role, role_family_id: SecureRandom.uuid_v7, tenant: @tenant,
+        name: "Engineering Manager", code: "EM")
+    end
+
+    should "name a draft-added capability from its CapabilityAdded event" do
+      append(Frameworks::Events::CapabilityAdded,
+        data: { capability_id: @draft_cap_id, stable_id: SecureRandom.uuid_v7,
+                category_id: @cat.category_id, name: "Draft Capability" })
+
+      entry = entries.find { |e| e.kind == "capability_added" }
+      assert entry
+      assert_equal @draft_cap_id, entry.capability_id
+      assert_equal "Draft Capability", entry.capability_name
+    end
+
+    should "name the capability for a binding on a draft-added capability" do
+      append(Frameworks::Events::CapabilityAdded,
+        data: { capability_id: @draft_cap_id, stable_id: SecureRandom.uuid_v7,
+                category_id: @cat.category_id, name: "Draft Capability" })
+      append(Frameworks::Events::CapabilityRoleBindingCreated,
+        data: { binding_id: SecureRandom.uuid_v7, capability_id: @draft_cap_id,
+                role_id: @role.role_id, weight: 1.0 })
+
+      entry = entries.find { |e| e.kind == "binding_added" }
+      assert entry
+      assert_equal @draft_cap_id, entry.capability_id
+      assert_equal "Draft Capability", entry.capability_name
+    end
+
+    should "pin the level on a directly-authored expectation" do
+      append(Frameworks::Events::BehaviouralExpectationSet,
+        data: { expectation_id: SecureRandom.uuid_v7, stable_id: SecureRandom.uuid_v7,
+                capability_id: @cap.capability_id, level_ordinal: 4, description: "X" })
+
+      entry = entries.find { |e| e.kind == "expectation_added" }
+      assert_equal 4, entry.payload[:expectation_level]
+    end
+
+    should "pin the level on a proposed (create) expectation suggestion" do
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit, tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "behavioural_expectation", target_entity_id: nil, parent_id: @cap.capability_id,
+        kind: "create", author_id: @actor.id, proposed_attributes: { "level_ordinal" => 5, "description" => "Y" })
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: sid, target_entity_type: "behavioural_expectation", parent_id: @cap.capability_id,
+                author_id: @actor.id, proposed_attributes: { "level_ordinal" => 5, "description" => "Y" } },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_create" }
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal 5, entry.payload[:expectation_level]
+    end
+  end
+
   context "framework-level events" do
     should "carry nil anchors and surface only at framework focus" do
       append(Frameworks::Events::FrameworkVersionPublished,
