@@ -313,6 +313,17 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "Draft Capability", entry.capability_name
     end
 
+    should "reflect a rename of a draft-added capability (newest name wins)" do
+      append(Frameworks::Events::CapabilityAdded,
+        data: { capability_id: @draft_cap_id, stable_id: SecureRandom.uuid_v7,
+                category_id: @cat.category_id, name: "Original Draft Name" })
+      append(Frameworks::Events::CapabilityUpdated,
+        data: { capability_id: @draft_cap_id, name: "Renamed Draft" })
+
+      entry = entries.find { |e| e.kind == "capability_added" }
+      assert_equal "Renamed Draft", entry.capability_name
+    end
+
     should "name the capability for a binding on a draft-added capability" do
       append(Frameworks::Events::CapabilityAdded,
         data: { capability_id: @draft_cap_id, stable_id: SecureRandom.uuid_v7,

@@ -439,19 +439,26 @@ class Frameworks::ActivityFeedQuery
   end
 
   # Names/coordinates of draft-added entities, harvested from the stream window.
+  # `stream_events` is newest-first, so `||=` keeps the most-recent value — a
+  # draft-added entity renamed before publish (its rename is also absent from the
+  # published read model) shows its current name, not the original.
   def stream_structure
     @stream_structure ||= begin
       acc = { cap_names: {}, cap_to_cat: {}, cat_names: {}, exp_to_cap: {}, exp_to_level: {} }
       stream_events.each do |event|
         case event
         when Frameworks::Events::CapabilityAdded
-          acc[:cap_names][event.data[:capability_id]] = event.data[:name]
-          acc[:cap_to_cat][event.data[:capability_id]] = event.data[:category_id]
+          acc[:cap_names][event.data[:capability_id]] ||= event.data[:name]
+          acc[:cap_to_cat][event.data[:capability_id]] ||= event.data[:category_id]
+        when Frameworks::Events::CapabilityUpdated
+          acc[:cap_names][event.data[:capability_id]] ||= event.data[:name] if event.data.key?(:name)
         when Frameworks::Events::CapabilityCategoryAdded
-          acc[:cat_names][event.data[:category_id]] = event.data[:name]
+          acc[:cat_names][event.data[:category_id]] ||= event.data[:name]
+        when Frameworks::Events::CapabilityCategoryUpdated
+          acc[:cat_names][event.data[:category_id]] ||= event.data[:name] if event.data.key?(:name)
         when Frameworks::Events::BehaviouralExpectationSet
-          acc[:exp_to_cap][event.data[:expectation_id]] = event.data[:capability_id]
-          acc[:exp_to_level][event.data[:expectation_id]] = event.data[:level_ordinal]
+          acc[:exp_to_cap][event.data[:expectation_id]] ||= event.data[:capability_id]
+          acc[:exp_to_level][event.data[:expectation_id]] ||= event.data[:level_ordinal]
         end
       end
       acc
