@@ -194,6 +194,15 @@ class Frameworks::MatrixDataBuilderModeTest < ActiveSupport::TestCase
       cap = build_gap(mode: :view)[:categories].first[:capabilities].first
       assert_nil cap[:cells][2], "no authoring placeholder in view mode"
     end
+
+    should "attach pending expectation-create suggestions to the empty cell" do
+      suggestion = Object.new
+      creates = { [ @gap_cap_id, 2 ] => [ suggestion ] }
+      cap = build_gap(mode: :edit, pending_expectation_creates: creates)[:categories].first[:capabilities].first
+
+      assert_equal [ suggestion ], cap[:cells][2][:pending_expectation_creates]
+      assert_empty Array(cap[:cells][1] && cap[:cells][1][:pending_expectation_creates])
+    end
   end
 
   private
@@ -202,7 +211,7 @@ class Frameworks::MatrixDataBuilderModeTest < ActiveSupport::TestCase
     build_with([ @category ], mode: mode)
   end
 
-  def build_gap(mode:)
+  def build_gap(mode:, pending_expectation_creates: {})
     Frameworks::MatrixDataBuilder.new(
       framework: Framework.new(
         framework_id: SecureRandom.uuid_v7, name: "Test",
@@ -210,7 +219,8 @@ class Frameworks::MatrixDataBuilderModeTest < ActiveSupport::TestCase
         role_families: [ @gap_family ], capability_categories: [ @gap_category ]
       ),
       role_families: [ @gap_family ], categories: [ @gap_category ],
-      selected_role_ids: [ @gap_role_id ], mode: mode
+      selected_role_ids: [ @gap_role_id ], mode: mode,
+      pending_expectation_creates: pending_expectation_creates
     ).build
   end
 

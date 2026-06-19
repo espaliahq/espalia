@@ -45,16 +45,27 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
     @mode == :edit && @cell_data && @cell_data[:authorable]
   end
 
-  # Empty cell with the "+ Add expectation" affordance (group/cell so the button
-  # is hover-revealed against the cell, matching the other inline-add controls).
+  # Empty cell with any pending-create ghosts plus the "+ Add expectation"
+  # affordance (group/cell so the button is hover-revealed against the cell,
+  # matching the other inline-add controls).
   def authorable_cell
     td(class: "group/cell px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
               "bg-gray-50/40 dark:bg-gray-800/20 align-top") do
+      pending_create_ghosts
       render Views::Frameworks::Explorer::NewExpectationFrame.new(
         capability_id: @cell_data[:capability_id],
         level_ordinal: @ordinal,
         framework_id: @framework_id
       )
+    end
+  end
+
+  # Ghosts for pending expectation-creation suggestions on this cell — so a
+  # proposed expectation shows in the grid, not just the activity feed.
+  def pending_create_ghosts
+    creates = @cell_data[:pending_expectation_creates] || []
+    creates.each do |suggestion|
+      render Views::Frameworks::Explorer::PendingExpectationFrame.new(suggestion: suggestion)
     end
   end
 

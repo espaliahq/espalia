@@ -42,7 +42,8 @@ class Frameworks::MatrixDataBuilder
   #   compact matrix. Role dimming is untouched — a dimmed-but-matching
   #   capability still shows.
   def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both",
-                 mode: :view, pending_suggestions: {}, pending_illustration_creates: {}, search_query: nil)
+                 mode: :view, pending_suggestions: {}, pending_illustration_creates: {},
+                 pending_expectation_creates: {}, search_query: nil)
     @framework = framework
     @role_families = role_families
     @categories = categories
@@ -51,6 +52,7 @@ class Frameworks::MatrixDataBuilder
     @mode = mode
     @pending_suggestions = pending_suggestions
     @pending_illustration_creates = pending_illustration_creates
+    @pending_expectation_creates = pending_expectation_creates
     @search_query = search_query.to_s.strip.presence
     @search_tokens = @search_query.to_s.downcase.split
   end
@@ -285,7 +287,9 @@ class Frameworks::MatrixDataBuilder
           cells[ordinal] = { expectation: nil, authorable: true,
                              capability_id: capability.capability_id,
                              illustration_count: 0, illustrations_by_role: {},
-                             bound_selected_role_ids: bound_selected_role_ids }
+                             bound_selected_role_ids: bound_selected_role_ids,
+                             pending_expectation_creates:
+                               @pending_expectation_creates[[ capability.capability_id, ordinal ]] || [] }
         end
         next
       end

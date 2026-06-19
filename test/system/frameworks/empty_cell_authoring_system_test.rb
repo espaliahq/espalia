@@ -86,6 +86,30 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "with a pending expectation-create suggestion" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        cap = FrameworkState::Capability.find_by!(name: "Strategic Thinking")
+        Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+          Frameworks::CommandHandler.new.suggest_create(
+            @framework_id, SecureRandom.uuid_v7, "behavioural_expectation",
+            { "level_ordinal" => 2, "description" => "Proposed: anticipates second-order effects" },
+            parent_id: cap.capability_id, author_id: @admin_person.id.to_s, mode: :suggesting
+          )
+        end
+      end
+    end
+
+    should "render a ghost of the proposed expectation in the empty cell" do
+      visit_edit
+
+      assert_text "PROPOSED"
+      assert_text "Proposed: anticipates second-order effects"
+      # The cell stays authorable (others can still propose / it's not applied).
+      assert_selector "button[data-inline-editor-target='display']", text: "Add expectation", visible: :all
+    end
+  end
+
   context "as a tenant admin on a mobile viewport" do
     should "still expose the + Add expectation affordance" do
       visit_edit(size: MOBILE_SIZE)
