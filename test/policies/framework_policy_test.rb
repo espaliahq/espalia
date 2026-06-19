@@ -65,6 +65,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.add_category?
       assert_not policy.archive_category?
       assert_not policy.update_binding?
+      assert_not policy.add_binding?
+      assert_not policy.remove_binding?
     end
 
     should "deny settings" do
@@ -142,6 +144,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.add_category?
       assert policy.archive_category?
       assert policy.update_binding?
+      assert policy.add_binding?
+      assert policy.remove_binding?
     end
   end
 
@@ -214,6 +218,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.add_category?
       assert policy.archive_category?
       assert policy.update_binding?
+      assert policy.add_binding?
+      assert policy.remove_binding?
     end
 
     should "deny settings (requires tenant admin)" do
@@ -255,6 +261,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.add_category?
       assert policy.archive_category?
       assert policy.update_binding?
+      assert policy.add_binding?
+      assert policy.remove_binding?
     end
   end
 

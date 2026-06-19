@@ -457,6 +457,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_add_capability_role_binding",
+        "description" => "Bind a capability to a role, optionally with a weight / individual tolerance (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"         => { "type" => "string" },
+            "capability_id"        => { "type" => "string" },
+            "role_id"              => { "type" => "string" },
+            "weight"               => { "type" => "number" },
+            "individual_tolerance" => { "type" => "number" }
+          },
+          "required" => %w[framework_id capability_id role_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_add_category",
         "description" => "Add a capability category to a framework (owner/editor/lead only).",
         "inputSchema" => {
@@ -699,6 +720,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => false,
           "destructiveHint" => false,
           "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_remove_capability_role_binding",
+        "description" => "Remove a capability-role binding, un-scoping the capability from that role (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "binding_id"   => { "type" => "string" }
+          },
+          "required" => %w[framework_id binding_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
         }
       },
       {
