@@ -65,7 +65,15 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
         [...document.querySelectorAll("button[data-inline-editor-target='display']")]
           .find((b) => b.textContent.includes("Add expectation")).click();
       JS
-      find("textarea[name='behavioural_expectation[description]']").set("Identifies root causes")
+      # Set the textarea via JS value-dispatch — Selenium send_keys can drop
+      # characters on starved CI and the assertion depends on this value
+      # (testing.md). Then submit the (redirecting) form.
+      page.execute_script(<<~JS, find("textarea[name='behavioural_expectation[description]']"))
+        const el = arguments[0];
+        el.value = "Identifies root causes";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      JS
       page.execute_script('document.querySelector("form[action$=\'/expectations\']").requestSubmit();')
 
       assert_text "Added an expectation"
