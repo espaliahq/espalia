@@ -144,6 +144,22 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "Ada Author", entry.actor_name
     end
 
+    should "anchor an expectation_added to its capability with the level + description" do
+      append(Frameworks::Events::BehaviouralExpectationSet,
+        data: { expectation_id: SecureRandom.uuid_v7, stable_id: SecureRandom.uuid_v7,
+                capability_id: @cap.capability_id, level_ordinal: 3, description: "Identifies root causes" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "expectation_added" }
+      assert entry
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal @cat.category_id, entry.category_id
+      assert_equal "Ada Author", entry.actor_name
+      assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+      assert_equal 3, entry.payload[:level_ordinal]
+      assert_equal "Identifies root causes", entry.payload[:description]
+    end
+
     should "anchor an expectation_updated to its parent capability" do
       append(Frameworks::Events::BehaviouralExpectationUpdated,
         data: { expectation_id: @exp.expectation_id, new_description: "x", rationale: "y" })

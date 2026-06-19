@@ -61,6 +61,7 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::CapabilityRoleBindingCreated => "binding_added",
     Frameworks::Events::CapabilityRoleBindingUpdated => "binding_updated",
     Frameworks::Events::CapabilityRoleBindingRemoved => "binding_removed",
+    Frameworks::Events::BehaviouralExpectationSet     => "expectation_added",
     Frameworks::Events::BehaviouralExpectationUpdated => "expectation_updated",
     Frameworks::Events::RoleIllustrationAdded      => "illustration_added",
     Frameworks::Events::RoleIllustrationUpdated    => "illustration_updated",
@@ -289,6 +290,9 @@ class Frameworks::ActivityFeedQuery
       # capability via the binding index. A binding removed *and* published is
       # gone from the read model, so anchoring may fall back to framework-level.
       from_capability(binding_index.dig(data[:binding_id], :capability_id))
+    when "expectation_added"
+      # The set event carries capability_id directly.
+      from_capability(data[:capability_id])
     when "expectation_updated"
       from_capability(expectation_to_capability[data[:expectation_id]])
     when "illustration_added"
