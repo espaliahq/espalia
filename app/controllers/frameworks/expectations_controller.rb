@@ -22,13 +22,17 @@ class Frameworks::ExpectationsController < ApplicationController
   def create
     authorize @framework, :add_expectation?
     attrs = params.expect(behavioural_expectation: [ :capability_id, :level_ordinal, :description ])
+    # Fail fast on a malformed ordinal rather than silently coercing it to 0
+    # (which would author at level 0).
+    level_ordinal = Integer(attrs[:level_ordinal], exception: false)
+    raise Operations::Base::ParameterError, "level must be a positive number" if level_ordinal.nil? || level_ordinal <= 0
 
     Operations::Frameworks::SetBehaviouralExpectation.call(
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
         capability_id: attrs[:capability_id],
-        level_ordinal: attrs[:level_ordinal].to_i,
+        level_ordinal: level_ordinal,
         description: attrs[:description].to_s
       }
     )
