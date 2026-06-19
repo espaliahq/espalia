@@ -57,6 +57,17 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     assert_no_selector "turbo-frame#notification-bell span", text: /\d/
   end
 
+  should "navigate to the inbox when the bell is clicked (frame breaks out to _top)" do
+    notify!(title: "Clickthrough")
+    visit root_path
+    # Click the real bell link — must navigate the whole page, not replace the
+    # frame with the inbox page's placeholder bell (the "disappearing bell" bug).
+    find("turbo-frame#notification-bell a").click
+
+    assert_current_path notifications_path
+    assert_text "Test: Clickthrough"
+  end
+
   should "show the bell on a mobile viewport" do
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     notify!(title: "Mobile")

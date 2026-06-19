@@ -13,6 +13,10 @@ class Views::Notifications::Bell < Views::Base
     turbo_frame_tag("notification-bell") do
       a(
         href: notifications_path,
+        # Break out of the lazy bell frame — without _top, Turbo navigates
+        # within #notification-bell and the inbox page's own (unloaded) bell
+        # frame replaces the icon with its placeholder ("the bell disappears").
+        data: { turbo_frame: "_top" },
         class: "relative inline-flex items-center justify-center h-11 w-11 rounded-md " \
                "text-nav-fg/80 hover:text-nav-fg hover:bg-white/10 " \
                "focus:outline-hidden focus:ring-2 focus:ring-white",
