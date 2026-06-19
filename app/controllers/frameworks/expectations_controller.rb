@@ -38,7 +38,11 @@ class Frameworks::ExpectationsController < ApplicationController
         mode: framework_edit_mode.to_s
       }
     )
-    notice = result[:applied] ? "Added an expectation." : "Proposed a new expectation."
+    notice =
+      if result[:amended] then "Updated your proposed expectation."
+      elsif result[:applied] then "Added an expectation."
+      else "Proposed a new expectation."
+      end
     redirect_to edit_framework_path(@framework.framework_id), notice: notice
   rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to edit_framework_path(@framework.framework_id), alert: e.message

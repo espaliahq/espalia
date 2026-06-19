@@ -119,6 +119,39 @@ class Operations::Frameworks::SetBehaviouralExpectationTest < ActiveSupport::Tes
         assert_equal @collab_person.id, pending_creates.first.author_id
       end
     end
+
+    should "amend the existing proposal instead of stacking a second one" do
+      ActsAsTenant.with_tenant(@tenant) do
+        first = set_expectation(@collab_ctx, {
+          framework_id: @framework_id, capability_id: @cap_id, level_ordinal: 2,
+          description: "First take", mode: "suggesting"
+        })
+        second = set_expectation(@collab_ctx, {
+          framework_id: @framework_id, capability_id: @cap_id, level_ordinal: 2,
+          description: "Refined take", mode: "suggesting"
+        })
+
+        assert second[:amended], "re-proposing the same cell amends"
+        assert_equal first[:suggestion_id], second[:suggestion_id], "same suggestion, not a new one"
+        assert_equal 1, pending_creates.count, "still one pending proposal"
+        assert_equal "Refined take", pending_creates.first.reload.suggested_value
+      end
+    end
+
+    should "keep different authors' proposals separate" do
+      ActsAsTenant.with_tenant(@tenant) do
+        set_expectation(@collab_ctx, {
+          framework_id: @framework_id, capability_id: @cap_id, level_ordinal: 2,
+          description: "Collab take", mode: "suggesting"
+        })
+        set_expectation(@owner_ctx, {
+          framework_id: @framework_id, capability_id: @cap_id, level_ordinal: 2,
+          description: "Owner take", mode: "suggesting"
+        })
+
+        assert_equal 2, pending_creates.count, "two authors → two proposals"
+      end
+    end
   end
 
   context "as a tenant member with no suggest rights" do

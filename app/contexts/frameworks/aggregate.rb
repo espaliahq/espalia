@@ -1556,10 +1556,31 @@ class Frameworks::Aggregate
   # @param suggestion [Hash] pending_edits entry with kind: :create
   # @raise [RuntimeError] if the entity type is not supported
   # @return [String] the generated entity ID for the created record
+  # The primary content attribute of each create type — the field an amendment's
+  # `suggested_value` revises. Used to fold an amended value back into the
+  # attributes the entity is built from on approval.
+  CREATE_CONTENT_FIELD = {
+    "role_illustration" => :description,
+    "behavioural_expectation" => :description,
+    "capability" => :name,
+    "capability_category" => :name,
+    "role" => :name,
+    "role_family" => :name,
+    "level" => :title
+  }.freeze
+
   def apply_suggested_creation(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
     type = suggestion[:target_entity_type]
     attrs = (suggestion[:proposed_attributes] || {}).transform_keys(&:to_sym)
     parent_id = suggestion[:parent_id]
+
+    # An amended create carries its revised content in :suggested_value (the
+    # amend command only updates that field), so fold it back into the primary
+    # content attribute — otherwise approval would apply the original proposal.
+    amended = suggestion[:suggested_value]
+    if amended.present? && (key = CREATE_CONTENT_FIELD[type])
+      attrs[key] = amended
+    end
 
     entity_id = SecureRandom.uuid_v7
     stable_id = SecureRandom.uuid_v7

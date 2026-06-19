@@ -30,11 +30,22 @@ class Operations::Frameworks::SetBehaviouralExpectation < Operations::Base
     authorize framework, :suggest_edit?
   end
 
-  # @return [Hash] { framework_id:, capability_id:, level_ordinal:, suggestion_id:, applied: }
+  # @return [Hash] { framework_id:, capability_id:, level_ordinal:, suggestion_id:, applied:, amended: }
   def perform
     validate_description!
     ensure_cell_empty!
     require_author!
+
+    # If this author already has a pending proposal for the same cell, amend it
+    # rather than stacking a second one (one proposal per author per cell, like
+    # inline edits). The author's *own* pending create is the only one amended;
+    # different authors keep separate proposals.
+    if (existing = author_pending_create)
+      Frameworks::CommandHandler.new.amend_suggestion(
+        framework.framework_id, existing.suggestion_id, params[:description], author_id
+      )
+      return result(suggestion_id: existing.suggestion_id, applied: false, amended: true)
+    end
 
     suggestion_id = SecureRandom.uuid_v7
     created_entity_id = Frameworks::CommandHandler.new.suggest_create(
@@ -43,16 +54,31 @@ class Operations::Frameworks::SetBehaviouralExpectation < Operations::Base
       parent_id: capability.capability_id, author_id: author_id, mode: mode_sym
     )
 
+    result(suggestion_id: suggestion_id, applied: created_entity_id.present?, amended: false)
+  end
+
+  private
+
+  def result(suggestion_id:, applied:, amended:)
     {
       framework_id: framework.framework_id,
       capability_id: capability.capability_id,
       level_ordinal: params[:level_ordinal],
       suggestion_id: suggestion_id,
-      applied: created_entity_id.present?
+      applied: applied,
+      amended: amended
     }
   end
 
-  private
+  # This author's pending behavioural_expectation creation suggestion for the
+  # same cell, if any. level_ordinal lives in proposed_attributes (JSON), so the
+  # final match is done in Ruby.
+  def author_pending_create
+    FrameworkState::SuggestedEdit.pending.creates
+      .where(framework_id: framework.framework_id, target_entity_type: "behavioural_expectation",
+             parent_id: capability.capability_id, author_id: author_id)
+      .find { |s| s.proposed_attributes["level_ordinal"].to_i == params[:level_ordinal] }
+  end
 
   # mode defaults to editing when unset (e.g. MCP) so authority alone decides.
   def mode_sym

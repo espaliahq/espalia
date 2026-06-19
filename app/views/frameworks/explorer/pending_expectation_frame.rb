@@ -16,6 +16,14 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   end
 
   def view_template
-    p(class: "mb-1 text-sm #{suggestion_text_classes(pending_edit_count: 1)}") { @attrs[:description] }
+    p(class: "mb-1 text-sm #{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
+  end
+
+  private
+
+  # An amended create carries its current value in suggested_value (the amend
+  # only updates that field); fall back to the original proposed description.
+  def proposed_text
+    @suggestion.suggested_value.presence || @attrs[:description]
   end
 end
