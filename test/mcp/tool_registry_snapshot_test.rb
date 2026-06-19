@@ -741,6 +741,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_set_behavioural_expectation",
+        "description" => "Author a behavioural expectation for an empty capability × level cell (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"  => { "type" => "string" },
+            "capability_id" => { "type" => "string" },
+            "level_ordinal" => { "type" => "integer" },
+            "description"   => { "type" => "string" }
+          },
+          "required" => %w[framework_id capability_id level_ordinal description],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_update_capability_role_binding",
         "description" => "Update a capability-role binding's weight and/or individual tolerance (owner/editor/lead only).",
         "inputSchema" => {

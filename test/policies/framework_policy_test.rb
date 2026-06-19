@@ -67,6 +67,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_binding?
       assert_not policy.add_binding?
       assert_not policy.remove_binding?
+      assert_not policy.add_expectation?
     end
 
     should "deny settings" do
@@ -146,6 +147,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.update_binding?
       assert policy.add_binding?
       assert policy.remove_binding?
+      assert policy.add_expectation?
     end
   end
 
@@ -220,6 +222,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.update_binding?
       assert policy.add_binding?
       assert policy.remove_binding?
+      assert policy.add_expectation?
     end
 
     should "deny settings (requires tenant admin)" do
@@ -263,6 +266,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.update_binding?
       assert policy.add_binding?
       assert policy.remove_binding?
+      assert policy.add_expectation?
     end
   end
 
