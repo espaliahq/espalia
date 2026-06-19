@@ -361,8 +361,10 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
 - **"+ Add category"** — in the stats bar (header). Opens the add-category modal.
 - **"+ Add capability"** — at the foot of each category group. Opens the
   add-capability modal, prefilled with that category; it captures name +
-  description + which **roles** the capability applies to (so it's visible in
-  the role-filtered matrix — a capability bound to no role is hidden).
+  description + which **roles** the capability applies to. **At least one role
+  is required** (a capability bound to no role is hidden from the role-filtered
+  matrix) — enforced both client-side (the modal blocks submit + shows an inline
+  message) and in `AddCapability`.
 - **"+ Add expectation"** — inline affordance on an **empty-but-applicable**
   matrix cell (a level the capability's bound roles reach, with no expectation
   yet). `MatrixDataBuilder` emits an `authorable` placeholder cell only in edit
@@ -376,7 +378,11 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   pending `behavioural_expectation` creation suggestion. A *not-applicable* cell
   (no bound selected role at that ordinal) and a *filled* cell are untouched.
   (A directly-applied expectation is draft-deferred from the read model, so its
-  inline edit resolves from the graph — Lesson 17.)
+  inline edit resolves from the graph — Lesson 17.) A **pending** create renders
+  as an amber "Proposed" **ghost** in the cell (`PendingExpectationFrame`) — so a
+  proposed expectation shows in the grid, not just the feed — via
+  `MatrixDataBuilder`'s `pending_expectation_creates` map (keyed by
+  `[capability_id, level_ordinal]`); approve/reject stays in the actionable feed.
 - **Row-actions kebab (⋮) → Archive** — hover-revealed beside the capability-name
   pencil; offered to **any suggest-rights (edit-mode) viewer**, not just
   edit-structure holders. "Archive" is the single removal operation — there is no
@@ -876,6 +882,7 @@ line (§9).
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
 | `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
+| `app/views/frameworks/explorer/pending_expectation_frame.rb` | Amber "Proposed" ghost of a pending expectation-create suggestion, shown in the empty cell |
 | `app/views/frameworks/explorer/capability_name_frame.rb` | Capability name + edit-mode inline editor |
 | `app/views/frameworks/explorer/capability_description_frame.rb` | Capability description + edit-mode inline editor ("Add a description…" when blank) |
 | `app/views/frameworks/explorer/category_name_frame.rb` | Category name + edit-mode inline editor |
