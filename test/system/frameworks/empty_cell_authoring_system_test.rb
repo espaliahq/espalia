@@ -108,7 +108,7 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
       assert_text "Proposed: anticipates second-order effects"
       # An expectation is singular per cell: once proposed, amend it via the
       # pencil — there's no "+ Add expectation" affordance.
-      assert_no_selector "button", text: "Add expectation"
+      assert_no_selector "button", text: "Add expectation", visible: :all
       assert_selector "button[aria-label='Amend suggestion']", visible: :all
     end
   end
