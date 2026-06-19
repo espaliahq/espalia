@@ -30,6 +30,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "category_added"            => "bg-emerald-500",
     "category_archived"         => "bg-amber-500",
     "category_updated"          => "bg-indigo-500",
+    "binding_added"             => "bg-emerald-500",
+    "binding_updated"           => "bg-indigo-500",
+    "binding_removed"           => "bg-gray-400",
     "expectation_updated"       => "bg-indigo-500",
     "illustration_added"        => "bg-indigo-500",
     "illustration_updated"      => "bg-indigo-500",
@@ -61,6 +64,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "capability_archived"       => "structural",
     "category_added"            => "structural",
     "category_archived"         => "structural",
+    "binding_added"             => "structural",
+    "binding_updated"           => "structural",
+    "binding_removed"           => "structural",
     "draft_opened"              => "lifecycle",
     "version_published"         => "lifecycle",
     "migration_mapping_defined" => "lifecycle",
@@ -270,6 +276,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "category_added"      then "Added a category"
     when "category_archived"   then "Archived a category"
     when "category_updated"    then "Updated a category"
+    when "binding_added"       then "Bound a capability to a role"
+    when "binding_updated"     then "Updated a capability-role binding"
+    when "binding_removed"     then "Removed a capability-role binding"
     when "expectation_updated" then "Updated an expectation"
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"

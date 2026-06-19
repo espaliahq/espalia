@@ -174,6 +174,58 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "binding lifecycle" do
+    should "anchor binding_added to its capability + category, actor from metadata" do
+      append(Frameworks::Events::CapabilityRoleBindingCreated,
+        data: { binding_id: SecureRandom.uuid_v7, capability_id: @cap.capability_id,
+                role_id: SecureRandom.uuid_v7, weight: 1.0, individual_tolerance: nil },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "binding_added" }
+      assert entry
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal @cat.category_id, entry.category_id
+      assert_equal "Ada Author", entry.actor_name
+      assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+
+    should "anchor binding_updated to the capability of the created binding in the window" do
+      bid = SecureRandom.uuid_v7
+      append(Frameworks::Events::CapabilityRoleBindingCreated,
+        data: { binding_id: bid, capability_id: @cap.capability_id,
+                role_id: SecureRandom.uuid_v7, weight: 1.0 })
+      append(Frameworks::Events::CapabilityRoleBindingUpdated,
+        data: { binding_id: bid, weight: 2.0 }, actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "binding_updated" }
+      assert entry
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal @cat.category_id, entry.category_id
+    end
+
+    should "anchor binding_removed via the created event still in the window" do
+      bid = SecureRandom.uuid_v7
+      append(Frameworks::Events::CapabilityRoleBindingCreated,
+        data: { binding_id: bid, capability_id: @cap.capability_id,
+                role_id: SecureRandom.uuid_v7, weight: 1.0 })
+      append(Frameworks::Events::CapabilityRoleBindingRemoved, data: { binding_id: bid })
+
+      entry = entries.find { |e| e.kind == "binding_removed" }
+      assert entry
+      assert_equal @cap.capability_id, entry.capability_id
+    end
+
+    should "fall back to a framework-level anchor when the binding can't be resolved" do
+      append(Frameworks::Events::CapabilityRoleBindingRemoved,
+        data: { binding_id: SecureRandom.uuid_v7 })
+
+      entry = entries.find { |e| e.kind == "binding_removed" }
+      assert entry
+      assert_nil entry.capability_id
+      assert_nil entry.category_id
+    end
+  end
+
   context "framework-level events" do
     should "carry nil anchors and surface only at framework focus" do
       append(Frameworks::Events::FrameworkVersionPublished,

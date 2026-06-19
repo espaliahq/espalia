@@ -58,6 +58,9 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::CapabilityCategoryAdded    => "category_added",
     Frameworks::Events::CapabilityCategoryArchived => "category_archived",
     Frameworks::Events::CapabilityCategoryUpdated  => "category_updated",
+    Frameworks::Events::CapabilityRoleBindingCreated => "binding_added",
+    Frameworks::Events::CapabilityRoleBindingUpdated => "binding_updated",
+    Frameworks::Events::CapabilityRoleBindingRemoved => "binding_removed",
     Frameworks::Events::BehaviouralExpectationUpdated => "expectation_updated",
     Frameworks::Events::RoleIllustrationAdded      => "illustration_added",
     Frameworks::Events::RoleIllustrationUpdated    => "illustration_updated",
@@ -258,6 +261,13 @@ class Frameworks::ActivityFeedQuery
       from_capability(data[:capability_id])
     when "category_added", "category_archived", "category_updated"
       { capability_id: nil, category_id: data[:category_id] }
+    when "binding_added"
+      from_capability(data[:capability_id])
+    when "binding_updated", "binding_removed"
+      # The update/remove payloads carry only the binding_id; resolve the
+      # capability via the binding map. A binding removed *and* published is
+      # gone from the read model, so anchoring may fall back to framework-level.
+      from_capability(binding_to_capability[data[:binding_id]])
     when "expectation_updated"
       from_capability(expectation_to_capability[data[:expectation_id]])
     when "illustration_added"
@@ -400,6 +410,26 @@ class Frameworks::ActivityFeedQuery
     @illustration_to_expectation ||= all_capabilities
       .flat_map(&:expectations).flat_map(&:illustrations)
       .to_h { |i| [ i.illustration_id, i.expectation_id ] }
+  end
+
+  # {binding_id => capability_id}. Built from the read model (covers every
+  # binding still present — incl. ones updated live, or removed-but-not-yet-
+  # published) and supplemented from CapabilityRoleBindingCreated events in the
+  # read window (so a binding both created and removed-then-published within the
+  # window still resolves). A binding created before the window and later removed
+  # falls back to a framework-level anchor — consistent with the recency model.
+  def binding_to_capability
+    @binding_to_capability ||= begin
+      cap_ids = all_capabilities.map(&:capability_id)
+      map = cap_ids.empty? ? {} : FrameworkState::CapabilityRoleBinding
+        .where(capability_id: cap_ids).pluck(:binding_id, :capability_id).to_h
+      stream_events.each do |event|
+        next unless event.is_a?(Frameworks::Events::CapabilityRoleBindingCreated)
+
+        map[event.data[:binding_id]] ||= event.data[:capability_id]
+      end
+      map
+    end
   end
 
   def capability_name_for(capability_id)
