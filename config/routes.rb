@@ -22,6 +22,7 @@ Rails.application.routes.draw do
   # other settings live elsewhere historically.
   namespace :settings do
     resources :connected_clients, only: [ :index, :destroy ]
+    resource :notifications, only: [ :show, :update ], controller: "notifications"
   end
 
   # In-app approval surface for high-stakes MCP tools. The MCP server
