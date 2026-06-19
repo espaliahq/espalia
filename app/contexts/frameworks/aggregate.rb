@@ -450,6 +450,11 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if no draft in progress, capability not found, or expectation already exists
   def set_behavioural_expectation(framework_id, expectation_id, stable_id, capability_id, level_ordinal, description)
     ensure_draft_in_progress!
+    # Normalize so the uniqueness guard (and the stored ordinal) are type-stable
+    # — the suggest-create path forwards a JSON ordinal that may be a string, so
+    # "1" and 1 must be treated as the same cell.
+    level_ordinal = Integer(level_ordinal, exception: false)
+    raise "Level ordinal must be an integer" if level_ordinal.nil?
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Expectation #{expectation_id} already exists" if @expectations.key?(expectation_id)
     if @expectations.values.any? { |e| e[:capability_id] == capability_id && e[:level_ordinal] == level_ordinal }
