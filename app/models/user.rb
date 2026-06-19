@@ -16,6 +16,12 @@ class User < ApplicationRecord
   has_many :tenant_users, dependent: :destroy
   has_many :tenants, through: :tenant_users
 
+  # In-app notifications addressed to this user (Noticed). The record is the
+  # cross-channel anchor: it always exists and its read state drives the
+  # smart-escalation gate, even when the user has the in-app channel disabled
+  # (in which case it simply doesn't surface in the inbox).
+  has_many :notifications, as: :recipient, class_name: "Noticed::Notification", dependent: :destroy
+
   # Include default devise modules. :validatable is included because email
   # uniqueness is now global (no tenant scope on User).
   devise :database_authenticatable, :registerable,
