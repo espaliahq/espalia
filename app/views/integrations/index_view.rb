@@ -11,9 +11,12 @@ class Views::Integrations::IndexView < Views::Base
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(hris_config:, hris_credentials_present:, user: nil, current_tenant: nil, tenants: [])
+  def initialize(hris_config:, hris_credentials_present:, slack_connected: false, slack_team_name: nil, slack_available: false, user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
     @hris_credentials_present = hris_credentials_present
+    @slack_connected = slack_connected
+    @slack_team_name = slack_team_name
+    @slack_available = slack_available
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -43,6 +46,51 @@ class Views::Integrations::IndexView < Views::Base
   def integration_grid
     div(class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6") do
       hris_card
+      slack_card
+    end
+  end
+
+  def slack_card
+    render Components::Kit::Card.new do |card|
+      card.body do
+        div(class: "flex items-start justify-between") do
+          div do
+            h3(class: "text-lg font-semibold text-gray-900 dark:text-white") { "Slack" }
+            p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { slack_subtitle }
+          end
+          render Components::Kit::Badge.new(
+            @slack_connected ? "Connected" : "Not connected",
+            variant: @slack_connected ? :success : :default
+          )
+        end
+        div(class: "mt-4") { slack_action }
+      end
+    end
+  end
+
+  def slack_subtitle
+    return "Send assessment notifications to Slack" unless @slack_connected
+
+    @slack_team_name.present? ? "Connected to #{@slack_team_name}" : "Workspace connected"
+  end
+
+  def slack_action
+    if @slack_connected
+      # Always offer disconnect when connected, even if the app's OAuth config
+      # later changes — otherwise an admin couldn't sever a stale connection.
+      a(
+        href: tenant_slack_connection_path,
+        data: { turbo_method: :delete, turbo_confirm: "Disconnect Slack from this workspace?" },
+        class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline"
+      ) { "Disconnect" }
+    elsif @slack_available
+      a(
+        href: tenant_slack_install_path,
+        data: { turbo_frame: "_top" },
+        class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90"
+      ) { "Connect Slack" }
+    else
+      span(class: "text-xs text-gray-600 dark:text-gray-300") { "Slack is not configured for this deployment." }
     end
   end
 

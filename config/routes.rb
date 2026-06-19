@@ -80,6 +80,11 @@ Rails.application.routes.draw do
         post :sync
       end
     end
+
+    # Per-tenant Slack install (OAuth v2). install → Slack consent → callback.
+    get    "slack/install",  to: "slack_connections#install",  as: :slack_install
+    get    "slack/callback", to: "slack_connections#callback", as: :slack_callback
+    delete "slack",          to: "slack_connections#destroy",  as: :slack_connection
   end
   # RailsEventStore browser for debugging event streams (global admins only)
   authenticate :user, ->(u) { u.global_admin? } do

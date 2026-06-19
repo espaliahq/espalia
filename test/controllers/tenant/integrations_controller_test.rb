@@ -36,6 +36,24 @@ class Tenant::IntegrationsControllerTest < ActionDispatch::IntegrationTest
         assert_includes response.body, "Integrations"
         assert_includes response.body, "HRIS"
       end
+
+      should "show the Slack connect affordance when configured but not connected" do
+        Slack.stub(:configured?, true) do
+          get tenant_integrations_path
+        end
+        assert_includes response.body, "Slack"
+        assert_includes response.body, "Connect Slack"
+        assert_includes response.body, tenant_slack_install_path
+      end
+
+      should "show the connected workspace + disconnect when connected" do
+        @tenant.connect_slack!(bot_token: "xoxb-1", team_id: "T1", team_name: "Acme HQ")
+        Slack.stub(:configured?, true) do
+          get tenant_integrations_path
+        end
+        assert_includes response.body, "Acme HQ"
+        assert_includes response.body, "Disconnect"
+      end
     end
 
     context "GET /integrations/hris" do

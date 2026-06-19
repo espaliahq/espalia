@@ -49,6 +49,7 @@ oauth_config:
       - chat:write             # send messages as the bot
       - chat:write.public      # post to public channels without joining first
       - chat:write.customize   # customise username/icon per message
+      - im:write               # open DM channels to deliver user notifications
 
       # --- Identity / org lookup (map Slack users → Person records) ---
       - users:read             # list workspace users

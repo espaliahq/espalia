@@ -18,4 +18,11 @@ class IntegrationsPolicy < ApplicationPolicy
 
   # @return [Boolean]
   def sync?   = tenant_admin?
+
+  # Connect / disconnect the tenant's Slack workspace.
+  # @return [Boolean]
+  def connect?    = tenant_admin?
+
+  # @return [Boolean]
+  def disconnect? = tenant_admin?
 end

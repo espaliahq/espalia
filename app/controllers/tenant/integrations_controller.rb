@@ -19,6 +19,9 @@ class Tenant::IntegrationsController < ApplicationController
     render Views::Integrations::IndexView.new(
       hris_config: current_tenant.hris_config,
       hris_credentials_present: current_tenant.hris_credentials.present?,
+      slack_connected: current_tenant.slack_connected?,
+      slack_team_name: current_tenant.slack_team_name,
+      slack_available: Slack.configured?,
       user: current_user,
       current_tenant: current_tenant,
       tenants: tenants_for_user
