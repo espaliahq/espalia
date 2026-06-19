@@ -1,7 +1,13 @@
 # frozen_string_literal: true
 
-# One row in the notification inbox. Clicking marks the notification read
-# (PATCH via Turbo) and navigates to its target surface.
+# One row in the notification inbox. Clicking marks the notification read and
+# navigates to its target surface.
+#
+# Submitted as a NATIVE (data-turbo=false) PATCH form, not a Turbo link: the
+# controller redirects to the notification's target, which may carry a #anchor
+# (e.g. /evidence#evidence-request-<id>). Turbo follows redirects via fetch,
+# whose response URL strips the fragment — a native submit lets the browser
+# follow the 302 with the anchor intact and scroll to it.
 class Views::Notifications::Row < Views::Base
   # @param notification [Noticed::Notification]
   def initialize(notification:)
@@ -9,18 +15,16 @@ class Views::Notifications::Row < Views::Base
   end
 
   def view_template
-    a(
-      href: notification_path(@notification),
-      # turbo_frame _top so a row inside the lazy bell frame drives a full-page
-      # navigation (mark read + go to target) rather than navigating the frame.
-      data: { turbo_method: :patch, turbo_frame: "_top" },
-      class: row_classes
-    ) do
-      unread_dot
-      div(class: "min-w-0 flex-1") do
-        p(class: "text-sm font-medium text-gray-900 dark:text-white truncate") { title }
-        p(class: "mt-0.5 text-sm text-gray-600 dark:text-gray-300 line-clamp-2") { body } if body.present?
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { local_time_ago(@notification.created_at) }
+    form(action: notification_path(@notification), method: "post", data: { turbo: "false" }, class: "block") do
+      input(type: "hidden", name: "_method", value: "patch")
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      button(type: "submit", class: "#{row_classes} w-full text-left cursor-pointer") do
+        unread_dot
+        div(class: "min-w-0 flex-1") do
+          p(class: "text-sm font-medium text-gray-900 dark:text-white truncate") { title }
+          p(class: "mt-0.5 text-sm text-gray-600 dark:text-gray-300 line-clamp-2") { body } if body.present?
+          p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { local_time_ago(@notification.created_at) }
+        end
       end
     end
   end

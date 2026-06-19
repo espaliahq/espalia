@@ -11,6 +11,6 @@ class EvidenceRequestRespondedNotifier < ApplicationNotifier
 
     def inbox_body = params[:capability_name].presence
 
-    def inbox_url = "/evidence"
+    def inbox_url = EvidenceRequest.hub_path(params[:request_id])
   end
 end

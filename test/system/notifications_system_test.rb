@@ -38,7 +38,7 @@ class NotificationsSystemTest < ApplicationSystemTestCase
 
     # Reading the notification (click navigates to its target) clears the badge.
     visit notifications_path
-    find("a", text: "Test: Peer feedback").click
+    find("button", text: "Test: Peer feedback").click
     assert_selector "turbo-frame#notification-bell button[aria-label='Notifications']"
     assert_no_selector "turbo-frame#notification-bell span", text: /\d/
   end

@@ -17,6 +17,6 @@ class EvidenceRequestedNotifier < ApplicationNotifier
       [ params[:capability_name].presence, params[:message].presence ].compact.join(" — ").presence
     end
 
-    def inbox_url = "/evidence"
+    def inbox_url = EvidenceRequest.hub_path(params[:request_id])
   end
 end

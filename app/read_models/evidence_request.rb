@@ -33,4 +33,28 @@ class EvidenceRequest < ApplicationRecord
   def pending?
     status == "pending"
   end
+
+  # DOM id of this request's card on the evidence hub — the anchor that
+  # notification deep links target. Single source of truth for the view and
+  # the notifiers so the link can't drift from the element.
+  #
+  # @param id [String]
+  # @return [String]
+  def self.dom_id(id)
+    "evidence-request-#{id}"
+  end
+
+  # Path to a request's card on the evidence hub (the notification deep-link
+  # target), falling back to the hub itself when no id is given.
+  #
+  # @param id [String, nil]
+  # @return [String]
+  def self.hub_path(id)
+    id.present? ? "/evidence##{dom_id(id)}" : "/evidence"
+  end
+
+  # @return [String]
+  def dom_id
+    self.class.dom_id(id)
+  end
 end

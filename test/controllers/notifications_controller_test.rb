@@ -75,6 +75,15 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to notifications_path
     end
 
+    should "preserve a deep-link #anchor in the redirect target" do
+      sign_in @user
+      notify!(@user, title: "Deep", url: "/evidence#evidence-request-abc123")
+      notification = @user.notifications.first
+
+      patch notification_path(notification)
+      assert_redirected_to "/evidence#evidence-request-abc123"
+    end
+
     should "not let a user mark another user's notification read" do
       other = create(:user, password: "password123")
       notify!(other, title: "Theirs")

@@ -93,8 +93,12 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def card(request, &)
-    div(id: "evidence-request-#{request.id}",
-        class: "rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-2", &)
+    # `target:` highlights the card when reached via a notification deep link
+    # (/evidence#evidence-request-<id>).
+    div(id: request.dom_id,
+        class: "scroll-mt-20 rounded-lg border border-gray-200 dark:border-gray-700 " \
+               "bg-white dark:bg-gray-900 p-4 space-y-2 " \
+               "target:ring-2 target:ring-primary target:border-primary", &)
   end
 
   def cell_line(request)

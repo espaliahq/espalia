@@ -57,6 +57,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
 
     EvidenceRequestRespondedNotifier.with(
       tenant_id: request.tenant_id,
+      request_id: request.id,
       responder_name: Person.find_by(id: event.data[:responded_by_id])&.name,
       capability_name: capability_name(request)
     ).deliver(user)
@@ -68,6 +69,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
 
     EvidenceRequestDeclinedNotifier.with(
       tenant_id: request.tenant_id,
+      request_id: request.id,
       decliner_name: Person.find_by(id: event.data[:declined_by_id])&.name,
       capability_name: capability_name(request),
       reason: event.data[:reason]

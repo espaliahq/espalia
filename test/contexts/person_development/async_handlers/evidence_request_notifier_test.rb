@@ -32,12 +32,14 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     id
   end
 
-  should "notify the requestee when evidence is requested" do
-    perform_enqueued_jobs { request! }
+  should "notify the requestee when evidence is requested, deep-linking to the request" do
+    request_id = nil
+    perform_enqueued_jobs { request_id = request! }
 
     notifications = @peer_user.notifications.reload
     assert_equal 1, notifications.size
     assert_match "Alex asked you for evidence", notifications.first.inbox_title
+    assert_equal "/evidence#evidence-request-#{request_id}", notifications.first.inbox_url
   end
 
   should "notify the requester when the request is responded to" do
