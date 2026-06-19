@@ -366,11 +366,17 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
 - **"+ Add expectation"** — inline affordance on an **empty-but-applicable**
   matrix cell (a level the capability's bound roles reach, with no expectation
   yet). `MatrixDataBuilder` emits an `authorable` placeholder cell only in edit
-  mode (never view); `MatrixCell` renders the affordance only for
-  edit-structure holders (`NewExpectationFrame`, the same inline-editor toggle
-  as "+ Add illustration"). Submits to `Operations::Frameworks::SetBehaviouralExpectation`
-  (shape-changing → draft). A *not-applicable* cell (no bound selected role at
-  that ordinal) and a *filled* cell are untouched.
+  mode (never view); `MatrixCell` renders the affordance for **any edit-mode
+  viewer** (edit mode already requires suggest rights), via `NewExpectationFrame`
+  — the same inline-editor toggle as "+ Add illustration". Submits to
+  `Operations::Frameworks::SetBehaviouralExpectation`, which **follows the
+  suggest/approve path** (routes through `suggest_create`): in editing mode an
+  author with expectation-tier approval authority has it applied directly
+  (shape-changing → draft), otherwise — or in suggesting mode — it lands as a
+  pending `behavioural_expectation` creation suggestion. A *not-applicable* cell
+  (no bound selected role at that ordinal) and a *filled* cell are untouched.
+  (A directly-applied expectation is draft-deferred from the read model, so its
+  inline edit resolves from the graph — Lesson 17.)
 - **Row-actions kebab (⋮) → Archive** — hover-revealed beside the capability-name
   pencil; offered to **any suggest-rights (edit-mode) viewer**, not just
   edit-structure holders. "Archive" is the single removal operation — there is no
@@ -865,11 +871,11 @@ line (§9).
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Edit roles… (binding editor) + Archive (§11, §12) |
-| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (edit-structure) |
+| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
 | `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
-| `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (edit mode, edit-structure only) |
+| `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
 | `app/views/frameworks/explorer/capability_name_frame.rb` | Capability name + edit-mode inline editor |
 | `app/views/frameworks/explorer/capability_description_frame.rb` | Capability description + edit-mode inline editor ("Add a description…" when blank) |
 | `app/views/frameworks/explorer/category_name_frame.rb` | Category name + edit-mode inline editor |
@@ -917,7 +923,7 @@ line (§9).
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH/POST) |
 | `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name **or** description (PATCH); add a capability (POST → `AddCapability`). Resolves the capability from the graph (incl. draft-added — Lesson 17) |
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name **or** description (PATCH); add a category (POST → `AddCategory`) |
-| `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH); author an expectation in an empty cell (POST → `SetBehaviouralExpectation`) |
+| `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH — resolves from the graph for draft-added, Lesson 17); author an expectation in an empty cell (POST → `SetBehaviouralExpectation`, suggest/approve path) |
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
@@ -926,7 +932,7 @@ line (§9).
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
 | `app/operations/operations/frameworks/{add,update,remove}_capability_role_binding.rb` | Shared web + MCP binding operations — add/remove (shape-changing, draft) and weight/tolerance update (shape-preserving). |
-| `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell (shape-changing, draft); guards against a duplicate at the same level. |
+| `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |

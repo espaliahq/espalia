@@ -16,27 +16,30 @@ class Frameworks::ExpectationsController < ApplicationController
   # POST /frameworks/:framework_id/expectations
   #
   # Authors a behavioural expectation in a previously-empty capability × level
-  # cell via the matrix "+ Add expectation" affordance. Shape-changing —
-  # restricted to edit-rights holders; redirects back to the edit page with the
-  # new cell rendered.
+  # cell via the matrix "+ Add expectation" affordance. Follows the suggest/
+  # approve path (the Operation routes through suggest_create): applied directly
+  # for an author with approval authority in editing mode, otherwise proposed as
+  # a pending suggestion. Redirects back to the edit page.
   def create
-    authorize @framework, :add_expectation?
+    authorize @framework, :suggest_edit?
     attrs = params.expect(behavioural_expectation: [ :capability_id, :level_ordinal, :description ])
     # Fail fast on a malformed ordinal rather than silently coercing it to 0
     # (which would author at level 0).
     level_ordinal = Integer(attrs[:level_ordinal], exception: false)
     raise Operations::Base::ParameterError, "level must be a positive number" if level_ordinal.nil? || level_ordinal <= 0
 
-    Operations::Frameworks::SetBehaviouralExpectation.call(
+    result = Operations::Frameworks::SetBehaviouralExpectation.call(
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
         capability_id: attrs[:capability_id],
         level_ordinal: level_ordinal,
-        description: attrs[:description].to_s
+        description: attrs[:description].to_s,
+        mode: framework_edit_mode.to_s
       }
     )
-    redirect_to edit_framework_path(@framework.framework_id), notice: "Added an expectation."
+    notice = result[:applied] ? "Added an expectation." : "Proposed a new expectation."
+    redirect_to edit_framework_path(@framework.framework_id), notice: notice
   rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to edit_framework_path(@framework.framework_id), alert: e.message
   end

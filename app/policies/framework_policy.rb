@@ -105,14 +105,6 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def remove_binding? = edit_structure?
 
-  # Author a behavioural expectation in a previously-empty capability × level
-  # cell. Shape-changing — it adds a cell to the rating grid — so it sits on the
-  # edit-rights bar like the other structural adds (existing expectation *text*
-  # edits go through the broader suggest bar instead).
-  #
-  # @return [Boolean]
-  def add_expectation? = edit_structure?
-
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]

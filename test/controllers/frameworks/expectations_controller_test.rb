@@ -93,6 +93,21 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       assert_match(/Added an expectation/, flash[:notice])
     end
 
+    should "propose (not apply) when the suggesting cookie is set" do
+      sign_in @user
+      cookies[:framework_edit_mode] = "suggesting"
+      post framework_expectations_path(framework_id: @framework_id),
+           params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 2, description: "Proposed text" } }
+
+      assert_redirected_to edit_framework_path(@framework_id)
+      assert_match(/Proposed a new expectation/, flash[:notice])
+      pending = ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::SuggestedEdit.where(framework_id: @framework_id, kind: "create",
+                                            target_entity_type: "behavioural_expectation", status: "pending").count
+      end
+      assert_equal 1, pending
+    end
+
     should "redirect with an alert on a malformed level ordinal (no silent 0)" do
       sign_in @user
       post framework_expectations_path(framework_id: @framework_id),

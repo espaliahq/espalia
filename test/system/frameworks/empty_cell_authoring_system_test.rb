@@ -14,7 +14,11 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
     @admin_user = FactoryBot.create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
+      # Linked person + owner collaborator so authoring applies directly (the
+      # suggest/approve path auto-approves for an authority-holder in editing
+      # mode) and needs a person for attribution.
+      @admin_person = FactoryBot.create(:person, tenant: @tenant, email: @admin_user.email)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person)
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
@@ -35,6 +39,7 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
       # Authored at level 1 only — level 2 is the empty cell under test.
       handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
                                           cap_id, 1, "Asks clarifying questions")
+      handler.add_collaborator(@framework_id, @admin_person.id.to_s, "owner", added_by: @admin_person.id.to_s)
       handler.publish_version(@framework_id, "test")
     end
   end

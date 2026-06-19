@@ -15,16 +15,12 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param search_query [String, nil] active text filter — highlighted in the
   #   expectation text
-  # @param can_edit_structure [Boolean] whether the viewer may author an
-  #   expectation in an empty-but-applicable cell (edit mode only)
-  def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view, search_query: nil,
-                 can_edit_structure: false)
+  def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view, search_query: nil)
     @cell_data = cell_data
     @ordinal = ordinal
     @framework_id = framework_id
     @mode = mode
     @search_query = search_query
-    @can_edit_structure = can_edit_structure
   end
 
   def view_template
@@ -39,11 +35,14 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
   private
 
-  # An empty-but-applicable cell the viewer may author into (the builder only
-  # emits the `authorable` placeholder in edit mode for cells bound to a selected
-  # role with a level at this ordinal).
+  # An empty-but-applicable cell the viewer may author into. Offered to any
+  # edit-mode viewer (edit mode already requires suggest rights) — the
+  # Operation's suggest/approve path applies it directly for an authority-holder
+  # or proposes it as a suggestion otherwise. The builder only emits the
+  # `authorable` placeholder in edit mode for cells bound to a selected role with
+  # a level at this ordinal.
   def authorable?
-    @mode == :edit && @can_edit_structure && @cell_data && @cell_data[:authorable]
+    @mode == :edit && @cell_data && @cell_data[:authorable]
   end
 
   # Empty cell with the "+ Add expectation" affordance (group/cell so the button

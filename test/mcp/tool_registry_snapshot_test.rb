@@ -742,14 +742,15 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_set_behavioural_expectation",
-        "description" => "Author a behavioural expectation for an empty capability × level cell (owner/editor/lead only).",
+        "description" => "Author a behavioural expectation for an empty cell — applied directly with approval rights in editing mode, else proposed as a suggestion.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "framework_id"  => { "type" => "string" },
             "capability_id" => { "type" => "string" },
             "level_ordinal" => { "type" => "integer" },
-            "description"   => { "type" => "string" }
+            "description"   => { "type" => "string" },
+            "mode"          => { "type" => "string", "enum" => %w[editing suggesting] }
           },
           "required" => %w[framework_id capability_id level_ordinal description],
           "additionalProperties" => false
