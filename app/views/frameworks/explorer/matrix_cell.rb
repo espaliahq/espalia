@@ -15,12 +15,16 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param search_query [String, nil] active text filter — highlighted in the
   #   expectation text
-  def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view, search_query: nil)
+  # @param current_person_id [String, nil] the viewer's person id — marks their
+  #   own pending proposal as amendable vs others' as "suggest alternative"
+  def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view, search_query: nil,
+                 current_person_id: nil)
     @cell_data = cell_data
     @ordinal = ordinal
     @framework_id = framework_id
     @mode = mode
     @search_query = search_query
+    @current_person_id = current_person_id
   end
 
   def view_template
@@ -45,28 +49,33 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
     @mode == :edit && @cell_data && @cell_data[:authorable]
   end
 
-  # Empty cell with any pending-create ghosts plus the "+ Add expectation"
-  # affordance (group/cell so the button is hover-revealed against the cell,
-  # matching the other inline-add controls).
+  # Empty cell. An expectation is singular per cell, so once a proposal exists we
+  # show its editable ghost(s) (pencil → amend) and NOT a "+ Add expectation"
+  # affordance — amending the existing proposal is the way to change it, like
+  # every other suggestion flow. With no proposal yet, show "+ Add expectation".
   def authorable_cell
     td(class: "group/cell px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
               "bg-gray-50/40 dark:bg-gray-800/20 align-top") do
-      pending_create_ghosts
-      render Views::Frameworks::Explorer::NewExpectationFrame.new(
-        capability_id: @cell_data[:capability_id],
-        level_ordinal: @ordinal,
-        framework_id: @framework_id
-      )
+      creates = @cell_data[:pending_expectation_creates] || []
+      if creates.any?
+        creates.each { |suggestion| render_pending_ghost(suggestion) }
+      else
+        render Views::Frameworks::Explorer::NewExpectationFrame.new(
+          capability_id: @cell_data[:capability_id],
+          level_ordinal: @ordinal,
+          framework_id: @framework_id
+        )
+      end
     end
   end
 
-  # Ghosts for pending expectation-creation suggestions on this cell — so a
-  # proposed expectation shows in the grid, not just the activity feed.
-  def pending_create_ghosts
-    creates = @cell_data[:pending_expectation_creates] || []
-    creates.each do |suggestion|
-      render Views::Frameworks::Explorer::PendingExpectationFrame.new(suggestion: suggestion)
-    end
+  def render_pending_ghost(suggestion)
+    render Views::Frameworks::Explorer::PendingExpectationFrame.new(
+      suggestion: suggestion,
+      framework_id: @framework_id,
+      level_ordinal: @ordinal,
+      is_author: @current_person_id.present? && suggestion.author_id.to_s == @current_person_id.to_s
+    )
   end
 
   def empty_cell

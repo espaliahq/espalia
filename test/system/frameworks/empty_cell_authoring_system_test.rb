@@ -100,14 +100,16 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "render a ghost of the proposed expectation in the empty cell" do
+    should "render an editable ghost (pencil to amend) and no + Add button" do
       visit_edit
 
-      # The proposed text shows in the cell (the amber wavy underline is the
-      # pending signal — no separate label).
+      # The proposed text shows as a ghost (amber wavy underline is the pending
+      # signal — no separate label).
       assert_text "Proposed: anticipates second-order effects"
-      # The cell stays authorable (others can still propose / it's not applied).
-      assert_selector "button[data-inline-editor-target='display']", text: "Add expectation", visible: :all
+      # An expectation is singular per cell: once proposed, amend it via the
+      # pencil — there's no "+ Add expectation" affordance.
+      assert_no_selector "button", text: "Add expectation"
+      assert_selector "button[aria-label='Amend suggestion']", visible: :all
     end
   end
 

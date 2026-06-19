@@ -120,7 +120,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           ordinal: level[:ordinal],
           framework_id: @framework_id,
           mode: @mode,
-          search_query: @search_query
+          search_query: @search_query,
+          current_person_id: @current_person_id
         )
       end
     end
