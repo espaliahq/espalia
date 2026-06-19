@@ -171,7 +171,14 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # toggleRow ignores clicks inside `[data-controller~='dropdown']`, so opening
   # the menu never also expands the row.
   def show_row_kebab?
-    @mode == :edit && (show_archive_action? || capability_edit_actions.any?)
+    @mode == :edit && (show_archive_action? || capability_edit_actions.any? || show_binding_action?)
+  end
+
+  # "Edit roles…" — manage this capability's role bindings. A direct structural
+  # edit (add/remove bindings auto-open a draft), so it's on the edit-structure
+  # bar like add-capability, not the broader suggest bar.
+  def show_binding_action?
+    @can_edit_structure
   end
 
   # Archive is offered to any edit-mode (suggest-rights) viewer and hidden once
@@ -217,6 +224,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       end
       dd.menu do
         capability_edit_actions.each { |action| kebab_edit_items(action) }
+        kebab_binding_item if show_binding_action?
         kebab_archive_item if show_archive_action?
       end
     end
@@ -248,6 +256,18 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
         reject_preview: action[:preview]
       }
     ) { "Reject #{action[:field_label]} change" }
+  end
+
+  def kebab_binding_item
+    button(
+      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
+      data: {
+        action: "click->modal#open",
+        modal_target_id: "binding-editor-modal",
+        binding_editor_capability_id: @capability.capability_id,
+        binding_editor_capability_name: @capability.name
+      }
+    ) { "Edit roles…" }
   end
 
   def kebab_archive_item
