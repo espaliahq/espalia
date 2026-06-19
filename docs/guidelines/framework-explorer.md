@@ -385,6 +385,18 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   (`IllustrationFrame`) → `Operations::Frameworks::ArchiveIllustration`: direct
   `remove_role_illustration` vs `suggest_delete("role_illustration")`, no
   migration mapping since illustrations carry no ratings.)*
+- **Row-actions kebab (⋮) → Edit roles…** — offered to **edit-structure
+  holders** (a direct structural edit, like add-capability, not the broader
+  suggest bar). Opens the shared **binding-editor modal** whose body is the
+  `binding-editor` Turbo Frame: it lists the capability's role bindings (each
+  with a weight field + Remove) and an "add role" form offering the roles it
+  isn't bound to yet. Re-scoping a capability to roles is the editor's headline
+  (a capability bound to no role is hidden from the role-filtered matrix). Each
+  action dispatches a shared `Operations::Frameworks::{Add,Update,Remove}CapabilityRoleBinding`
+  and re-renders the frame **in place** (the modal stays open for list
+  management). Add/remove are shape-changing (auto-open a draft, deferred to
+  publish); weight edits are shape-preserving (apply live). Individual tolerance
+  is an advanced lever exposed via the Operation/MCP only — no UI field yet.
 - **Archive-category kebab** — hover-revealed next to the category **name**
   (not the far right of the full-width header, which scrolls off-screen on a
   matrix with many level columns), **only for an empty category** (the aggregate refuses to archive one
@@ -592,6 +604,13 @@ Wraps every inline-edit site (IllustrationFrame, PendingIllustrationFrame, NewIl
 
 ### edit_mode_toggle_controller.js (edit mode only)
 Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
+
+### binding_editor_form_controller.js (edit mode only)
+Companion to the `modal` controller for the shared binding-editor modal. On the
+window `modal:open` event it self-gates on `bindingEditorCapabilityId` and points
+the `binding-editor` Turbo Frame at {Frameworks::CapabilityBindingsController#index}
+for that capability (with a cache-buster so reopening the same capability refetches
+the latest state). All add/remove/weight actions then re-render the frame in place.
 
 ### suggestion_action_controller.js (edit mode only)
 Wraps the inline **Approve** button on an actionable feed entry. `approve` POSTs to the suggestion's approve endpoint (`inline=1` → 204) via `@rails/request.js`; on success dispatches the window `suggestion:resolved` event (→ `matrix#refresh`) and leaves the feed to reload off the activity broadcast. Reject is *not* handled here — it always opens the shared modal (§12).
@@ -837,7 +856,7 @@ line (§9).
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
-| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Archive (§12) |
+| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Edit roles… (binding editor) + Archive (§11, §12) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2) |
 | `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
@@ -850,6 +869,8 @@ line (§9).
 | `app/views/frameworks/explorer/add_capability_modal.rb` | Shared add-capability modal (name + description + role bindings) |
 | `app/views/frameworks/explorer/add_category_modal.rb` | Shared add-category modal (name + description) |
 | `app/views/frameworks/explorer/archive_category_modal.rb` | Shared archive-category modal (confirm + optional reason; no migration mapping) — opened by the header kebab |
+| `app/views/frameworks/explorer/binding_editor_modal.rb` | Shared "Edit roles" modal (embedded) — body is the `binding-editor` Turbo Frame; opened by the row kebab |
+| `app/views/frameworks/explorer/binding_editor_frame.rb` | Binding-editor frame body — lists role bindings (weight + Remove) + add-role form; re-renders in place on each action |
 | `app/views/frameworks/publication_review_view.rb` | Publish-review page — validate/override migration mappings, then cut the version |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
@@ -889,11 +910,14 @@ line (§9).
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name **or** description (PATCH); add a category (POST → `AddCategory`) |
 | `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH) |
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
+| `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
+| `app/operations/operations/frameworks/{add,update,remove}_capability_role_binding.rb` | Shared web + MCP binding operations — add/remove (shape-changing, draft) and weight/tolerance update (shape-preserving). |
+| `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/controllers/concerns/inline_suggested_edits.rb` | `submit_inline_suggested_edit` — amends the author's pending edit on a field (→ `SuggestionAmended`) or creates a fresh suggestion; prevents consecutive duplicate suggestions |
