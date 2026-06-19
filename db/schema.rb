@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_19_000100) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_19_000200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -580,6 +580,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_19_000100) do
     t.datetime "created_at", null: false
     t.uuid "person_id"
     t.string "role", default: "member", null: false
+    t.string "slack_user_id"
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.uuid "user_id", null: false
@@ -595,8 +596,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_19_000100) do
     t.string "hris_credentials"
     t.string "name", null: false
     t.jsonb "settings", default: {}, null: false
+    t.string "slack_credentials"
+    t.string "slack_team_id"
     t.string "slug", null: false
     t.datetime "updated_at", null: false
+    t.index ["slack_team_id"], name: "index_tenants_on_slack_team_id", unique: true, where: "(slack_team_id IS NOT NULL)"
     t.index ["slug"], name: "index_tenants_on_slug", unique: true
   end
 

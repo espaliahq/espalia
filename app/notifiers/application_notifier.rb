@@ -35,6 +35,16 @@ class ApplicationNotifier < Noticed::Event
     self.notification_type_key = type_key.to_sym
   end
 
+  # External Slack DM, gated by the smart-escalation rules. Fires only when the
+  # recipient enabled Slack for this type and (when they also get it in-app)
+  # hasn't read the in-app copy within ESCALATION_DELAY. Notifiers must include
+  # `tenant_id` in their params so the delivery method can resolve the
+  # per-tenant workspace + recipient identity.
+  deliver_by :slack, class: "SlackDeliveryMethod" do |config|
+    config.wait = -> { external_wait }
+    config.if = -> { escalate_external?(:slack) }
+  end
+
   # Smart-escalation helpers shared by every external delivery method. They run
   # in the context of a Noticed::Notification (recipient + read state + event
   # available) and are evaluated at delivery time, so the read check reflects

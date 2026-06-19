@@ -152,4 +152,34 @@ class TenantTest < ActiveSupport::TestCase
       assert_equal "acme-corp", tenant.slug
     end
   end
+
+  context "Slack connection" do
+    should "report not connected by default" do
+      assert_not create(:tenant).slack_connected?
+    end
+
+    should "store the encrypted token + team on connect and expose helpers" do
+      tenant = create(:tenant)
+      tenant.connect_slack!(bot_token: "xoxb-1", team_id: "T1", team_name: "Acme HQ", installed_by: "person-1")
+
+      assert tenant.slack_connected?
+      assert_equal "xoxb-1", tenant.slack_bot_token
+      assert_equal "Acme HQ", tenant.slack_team_name
+      assert_equal "T1", tenant.slack_team_id
+    end
+
+    should "clear the connection and cached user ids on disconnect" do
+      tenant = create(:tenant)
+      tenant.connect_slack!(bot_token: "xoxb-1", team_id: "T1")
+      membership = ActsAsTenant.with_tenant(tenant) do
+        create(:tenant_user, tenant: tenant, user: create(:user)).tap { |tu| tu.update_column(:slack_user_id, "U1") }
+      end
+
+      tenant.disconnect_slack!
+
+      assert_not tenant.reload.slack_connected?
+      assert_nil tenant.slack_team_id
+      assert_nil membership.reload.slack_user_id
+    end
+  end
 end
