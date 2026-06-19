@@ -86,6 +86,13 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def archive_category? = edit_structure?
 
+  # Edit a capability-role binding's weight / individual tolerance.
+  # Shape-preserving (applies live) but still a structural edit, so it sits
+  # on the edit-rights bar like the other binding/structure mutations.
+  #
+  # @return [Boolean]
+  def update_binding? = edit_structure?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]

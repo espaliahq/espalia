@@ -702,6 +702,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_update_capability_role_binding",
+        "description" => "Update a capability-role binding's weight and/or individual tolerance (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"         => { "type" => "string" },
+            "binding_id"           => { "type" => "string" },
+            "weight"               => { "type" => "number" },
+            "individual_tolerance" => { "type" => "number" }
+          },
+          "required" => %w[framework_id binding_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_withdraw_suggestion",
         "description" => "Withdraw your own pending framework suggested edit (author only).",
         "inputSchema" => {
