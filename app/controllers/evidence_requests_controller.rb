@@ -28,7 +28,7 @@ class EvidenceRequestsController < ApplicationController
 
     Operations::Assessments::RespondToEvidenceRequest.call(
       context: pundit_user,
-      params: respond_params.to_h.symbolize_keys.merge(request_id: evidence_request.id)
+      params: respond_attrs
     )
     redirect_to evidence_hub_path, notice: "Evidence provided. Thank you!"
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
@@ -75,6 +75,16 @@ class EvidenceRequestsController < ApplicationController
   end
 
   def respond_params
-    params.expect(evidence_request: [ :evidence_type, :content, :custom_type_label, :title ])
+    params.expect(evidence_request: [ :evidence_type, :content, :custom_type_label, :title,
+                                      { external_reference: [ :system, :url ] } ])
+  end
+
+  # Build the operation params, dropping a blank external reference (an empty
+  # system/url pair from the form) so it isn't treated as a real link.
+  def respond_attrs
+    attrs = respond_params.to_h.symbolize_keys.merge(request_id: evidence_request.id)
+    ref = attrs[:external_reference]
+    attrs.delete(:external_reference) unless ref.present? && ref["url"].present?
+    attrs
   end
 end

@@ -90,6 +90,33 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       ActsAsTenant.with_tenant(@tenant) { assert_equal "responded", EvidenceRequest.find(id).status }
     end
 
+    should "capture the full evidence fields incl. title and external link" do
+      id = make_request!
+      sign_in @peer_user
+      post respond_evidence_request_path(id), params: { evidence_request: {
+        evidence_type: "code_review", title: "Pairing on the parser",
+        content: "Drove the recursive-descent refactor together.",
+        external_reference: { system: "github", url: "https://github.com/example/repo/pull/9" }
+      } }
+      assert_redirected_to evidence_hub_path
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(EvidenceRequest.find(id).evidence_id)
+        assert_equal "code_review", item.evidence_type
+        assert_equal "Pairing on the parser", item.title
+        assert_equal "https://github.com/example/repo/pull/9", item.external_reference.url
+      end
+    end
+
+    should "render the full evidence fields (incl. URL) on the incoming card" do
+      make_request!
+      sign_in @peer_user
+      get evidence_hub_path
+      assert_select "input[name='evidence_request[external_reference][url]']"
+      assert_select "input[name='evidence_request[title]']"
+      assert_select "select[name='evidence_request[evidence_type]']"
+    end
+
     should "deny a non-requestee" do
       id = make_request!
       sign_in @report_user

@@ -42,11 +42,19 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_text "Rep asked you for evidence"
 
     select "Peer feedback", from: "evidence_request[evidence_type]"
+    fill_in "evidence_request[title]", with: "Incident retro"
     fill_in "evidence_request[content]", with: "Strong systems thinking during the incident."
+    fill_in "evidence_request[external_reference][url]", with: "https://slack.example/archives/p1"
     click_button "Provide evidence"
 
     assert_text "Evidence provided"
-    ActsAsTenant.with_tenant(@tenant) { assert_equal "responded", EvidenceRequest.last.status }
+    ActsAsTenant.with_tenant(@tenant) do
+      request = EvidenceRequest.last
+      assert_equal "responded", request.status
+      item = EvidenceItem.find(request.evidence_id)
+      assert_equal "Incident retro", item.title
+      assert_equal "https://slack.example/archives/p1", item.external_reference.url
+    end
   end
 
   should "let the requester cancel an outgoing request" do

@@ -153,23 +153,91 @@ class Views::Evidence::HubView < Views::Base
     p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{request.message}”" }
   end
 
-  # Inline respond form (evidence type + content) plus a decline form.
+  INPUT_CLASSES = "w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm " \
+                  "focus-visible:ring-primary focus-visible:border-primary"
+  FIELD_LABEL_CLASSES = "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1"
+
+  # Inline respond form — mirrors the evidence-adding modal's fields (type +
+  # custom label, title, what-happened, and an optional external link) so
+  # responding from the hub captures the same evidence as the matrix modal.
   def respond_block(request)
-    div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 space-y-3") do
-      form_with(url: respond_evidence_request_path(request), method: :post, scope: :evidence_request, class: "space-y-2") do |f|
-        f.select(:evidence_type, EvidenceItem::EVIDENCE_TYPES.map { |t| [ t.humanize, t ] }, { selected: "peer_feedback" },
-                 class: "w-full rounded-md border-gray-300 text-sm", aria: { label: "Evidence type" })
-        f.text_area(:content, rows: 3, required: true, placeholder: "Describe what you observed…",
-                    class: "w-full rounded-md border-gray-300 text-sm", aria: { label: "Evidence" })
-        f.submit("Provide evidence",
-                 class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer")
+    div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3") do
+      form_with(url: respond_evidence_request_path(request), method: :post, class: "space-y-3",
+                data: { controller: "evidence-response" }) do
+        type_field
+        custom_label_field
+        title_field
+        content_field
+        external_reference_fields
+        button(
+          type: "submit",
+          class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer"
+        ) { "Provide evidence" }
       end
-      form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "flex items-center gap-2") do |f|
-        f.text_field(:reason, placeholder: "Reason (optional)",
-                     class: "flex-1 rounded-md border-gray-300 text-sm", aria: { label: "Decline reason" })
-        f.submit("Decline",
-                 class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
+      decline_form(request)
+    end
+  end
+
+  def type_field
+    div do
+      label(for: "evidence-type", class: FIELD_LABEL_CLASSES) { "Type" }
+      select(
+        id: "evidence-type", name: "evidence_request[evidence_type]", class: INPUT_CLASSES,
+        data: { evidence_response_target: "typeSelect", action: "change->evidence-response#typeChanged" }
+      ) do
+        Views::Assessments::Evidence::Form::TYPE_OPTIONS.each do |text, value|
+          option(value: value, selected: value == "peer_feedback") { text }
+        end
       end
+    end
+  end
+
+  def custom_label_field
+    div(class: "hidden", data: { evidence_response_target: "customLabel" }) do
+      label(for: "evidence-custom-label", class: FIELD_LABEL_CLASSES) { "Describe the type" }
+      input(id: "evidence-custom-label", type: "text", name: "evidence_request[custom_type_label]", maxlength: 60, class: INPUT_CLASSES)
+    end
+  end
+
+  def title_field
+    div do
+      label(for: "evidence-title", class: FIELD_LABEL_CLASSES) { "Title (optional)" }
+      input(id: "evidence-title", type: "text", name: "evidence_request[title]", maxlength: 120, class: INPUT_CLASSES)
+    end
+  end
+
+  def content_field
+    div do
+      label(for: "evidence-content", class: FIELD_LABEL_CLASSES) { "What happened?" }
+      textarea(id: "evidence-content", name: "evidence_request[content]", rows: 3, required: true,
+               placeholder: "Describe what you observed…", class: INPUT_CLASSES) { "" }
+    end
+  end
+
+  def external_reference_fields
+    div(class: "grid grid-cols-2 gap-2") do
+      div do
+        label(for: "evidence-ref-system", class: FIELD_LABEL_CLASSES) { "Link to (optional)" }
+        select(id: "evidence-ref-system", name: "evidence_request[external_reference][system]", class: INPUT_CLASSES) do
+          Views::Assessments::Evidence::Form::SYSTEM_OPTIONS.each do |text, value|
+            option(value: value) { text }
+          end
+        end
+      end
+      div do
+        label(for: "evidence-ref-url", class: FIELD_LABEL_CLASSES) { "URL" }
+        input(id: "evidence-ref-url", type: "url", name: "evidence_request[external_reference][url]",
+              placeholder: "https://", class: INPUT_CLASSES)
+      end
+    end
+  end
+
+  def decline_form(request)
+    form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "flex items-center gap-2") do |f|
+      f.text_field(:reason, placeholder: "Reason (optional)",
+                   class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm", aria: { label: "Decline reason" })
+      f.submit("Decline",
+               class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
     end
   end
 
