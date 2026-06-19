@@ -94,7 +94,7 @@ class Frameworks::CapabilityBindingsController < ApplicationController
       capability: @capability,
       roles_by_id: roles_by_id,
       error: error
-    ), layout: false
+    ), layout: false, status: (error.present? ? :unprocessable_content : :ok)
   end
 
   # Resolve the capability from the explorer graph (incl. draft-added), scoped to

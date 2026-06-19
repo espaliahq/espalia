@@ -81,7 +81,7 @@ class Frameworks::CapabilityBindingsControllerTest < ActionDispatch::Integration
       post framework_capability_bindings_path(framework_id: @framework_id),
            params: { binding: { capability_id: @cap_id, role_id: @role_a } }
 
-      assert_response :success
+      assert_response :unprocessable_content
       assert_match(/already bound/i, response.body)
     end
   end
