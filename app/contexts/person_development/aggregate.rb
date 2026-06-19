@@ -44,6 +44,7 @@ class PersonDevelopment::Aggregate
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     @aligned_ratings = {} # [stable_id, level_ordinal] => frequency
     @evidence = {}       # evidence_id => { links: Set[[capability_stable_id, level_ordinal], ...], status: }
+    @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
@@ -785,6 +786,81 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # ── Evidence requests ──
+  #
+  # A cell-scoped ask for peer evidence. The requester is the assessee or
+  # someone in their manager chain (enforced by policy); the requestee is any
+  # other person. Lifecycle: pending → responded | declined | cancelled.
+
+  # Ask a colleague for evidence about a specific (capability, level) cell.
+  #
+  # @param request_id [String] UUID v7 minted at command time
+  # @param requested_by_id [String] Person making the request
+  # @param requestee_person_id [String] Person being asked
+  # @param capability_stable_id [String] stable UUID of the capability
+  # @param level_ordinal [Integer] the level the evidence is about
+  # @param message [String, nil] optional note to the requestee
+  # @param due_at [String, nil] optional ISO8601 due date
+  # @raise [CommandError] if not assigned, id exists, or requestee is the assessee
+  def request_evidence(request_id, requested_by_id:, requestee_person_id:, capability_stable_id:,
+                       level_ordinal:, message: nil, due_at: nil)
+    ensure_assigned!
+    raise CommandError, "Evidence request ID already exists" if @evidence_requests.key?(request_id)
+    raise CommandError, "Cannot request evidence from the assessee" if requestee_person_id == @person_id
+
+    apply(PersonDevelopment::Events::EvidenceRequested.new(data: {
+      request_id: request_id,
+      requested_by_id: requested_by_id,
+      requestee_person_id: requestee_person_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      message: message,
+      due_at: due_at
+    }))
+  end
+
+  # Fulfil a pending request by linking the evidence the requestee provided.
+  #
+  # @param request_id [String]
+  # @param evidence_id [String] the EvidenceRecorded item provided in response
+  # @param responded_by_id [String] the requestee
+  # @raise [CommandError] if not assigned, request unknown, or not pending
+  def respond_to_evidence_request(request_id, evidence_id:, responded_by_id:)
+    state = pending_request!(request_id)
+
+    apply(PersonDevelopment::Events::EvidenceRequestResponded.new(data: {
+      request_id: request_id,
+      evidence_id: evidence_id,
+      responded_by_id: responded_by_id
+    }))
+    state
+  end
+
+  # Decline a pending request, optionally with a reason.
+  #
+  # @raise [CommandError] if not assigned, request unknown, or not pending
+  def decline_evidence_request(request_id, declined_by_id:, reason: nil)
+    pending_request!(request_id)
+
+    apply(PersonDevelopment::Events::EvidenceRequestDeclined.new(data: {
+      request_id: request_id,
+      declined_by_id: declined_by_id,
+      reason: reason
+    }))
+  end
+
+  # Cancel a still-pending request (requester or admin).
+  #
+  # @raise [CommandError] if not assigned, request unknown, or not pending
+  def cancel_evidence_request(request_id, cancelled_by_id:)
+    pending_request!(request_id)
+
+    apply(PersonDevelopment::Events::EvidenceRequestCancelled.new(data: {
+      request_id: request_id,
+      cancelled_by_id: cancelled_by_id
+    }))
+  end
+
   # ── Comments ──
   #
   # Comments are informal-conversation context. They do not feed scoring
@@ -903,6 +979,19 @@ class PersonDevelopment::Aggregate
 
   def ensure_assigned!
     raise "Person not yet assigned to a framework" unless @assigned
+  end
+
+  # Fetch an evidence request that must exist and still be pending.
+  #
+  # @return [Hash] the request's in-memory state
+  # @raise [CommandError]
+  def pending_request!(request_id)
+    ensure_assigned!
+    state = @evidence_requests[request_id]
+    raise CommandError, "No evidence request with id #{request_id}" unless state
+    raise CommandError, "Evidence request is not pending" unless state[:status] == "pending"
+
+    state
   end
 
   def ensure_in_cycle!(expected_cycle_id)
@@ -1121,6 +1210,30 @@ class PersonDevelopment::Aggregate
   # does not track. Handler is declared so the event has a registered
   # applier on the aggregate.
   on PersonDevelopment::Events::EvidenceUpdated do |_event|
+  end
+
+  on PersonDevelopment::Events::EvidenceRequested do |event|
+    @evidence_requests[event.data[:request_id]] = {
+      status: "pending",
+      requestee_person_id: event.data[:requestee_person_id],
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal]
+    }
+  end
+
+  on PersonDevelopment::Events::EvidenceRequestResponded do |event|
+    state = @evidence_requests[event.data[:request_id]]
+    state[:status] = "responded" if state
+  end
+
+  on PersonDevelopment::Events::EvidenceRequestDeclined do |event|
+    state = @evidence_requests[event.data[:request_id]]
+    state[:status] = "declined" if state
+  end
+
+  on PersonDevelopment::Events::EvidenceRequestCancelled do |event|
+    state = @evidence_requests[event.data[:request_id]]
+    state[:status] = "cancelled" if state
   end
 
   on PersonDevelopment::Events::CommentPosted do |event|

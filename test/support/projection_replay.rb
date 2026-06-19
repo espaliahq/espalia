@@ -43,6 +43,12 @@ module ProjectionReplayHelpers
           person_development_comments: rows(PersonDevelopmentComment, stable_id: true)
         }
 
+      when "PersonDevelopment::Projections::EvidenceRequests"
+        {
+          # PK is the event-carried request_id — assert it survives reset! + replay.
+          evidence_requests: rows(EvidenceRequest, stable_id: true)
+        }
+
       when "PersonDevelopment::Projections::AssessmentAuthority"
         {
           recorded_reporting_managers:    rows(RecordedReportingManager),

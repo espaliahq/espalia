@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_19_000200) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_19_000300) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -179,6 +179,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_19_000200) do
     t.index ["evidence_id"], name: "index_evidence_links_on_evidence_id"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal", "link_status"], name: "idx_evidence_links_anchor"
     t.index ["tenant_id"], name: "index_evidence_links_on_tenant_id"
+  end
+
+  create_table "evidence_requests", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "cancelled_at"
+    t.uuid "capability_stable_id", null: false
+    t.datetime "created_at", null: false
+    t.text "decline_reason"
+    t.datetime "declined_at"
+    t.datetime "due_at"
+    t.uuid "evidence_id"
+    t.uuid "framework_id", null: false
+    t.integer "level_ordinal", null: false
+    t.text "message"
+    t.uuid "person_id", null: false
+    t.datetime "requested_at", null: false
+    t.uuid "requested_by_id", null: false
+    t.uuid "requestee_person_id", null: false
+    t.datetime "responded_at"
+    t.string "status", default: "pending", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id", "framework_id"], name: "index_evidence_requests_on_person_id_and_framework_id"
+    t.index ["requested_by_id"], name: "index_evidence_requests_on_requested_by_id"
+    t.index ["requestee_person_id"], name: "index_evidence_requests_on_requestee_person_id"
+    t.index ["status"], name: "index_evidence_requests_on_status"
+    t.index ["tenant_id"], name: "index_evidence_requests_on_tenant_id"
   end
 
   create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
@@ -636,6 +662,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_19_000200) do
   add_foreign_key "evidence_links", "people", column: "linked_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "people", column: "removed_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "tenants"
+  add_foreign_key "evidence_requests", "people", column: "requested_by_id", on_delete: :cascade
+  add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
+  add_foreign_key "evidence_requests", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"

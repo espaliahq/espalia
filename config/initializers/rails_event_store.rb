@@ -40,6 +40,11 @@ Rails.configuration.to_prepare do
   )
 
   event_store.subscribe(
+    PersonDevelopment::Projections::EvidenceRequests.new,
+    to: PersonDevelopment::Projections::EvidenceRequests.handled_events
+  )
+
+  event_store.subscribe(
     PersonDevelopment::Projections::CommentThread.new,
     to: PersonDevelopment::Projections::CommentThread.handled_events
   )

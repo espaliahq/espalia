@@ -568,6 +568,61 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Asks a colleague for evidence about a specific (capability, level) cell.
+  #
+  # @param person_id [String] the assessee
+  # @param framework_id [String]
+  # @param request_id [String] UUID v7 minted at command time
+  # @param requested_by_id [String] Person making the request
+  # @param requestee_person_id [String] Person being asked
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @param message [String, nil]
+  # @param due_at [String, nil]
+  def request_evidence(person_id, framework_id, request_id,
+                       requested_by_id:, requestee_person_id:, capability_stable_id:,
+                       level_ordinal:, message: nil, due_at: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.request_evidence(request_id,
+        requested_by_id: requested_by_id, requestee_person_id: requestee_person_id,
+        capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
+        message: message, due_at: due_at)
+    end
+  end
+
+  # Fulfils a pending evidence request by linking the evidence provided.
+  #
+  # @param evidence_id [String] the EvidenceRecorded item (source "peer")
+  # @param responded_by_id [String] the requestee
+  def respond_to_evidence_request(person_id, framework_id, request_id,
+                                  evidence_id:, responded_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.respond_to_evidence_request(request_id,
+        evidence_id: evidence_id, responded_by_id: responded_by_id)
+    end
+  end
+
+  # Declines a pending evidence request.
+  #
+  # @param declined_by_id [String] the requestee
+  # @param reason [String, nil]
+  def decline_evidence_request(person_id, framework_id, request_id,
+                               declined_by_id:, reason: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.decline_evidence_request(request_id,
+        declined_by_id: declined_by_id, reason: reason)
+    end
+  end
+
+  # Cancels a still-pending evidence request (requester or admin).
+  #
+  # @param cancelled_by_id [String]
+  def cancel_evidence_request(person_id, framework_id, request_id, cancelled_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.cancel_evidence_request(request_id, cancelled_by_id: cancelled_by_id)
+    end
+  end
+
   # Posts a new comment on the person's development stream.
   #
   # Caller supplies the comment_id (UUID v7) so the controller can
