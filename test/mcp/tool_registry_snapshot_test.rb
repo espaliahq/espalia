@@ -80,6 +80,23 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_cancel_evidence_request",
+        "description" => "Cancel a pending evidence request you created.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "request_id" => { "type" => "string" }
+          },
+          "required" => %w[request_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_capability_get",
         "description" => "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned). Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {
@@ -116,6 +133,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => true,
           "destructiveHint" => false,
           "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_decline_evidence_request",
+        "description" => "Decline a pending evidence request.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "request_id" => { "type" => "string" },
+            "reason"     => { "type" => "string" }
+          },
+          "required" => %w[request_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
         }
       },
       {
@@ -189,6 +224,23 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "level_ordinal"        => { "type" => "integer" }
           },
           "required" => %w[assignment_id capability_stable_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_evidence_requests_list",
+        "description" => "List evidence requests addressed to you (incoming) and ones you've made (outgoing).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "status" => { "type" => "string", "enum" => %w[pending responded declined cancelled] }
+          },
+          "required" => [],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -349,6 +401,50 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "reason"               => { "type" => "string" }
           },
           "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_request_evidence",
+        "description" => "Ask a colleague to provide evidence for a capability × level on an assessment.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "requestee_person_id"  => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "message"              => { "type" => "string" },
+            "due_at"               => { "type" => "string" }
+          },
+          "required" => %w[assignment_id requestee_person_id capability_stable_id level_ordinal],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_respond_to_evidence_request",
+        "description" => "Respond to an evidence request by providing the requested evidence.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "request_id"         => { "type" => "string" },
+            "evidence_type"      => { "type" => "string", "enum" => %w[peer_feedback project_outcome code_review design_review customer_feedback incident_response presentation mentoring observation other] },
+            "content"            => { "type" => "string" },
+            "custom_type_label"  => { "type" => "string" },
+            "title"              => { "type" => "string" },
+            "external_reference" => { "type" => "object" }
+          },
+          "required" => %w[request_id evidence_type content],
           "additionalProperties" => false
         },
         "annotations" => {
