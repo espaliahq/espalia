@@ -23,6 +23,12 @@ Rails.configuration.to_prepare do
     ),
   )
 
+  # Publish the store before subscribing. Async handlers `prepend
+  # RailsEventStore::AsyncHandler`, whose load-time hook reads
+  # `Rails.configuration.event_store` — so it must be set before the
+  # subscribe lines autoload those handler classes.
+  Rails.configuration.event_store = event_store
+
   # ── Synchronous projections (same transaction) ──
   event_store.subscribe(
     Frameworks::Projections::PublishedState.new,
@@ -104,12 +110,10 @@ Rails.configuration.to_prepare do
   )
 
   # ── Async handlers (via SolidQueue) ──
-  # Subscriptions will be added here as integrations are implemented.
-  # Example:
-  #   event_store.subscribe(
-  #     Integrations::Notifications::AssessmentNotifier,
-  #     to: [PersonDevelopment::Events::SelfRated]
-  #   )
-
-  Rails.configuration.event_store = event_store
+  # Side-effect handlers (notifications). NOT projections — never register
+  # these in Projections::Registry (replaying would re-send notifications).
+  event_store.subscribe(
+    PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier,
+    to: PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier.handled_events
+  )
 end
