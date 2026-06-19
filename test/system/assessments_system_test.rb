@@ -768,6 +768,37 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_in_delta scroll_before, scroll_after, 150,
         "Scroll should remain stable when rating (was #{scroll_before}, now #{scroll_after})"
     end
+
+    # Regression guard for the hero-collapse "shake": the band collapses on
+    # scroll via a scroll-driven animation while it lives inside the in-flow
+    # sticky header, which couples scroll position to the animation (via
+    # browser scroll-anchoring AND scroll-range clamping on short pages) and
+    # makes the band jitter near full visibility. The fix lives on
+    # `.assessment-scroll-root` — `overflow-anchor: none` plus a `min-height`
+    # floor — gated on scroll-driven-animation support. See
+    # app/assets/tailwind/application.css and docs/guidelines/assessments.md.
+    should "apply the anti-shake CSS to the assessment scroll root" do
+      rate_to_unlock_hero
+      visit assessment_path(@assignment)
+      assert_selector ".assessment-scroll-root"
+      # The collapsible band only exists once coverage unlocks the scoring hero.
+      assert_selector ".hero-collapsible", visible: :all
+
+      anchor = page.evaluate_script(
+        "getComputedStyle(document.querySelector('.assessment-scroll-root')).overflowAnchor"
+      )
+      min_h = page.evaluate_script(
+        "parseFloat(getComputedStyle(document.querySelector('.assessment-scroll-root')).minHeight)"
+      )
+      inner_h = page.evaluate_script("window.innerHeight")
+
+      assert_equal "none", anchor,
+        "scroll anchoring must be disabled so the collapsing band can't re-drive scroll"
+      # Floor = collapse range (240px) + headroom for the band height, on top
+      # of the viewport — so a short page's scroll length stays clamp-free.
+      assert_operator min_h, :>=, inner_h + 240,
+        "min-height floor (#{min_h}px) must exceed the viewport by at least the 240px collapse range"
+    end
   end
 
   context "responsive layout" do

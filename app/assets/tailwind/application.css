@@ -116,6 +116,46 @@
       opacity: 0;
     }
   }
+
+  /* Assessment page scroll root — kills the hero-collapse "shake".
+   *
+   * The `.hero-collapsible` band above collapses on scroll, and it lives
+   * inside the unified sticky header which is in normal document flow at
+   * the top of the page. So as the band collapses, the header's flow box
+   * shrinks *above the fold*. That couples scroll position to the
+   * animation in two distinct ways, each producing a visible jitter when
+   * the band is near (but not at) full visibility — i.e. when the resting
+   * scroll lands inside the 0–240px collapse range:
+   *
+   *  1. Scroll anchoring. The browser, by default, nudges `scrollTop` to
+   *     keep below-fold content visually stable when content above it
+   *     resizes — re-driving the scroll-linked animation, which resizes
+   *     the header again. `overflow-anchor: none` opts this subtree out
+   *     of anchoring so the band collapses purely as a function of
+   *     genuine user scroll.
+   *
+   *  2. Scroll-range clamping (the "sometimes" / short-page case). On a
+   *     marginally-scrollable page the collapse shrinks the document
+   *     below `scrollTop`, so the browser hard-clamps the scroll down,
+   *     which re-expands the band, which restores the scroll length… a
+   *     sustained 1px limit cycle. Clamping is a hard constraint that
+   *     `overflow-anchor` can't suppress. The `min-height` floor fixes it
+   *     deterministically: when the page is short, the collapse is
+   *     absorbed by the floor instead of shrinking the document, so the
+   *     scroll length stays constant and never clamps. The floor is the
+   *     collapse range (240px) plus headroom for the band's own height so
+   *     it binds across the whole danger zone; on a normal (tall) matrix
+   *     it's a no-op. `svh` slightly over-reserves vs the navbar offset —
+   *     deliberately, for margin.
+   *
+   * Both are scoped here and gated on scroll-driven-animation support, so
+   * they only apply where the collapse (and thus the loop) actually runs.
+   * Verified in-browser: before, a held scroll position oscillates the
+   * band height; after, every position holds a single stable height. */
+  .assessment-scroll-root {
+    overflow-anchor: none;
+    min-height: calc(100svh + 360px);
+  }
 }
 
 /*

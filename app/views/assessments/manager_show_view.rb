@@ -94,7 +94,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   # ── Layout ──
 
   def assessment_layout
-    div(data: { controller: "assessment-sync" }) do
+    div(class: "assessment-scroll-root", data: { controller: "assessment-sync" }) do
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
           data: { assessment_sync_target: "signal" }) { }
