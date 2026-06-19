@@ -175,10 +175,16 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
   end
 
   context "binding lifecycle" do
-    should "anchor binding_added to its capability + category, actor from metadata" do
+    setup do
+      @role_family = create(:framework_role_family, framework_id: @fwid, tenant: @tenant)
+      @role = create(:framework_role, role_family_id: @role_family.role_family_id, tenant: @tenant,
+        name: "Engineering Manager", code: "EM")
+    end
+
+    should "anchor binding_added to its capability + category, with role + weight, actor from metadata" do
       append(Frameworks::Events::CapabilityRoleBindingCreated,
         data: { binding_id: SecureRandom.uuid_v7, capability_id: @cap.capability_id,
-                role_id: SecureRandom.uuid_v7, weight: 1.0, individual_tolerance: nil },
+                role_id: @role.role_id, weight: 2.5, individual_tolerance: nil },
         actor_id: @actor.id)
 
       entry = entries.find { |e| e.kind == "binding_added" }
@@ -187,13 +193,15 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal @cat.category_id, entry.category_id
       assert_equal "Ada Author", entry.actor_name
       assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+      assert_equal "EM · Engineering Manager", entry.payload[:binding_role_label]
+      assert_equal 2.5, entry.payload[:binding_weight].to_f
     end
 
-    should "anchor binding_updated to the capability of the created binding in the window" do
+    should "anchor binding_updated to the capability + role, surfacing the changed weight" do
       bid = SecureRandom.uuid_v7
       append(Frameworks::Events::CapabilityRoleBindingCreated,
         data: { binding_id: bid, capability_id: @cap.capability_id,
-                role_id: SecureRandom.uuid_v7, weight: 1.0 })
+                role_id: @role.role_id, weight: 1.0 })
       append(Frameworks::Events::CapabilityRoleBindingUpdated,
         data: { binding_id: bid, weight: 2.0 }, actor_id: @actor.id)
 
@@ -201,18 +209,21 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert entry
       assert_equal @cap.capability_id, entry.capability_id
       assert_equal @cat.category_id, entry.category_id
+      assert_equal "EM · Engineering Manager", entry.payload[:binding_role_label]
+      assert_equal 2.0, entry.payload[:binding_weight].to_f
     end
 
-    should "anchor binding_removed via the created event still in the window" do
+    should "anchor binding_removed via the created event still in the window, naming the role" do
       bid = SecureRandom.uuid_v7
       append(Frameworks::Events::CapabilityRoleBindingCreated,
         data: { binding_id: bid, capability_id: @cap.capability_id,
-                role_id: SecureRandom.uuid_v7, weight: 1.0 })
+                role_id: @role.role_id, weight: 1.0 })
       append(Frameworks::Events::CapabilityRoleBindingRemoved, data: { binding_id: bid })
 
       entry = entries.find { |e| e.kind == "binding_removed" }
       assert entry
       assert_equal @cap.capability_id, entry.capability_id
+      assert_equal "EM · Engineering Manager", entry.payload[:binding_role_label]
     end
 
     should "fall back to a framework-level anchor when the binding can't be resolved" do

@@ -276,9 +276,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "category_added"      then "Added a category"
     when "category_archived"   then "Archived a category"
     when "category_updated"    then "Updated a category"
-    when "binding_added"       then "Bound a capability to a role"
-    when "binding_updated"     then "Updated a capability-role binding"
-    when "binding_removed"     then "Removed a capability-role binding"
+    when "binding_added"       then binding_role ? "Bound to #{binding_role}" : "Bound a capability to a role"
+    when "binding_updated"     then binding_role ? "Updated the #{binding_role} binding" : "Updated a capability-role binding"
+    when "binding_removed"     then binding_role ? "Unbound #{binding_role}" : "Removed a capability-role binding"
     when "expectation_updated" then "Updated an expectation"
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"
@@ -336,7 +336,35 @@ class Views::Frameworks::Activity::Entry < Views::Base
       payload_value(:new_description)
     when "migration_mapping_defined"
       payload_value(:reason)
+    when "binding_added", "binding_updated"
+      binding_change_text
     end.to_s.strip.presence
+  end
+
+  # The role this binding entry concerns (e.g. "EM · Engineering Manager"), or
+  # nil when it couldn't be resolved (binding created before the read window).
+  def binding_role
+    payload_value(:binding_role_label).to_s.strip.presence
+  end
+
+  # The scoring levers the add/update carried — weight and/or individual
+  # tolerance. For an update the payload only carries the levers that actually
+  # changed, so this reads as "what changed". Tolerance 0 means mandatory.
+  def binding_change_text
+    parts = []
+    weight = payload_value(:binding_weight)
+    tolerance = payload_value(:binding_individual_tolerance)
+    parts << "Weight #{format_lever(weight)}" unless weight.nil?
+    parts << "Tolerance #{tolerance_label(tolerance)}" unless tolerance.nil?
+    parts.join(" · ")
+  end
+
+  def format_lever(value)
+    "%g" % value.to_f
+  end
+
+  def tolerance_label(value)
+    value.to_f.zero? ? "0 (mandatory)" : format_lever(value)
   end
 
   def payload_value(key)
