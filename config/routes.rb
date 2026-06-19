@@ -106,6 +106,15 @@ Rails.application.routes.draw do
     end
   end
 
+  # Evidence-request hub — incoming (respond/decline) and outgoing (cancel).
+  get "evidence", to: "evidence_hub#show", as: :evidence_hub
+  resources :evidence_requests, only: [ :create, :destroy ] do
+    member do
+      post :respond
+      post :decline
+    end
+  end
+
   # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
