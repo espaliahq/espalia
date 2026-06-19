@@ -146,6 +146,7 @@ Two practical notes:
 
 1. **`grid-template-rows: 1fr → 0fr` rather than `max-height`.** Animating max-height + padding-block inside the unified sticky header was triggering a re-layout feedback loop mid-scroll (visible as a flicker between hidden and visible). The grid-row approach owns the row's height locally, no cascade.
 2. **Two-layer wrapper** so the grid item can shrink to 0 without the inner padding forcing a minimum row height. `.hero-collapsible` is `display: grid` with `overflow: hidden`; the grid item is a plain `<div>` (no padding); padding lives on a deeper `<div class="px-5 pb-5">`. When the row collapses to `0fr`, the padded child overflows and is clipped.
+3. **Anti-shake guard on the scroll root.** The collapsing band lives inside the in-flow sticky header, so its collapse shrinks layout *above the fold* — which couples scroll position back into the scroll-driven animation and makes the band jitter near full visibility (see Hard-Won Lesson 16). The page's scroll-root wrapper carries `class="assessment-scroll-root"`, which (gated on scroll-driven-animation support) sets `overflow-anchor: none` + a `min-height` floor to break both feedback loops. Both show/manager views apply it; see `app/assets/tailwind/application.css`.
 
 Browser support for `animation-timeline: scroll()` was at ~94% globally as of 2026 (Chrome/Edge 115+, Safari 26+, Firefox 137+). Browsers without it silently keep the middle band fully expanded — functional, just static.
 
@@ -641,6 +642,16 @@ The original picker iterated `_intersectingCards`, a `Set` maintained by the `In
 
 The picker's "don't override" check originally only honoured `cell` / `capability` focus on the same card — `category` always fell through and got rewritten to `capability` focus on whatever card was the area winner. That meant a deliberate chip click would persist for the suppression window, then silently downgrade the moment a single scroll event landed past the renew timer. Fix: track external category dispatches with a `_categoryFocusFromExternal` sticky flag (set in `#onExternalFocusChange` when `detail.level === "category"`, cleared in `#setFocus` whenever the new level is anything else). The picker checks the flag the same way it checks for same-card cell/capability focus. Initial default category focus from `#dispatchInitialFocus` doesn't set the flag, so the first user scroll on a fresh page still narrows to capability focus as expected — only chip-set category focus is sticky.
 
+### 16. A scroll-driven animation that resizes an in-flow element shakes — two couplings, two fixes
+
+The hero middle band collapses via `animation-timeline: scroll(root)`, and the band sits inside the **unified sticky header, which is in normal document flow** at the top of the page. So as the band collapses, the header's flow box shrinks *above the fold* — and that couples scroll position back into the scroll-linked animation in **two independent ways**, each producing a visible "shake" of the band when the resting scroll lands inside the 0–240px collapse range ("close to full visibility but not quite"):
+
+1. **Scroll anchoring** (fires on *any* page during active scroll). The browser, by default, nudges `scrollTop` to keep below-fold content visually stable when content above it resizes. The header shrinking triggers that nudge → re-drives the animation → resizes the header → … Fix: `overflow-anchor: none` on the page's scroll-root subtree, so the band collapses purely as a function of genuine user scroll.
+
+2. **Scroll-range clamping** (the "sometimes" / short-page case). On a marginally-scrollable page the collapse shrinks the document below `scrollTop`, so the browser **hard-clamps** the scroll down, which re-expands the band, which restores the scroll length — a sustained ~1px limit cycle. Clamping is a hard constraint `overflow-anchor` can't suppress. Fix: a `min-height` floor (collapse range + band-height headroom, on top of the viewport) on the same scroll-root — on a short page the collapse is absorbed by the floor instead of shrinking the document, so the scroll length stays constant and never clamps; on a normal (tall) matrix it's a no-op.
+
+Both live on `.assessment-scroll-root` (the `assessment-sync` wrapper in `show_view.rb` / `manager_show_view.rb`), gated inside `@supports (animation-timeline: scroll())` so they only apply where the collapse — and thus the loop — actually runs. The trap is assuming `overflow-anchor: none` alone fixes it: it kills the anchor loop but not the clamp loop, which is the one the bug report ("shakes near full visibility, sometimes") actually describes. Verified in-browser: before, a held scroll position oscillates the band through several heights; after, every position holds a single stable height. Regression-guarded by `assessments_system_test.rb` → "apply the anti-shake CSS to the assessment scroll root".
+
 ## Performance state machine
 
 Defined in `PersonDevelopment::Scoring#performance_state`. See [scoring-model.md](../architecture/scoring-model.md) for the canonical definition. Summary:
@@ -727,7 +738,7 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/Esc; opt-in outside-click dismissal (`dismissOnOutsideClick`, default off); dispatches `modal:open` |
 | `app/javascript/controllers/evidence_form_controller.js` | Evidence prefill companion to `modal` (visibility lives in `modal`) |
 | **CSS** | |
-| `app/assets/tailwind/application.css` | `.hero-collapsible` scroll-driven animation (`animation-timeline: scroll(root)`) |
+| `app/assets/tailwind/application.css` | `.hero-collapsible` scroll-driven animation (`animation-timeline: scroll(root)`) + `.assessment-scroll-root` anti-shake guard (`overflow-anchor: none` + `min-height` floor — Hard-Won Lesson 16) |
 | **Tests** | |
 | `test/system/assessments_system_test.rb` | Self-assessment system tests |
 | `test/system/manager_assessments_system_test.rb` | Manager assessment system tests |
