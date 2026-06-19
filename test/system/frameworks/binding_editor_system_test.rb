@@ -1,0 +1,115 @@
+# frozen_string_literal: true
+
+require "application_system_test_case"
+
+# The "Edit roles" binding editor — row-actions kebab → shared modal whose
+# Turbo Frame body lists a capability's role bindings and lets an edit-rights
+# holder add / remove them in place. Re-scoping (add/remove) is the editor's
+# headline; weight editing is covered at the controller/operation layer.
+class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
+  DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE  = [ 375, 812 ].freeze
+
+  setup do
+    @tenant = FactoryBot.create(:tenant)
+    @admin_user = FactoryBot.create(:user, password: "password123")
+
+    ActsAsTenant.with_tenant(@tenant) do
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
+
+      handler = Frameworks::CommandHandler.new
+      @framework_id = SecureRandom.uuid_v7
+      rfid = SecureRandom.uuid_v7
+      @role_e = SecureRandom.uuid_v7
+      @role_em = SecureRandom.uuid_v7
+      cat_id = SecureRandom.uuid_v7
+      cap_id = SecureRandom.uuid_v7
+
+      handler.create_framework(@framework_id, "Test Framework")
+      handler.add_role_family(@framework_id, rfid, "Engineering")
+      handler.add_role(@framework_id, @role_e, rfid, "Software Engineer", "E", "ic")
+      handler.add_role(@framework_id, @role_em, rfid, "Engineering Manager", "EM", "management")
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, @role_e, 1, "Engineer I", "E1", is_entry: true)
+      handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
+      handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, @role_e)
+      handler.publish_version(@framework_id, "test")
+    end
+  end
+
+  # JS-click the hover-revealed kebab + the "Edit roles…" item (Selenium pointer
+  # clicks on the opacity-0 control flake on starved CI), then wait for the
+  # modal's Turbo Frame to load.
+  def open_binding_editor(size: DESKTOP_SIZE)
+    page.driver.browser.manage.window.resize_to(*size)
+    sign_in_as(@admin_user)
+    visit edit_framework_path(@framework_id)
+    wait_for_stimulus "matrix"
+
+    assert_selector "button[aria-label='Capability actions']", visible: :all
+    page.execute_script('document.querySelector("button[aria-label=\'Capability actions\']").click();')
+    assert_text "Edit roles…"
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("[role='menuitem']")]
+        .find((b) => b.textContent.trim().startsWith("Edit roles")).click();
+    JS
+
+    assert_selector "#binding-editor-modal", visible: true
+    assert_selector "turbo-frame#binding-editor", visible: true
+    assert_text "Engineering Manager" # the unbound role offered in the add select
+  end
+
+  context "as a tenant admin in edit mode" do
+    should "add a role binding, re-scoping the capability" do
+      open_binding_editor
+
+      within "#binding-editor" do
+        assert_text "Software Engineer" # already bound
+        select "EM · Engineering Manager", from: "Add a role"
+      end
+      click_button_with_js_fallback("Add role", expect_text: "Bound to every role.")
+
+      # Both roles bound now → the add select is gone, and the new binding shows
+      # the draft chip (add is shape-changing).
+      within "#binding-editor" do
+        assert_text "Bound to every role."
+        assert_text "New in draft"
+      end
+      assert_text(/draft/i) # the header draft pill — a draft was auto-opened
+    end
+
+    should "remove the only role binding, un-scoping the capability" do
+      open_binding_editor
+
+      within "#binding-editor" do
+        assert_text "Software Engineer"
+      end
+      # Submit the data-turbo-confirm Remove form via requestSubmit() (the
+      # documented JS-submit remedy for the flaky confirm-form click on starved
+      # CI — testing.md). auto_confirm stubs window.confirm so Turbo proceeds.
+      auto_confirm do
+        page.execute_script(
+          'document.querySelector("#binding-editor form[data-turbo-confirm]").requestSubmit();'
+        )
+      end
+
+      within "#binding-editor" do
+        assert_text "Not bound to any role yet."
+      end
+      assert_text(/draft/i)
+    end
+  end
+
+  context "as a tenant admin on a mobile viewport" do
+    should "open the binding editor from the kebab" do
+      open_binding_editor(size: MOBILE_SIZE)
+
+      # The modal + Turbo Frame body render identically on narrow — the kebab is
+      # JS-clicked, the modal is centered — so the editor is reachable on mobile.
+      within "#binding-editor" do
+        assert_text "Software Engineer"
+        assert_selector "select#binding-add-role"
+      end
+    end
+  end
+end

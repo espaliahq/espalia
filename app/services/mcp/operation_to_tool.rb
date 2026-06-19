@@ -17,6 +17,11 @@ class Mcp::OperationToTool
     String     => "string",
     Integer    => "integer",
     Float      => "number",
+    # JSON-RPC numbers arrive as Integer or Float depending on whether the
+    # client sent `1` or `1.0`. A decimal-valued parameter (e.g. a binding
+    # weight) declares its type as Numeric so both pass param validation; it
+    # advertises as a JSON Schema "number".
+    Numeric    => "number",
     TrueClass  => "boolean",
     FalseClass => "boolean",
     Hash       => "object",

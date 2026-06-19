@@ -86,6 +86,25 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def archive_category? = edit_structure?
 
+  # Edit a capability-role binding's weight / individual tolerance.
+  # Shape-preserving (applies live) but still a structural edit, so it sits
+  # on the edit-rights bar like the other binding/structure mutations.
+  #
+  # @return [Boolean]
+  def update_binding? = edit_structure?
+
+  # Bind a capability to a role (re-scope it). Shape-changing — auto-opens a
+  # draft — but on the same edit-rights bar as the other structural edits.
+  #
+  # @return [Boolean]
+  def add_binding? = edit_structure?
+
+  # Remove a capability-role binding (un-scope it from a role). Shape-changing,
+  # edit-rights bar.
+  #
+  # @return [Boolean]
+  def remove_binding? = edit_structure?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]

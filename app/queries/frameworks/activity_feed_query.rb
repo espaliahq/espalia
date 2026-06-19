@@ -58,6 +58,9 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::CapabilityCategoryAdded    => "category_added",
     Frameworks::Events::CapabilityCategoryArchived => "category_archived",
     Frameworks::Events::CapabilityCategoryUpdated  => "category_updated",
+    Frameworks::Events::CapabilityRoleBindingCreated => "binding_added",
+    Frameworks::Events::CapabilityRoleBindingUpdated => "binding_updated",
+    Frameworks::Events::CapabilityRoleBindingRemoved => "binding_removed",
     Frameworks::Events::BehaviouralExpectationUpdated => "expectation_updated",
     Frameworks::Events::RoleIllustrationAdded      => "illustration_added",
     Frameworks::Events::RoleIllustrationUpdated    => "illustration_updated",
@@ -74,6 +77,10 @@ class Frameworks::ActivityFeedQuery
     suggestion_edit suggestion_create suggestion_delete
     suggestion_amended suggestion_approved suggestion_rejected suggestion_withdrawn
   ].freeze
+
+  # Binding lifecycle kinds — their entries carry the role + scoring levers
+  # (weight / individual tolerance) folded into the payload by #binding_metadata.
+  BINDING_KINDS = %w[binding_added binding_updated binding_removed].freeze
 
   # Maps each feed kind to the payload key carrying its actor's Person id, when
   # the actor is a first-class payload fact. Kinds absent here fall back to
@@ -238,7 +245,24 @@ class Frameworks::ActivityFeedQuery
       meta = suggestion_meta[data[:suggestion_id]]
       extra.merge!(meta) if meta
     end
+    extra.merge!(binding_metadata(kind, data)) if BINDING_KINDS.include?(kind)
     extra
+  end
+
+  # Role label + the scoring levers a binding entry should surface — the role it
+  # concerns (resolved from the payload, or the binding index for update/remove)
+  # and the weight / individual tolerance carried by add & update payloads. An
+  # update payload is `.compact`ed by the aggregate, so a present key means that
+  # lever actually changed.
+  def binding_metadata(kind, data)
+    role_id = data[:role_id] || binding_index.dig(data[:binding_id], :role_id)
+    meta = {}
+    meta[:binding_role_label] = role_labels[role_id] if role_id && role_labels.key?(role_id)
+    return meta if kind == "binding_removed"
+
+    meta[:binding_weight] = data[:weight] unless data[:weight].nil?
+    meta[:binding_individual_tolerance] = data[:individual_tolerance] unless data[:individual_tolerance].nil?
+    meta
   end
 
   # ── Anchoring ──
@@ -258,6 +282,13 @@ class Frameworks::ActivityFeedQuery
       from_capability(data[:capability_id])
     when "category_added", "category_archived", "category_updated"
       { capability_id: nil, category_id: data[:category_id] }
+    when "binding_added"
+      from_capability(data[:capability_id])
+    when "binding_updated", "binding_removed"
+      # The update/remove payloads carry only the binding_id; resolve the
+      # capability via the binding index. A binding removed *and* published is
+      # gone from the read model, so anchoring may fall back to framework-level.
+      from_capability(binding_index.dig(data[:binding_id], :capability_id))
     when "expectation_updated"
       from_capability(expectation_to_capability[data[:expectation_id]])
     when "illustration_added"
@@ -400,6 +431,40 @@ class Frameworks::ActivityFeedQuery
     @illustration_to_expectation ||= all_capabilities
       .flat_map(&:expectations).flat_map(&:illustrations)
       .to_h { |i| [ i.illustration_id, i.expectation_id ] }
+  end
+
+  # {binding_id => { capability_id:, role_id: }}. Built from the read model
+  # (covers every binding still present — incl. ones updated live, or
+  # removed-but-not-yet-published) and supplemented from CapabilityRoleBindingCreated
+  # events in the read window (so a binding both created and removed-then-published
+  # within the window still resolves its capability + role). A binding created
+  # before the window and later removed falls back to a framework-level anchor and
+  # no role label — consistent with the recency model.
+  def binding_index
+    @binding_index ||= begin
+      cap_ids = all_capabilities.map(&:capability_id)
+      rows = cap_ids.empty? ? [] : FrameworkState::CapabilityRoleBinding
+        .where(capability_id: cap_ids).pluck(:binding_id, :capability_id, :role_id)
+      map = rows.to_h { |bid, cid, rid| [ bid, { capability_id: cid, role_id: rid } ] }
+      stream_events.each do |event|
+        next unless event.is_a?(Frameworks::Events::CapabilityRoleBindingCreated)
+
+        map[event.data[:binding_id]] ||= { capability_id: event.data[:capability_id],
+                                           role_id: event.data[:role_id] }
+      end
+      map
+    end
+  end
+
+  # {role_id => "CODE · Name"} for every role in the framework, so binding feed
+  # entries can name the role they bound / unbound / reweighted.
+  def role_labels
+    @role_labels ||= begin
+      family_ids = FrameworkState::RoleFamily.where(framework_id: @framework.framework_id).pluck(:role_family_id)
+      FrameworkState::Role.where(role_family_id: family_ids)
+        .pluck(:role_id, :code, :name)
+        .to_h { |rid, code, name| [ rid, [ code, name ].compact.join(" · ") ] }
+    end
   end
 
   def capability_name_for(capability_id)
