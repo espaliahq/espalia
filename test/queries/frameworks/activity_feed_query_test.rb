@@ -131,6 +131,46 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "suggestion create lifecycle" do
+    setup do
+      @create_sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: @create_sid,
+        target_entity_type: "behavioural_expectation", target_entity_id: nil,
+        parent_id: @cap.capability_id, kind: "create", author_id: @actor.id,
+        proposed_attributes: { "level_ordinal" => 2, "description" => "Anticipates risks" })
+    end
+
+    should "carry proposed_attributes so the feed can preview the proposed value" do
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: @create_sid, target_entity_type: "behavioural_expectation",
+                parent_id: @cap.capability_id, author_id: @actor.id,
+                proposed_attributes: { "level_ordinal" => 2, "description" => "Anticipates risks" } },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_create" }
+      assert entry
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal "Anticipates risks", entry.payload[:proposed_attributes]["description"]
+    end
+
+    should "flag the original create as superseded once amended, leaving the amendment live" do
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: @create_sid, target_entity_type: "behavioural_expectation",
+                parent_id: @cap.capability_id, author_id: @actor.id,
+                proposed_attributes: { "level_ordinal" => 2, "description" => "First" } },
+        actor_id: @actor.id)
+      append(Frameworks::Events::SuggestionAmended,
+        data: { suggestion_id: @create_sid, new_suggested_value: "Second", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      created = entries.find { |e| e.kind == "suggestion_create" }
+      amended = entries.find { |e| e.kind == "suggestion_amended" }
+      assert created.superseded, "the original create is superseded by the amendment"
+      assert_not amended.superseded, "the amendment stays live"
+    end
+  end
+
   context "structural & editorial" do
     should "anchor capability_archived to its capability + category, actor from metadata" do
       append(Frameworks::Events::CapabilityArchived,

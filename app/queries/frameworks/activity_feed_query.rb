@@ -34,8 +34,10 @@ class Frameworks::ActivityFeedQuery
 
   # Proposal events for one suggestion (the original edit + each amendment).
   # Only the most recent of these carries the approve/reject action — see
-  # #flag_superseded_proposals.
-  PROPOSAL_KINDS = %w[suggestion_edit suggestion_amended].freeze
+  # #flag_superseded_proposals. Includes the original create/delete/edit proposal
+  # plus each amendment, so amending a create supersedes the original proposal
+  # entry (only the latest, with the current value, stays actionable).
+  PROPOSAL_KINDS = %w[suggestion_edit suggestion_create suggestion_delete suggestion_amended].freeze
 
   # Event class → feed kind string. Drives both which events become feed
   # entries and the kind the view renders. Events not in this map (e.g.

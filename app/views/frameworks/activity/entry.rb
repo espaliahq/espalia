@@ -333,6 +333,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
     case @entry.kind
     when "suggestion_edit", "suggestion_amended"
       payload_value(:suggested_value) || payload_value(:new_suggested_value)
+    when "suggestion_create"
+      creation_preview
     when "suggestion_approved", "suggestion_rejected"
       payload_value(:comment)
     when "expectation_added"
@@ -382,5 +384,17 @@ class Views::Frameworks::Activity::Entry < Views::Base
     return nil unless @entry.payload.respond_to?(:[])
 
     @entry.payload[key] || @entry.payload[key.to_s]
+  end
+
+  # Preview of a create proposal's content — the first present of the entity's
+  # human-readable attributes, so the reviewer can see what's proposed rather
+  # than a bare "Proposed a new …".
+  CREATE_PREVIEW_KEYS = %i[description name title].freeze
+
+  def creation_preview
+    attrs = payload_value(:proposed_attributes)
+    return nil unless attrs.respond_to?(:[])
+
+    CREATE_PREVIEW_KEYS.filter_map { |k| attrs[k] || attrs[k.to_s] }.first
   end
 end
