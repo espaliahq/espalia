@@ -11,7 +11,9 @@ class Views::Notifications::Row < Views::Base
   def view_template
     a(
       href: notification_path(@notification),
-      data: { turbo_method: :patch },
+      # turbo_frame _top so a row inside the lazy bell frame drives a full-page
+      # navigation (mark read + go to target) rather than navigating the frame.
+      data: { turbo_method: :patch, turbo_frame: "_top" },
       class: row_classes
     ) do
       unread_dot

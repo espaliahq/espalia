@@ -11,6 +11,10 @@ class NotificationsController < ApplicationController
   # filter runs in Ruby, so we bound the working set.
   RECENT_LIMIT = 100
 
+  # How many notifications the bell dropdown previews (the full list lives on
+  # the inbox page).
+  BELL_LIMIT = 8
+
   # GET /notifications
   def index
     authorize Noticed::Notification, :index?, policy_class: NotificationPolicy
@@ -25,10 +29,14 @@ class NotificationsController < ApplicationController
     )
   end
 
-  # GET /notifications/bell — lazy Turbo Frame content for the navbar bell.
+  # GET /notifications/bell — lazy Turbo Frame content for the navbar bell:
+  # the unread count + a dropdown panel of the most recent notifications.
   def bell
     authorize Noticed::Notification, :bell?, policy_class: NotificationPolicy
-    render Views::Notifications::Bell.new(unread_count: surfaced_notifications.count(&:unread?))
+    render Views::Notifications::Bell.new(
+      notifications: surfaced_notifications.first(BELL_LIMIT),
+      unread_count: surfaced_notifications.count(&:unread?)
+    )
   end
 
   # PATCH /notifications/:id — mark one read, then go to its target surface.
@@ -52,24 +60,29 @@ class NotificationsController < ApplicationController
 
   # Recent notifications the user surfaces in-app, newest first.
   #
-  # Scoped to STI types whose notifier class is still defined: a removed,
-  # renamed, or otherwise unloadable notifier must never 500 the always-on
-  # navbar bell (ActiveRecord raises SubclassNotFound while materialising an
-  # unknown `type`). Such rows are simply omitted.
+  # Scoped to STI types whose class still resolves: a removed, renamed, or
+  # otherwise unloadable notifier must never 500 the always-on navbar bell
+  # (ActiveRecord raises SubclassNotFound while materialising an unknown
+  # `type`). Such rows are simply omitted.
   #
   # @return [Array<Noticed::Notification>]
   def surfaced_notifications
     @surfaced_notifications ||= current_user.notifications
-      .where(type: known_notification_types)
+      .where(type: loadable_notification_types)
       .includes(:event)
       .newest_first
       .limit(RECENT_LIMIT)
       .select(&:surfaced_in_app?)
   end
 
-  # @return [Array<String>] notification STI type names with a loadable notifier
-  def known_notification_types
-    ApplicationNotifier.descendants.map { |klass| "#{klass}::Notification" }
+  # STI type strings actually present for this user, kept only when the class
+  # resolves. Derived from the data (not ApplicationNotifier.descendants) so it
+  # is correct even when notifier classes haven't been eager-loaded — and
+  # `safe_constantize` triggers Zeitwerk to load them as a side effect.
+  #
+  # @return [Array<String>]
+  def loadable_notification_types
+    current_user.notifications.distinct.pluck(:type).select { |type| type.present? && type.safe_constantize }
   end
 
   def mark_seen(notifications)

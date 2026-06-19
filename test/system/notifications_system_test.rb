@@ -21,7 +21,7 @@ class NotificationsSystemTest < ApplicationSystemTestCase
 
   should "show the bell with no badge when there are no notifications" do
     visit root_path
-    assert_selector "turbo-frame#notification-bell a[aria-label='Notifications']"
+    assert_selector "turbo-frame#notification-bell button[aria-label='Notifications']"
     assert_no_selector "turbo-frame#notification-bell span", text: /\d/
   end
 
@@ -39,7 +39,7 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     # Reading the notification (click navigates to its target) clears the badge.
     visit notifications_path
     find("a", text: "Test: Peer feedback").click
-    assert_selector "turbo-frame#notification-bell a[aria-label='Notifications']"
+    assert_selector "turbo-frame#notification-bell button[aria-label='Notifications']"
     assert_no_selector "turbo-frame#notification-bell span", text: /\d/
   end
 
@@ -57,15 +57,26 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     assert_no_selector "turbo-frame#notification-bell span", text: /\d/
   end
 
-  should "navigate to the inbox when the bell is clicked (frame breaks out to _top)" do
+  should "open a dropdown panel of recent notifications when the bell is clicked" do
     notify!(title: "Clickthrough")
     visit root_path
-    # Click the real bell link — must navigate the whole page, not replace the
-    # frame with the inbox page's placeholder bell (the "disappearing bell" bug).
-    find("turbo-frame#notification-bell a").click
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    within "turbo-frame#notification-bell" do
+      assert_text "Test: Clickthrough"
+      assert_link "View all notifications"
+    end
+  end
+
+  should "navigate to the full inbox via 'View all' (frame breaks out to _top)" do
+    notify!(title: "Full list")
+    visit root_path
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    within("turbo-frame#notification-bell") { click_link "View all notifications" }
 
     assert_current_path notifications_path
-    assert_text "Test: Clickthrough"
+    assert_text "Test: Full list"
   end
 
   should "show the bell on a mobile viewport" do
