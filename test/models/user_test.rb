@@ -10,6 +10,35 @@ class UserTest < ActiveSupport::TestCase
     should have_many(:tenants).through(:tenant_users)
   end
 
+  context "notification preferences" do
+    should "default to an empty hash" do
+      assert_equal({}, build(:user).notification_preferences)
+    end
+
+    should "resolve #notifies_via? from registry defaults when unset" do
+      user = build(:user)
+      assert user.notifies_via?(:evidence_requested, :slack)
+      assert_not user.notifies_via?(:evidence_request_responded, :slack)
+    end
+
+    should "persist and honour overrides via #update_notification_preference" do
+      user = create(:user)
+      assert user.update_notification_preference(:evidence_requested, slack: false, in_app: true)
+
+      user.reload
+      assert_not user.notifies_via?(:evidence_requested, :slack)
+      assert user.notifies_via?(:evidence_requested, :in_app)
+    end
+
+    should "ignore unknown channels and reject unknown types" do
+      user = create(:user)
+      assert user.update_notification_preference(:evidence_requested, sms: true, slack: false)
+      assert_not user.notification_preferences["evidence_requested"].key?("sms")
+
+      assert_not user.update_notification_preference(:nonexistent_type, slack: true)
+    end
+  end
+
   context "validations" do
     should validate_presence_of(:email)
     should validate_uniqueness_of(:email).case_insensitive
