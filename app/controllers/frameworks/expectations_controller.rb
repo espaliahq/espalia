@@ -11,7 +11,31 @@ class Frameworks::ExpectationsController < ApplicationController
   include InlineSuggestedEdits
 
   before_action :set_framework
-  before_action :set_expectation
+  before_action :set_expectation, only: [ :update ]
+
+  # POST /frameworks/:framework_id/expectations
+  #
+  # Authors a behavioural expectation in a previously-empty capability × level
+  # cell via the matrix "+ Add expectation" affordance. Shape-changing —
+  # restricted to edit-rights holders; redirects back to the edit page with the
+  # new cell rendered.
+  def create
+    authorize @framework, :add_expectation?
+    attrs = params.expect(behavioural_expectation: [ :capability_id, :level_ordinal, :description ])
+
+    Operations::Frameworks::SetBehaviouralExpectation.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        capability_id: attrs[:capability_id],
+        level_ordinal: attrs[:level_ordinal].to_i,
+        description: attrs[:description].to_s
+      }
+    )
+    redirect_to edit_framework_path(@framework.framework_id), notice: "Added an expectation."
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+  end
 
   # PATCH /frameworks/:framework_id/expectations/:id
   def update

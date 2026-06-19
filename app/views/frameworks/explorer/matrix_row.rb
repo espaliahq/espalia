@@ -120,7 +120,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           ordinal: level[:ordinal],
           framework_id: @framework_id,
           mode: @mode,
-          search_query: @search_query
+          search_query: @search_query,
+          can_edit_structure: @can_edit_structure
         )
       end
     end
@@ -296,7 +297,9 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   def expanded_cell(ordinal) # rubocop:disable Metrics/MethodLength
     cell_data = @cells[ordinal]
 
-    if cell_data.nil? || cell_data[:bound_selected_role_ids].blank?
+    # An authorable placeholder (empty-but-applicable cell) has no expectation,
+    # so there are no illustrations to show — render the blank expanded td.
+    if cell_data.nil? || cell_data[:expectation].nil? || cell_data[:bound_selected_role_ids].blank?
       td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
                 "bg-blue-50/30 dark:bg-blue-900/10 align-top") { }
       return

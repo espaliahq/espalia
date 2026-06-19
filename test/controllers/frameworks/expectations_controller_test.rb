@@ -82,7 +82,48 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "POST /frameworks/:framework_id/expectations" do
+    should "author an expectation on an empty cell and redirect" do
+      sign_in @user
+      post framework_expectations_path(framework_id: @framework_id),
+           params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 2,
+                                                description: "Identifies root causes" } }
+
+      assert_redirected_to edit_framework_path(@framework_id)
+      assert_match(/Added an expectation/, flash[:notice])
+    end
+
+    should "redirect with an alert when the cell already has an expectation" do
+      sign_in @user
+      post framework_expectations_path(framework_id: @framework_id),
+           params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 1, description: "Dup" } }
+
+      assert_redirected_to edit_framework_path(@framework_id)
+      assert_match(/already has an expectation/i, flash[:alert])
+    end
+
+    should "deny non-contributor viewers" do
+      viewer = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: viewer, role: :member)
+      end
+      sign_in viewer
+
+      post framework_expectations_path(framework_id: @framework_id),
+           params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 2, description: "x" } }
+
+      assert_response :redirect
+      assert_match(/not authorized/i, flash[:alert])
+    end
+  end
+
   private
+
+  def cap_id
+    ActsAsTenant.with_tenant(@tenant) do
+      FrameworkState::Capability.find_by!(name: "Strategic Thinking").capability_id
+    end
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }

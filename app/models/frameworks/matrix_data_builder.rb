@@ -270,8 +270,25 @@ class Frameworks::MatrixDataBuilder
     end
 
     ordinals.each_with_object({}) do |ordinal, cells|
+      bound_selected_role_ids = @selected_roles
+        .map(&:role_id)
+        .select { |rid| binding_role_ids.include?(rid) && role_ordinals[rid]&.include?(ordinal) }
+
       expectation = expectations_by_ordinal[ordinal]
-      next unless expectation
+      unless expectation
+        # Applicable (the capability is bound to a selected role with a level at
+        # this ordinal) but unauthored — in edit mode emit an authoring
+        # placeholder so the cell can offer "+ Add expectation"; in view mode
+        # leave it nil (renders as an em-dash). A genuinely not-applicable cell
+        # (no bound selected role at this ordinal) stays nil in both modes.
+        if @mode == :edit && bound_selected_role_ids.any?
+          cells[ordinal] = { expectation: nil, authorable: true,
+                             capability_id: capability.capability_id,
+                             illustration_count: 0, illustrations_by_role: {},
+                             bound_selected_role_ids: bound_selected_role_ids }
+        end
+        next
+      end
 
       illustrations = expectation.illustrations
         .select { |ill| selected_role_id_set.include?(ill.role_id) }
@@ -279,10 +296,6 @@ class Frameworks::MatrixDataBuilder
       illustrations_by_role = illustrations
         .group_by(&:role_id)
         .transform_values { |ills| ills.sort_by(&:ordinal) }
-
-      bound_selected_role_ids = @selected_roles
-        .map(&:role_id)
-        .select { |rid| binding_role_ids.include?(rid) && role_ordinals[rid]&.include?(ordinal) }
 
       cells[ordinal] = {
         expectation: expectation,
@@ -347,12 +360,14 @@ class Frameworks::MatrixDataBuilder
   def searchable_text(cap_data, category)
     cap = cap_data[:capability]
     parts = [ category.name, category.description, cap.name, cap.description ]
-    cap_data[:cells].each_value { |cell| parts << cell[:expectation].description }
+    cap_data[:cells].each_value { |cell| parts << cell[:expectation]&.description }
 
     if @mode == :edit
       parts.concat(pending_suggested_values("capability_category", category.category_id))
       parts.concat(pending_suggested_values("capability", cap.capability_id))
       cap_data[:cells].each_value do |cell|
+        next unless cell[:expectation]
+
         parts.concat(pending_suggested_values("behavioural_expectation", cell[:expectation].expectation_id))
       end
     end
