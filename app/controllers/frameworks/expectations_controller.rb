@@ -53,15 +53,17 @@ class Frameworks::ExpectationsController < ApplicationController
       field: "description", value: new_description, author_id: resolve_author_id, mode: framework_edit_mode
     )
 
-    @expectation.reload
     render Views::Frameworks::Explorer::ExpectationTextFrame.new(
-      expectation: @expectation,
+      # Re-resolve from a fresh graph — an auto-approved edit rewrote the
+      # snapshot; in suggesting mode the value is unchanged and the pending
+      # decoration carries the diff.
+      expectation: graph_expectation(@expectation.expectation_id, reload: true) || @expectation,
       framework_id: @framework.framework_id,
       mode: :edit,
       pending_edit_count: pending_edits_on_expectation,
       pending_edit: latest_pending_edit
     ), layout: false
-  rescue ActiveRecord::RecordNotFound, RuntimeError
+  rescue RuntimeError
     head :unprocessable_content
   end
 
@@ -73,17 +75,25 @@ class Frameworks::ExpectationsController < ApplicationController
     head :not_found
   end
 
+  # Resolve the expectation from the explorer graph, NOT the published read
+  # model — an expectation authored in the current draft is deferred from
+  # FrameworkState::BehaviouralExpectation (shape-changing) but lives in the
+  # graph, and must still be inline-editable (Hard-Won Lesson 17). The graph is
+  # per-framework, so finding the id in it also scopes to the authorized framework.
   def set_expectation
-    # Scope to the current framework via capability → category to prevent
-    # a framework-A request targeting a framework-B expectation.
-    @expectation = FrameworkState::BehaviouralExpectation
-      .joins(capability: :category)
-      .find_by!(
-        expectation_id: params.expect(:id),
-        framework_capability_categories: { framework_id: @framework.framework_id }
-      )
-  rescue ActiveRecord::RecordNotFound
-    head :not_found
+    @expectation = graph_expectation(params.expect(:id))
+    head :not_found unless @expectation
+  end
+
+  def graph_expectation(expectation_id, reload: false)
+    @explorer_graph = nil if reload
+    explorer_graph.capability_categories.flat_map(&:capabilities).flat_map(&:expectations)
+      .find { |e| e.expectation_id == expectation_id }
+  end
+
+  def explorer_graph
+    @explorer_graph ||= Frameworks::ExplorerGraph.load(@framework.framework_id) ||
+                        Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
   end
 
   def resolve_author_id

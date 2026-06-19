@@ -124,6 +124,29 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       assert_match(/not authorized/i, flash[:alert])
     end
+
+    should "edit a draft-added (read-model-deferred) expectation without 404ing" do
+      sign_in @user
+      # Author a new expectation — shape-changing, so it's deferred from the AR
+      # read model until publish but lives in the graph.
+      post framework_expectations_path(framework_id: @framework_id),
+           params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 2, description: "Drafted" } }
+
+      new_eid = ActsAsTenant.with_tenant(@tenant) do
+        exp = Frameworks::ExplorerGraph.load(@framework_id)
+          .capability_categories.flat_map(&:capabilities).flat_map(&:expectations)
+          .find { |e| e.level_ordinal == 2 }
+        assert_nil FrameworkState::BehaviouralExpectation.find_by(expectation_id: exp.expectation_id),
+                   "precondition: the new expectation is deferred from the read model"
+        exp.expectation_id
+      end
+
+      patch framework_expectation_path(framework_id: @framework_id, id: new_eid),
+            params: { behavioural_expectation: { description: "Edited the draft expectation" } }
+
+      assert_response :success
+      assert_includes response.body, "Edited the draft expectation"
+    end
   end
 
   private
