@@ -103,7 +103,8 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
     should "render a ghost of the proposed expectation in the empty cell" do
       visit_edit
 
-      assert_text "PROPOSED"
+      # The proposed text shows in the cell (the amber wavy underline is the
+      # pending signal — no separate label).
       assert_text "Proposed: anticipates second-order effects"
       # The cell stays authorable (others can still propose / it's not applied).
       assert_selector "button[data-inline-editor-target='display']", text: "Add expectation", visible: :all

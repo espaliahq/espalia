@@ -379,10 +379,11 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   (no bound selected role at that ordinal) and a *filled* cell are untouched.
   (A directly-applied expectation is draft-deferred from the read model, so its
   inline edit resolves from the graph — Lesson 17.) A **pending** create renders
-  as an amber "Proposed" **ghost** in the cell (`PendingExpectationFrame`) — so a
-  proposed expectation shows in the grid, not just the feed — via
-  `MatrixDataBuilder`'s `pending_expectation_creates` map (keyed by
-  `[capability_id, level_ordinal]`); approve/reject stays in the actionable feed.
+  as a **ghost** in the cell (`PendingExpectationFrame`, amber wavy underline —
+  the explorer's standard pending-change signal, no extra label) — so a proposed
+  expectation shows in the grid, not just the feed — via `MatrixDataBuilder`'s
+  `pending_expectation_creates` map (keyed by `[capability_id, level_ordinal]`);
+  approve/reject stays in the actionable feed.
 - **Row-actions kebab (⋮) → Archive** — hover-revealed beside the capability-name
   pencil; offered to **any suggest-rights (edit-mode) viewer**, not just
   edit-structure holders. "Archive" is the single removal operation — there is no
@@ -882,7 +883,7 @@ line (§9).
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
 | `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
-| `app/views/frameworks/explorer/pending_expectation_frame.rb` | Amber "Proposed" ghost of a pending expectation-create suggestion, shown in the empty cell |
+| `app/views/frameworks/explorer/pending_expectation_frame.rb` | Ghost of a pending expectation-create suggestion (amber wavy underline), shown in the empty cell |
 | `app/views/frameworks/explorer/capability_name_frame.rb` | Capability name + edit-mode inline editor |
 | `app/views/frameworks/explorer/capability_description_frame.rb` | Capability description + edit-mode inline editor ("Add a description…" when blank) |
 | `app/views/frameworks/explorer/category_name_frame.rb` | Category name + edit-mode inline editor |
