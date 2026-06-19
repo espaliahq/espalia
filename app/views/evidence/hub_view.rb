@@ -11,11 +11,11 @@ class Views::Evidence::HubView < Views::Base
 
   # @param incoming [Array<EvidenceRequest>] requests addressed to the viewer
   # @param outgoing [Array<EvidenceRequest>] requests the viewer made
-  # @param capability_names [Hash{String=>String}] stable_id → capability name
-  def initialize(incoming:, outgoing:, capability_names: {}, user: nil, current_tenant: nil, tenants: [])
+  # @param cell_details [Hash{String=>Hash}] request_id => { name:, expectation:, illustrations: }
+  def initialize(incoming:, outgoing:, cell_details: {}, user: nil, current_tenant: nil, tenants: [])
     @incoming = incoming
     @outgoing = outgoing
-    @capability_names = capability_names
+    @cell_details = cell_details
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -70,6 +70,7 @@ class Views::Evidence::HubView < Views::Base
         plain "#{request.requester&.name || "A colleague"} asked you for evidence"
       end
       cell_line(request)
+      expectation_block(request)
       message_line(request)
       respond_block(request) if request.pending?
     end
@@ -82,6 +83,7 @@ class Views::Evidence::HubView < Views::Base
         render Components::Kit::Badge.new(request.status.capitalize, variant: STATUS_VARIANT.fetch(request.status, :default))
       end
       cell_line(request)
+      expectation_block(request)
       message_line(request)
       if request.pending?
         a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
@@ -96,10 +98,53 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def cell_line(request)
-    label = @capability_names[request.capability_stable_id]
-    p(class: "text-sm text-gray-600 dark:text-gray-300") do
-      plain [ label, "Level #{request.level_ordinal}" ].compact.join(" · ")
+    detail = details(request)
+    div do
+      p(class: "text-sm font-medium text-gray-900 dark:text-white") { detail[:name] || "Capability" }
+      p(class: "text-xs text-gray-600 dark:text-gray-300") { scope_label(request, detail) }
     end
+  end
+
+  # "Software Engineer · Senior Engineer (Level 3)" — the role the request is
+  # scoped to and the level within it.
+  def scope_label(request, detail)
+    level = detail[:level_title].present? ? "#{detail[:level_title]} (Level #{request.level_ordinal})" : "Level #{request.level_ordinal}"
+    [ detail[:role], level ].compact.join(" · ")
+  end
+
+  # The behavioural expectation (and any role illustrations) for the cell, so
+  # the responder sees exactly what behaviour they're evidencing — no lookup.
+  def expectation_block(request)
+    detail = details(request)
+    return if detail[:expectation].blank? && detail[:illustrations].blank?
+
+    div(class: "rounded-md bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 p-3 space-y-2") do
+      if detail[:expectation].present?
+        div do
+          span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "What good looks like" }
+          p(class: "mt-0.5 text-sm text-gray-700 dark:text-gray-200") { detail[:expectation] }
+        end
+      end
+      illustrations_list(detail[:illustrations]) if detail[:illustrations].present?
+    end
+  end
+
+  def illustrations_list(illustrations)
+    div do
+      span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Examples for this role" }
+      ul(class: "mt-1 space-y-1") do
+        illustrations.each do |text|
+          li(class: "flex gap-2 text-sm text-gray-700 dark:text-gray-200") do
+            span(class: "text-gray-400 dark:text-gray-500", aria: { hidden: "true" }) { "•" }
+            span { text }
+          end
+        end
+      end
+    end
+  end
+
+  def details(request)
+    @cell_details.fetch(request.id, {})
   end
 
   def message_line(request)

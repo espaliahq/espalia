@@ -24,7 +24,8 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
       @cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
       create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: role.role_id, weight: 1.0)
-      create(:framework_behavioural_expectation, capability_id: @cap.capability_id, level_ordinal: 2, description: "x")
+      expectation = create(:framework_behavioural_expectation, capability_id: @cap.capability_id, level_ordinal: 2, description: "Synthesises competing trade-offs")
+      create(:framework_role_illustration, expectation_id: expectation.expectation_id, role_id: role.role_id, ordinal: 1, description: "Wrote the migration RFC")
 
       PersonDevelopment::CommandHandler.new.assign_to_framework(@report.id, @framework_id, role.role_id, level.level_id)
       @assignment = PersonFrameworkAssignment.for_person(@report.id).first
@@ -49,6 +50,13 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_match "Rep asked you for evidence", response.body
       assert_match "Critical Thinking", response.body
+      # The role + level, behavioural expectation, and role illustration render
+      # inline so the responder sees which role + what behaviour they're
+      # evidencing without a lookup.
+      assert_match "SWE", response.body
+      assert_match "Mid (Level 2)", response.body
+      assert_match "Synthesises competing trade-offs", response.body
+      assert_match "Wrote the migration RFC", response.body
     end
 
     should "show outgoing requests to the requester" do
