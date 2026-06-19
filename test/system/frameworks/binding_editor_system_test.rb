@@ -8,10 +8,9 @@ require "application_system_test_case"
 # headline; weight editing is covered at the controller/operation layer.
 class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE  = [ 375, 812 ].freeze
 
   setup do
-    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-
     @tenant = FactoryBot.create(:tenant)
     @admin_user = FactoryBot.create(:user, password: "password123")
 
@@ -41,7 +40,8 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
   # JS-click the hover-revealed kebab + the "Edit roles…" item (Selenium pointer
   # clicks on the opacity-0 control flake on starved CI), then wait for the
   # modal's Turbo Frame to load.
-  def open_binding_editor
+  def open_binding_editor(size: DESKTOP_SIZE)
+    page.driver.browser.manage.window.resize_to(*size)
     sign_in_as(@admin_user)
     visit edit_framework_path(@framework_id)
     wait_for_stimulus "matrix"
@@ -84,14 +84,32 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       within "#binding-editor" do
         assert_text "Software Engineer"
       end
-      click_with_retry(expect_text: "Not bound to any role yet.") do
-        auto_confirm { within("#binding-editor") { click_button "Remove" } }
+      # Submit the data-turbo-confirm Remove form via requestSubmit() (the
+      # documented JS-submit remedy for the flaky confirm-form click on starved
+      # CI — testing.md). auto_confirm stubs window.confirm so Turbo proceeds.
+      auto_confirm do
+        page.execute_script(
+          'document.querySelector("#binding-editor form[data-turbo-confirm]").requestSubmit();'
+        )
       end
 
       within "#binding-editor" do
         assert_text "Not bound to any role yet."
       end
       assert_text(/draft/i)
+    end
+  end
+
+  context "as a tenant admin on a mobile viewport" do
+    should "open the binding editor from the kebab" do
+      open_binding_editor(size: MOBILE_SIZE)
+
+      # The modal + Turbo Frame body render identically on narrow — the kebab is
+      # JS-clicked, the modal is centered — so the editor is reachable on mobile.
+      within "#binding-editor" do
+        assert_text "Software Engineer"
+        assert_selector "select#binding-add-role"
+      end
     end
   end
 end
