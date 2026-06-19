@@ -452,6 +452,9 @@ class Frameworks::Aggregate
     ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Expectation #{expectation_id} already exists" if @expectations.key?(expectation_id)
+    if @expectations.values.any? { |e| e[:capability_id] == capability_id && e[:level_ordinal] == level_ordinal }
+      raise "Capability #{capability_id} already has an expectation at level #{level_ordinal}"
+    end
 
     apply(Frameworks::Events::BehaviouralExpectationSet.new(data: {
       framework_id: framework_id,

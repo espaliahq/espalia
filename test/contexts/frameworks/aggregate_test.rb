@@ -442,6 +442,15 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       end
       assert_match /not found/, err.message
     end
+
+    should "raise if the capability already has an expectation at that level" do
+      @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, 1, "First")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, 1, "Second")
+      end
+      assert_match /already has an expectation at level 1/, err.message
+    end
   end
 
   context "#update_behavioural_expectation" do
