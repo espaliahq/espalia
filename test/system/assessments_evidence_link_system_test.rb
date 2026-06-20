@@ -76,37 +76,35 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
   end
 
   context "kebab menu + link" do
-    should "link evidence to a second capability and show the also-linked indicator" do
+    should "link evidence to a second capability via the Edit modal's picker" do
       # Evidence rendering is gated on cell focus (`data-focused="true"`
       # on the expanded `<td>`), so deep-link to the cell.
       visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
-      wait_for_stimulus "evidence-link-form"
+      wait_for_stimulus "evidence-modal"
       assert_selector "#evidence-#{@evidence_id}", visible: true
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
-      # The menu lives in an opacity-0 hover wrapper behind useTransition —
-      # assert the items exist in the DOM and drive the action directly.
-      assert_selector "#evidence-#{@evidence_id} [role='menuitem']",
-                      text: "Link to another capability", visible: :all
+      # The author manages links inside Edit (the unified modal); a separate
+      # "Link" item is only for non-author link-holders. Unlink (disabled at
+      # one link) + Withdraw remain.
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Edit", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw", visible: :all
-      # With only one link, "Unlink from this capability" is rendered disabled.
       assert_selector "#evidence-#{@evidence_id} [role='menuitem'][aria-disabled='true']",
                       text: "Unlink from this capability", visible: :all
 
       page.execute_script(<<~JS)
-        document.querySelector(
-          "#evidence-#{@evidence_id} [data-action*='evidence-link-form#open']"
-        ).click();
+        document.querySelector("#evidence-#{@evidence_id} [data-evidence-modal-mode-param='edit']").click();
       JS
-      assert_selector "#evidence-link-modal", visible: true
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_selector "#evm-content", visible: true
 
-      # Submit a link to cap2.
+      # Add cap2 · L1 to the "also applies to" picker, then save (links-only).
       page.execute_script(<<~JS)
-        const f = document.querySelector("#evidence-link-modal form");
-        f.querySelector("#evidence_link_capability_field").value = "#{@cap2_stable}";
-        f.querySelector("#evidence_link_level_field").value = "1";
-        f.querySelector("#evidence_link_rationale_field").value = "Also applies";
-        f.requestSubmit();
+        const m = document.querySelector("#evidence-modal");
+        m.querySelector("[data-evidence-modal-target='linkCapability']").value = "#{@cap2_stable}";
+        m.querySelector("[data-evidence-modal-target='linkLevel']").value = "1";
+        m.querySelector("[data-action*='evidence-modal#addLink']").click();
+        m.querySelector("form").requestSubmit();
       JS
 
       assert_text "Also linked to 1 other place"

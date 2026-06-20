@@ -71,53 +71,41 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
       end
     end
 
-    # Kebab → Edit opens the modal with current field values, PATCH lands,
-    # card re-renders with the new content and an "edited" footer. Same
-    # JS-dispatched-click approach as the relink test — the hover-revealed
-    # kebab is hostile to Capybara's pointer-click on starved CI runners.
+    # Kebab → Edit opens the unified modal prefilled, the diff-save lands, and
+    # the focused cell re-renders in place with the new content + "edited"
+    # footer (no full-page reload). JS-dispatched clicks bypass the
+    # hover-revealed kebab + lazy-frame races on starved CI.
     should "open prefilled, submit a change, and stamp edited_at on the card" do
       visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
-      wait_for_stimulus "evidence-edit-form"
+      wait_for_stimulus "evidence-modal"
       assert_selector "#evidence-#{@evidence_id}", visible: true
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
-      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Edit", visible: :all
 
       page.execute_script(<<~JS)
         document.querySelector(
-          "#evidence-#{@evidence_id} [data-action*='evidence-edit-form#open']"
+          "#evidence-#{@evidence_id} [data-evidence-modal-mode-param='edit']"
         ).click();
       JS
-      assert_selector "#evidence-edit-form-modal", visible: true
+      # The modal opens and the lazy frame renders the prefilled form.
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_selector "#evm-content", visible: true
 
-      title_val, content_val, type_val = page.evaluate_script(<<~JS)
-        (() => {
-          const f = document.querySelector("#evidence-edit-form-modal form");
-          return [
-            f.querySelector("#evidence_edit_title_field").value,
-            f.querySelector("#evidence_edit_content_field").value,
-            f.querySelector("#evidence_edit_type_field").value
-          ];
-        })()
+      content_val, type_val = page.evaluate_script(<<~JS)
+        [ document.querySelector("#evm-content").value,
+          document.querySelector("#evm-type").value ]
       JS
-      assert_equal "Original title", title_val
       assert_equal "Original content.", content_val
       assert_equal "project_outcome", type_val
 
       page.execute_script(<<~JS)
-        const f = document.querySelector("#evidence-edit-form-modal form");
-        f.querySelector("#evidence_edit_title_field").value = "Updated title";
-        f.querySelector("#evidence_edit_content_field").value = "Revised content.";
-        f.querySelector("#evidence_edit_type_field").value = "code_review";
+        const f = document.querySelector("#evidence-modal form");
+        f.querySelector("#evm-title").value = "Updated title";
+        f.querySelector("#evm-content").value = "Revised content.";
+        f.querySelector("#evm-type").value = "code_review";
         f.requestSubmit();
       JS
 
-      # The post-PATCH redirect carries capability + category + level_ordinal,
-      # which lands the page back in the focused-cell state the user
-      # triggered the edit from. Sync on `category=` — only the redirect
-      # adds it, so this can't match the pre-submit URL.
-      assert_current_path(/category=#{@cat_id}/)
-      # Cell focus preserved — the updated content and "edited" footer
-      # are visible immediately without a second visit.
+      # The focused cell re-renders in place (Turbo Stream), no navigation.
       assert_selector "#evidence-#{@evidence_id}", visible: true
       assert_text "Updated title"
       assert_text "edited"
@@ -146,7 +134,7 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
         )
 
         visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
-        wait_for_stimulus "evidence-edit-form"
+        wait_for_stimulus "evidence-modal"
         assert_selector "#evidence-#{other_evidence_id}", visible: true
         # The author's own item carries an Edit menuitem; the peer-authored
         # one must not.
@@ -156,72 +144,56 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
   end
 
   context "evidence modal" do
-    # The full create flow is covered end-to-end by the integration test in
-    # test/controllers/assessments/evidence_controller_test.rb. The system
-    # test's unique value is asserting the Stimulus wiring: the `+ Add`
-    # affordance next to the EVIDENCE header inside the matrix turbo-frame
-    # actually opens the modal hosted on the page wrapper, and the
-    # capability + level coords are primed correctly.
-    should "open with the cell's capability and level pre-populated" do
+    # The full create flow is covered by the diff-save integration tests. The
+    # system test's unique value is the Stimulus wiring: the matrix "+ Add"
+    # button loads the lazy modal frame for the right cell, with the primary
+    # cell + behavioural-expectation context primed.
+    should "open with the cell's capability + expectation context" do
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
-      # The "+ Add evidence" button lives inside the auto-focused level's
-      # expansion panel. Card layout: every card auto-focuses the
-      # person's level by default, so the button is visible without
-      # any further interaction. JS-dispatched click bypasses Selenium's
-      # synthetic pointer click which can be lost on starved CI.
       page.execute_script(<<~JS)
-        const btn = document.querySelector(
-          "[data-action~='click->modal#open']" +
-          "[data-evidence-form-capability-stable-id-param='#{@cap_stable}']" +
-          "[data-evidence-form-level-ordinal-param='1']"
-        );
-        btn?.click();
+        document.querySelector(
+          "[data-evidence-modal-mode-param='new']" +
+          "[data-evidence-modal-capability-stable-id-param='#{@cap_stable}']" +
+          "[data-evidence-modal-level-ordinal-param='1']"
+        )?.click();
       JS
 
-      # Modal is hosted on the page wrapper; opening flips the modal's
-      # `hidden`/`flex` classes. The form's hidden capability + level
-      # inputs get populated from the Stimulus params on open.
-      assert_selector "#evidence-form-modal.flex", visible: true
-      assert_equal @cap_stable, page.evaluate_script(
-        "document.querySelector(\"#evidence-form-modal input[name='evidence[capability_stable_id]']\")?.value"
-      )
-      assert_equal "1", page.evaluate_script(
-        "document.querySelector(\"#evidence-form-modal input[name='evidence[level_ordinal]']\")?.value"
+      assert_selector "#evidence-modal-overlay", visible: true
+      # Context block ties the form to the cell's behaviour.
+      assert_text "Critical Thinking · Level 1"
+      assert_text "Synthesises information"
+      assert_equal "#{@cap_stable}|1", page.evaluate_script(
+        "document.querySelector(\"#evidence-modal input[name='evidence[primary_cell]']\")?.value"
       )
     end
 
-    # The evidence modal holds unsaved input — a stray background click must
-    # NOT discard it. Esc still closes it (deliberate keypress, kept for
-    # accessibility). See modal_controller.js `dismissOnOutsideClick`.
+    # The modal holds unsaved input — a stray background click must NOT discard
+    # it; Esc still closes it (accessibility). See modal_controller.js.
     should "stay open on an outside click but close on Esc" do
       visit assessment_path(@assignment)
       wait_for_stimulus "matrix"
 
       page.execute_script(<<~JS)
-        const btn = document.querySelector(
-          "[data-action~='click->modal#open']" +
-          "[data-evidence-form-capability-stable-id-param='#{@cap_stable}']" +
-          "[data-evidence-form-level-ordinal-param='1']"
-        );
-        btn?.click();
+        document.querySelector(
+          "[data-evidence-modal-mode-param='new']" +
+          "[data-evidence-modal-capability-stable-id-param='#{@cap_stable}']" +
+          "[data-evidence-modal-level-ordinal-param='1']"
+        )?.click();
       JS
-      assert_selector "#evidence-form-modal.flex", visible: true
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_selector "#evm-content", visible: true
 
-      # A real MouseEvent on the backdrop (outside the panel) — the click-outside
-      # gesture that previously dismissed the modal and lost the form.
       page.execute_script(<<~JS)
-        document.querySelector("#evidence-form-modal").dispatchEvent(
+        document.querySelector("#evidence-modal-overlay").dispatchEvent(
           new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
         );
       JS
-      assert_selector "#evidence-form-modal.flex", visible: true,
-        wait: 1
+      assert_selector "#evidence-modal-overlay", visible: true, wait: 1
 
-      # Esc remains an intentional dismissal.
-      find("#evidence_content_field").send_keys(:escape)
-      assert_no_selector "#evidence-form-modal.flex"
+      find("#evm-content").send_keys(:escape)
+      assert_no_selector "#evidence-modal-overlay", visible: true
     end
   end
 

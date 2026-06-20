@@ -46,10 +46,11 @@ class Views::Evidence::ModalForm < Views::Base
 
   def view_template
     turbo_frame_tag("evidence-modal") do
-      div(class: "p-1", data: { controller: "evidence-modal" }) do
+      div(class: "p-5", data: { controller: "evidence-modal" }) do
         header
         context_card
-        form_with(url: form_action, method: form_method, class: "space-y-3") do
+        form_with(url: form_action, method: form_method, class: "space-y-3",
+                  data: { action: "turbo:submit-end->modal#submitted" }) do
           hidden_fields
           content_fields
           links_section

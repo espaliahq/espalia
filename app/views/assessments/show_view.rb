@@ -48,51 +48,12 @@ class Views::Assessments::ShowView < Views::Base
     @tenants = tenants
   end
 
-  def can_render_link_modal?
-    @viewer_person_id.present? && (@can_create_evidence || @can_relink_others_evidence)
-  end
-
-  def can_render_edit_modal?
-    @viewer_person_id.present?
-  end
-
   def view_template
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      controllers = [
-        "activity-pane",
-        ("modal" if @can_create_evidence),
-        ("evidence-form" if @can_create_evidence),
-        ("evidence-link-form" if can_render_link_modal?),
-        ("evidence-edit-form" if can_render_edit_modal?)
-      ].compact.join(" ")
-      esc_actions = [
-        ("keydown.esc->modal#close" if @can_create_evidence),
-        ("modal:open@window->evidence-form#prefill" if @can_create_evidence),
-        ("keydown.esc->evidence-link-form#close" if can_render_link_modal?),
-        ("keydown.esc->evidence-edit-form#close" if can_render_edit_modal?)
-      ].compact.join(" ")
-      data = { controller: controllers }
-      data[:action] = esc_actions if esc_actions.present?
-      data[:evidence_link_form_assessment_id_value] = @assignment.id if can_render_link_modal?
-      data[:evidence_edit_form_assessment_id_value] = @assignment.id if can_render_edit_modal?
-      div(data: data) do
+      div(data: { controller: "activity-pane" }) do
         assessment_layout
-        if @can_create_evidence
-          render Views::Assessments::Evidence::Form.new(
-            assessment_id: @assignment.id,
-            categories: @matrix_data[:categories],
-            merged_levels: @matrix_data[:merged_levels]
-          )
-        end
-        if can_render_link_modal?
-          render Views::Assessments::Evidence::LinkForm.new(
-            categories: @matrix_data[:categories],
-            merged_levels: @matrix_data[:merged_levels]
-          )
-        end
-        render Views::Assessments::Evidence::EditForm.new(assessment_id: @assignment.id) if can_render_edit_modal?
       end
     end
   end
@@ -102,7 +63,13 @@ class Views::Assessments::ShowView < Views::Base
   # ── Layout ──
 
   def assessment_layout
-    div(class: "assessment-scroll-root", data: { controller: "assessment-sync" }) do
+    # `modal` + `evidence-modal` live here (not on an outer wrapper) so the
+    # unified evidence modal — overlay, frame, and its submit — sits INSIDE the
+    # assessment-sync element; the submit then arms the suppress window and the
+    # matrix updates in place instead of fully reloading.
+    div(class: "assessment-scroll-root",
+        data: { controller: "assessment-sync modal evidence-modal",
+                action: "keydown.esc@window->modal#close" }) do
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
           data: { assessment_sync_target: "signal" }) { }
@@ -115,6 +82,8 @@ class Views::Assessments::ShowView < Views::Base
         div(class: "flex-1 min-w-0") { main_section }
         activity_sidebar
       end
+
+      render Views::Evidence::ModalShell.new if @viewer_person_id.present?
     end
   end
 
