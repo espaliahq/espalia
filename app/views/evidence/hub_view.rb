@@ -121,7 +121,7 @@ class Views::Evidence::HubView < Views::Base
     detail = @authored_details.fetch(item.id, {})
     card do
       div do
-        p(class: "text-sm font-medium text-gray-900 dark:text-white") { detail[:capability_name] || "Capability" }
+        p(class: "text-sm font-medium text-gray-900 dark:text-white") { detail[:name] || "Capability" }
         p(class: "text-xs text-gray-600 dark:text-gray-300") { authored_scope_label(item, detail) }
       end
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
