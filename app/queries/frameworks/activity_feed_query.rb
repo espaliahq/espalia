@@ -34,8 +34,10 @@ class Frameworks::ActivityFeedQuery
 
   # Proposal events for one suggestion (the original edit + each amendment).
   # Only the most recent of these carries the approve/reject action — see
-  # #flag_superseded_proposals.
-  PROPOSAL_KINDS = %w[suggestion_edit suggestion_amended].freeze
+  # #flag_superseded_proposals. Includes the original create/delete/edit proposal
+  # plus each amendment, so amending a create supersedes the original proposal
+  # entry (only the latest, with the current value, stays actionable).
+  PROPOSAL_KINDS = %w[suggestion_edit suggestion_create suggestion_delete suggestion_amended].freeze
 
   # Event class → feed kind string. Drives both which events become feed
   # entries and the kind the view renders. Events not in this map (e.g.
@@ -61,6 +63,7 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::CapabilityRoleBindingCreated => "binding_added",
     Frameworks::Events::CapabilityRoleBindingUpdated => "binding_updated",
     Frameworks::Events::CapabilityRoleBindingRemoved => "binding_removed",
+    Frameworks::Events::BehaviouralExpectationSet     => "expectation_added",
     Frameworks::Events::BehaviouralExpectationUpdated => "expectation_updated",
     Frameworks::Events::RoleIllustrationAdded      => "illustration_added",
     Frameworks::Events::RoleIllustrationUpdated    => "illustration_updated",
@@ -81,6 +84,11 @@ class Frameworks::ActivityFeedQuery
   # Binding lifecycle kinds — their entries carry the role + scoring levers
   # (weight / individual tolerance) folded into the payload by #binding_metadata.
   BINDING_KINDS = %w[binding_added binding_updated binding_removed].freeze
+
+  # Directly-authored / edited expectation kinds — their entries carry the level
+  # (`expectation_level`) folded in by #structural_expectation_level. (Expectation
+  # *suggestions* get the level via #suggestion_meta instead.)
+  EXPECTATION_KINDS = %w[expectation_added expectation_updated].freeze
 
   # Maps each feed kind to the payload key carrying its actor's Person id, when
   # the actor is a first-class payload fact. Kinds absent here fall back to
@@ -246,7 +254,18 @@ class Frameworks::ActivityFeedQuery
       extra.merge!(meta) if meta
     end
     extra.merge!(binding_metadata(kind, data)) if BINDING_KINDS.include?(kind)
+    extra[:expectation_level] = structural_expectation_level(kind, data) if EXPECTATION_KINDS.include?(kind)
     extra
+  end
+
+  # Level for a directly-authored / edited expectation entry (the suggestion
+  # variants get it from suggestion_meta). expectation_added carries it on the
+  # event; expectation_updated resolves it from the target expectation.
+  def structural_expectation_level(kind, data)
+    case kind
+    when "expectation_added" then data[:level_ordinal]
+    when "expectation_updated" then expectation_to_level[data[:expectation_id]]
+    end
   end
 
   # Role label + the scoring levers a binding entry should surface — the role it
@@ -289,6 +308,9 @@ class Frameworks::ActivityFeedQuery
       # capability via the binding index. A binding removed *and* published is
       # gone from the read model, so anchoring may fall back to framework-level.
       from_capability(binding_index.dig(data[:binding_id], :capability_id))
+    when "expectation_added"
+      # The set event carries capability_id directly.
+      from_capability(data[:capability_id])
     when "expectation_updated"
       from_capability(expectation_to_capability[data[:expectation_id]])
     when "illustration_added"
@@ -399,7 +421,13 @@ class Frameworks::ActivityFeedQuery
     end
   end
 
-  # ── Structure maps (built once from the framework read model) ──
+  # ── Structure maps (read model + draft-entity supplement) ──
+  #
+  # The published read model excludes shape-changing entities still in the open
+  # draft (added capability / category / expectation). The feed must still name
+  # them, so each map is supplemented from the creating event in the read window
+  # — the same recency-bounded approach #binding_index uses. Read-model values
+  # win (authoritative for published entities); the supplement only fills gaps.
 
   def preloaded_categories
     @preloaded_categories ||= @framework.capability_categories
@@ -410,21 +438,57 @@ class Frameworks::ActivityFeedQuery
     @all_capabilities ||= preloaded_categories.flat_map(&:capabilities)
   end
 
+  # Names/coordinates of draft-added entities, harvested from the stream window.
+  # `stream_events` is newest-first, so `||=` keeps the most-recent value — a
+  # draft-added entity renamed before publish (its rename is also absent from the
+  # published read model) shows its current name, not the original.
+  def stream_structure
+    @stream_structure ||= begin
+      acc = { cap_names: {}, cap_to_cat: {}, cat_names: {}, exp_to_cap: {}, exp_to_level: {} }
+      stream_events.each do |event|
+        case event
+        when Frameworks::Events::CapabilityAdded
+          acc[:cap_names][event.data[:capability_id]] ||= event.data[:name]
+          acc[:cap_to_cat][event.data[:capability_id]] ||= event.data[:category_id]
+        when Frameworks::Events::CapabilityUpdated
+          acc[:cap_names][event.data[:capability_id]] ||= event.data[:name] if event.data.key?(:name)
+        when Frameworks::Events::CapabilityCategoryAdded
+          acc[:cat_names][event.data[:category_id]] ||= event.data[:name]
+        when Frameworks::Events::CapabilityCategoryUpdated
+          acc[:cat_names][event.data[:category_id]] ||= event.data[:name] if event.data.key?(:name)
+        when Frameworks::Events::BehaviouralExpectationSet
+          acc[:exp_to_cap][event.data[:expectation_id]] ||= event.data[:capability_id]
+          acc[:exp_to_level][event.data[:expectation_id]] ||= event.data[:level_ordinal]
+        end
+      end
+      acc
+    end
+  end
+
   def capability_to_category
-    @capability_to_category ||= all_capabilities.to_h { |c| [ c.capability_id, c.category_id ] }
+    @capability_to_category ||= stream_structure[:cap_to_cat]
+      .merge(all_capabilities.to_h { |c| [ c.capability_id, c.category_id ] })
   end
 
   def capability_names
-    @capability_names ||= all_capabilities.to_h { |c| [ c.capability_id, c.name ] }
+    @capability_names ||= stream_structure[:cap_names]
+      .merge(all_capabilities.to_h { |c| [ c.capability_id, c.name ] })
   end
 
   def category_names
-    @category_names ||= preloaded_categories.to_h { |c| [ c.category_id, c.name ] }
+    @category_names ||= stream_structure[:cat_names]
+      .merge(preloaded_categories.to_h { |c| [ c.category_id, c.name ] })
   end
 
   def expectation_to_capability
-    @expectation_to_capability ||= all_capabilities.flat_map(&:expectations)
-      .to_h { |e| [ e.expectation_id, e.capability_id ] }
+    @expectation_to_capability ||= stream_structure[:exp_to_cap]
+      .merge(all_capabilities.flat_map(&:expectations).to_h { |e| [ e.expectation_id, e.capability_id ] })
+  end
+
+  # {expectation_id => level_ordinal} — read model + draft supplement.
+  def expectation_to_level
+    @expectation_to_level ||= stream_structure[:exp_to_level]
+      .merge(all_capabilities.flat_map(&:expectations).to_h { |e| [ e.expectation_id, e.level_ordinal ] })
   end
 
   def illustration_to_expectation
@@ -496,7 +560,21 @@ class Frameworks::ActivityFeedQuery
         { suggestion_entity_type: s.target_entity_type,
           suggestion_kind: s.kind,
           suggestion_field: s.field,
-          suggestion_status: s.status } ]
+          suggestion_status: s.status,
+          expectation_level: suggestion_level(s) } ]
+    end
+  end
+
+  # The level a behavioural_expectation suggestion concerns — from the proposed
+  # attributes for a create, or the target expectation for an edit — so the feed
+  # entry can show "Capability · L<n>". nil for non-expectation suggestions.
+  def suggestion_level(suggestion)
+    return nil unless suggestion.target_entity_type == "behavioural_expectation"
+
+    if suggestion.kind == "create"
+      suggestion.proposed_attributes&.dig("level_ordinal")&.to_i
+    else
+      expectation_to_level[suggestion.target_entity_id]
     end
   end
 

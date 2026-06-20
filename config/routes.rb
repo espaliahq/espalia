@@ -137,7 +137,7 @@ Rails.application.routes.draw do
               controller: "frameworks/capability_bindings"
     resources :categories,   only: [ :create, :update ], controller: "frameworks/categories"
     resources :category_archives, only: [ :create ], controller: "frameworks/category_archives"
-    resources :expectations, only: [ :update ], controller: "frameworks/expectations"
+    resources :expectations, only: [ :create, :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
     resource :publication, only: [ :new, :create ], controller: "frameworks/publications"
     resources :migration_mappings, only: [ :create ], controller: "frameworks/migration_mappings"

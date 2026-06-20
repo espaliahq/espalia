@@ -29,7 +29,10 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
       action: framework_capabilities_path(@framework_id),
       method: "post",
       class: "space-y-4",
-      data: { controller: "add-capability-form", action: "turbo:submit-end->modal#submitted" }
+      data: {
+        controller: "add-capability-form",
+        action: "submit->add-capability-form#validateRoles turbo:submit-end->modal#submitted"
+      }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "capability[category_id]", data: { add_capability_form_target: "categoryId" })
@@ -71,6 +74,10 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
         div(class: "mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5") do
           @roles.each { |role| role_checkbox(role) }
         end
+        p(
+          class: "hidden mt-1.5 text-xs text-red-600 dark:text-red-400",
+          data: { add_capability_form_target: "rolesError" }
+        ) { "Select at least one role — a capability bound to no role is hidden from the matrix." }
       end
     end
   end
@@ -78,6 +85,7 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
   def role_checkbox(role)
     label(class: "inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200") do
       input(type: "checkbox", name: "capability[role_ids][]", value: role[:id],
+            data: { add_capability_form_target: "role" },
             class: "rounded border-gray-300 dark:border-gray-600 text-primary focus-visible:ring-primary")
       plain role[:label]
     end

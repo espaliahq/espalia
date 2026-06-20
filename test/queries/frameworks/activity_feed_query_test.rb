@@ -131,6 +131,46 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "suggestion create lifecycle" do
+    setup do
+      @create_sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: @create_sid,
+        target_entity_type: "behavioural_expectation", target_entity_id: nil,
+        parent_id: @cap.capability_id, kind: "create", author_id: @actor.id,
+        proposed_attributes: { "level_ordinal" => 2, "description" => "Anticipates risks" })
+    end
+
+    should "carry proposed_attributes so the feed can preview the proposed value" do
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: @create_sid, target_entity_type: "behavioural_expectation",
+                parent_id: @cap.capability_id, author_id: @actor.id,
+                proposed_attributes: { "level_ordinal" => 2, "description" => "Anticipates risks" } },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_create" }
+      assert entry
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal "Anticipates risks", entry.payload[:proposed_attributes]["description"]
+    end
+
+    should "flag the original create as superseded once amended, leaving the amendment live" do
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: @create_sid, target_entity_type: "behavioural_expectation",
+                parent_id: @cap.capability_id, author_id: @actor.id,
+                proposed_attributes: { "level_ordinal" => 2, "description" => "First" } },
+        actor_id: @actor.id)
+      append(Frameworks::Events::SuggestionAmended,
+        data: { suggestion_id: @create_sid, new_suggested_value: "Second", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      created = entries.find { |e| e.kind == "suggestion_create" }
+      amended = entries.find { |e| e.kind == "suggestion_amended" }
+      assert created.superseded, "the original create is superseded by the amendment"
+      assert_not amended.superseded, "the amendment stays live"
+    end
+  end
+
   context "structural & editorial" do
     should "anchor capability_archived to its capability + category, actor from metadata" do
       append(Frameworks::Events::CapabilityArchived,
@@ -142,6 +182,22 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal @cap.capability_id, entry.capability_id
       assert_equal @cat.category_id, entry.category_id
       assert_equal "Ada Author", entry.actor_name
+    end
+
+    should "anchor an expectation_added to its capability with the level + description" do
+      append(Frameworks::Events::BehaviouralExpectationSet,
+        data: { expectation_id: SecureRandom.uuid_v7, stable_id: SecureRandom.uuid_v7,
+                capability_id: @cap.capability_id, level_ordinal: 3, description: "Identifies root causes" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "expectation_added" }
+      assert entry
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal @cat.category_id, entry.category_id
+      assert_equal "Ada Author", entry.actor_name
+      assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+      assert_equal 3, entry.payload[:level_ordinal]
+      assert_equal "Identifies root causes", entry.payload[:description]
     end
 
     should "anchor an expectation_updated to its parent capability" do
@@ -234,6 +290,76 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert entry
       assert_nil entry.capability_id
       assert_nil entry.category_id
+    end
+  end
+
+  # A draft-added capability/expectation isn't in the published read model yet,
+  # but the feed must still name it (from the creating event in the window).
+  context "draft-entity naming and expectation levels" do
+    setup do
+      @draft_cap_id = SecureRandom.uuid_v7
+      @role = create(:framework_role, role_family_id: SecureRandom.uuid_v7, tenant: @tenant,
+        name: "Engineering Manager", code: "EM")
+    end
+
+    should "name a draft-added capability from its CapabilityAdded event" do
+      append(Frameworks::Events::CapabilityAdded,
+        data: { capability_id: @draft_cap_id, stable_id: SecureRandom.uuid_v7,
+                category_id: @cat.category_id, name: "Draft Capability" })
+
+      entry = entries.find { |e| e.kind == "capability_added" }
+      assert entry
+      assert_equal @draft_cap_id, entry.capability_id
+      assert_equal "Draft Capability", entry.capability_name
+    end
+
+    should "reflect a rename of a draft-added capability (newest name wins)" do
+      append(Frameworks::Events::CapabilityAdded,
+        data: { capability_id: @draft_cap_id, stable_id: SecureRandom.uuid_v7,
+                category_id: @cat.category_id, name: "Original Draft Name" })
+      append(Frameworks::Events::CapabilityUpdated,
+        data: { capability_id: @draft_cap_id, name: "Renamed Draft" })
+
+      entry = entries.find { |e| e.kind == "capability_added" }
+      assert_equal "Renamed Draft", entry.capability_name
+    end
+
+    should "name the capability for a binding on a draft-added capability" do
+      append(Frameworks::Events::CapabilityAdded,
+        data: { capability_id: @draft_cap_id, stable_id: SecureRandom.uuid_v7,
+                category_id: @cat.category_id, name: "Draft Capability" })
+      append(Frameworks::Events::CapabilityRoleBindingCreated,
+        data: { binding_id: SecureRandom.uuid_v7, capability_id: @draft_cap_id,
+                role_id: @role.role_id, weight: 1.0 })
+
+      entry = entries.find { |e| e.kind == "binding_added" }
+      assert entry
+      assert_equal @draft_cap_id, entry.capability_id
+      assert_equal "Draft Capability", entry.capability_name
+    end
+
+    should "pin the level on a directly-authored expectation" do
+      append(Frameworks::Events::BehaviouralExpectationSet,
+        data: { expectation_id: SecureRandom.uuid_v7, stable_id: SecureRandom.uuid_v7,
+                capability_id: @cap.capability_id, level_ordinal: 4, description: "X" })
+
+      entry = entries.find { |e| e.kind == "expectation_added" }
+      assert_equal 4, entry.payload[:expectation_level]
+    end
+
+    should "pin the level on a proposed (create) expectation suggestion" do
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit, tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "behavioural_expectation", target_entity_id: nil, parent_id: @cap.capability_id,
+        kind: "create", author_id: @actor.id, proposed_attributes: { "level_ordinal" => 5, "description" => "Y" })
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: sid, target_entity_type: "behavioural_expectation", parent_id: @cap.capability_id,
+                author_id: @actor.id, proposed_attributes: { "level_ordinal" => 5, "description" => "Y" } },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_create" }
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal 5, entry.payload[:expectation_level]
     end
   end
 

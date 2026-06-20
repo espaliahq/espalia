@@ -33,6 +33,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "binding_added"             => "bg-emerald-500",
     "binding_updated"           => "bg-indigo-500",
     "binding_removed"           => "bg-gray-400",
+    "expectation_added"         => "bg-emerald-500",
     "expectation_updated"       => "bg-indigo-500",
     "illustration_added"        => "bg-indigo-500",
     "illustration_updated"      => "bg-indigo-500",
@@ -67,6 +68,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "binding_added"             => "structural",
     "binding_updated"           => "structural",
     "binding_removed"           => "structural",
+    "expectation_added"         => "structural",
     "draft_opened"              => "lifecycle",
     "version_published"         => "lifecycle",
     "migration_mapping_defined" => "lifecycle",
@@ -276,6 +278,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "category_added"      then "Added a category"
     when "category_archived"   then "Archived a category"
     when "category_updated"    then "Updated a category"
+    when "expectation_added"   then "Added an expectation#{expectation_level}"
     when "binding_added"       then binding_role ? "Bound to #{binding_role}" : "Bound a capability to a role"
     when "binding_updated"     then binding_role ? "Updated the #{binding_role} binding" : "Updated a capability-role binding"
     when "binding_removed"     then binding_role ? "Unbound #{binding_role}" : "Removed a capability-role binding"
@@ -315,13 +318,14 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def context_text
     cap = @entry.capability_name.to_s.strip.presence
     cat = payload_value(:category_name).to_s.strip.presence
-    if cap && cat
-      "#{cat} · #{cap}"
-    elsif cap
-      cap
-    elsif cat
-      cat
-    end
+    base =
+      if cap && cat then "#{cat} · #{cap}"
+      elsif cap then cap
+      elsif cat then cat
+      end
+    # Expectation entries pin the level too ("Category · Capability · L2").
+    level = payload_value(:expectation_level)
+    base && level.present? ? "#{base} · L#{level}" : base
   end
 
   # ── Secondary line (preview / detail) ──
@@ -330,8 +334,12 @@ class Views::Frameworks::Activity::Entry < Views::Base
     case @entry.kind
     when "suggestion_edit", "suggestion_amended"
       payload_value(:suggested_value) || payload_value(:new_suggested_value)
+    when "suggestion_create"
+      creation_preview
     when "suggestion_approved", "suggestion_rejected"
       payload_value(:comment)
+    when "expectation_added"
+      payload_value(:description)
     when "expectation_updated", "illustration_updated"
       payload_value(:new_description)
     when "migration_mapping_defined"
@@ -339,6 +347,12 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "binding_added", "binding_updated"
       binding_change_text
     end.to_s.strip.presence
+  end
+
+  # " at L2" suffix for an authored expectation, when the level is known.
+  def expectation_level
+    ordinal = payload_value(:level_ordinal)
+    ordinal.present? ? " at L#{ordinal}" : ""
   end
 
   # The role this binding entry concerns (e.g. "EM · Engineering Manager"), or
@@ -371,5 +385,17 @@ class Views::Frameworks::Activity::Entry < Views::Base
     return nil unless @entry.payload.respond_to?(:[])
 
     @entry.payload[key] || @entry.payload[key.to_s]
+  end
+
+  # Preview of a create proposal's content — the first present of the entity's
+  # human-readable attributes, so the reviewer can see what's proposed rather
+  # than a bare "Proposed a new …".
+  CREATE_PREVIEW_KEYS = %i[description name title].freeze
+
+  def creation_preview
+    attrs = payload_value(:proposed_attributes)
+    return nil unless attrs.respond_to?(:[])
+
+    CREATE_PREVIEW_KEYS.filter_map { |k| attrs[k] || attrs[k.to_s] }.first
   end
 end

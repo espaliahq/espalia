@@ -442,6 +442,29 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       end
       assert_match /not found/, err.message
     end
+
+    should "raise if the capability already has an expectation at that level" do
+      @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, 1, "First")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, 1, "Second")
+      end
+      assert_match /already has an expectation at level 1/, err.message
+    end
+
+    should "treat a string ordinal as the same cell as the integer (normalized)" do
+      @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, 1, "First")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, "1", "Dup via string")
+      end
+      assert_match /already has an expectation at level 1/, err.message
+    end
+
+    should "store the ordinal as an integer even when given a string" do
+      @aggregate.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap_id, "3", "Stringy")
+      assert_equal 3, @aggregate.unpublished_events.to_a.last.data[:level_ordinal]
+    end
   end
 
   context "#update_behavioural_expectation" do

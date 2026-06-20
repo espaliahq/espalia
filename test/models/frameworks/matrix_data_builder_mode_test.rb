@@ -148,10 +148,80 @@ class Frameworks::MatrixDataBuilderModeTest < ActiveSupport::TestCase
     end
   end
 
+  context "authorable empty cells" do
+    setup do
+      # A role with two *live* levels (avoids the draft-level confound), a
+      # capability bound to it with an expectation only at level 1 — so level 2
+      # is empty-but-applicable.
+      role_id = SecureRandom.uuid_v7
+      levels = [
+        Level.new(level_id: SecureRandom.uuid_v7, role_id: role_id, ordinal: 1,
+                  title: "L1", code: "R1", is_entry: true, added_in_draft: false),
+        Level.new(level_id: SecureRandom.uuid_v7, role_id: role_id, ordinal: 2,
+                  title: "L2", code: "R2", is_entry: false, added_in_draft: false)
+      ]
+      role = Role.new(role_id: role_id, role_family_id: SecureRandom.uuid_v7,
+                      name: "Engineer", code: "R", track: "ic", levels: levels)
+      @gap_family = RoleFamily.new(role_family_id: role.role_family_id, name: "Engineering",
+                                   description: nil, department: nil, roles: [ role ])
+      @gap_role_id = role_id
+
+      @gap_cap_id = SecureRandom.uuid_v7
+      gap_binding = CapabilityRoleBinding.new(binding_id: SecureRandom.uuid_v7, capability_id: @gap_cap_id,
+                                              role_id: role_id, weight: 1.0, individual_tolerance: nil,
+                                              added_in_draft: false)
+      gap_exp = BehaviouralExpectation.new(expectation_id: SecureRandom.uuid_v7, stable_id: SecureRandom.uuid_v7,
+                                           capability_id: @gap_cap_id, level_ordinal: 1, description: "only level 1",
+                                           illustrations: [], added_in_draft: false)
+      gap_cap = Capability.new(capability_id: @gap_cap_id, stable_id: SecureRandom.uuid_v7,
+                               category_id: SecureRandom.uuid_v7, name: "Gap Capability", description: nil,
+                               status: "active", bindings: [ gap_binding ], expectations: [ gap_exp ],
+                               added_in_draft: false, pending_archive: false)
+      @gap_category = CapabilityCategory.new(category_id: gap_cap.category_id, name: "Thinking", description: nil,
+                                             ordinal: 1, deficit_threshold: nil, overperformance_cap: nil,
+                                             status: "active", capabilities: [ gap_cap ])
+    end
+
+    should "emit an authorable placeholder for the empty applicable cell in edit mode" do
+      cap = build_gap(mode: :edit)[:categories].first[:capabilities].first
+      assert_not_nil cap[:cells][1][:expectation], "level 1 is authored"
+      assert cap[:cells][2][:authorable], "level 2 is empty-but-applicable"
+      assert_nil cap[:cells][2][:expectation]
+      assert_equal @gap_cap_id, cap[:cells][2][:capability_id]
+    end
+
+    should "leave the empty applicable cell nil in view mode" do
+      cap = build_gap(mode: :view)[:categories].first[:capabilities].first
+      assert_nil cap[:cells][2], "no authoring placeholder in view mode"
+    end
+
+    should "attach pending expectation-create suggestions to the empty cell" do
+      suggestion = Object.new
+      creates = { [ @gap_cap_id, 2 ] => [ suggestion ] }
+      cap = build_gap(mode: :edit, pending_expectation_creates: creates)[:categories].first[:capabilities].first
+
+      assert_equal [ suggestion ], cap[:cells][2][:pending_expectation_creates]
+      assert_empty Array(cap[:cells][1] && cap[:cells][1][:pending_expectation_creates])
+    end
+  end
+
   private
 
   def build(mode:)
     build_with([ @category ], mode: mode)
+  end
+
+  def build_gap(mode:, pending_expectation_creates: {})
+    Frameworks::MatrixDataBuilder.new(
+      framework: Framework.new(
+        framework_id: SecureRandom.uuid_v7, name: "Test",
+        current_published_version: 1, draft_in_progress: true, draft_version: 2,
+        role_families: [ @gap_family ], capability_categories: [ @gap_category ]
+      ),
+      role_families: [ @gap_family ], categories: [ @gap_category ],
+      selected_role_ids: [ @gap_role_id ], mode: mode,
+      pending_expectation_creates: pending_expectation_creates
+    ).build
   end
 
   def build_with(categories, mode:)

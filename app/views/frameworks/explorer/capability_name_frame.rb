@@ -54,8 +54,14 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
         render_inline_diff(original: @capability.name, pending_edit: @pending_edit)
       end
     else
-      span(class: "#{base} #{decoration}".strip) { render_highlighted(@capability.name, @search_query) }
+      span(class: "#{base} #{decoration}".strip, title: draft_change_title(added_in_draft?)) do
+        render_highlighted(@capability.name, @search_query)
+      end
     end
+  end
+
+  def added_in_draft?
+    @capability.respond_to?(:added_in_draft) && @capability.added_in_draft
   end
 
   def editable
@@ -76,6 +82,6 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   end
 
   def decoration
-    suggestion_text_classes(pending_edit_count: @pending_edit_count)
+    suggestion_text_classes(pending_edit_count: @pending_edit_count, added_in_draft: added_in_draft?)
   end
 end

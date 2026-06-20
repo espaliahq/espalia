@@ -150,6 +150,10 @@ Suggested edits (collaborative editing):
   SuggestionAmended { suggestion_id, new_suggested_value, author_id, rationale }
     → Author updates their own pending suggestion in-place (preserves suggestion_id
        and any comment thread attached to it)
+    → For a CREATE suggestion the new value is the revised primary content
+       (description / name / title per CREATE_CONTENT_FIELD); on approval
+       apply_suggested_creation folds new_suggested_value into that attribute so
+       the entity is created with the amended value, not the original proposal.
   SuggestionCommented { suggestion_id, author_id, content }
   SuggestionApproved { suggestion_id, reviewer_id, comment }
     → Triggers actual content-change event (e.g. RoleIllustrationUpdated)

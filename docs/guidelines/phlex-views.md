@@ -112,6 +112,34 @@ bodies emit (call `render`/`p`/`form`), which is why this works in practice.
 slot) or embedded (`standalone: false` — overlay only, an ancestor provides the
 controller, for many remote triggers sharing one modal).
 
+## Inline-edit affordances (pencil placement)
+
+An inline-edit pencil (or equivalent hover-revealed edit control) sits
+**immediately to the right of the text it edits**, never pushed to the far edge
+of its container. The text takes only its content width and the pencil follows
+it directly:
+
+```ruby
+# Good — pencil hugs the text
+div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
+  span(class: "...") { @text }          # no flex-1 / flex-grow on the text
+  render_inline_editor_pencil(aria_label: "Edit …")  # shrink-0
+end
+
+# Bad — flex-1 on the text shoves the pencil to the far side of the cell
+span(class: "flex-1 ...") { @text }
+render_inline_editor_pencil(aria_label: "Edit …")
+```
+
+Rules:
+- The display wrapper is `flex items-start gap-1`; the text element carries **no
+  `flex-1`/`flex-grow`** and the pencil is `shrink-0`.
+- Reuse `Views::Frameworks::Explorer::Concerns::InlineEditable#render_inline_editor_pencil`
+  (hover/focus reveal via the `group/ine` token) rather than re-rolling the
+  control, so behaviour and styling stay uniform.
+- The pencil belongs in the same visual line as the value, so the edit target is
+  unambiguous — a control floated to the opposite edge reads as unrelated.
+
 ## Controller Rendering
 
 ```ruby

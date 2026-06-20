@@ -353,6 +353,18 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
       assert_match(/Applied via approved suggestion/, updated.data[:rationale])
     end
 
+    should "apply the amended value when an amended create suggestion is approved" do
+      @aggregate.suggest_create(@framework_id, @suggestion_id, "behavioural_expectation",
+        { "level_ordinal" => 2, "description" => "Original wording" }, parent_id: @cap_id, author_id: @author_id)
+      @aggregate.amend_suggestion(@suggestion_id, "Amended wording", @author_id)
+      @aggregate.approve_suggestion(@suggestion_id, @reviewer_id)
+
+      set_event = new_events.find { |e| e.is_a?(Frameworks::Events::BehaviouralExpectationSet) }
+      assert_not_nil set_event
+      assert_equal "Amended wording", set_event.data[:description], "approval must apply the amended value, not the original"
+      assert_equal 2, set_event.data[:level_ordinal]
+    end
+
     should "emit CapabilityUpdated for capability/name" do
       @aggregate.suggest_edit(@framework_id, @suggestion_id,
         "capability", @cap_id, "name", "Renamed", @author_id)

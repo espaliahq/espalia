@@ -450,8 +450,16 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if no draft in progress, capability not found, or expectation already exists
   def set_behavioural_expectation(framework_id, expectation_id, stable_id, capability_id, level_ordinal, description)
     ensure_draft_in_progress!
+    # Normalize so the uniqueness guard (and the stored ordinal) are type-stable
+    # — the suggest-create path forwards a JSON ordinal that may be a string, so
+    # "1" and 1 must be treated as the same cell.
+    level_ordinal = Integer(level_ordinal, exception: false)
+    raise "Level ordinal must be an integer" if level_ordinal.nil?
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Expectation #{expectation_id} already exists" if @expectations.key?(expectation_id)
+    if @expectations.values.any? { |e| e[:capability_id] == capability_id && e[:level_ordinal] == level_ordinal }
+      raise "Capability #{capability_id} already has an expectation at level #{level_ordinal}"
+    end
 
     apply(Frameworks::Events::BehaviouralExpectationSet.new(data: {
       framework_id: framework_id,
@@ -1548,10 +1556,31 @@ class Frameworks::Aggregate
   # @param suggestion [Hash] pending_edits entry with kind: :create
   # @raise [RuntimeError] if the entity type is not supported
   # @return [String] the generated entity ID for the created record
+  # The primary content attribute of each create type — the field an amendment's
+  # `suggested_value` revises. Used to fold an amended value back into the
+  # attributes the entity is built from on approval.
+  CREATE_CONTENT_FIELD = {
+    "role_illustration" => :description,
+    "behavioural_expectation" => :description,
+    "capability" => :name,
+    "capability_category" => :name,
+    "role" => :name,
+    "role_family" => :name,
+    "level" => :title
+  }.freeze
+
   def apply_suggested_creation(suggestion) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
     type = suggestion[:target_entity_type]
     attrs = (suggestion[:proposed_attributes] || {}).transform_keys(&:to_sym)
     parent_id = suggestion[:parent_id]
+
+    # An amended create carries its revised content in :suggested_value (the
+    # amend command only updates that field), so fold it back into the primary
+    # content attribute — otherwise approval would apply the original proposal.
+    amended = suggestion[:suggested_value]
+    if amended.present? && (key = CREATE_CONTENT_FIELD[type])
+      attrs[key] = amended
+    end
 
     entity_id = SecureRandom.uuid_v7
     stable_id = SecureRandom.uuid_v7

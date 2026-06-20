@@ -437,7 +437,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_add_capability",
-        "description" => "Add a capability to a category, optionally binding it to roles (owner/editor/lead only).",
+        "description" => "Add a capability to a category, binding it to one or more roles (owner/editor/lead only).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -732,6 +732,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "binding_id"   => { "type" => "string" }
           },
           "required" => %w[framework_id binding_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_set_behavioural_expectation",
+        "description" => "Author a behavioural expectation for an empty cell — applied directly with approval rights in editing mode, else proposed as a suggestion.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"  => { "type" => "string" },
+            "capability_id" => { "type" => "string" },
+            "level_ordinal" => { "type" => "integer" },
+            "description"   => { "type" => "string" },
+            "mode"          => { "type" => "string", "enum" => %w[editing suggesting] }
+          },
+          "required" => %w[framework_id capability_id level_ordinal description],
           "additionalProperties" => false
         },
         "annotations" => {

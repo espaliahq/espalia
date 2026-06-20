@@ -145,8 +145,8 @@ class FrameworksController < ApplicationController
     graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
             Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
 
-    pending_suggestions, pending_illustration_creates =
-      mode == :edit ? load_pending_suggestion_maps : [ {}, {} ]
+    pending_suggestions, pending_illustration_creates, pending_expectation_creates =
+      mode == :edit ? load_pending_suggestion_maps : [ {}, {}, {} ]
 
     matrix_data = Frameworks::MatrixDataBuilder.new(
       framework: graph,
@@ -157,6 +157,7 @@ class FrameworksController < ApplicationController
       mode: mode,
       pending_suggestions: pending_suggestions,
       pending_illustration_creates: pending_illustration_creates,
+      pending_expectation_creates: pending_expectation_creates,
       search_query: resolved_search_query
     ).build
 
@@ -198,8 +199,13 @@ class FrameworksController < ApplicationController
     creates = base.creates
       .where(target_entity_type: "role_illustration")
       .to_a.group_by(&:parent_id)
+    # Pending expectation creates, keyed by [capability_id, level_ordinal] so the
+    # matrix cell at that position can render a ghost of the proposed expectation.
+    expectation_creates = base.creates
+      .where(target_entity_type: "behavioural_expectation")
+      .to_a.group_by { |s| [ s.parent_id, s.proposed_attributes["level_ordinal"].to_i ] }
 
-    [ suggestions, creates ]
+    [ suggestions, creates, expectation_creates ]
   end
 
   # Iterates pending suggestions once, aggregating the per-entity count and the

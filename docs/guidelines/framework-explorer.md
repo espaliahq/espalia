@@ -11,7 +11,7 @@ The Framework Explorer is a two- or three-pane interactive view for browsing car
 The explorer has two modes, both backed by the same components:
 
 - **View mode** (`GET /frameworks/:id`) — published state only. No inline editors, no pending-suggestion decorations on the grid, no context pane. The `.flex` layout has two panes (role tree + matrix).
-- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability name / **capability description** / category / expectation / illustration text, "+ Add illustration" affordances, draft-only and pending-archive badges, the amber "Edit mode" header badge, and the context (suggestions/activity) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin. **Structural edits** (add capability/category, the draft pill, the Publish button) need the narrower `#edit_structure?` / `#publish?` bar — see §11. The row-actions **Archive** is offered to any suggest-rights viewer (it applies directly or proposes a suggestion per the edit/suggest toggle + authority — §11).
+- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability name / **capability description** / category / expectation / illustration text, "+ Add illustration" affordances, the wiggle on draft (not-yet-published) entities + the pending-archive badge, the amber "Edit mode" header badge, and the context (suggestions/activity) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin. **Structural edits** (add capability/category, the draft pill, the Publish button) need the narrower `#edit_structure?` / `#publish?` bar — see §11. The row-actions **Archive** is offered to any suggest-rights viewer (it applies directly or proposes a suggestion per the edit/suggest toggle + authority — §11).
 
 Both modes read structural data from the same `Frameworks::ExplorerGraph` snapshot (see [docs/architecture/framework-edit-mode-benchmarks.md](../architecture/framework-edit-mode-benchmarks.md)). A `mode: :view | :edit` kwarg is threaded from `ShowView` down through `Matrix`, `MatrixCategoryGroup`, `MatrixRow`, `MatrixCell`, and each entity's inline-edit frame. The `MatrixDataBuilder` filters out `added_in_draft` entities in view mode — matching `PublishedState`'s event-deferral semantics from ADR-16.
 
@@ -26,7 +26,7 @@ Plumbing:
 - Persisted client-side in a 1-year cookie `framework_edit_mode` (`editing` | `suggesting`). Single global cookie — applies across frameworks.
 - [`app/controllers/concerns/framework_edit_mode.rb`](../../app/controllers/concerns/framework_edit_mode.rb) reads the cookie server-side and returns `:editing` / `:suggesting`.
 - The four inline-edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`) `include FrameworkEditMode` and dispatch via the shared [`InlineSuggestedEdits`](../../app/controllers/concerns/inline_suggested_edits.rb) concern (`submit_inline_suggested_edit`), passing `mode: framework_edit_mode`. (`CapabilitiesController#update` **and** `CategoriesController#update` each handle **name or description** — whichever field the inline editor submitted — re-rendering the matching frame.)
-- **Consecutive edits by the same author amend, they don't stack.** When the author already has a *pending* edit on the same `(entity, field)`, `submit_inline_suggested_edit` routes the new value through `#amend_suggestion` (→ `SuggestionAmended`) instead of a second `#suggest_edit`. So in Suggesting mode (and for any non-authority user) a field carries **one** pending suggestion per author — the all-suggestions page and activity feed never show consecutive duplicate suggestions on the same field by the same person; the 2nd+ edit renders as a distinct "Amended a … suggestion" feed entry. (In Editing mode an authority-holder's edit auto-approves immediately, so no pending suggestion lingers to amend — each applied change is its own audit event. Different authors still produce separate pending suggestions on the same field, so the §10 "stacked edits" multi-author case is unchanged.)
+- **Consecutive edits by the same author amend, they don't stack.** When the author already has a *pending* edit on the same `(entity, field)`, `submit_inline_suggested_edit` routes the new value through `#amend_suggestion` (→ `SuggestionAmended`) instead of a second `#suggest_edit`. So in Suggesting mode (and for any non-authority user) a field carries **one** pending suggestion per author — the all-suggestions page and activity feed never show consecutive duplicate suggestions on the same field by the same person; the 2nd+ edit renders as a distinct "Amended a … suggestion" feed entry. (In Editing mode an authority-holder's edit auto-approves immediately, so no pending suggestion lingers to amend — each applied change is its own audit event. Different authors still produce separate pending suggestions on the same field, so the §10 "stacked edits" multi-author case is unchanged.) **The same amend-on-duplicate rule covers `behavioural_expectation` *creates*** authored via "+ Add expectation": `Operations::Frameworks::SetBehaviouralExpectation` amends the author's existing pending create for that cell instead of stacking a second proposal. Because `apply_suggested_creation` reads `proposed_attributes` but an amend only updates `suggested_value`, the operation/aggregate fold the amended value back into the content field (`Frameworks::Aggregate::CREATE_CONTENT_FIELD`) so approval applies the latest value — and create/delete proposals are in `ActivityFeedQuery::PROPOSAL_KINDS`, so an amended create supersedes its original feed entry (only the latest stays actionable).
 - `SuggestionsController#create` (the explicit "propose a change" endpoint for full-form creates/deletes) is intentionally **not** wired — it always submits as pending regardless of the toggle.
 - Stimulus controller [`edit_mode_toggle_controller.js`](../../app/javascript/controllers/edit_mode_toggle_controller.js) writes the cookie and swaps `aria-pressed` + the caller-supplied active/inactive classes when clicked. No server round-trip on select; the cookie is picked up on the next form submission.
 
@@ -308,6 +308,8 @@ Each suggestion row in the panel must answer three questions at a glance: **what
 
 In edit mode, suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has a pending change" with the proposal itself visible inline.
 
+**Pending-change vocabulary (NON-NEGOTIABLE): the wiggle is the universal "differs from published" signal — never a pill.** The amber wavy underline ("the wiggle", `PENDING_EDIT_CLASSES`) marks any text that is **not in the published framework**, whether it's a pending suggestion *or* a change already applied into the open draft (added/edited in draft, not yet published). Do **not** add a "New in draft"/"Draft"/"Unpublished" pill or badge for this — the wiggle says it. Apply it via `suggestion_text_classes(added_in_draft: …)` (it returns the wiggle for `added_in_draft` just as it does for a pending edit), and pair it with `draft_change_title(added_in_draft)` so the meaning is conveyed non-visually (a `title` tooltip — accessibility, since the wiggle is otherwise colour/decoration-only). The one explicit badge that remains is **"Pending archive"**, because *removal* is a distinct state (the row is also struck through), not merely "differs from published".
+
 **Inline diff (primary affordance for text edits).** When an entity has a pending `kind: "edit"` on its text field, the entity re-renders as a character-level diff over the original text:
 
 - **Added graphemes** — light-blue wavy underline (`PENDING_ADD_CLASSES`, `decoration-sky-400 decoration-wavy`).
@@ -325,7 +327,7 @@ See `app/models/frameworks/suggestion_diff.rb` for the algorithm and `test/model
 - `PENDING_REMOVE_CLASSES` — strikethrough for removed graphemes.
 - `PROPOSED_TEXT_CLASSES` — alias of `PENDING_ADD_CLASSES`, used for the fallback.
 - `PENDING_DELETE_CLASSES` — red strikethrough on the entity wrapper (applied when `pending_delete_count > 0`). Delete wins over edit if both are non-zero.
-- `PENDING_EDIT_CLASSES` — legacy amber wavy underline retained as a wrapper-level fallback when an entity has a pending edit but no `pending_edit` payload is available (e.g. a future entity type that hasn't been wired through the map yet). Not expected to render on the four text-edit sites in normal operation.
+- `PENDING_EDIT_CLASSES` — the amber wavy underline ("the wiggle"), the universal "differs from published" signal. Returned by `suggestion_text_classes` for both **`added_in_draft`** entities (the draft capability name / expectation text / binding role — replacing the old "New in draft" pill) and the wrapper-level fallback when an entity has a pending edit but no `pending_edit` diff payload. Pair with `draft_change_title(added_in_draft)` for the a11y tooltip.
 
 **Where the inline diff is applied** — six sites, each fed by `MatrixDataBuilder` from the `pending_suggestions` map `{ count:, latest_by_field: { field => descriptor } }`. The map tracks the latest pending edit **per field** (not one field per entity), so a category's (and capability's) name AND description each decorate independently:
 
@@ -361,8 +363,34 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
 - **"+ Add category"** — in the stats bar (header). Opens the add-category modal.
 - **"+ Add capability"** — at the foot of each category group. Opens the
   add-capability modal, prefilled with that category; it captures name +
-  description + which **roles** the capability applies to (so it's visible in
-  the role-filtered matrix — a capability bound to no role is hidden).
+  description + which **roles** the capability applies to. **At least one role
+  is required** (a capability bound to no role is hidden from the role-filtered
+  matrix) — enforced both client-side (the modal blocks submit + shows an inline
+  message) and in `AddCapability`.
+- **"+ Add expectation"** — inline affordance on an **empty-but-applicable**
+  matrix cell (a level the capability's bound roles reach, with no expectation
+  yet). `MatrixDataBuilder` emits an `authorable` placeholder cell only in edit
+  mode (never view); `MatrixCell` renders the affordance for **any edit-mode
+  viewer** (edit mode already requires suggest rights), via `NewExpectationFrame`
+  — the same inline-editor toggle as "+ Add illustration". Submits to
+  `Operations::Frameworks::SetBehaviouralExpectation`, which **follows the
+  suggest/approve path** (routes through `suggest_create`): in editing mode an
+  author with expectation-tier approval authority has it applied directly
+  (shape-changing → draft), otherwise — or in suggesting mode — it lands as a
+  pending `behavioural_expectation` creation suggestion. A *not-applicable* cell
+  (no bound selected role at that ordinal) and a *filled* cell are untouched.
+  (A directly-applied expectation is draft-deferred from the read model, so its
+  inline edit resolves from the graph — Lesson 17.) A **pending** create renders
+  as an **editable ghost** in the cell (`PendingExpectationFrame`, amber wavy
+  underline — the explorer's standard pending-change signal, no extra label) —
+  so a proposed expectation shows in the grid, not just the feed — via
+  `MatrixDataBuilder`'s `pending_expectation_creates` map (keyed by
+  `[capability_id, level_ordinal]`). An expectation is **singular per cell**, so
+  while a proposal exists the cell shows the ghost with a hover **pencil**
+  (amend — author — / suggest alternative — others) and **no "+ Add
+  expectation"** affordance; the pencil's form re-submits to the same create
+  endpoint, which amends the author's own proposal or records a non-author's
+  alternative. Approve/reject stays in the actionable feed.
 - **Row-actions kebab (⋮) → Archive** — hover-revealed beside the capability-name
   pencil; offered to **any suggest-rights (edit-mode) viewer**, not just
   edit-structure holders. "Archive" is the single removal operation — there is no
@@ -857,10 +885,12 @@ line (§9).
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Edit roles… (binding editor) + Archive (§11, §12) |
-| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2) |
+| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
 | `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
+| `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
+| `app/views/frameworks/explorer/pending_expectation_frame.rb` | Editable ghost of a pending expectation-create suggestion (amber wavy underline + pencil → amend/alternative), shown instead of "+ Add expectation" while a proposal exists |
 | `app/views/frameworks/explorer/capability_name_frame.rb` | Capability name + edit-mode inline editor |
 | `app/views/frameworks/explorer/capability_description_frame.rb` | Capability description + edit-mode inline editor ("Add a description…" when blank) |
 | `app/views/frameworks/explorer/category_name_frame.rb` | Category name + edit-mode inline editor |
@@ -898,7 +928,7 @@ line (§9).
 | `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
 | `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync + activity-sync-signal observer (live reload) |
 | `app/javascript/controllers/framework_search_controller.js` | Stats-bar text filter — debounced input → `framework-search:changed` (§4a) |
-| `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor` |
+| `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor`. Names entities from the read model **supplemented by the creating event in the window** (so draft-added capabilities/expectations — deferred from the read model — are still named in "Added a capability" / binding entries), and pins the **level** on expectation entries ("Capability · L`n`") |
 | `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for the standalone suggestion index |
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) |
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
@@ -908,7 +938,7 @@ line (§9).
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH/POST) |
 | `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name **or** description (PATCH); add a capability (POST → `AddCapability`). Resolves the capability from the graph (incl. draft-added — Lesson 17) |
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name **or** description (PATCH); add a category (POST → `AddCategory`) |
-| `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH) |
+| `app/controllers/frameworks/expectations_controller.rb` | Inline edit on expectation description (PATCH — resolves from the graph for draft-added, Lesson 17); author an expectation in an empty cell (POST → `SetBehaviouralExpectation`, suggest/approve path) |
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
@@ -917,6 +947,7 @@ line (§9).
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
 | `app/operations/operations/frameworks/{add,update,remove}_capability_role_binding.rb` | Shared web + MCP binding operations — add/remove (shape-changing, draft) and weight/tolerance update (shape-preserving). |
+| `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |

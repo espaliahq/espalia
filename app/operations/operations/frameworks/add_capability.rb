@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
-# Adds a capability to a category and, optionally, binds it to one or more
-# roles in the same action so it is immediately visible in the role-filtered
-# matrix (a capability bound to no role is hidden). Shape-changing — adding a
-# capability auto-opens a draft (see Frameworks::Aggregate#ensure_draft_in_progress!).
+# Adds a capability to a category and binds it to one or more roles in the same
+# action so it is immediately visible in the role-filtered matrix. At least one
+# role is required — a capability bound to no role is hidden, so an unbound one
+# is never what the caller wants. Shape-changing — adding a capability auto-opens
+# a draft (see Frameworks::Aggregate#ensure_draft_in_progress!).
 #
 # Write — :mcp_client. It stages a structural change into the open draft;
 # the live impact happens at publish (:in_app). Restricted to edit-rights
 # holders (FrameworkPolicy#add_capability?).
 class Operations::Frameworks::AddCapability < Operations::Base
-  description "Add a capability to a category, optionally binding it to roles (owner/editor/lead only)."
+  description "Add a capability to a category, binding it to one or more roles (owner/editor/lead only)."
   category :write
   approval :mcp_client
 
@@ -60,11 +61,15 @@ class Operations::Frameworks::AddCapability < Operations::Base
     raise Operations::Base::ParameterError, "category #{params[:category_id]} not found in this framework"
   end
 
-  # Role ids that exist in this framework. Raises on any unknown id so we never
-  # add the capability and then fail (or silently skip) a binding.
+  # Role ids that exist in this framework. Requires at least one — a capability
+  # bound to no role is hidden from the role-filtered matrix, so an unbound
+  # capability is never what the caller wants. Raises on any unknown id so we
+  # never add the capability and then fail (or silently skip) a binding.
   def validated_role_ids
     requested = Array(params[:role_ids]).compact_blank
-    return [] if requested.empty?
+    if requested.empty?
+      raise Operations::Base::ParameterError, "select at least one role to bind the capability to"
+    end
 
     family_ids = FrameworkState::RoleFamily.where(framework_id: framework.framework_id).pluck(:role_family_id)
     valid = FrameworkState::Role.where(role_family_id: family_ids, role_id: requested).pluck(:role_id)

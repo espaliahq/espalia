@@ -69,11 +69,13 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       end
       click_button_with_js_fallback("Add role", expect_text: "Bound to every role.")
 
-      # Both roles bound now → the add select is gone, and the new binding shows
-      # the draft chip (add is shape-changing).
+      # Both roles bound now → the add select is gone, and the new (draft) binding
+      # carries the wiggle (the universal "differs from published" signal), not a
+      # "New in draft" pill.
       within "#binding-editor" do
         assert_text "Bound to every role."
-        assert_text "New in draft"
+        assert_no_text "New in draft"
+        assert_selector "span.decoration-amber-400", text: "Engineering Manager"
       end
       assert_text(/draft/i) # the header draft pill — a draft was auto-opened
     end
