@@ -435,6 +435,27 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
 - **Draft pill** (`vN draft`, teal) + **Publish button** — header, edit-mode +
   draft-open only; Publish links to the publish-review page where mappings are
   validated before the version is cut. (Draft lifecycle: see ADR-16/17.)
+- **Org-structure inline renames** — hover-pencil inline editors on the
+  **role-family name** and **role name** in the left role tree
+  (`RoleFamilyNameFrame` / `RoleNameFrame`, rendered by `RoleTree` when
+  `mode == :edit`) and on each per-role **level title** in the matrix header
+  (`LevelTitleFrame`, rendered by `MatrixHeader#full_title_badges`). These use
+  the shared `InlineEditable` pencil/form helpers but — unlike capability /
+  category text — are **direct edits, NOT the suggested-edit path**: org
+  structure has no approval tier, so there is no pending decoration, no
+  editing/suggesting toggle interaction, and no `SuggestionDecoration`. Each
+  PATCHes a thin controller (`Frameworks::{RoleFamilies,Roles,Levels}Controller`)
+  that dispatches `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`
+  (shape-preserving → applies live, no draft) and re-renders the frame. Gated by
+  `FrameworkPolicy#{update_role_family?,update_role?,update_level?}` (the
+  `edit_structure?` bar). **Constraints:** the level-title pencil shows only when
+  the header renders **full titles** (≤ 3 roles selected); the compact-code view
+  (> 3 roles) stays read-only — titles are hidden there, so the user renames with
+  fewer roles in scope. `MatrixDataBuilder#build_merged_levels` carries a
+  per-role `level_id` in each `role_codes` entry so the editor targets one
+  specific level. The inline UI is **rename-only** today — the Operations also
+  accept role code/track and level code for MCP, and `is_entry` is deferred until
+  `Operations::Base` grows Boolean-param support.
 
 **Shared modals under one `modal` controller.** Archive(-capability),
 add-capability, add-category, and archive-category are four embedded `Kit::Modal`s
@@ -880,9 +901,12 @@ line (§9).
 |------|---------|
 | `app/views/frameworks/show_view.rb` | Three-pane shell, stats bar, layout |
 | `app/views/frameworks/matrix_frame_view.rb` | Turbo Frame wrapper for matrix endpoint |
-| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree |
+| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; renders `RoleFamilyNameFrame` + `RoleNameFrame` for inline rename when `mode == :edit` |
+| `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
+| `app/views/frameworks/explorer/role_name_frame.rb` | Role name + edit-mode inline rename editor (direct edit) |
+| `app/views/frameworks/explorer/level_title_frame.rb` | Per-role level title + edit-mode inline rename editor (full-title header mode only) |
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
-| `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles |
+| `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles; renders `LevelTitleFrame` per role in full-title (≤3 roles) edit mode |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Edit roles… (binding editor) + Archive (§11, §12) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
@@ -942,14 +966,16 @@ line (§9).
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
+| `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Inline rename (PATCH) of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; re-render the name/title frame. Direct edit, not the suggest path. |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
 | `app/operations/operations/frameworks/{add,update,remove}_capability_role_binding.rb` | Shared web + MCP binding operations — add/remove (shape-changing, draft) and weight/tolerance update (shape-preserving). |
 | `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
+| `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code for MCP). `update_level` defers `is_entry` (no Boolean param support in `Operations::Base` yet). |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
-| `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
+| `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` / `update_role_family?` / `update_role?` / `update_level?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/controllers/concerns/inline_suggested_edits.rb` | `submit_inline_suggested_edit` — amends the author's pending edit on a field (→ `SuggestionAmended`) or creates a fresh suggestion; prevents consecutive duplicate suggestions |
 | `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side |
