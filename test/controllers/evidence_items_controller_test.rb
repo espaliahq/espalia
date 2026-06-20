@@ -49,7 +49,9 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
   context "PATCH /evidence_items/:id" do
     should "let the author edit their evidence" do
       sign_in @author_user
-      patch evidence_item_path(@evidence_id), params: { evidence: {
+      cell = "#{@cap.stable_id}|2"
+      patch evidence_item_path(@evidence_id), params: { return_to: "hub", evidence: {
+        evidence_id: @evidence_id, primary_cell: cell, desired_links: [ cell ],
         evidence_type: "project_outcome", content: "Revised content", title: "Now titled"
       } }
       assert_redirected_to evidence_hub_path
@@ -62,7 +64,11 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
 
     should "deny a non-author" do
       sign_in @other_user
-      patch evidence_item_path(@evidence_id), params: { evidence: { evidence_type: "project_outcome", content: "Hijacked" } }
+      cell = "#{@cap.stable_id}|2"
+      patch evidence_item_path(@evidence_id), params: { return_to: "hub", evidence: {
+        evidence_id: @evidence_id, primary_cell: cell, desired_links: [ cell ],
+        evidence_type: "project_outcome", content: "Hijacked"
+      } }
       assert_redirected_to root_path
       ActsAsTenant.with_tenant(@tenant) { assert_equal "Original content", EvidenceItem.find(@evidence_id).content }
     end

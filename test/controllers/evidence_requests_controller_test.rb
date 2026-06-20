@@ -85,7 +85,11 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
     should "record peer evidence and resolve the request" do
       id = make_request!
       sign_in @peer_user
-      post respond_evidence_request_path(id), params: { evidence_request: { evidence_type: "peer_feedback", content: "Great pairing." } }
+      cell = "#{@cap.stable_id}|2"
+      post respond_evidence_request_path(id), params: { return_to: "hub", evidence: {
+        request_id: id, primary_cell: cell, desired_links: [ cell ],
+        evidence_type: "peer_feedback", content: "Great pairing."
+      } }
       assert_redirected_to evidence_hub_path
       ActsAsTenant.with_tenant(@tenant) { assert_equal "responded", EvidenceRequest.find(id).status }
     end
@@ -93,7 +97,9 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
     should "capture the full evidence fields incl. title and external link" do
       id = make_request!
       sign_in @peer_user
-      post respond_evidence_request_path(id), params: { evidence_request: {
+      cell = "#{@cap.stable_id}|2"
+      post respond_evidence_request_path(id), params: { return_to: "hub", evidence: {
+        request_id: id, primary_cell: cell, desired_links: [ cell ],
         evidence_type: "code_review", title: "Pairing on the parser",
         content: "Drove the recursive-descent refactor together.",
         external_reference: { system: "github", url: "https://github.com/example/repo/pull/9" }
@@ -108,13 +114,11 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "render the full evidence fields (incl. URL) on the incoming card" do
+    should "render a Provide evidence modal trigger on the incoming card" do
       make_request!
       sign_in @peer_user
       get evidence_hub_path
-      assert_select "input[name='evidence_request[external_reference][url]']"
-      assert_select "input[name='evidence_request[title]']"
-      assert_select "select[name='evidence_request[evidence_type]']"
+      assert_select "button[data-evidence-modal-mode-param='respond']", text: "Provide evidence"
     end
 
     should "deny a non-requestee" do

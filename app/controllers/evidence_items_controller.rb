@@ -5,13 +5,18 @@
 # the hub is the author's home for managing it. Dispatches the shared
 # Operations (web + MCP parity); author-only via {EvidencePolicy}.
 class EvidenceItemsController < ApplicationController
+  include EvidenceDiffSubmit
+
   before_action :require_person
 
-  # PATCH /evidence_items/:id
+  # PATCH /evidence_items/:id — the unified modal's edit submit (content and/or
+  # links). The diff emits only what changed (no edited_at bump for links-only).
   def update
-    authorize evidence_item, :update?, policy_class: EvidencePolicy
+    # The author can edit; a content edit is gated again by UpdateEvidence's
+    # own update? check inside the diff.
+    authorize evidence_item, :add_link?, policy_class: EvidencePolicy
 
-    Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: update_attrs)
+    apply_evidence_diff
     redirect_to evidence_hub_path, notice: "Evidence updated."
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
     redirect_to evidence_hub_path, alert: e.message, status: :see_other
@@ -40,17 +45,8 @@ class EvidenceItemsController < ApplicationController
     @evidence_item ||= EvidenceItem.find(params.expect(:id))
   end
 
-  # The assignment the operations expect, derived from the item's coordinates.
+  # The assignment WithdrawEvidence expects, derived from the item's coordinates.
   def assignment_id
     PersonFrameworkAssignment.where(person_id: evidence_item.person_id, framework_id: evidence_item.framework_id).pick(:id)
-  end
-
-  def update_attrs
-    permitted = params.expect(evidence: [ :evidence_type, :content, :custom_type_label, :title,
-                                          { external_reference: [ :system, :url ] } ])
-    attrs = permitted.to_h.symbolize_keys.merge(assignment_id: assignment_id, evidence_id: evidence_item.id)
-    ref = attrs[:external_reference]
-    attrs.delete(:external_reference) unless ref.present? && ref["url"].present?
-    attrs
   end
 end

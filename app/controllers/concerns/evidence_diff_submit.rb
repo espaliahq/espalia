@@ -120,7 +120,7 @@ module EvidenceDiffSubmit
       custom_type_label: p[:custom_type_label].presence, title: p[:title].presence
     }
     ref = p[:external_reference]
-    attrs[:external_reference] = ref if ref.present? && ref[:url].present?
+    attrs[:external_reference] = ref if ref.present? && ref["url"].present?
     attrs
   end
 
@@ -134,8 +134,8 @@ module EvidenceDiffSubmit
       p[:custom_type_label].presence != item.custom_type_label.presence ||
       p[:title].presence != item.title.presence ||
       p[:content].to_s != item.content.to_s ||
-      ref[:system].presence != item.external_reference&.system.presence ||
-      ref[:url].presence != item.external_reference&.url.presence
+      ref["system"].presence != item.external_reference&.system.presence ||
+      ref["url"].presence != item.external_reference&.url.presence
   end
 
   def assignment_id_for(record)

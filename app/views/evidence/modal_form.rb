@@ -49,8 +49,11 @@ class Views::Evidence::ModalForm < Views::Base
       div(class: "p-5", data: { controller: "evidence-modal" }) do
         header
         context_card
+        # _top so the submit isn't captured by the #evidence-modal frame: the
+        # hub's redirect must navigate the page, and turbo_stream responses (the
+        # assessment surface) still apply globally regardless of frame target.
         form_with(url: form_action, method: form_method, class: "space-y-3",
-                  data: { action: "turbo:submit-end->modal#submitted" }) do
+                  data: { turbo_frame: "_top", action: "turbo:submit-end->modal#submitted" }) do
           hidden_fields
           content_fields
           links_section

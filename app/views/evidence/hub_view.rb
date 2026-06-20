@@ -10,10 +10,6 @@ class Views::Evidence::HubView < Views::Base
     "pending" => :warning, "responded" => :success, "declined" => :default, "cancelled" => :default
   }.freeze
 
-  INPUT_CLASSES = "w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm " \
-                  "focus-visible:ring-primary focus-visible:border-primary"
-  FIELD_LABEL_CLASSES = "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1"
-
   # @param incoming [Array<EvidenceRequest>] requests addressed to the viewer
   # @param outgoing [Array<EvidenceRequest>] requests the viewer made
   # @param authored [Array<EvidenceItem>] active evidence the viewer authored
@@ -32,11 +28,14 @@ class Views::Evidence::HubView < Views::Base
 
   def view_template
     render Components::Kit::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(class: "max-w-3xl mx-auto space-y-10") do
-        header
-        incoming_section
-        outgoing_section
-        authored_section
+      div(data: { controller: "modal evidence-modal", action: "keydown.esc@window->modal#close" }) do
+        div(class: "max-w-3xl mx-auto space-y-10") do
+          header
+          incoming_section
+          outgoing_section
+          authored_section
+        end
+        render Views::Evidence::ModalShell.new
       end
     end
   end
@@ -84,7 +83,7 @@ class Views::Evidence::HubView < Views::Base
       request_cell_line(request)
       expectation_block(request)
       message_line(request)
-      respond_block(request) if request.pending?
+      respond_actions(request) if request.pending?
     end
   end
 
@@ -155,15 +154,10 @@ class Views::Evidence::HubView < Views::Base
   def authored_actions(item, detail)
     return if detail[:assignment_id].blank?
 
-    div(class: "pt-2 border-t border-gray-100 dark:border-gray-800") do
-      details do
-        summary(class: "cursor-pointer inline-flex items-center min-h-11 text-sm font-medium text-primary [&::-webkit-details-marker]:hidden") { "Edit" }
-        form_with(url: evidence_item_path(item), method: :patch, class: "mt-2 space-y-3", data: { controller: "evidence-response" }) do
-          evidence_fields(name_scope: "evidence", id_prefix: "edit-#{item.id}", item: item)
-          submit_button("Save changes")
-        end
-      end
-      form_with(url: evidence_item_path(item), method: :delete, class: "mt-1") do
+    div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4") do
+      button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
+             class: "inline-flex items-center min-h-11 text-sm font-medium text-primary cursor-pointer") { "Edit" }
+      form_with(url: evidence_item_path(item), method: :delete) do
         button(type: "submit", data: { turbo_confirm: "Withdraw this evidence? It will be hidden everywhere it appears." },
                class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline cursor-pointer") { "Withdraw" }
       end
@@ -222,17 +216,26 @@ class Views::Evidence::HubView < Views::Base
     p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{request.message}”" }
   end
 
-  # ── Respond form (incoming) ──
+  # ── Respond / edit (open the unified modal) ──
 
-  def respond_block(request)
+  def respond_actions(request)
     div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3") do
-      form_with(url: respond_evidence_request_path(request), method: :post, class: "space-y-3",
-                data: { controller: "evidence-response" }) do
-        evidence_fields(name_scope: "evidence_request", id_prefix: "respond-#{request.id}")
-        submit_button("Provide evidence")
-      end
+      button(type: "button", data: modal_trigger_data(mode: "respond", request_id: request.id),
+             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { "Provide evidence" }
       decline_form(request)
     end
+  end
+
+  # Opens the unified evidence modal (return_to=hub) for a request/item.
+  def modal_trigger_data(mode:, request_id: nil, evidence_id: nil)
+    data = {
+      action: "evidence-modal#load click->modal#open",
+      evidence_modal_mode_param: mode,
+      evidence_modal_return_to_param: "hub"
+    }
+    data[:evidence_modal_request_id_param] = request_id if request_id
+    data[:evidence_modal_evidence_id_param] = evidence_id if evidence_id
+    data
   end
 
   def decline_form(request)
@@ -241,74 +244,6 @@ class Views::Evidence::HubView < Views::Base
                    class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm", aria: { label: "Decline reason" })
       f.submit("Decline",
                class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
-    end
-  end
-
-  # ── Shared evidence field set (respond + edit) ──
-
-  # @param name_scope [String] the params key ("evidence_request" | "evidence")
-  # @param id_prefix [String] unique DOM-id prefix (so multiple forms coexist)
-  # @param item [EvidenceItem, nil] pre-fill source when editing
-  def evidence_fields(name_scope:, id_prefix:, item: nil)
-    selected_type = item&.evidence_type.presence || "peer_feedback"
-    type_field(name_scope:, id_prefix:, selected: selected_type)
-    custom_label_field(name_scope:, id_prefix:, value: item&.custom_type_label, show: selected_type == "other")
-    title_field(name_scope:, id_prefix:, value: item&.title)
-    content_field(name_scope:, id_prefix:, value: item&.content)
-    external_reference_fields(name_scope:, id_prefix:,
-      system: item&.external_reference&.system, url: item&.external_reference&.url)
-  end
-
-  def type_field(name_scope:, id_prefix:, selected:)
-    div do
-      label(for: "#{id_prefix}-type", class: FIELD_LABEL_CLASSES) { "Type" }
-      select(id: "#{id_prefix}-type", name: "#{name_scope}[evidence_type]", class: INPUT_CLASSES,
-             data: { evidence_response_target: "typeSelect", action: "change->evidence-response#typeChanged" }) do
-        Views::Assessments::Evidence::Form::TYPE_OPTIONS.each do |text, value|
-          option(value: value, selected: value == selected) { text }
-        end
-      end
-    end
-  end
-
-  def custom_label_field(name_scope:, id_prefix:, value:, show:)
-    div(class: (show ? nil : "hidden"), data: { evidence_response_target: "customLabel" }) do
-      label(for: "#{id_prefix}-custom-label", class: FIELD_LABEL_CLASSES) { "Describe the type" }
-      input(id: "#{id_prefix}-custom-label", type: "text", name: "#{name_scope}[custom_type_label]",
-            value: value, maxlength: 60, class: INPUT_CLASSES)
-    end
-  end
-
-  def title_field(name_scope:, id_prefix:, value:)
-    div do
-      label(for: "#{id_prefix}-title", class: FIELD_LABEL_CLASSES) { "Title (optional)" }
-      input(id: "#{id_prefix}-title", type: "text", name: "#{name_scope}[title]", value: value, maxlength: 120, class: INPUT_CLASSES)
-    end
-  end
-
-  def content_field(name_scope:, id_prefix:, value:)
-    div do
-      label(for: "#{id_prefix}-content", class: FIELD_LABEL_CLASSES) { "What happened?" }
-      textarea(id: "#{id_prefix}-content", name: "#{name_scope}[content]", rows: 3, required: true,
-               placeholder: "Describe what you observed…", class: INPUT_CLASSES) { value }
-    end
-  end
-
-  def external_reference_fields(name_scope:, id_prefix:, system: nil, url: nil)
-    div(class: "grid grid-cols-2 gap-2") do
-      div do
-        label(for: "#{id_prefix}-ref-system", class: FIELD_LABEL_CLASSES) { "Link to (optional)" }
-        select(id: "#{id_prefix}-ref-system", name: "#{name_scope}[external_reference][system]", class: INPUT_CLASSES) do
-          Views::Assessments::Evidence::Form::SYSTEM_OPTIONS.each do |text, value|
-            option(value: value, selected: value == system) { text }
-          end
-        end
-      end
-      div do
-        label(for: "#{id_prefix}-ref-url", class: FIELD_LABEL_CLASSES) { "URL" }
-        input(id: "#{id_prefix}-ref-url", type: "url", name: "#{name_scope}[external_reference][url]",
-              value: url, placeholder: "https://", class: INPUT_CLASSES)
-      end
     end
   end
 
@@ -325,11 +260,6 @@ class Views::Evidence::HubView < Views::Base
 
   def section_heading(text)
     h2(class: "text-lg font-semibold text-gray-900 dark:text-white mb-3") { text }
-  end
-
-  def submit_button(label)
-    button(type: "submit",
-           class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { label }
   end
 
   def empty(text)

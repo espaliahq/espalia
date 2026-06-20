@@ -41,11 +41,19 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     visit evidence_hub_path
     assert_text "Rep asked you for evidence"
 
-    select "Peer feedback", from: "evidence_request[evidence_type]"
-    fill_in "evidence_request[title]", with: "Incident retro"
-    fill_in "evidence_request[content]", with: "Strong systems thinking during the incident."
-    fill_in "evidence_request[external_reference][url]", with: "https://slack.example/archives/p1"
-    click_button "Provide evidence"
+    # Open the unified modal in respond mode, fill it, and submit.
+    find("button[data-evidence-modal-mode-param='respond']").click
+    assert_selector "#evidence-modal-overlay", visible: true
+    assert_selector "#evm-content", visible: true
+
+    page.execute_script(<<~JS)
+      const f = document.querySelector("#evidence-modal form");
+      f.querySelector("#evm-type").value = "peer_feedback";
+      f.querySelector("#evm-title").value = "Incident retro";
+      f.querySelector("#evm-content").value = "Strong systems thinking during the incident.";
+      f.querySelector("#evm-url").value = "https://slack.example/archives/p1";
+      f.requestSubmit();
+    JS
 
     assert_text "Evidence provided"
     ActsAsTenant.with_tenant(@tenant) do
