@@ -60,7 +60,9 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
     table(class: "w-full border-collapse") do
       render Views::Frameworks::Explorer::MatrixHeader.new(
         merged_levels: @merged_levels,
-        selected_role_count: @matrix_data[:selected_roles].size
+        selected_role_count: @matrix_data[:selected_roles].size,
+        framework_id: @framework_id,
+        mode: @mode
       )
       tbody do
         @categories.each do |cat_data|

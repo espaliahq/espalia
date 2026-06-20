@@ -114,6 +114,16 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_equal [ "E", "EM" ], role_codes
       end
 
+      should "carry each per-role level_id so the inline title editor can target it" do
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ])
+
+        result[:merged_levels].each do |level|
+          level[:role_codes].each do |rc|
+            assert rc[:level_id].present?, "every merged-level role_code should carry a level_id"
+          end
+        end
+      end
+
       should "include capabilities bound to selected roles" do
         result = build_matrix(selected_role_ids: [ @ic_role.role_id, @mgmt_role.role_id ])
 

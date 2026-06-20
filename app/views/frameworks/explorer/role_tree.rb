@@ -15,10 +15,14 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # @param role_families [Array<FrameworkState::RoleFamily>] eager-loaded with roles
   # @param selected_role_ids [Array<String>] currently selected role UUIDs
   # @param track_filter [String] "ic", "management", or "both"
-  def initialize(role_families:, selected_role_ids:, track_filter:)
+  # @param framework_id [String, nil] required in :edit mode for inline-edit form actions
+  # @param mode [Symbol] :view or :edit — gates the inline rename pencils
+  def initialize(role_families:, selected_role_ids:, track_filter:, framework_id: nil, mode: :view)
     @role_families = role_families
     @selected_role_ids = selected_role_ids
     @track_filter = track_filter
+    @framework_id = framework_id
+    @mode = mode
   end
 
   def view_template
@@ -186,9 +190,9 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           data: { action: "change->tree#toggleFamily", family_id: role_family.role_family_id, tree_target: "familyCheckbox" }
         )
 
-        span(class: "text-sm font-medium text-gray-700 dark:text-gray-300 flex-1 truncate") do
-          role_family.name
-        end
+        render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
+          role_family: role_family, framework_id: @framework_id, mode: @mode
+        )
 
         span(class: "text-xs text-gray-600 dark:text-gray-300") { visible_roles.size.to_s }
       end
@@ -217,7 +221,9 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         data: { action: "change->tree#toggleRole", role_id: role.role_id }
       )
 
-      span(class: "text-sm text-gray-600 dark:text-gray-400 flex-1 truncate") { role.name }
+      render Views::Frameworks::Explorer::RoleNameFrame.new(
+        role: role, framework_id: @framework_id, mode: @mode
+      )
 
       button(
         type: "button",

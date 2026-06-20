@@ -467,7 +467,9 @@ class Views::Frameworks::ShowView < Views::Base
       render Views::Frameworks::Explorer::RoleTree.new(
         role_families: @role_families,
         selected_role_ids: @selected_role_ids,
-        track_filter: @track_filter
+        track_filter: @track_filter,
+        framework_id: @framework.framework_id,
+        mode: @mode
       )
     end
   end
