@@ -44,7 +44,10 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
 
   def display
     div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
-      span(class: "flex-1 text-sm #{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
+      # The amber wiggle (suggestion_text_classes) carries no text colour of its
+      # own, so set one explicitly — otherwise the text is unreadable in dark mode.
+      span(class: "flex-1 text-sm text-gray-700 dark:text-gray-300 " \
+                  "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
       pencil_button
     end
   end
