@@ -38,6 +38,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "bg-indigo-500",
     "illustration_updated"      => "bg-indigo-500",
     "illustration_removed"      => "bg-gray-400",
+    "role_family_updated"       => "bg-indigo-500",
+    "role_updated"              => "bg-indigo-500",
+    "level_updated"             => "bg-indigo-500",
     "draft_opened"              => "bg-purple-500",
     "version_published"         => "bg-green-600",
     "migration_mapping_defined" => "bg-purple-500",
@@ -61,6 +64,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "edits",
     "illustration_updated"      => "edits",
     "illustration_removed"      => "edits",
+    "role_family_updated"       => "edits",
+    "role_updated"              => "edits",
+    "level_updated"             => "edits",
     "capability_added"          => "structural",
     "capability_archived"       => "structural",
     "category_added"            => "structural",
@@ -286,6 +292,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"
     when "illustration_removed" then "Removed an illustration"
+    when "role_family_updated" then "Updated a role family"
+    when "role_updated"        then "Updated a role"
+    when "level_updated"       then "Updated a level"
     when "draft_opened"        then draft_opened_summary
     when "version_published"   then "Published v#{payload_value(:version)}"
     when "migration_mapping_defined" then "Defined a migration mapping"
@@ -342,6 +351,10 @@ class Views::Frameworks::Activity::Entry < Views::Base
       payload_value(:description)
     when "expectation_updated", "illustration_updated"
       payload_value(:new_description)
+    when "role_family_updated", "role_updated"
+      payload_value(:name)
+    when "level_updated"
+      payload_value(:title)
     when "migration_mapping_defined"
       payload_value(:reason)
     when "binding_added", "binding_updated"

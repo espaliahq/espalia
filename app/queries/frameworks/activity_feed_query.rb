@@ -41,8 +41,9 @@ class Frameworks::ActivityFeedQuery
 
   # Event class → feed kind string. Drives both which events become feed
   # entries and the kind the view renders. Events not in this map (e.g.
-  # FrameworkCreated, ScoringThresholdsConfigured, role/level structural
-  # events) are deliberately out of the first increment's scope.
+  # FrameworkCreated, ScoringThresholdsConfigured, role/family/level *adds* and
+  # reorders) are deliberately out of scope; org-structure *renames*
+  # (RoleFamilyUpdated / RoleUpdated / LevelUpdated) are covered.
   KINDS = {
     Frameworks::Events::EditSuggested              => "suggestion_edit",
     Frameworks::Events::EntityCreationSuggested    => "suggestion_create",
@@ -68,6 +69,9 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::RoleIllustrationAdded      => "illustration_added",
     Frameworks::Events::RoleIllustrationUpdated    => "illustration_updated",
     Frameworks::Events::RoleIllustrationRemoved    => "illustration_removed",
+    Frameworks::Events::RoleFamilyUpdated          => "role_family_updated",
+    Frameworks::Events::RoleUpdated                => "role_updated",
+    Frameworks::Events::LevelUpdated               => "level_updated",
     Frameworks::Events::CollaboratorAdded          => "collaborator_added",
     Frameworks::Events::CollaboratorRoleChanged    => "collaborator_role_changed",
     Frameworks::Events::CollaboratorRemoved        => "collaborator_removed"
