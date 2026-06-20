@@ -121,9 +121,10 @@ class Views::Evidence::ModalForm < Views::Base
     input(type: "hidden", name: "evidence[evidence_id]", value: @evidence&.id) if @evidence
     input(type: "hidden", name: "evidence[request_id]", value: @request&.id) if @request
     input(type: "hidden", name: "return_to", value: @return_to)
-    # Primary cell is always part of the desired link set.
-    input(type: "hidden", name: "evidence[desired_links][]",
-          value: "#{@primary_cell[:capability_stable_id]}|#{@primary_cell[:level_ordinal]}")
+    # The primary cell, explicit so the server can split it from the extras, and
+    # always part of the desired link set.
+    input(type: "hidden", name: "evidence[primary_cell]", value: primary_token)
+    input(type: "hidden", name: "evidence[desired_links][]", value: primary_token)
   end
 
   def content_fields
@@ -257,6 +258,10 @@ class Views::Evidence::ModalForm < Views::Base
 
   def selected_type
     @evidence&.evidence_type.presence || "peer_feedback"
+  end
+
+  def primary_token
+    "#{@primary_cell[:capability_stable_id]}|#{@primary_cell[:level_ordinal]}"
   end
 
   # Raw path (not a named helper) so the component renders before the save

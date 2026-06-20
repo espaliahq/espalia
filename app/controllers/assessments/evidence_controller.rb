@@ -12,9 +12,23 @@
 #
 class Assessments::EvidenceController < ApplicationController
   include AssessmentVisibility
+  include EvidenceDiffSubmit
 
   before_action :require_person
   before_action :set_assignment
+
+  # POST /assessments/:assessment_id/evidence/save
+  #
+  # The unified modal's submit. Authorization is per-command: the diff dispatches
+  # the existing Operations (RecordEvidence / UpdateEvidence / Add/RemoveEvidenceLink /
+  # RespondToEvidenceRequest), each of which authorizes its precise action against
+  # the relevant policy — a single controller-level check can't capture all modes.
+  def save
+    touched = apply_evidence_diff
+    render turbo_stream: touched.cells.uniq.map { |cap, level| cell_evidence_stream(cap, level) }
+  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
+    redirect_back fallback_location: assessment_path(@assignment), alert: e.message, status: :see_other
+  end
 
   # POST /assessments/:assessment_id/evidence
   def create
