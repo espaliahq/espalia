@@ -525,8 +525,8 @@ ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
 | `activity_feed_controller.js` | Listens for `matrix:focus-changed` and narrows entries by capability + level focus. |
 | `context_pane_controller.js` (shared with framework explorer) | Right-pane suggestion / activity panel state, URL focus sync. |
 | `continue_assessing_controller.js` | Bottom-line CTA — dispatches a window event with the next-unrated capability stable_id + level, picked up by `matrix_controller#focusUnrated`. |
-| `modal_controller.js` | Generic `Kit::Modal` controller — open/close, Esc, body-scroll-lock; dispatches a window `modal:open` event so feature controllers can prefill. **Outside-click dismissal is opt-in** (`dismissOnOutsideClick` value, default off) so a stray background click can't discard a half-filled transactional form — modals close via the × button, Cancel, Esc, or a successful submit. Hosts the Delegates modal (standalone) and the evidence modal (embedded, with `evidence-form` prefilling via `modal:open`). |
-| `evidence_form_controller.js` | Evidence-specific companion to `modal` — prefills capability/level/type from the `modal:open` dataset and toggles the custom-label field. Visibility lives in `modal`. |
+| `modal_controller.js` | Generic `Kit::Modal` controller — open/close, Esc, body-scroll-lock. **Outside-click dismissal is opt-in** (`dismissOnOutsideClick` value, default off) so a stray background click can't discard a half-filled transactional form — modals close via the × button, Cancel, Esc, or a successful submit. Hosts the Delegates modal (standalone) and the unified evidence modal (embedded — a lazy `#evidence-modal` frame). |
+| `evidence_modal_controller.js` | Drives the **unified evidence modal** (one modal for new/edit/respond, both surfaces). The page instance's `load` sets the lazy `#evidence-modal` frame `src` from a trigger's action params (mode + ids + `return_to`), so the server renders the right form each open; the in-frame instance toggles the custom-type label and manages the "also applies to" link rows (each showing that cell's behavioural expectation, read from an embedded JSON map). Replaced the old `evidence_form` / `evidence_edit_form` / `evidence_link_form` / `evidence_response` controllers. |
 
 There is **no** `sticky_hero_controller.js`. The hero's collapse is pure CSS scroll-driven animation. See *Hero Summary — Collapse on scroll*.
 
@@ -736,7 +736,15 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/javascript/controllers/activity_feed_controller.js` | Focus-narrowing on `matrix:focus-changed` |
 | `app/javascript/controllers/continue_assessing_controller.js` | Bottom-line CTA — dispatches focus-unrated event |
 | `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/Esc; opt-in outside-click dismissal (`dismissOnOutsideClick`, default off); dispatches `modal:open` |
-| `app/javascript/controllers/evidence_form_controller.js` | Evidence prefill companion to `modal` (visibility lives in `modal`) |
+| `app/javascript/controllers/evidence_modal_controller.js` | Drives the unified evidence modal — frame `load`, link rows, type toggle (shared with the hub) |
+| **Unified evidence modal** (one modal for new/edit/respond, assessment + hub) | |
+| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — context-aware primary block (expectation + examples; role/level line only off the hub), content fields (disabled for a non-author link), "also applies to" picker with per-cell expectations |
+| `app/views/evidence/modal_shell.rb` | The bare overlay/panel + lazy `#evidence-modal` frame, hosted inside `assessment-sync` (so the submit updates the matrix in place) |
+| `app/controllers/evidence_modal_controller.rb` | `GET /evidence_modal` — renders `ModalForm` for `(mode, evidence?, request?, cell?)`; resolves permissions + prefill + link options server-side |
+| `app/models/evidence/cell_context_resolver.rb` | Shared per-cell context (name, role, level title, expectation, illustrations) — hub + modal |
+| `app/models/evidence/framework_cell_options.rb` | Valid (active + bound + has-expectation) link cells + the per-cell expectation map for the picker |
+| `app/controllers/concerns/evidence_diff_submit.rb` | Diff-based save — emits the minimal commands (record / update-if-content-changed / add+remove links / respond); links-only never bumps `edited_at` |
+| `app/controllers/assessments/evidence_controller.rb#save` | Assessment-surface submit → matrix cell Turbo Streams (hub uses `evidence_requests#respond` / `evidence_items#update`) |
 | **CSS** | |
 | `app/assets/tailwind/application.css` | `.hero-collapsible` scroll-driven animation (`animation-timeline: scroll(root)`) + `.assessment-scroll-root` anti-shake guard (`overflow-anchor: none` + `min-height` floor — Hard-Won Lesson 16) |
 | **Tests** | |
