@@ -117,6 +117,9 @@ Rails.application.routes.draw do
   end
   resources :evidence_items, only: [ :update, :destroy ]
 
+  # Unified evidence modal body (server-rendered into the #evidence-modal frame).
+  resource :evidence_modal, only: [ :show ], controller: "evidence_modal"
+
   # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
