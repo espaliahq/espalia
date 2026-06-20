@@ -4,8 +4,8 @@
 # ghost in an otherwise-empty matrix cell — so a proposed expectation is visible
 # in the grid (not just the feed) and follows the same inline-edit pattern as
 # every other suggestion. The amber wavy underline is the explorer's pending
-# signal; a hover-revealed pencil opens an inline form pre-filled with the
-# current value.
+# signal; a hover-revealed pencil (immediately right of the text, per the
+# inline-edit convention) opens an inline form pre-filled with the current value.
 #
 # Both author and non-author submit to the same create endpoint
 # (ExpectationsController#create → SetBehaviouralExpectation): the author's
@@ -14,6 +14,7 @@
 # "+ Add expectation" affordance while a proposal exists.
 class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::InlineEditable
 
   # @param suggestion [FrameworkState::SuggestedEdit] kind: "create", target: behavioural_expectation
   # @param framework_id [String]
@@ -28,7 +29,8 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   end
 
   def view_template
-    div(class: "group/pe relative mb-1", data: { controller: "inline-editor" }) do
+    # `group/ine` so the shared inline-edit pencil reveals on hover.
+    div(class: "group/ine relative mb-1", data: { controller: "inline-editor" }) do
       display
       edit_form
     end
@@ -42,28 +44,13 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
     @suggestion.suggested_value.presence || @attrs[:description]
   end
 
+  # Text then pencil, in a flex row — the pencil sits immediately to the right of
+  # the text (no flex-grow on the text), matching every inline-edit affordance.
   def display
     div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
-      # The amber wiggle (suggestion_text_classes) carries no text colour of its
-      # own, so set one explicitly — otherwise the text is unreadable in dark mode.
-      span(class: "flex-1 text-sm text-gray-700 dark:text-gray-300 " \
+      span(class: "text-sm text-gray-700 dark:text-gray-300 " \
                   "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
-      pencil_button
-    end
-  end
-
-  def pencil_button
-    button(
-      type: "button",
-      class: "opacity-0 group-hover/pe:opacity-100 group-focus-within/pe:opacity-100 " \
-             "focus-visible:opacity-100 transition-opacity text-gray-400 hover:text-primary shrink-0 mt-0.5",
-      data: { action: "inline-editor#startEdit" },
-      aria_label: @is_author ? "Amend suggestion" : "Suggest alternative"
-    ) do
-      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2") do |s|
-        s.path(d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" \
-                  "m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
-      end
+      render_inline_editor_pencil(aria_label: @is_author ? "Amend suggestion" : "Suggest alternative")
     end
   end
 
