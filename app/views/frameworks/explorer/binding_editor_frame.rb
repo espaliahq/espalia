@@ -10,6 +10,8 @@
 # bound to no role is hidden from the role-filtered matrix). Weight is editable
 # inline; individual tolerance is an advanced lever left to the MCP / API for now.
 class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # @param framework_id [String]
   # @param capability [Frameworks::ExplorerGraph::Capability] graph node (incl. bindings)
   # @param roles_by_id [Hash{String=>FrameworkState::Role}] every role in the framework
@@ -76,17 +78,17 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
     li(class: "flex items-center gap-3 px-3 py-2") do
       div(class: "min-w-0 flex-1 flex items-center gap-2") do
         render Components::Kit::Badge.new(role_code(binding.role_id), variant: :default)
-        span(class: "truncate text-sm text-gray-900 dark:text-gray-100") { role_name(binding.role_id) }
-        draft_chip if binding.added_in_draft
+        # A binding added in the draft carries the wiggle (the universal
+        # "differs from published" signal), not a separate "New in draft" pill.
+        span(
+          class: "truncate text-sm text-gray-900 dark:text-gray-100 " \
+                 "#{suggestion_text_classes(added_in_draft: binding.added_in_draft)}".strip,
+          title: draft_change_title(binding.added_in_draft)
+        ) { role_name(binding.role_id) }
       end
       weight_form(binding)
       remove_form(binding)
     end
-  end
-
-  def draft_chip
-    span(class: "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold " \
-                "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300") { "New in draft" }
   end
 
   # Inline weight editor — PATCH the binding, re-rendering the frame.

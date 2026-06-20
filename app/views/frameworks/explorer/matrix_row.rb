@@ -127,21 +127,17 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     end
   end
 
-  # Visible only in edit mode — signals that the capability is new in the
-  # current draft ("New") or staged for archive ("Pending archive"). View
-  # mode filters these entities entirely, so the badges never render there.
+  # Visible only in edit mode. A capability *added* in the draft carries the
+  # wiggle on its name (the universal "differs from published" signal — see
+  # CapabilityNameFrame), so no "New in draft" pill. A capability staged for
+  # *archive* keeps an explicit "Pending archive" badge — removal is a distinct
+  # state (the row is also struck through), not just "differs from published".
   def draft_state_badge
-    return unless @capability.respond_to?(:added_in_draft)
+    return unless @capability.respond_to?(:pending_archive) && @capability.pending_archive
 
-    if @capability.added_in_draft
-      span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
-                  "text-[10px] font-semibold bg-emerald-100 text-emerald-700 " \
-                  "dark:bg-emerald-900/30 dark:text-emerald-300") { "New in draft" }
-    elsif @capability.respond_to?(:pending_archive) && @capability.pending_archive
-      span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
-                  "text-[10px] font-semibold bg-amber-100 text-amber-700 " \
-                  "dark:bg-amber-900/30 dark:text-amber-300") { "Pending archive" }
-    end
+    span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
+                "text-[10px] font-semibold bg-amber-100 text-amber-700 " \
+                "dark:bg-amber-900/30 dark:text-amber-300") { "Pending archive" }
   end
 
   def expanded_row

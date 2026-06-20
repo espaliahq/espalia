@@ -53,8 +53,14 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
         render_inline_diff(original: @expectation.description, pending_edit: @pending_edit)
       end
     else
-      p(class: "#{base} #{decoration}".strip) { render_highlighted(@expectation.description, @search_query) }
+      p(class: "#{base} #{decoration}".strip, title: draft_change_title(added_in_draft?)) do
+        render_highlighted(@expectation.description, @search_query)
+      end
     end
+  end
+
+  def added_in_draft?
+    @expectation.respond_to?(:added_in_draft) && @expectation.added_in_draft
   end
 
   def editable
@@ -75,6 +81,6 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
   end
 
   def decoration
-    suggestion_text_classes(pending_edit_count: @pending_edit_count)
+    suggestion_text_classes(pending_edit_count: @pending_edit_count, added_in_draft: added_in_draft?)
   end
 end

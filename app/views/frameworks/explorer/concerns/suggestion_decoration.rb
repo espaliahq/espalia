@@ -5,6 +5,12 @@
 # Include in any Phlex view component that renders framework entity text
 # to apply consistent decoration when pending suggestions exist.
 #
+# The amber wavy underline (the "wiggle") is the **universal signal that text
+# differs from the published framework** — whether it's a pending suggestion or a
+# change already applied into the open draft (added/edited in draft, not yet
+# published). There is NO separate "New in draft" pill: the wiggle says it. See
+# docs/guidelines/framework-explorer.md → "Pending-change vocabulary".
+#
 # Visual language:
 # - Pending text edit (the common case): render an inline character-level
 #   diff — added graphemes get a light-blue wavy underline, removed
@@ -12,8 +18,8 @@
 #   {Frameworks::SuggestionDiff::MAX_CHANGE_RUNS} change runs the view
 #   collapses to the proposed text styled with the light-blue squiggle
 #   (readers can open the context pane to see the full side-by-side).
-# - Pending create (illustrations): amber wavy underline on the proposed
-#   ghost-row text — rendered by PendingIllustrationFrame, unchanged.
+# - Pending create (illustrations / expectations) or **added-in-draft** entity:
+#   amber wavy underline (the wiggle) on the text.
 # - Pending delete: red strikethrough on existing text.
 #
 module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
@@ -31,7 +37,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   #   inline-diff rendering is applied per-segment by {#render_inline_diff}.
   # @param pending_delete_count [Integer] number of pending delete suggestions
   # @return [String] space-separated CSS classes, or empty string
-  def suggestion_text_classes(pending_edit_count: 0, pending_delete_count: 0)
+  def suggestion_text_classes(pending_edit_count: 0, pending_delete_count: 0, added_in_draft: false)
     return PENDING_DELETE_CLASSES if pending_delete_count > 0
 
     # Pending edit decoration is rendered inline by #render_inline_diff so
@@ -40,7 +46,20 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
     # amber underline so the author still sees something.
     return PENDING_EDIT_CLASSES if pending_edit_count > 0
 
+    # A change already applied into the open draft (not yet published) carries
+    # the same wiggle — it differs from the published framework. No pill.
+    return PENDING_EDIT_CLASSES if added_in_draft
+
     ""
+  end
+
+  # Tooltip for a draft-applied entity's wiggle, so the "differs from published"
+  # meaning is conveyed non-visually (the wiggle replaced the explicit pill).
+  #
+  # @param added_in_draft [Boolean]
+  # @return [String, nil]
+  def draft_change_title(added_in_draft)
+    "Not yet published — appears in the published framework once this draft is published" if added_in_draft
   end
 
   # Renders the inline diff for a pending text-edit suggestion. Emits a

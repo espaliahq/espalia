@@ -96,6 +96,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
     pending_count = @cell_data[:pending_suggestion_count] || 0
     expectation = @cell_data[:expectation]
 
+    # A draft-added expectation carries the wiggle (rendered by the frame) — the
+    # universal "differs from published" signal — not a separate "New in draft" pill.
     render Views::Frameworks::Explorer::ExpectationTextFrame.new(
       expectation: expectation,
       framework_id: @framework_id,
@@ -104,12 +106,6 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
       pending_edit: @cell_data[:pending_edit],
       search_query: @search_query
     )
-
-    if @mode == :edit && expectation.respond_to?(:added_in_draft) && expectation.added_in_draft
-      span(class: "mt-1 inline-flex items-center rounded-full px-2 py-0.5 " \
-                  "text-[10px] font-semibold bg-emerald-100 text-emerald-700 " \
-                  "dark:bg-emerald-900/30 dark:text-emerald-300") { "New in draft" }
-    end
 
     if pending_count >= 2
       render Views::Frameworks::Suggestions::InlineIndicator.new(count: pending_count)
