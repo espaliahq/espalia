@@ -67,6 +67,9 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_binding?
       assert_not policy.add_binding?
       assert_not policy.remove_binding?
+      assert_not policy.update_role_family?
+      assert_not policy.update_role?
+      assert_not policy.update_level?
     end
 
     should "deny settings" do
@@ -147,6 +150,12 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.add_binding?
       assert policy.remove_binding?
     end
+
+    should "allow org-structure rename predicates" do
+      assert policy.update_role_family?
+      assert policy.update_role?
+      assert policy.update_level?
+    end
   end
 
   context "as a global admin" do
@@ -220,6 +229,12 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.update_binding?
       assert policy.add_binding?
       assert policy.remove_binding?
+    end
+
+    should "allow org-structure rename predicates (editor has edit rights)" do
+      assert policy.update_role_family?
+      assert policy.update_role?
+      assert policy.update_level?
     end
 
     should "deny settings (requires tenant admin)" do

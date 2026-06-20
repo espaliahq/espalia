@@ -86,6 +86,21 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def archive_category? = edit_structure?
 
+  # Org-structure editorial edits — rename a role family / role / level (and,
+  # via the Operation/MCP, a role's code/track or a level's code). Direct,
+  # shape-preserving edits on the edit-rights bar, like the other structural
+  # mutations — distinct from the suggested-edit path that capability / category
+  # *text* uses.
+  #
+  # @return [Boolean]
+  def update_role_family? = edit_structure?
+
+  # @return [Boolean]
+  def update_role? = edit_structure?
+
+  # @return [Boolean]
+  def update_level? = edit_structure?
+
   # Edit a capability-role binding's weight / individual tolerance.
   # Shape-preserving (applies live) but still a structural edit, so it sits
   # on the edit-rights bar like the other binding/structure mutations.
