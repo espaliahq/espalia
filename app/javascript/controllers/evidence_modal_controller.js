@@ -21,7 +21,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations"]
+  static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations", "levels"]
   static values = { url: { type: String, default: "/evidence_modal" } }
 
   // PAGE: point the lazy frame at the render endpoint for this trigger.
@@ -45,6 +45,13 @@ export default class extends BaseController {
     this.customLabelTarget.classList.toggle("hidden", this.typeSelectTarget.value !== "other")
   }
 
+  // IN-FRAME: rebuild the level dropdown for the chosen capability — only its
+  // valid cells (those with an expectation), with already-linked levels
+  // (including the primary) disabled.
+  capabilityChanged() {
+    this.#rebuildLevels()
+  }
+
   // IN-FRAME: add an "also applies to" cell as a row with its expectation.
   addLink() {
     if (!this.hasLinkRowsTarget || !this.hasLinkCapabilityTarget || !this.hasLinkLevelTarget) return
@@ -53,20 +60,56 @@ export default class extends BaseController {
     if (!cap || !level) return
 
     const token = `${cap}|${level}`
-    if (this.element.querySelector(`input[name="evidence[desired_links][]"][value="${token}"]`)) return // dup or primary
+    if (this.#isLinked(cap, level)) return // dup or primary (also disabled in the UI)
     const info = this.#expectations()[token]
     if (!info) return // not a valid cell
 
     this.linkRowsTarget.appendChild(this.#row(token, level, info))
-    this.linkCapabilityTarget.value = ""
     this.linkLevelTarget.value = ""
+    this.#rebuildLevels() // the just-added level is now disabled; keep the capability selected
   }
 
   removeLink(event) {
     event.target.closest("[data-link-row]")?.remove()
+    this.#rebuildLevels() // the freed level becomes selectable again
   }
 
   // private
+
+  #rebuildLevels() {
+    if (!this.hasLinkLevelTarget || !this.hasLinkCapabilityTarget) return
+    const sel = this.linkLevelTarget
+    sel.replaceChildren(new Option("Level…", ""))
+
+    const cap = this.linkCapabilityTarget.value
+    if (!cap) return
+
+    const labels = this.#levelLabels()
+    const levels = Object.keys(this.#expectations())
+      .filter((key) => key.startsWith(`${cap}|`))
+      .map((key) => parseInt(key.split("|")[1], 10))
+      .sort((a, b) => a - b)
+
+    levels.forEach((level) => {
+      const linked = this.#isLinked(cap, level)
+      const opt = new Option(`${labels[level] || `L${level}`}${linked ? " (linked)" : ""}`, String(level))
+      opt.disabled = linked
+      sel.add(opt)
+    })
+  }
+
+  #isLinked(cap, level) {
+    return !!this.element.querySelector(`input[name="evidence[desired_links][]"][value="${cap}|${level}"]`)
+  }
+
+  #levelLabels() {
+    if (!this.hasLevelsTarget) return {}
+    try {
+      return Object.fromEntries(JSON.parse(this.levelsTarget.textContent).map((l) => [l.ordinal, l.label]))
+    } catch {
+      return {}
+    }
+  }
 
   #row(token, level, info) {
     const row = document.createElement("div")

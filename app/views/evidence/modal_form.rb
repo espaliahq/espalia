@@ -61,6 +61,7 @@ class Views::Evidence::ModalForm < Views::Base
           content_fields
           links_section
           expectation_data
+          level_data
           footer
         end
       end
@@ -212,7 +213,8 @@ class Views::Evidence::ModalForm < Views::Base
   def picker_row
     div(class: "flex flex-wrap items-end gap-2") do
       div(class: "flex-1 min-w-40") do
-        select(class: INPUT, data: { evidence_modal_target: "linkCapability" }, aria: { label: "Capability to also link" }) do
+        select(class: INPUT, aria: { label: "Capability to also link" },
+               data: { evidence_modal_target: "linkCapability", action: "change->evidence-modal#capabilityChanged" }) do
           option(value: "") { "Capability…" }
           @link_options.each do |group|
             optgroup(label: group[:category_name]) do
@@ -221,10 +223,11 @@ class Views::Evidence::ModalForm < Views::Base
           end
         end
       end
-      div(class: "w-28") do
+      # Levels are populated by the controller from the chosen capability's valid
+      # cells, with already-linked levels disabled (see #capabilityChanged).
+      div(class: "w-44") do
         select(class: INPUT, data: { evidence_modal_target: "linkLevel" }, aria: { label: "Level to also link" }) do
           option(value: "") { "Level…" }
-          @level_options.each { |lvl| option(value: lvl[:ordinal]) { lvl[:label] } }
         end
       end
       button(type: "button", data: { action: "evidence-modal#addLink" }, class: SECONDARY_BTN) { "+ Add" }
@@ -243,10 +246,17 @@ class Views::Evidence::ModalForm < Views::Base
     end
   end
 
-  # Per-cell expectation map for the Stimulus controller to render new rows.
+  # Per-cell expectation map (valid cells + their expectation) for the Stimulus
+  # controller to drive the level dropdown and render new rows.
   def expectation_data
     json = JSON.generate(@expectation_map).gsub("</", '<\/')
     script(type: "application/json", data: { evidence_modal_target: "expectations" }) { raw(safe(json)) }
+  end
+
+  # Level ordinal → label, for the dynamically-populated level dropdown.
+  def level_data
+    json = JSON.generate(@level_options).gsub("</", '<\/')
+    script(type: "application/json", data: { evidence_modal_target: "levels" }) { raw(safe(json)) }
   end
 
   def footer
