@@ -11,6 +11,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
                  viewer_person_id: nil, can_create_evidence: false,
+                 can_request_evidence: false,
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
@@ -28,6 +29,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @can_complete_alignment = can_complete_alignment
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_request_evidence = can_request_evidence
     @can_relink_others_evidence = can_relink_others_evidence
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
@@ -58,7 +60,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     # See ShowView#assessment_layout — the unified evidence modal lives inside
     # assessment-sync so its submit arms the suppress window (in-place update).
     div(class: "assessment-scroll-root",
-        data: { controller: "assessment-sync modal evidence-modal",
+        data: { controller: "assessment-sync modal evidence-modal request-evidence",
                 action: "keydown.esc@window->modal#close" }) do
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
@@ -71,6 +73,7 @@ class Views::Assessments::ManagerShowView < Views::Base
       end
 
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
+      render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
   end
 
@@ -236,6 +239,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         expanded_level_ordinal: @expanded_level_ordinal,
         viewer_person_id: @viewer_person_id,
         can_create_evidence: @can_create_evidence,
+        can_request_evidence: @can_request_evidence,
         can_relink_others_evidence: @can_relink_others_evidence,
         can_comment: @can_comment,
         viewer_is_tenant_admin: @viewer_is_tenant_admin

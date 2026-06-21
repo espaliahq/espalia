@@ -115,6 +115,13 @@ Rails.application.routes.draw do
   # Evidence-request hub — incoming (respond/decline) and outgoing (cancel),
   # plus edit/withdraw of evidence you've authored.
   get "evidence", to: "evidence_hub#show", as: :evidence_hub
+  # Request-creation modal (assignment-scoped, read-only renders): the form
+  # frame and the debounced typeahead candidates frame.
+  get "assessments/:assignment_id/evidence_request_modal",
+    to: "evidence_requests#modal", as: :evidence_request_modal
+  get "assessments/:assignment_id/evidence_request_candidates",
+    to: "evidence_requests#candidates", as: :evidence_request_candidates
+
   resources :evidence_requests, only: [ :create, :destroy ] do
     member do
       post :respond

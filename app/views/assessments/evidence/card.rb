@@ -236,6 +236,7 @@ class Views::Assessments::Evidence::Card < Views::Base
       role: "menuitem",
       data: {
         action: "click->dropdown#close evidence-modal#load click->modal#open",
+        modal_target_id: "evidence-modal-overlay",
         evidence_modal_mode_param: "edit",
         evidence_modal_evidence_id_param: @item.id,
         evidence_modal_return_to_param: "assessment:#{@assessment_id}"

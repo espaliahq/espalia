@@ -26,6 +26,7 @@ class Views::Assessments::ShowView < Views::Base
                  expanded_capability_id: nil, expanded_level_ordinal: nil,
                  context: :self,
                  viewer_person_id: nil, can_create_evidence: false,
+                 can_request_evidence: false,
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
@@ -39,6 +40,7 @@ class Views::Assessments::ShowView < Views::Base
     @context = context
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_request_evidence = can_request_evidence
     @can_relink_others_evidence = can_relink_others_evidence
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
@@ -68,7 +70,7 @@ class Views::Assessments::ShowView < Views::Base
     # assessment-sync element; the submit then arms the suppress window and the
     # matrix updates in place instead of fully reloading.
     div(class: "assessment-scroll-root",
-        data: { controller: "assessment-sync modal evidence-modal",
+        data: { controller: "assessment-sync modal evidence-modal request-evidence",
                 action: "keydown.esc@window->modal#close" }) do
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
@@ -84,6 +86,7 @@ class Views::Assessments::ShowView < Views::Base
       end
 
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
+      render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
   end
 
@@ -181,6 +184,7 @@ class Views::Assessments::ShowView < Views::Base
         expanded_level_ordinal: @expanded_level_ordinal,
         viewer_person_id: @viewer_person_id,
         can_create_evidence: @can_create_evidence,
+        can_request_evidence: @can_request_evidence,
         can_relink_others_evidence: @can_relink_others_evidence,
         can_comment: @can_comment,
         viewer_is_tenant_admin: @viewer_is_tenant_admin

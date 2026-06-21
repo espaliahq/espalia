@@ -28,6 +28,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
                  ordinal:, person_level:, assessment_id:, context: :self,
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
+                 can_request_evidence: false,
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false)
     @cell_data = cell_data
@@ -43,6 +44,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     @alignment_locked = alignment_locked
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_request_evidence = can_request_evidence
     @can_relink_others_evidence = can_relink_others_evidence
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
@@ -157,7 +159,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
 
   def evidence_section
     evidence = @cell_data[:evidence] || []
-    return unless @viewer_person_id && (evidence.any? || @can_create_evidence)
+    return unless @viewer_person_id && (evidence.any? || @can_create_evidence || @can_request_evidence)
 
     div(class: "mb-3") do
       render Views::Assessments::Evidence::List.new(
@@ -165,6 +167,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
         assessment_id: @assessment_id,
         viewer_person_id: @viewer_person_id,
         can_create: @can_create_evidence,
+        can_request: @can_request_evidence,
         can_relink_others: @can_relink_others_evidence,
         capability_stable_id: @capability_stable_id,
         level_ordinal: @ordinal

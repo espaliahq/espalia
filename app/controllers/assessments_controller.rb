@@ -61,6 +61,7 @@ class AssessmentsController < ApplicationController
         can_complete_alignment: policy.complete_alignment?,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
+        can_request_evidence: viewer_can_request_evidence?,
         can_relink_others_evidence: can_relink_others,
         can_comment: viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
@@ -83,6 +84,7 @@ class AssessmentsController < ApplicationController
         context: context,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
+        can_request_evidence: viewer_can_request_evidence?,
         can_relink_others_evidence: can_relink_others,
         can_comment: viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
@@ -108,6 +110,7 @@ class AssessmentsController < ApplicationController
       expanded_level_ordinal: focused_level_ordinal_param,
       viewer_person_id: current_person&.id,
       can_create_evidence: viewer_can_create_evidence?,
+        can_request_evidence: viewer_can_request_evidence?,
       can_relink_others_evidence: viewer_can_relink_others_evidence?,
       can_comment: viewer_can_comment?,
       viewer_is_tenant_admin: viewer_is_tenant_admin?
@@ -209,6 +212,15 @@ class AssessmentsController < ApplicationController
     return false unless current_person
 
     EvidencePolicy.new(pundit_user, @assignment).create?
+  end
+
+  # Whether to render the per-cell "Request evidence" affordance — same
+  # population as who may create a request (assessee / manager chain / active
+  # rating delegate / tenant admin), enforced again server-side on submit.
+  def viewer_can_request_evidence?
+    return false unless current_person
+
+    EvidenceRequestPolicy.new(pundit_user, @assignment).request?
   end
 
   # Whether the current viewer is permitted to post comments on this

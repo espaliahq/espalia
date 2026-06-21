@@ -435,6 +435,45 @@ Each uses `PersonDevelopment::Scoring` with a different `perspective:` parameter
 
 Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_contributions_at_next_level` map keyed by stable_id. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
 
+## Requesting evidence (cell-scoped)
+
+A manager (or the assessee, or an active rating delegate, or a tenant admin —
+`EvidenceRequestPolicy#request?`) can **ask a colleague for evidence on a specific
+capability × level**. The whole flow is cell-scoped: it originates from a cell and
+the response lands pre-linked to it.
+
+- **Entry point** — a per-cell **"Request evidence"** button on the capability-card
+  expansion ([capability_card_expansion.rb](../../app/views/assessments/capability_card_expansion.rb),
+  `#request_evidence_section`), next to "Add evidence". Gated on
+  `can_request_evidence`, threaded from `AssessmentsController#viewer_can_request_evidence?`
+  through the card view chain exactly like `can_create_evidence`.
+- **The modal** ([Views::Evidence::RequestForm](../../app/views/evidence/request_form.rb),
+  hosted once via [RequestModalShell](../../app/views/evidence/request_modal_shell.rb))
+  carries the cell context (capability · level + behavioural expectation, via
+  `CellContextResolver`), a **debounced name/email search**, the **assessee's
+  org-neighbour suggestions** (manager, peers, direct reports — `Assessments::RequestCandidates`),
+  a **multi-select** chip list, **one shared reason**, and an optional due date.
+- **Search + suggestions** are server-rendered: the search input (debounced ~250ms by
+  [request_evidence_controller.js](../../app/javascript/controllers/request_evidence_controller.js))
+  repoints the `#request-candidates` frame
+  ([RequestCandidatesFrame](../../app/views/evidence/request_candidates_frame.rb));
+  selection is client-side (chips + `requestee_ids[]` hidden inputs). People with a
+  **pending request on the cell are greyed "Asked"** and can't be re-selected;
+  the assessee and the requester are excluded entirely.
+- **Two render endpoints** (`EvidenceRequestsController#modal` / `#candidates`,
+  assignment-scoped, `EvidenceRequestPolicy#request?`-authorized) feed the lazy modal
+  frame and the typeahead frame.
+- **Multi-send** — `POST /evidence_requests` loops the single-recipient
+  `Operations::Assessments::RequestEvidence` once per `requestee_ids[]` entry (shared
+  message + due), flashing a per-batch summary ("Sent to N people · Skipped M"). MCP
+  parity is preserved — the op is unchanged; multi-send is a web convenience.
+
+**Two modal overlays, one `modal` controller.** The assessment screen now hosts both
+the evidence modal and the request modal under the wrapper's single `modal`
+controller, so **every** evidence/request trigger names its overlay via
+`data-modal-target-id` (`evidence-modal-overlay` / `evidence-request-modal-overlay`) —
+framework-explorer Hard-Won Lesson 19.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 **Every action a user can take on the assessment screen MUST produce a
@@ -651,6 +690,10 @@ The hero middle band collapses via `animation-timeline: scroll(root)`, and the b
 2. **Scroll-range clamping** (the "sometimes" / short-page case). On a marginally-scrollable page the collapse shrinks the document below `scrollTop`, so the browser **hard-clamps** the scroll down, which re-expands the band, which restores the scroll length — a sustained ~1px limit cycle. Clamping is a hard constraint `overflow-anchor` can't suppress. Fix: a `min-height` floor (collapse range + band-height headroom, on top of the viewport) on the same scroll-root — on a short page the collapse is absorbed by the floor instead of shrinking the document, so the scroll length stays constant and never clamps; on a normal (tall) matrix it's a no-op.
 
 Both live on `.assessment-scroll-root` (the `assessment-sync` wrapper in `show_view.rb` / `manager_show_view.rb`), gated inside `@supports (animation-timeline: scroll())` so they only apply where the collapse — and thus the loop — actually runs. The trap is assuming `overflow-anchor: none` alone fixes it: it kills the anchor loop but not the clamp loop, which is the one the bug report ("shakes near full visibility, sometimes") actually describes. Verified in-browser: before, a held scroll position oscillates the band through several heights; after, every position holds a single stable height. Regression-guarded by `assessments_system_test.rb` → "apply the anti-shake CSS to the assessment scroll root".
+
+### 17. Toggling Tailwind `hidden` on an element that already has a `display` utility doesn't hide it
+
+The request modal hides a suggestion chip once it's been added to the recipient list. The first cut toggled the `hidden` class — and the chip stayed visible. Cause: the chip carries `inline-flex` (a `display` utility), and `.hidden { display:none }` ties it on specificity (both single-class selectors), so **source order decides** — Tailwind emits `inline-flex` after `hidden`, so `inline-flex` wins and `.hidden` is a no-op. The class *is* present in the DOM (so a `classList.contains("hidden")` check misleads you into thinking it worked); it just has no visual effect. Fix: toggle an **inline** `el.style.display = "none" / ""` (inline style beats any class), or render the element without a competing display utility. See `request_evidence_controller.js#toggleSuggestion`. The general rule: never rely on `hidden` to override another `display-*` utility on the *same* element — gate visibility from a parent, or use inline style.
 
 ## Performance state machine
 
