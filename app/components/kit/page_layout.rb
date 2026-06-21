@@ -75,10 +75,19 @@ class Components::Kit::PageLayout < Components::Base
       ]
       assessment_link = assessment_nav_link
       links << assessment_link if assessment_link
+      links << { label: "Evidence", href: "/evidence" } if show_evidence_link?
       links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
       links << { label: "Admin", href: "/tenant" } if show_admin_link?
       links
     end
+  end
+
+  # Whether to show the evidence-request hub link — anyone linked to a Person
+  # can be asked for (or ask for) evidence.
+  #
+  # @return [Boolean]
+  def show_evidence_link?
+    resolve_tenant_user&.person_id.present?
   end
 
   # Whether the current viewer can manage assessment cycles.

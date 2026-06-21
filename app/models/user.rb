@@ -16,6 +16,12 @@ class User < ApplicationRecord
   has_many :tenant_users, dependent: :destroy
   has_many :tenants, through: :tenant_users
 
+  # In-app notifications addressed to this user (Noticed). The record is the
+  # cross-channel anchor: it always exists and its read state drives the
+  # smart-escalation gate, even when the user has the in-app channel disabled
+  # (in which case it simply doesn't surface in the inbox).
+  has_many :notifications, as: :recipient, class_name: "Noticed::Notification", dependent: :destroy
+
   # Include default devise modules. :validatable is included because email
   # uniqueness is now global (no tenant scope on User).
   devise :database_authenticatable, :registerable,
@@ -25,6 +31,42 @@ class User < ApplicationRecord
   # @return [Boolean] whether this user has global admin privileges
   def global_admin?
     global_admin
+  end
+
+  # Whether this user wants notifications of the given type delivered over the
+  # given channel. Resolves the user's stored overrides against the
+  # code-defined defaults in {NotificationType}.
+  #
+  # @param type_key [Symbol, String] a NotificationType key (e.g. :evidence_requested)
+  # @param channel [Symbol, String] one of NotificationType::CHANNELS
+  # @return [Boolean]
+  def notifies_via?(type_key, channel)
+    NotificationType.enabled?(notification_preferences, type_key, channel)
+  end
+
+  # Merge explicit channel overrides for one notification type into the stored
+  # preferences and persist. Only known channels are written; values cast to
+  # booleans. Used by the notification settings UI.
+  #
+  # @param type_key [Symbol, String]
+  # @param channels [Hash{Symbol,String=>Boolean}] channel => enabled
+  # @return [Boolean] whether the save succeeded
+  def update_notification_preference(type_key, channels)
+    return false unless NotificationType.exists?(type_key)
+
+    bool = ActiveModel::Type::Boolean.new
+    overrides = channels.to_h.each_with_object({}) do |(channel, enabled), acc|
+      next unless NotificationType::CHANNELS.include?(channel.to_sym)
+
+      acc[channel.to_s] = bool.cast(enabled) || false
+    end
+
+    # Merge at the channel level so updating one channel (or the settings UI,
+    # which submits only the in-app/slack channels) doesn't drop a previously
+    # set override on another channel (e.g. an email override set via MCP).
+    existing = notification_preferences[type_key.to_s] || {}
+    merged = notification_preferences.merge(type_key.to_s => existing.merge(overrides))
+    update(notification_preferences: merged)
   end
 
   # Resolve a Google OmniAuth payload into a signed-in-able User.

@@ -22,6 +22,7 @@ Rails.application.routes.draw do
   # other settings live elsewhere historically.
   namespace :settings do
     resources :connected_clients, only: [ :index, :destroy ]
+    resource :notifications, only: [ :show, :update ], controller: "notifications"
   end
 
   # In-app approval surface for high-stakes MCP tools. The MCP server
@@ -80,6 +81,11 @@ Rails.application.routes.draw do
         post :sync
       end
     end
+
+    # Per-tenant Slack install (OAuth v2). install → Slack consent → callback.
+    get    "slack/install",  to: "slack_connections#install",  as: :slack_install
+    get    "slack/callback", to: "slack_connections#callback", as: :slack_callback
+    delete "slack",          to: "slack_connections#destroy",  as: :slack_connection
   end
   # RailsEventStore browser for debugging event streams (global admins only)
   authenticate :user, ->(u) { u.global_admin? } do
@@ -91,6 +97,28 @@ Rails.application.routes.draw do
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", as: :rails_health_check
+
+  # In-app notification inbox (cross-tenant, on the global User).
+  resources :notifications, only: [ :index, :update ] do
+    collection do
+      get :bell
+      post :read_all
+    end
+  end
+
+  # Evidence-request hub — incoming (respond/decline) and outgoing (cancel),
+  # plus edit/withdraw of evidence you've authored.
+  get "evidence", to: "evidence_hub#show", as: :evidence_hub
+  resources :evidence_requests, only: [ :create, :destroy ] do
+    member do
+      post :respond
+      post :decline
+    end
+  end
+  resources :evidence_items, only: [ :update, :destroy ]
+
+  # Unified evidence modal body (server-rendered into the #evidence-modal frame).
+  resource :evidence_modal, only: [ :show ], controller: "evidence_modal"
 
   # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
@@ -108,6 +136,9 @@ Rails.application.routes.draw do
     resource :alignment_completion, only: [ :create ], controller: "assessments/alignment_completions"
     resources :delegations, only: [ :create, :destroy ], controller: "assessments/delegations"
     resources :evidence, only: [ :create, :update, :destroy ], controller: "assessments/evidence" do
+      collection do
+        post :save
+      end
       member do
         post :add_link
         post :remove_link

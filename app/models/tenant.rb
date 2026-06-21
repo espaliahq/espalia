@@ -19,6 +19,11 @@ class Tenant < ApplicationRecord
   serialize :hris_credentials, coder: JSON
   encrypts :hris_credentials
 
+  # Slack bot credentials for this workspace, set when a tenant admin installs
+  # the GrowthOS Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
+  serialize :slack_credentials, coder: JSON
+  encrypts :slack_credentials
+
   store_accessor :settings,
     :primary_color, :primary_color_dark,
     :secondary_color, :secondary_color_dark,
@@ -73,5 +78,52 @@ class Tenant < ApplicationRecord
 
     family = font_family.gsub(" ", "+")
     "https://fonts.googleapis.com/css2?family=#{family}:wght@300;400;500;600;700&display=swap"
+  end
+
+  # @return [Boolean] whether this tenant has a usable Slack connection
+  def slack_connected?
+    slack_bot_token.present?
+  end
+
+  # @return [String, nil] the Slack bot token, or nil when not connected
+  def slack_bot_token
+    slack_credentials.is_a?(Hash) ? slack_credentials["bot_token"].presence : nil
+  end
+
+  # @return [String, nil] the connected workspace's display name
+  def slack_team_name
+    slack_credentials.is_a?(Hash) ? slack_credentials["team_name"] : nil
+  end
+
+  # Record a completed Slack install. Persists the encrypted bot token and the
+  # plain team id (used for inbound event routing later).
+  #
+  # @param bot_token [String]
+  # @param team_id [String]
+  # @param team_name [String, nil]
+  # @param installed_by [String, nil] Person id of the installing admin
+  # @return [Boolean]
+  def connect_slack!(bot_token:, team_id:, team_name: nil, installed_by: nil)
+    transaction do
+      update!(
+        slack_team_id: team_id,
+        slack_credentials: { "bot_token" => bot_token, "team_name" => team_name, "installed_by" => installed_by }
+      )
+      # A reconnect may point at a different workspace, where the cached
+      # per-user Slack ids no longer resolve — clear them so they re-resolve.
+      tenant_users.where.not(slack_user_id: nil).update_all(slack_user_id: nil)
+    end
+    true
+  end
+
+  # Remove the Slack connection. Cached per-user Slack ids are cleared too so a
+  # reconnect to a different workspace re-resolves identities.
+  #
+  # @return [void]
+  def disconnect_slack!
+    transaction do
+      update!(slack_credentials: nil, slack_team_id: nil)
+      tenant_users.where.not(slack_user_id: nil).update_all(slack_user_id: nil)
+    end
   end
 end

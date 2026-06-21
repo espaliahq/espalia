@@ -4,9 +4,40 @@
 # Paste this YAML, then install to your workspace. Rotate/replace the signing secret and
 # tokens via Rails credentials (config/credentials.yml.enc) — never commit them.
 #
-# Scopes below grant full read access to channels and history plus the write/identity
-# scopes a notification + assistant bot needs. Trim any you don't use before going to prod;
-# Slack reviews broad scopes (notably the `*:history` and `users:read.email` families).
+# Scope is deliberately minimal: GrowthOS sends OUTBOUND direct-message
+# notifications today (assessment nudges, alignment reminders, evidence-request
+# pings). The three bot scopes below are exactly what that requires and match
+# Slack::BOT_SCOPES, which the OAuth install flow requests:
+#
+#   users:read.email  → users.lookupByEmail  (map a Person's email → Slack user id)
+#   im:write          → conversations.open   (open the 1:1 DM channel)
+#   chat:write        → chat.postMessage      (post the notification into that DM)
+#
+# ── Reinstall vs. transparent upgrade ──────────────────────────────────────────
+# A workspace must RE-AUTHORISE (reinstall) the app ONLY when a new bot *scope*
+# is added — existing tokens never gain scopes retroactively. App *settings*
+# (interactivity, request URLs, event subscriptions that need no new scope) are
+# config and can change with no reinstall.
+#
+# So that EVERY planned inbound feature can ship later with zero reinstall, the
+# scopes they need are all granted up front, even though no code uses them yet:
+#
+#   chat:write     → post interactive messages, chat.update, views.open (modals)
+#   commands       → a /growthos slash-command entry point
+#   im:history     → capture a free-text DM reply to an evidence request
+#
+# With these pre-granted, the remaining work to light up each feature is pure
+# CONFIG (no reinstall):
+#   • Inline button/modal responses — flip on Interactivity (done below) + build
+#     /slack/interactions. Interactivity URLs are NOT challenge-verified, so the
+#     placeholder below is safe before the endpoint exists.
+#   • Slash command — declare the /growthos command (name + request_url) once its
+#     endpoint exists. Slash-command URLs aren't challenge-verified either.
+#   • Free-text DM replies — set messages_tab_read_only_enabled: false and add a
+#     `message.im` Events subscription. NOTE: Events API request_urls ARE
+#     challenge-verified the moment they're saved, so that subscription can't be
+#     declared here against a dead URL — add it only after /slack/events is live.
+# None of those three steps adds a scope, so none triggers a reinstall.
 
 display_information:
   name: GrowthOS
@@ -15,74 +46,47 @@ display_information:
   long_description: >-
     GrowthOS operationalises career growth frameworks — self-assessments, manager
     alignment conversations, evidence collection, and growth planning. This Slack app
-    delivers notifications and lets people interact with their development journey
-    without leaving Slack.
+    delivers timely direct-message notifications about your development journey.
 
 features:
   bot_user:
     display_name: GrowthOS
     always_online: true
   app_home:
-    home_tab_enabled: true
+    # Notifications arrive as DMs and surface in the Messages tab. We don't
+    # process replies, so the tab is read-only and the Home tab is disabled.
+    home_tab_enabled: false
     messages_tab_enabled: true
-    messages_tab_read_only_enabled: false
+    messages_tab_read_only_enabled: true
 
 oauth_config:
   scopes:
     bot:
-      # --- Channel listing & metadata ---
-      - channels:read          # list & inspect public channels
-      - groups:read            # list & inspect private channels the bot is in
-      - im:read                # list direct messages
-      - mpim:read              # list group direct messages
-
-      # --- Reading history ---
-      - channels:history       # read messages in public channels
-      - groups:history         # read messages in private channels
-      - im:history             # read direct message history
-      - mpim:history           # read group DM history
-
-      # --- Membership / joining ---
-      - channels:join          # join public channels programmatically
-
-      # --- Posting & messaging ---
-      - chat:write             # send messages as the bot
-      - chat:write.public      # post to public channels without joining first
-      - chat:write.customize   # customise username/icon per message
-
-      # --- Identity / org lookup (map Slack users → Person records) ---
-      - users:read             # list workspace users
-      - users:read.email       # match users by email to GrowthOS Person records
-      - users.profile:read     # read extended user profiles
-      - team:read              # workspace/org metadata
-
-      # --- Reactions & files ---
-      - reactions:read         # read reactions
-      - reactions:write        # add reactions (e.g. acknowledge a nudge)
-      - files:read             # read shared files (evidence attachments)
-
-      # --- Interactivity / commands ---
-      - commands               # slash commands
-      - app_mentions:read      # respond when @-mentioned
+      # Used today — outbound DM notifications:
+      - users:read.email   # users.lookupByEmail — match a Person by email
+      - im:write           # conversations.open — open the user's DM channel
+      - chat:write         # chat.postMessage — deliver the notification (and, later,
+                           #   interactive blocks / chat.update / views.open)
+      # Pre-granted for planned inbound features so they ship with NO reinstall.
+      # No code uses these yet (see the header note); they exist purely so a later
+      # config-only change can light up the feature:
+      - commands           # a /growthos slash-command entry point
+      - im:history         # capture a free-text DM reply to an evidence request
 
 settings:
-  event_subscriptions:
-    # Set request_url after deploy, e.g. https://app.growthos.example/slack/events
-    request_url: https://growthos.work/slack/events
-    bot_events:
-      - app_home_opened
-      - app_mention
-      - message.channels
-      - message.groups
-      - message.im
-      - message.mpim
-      - member_joined_channel
-      - reaction_added
-      - team_join
   interactivity:
+    # Enabled now so inline evidence-request responses (buttons + modal) can ship
+    # later with zero Slack-side change. This is config, not a scope — no
+    # reinstall. The endpoint doesn't exist yet; build it before wiring buttons.
+    # Interactivity request URLs are NOT challenge-verified at config time (unlike
+    # the Events API), so this placeholder is safe until the responder ships.
     is_enabled: true
-    # Set request_url after deploy, e.g. https://app.growthos.example/slack/interactions
     request_url: https://growthos.work/slack/interactions
+  # No event subscriptions yet: GrowthOS consumes no inbound events today. The
+  # `im:history` scope is pre-granted (above), so adding a `message.im`
+  # subscription later needs no reinstall — but it CAN'T be declared here against
+  # a dead URL (Slack challenge-verifies Events request_urls on save). Add it once
+  # /slack/events is live.
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_21_000100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -179,6 +179,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
     t.index ["evidence_id"], name: "index_evidence_links_on_evidence_id"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal", "link_status"], name: "idx_evidence_links_anchor"
     t.index ["tenant_id"], name: "index_evidence_links_on_tenant_id"
+  end
+
+  create_table "evidence_requests", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "cancelled_at"
+    t.uuid "capability_stable_id", null: false
+    t.datetime "created_at", null: false
+    t.text "decline_reason"
+    t.datetime "declined_at"
+    t.datetime "due_at"
+    t.uuid "evidence_id"
+    t.uuid "framework_id", null: false
+    t.integer "level_ordinal", null: false
+    t.text "message"
+    t.uuid "person_id", null: false
+    t.datetime "requested_at", null: false
+    t.uuid "requested_by_id", null: false
+    t.uuid "requestee_person_id", null: false
+    t.datetime "responded_at"
+    t.string "status", default: "pending", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id", "framework_id"], name: "index_evidence_requests_on_person_id_and_framework_id"
+    t.index ["requested_by_id"], name: "index_evidence_requests_on_requested_by_id"
+    t.index ["requestee_person_id"], name: "index_evidence_requests_on_requestee_person_id"
+    t.index ["status"], name: "index_evidence_requests_on_status"
+    t.index ["tenant_id"], name: "index_evidence_requests_on_tenant_id"
   end
 
   create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
@@ -423,6 +449,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
     t.index ["user_id"], name: "index_mcp_pending_approvals_on_user_id"
   end
 
+  create_table "noticed_events", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "notifications_count"
+    t.jsonb "params"
+    t.uuid "record_id"
+    t.string "record_type"
+    t.string "type"
+    t.datetime "updated_at", null: false
+    t.index ["record_type", "record_id"], name: "index_noticed_events_on_record"
+  end
+
+  create_table "noticed_notifications", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "event_id", null: false
+    t.datetime "read_at"
+    t.uuid "recipient_id", null: false
+    t.string "recipient_type", null: false
+    t.datetime "seen_at"
+    t.string "type"
+    t.datetime "updated_at", null: false
+    t.index ["event_id"], name: "index_noticed_notifications_on_event_id"
+    t.index ["recipient_type", "recipient_id"], name: "index_noticed_notifications_on_recipient"
+  end
+
   create_table "oauth_access_grants", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "application_id", null: false
     t.string "code_challenge"
@@ -556,6 +606,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
     t.datetime "created_at", null: false
     t.uuid "person_id"
     t.string "role", default: "member", null: false
+    t.string "slack_user_id"
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.uuid "user_id", null: false
@@ -571,8 +622,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
     t.string "hris_credentials"
     t.string "name", null: false
     t.jsonb "settings", default: {}, null: false
+    t.string "slack_credentials"
+    t.string "slack_team_id"
     t.string "slug", null: false
     t.datetime "updated_at", null: false
+    t.index ["slack_team_id"], name: "index_tenants_on_slack_team_id", unique: true, where: "(slack_team_id IS NOT NULL)"
     t.index ["slug"], name: "index_tenants_on_slug", unique: true
   end
 
@@ -581,6 +635,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false
     t.boolean "global_admin", default: false, null: false
+    t.jsonb "notification_preferences", default: {}, null: false
     t.string "provider"
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"
@@ -607,6 +662,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
   add_foreign_key "evidence_links", "people", column: "linked_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "people", column: "removed_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "tenants"
+  add_foreign_key "evidence_requests", "people", column: "requested_by_id", on_delete: :cascade
+  add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
+  add_foreign_key "evidence_requests", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"
@@ -626,6 +684,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_120000) do
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"
   add_foreign_key "mcp_pending_approvals", "tenants"
   add_foreign_key "mcp_pending_approvals", "users"
+  add_foreign_key "noticed_notifications", "noticed_events", column: "event_id", on_delete: :cascade
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_grants", "tenants"
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"

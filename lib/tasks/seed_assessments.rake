@@ -414,6 +414,96 @@ namespace :assessments do
         puts "  Comment  (#{seed[:author].name}, #{cap.name} L#{target_level_ordinal}, #{kind})"
       end
 
+      # ── Evidence requests (demo) ──
+      # Populate the manager's /evidence hub from both directions:
+      #   - incoming (someone asked the manager → respond / decline)
+      #   - outgoing (the manager asked someone → cancel), incl. one already
+      #     responded so the resolved state is visible.
+      # Cell-scoped, like the real feature. Idempotency is per request, keyed
+      # by (assessee, requestee, message) so re-runs don't duplicate.
+      manager_assignment = PersonFrameworkAssignment.for_person(manager_person.id)
+        .where(framework_id: framework.framework_id).first
+      mgr_binding = mgr_role && FrameworkState::CapabilityRoleBinding
+        .where(role_id: mgr_role.role_id).includes(:capability).first
+
+      request_seeds = []
+
+      # Incoming → manager: the report asks their manager for evidence on the
+      # report's own assessment (pending — the manager can respond or decline).
+      if (report_cap = bindings_by_name["Commit, Deliver, Celebrate: Accountability & Execution"]&.capability)
+        request_seeds << {
+          assessee: report_person, requested_by: report_person, requestee: manager_person,
+          capability: report_cap, level_ordinal: level.ordinal,
+          message: "Could you share what you saw during the Saturday outage? Your read on the stakeholder comms would really help my write-up."
+        }
+      end
+
+      # Outgoing ← manager: the manager asks the report for upward feedback on
+      # the manager's OWN assessment (pending — the manager can cancel).
+      if manager_assignment && mgr_binding && mgr_level
+        request_seeds << {
+          assessee: manager_person, requested_by: manager_person, requestee: report_person,
+          capability: mgr_binding.capability, level_ordinal: mgr_level.ordinal,
+          message: "Quick favour — could you share feedback on how I supported the team during the incident this quarter?"
+        }
+        # Outgoing ← manager, already RESPONDED: the manager asked the report,
+        # who answered with a piece of peer evidence.
+        if (mgr_cap2 = FrameworkState::CapabilityRoleBinding.where(role_id: mgr_role.role_id)
+              .includes(:capability).offset(1).first&.capability)
+          request_seeds << {
+            assessee: manager_person, requested_by: manager_person, requestee: report_person,
+            capability: mgr_cap2, level_ordinal: mgr_level.ordinal,
+            message: "Would you be up for sharing how the new on-call rotation has felt from your side?",
+            respond_with: {
+              evidence_type: "peer_feedback",
+              content: "The rotation's been a big improvement — clearer handoffs and the runbook " \
+                       "links in the channel topic meant I never had to go digging. Felt well supported."
+            }
+          }
+        end
+      end
+
+      request_seeds.each do |seed|
+        existing = EvidenceRequest.for_assessment(seed[:assessee].id, framework.framework_id)
+          .where(requestee_person_id: seed[:requestee].id, message: seed[:message]).first
+        if existing
+          puts "  Evidence request (#{seed[:requested_by].name} → #{seed[:requestee].name}): already seeded — skipping."
+          next
+        end
+
+        request_id = SecureRandom.uuid_v7
+        handler.request_evidence(
+          seed[:assessee].id, framework.framework_id, request_id,
+          requested_by_id: seed[:requested_by].id,
+          requestee_person_id: seed[:requestee].id,
+          capability_stable_id: seed[:capability].stable_id,
+          level_ordinal: seed[:level_ordinal],
+          message: seed[:message]
+        )
+        state = "pending"
+
+        if (resp = seed[:respond_with])
+          evidence_id = SecureRandom.uuid_v7
+          handler.record_evidence(
+            seed[:assessee].id, framework.framework_id, evidence_id,
+            capability_stable_id: seed[:capability].stable_id,
+            level_ordinal: seed[:level_ordinal],
+            source: "peer",
+            evidence_type: resp[:evidence_type],
+            content: resp[:content],
+            author_id: seed[:requestee].id
+          )
+          handler.respond_to_evidence_request(
+            seed[:assessee].id, framework.framework_id, request_id,
+            evidence_id: evidence_id, responded_by_id: seed[:requestee].id
+          )
+          state = "responded"
+        end
+
+        puts "  Evidence request (#{seed[:requested_by].name} → #{seed[:requestee].name}, " \
+             "#{seed[:capability].name} L#{seed[:level_ordinal]}): #{state}"
+      end
+
       puts "Assessment seed complete."
       puts "  Manager: #{manager_person.name} (#{admin_tu.user.email})"
       puts "  Report:  #{report_person.name} (#{report_email} / password123)"

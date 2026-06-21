@@ -29,6 +29,7 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       handler.add_role(@framework_id, @role_id, rf_id, "Engineer", "E", "ic")
       @level_id = SecureRandom.uuid_v7
       handler.add_level(@framework_id, @level_id, @role_id, 1, "Engineer 1", "E1", is_entry: true)
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, @role_id, 2, "Engineer 2", "E2")
 
       @cat_id = SecureRandom.uuid_v7
       handler.add_capability_category(@framework_id, @cat_id, "Thinking", ordinal: 1)
@@ -41,6 +42,10 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       )
       handler.set_behavioural_expectation(
         @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap1_id, 1, "Synthesises"
+      )
+      # cap1 also has an expectation at L2 — a valid, not-yet-linked cell.
+      handler.set_behavioural_expectation(
+        @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @cap1_id, 2, "Synthesises deeper"
       )
 
       @cap2_id = SecureRandom.uuid_v7
@@ -76,37 +81,38 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
   end
 
   context "kebab menu + link" do
-    should "link evidence to a second capability and show the also-linked indicator" do
+    should "link evidence to a second capability via the Edit modal's picker" do
       # Evidence rendering is gated on cell focus (`data-focused="true"`
       # on the expanded `<td>`), so deep-link to the cell.
       visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
-      wait_for_stimulus "evidence-link-form"
+      wait_for_stimulus "evidence-modal"
       assert_selector "#evidence-#{@evidence_id}", visible: true
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
-      # The menu lives in an opacity-0 hover wrapper behind useTransition —
-      # assert the items exist in the DOM and drive the action directly.
-      assert_selector "#evidence-#{@evidence_id} [role='menuitem']",
-                      text: "Link to another capability", visible: :all
+      # The author manages links inside Edit (the unified modal); a separate
+      # "Link" item is only for non-author link-holders. Unlink (disabled at
+      # one link) + Withdraw remain.
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Edit", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw", visible: :all
-      # With only one link, "Unlink from this capability" is rendered disabled.
       assert_selector "#evidence-#{@evidence_id} [role='menuitem'][aria-disabled='true']",
                       text: "Unlink from this capability", visible: :all
 
       page.execute_script(<<~JS)
-        document.querySelector(
-          "#evidence-#{@evidence_id} [data-action*='evidence-link-form#open']"
-        ).click();
+        document.querySelector("#evidence-#{@evidence_id} [data-evidence-modal-mode-param='edit']").click();
       JS
-      assert_selector "#evidence-link-modal", visible: true
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_selector "#evm-content", visible: true
 
-      # Submit a link to cap2.
+      # Add cap2 · L1 to the "also applies to" picker, then save (links-only).
+      # Selecting the capability populates its valid levels (change event).
       page.execute_script(<<~JS)
-        const f = document.querySelector("#evidence-link-modal form");
-        f.querySelector("#evidence_link_capability_field").value = "#{@cap2_stable}";
-        f.querySelector("#evidence_link_level_field").value = "1";
-        f.querySelector("#evidence_link_rationale_field").value = "Also applies";
-        f.requestSubmit();
+        const m = document.querySelector("#evidence-modal");
+        const cap = m.querySelector("[data-evidence-modal-target='linkCapability']");
+        cap.value = "#{@cap2_stable}";
+        cap.dispatchEvent(new Event("change", { bubbles: true }));
+        m.querySelector("[data-evidence-modal-target='linkLevel']").value = "1";
+        m.querySelector("[data-action*='evidence-modal#addLink']").click();
+        m.querySelector("form").requestSubmit();
       JS
 
       assert_text "Also linked to 1 other place"
@@ -116,6 +122,34 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
           .pluck(:capability_stable_id, :level_ordinal)
         assert_equal [ [ @cap1_stable, 1 ], [ @cap2_stable, 1 ] ].sort, links.sort
       end
+    end
+
+    # The level dropdown reflects the chosen capability: only its valid cells,
+    # with the already-linked level (here the primary, cap1·L1) disabled.
+    should "offer only valid levels and disable already-linked ones" do
+      visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
+      wait_for_stimulus "evidence-modal"
+      page.execute_script(<<~JS)
+        document.querySelector("#evidence-#{@evidence_id} [data-evidence-modal-mode-param='edit']").click();
+      JS
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_selector "#evm-content", visible: true
+
+      # Select the primary capability (cap1, which has expectations at L1 + L2).
+      levels = page.evaluate_script(<<~JS)
+        (() => {
+          const m = document.querySelector("#evidence-modal");
+          const cap = m.querySelector("[data-evidence-modal-target='linkCapability']");
+          cap.value = "#{@cap1_stable}";
+          cap.dispatchEvent(new Event("change", { bubbles: true }));
+          return [...m.querySelector("[data-evidence-modal-target='linkLevel']").options]
+            .filter(o => o.value)
+            .map(o => ({ ordinal: o.value, disabled: o.disabled }));
+        })()
+      JS
+
+      # L1 is the primary (already linked) ⇒ disabled; L2 is valid + free ⇒ enabled.
+      assert_equal({ "1" => true, "2" => false }, levels.to_h { |o| [ o["ordinal"], o["disabled"] ] })
     end
   end
 end

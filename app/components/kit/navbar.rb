@@ -94,9 +94,24 @@ class Components::Kit::Navbar < Components::Base
     end
   end
 
+  # Live-updating notification bell. The hidden signal element is replaced by a
+  # per-user Turbo Stream when a notification lands; notifications_sync_controller
+  # reloads the lazy bell frame in response. See Views::Notifications::Bell.
+  def notification_bell
+    div(data: { controller: "notifications-sync" }) do
+      turbo_stream_from(@user, :notifications)
+      div(id: "notifications-sync-signal", data: { notifications_sync_target: "signal" }, hidden: true)
+      turbo_frame_tag("notification-bell", src: bell_notifications_path, loading: "lazy") do
+        # Placeholder shown until the lazy frame resolves — keeps layout stable.
+        div(class: "h-11 w-11", aria: { hidden: "true" })
+      end
+    end
+  end
+
   def right_section
     div(class: "flex items-center gap-2") do
       if @user
+        notification_bell
         render Components::Kit::UserMenu.new(
           user: @user,
           current_tenant: @current_tenant,

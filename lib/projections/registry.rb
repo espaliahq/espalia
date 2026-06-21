@@ -25,6 +25,7 @@ module Projections::Registry
     "assessment_cycles/current_state"        => "AssessmentCycles::Projections::CurrentState",
     "person_development/current_assessment"  => "PersonDevelopment::Projections::CurrentAssessment",
     "person_development/evidence_collection" => "PersonDevelopment::Projections::EvidenceCollection",
+    "person_development/evidence_requests"   => "PersonDevelopment::Projections::EvidenceRequests",
     "person_development/comment_thread"      => "PersonDevelopment::Projections::CommentThread",
     "person_development/assessment_authority" => "PersonDevelopment::Projections::AssessmentAuthority"
   }.freeze

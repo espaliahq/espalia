@@ -209,48 +209,38 @@ class Views::Assessments::Evidence::Card < Views::Base
       data: { dropdown_target: "menu" }
     ) do
       edit_menu_item if @can_update
-      link_menu_item if @can_manage_links
+      # The author's Edit already manages links (the unified modal). Offer a
+      # link-only entry only to non-author link-holders (content disabled there).
+      link_menu_item if @can_manage_links && !@can_update
       remove_link_menu_item if @can_manage_links
       withdraw_menu_item if @can_withdraw
     end
   end
 
   def edit_menu_item
-    ref = @item.external_reference
-    button(
-      type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700",
-      role: "menuitem",
-      data: {
-        action: "click->dropdown#close click->evidence-edit-form#open",
-        evidence_edit_form_evidence_id_param: @item.id,
-        evidence_edit_form_title_param: @item.title.to_s,
-        evidence_edit_form_content_param: @item.content.to_s,
-        evidence_edit_form_evidence_type_param: @item.evidence_type.to_s,
-        evidence_edit_form_custom_type_label_param: @item.custom_type_label.to_s,
-        evidence_edit_form_ref_system_param: ref&.system.to_s,
-        evidence_edit_form_ref_url_param: ref&.url.to_s
-      }
-    ) { "Edit" }
+    modal_menu_button("Edit")
   end
 
-  # Opens the link modal to attach this evidence to another capability ×
-  # level. The modal posts to add_link with the originating cell (this
-  # card's coordinate) so the server re-renders the right list afterward.
+  # Opens the unified modal in edit mode for a non-author who may manage links
+  # but not edit content — the server disables the content fields, leaving the
+  # "also applies to" picker active.
   def link_menu_item
+    modal_menu_button("Link to another capability")
+  end
+
+  def modal_menu_button(label)
     button(
       type: "button",
       class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
              "hover:bg-gray-100 dark:hover:bg-gray-700",
       role: "menuitem",
       data: {
-        action: "click->dropdown#close click->evidence-link-form#open",
-        evidence_link_form_evidence_id_param: @item.id,
-        evidence_link_form_from_capability_stable_id_param: @current_capability_stable_id,
-        evidence_link_form_from_level_ordinal_param: @current_level_ordinal
+        action: "click->dropdown#close evidence-modal#load click->modal#open",
+        evidence_modal_mode_param: "edit",
+        evidence_modal_evidence_id_param: @item.id,
+        evidence_modal_return_to_param: "assessment:#{@assessment_id}"
       }
-    ) { "Link to another capability" }
+    ) { label }
   end
 
   # "Unlink from this capability" — removes the link for the cell this card

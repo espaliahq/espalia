@@ -10,6 +10,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           frameworks/published_state
           person_development/current_assessment
           person_development/evidence_collection
+          person_development/evidence_requests
           person_development/comment_thread
           person_development/assessment_authority
           assessment_cycles/current_state
