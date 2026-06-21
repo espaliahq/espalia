@@ -292,9 +292,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"
     when "illustration_removed" then "Removed an illustration"
-    when "role_family_updated" then "Updated a role family"
-    when "role_updated"        then "Updated a role"
-    when "level_updated"       then "Updated a level"
+    when "role_family_updated" then org_update_summary("role family", name: "name", description: "description")
+    when "role_updated"        then org_update_summary("role", name: "name", code: "code", track: "track")
+    when "level_updated"       then org_update_summary("level", title: "title", code: "code")
     when "draft_opened"        then draft_opened_summary
     when "version_published"   then "Published v#{payload_value(:version)}"
     when "migration_mapping_defined" then "Defined a migration mapping"
@@ -308,6 +308,19 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def draft_opened_summary
     base = "Opened draft v#{payload_value(:target_version)}"
     payload_value(:auto_opened) ? "#{base} (auto)" : base
+  end
+
+  # Summary for a direct org-structure edit (role family / role / level) that
+  # names which field(s) changed — e.g. "Updated a role's name". The aggregate
+  # `.compact`s these update events, so a present payload key means that field
+  # actually changed; we list exactly those. Falls back to a bare "Updated a
+  # <noun>" if none resolve (e.g. an older event shape).
+  #
+  # @param noun [String] "role family" / "role" / "level"
+  # @param fields [Hash{Symbol=>String}] payload key → human label
+  def org_update_summary(noun, **fields)
+    changed = fields.filter_map { |key, label| label if payload_value(key).present? }
+    changed.empty? ? "Updated a #{noun}" : "Updated a #{noun}'s #{changed.to_sentence}"
   end
 
   # Entity word for suggestion summaries — the human label of the suggestion's
