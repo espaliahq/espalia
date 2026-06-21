@@ -15,11 +15,13 @@ class Views::Assessments::Evidence::List < Views::Base
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
   def initialize(items:, assessment_id:, viewer_person_id:, can_create:,
-                 capability_stable_id:, level_ordinal:, can_relink_others: false)
+                 capability_stable_id:, level_ordinal:, can_relink_others: false,
+                 can_request: false)
     @items = items
     @assessment_id = assessment_id
     @viewer_person_id = viewer_person_id
     @can_create = can_create
+    @can_request = can_request
     @can_relink_others = can_relink_others
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
@@ -53,29 +55,50 @@ class Views::Assessments::Evidence::List < Views::Base
     "evidence-list-#{@capability_stable_id}-#{@level_ordinal}"
   end
 
-  # Header pairs the section label with a `+` affordance that opens the
-  # evidence form. When the viewer can create, the whole header line is
-  # the click target — a 1px-tall row of microtype was a hard-to-hit
-  # affordance on touch.
+  # Section label on the left; a kebab (⋮) menu on the right gathering the cell
+  # actions ("Add evidence" / "Request evidence"), shown only for the actions the
+  # viewer is permitted. Read-only peers see the plain label.
   def header
-    if @can_create
-      add_button
-    else
-      div(class: header_label_classes) do
-        header_label_content
+    div(class: "flex items-center justify-between mb-2") do
+      div(class: header_label_classes) { header_label_content }
+      actions_menu if @can_create || @can_request
+    end
+  end
+
+  def header_label_classes
+    "flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-300"
+  end
+
+  def header_label_content
+    span { "Evidence" }
+    span(class: "font-mono") { "(#{@items.size})" } if @items.any?
+  end
+
+  def actions_menu
+    div(class: "relative", data: { controller: "dropdown", action: "keydown.esc@window->dropdown#close" }) do
+      button(
+        type: "button",
+        class: "rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
+               "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+        data: { dropdown_target: "trigger", action: "dropdown#toggle" },
+        aria: { label: "Evidence actions", haspopup: "menu", expanded: "false" }
+      ) { span(class: "block leading-none text-base", aria_hidden: "true") { "⋮" } }
+      div(
+        class: "hidden absolute right-0 mt-1 w-48 rounded-md border border-gray-200 dark:border-gray-700 " \
+               "bg-white dark:bg-gray-900 shadow-lg z-10 py-1 text-xs",
+        role: "menu", data: { dropdown_target: "menu" }
+      ) do
+        add_menu_item if @can_create
+        request_menu_item if @can_request
       end
     end
   end
 
-  def add_button
+  def add_menu_item
     button(
-      type: "button",
-      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
-             "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
-             "dark:hover:text-gray-200 transition-colors",
-      aria: { label: "Add evidence" },
+      type: "button", class: menu_item_classes, role: "menuitem",
       data: {
-        action: "evidence-modal#load click->modal#open",
+        action: "click->dropdown#close evidence-modal#load click->modal#open",
         modal_target_id: "evidence-modal-overlay",
         evidence_modal_mode_param: "new",
         evidence_modal_assignment_id_param: @assessment_id,
@@ -83,32 +106,24 @@ class Views::Assessments::Evidence::List < Views::Base
         evidence_modal_level_ordinal_param: @level_ordinal,
         evidence_modal_return_to_param: "assessment:#{@assessment_id}"
       }
-    ) do
-      header_label_content
-      span(class: "ml-auto block text-sm leading-none", aria_hidden: "true") { "+" }
-    end
+    ) { "Add evidence" }
   end
 
-  def header_label_classes
-    "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-      "text-gray-600 dark:text-gray-300 mb-2"
+  def request_menu_item
+    button(
+      type: "button", class: menu_item_classes, role: "menuitem",
+      data: {
+        action: "click->dropdown#close request-evidence#load click->modal#open",
+        modal_target_id: "evidence-request-modal-overlay",
+        request_evidence_assignment_id_param: @assessment_id,
+        request_evidence_capability_stable_id_param: @capability_stable_id,
+        request_evidence_level_ordinal_param: @level_ordinal
+      }
+    ) { "Request evidence" }
   end
 
-  # When the list is empty AND the viewer can create, lean the label
-  # into the affordance ("Add evidence") rather than describing an
-  # empty section ("Evidence"). When items exist, switch back to the
-  # section label with a count. When the viewer can't create (read-only
-  # peer view), don't show an affordance they can't act on — render the
-  # plain "Evidence" label so the row reads as descriptive context.
-  def header_label_content
-    if @items.any?
-      span { "Evidence" }
-      span(class: "font-mono") { "(#{@items.size})" }
-    elsif @can_create
-      span { "Add evidence" }
-    else
-      span { "Evidence" }
-    end
+  def menu_item_classes
+    "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
   end
 
   def can_withdraw?(item)

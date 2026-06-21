@@ -56,10 +56,14 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
   def open_request_modal
     visit assessment_path(@report_assignment)
     assert_text "Critical Thinking"
-    # JS-dispatch the Stimulus trigger so a starved CI loop can't drop it.
+    # Open the evidence-actions kebab, then the "Request evidence" item.
+    # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
+    page.execute_script(<<~JS)
+      document.querySelector("button[aria-label='Evidence actions']")?.click()
+    JS
     page.execute_script(<<~JS)
       [...document.querySelectorAll("button")]
-        .find((b) => b.textContent.trim().includes("Request evidence"))?.click()
+        .find((b) => b.textContent.trim() === "Request evidence")?.click()
     JS
     assert_selector "#evidence-request-modal-overlay", visible: true
     assert_text "Who can speak to this?"
@@ -91,10 +95,10 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     end
   end
 
-  should "show the Request evidence affordance on mobile too" do
+  should "show the evidence-actions menu on mobile too" do
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     visit assessment_path(@report_assignment)
     assert_text "Critical Thinking"
-    assert_selector "button", text: "Request evidence"
+    assert_selector "button[aria-label='Evidence actions']", visible: :all
   end
 end

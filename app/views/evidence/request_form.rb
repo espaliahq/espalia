@@ -80,9 +80,15 @@ class Views::Evidence::RequestForm < Views::Base
   def recipients_section
     div do
       label(class: LABEL) { "Who can speak to this?" }
-      input(type: "search", placeholder: "Search by name or email…", class: "#{INPUT} mb-2",
-            data: { request_evidence_target: "search", action: "input->request-evidence#search" })
-      render Views::Evidence::RequestCandidatesFrame.new(candidates: [], query: nil)
+      # The results float as a dropdown over the content below (absolute, inside
+      # this relative wrapper) so typing never resizes the modal.
+      div(class: "relative") do
+        input(type: "search", placeholder: "Search by name or email…", class: INPUT,
+              data: { request_evidence_target: "search", action: "input->request-evidence#search" })
+        div(class: "absolute left-0 right-0 top-full mt-1 z-20") do
+          render Views::Evidence::RequestCandidatesFrame.new(candidates: [], query: nil)
+        end
+      end
       suggestions_block
       div(class: "mt-3") do
         span(class: LABEL) { "Selected" }
