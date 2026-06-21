@@ -44,9 +44,13 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
 
   should "notify the requester when the request is responded to" do
     id = request!
+    evidence_id = SecureRandom.uuid_v7
+    @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
+      capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, source: "peer",
+      evidence_type: "peer_feedback", content: "Paired on the incident", author_id: @peer.id)
     perform_enqueued_jobs do
       @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
-        evidence_id: SecureRandom.uuid_v7, responded_by_id: @peer.id)
+        evidence_id: evidence_id, responded_by_id: @peer.id)
     end
 
     titles = @assessee_user.notifications.reload.map(&:inbox_title)
