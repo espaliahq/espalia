@@ -62,13 +62,18 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
   end
 
   context "view mode" do
-    should "render plain names with no edit affordance in the tree" do
+    should "render plain names with no edit affordance across the whole rename surface" do
       sign_in_as(@admin_user)
       visit framework_path(@framework_id)
       assert_text "Software Engineer"
+      # Tree: no role / role-family inline editors or pencils.
       assert_no_selector "turbo-frame#role-name-#{@role_id} [data-controller='inline-editor']"
       assert_no_selector "[aria-label='Edit role name']"
       assert_no_selector "[aria-label='Edit role family name']"
+      # Matrix header: no level-title inline editor or pencil.
+      assert_text "Engineer I"
+      assert_no_selector "turbo-frame#level-title-#{@level_id} [data-controller='inline-editor']"
+      assert_no_selector "[aria-label='Edit level title']"
     end
   end
 
