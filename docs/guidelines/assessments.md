@@ -691,6 +691,10 @@ The hero middle band collapses via `animation-timeline: scroll(root)`, and the b
 
 Both live on `.assessment-scroll-root` (the `assessment-sync` wrapper in `show_view.rb` / `manager_show_view.rb`), gated inside `@supports (animation-timeline: scroll())` so they only apply where the collapse — and thus the loop — actually runs. The trap is assuming `overflow-anchor: none` alone fixes it: it kills the anchor loop but not the clamp loop, which is the one the bug report ("shakes near full visibility, sometimes") actually describes. Verified in-browser: before, a held scroll position oscillates the band through several heights; after, every position holds a single stable height. Regression-guarded by `assessments_system_test.rb` → "apply the anti-shake CSS to the assessment scroll root".
 
+### 17. Toggling Tailwind `hidden` on an element that already has a `display` utility doesn't hide it
+
+The request modal hides a suggestion chip once it's been added to the recipient list. The first cut toggled the `hidden` class — and the chip stayed visible. Cause: the chip carries `inline-flex` (a `display` utility), and `.hidden { display:none }` ties it on specificity (both single-class selectors), so **source order decides** — Tailwind emits `inline-flex` after `hidden`, so `inline-flex` wins and `.hidden` is a no-op. The class *is* present in the DOM (so a `classList.contains("hidden")` check misleads you into thinking it worked); it just has no visual effect. Fix: toggle an **inline** `el.style.display = "none" / ""` (inline style beats any class), or render the element without a competing display utility. See `request_evidence_controller.js#toggleSuggestion`. The general rule: never rely on `hidden` to override another `display-*` utility on the *same* element — gate visibility from a parent, or use inline style.
+
 ## Performance state machine
 
 Defined in `PersonDevelopment::Scoring#performance_state`. See [scoring-model.md](../architecture/scoring-model.md) for the canonical definition. Summary:
