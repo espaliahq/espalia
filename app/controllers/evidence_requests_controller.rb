@@ -14,7 +14,7 @@ class EvidenceRequestsController < ApplicationController
   def modal
     authorize modal_assignment, :request?, policy_class: EvidenceRequestPolicy
     cap = params[:capability_stable_id]
-    lvl = Integer(params[:level_ordinal], exception: false)
+    lvl = cell_level_ordinal or return head(:bad_request)
     render Views::Evidence::RequestForm.new(
       assignment_id: modal_assignment.id, capability_stable_id: cap, level_ordinal: lvl,
       context_block: cell_context(cap, lvl),
@@ -31,7 +31,7 @@ class EvidenceRequestsController < ApplicationController
   def candidates
     authorize modal_assignment, :request?, policy_class: EvidenceRequestPolicy
     cap = params[:capability_stable_id]
-    lvl = Integer(params[:level_ordinal], exception: false)
+    lvl = cell_level_ordinal or return head(:bad_request)
     render Views::Evidence::RequestCandidatesFrame.new(
       candidates: candidates_query(cap, lvl).search(params[:q]), query: params[:q].presence
     ), layout: false
@@ -97,6 +97,12 @@ class EvidenceRequestsController < ApplicationController
 
   def modal_assignment
     @modal_assignment ||= PersonFrameworkAssignment.find(params.expect(:assignment_id))
+  end
+
+  # The cell level as an integer, or nil when the param is missing/malformed
+  # (the modal/candidates frames can't be rendered without a real cell).
+  def cell_level_ordinal
+    Integer(params[:level_ordinal], exception: false)
   end
 
   def candidates_query(capability_stable_id, level_ordinal)
