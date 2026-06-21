@@ -41,8 +41,12 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     visit evidence_hub_path
     assert_text "Rep asked you for evidence"
 
-    # Open the unified modal in respond mode, fill it, and submit.
-    find("button[data-evidence-modal-mode-param='respond']").click
+    # Open the unified modal in respond mode, fill it, and submit. JS-dispatch
+    # the click so a starved CI event loop can't silently drop it (the trigger is
+    # a Stimulus action, not a navigation).
+    page.execute_script(
+      "document.querySelector(\"button[data-evidence-modal-mode-param='respond']\").click()"
+    )
     assert_selector "#evidence-modal-overlay", visible: true
     assert_selector "#evm-content", visible: true
 
@@ -71,7 +75,9 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     visit evidence_hub_path
     assert_text "To Peer"
 
-    auto_confirm { click_link "Cancel request" }
+    click_with_retry(expect_text: "Request cancelled") do
+      auto_confirm { click_link "Cancel request" }
+    end
     assert_text "Request cancelled"
     ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.last.status }
   end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_19_000300) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_21_000100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -684,6 +684,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_19_000300) do
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"
   add_foreign_key "mcp_pending_approvals", "tenants"
   add_foreign_key "mcp_pending_approvals", "users"
+  add_foreign_key "noticed_notifications", "noticed_events", column: "event_id", on_delete: :cascade
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_grants", "tenants"
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"
