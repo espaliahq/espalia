@@ -25,7 +25,7 @@ class Settings::NotificationsController < ApplicationController
   # PATCH /settings/notifications
   def update
     authorize :notification_settings, :update?
-    submitted = params.fetch(:notification_preferences, {}).to_unsafe_h
+    submitted = params.fetch(:notification_preferences, {})
 
     NotificationType.all.each do |type|
       channels = UI_CHANNELS.index_with { |channel| submitted.dig(type.key.to_s, channel.to_s) }

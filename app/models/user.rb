@@ -61,7 +61,11 @@ class User < ApplicationRecord
       acc[channel.to_s] = bool.cast(enabled) || false
     end
 
-    merged = notification_preferences.merge(type_key.to_s => overrides)
+    # Merge at the channel level so updating one channel (or the settings UI,
+    # which submits only the in-app/slack channels) doesn't drop a previously
+    # set override on another channel (e.g. an email override set via MCP).
+    existing = notification_preferences[type_key.to_s] || {}
+    merged = notification_preferences.merge(type_key.to_s => existing.merge(overrides))
     update(notification_preferences: merged)
   end
 

@@ -37,6 +37,16 @@ class UserTest < ActiveSupport::TestCase
 
       assert_not user.update_notification_preference(:nonexistent_type, slack: true)
     end
+
+    should "preserve an existing channel override when another channel is updated" do
+      user = create(:user)
+      user.update_notification_preference(:evidence_requested, email: false)
+      user.update_notification_preference(:evidence_requested, slack: false) # settings UI omits email
+
+      user.reload
+      assert_not user.notifies_via?(:evidence_requested, :email), "email override must survive a slack-only update"
+      assert_not user.notifies_via?(:evidence_requested, :slack)
+    end
   end
 
   context "validations" do
