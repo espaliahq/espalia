@@ -7,6 +7,7 @@
 #
 class Frameworks::RolesController < ApplicationController
   before_action :set_framework
+  before_action :set_role, only: [ :update ]
 
   # PATCH /frameworks/:framework_id/roles/:id
   def update
@@ -16,15 +17,15 @@ class Frameworks::RolesController < ApplicationController
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
-        role_id: params.expect(:id),
+        role_id: @role.role_id,
         name: params.expect(role: [ :name ])[:name]
       }
     )
 
     render Views::Frameworks::Explorer::RoleNameFrame.new(
-      role: role, framework_id: @framework.framework_id, mode: :edit
+      role: @role.reload, framework_id: @framework.framework_id, mode: :edit
     ), layout: false
-  rescue Operations::Base::ParameterError, RuntimeError
+  rescue Operations::Base::ParameterError
     head :unprocessable_content
   end
 
@@ -37,9 +38,11 @@ class Frameworks::RolesController < ApplicationController
   end
 
   # Scope the lookup to this framework (via its role families) so a role id from
-  # another framework can't be re-rendered here.
-  def role
+  # another framework can't be targeted here.
+  def set_role
     family_ids = FrameworkState::RoleFamily.where(framework_id: @framework.framework_id).select(:role_family_id)
-    FrameworkState::Role.find_by!(role_family_id: family_ids, role_id: params.expect(:id))
+    @role = FrameworkState::Role.find_by!(role_family_id: family_ids, role_id: params.expect(:id))
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
   end
 end

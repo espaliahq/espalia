@@ -44,6 +44,14 @@ class Frameworks::RoleFamiliesControllerTest < ActionDispatch::IntegrationTest
       assert_response :unprocessable_content
     end
 
+    should "404 on an unknown role family id (not a masked 422)" do
+      sign_in @user
+      patch framework_role_family_path(framework_id: @framework_id, id: SecureRandom.uuid_v7),
+            params: { role_family: { name: "Whatever" } }
+
+      assert_response :not_found
+    end
+
     should "deny non-contributor viewers" do
       viewer = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: viewer, role: :member) }

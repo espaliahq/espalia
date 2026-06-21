@@ -7,6 +7,7 @@
 #
 class Frameworks::LevelsController < ApplicationController
   before_action :set_framework
+  before_action :set_level, only: [ :update ]
 
   # PATCH /frameworks/:framework_id/levels/:id
   def update
@@ -16,16 +17,16 @@ class Frameworks::LevelsController < ApplicationController
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
-        level_id: params.expect(:id),
+        level_id: @level.level_id,
         title: params.expect(level: [ :title ])[:title]
       }
     )
 
     render Views::Frameworks::Explorer::LevelTitleFrame.new(
-      level_id: level.level_id, title: level.title,
+      level_id: @level.level_id, title: @level.reload.title,
       framework_id: @framework.framework_id, mode: :edit
     ), layout: false
-  rescue Operations::Base::ParameterError, RuntimeError
+  rescue Operations::Base::ParameterError
     head :unprocessable_content
   end
 
@@ -38,10 +39,12 @@ class Frameworks::LevelsController < ApplicationController
   end
 
   # Scope the lookup to this framework (via its role families → roles) so a level
-  # id from another framework can't be re-rendered here.
-  def level
+  # id from another framework can't be targeted here.
+  def set_level
     family_ids = FrameworkState::RoleFamily.where(framework_id: @framework.framework_id).select(:role_family_id)
     role_ids = FrameworkState::Role.where(role_family_id: family_ids).select(:role_id)
-    FrameworkState::Level.find_by!(role_id: role_ids, level_id: params.expect(:id))
+    @level = FrameworkState::Level.find_by!(role_id: role_ids, level_id: params.expect(:id))
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
   end
 end

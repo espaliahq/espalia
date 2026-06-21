@@ -8,6 +8,7 @@
 #
 class Frameworks::RoleFamiliesController < ApplicationController
   before_action :set_framework
+  before_action :set_role_family, only: [ :update ]
 
   # PATCH /frameworks/:framework_id/role_families/:id
   def update
@@ -17,15 +18,15 @@ class Frameworks::RoleFamiliesController < ApplicationController
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
-        role_family_id: params.expect(:id),
+        role_family_id: @role_family.role_family_id,
         name: params.expect(role_family: [ :name ])[:name]
       }
     )
 
     render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
-      role_family: role_family, framework_id: @framework.framework_id, mode: :edit
+      role_family: @role_family.reload, framework_id: @framework.framework_id, mode: :edit
     ), layout: false
-  rescue Operations::Base::ParameterError, RuntimeError
+  rescue Operations::Base::ParameterError
     head :unprocessable_content
   end
 
@@ -37,9 +38,11 @@ class Frameworks::RoleFamiliesController < ApplicationController
     head :not_found
   end
 
-  def role_family
-    FrameworkState::RoleFamily.find_by!(
+  def set_role_family
+    @role_family = FrameworkState::RoleFamily.find_by!(
       framework_id: @framework.framework_id, role_family_id: params.expect(:id)
     )
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
   end
 end
