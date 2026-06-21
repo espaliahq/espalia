@@ -28,6 +28,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
                  ordinal:, person_level:, assessment_id:, context: :self,
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
+                 can_request_evidence: false,
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false)
     @cell_data = cell_data
@@ -43,6 +44,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     @alignment_locked = alignment_locked
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_request_evidence = can_request_evidence
     @can_relink_others_evidence = can_relink_others_evidence
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
@@ -61,6 +63,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
       expectation_sentence
       illustrations_section
       evidence_section
+      request_evidence_section
       comments_section
     end
   end
@@ -169,6 +172,33 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
         capability_stable_id: @capability_stable_id,
         level_ordinal: @ordinal
       )
+    end
+  end
+
+  # Per-cell "Request evidence" affordance — opens the shared request modal
+  # (hosted once on the page) pointed at this capability × level.
+  def request_evidence_section
+    return unless @can_request_evidence
+
+    div(class: "mb-3") do
+      button(
+        type: "button",
+        class: "inline-flex items-center gap-1.5 min-h-9 text-xs font-medium text-primary hover:underline cursor-pointer",
+        data: {
+          action: "request-evidence#load click->modal#open",
+          modal_target_id: "evidence-request-modal-overlay",
+          request_evidence_assignment_id_param: @assessment_id,
+          request_evidence_capability_stable_id_param: @capability_stable_id,
+          request_evidence_level_ordinal_param: @ordinal
+        }
+      ) do
+        svg(xmlns: "http://www.w3.org/2000/svg", fill: "none", viewbox: "0 0 24 24",
+            stroke_width: "2", stroke: "currentColor", class: "w-4 h-4") do |s|
+          s.path(stroke_linecap: "round", stroke_linejoin: "round",
+                 d: "M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z")
+        end
+        span { "Request evidence" }
+      end
     end
   end
 

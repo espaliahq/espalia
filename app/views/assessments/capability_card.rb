@@ -33,6 +33,7 @@ class Views::Assessments::CapabilityCard < Views::Base
                  expanded_capability_id: nil, focused_level_ordinal: nil,
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
+                 can_request_evidence: false,
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false)
     @capability_data = capability_data
@@ -51,6 +52,7 @@ class Views::Assessments::CapabilityCard < Views::Base
     @alignment_locked = alignment_locked
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
+    @can_request_evidence = can_request_evidence
     @can_relink_others_evidence = can_relink_others_evidence
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
@@ -209,6 +211,7 @@ class Views::Assessments::CapabilityCard < Views::Base
       alignment_locked: @alignment_locked,
       viewer_person_id: @viewer_person_id,
       can_create_evidence: @can_create_evidence,
+      can_request_evidence: @can_request_evidence,
       can_relink_others_evidence: @can_relink_others_evidence,
       can_comment: @can_comment,
       viewer_is_tenant_admin: @viewer_is_tenant_admin

@@ -76,6 +76,7 @@ class Views::Assessments::Evidence::List < Views::Base
       aria: { label: "Add evidence" },
       data: {
         action: "evidence-modal#load click->modal#open",
+        modal_target_id: "evidence-modal-overlay",
         evidence_modal_mode_param: "new",
         evidence_modal_assignment_id_param: @assessment_id,
         evidence_modal_capability_stable_id_param: @capability_stable_id,
