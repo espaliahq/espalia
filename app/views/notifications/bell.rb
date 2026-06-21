@@ -66,7 +66,7 @@ class Views::Notifications::Bell < Views::Base
 
   def panel_list
     div(class: "max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700") do
-      @notifications.each { |n| render Views::Notifications::Row.new(notification: n, compact: true) }
+      @notifications.each { |n| render Views::Notifications::Row.new(notification: n) }
     end
   end
 

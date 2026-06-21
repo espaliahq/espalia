@@ -50,6 +50,8 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_match "A long decline reason that must not be clamped", response.body
       assert_match "break-words", response.body
+      # Body is never clamped; the title isn't truncated either (the bell frame,
+      # which has no layout chrome, asserts truncate-absence directly below).
       assert_no_match "line-clamp-2", response.body
     end
   end
@@ -65,14 +67,15 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
       assert_match "2 unread", response.body
     end
 
-    should "render the bell peek compactly (truncated)" do
+    should "render bell notification text in full (no truncation)" do
       sign_in @user
-      notify!(@user, title: "One", body: "A long body that the compact peek should clamp")
+      notify!(@user, title: "One", body: "A long body that must show in full in the bell too")
 
       get bell_notifications_path
       assert_response :success
-      assert_match "truncate", response.body
-      assert_match "line-clamp-2", response.body
+      assert_match "A long body that must show in full in the bell too", response.body
+      assert_no_match "line-clamp-2", response.body
+      assert_no_match "truncate", response.body
     end
   end
 
