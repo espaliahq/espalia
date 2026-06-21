@@ -4,9 +4,20 @@
 # Paste this YAML, then install to your workspace. Rotate/replace the signing secret and
 # tokens via Rails credentials (config/credentials.yml.enc) — never commit them.
 #
-# Scopes below grant full read access to channels and history plus the write/identity
-# scopes a notification + assistant bot needs. Trim any you don't use before going to prod;
-# Slack reviews broad scopes (notably the `*:history` and `users:read.email` families).
+# Scope is deliberately minimal: GrowthOS only sends OUTBOUND direct-message
+# notifications today (assessment nudges, alignment reminders, evidence-request
+# pings). The three bot scopes below are exactly what that requires and match
+# Slack::BOT_SCOPES, which the OAuth install flow requests:
+#
+#   users:read.email  → users.lookupByEmail  (map a Person's email → Slack user id)
+#   im:write          → conversations.open   (open the 1:1 DM channel)
+#   chat:write        → chat.postMessage      (post the notification into that DM)
+#
+# We do NOT read channels/history, handle slash commands, or process inbound
+# messages/interactions — so none of the *:history, *:read, commands, reactions,
+# files, or interactivity scopes are requested, and no event subscriptions are
+# declared. When in-Slack responses or slash commands are built, add only the
+# scopes that feature needs (and the matching request_urls) at that point.
 
 display_information:
   name: GrowthOS
@@ -15,75 +26,29 @@ display_information:
   long_description: >-
     GrowthOS operationalises career growth frameworks — self-assessments, manager
     alignment conversations, evidence collection, and growth planning. This Slack app
-    delivers notifications and lets people interact with their development journey
-    without leaving Slack.
+    delivers timely direct-message notifications about your development journey.
 
 features:
   bot_user:
     display_name: GrowthOS
     always_online: true
   app_home:
-    home_tab_enabled: true
+    # Notifications arrive as DMs and surface in the Messages tab. We don't
+    # process replies, so the tab is read-only and the Home tab is disabled.
+    home_tab_enabled: false
     messages_tab_enabled: true
-    messages_tab_read_only_enabled: false
+    messages_tab_read_only_enabled: true
 
 oauth_config:
   scopes:
     bot:
-      # --- Channel listing & metadata ---
-      - channels:read          # list & inspect public channels
-      - groups:read            # list & inspect private channels the bot is in
-      - im:read                # list direct messages
-      - mpim:read              # list group direct messages
-
-      # --- Reading history ---
-      - channels:history       # read messages in public channels
-      - groups:history         # read messages in private channels
-      - im:history             # read direct message history
-      - mpim:history           # read group DM history
-
-      # --- Membership / joining ---
-      - channels:join          # join public channels programmatically
-
-      # --- Posting & messaging ---
-      - chat:write             # send messages as the bot
-      - chat:write.public      # post to public channels without joining first
-      - chat:write.customize   # customise username/icon per message
-      - im:write               # open DM channels to deliver user notifications
-
-      # --- Identity / org lookup (map Slack users → Person records) ---
-      - users:read             # list workspace users
-      - users:read.email       # match users by email to GrowthOS Person records
-      - users.profile:read     # read extended user profiles
-      - team:read              # workspace/org metadata
-
-      # --- Reactions & files ---
-      - reactions:read         # read reactions
-      - reactions:write        # add reactions (e.g. acknowledge a nudge)
-      - files:read             # read shared files (evidence attachments)
-
-      # --- Interactivity / commands ---
-      - commands               # slash commands
-      - app_mentions:read      # respond when @-mentioned
+      - users:read.email   # users.lookupByEmail — match a Person by email
+      - im:write           # conversations.open — open the user's DM channel
+      - chat:write         # chat.postMessage — deliver the notification
 
 settings:
-  event_subscriptions:
-    # Set request_url after deploy, e.g. https://app.growthos.example/slack/events
-    request_url: https://growthos.work/slack/events
-    bot_events:
-      - app_home_opened
-      - app_mention
-      - message.channels
-      - message.groups
-      - message.im
-      - message.mpim
-      - member_joined_channel
-      - reaction_added
-      - team_join
-  interactivity:
-    is_enabled: true
-    # Set request_url after deploy, e.g. https://app.growthos.example/slack/interactions
-    request_url: https://growthos.work/slack/interactions
+  # No event subscriptions or interactivity: GrowthOS is outbound-only. Add these
+  # back (with request_urls + the scopes they need) when inbound features land.
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false
