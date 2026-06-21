@@ -4,7 +4,7 @@
 # Paste this YAML, then install to your workspace. Rotate/replace the signing secret and
 # tokens via Rails credentials (config/credentials.yml.enc) — never commit them.
 #
-# Scope is deliberately minimal: GrowthOS only sends OUTBOUND direct-message
+# Scope is deliberately minimal: GrowthOS sends OUTBOUND direct-message
 # notifications today (assessment nudges, alignment reminders, evidence-request
 # pings). The three bot scopes below are exactly what that requires and match
 # Slack::BOT_SCOPES, which the OAuth install flow requests:
@@ -13,11 +13,23 @@
 #   im:write          → conversations.open   (open the 1:1 DM channel)
 #   chat:write        → chat.postMessage      (post the notification into that DM)
 #
-# We do NOT read channels/history, handle slash commands, or process inbound
-# messages/interactions — so none of the *:history, *:read, commands, reactions,
-# files, or interactivity scopes are requested, and no event subscriptions are
-# declared. When in-Slack responses or slash commands are built, add only the
-# scopes that feature needs (and the matching request_urls) at that point.
+# ── Reinstall vs. transparent upgrade ──────────────────────────────────────────
+# A workspace must RE-AUTHORISE (reinstall) the app ONLY when a new bot *scope*
+# is added — existing tokens never gain scopes retroactively. App *settings*
+# (interactivity, request URLs, event subscriptions that need no new scope) are
+# config and can change with no reinstall.
+#
+# Inline responses to evidence requests — Block Kit buttons + a modal in the DM
+# we already send — need NO new scope: posting the interactive message, updating
+# it after a click (chat.update), and opening the modal (views.open) all run on
+# chat:write, which we already hold. So that feature ships as pure server code.
+# To make it fully transparent we enable Interactivity below NOW (config only,
+# no reinstall) and point it at the future /slack/interactions endpoint.
+#
+# The only future Slack features that WOULD force a one-time reinstall are ones
+# needing a new scope — e.g. `commands` (slash-command entry point) or
+# `im:history` (capturing a free-text DM reply instead of a button/modal). Those
+# are intentionally NOT pre-added; add them (and reinstall once) if/when wanted.
 
 display_information:
   name: GrowthOS
@@ -47,8 +59,17 @@ oauth_config:
       - chat:write         # chat.postMessage — deliver the notification
 
 settings:
-  # No event subscriptions or interactivity: GrowthOS is outbound-only. Add these
-  # back (with request_urls + the scopes they need) when inbound features land.
+  interactivity:
+    # Enabled now so inline evidence-request responses (buttons + modal) can ship
+    # later with zero Slack-side change. This is config, not a scope — no
+    # reinstall. The endpoint doesn't exist yet; build it before wiring buttons.
+    # Interactivity request URLs are NOT challenge-verified at config time (unlike
+    # the Events API), so this placeholder is safe until the responder ships.
+    is_enabled: true
+    request_url: https://growthos.work/slack/interactions
+  # No event subscriptions: GrowthOS doesn't consume inbound events. Slash
+  # commands and free-text-reply capture are deferred — each needs a new scope
+  # (`commands` / `im:history`) and thus a one-time reinstall when added.
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false
