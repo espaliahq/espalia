@@ -25,6 +25,18 @@ class Slack::EventsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_equal "c-3po-r2d2", response.body
     end
+
+    should "echo the challenge even without a signature (proof-of-ownership, not auth)" do
+      # Slack may POST the handshake before the signing secret is wired up, and it
+      # isn't guaranteed to be signed — requiring a signature here is what makes a
+      # URL fail to verify. The challenge carries no sensitive data.
+      Slack.stub(:oauth_config, { signing_secret: nil }) do
+        post slack_events_path, params: { type: "url_verification", challenge: "open-sesame" }.to_json,
+          headers: { "CONTENT_TYPE" => "application/json" }
+      end
+      assert_response :success
+      assert_equal "open-sesame", response.body
+    end
   end
 
   context "event_callback" do
@@ -34,14 +46,14 @@ class Slack::EventsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  context "an unsigned or forged request" do
+  context "a forged or unsigned event_callback" do
     should "reject a wrong signature" do
-      post_event({ type: "url_verification", challenge: "x" }, signature: "v0=deadbeef")
+      post_event({ type: "event_callback", event: { type: "message" } }, signature: "v0=deadbeef")
       assert_response :unauthorized
     end
 
     should "reject a missing signature" do
-      body = { type: "url_verification", challenge: "x" }.to_json
+      body = { type: "event_callback", event: { type: "message" } }.to_json
       Slack.stub(:oauth_config, { signing_secret: SECRET }) do
         post slack_events_path, params: body, headers: { "CONTENT_TYPE" => "application/json" }
       end
@@ -49,7 +61,7 @@ class Slack::EventsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "reject when no signing secret is configured (fail closed)" do
-      body = { type: "url_verification", challenge: "x" }.to_json
+      body = { type: "event_callback", event: { type: "message" } }.to_json
       ts = Time.now.to_i.to_s
       sig = Slack::RequestVerifier.sign(timestamp: ts, body:, secret: SECRET)
       Slack.stub(:oauth_config, { signing_secret: nil }) do
