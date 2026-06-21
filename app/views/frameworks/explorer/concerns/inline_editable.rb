@@ -71,14 +71,19 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
   # @param field_name [String] the name attribute for the textarea ("capability[name]")
   # @param current_value [String]
   # @param rows [Integer] textarea rows (default 2)
-  def render_inline_editor_form(action:, field_name:, current_value:, rows: 2)
-    # Give the form a comfortable fixed width so editing a long sentence isn't
-    # cramped. Without it the form sits in a shrink-to-content inline-flex /
-    # flex container sized to the (often short) display text, and the textarea's
-    # `w-full` collapses to that narrow width. Capped at the viewport so it
-    # doesn't overflow on mobile or in the sticky left column.
+  # @param width_classes [String] Tailwind width utilities for the form. Default
+  #   is a comfortable fixed width for editing a sentence in the wide left
+  #   column. A compact host (e.g. a centered level-title cell in the matrix
+  #   header) passes a narrower value so the editor stays *in place* under the
+  #   column rather than ballooning the cell and rendering offset.
+  def render_inline_editor_form(action:, field_name:, current_value:, rows: 2,
+                                width_classes: "w-80 sm:w-96 max-w-[85vw]")
+    # Give the form a fixed width so editing isn't cramped. Without it the form
+    # sits in a shrink-to-content inline-flex / flex container sized to the
+    # (often short) display text, and the textarea's `w-full` collapses to that
+    # narrow width.
     form(
-      class: "hidden w-80 sm:w-96 max-w-[85vw]",
+      class: "hidden #{width_classes}",
       method: "post",
       action: action,
       data: {

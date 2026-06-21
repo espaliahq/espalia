@@ -59,6 +59,19 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
       submit_inline_rename("level-title-#{@level_id}", "level[title]", "Engineer One")
       assert_text "Engineer One"
     end
+
+    # Regression: the level-title editor used the shared sentence-width form
+    # (w-80/w-96), which ballooned the narrow, centred header cell so the editor
+    # rendered offset ("next to") rather than in place. It must use the compact
+    # width so it edits within the column.
+    should "render the level-title editor with the compact in-cell width" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      form = find("turbo-frame#level-title-#{@level_id} form", visible: :all)
+      assert_includes form[:class], "w-36"
+      assert_not_includes form[:class], "w-96"
+    end
   end
 
   context "view mode" do
