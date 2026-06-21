@@ -30,7 +30,7 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
   end
 
   def view_template
-    turbo_frame_tag("level-title-#{@level_id}", class: "inline-flex justify-center") do
+    turbo_frame_tag("level-title-#{@level_id}", class: "flex w-full justify-center") do
       if @mode == :edit
         editable
       else
@@ -51,10 +51,15 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
         plain_title
         render_inline_editor_pencil(aria_label: "Edit level title")
       end
+      # Compact width + single row so the editor stays in place within the
+      # narrow, centred level-title header cell (min-w-[180px]) instead of
+      # ballooning it with the default sentence-width form.
       render_inline_editor_form(
         action: framework_level_path(framework_id: @framework_id, id: @level_id),
         field_name: "level[title]",
-        current_value: @title
+        current_value: @title,
+        rows: 1,
+        width_classes: "w-36"
       )
     end
   end
