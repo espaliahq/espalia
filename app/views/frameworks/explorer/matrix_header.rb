@@ -12,8 +12,12 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
 
   # @param merged_levels [Array<Hash>] from MatrixDataBuilder
   # @param selected_role_count [Integer] number of selected roles
-  def initialize(merged_levels:, selected_role_count: 0)
+  # @param framework_id [String, nil] required in :edit mode for inline-edit form actions
+  # @param mode [Symbol] :view or :edit — gates the inline level-title rename pencils
+  def initialize(merged_levels:, selected_role_count: 0, framework_id: nil, mode: :view)
     @merged_levels = merged_levels
+    @framework_id = framework_id
+    @mode = mode
     @show_full_titles = selected_role_count <= FULL_TITLE_THRESHOLD
   end
 
@@ -53,12 +57,19 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
     end
   end
 
-  # Shows full level titles (e.g. "Associate Product Designer") when few roles selected
+  # Shows full level titles (e.g. "Associate Product Designer") when few roles
+  # selected. In edit mode each per-role title is an inline-editable frame keyed
+  # by its level_id (the compact-code view below stays read-only).
   def full_title_badges(role_codes)
     div(class: "flex flex-col items-center gap-0.5") do
       role_codes.each do |rc|
-        span(class: "text-xs text-gray-600 dark:text-gray-300") do
-          rc[:level_title]
+        if @mode == :edit && rc[:level_id]
+          render Views::Frameworks::Explorer::LevelTitleFrame.new(
+            level_id: rc[:level_id], title: rc[:level_title],
+            framework_id: @framework_id, mode: @mode
+          )
+        else
+          span(class: "text-xs text-gray-600 dark:text-gray-300") { rc[:level_title] }
         end
       end
     end

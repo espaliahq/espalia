@@ -230,6 +230,44 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "org-structure renames" do
+    should "emit a framework-level role_family_updated entry in the edits group" do
+      append(Frameworks::Events::RoleFamilyUpdated,
+        data: { role_family_id: SecureRandom.uuid_v7, name: "Platform Engineering" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "role_family_updated" }
+      assert entry
+      assert_nil entry.capability_id, "org-structure renames carry no matrix anchor"
+      assert_nil entry.category_id
+      assert_equal "Ada Author", entry.actor_name
+      assert_equal "Platform Engineering", entry.payload[:name]
+      assert_equal "edits", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+
+    should "emit a framework-level role_updated entry in the edits group" do
+      append(Frameworks::Events::RoleUpdated,
+        data: { role_id: SecureRandom.uuid_v7, name: "Backend Engineer" })
+
+      entry = entries.find { |e| e.kind == "role_updated" }
+      assert entry
+      assert_nil entry.capability_id
+      assert_equal "Backend Engineer", entry.payload[:name]
+      assert_equal "edits", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+
+    should "emit a framework-level level_updated entry in the edits group" do
+      append(Frameworks::Events::LevelUpdated,
+        data: { level_id: SecureRandom.uuid_v7, title: "Engineer One" })
+
+      entry = entries.find { |e| e.kind == "level_updated" }
+      assert entry
+      assert_nil entry.capability_id
+      assert_equal "Engineer One", entry.payload[:title]
+      assert_equal "edits", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+  end
+
   context "binding lifecycle" do
     setup do
       @role_family = create(:framework_role_family, framework_id: @fwid, tenant: @tenant)

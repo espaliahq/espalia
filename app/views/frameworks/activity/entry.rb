@@ -38,6 +38,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "bg-indigo-500",
     "illustration_updated"      => "bg-indigo-500",
     "illustration_removed"      => "bg-gray-400",
+    "role_family_updated"       => "bg-indigo-500",
+    "role_updated"              => "bg-indigo-500",
+    "level_updated"             => "bg-indigo-500",
     "draft_opened"              => "bg-purple-500",
     "version_published"         => "bg-green-600",
     "migration_mapping_defined" => "bg-purple-500",
@@ -61,6 +64,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "edits",
     "illustration_updated"      => "edits",
     "illustration_removed"      => "edits",
+    "role_family_updated"       => "edits",
+    "role_updated"              => "edits",
+    "level_updated"             => "edits",
     "capability_added"          => "structural",
     "capability_archived"       => "structural",
     "category_added"            => "structural",
@@ -286,6 +292,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"
     when "illustration_removed" then "Removed an illustration"
+    when "role_family_updated" then org_update_summary("role family", name: "name", description: "description")
+    when "role_updated"        then org_update_summary("role", name: "name", code: "code", track: "track")
+    when "level_updated"       then org_update_summary("level", title: "title", code: "code")
     when "draft_opened"        then draft_opened_summary
     when "version_published"   then "Published v#{payload_value(:version)}"
     when "migration_mapping_defined" then "Defined a migration mapping"
@@ -299,6 +308,29 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def draft_opened_summary
     base = "Opened draft v#{payload_value(:target_version)}"
     payload_value(:auto_opened) ? "#{base} (auto)" : base
+  end
+
+  # Summary for a direct org-structure edit (role family / role / level) that
+  # names which field(s) changed — e.g. "Updated a role's name". The aggregate
+  # `.compact`s these update events, so a present payload key means that field
+  # actually changed; we list exactly those. Falls back to a bare "Updated a
+  # <noun>" if none resolve (e.g. an older event shape).
+  #
+  # @param noun [String] "role family" / "role" / "level"
+  # @param fields [Hash{Symbol=>String}] payload key → human label
+  def org_update_summary(noun, **fields)
+    changed = fields.filter_map { |key, label| label if payload_key?(key) }
+    changed.empty? ? "Updated a #{noun}" : "Updated a #{noun}'s #{changed.to_sentence}"
+  end
+
+  # Whether the (compacted) update event carried this field at all — keyed
+  # presence, not value presence, so a field intentionally cleared to "" still
+  # counts as changed. The aggregate drops nil keys via `.compact`, so a present
+  # key means the field was part of the update.
+  def payload_key?(key)
+    return false unless @entry.payload.respond_to?(:key?)
+
+    @entry.payload.key?(key) || @entry.payload.key?(key.to_s)
   end
 
   # Entity word for suggestion summaries — the human label of the suggestion's
@@ -342,6 +374,10 @@ class Views::Frameworks::Activity::Entry < Views::Base
       payload_value(:description)
     when "expectation_updated", "illustration_updated"
       payload_value(:new_description)
+    when "role_family_updated", "role_updated"
+      payload_value(:name)
+    when "level_updated"
+      payload_value(:title)
     when "migration_mapping_defined"
       payload_value(:reason)
     when "binding_added", "binding_updated"

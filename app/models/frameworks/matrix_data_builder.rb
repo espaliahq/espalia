@@ -126,6 +126,7 @@ class Frameworks::MatrixDataBuilder
         levels_by_ordinal[level.ordinal] ||= { ordinal: level.ordinal, role_codes: [] }
         levels_by_ordinal[level.ordinal][:role_codes] << {
           role_id: role.role_id,
+          level_id: level.level_id,
           role_code: role.code,
           level_code: level.code,
           level_title: level.title

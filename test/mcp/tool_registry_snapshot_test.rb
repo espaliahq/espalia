@@ -782,6 +782,67 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_update_level",
+        "description" => "Update a level's title or code (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "level_id"     => { "type" => "string" },
+            "title"        => { "type" => "string" },
+            "code"         => { "type" => "string" }
+          },
+          "required" => %w[framework_id level_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_update_role",
+        "description" => "Update a role's name, code, or track (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "role_id"      => { "type" => "string" },
+            "name"         => { "type" => "string" },
+            "code"         => { "type" => "string" },
+            "track"        => { "type" => "string", "enum" => %w[ic management] }
+          },
+          "required" => %w[framework_id role_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_update_role_family",
+        "description" => "Rename or re-describe a role family (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"   => { "type" => "string" },
+            "role_family_id" => { "type" => "string" },
+            "name"           => { "type" => "string" },
+            "description"    => { "type" => "string" }
+          },
+          "required" => %w[framework_id role_family_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_withdraw_suggestion",
         "description" => "Withdraw your own pending framework suggested edit (author only).",
         "inputSchema" => {
