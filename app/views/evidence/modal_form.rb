@@ -23,9 +23,12 @@ class Views::Evidence::ModalForm < Views::Base
     [ "Figma", "figma" ], [ "Other", "other" ]
   ].freeze
 
-  INPUT = "w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm " \
+  INPUT = "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
+          "text-gray-900 dark:text-gray-100 text-sm " \
           "focus-visible:ring-primary focus-visible:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
   LABEL = "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1"
+  SECONDARY_BTN = "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 " \
+                  "text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
 
   def initialize(mode:, assignment_id:, primary_cell:, content_editable:, context_block:,
                  link_options: [], level_options: [], linked_cells: [], expectation_map: {},
@@ -224,8 +227,7 @@ class Views::Evidence::ModalForm < Views::Base
           @level_options.each { |lvl| option(value: lvl[:ordinal]) { lvl[:label] } }
         end
       end
-      button(type: "button", data: { action: "evidence-modal#addLink" },
-             class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium cursor-pointer") { "+ Add" }
+      button(type: "button", data: { action: "evidence-modal#addLink" }, class: SECONDARY_BTN) { "+ Add" }
     end
   end
 
@@ -249,8 +251,7 @@ class Views::Evidence::ModalForm < Views::Base
 
   def footer
     div(class: "flex justify-end gap-2 pt-2") do
-      button(type: "button", data: { action: "modal#close" },
-             class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium cursor-pointer") { "Cancel" }
+      button(type: "button", data: { action: "modal#close" }, class: SECONDARY_BTN) { "Cancel" }
       button(type: "submit",
              class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { submit_label }
     end
