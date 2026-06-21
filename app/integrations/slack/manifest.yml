@@ -33,10 +33,11 @@
 #     placeholder below is safe before the endpoint exists.
 #   • Slash command — declare the /growthos command (name + request_url) once its
 #     endpoint exists. Slash-command URLs aren't challenge-verified either.
-#   • Free-text DM replies — set messages_tab_read_only_enabled: false and add a
-#     `message.im` Events subscription. NOTE: Events API request_urls ARE
-#     challenge-verified the moment they're saved, so that subscription can't be
-#     declared here against a dead URL — add it only after /slack/events is live.
+#   • Free-text DM replies — the `message.im` Events subscription is declared
+#     below. Events API request_urls ARE challenge-verified the moment they're
+#     saved, so this is only importable because Slack::EventsController answers
+#     the url_verification challenge (the bot still drops real events until the
+#     reply handler is built). The Messages tab is writable so members can reply.
 # None of those three steps adds a scope, so none triggers a reinstall.
 
 display_information:
@@ -53,11 +54,12 @@ features:
     display_name: GrowthOS
     always_online: true
   app_home:
-    # Notifications arrive as DMs and surface in the Messages tab. We don't
-    # process replies, so the tab is read-only and the Home tab is disabled.
+    # Notifications arrive as DMs and surface in the Messages tab. The tab is
+    # writable so members can reply to an evidence-request DM (captured via the
+    # message.im subscription below). The Home tab is unused.
     home_tab_enabled: false
     messages_tab_enabled: true
-    messages_tab_read_only_enabled: true
+    messages_tab_read_only_enabled: false
 
 oauth_config:
   scopes:
@@ -83,11 +85,15 @@ settings:
     # the Events API), so this placeholder is safe until the responder ships.
     is_enabled: true
     request_url: https://growthos.work/slack/interactions
-  # No event subscriptions yet: GrowthOS consumes no inbound events today. The
-  # `im:history` scope is pre-granted (above), so adding a `message.im`
-  # subscription later needs no reinstall — but it CAN'T be declared here against
-  # a dead URL (Slack challenge-verifies Events request_urls on save). Add it once
-  # /slack/events is live.
+  event_subscriptions:
+    # Importable because Slack::EventsController answers the url_verification
+    # challenge Slack POSTs when this URL is saved. message.im delivers a member's
+    # free-text reply to an evidence-request DM; it needs the im:history scope
+    # (granted above), so no reinstall. The bot acks + drops these until the
+    # reply handler is built.
+    request_url: https://growthos.work/slack/events
+    bot_events:
+      - message.im
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false
