@@ -52,9 +52,8 @@ export default class extends BaseController {
     const { personId, name } = event.params || {}
     if (!personId || this.#selectedIds().includes(personId)) return
 
-    this.idsTarget.insertAdjacentHTML("beforeend",
-      `<input type="hidden" name="evidence_request[requestee_ids][]" value="${personId}" data-person-id="${personId}">`)
-    this.selectedTarget.insertAdjacentHTML("beforeend", this.#chip(personId, name))
+    this.idsTarget.appendChild(this.#hiddenInput(personId))
+    this.selectedTarget.appendChild(this.#chip(personId, name))
     if (this.hasEmptyTarget) this.emptyTarget.classList.add("hidden")
     this.#toggleSuggestion(personId, false) // drop it from the suggestion list
     this.#refreshCount()
@@ -81,13 +80,32 @@ export default class extends BaseController {
     return Array.from(this.idsTarget.querySelectorAll("input")).map((i) => i.value)
   }
 
+  // Build the hidden id input + the removable chip via DOM methods (textContent
+  // escapes automatically) — never string-interpolate person data into HTML.
+  #hiddenInput(personId) {
+    const input = document.createElement("input")
+    input.type = "hidden"
+    input.name = "evidence_request[requestee_ids][]"
+    input.value = personId
+    input.dataset.personId = personId
+    return input
+  }
+
   #chip(personId, name) {
-    const safe = (name || "").replace(/</g, "&lt;")
-    return `<span class="inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-primary/10 text-primary text-xs font-medium" data-person-id="${personId}">
-      ${safe}
-      <button type="button" aria-label="Remove" class="leading-none text-primary/70 hover:text-primary cursor-pointer"
-        data-action="request-evidence#remove" data-request-evidence-person-id-param="${personId}">×</button>
-    </span>`
+    const chip = document.createElement("span")
+    chip.className = "inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+    chip.dataset.personId = personId
+    chip.append(name || "")
+
+    const remove = document.createElement("button")
+    remove.type = "button"
+    remove.setAttribute("aria-label", "Remove")
+    remove.className = "leading-none text-primary/70 hover:text-primary cursor-pointer"
+    remove.dataset.action = "request-evidence#remove"
+    remove.dataset.requestEvidencePersonIdParam = personId
+    remove.textContent = "×"
+    chip.appendChild(remove)
+    return chip
   }
 
   // Hide (show=false) or restore (show=true) a person's suggestion chip. Use an
