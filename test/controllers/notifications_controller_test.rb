@@ -41,6 +41,17 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_no_match "Test: Hidden", response.body
     end
+
+    should "render notification text in full (no truncation) in the inbox" do
+      sign_in @user
+      notify!(@user, title: "Alpha", body: "A long decline reason that must not be clamped")
+
+      get notifications_path
+      assert_response :success
+      assert_match "A long decline reason that must not be clamped", response.body
+      assert_match "break-words", response.body
+      assert_no_match "line-clamp-2", response.body
+    end
   end
 
   context "GET /notifications/bell" do
@@ -52,6 +63,16 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
       get bell_notifications_path
       assert_response :success
       assert_match "2 unread", response.body
+    end
+
+    should "render the bell peek compactly (truncated)" do
+      sign_in @user
+      notify!(@user, title: "One", body: "A long body that the compact peek should clamp")
+
+      get bell_notifications_path
+      assert_response :success
+      assert_match "truncate", response.body
+      assert_match "line-clamp-2", response.body
     end
   end
 
