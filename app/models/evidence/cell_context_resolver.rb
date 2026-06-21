@@ -47,12 +47,14 @@ class Evidence::CellContextResolver
       expectation = capability_id &&
         FrameworkState::BehaviouralExpectation.find_by(capability_id: capability_id, level_ordinal: cell.level_ordinal)
 
+      title, code = level_label_for(role_id, cell.level_ordinal)
       acc[cell.id] = {
         capability_id: capability_id,
         name: capability_id && FrameworkState::Capability.where(capability_id: capability_id).pick(:name),
         role: role_names[role_id],
         role_id: role_id,
-        level_title: level_title_for(role_id, cell.level_ordinal),
+        level_title: title,
+        level_code: code,
         expectation: expectation&.description,
         expectation_id: expectation&.expectation_id,
         illustrations: illustrations_for(expectation, role_id),
@@ -100,10 +102,11 @@ class Evidence::CellContextResolver
     FrameworkState::Role.where(role_id: ids).pluck(:role_id, :name).to_h
   end
 
-  def level_title_for(role_id, level_ordinal)
-    return nil if role_id.nil?
+  # @return [Array(String, String)] the level's [title, code] for a role
+  def level_label_for(role_id, level_ordinal)
+    return [ nil, nil ] if role_id.nil?
 
-    FrameworkState::Level.where(role_id: role_id, ordinal: level_ordinal).pick(:title)
+    FrameworkState::Level.where(role_id: role_id, ordinal: level_ordinal).pick(:title, :code) || [ nil, nil ]
   end
 
   def illustrations_for(expectation, role_id)

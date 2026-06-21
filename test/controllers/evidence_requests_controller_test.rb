@@ -50,13 +50,10 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_match "Rep asked you for evidence", response.body
       assert_match "Critical Thinking", response.body
-      # The role + level, behavioural expectation, and role illustration render
-      # inline so the responder sees which role + what behaviour they're
-      # evidencing without a lookup.
-      assert_match "SWE", response.body
-      assert_match "Mid (Level 2)", response.body
-      assert_match "Synthesises competing trade-offs", response.body
-      assert_match "Wrote the migration RFC", response.body
+      # Compact context — role + level code; the full expectation/examples live
+      # in the modal you open to respond, not on the card.
+      assert_match "SWE · E2", response.body
+      assert_no_match "Synthesises competing trade-offs", response.body
     end
 
     should "show outgoing requests to the requester" do
@@ -65,6 +62,24 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       get evidence_hub_path
       assert_response :success
       assert_match "To Peer", response.body
+    end
+
+    should "embed the provided evidence on a responded outgoing request" do
+      id = make_request!
+      ActsAsTenant.with_tenant(@tenant) do
+        evidence_id = SecureRandom.uuid_v7
+        handler = PersonDevelopment::CommandHandler.new
+        handler.record_evidence(@report.id, @framework_id, evidence_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer",
+          evidence_type: "peer_feedback", content: "Solid pairing partner.", author_id: @peer.id)
+        handler.respond_to_evidence_request(@report.id, @framework_id, id, evidence_id: evidence_id, responded_by_id: @peer.id)
+      end
+      sign_in @report_user
+      get evidence_hub_path
+      assert_match "Response from Peer", response.body
+      assert_match "Solid pairing partner.", response.body
+      assert_match "Applies to: Critical Thinking E2", response.body
+      assert_select "button[data-evidence-modal-mode-param='edit']", text: "Edit links"
     end
   end
 

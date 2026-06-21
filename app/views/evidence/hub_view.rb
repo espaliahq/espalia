@@ -15,12 +15,13 @@ class Views::Evidence::HubView < Views::Base
   # @param authored [Array<EvidenceItem>] active evidence the viewer authored
   # @param cell_details [Hash{String=>Hash}] request_id => { name:, role:, level_title:, expectation:, illustrations: }
   # @param authored_details [Hash{String=>Hash}] evidence_id => { assessee_name:, capability_name:, role:, level_title:, assignment_id: }
-  def initialize(incoming:, outgoing:, authored: [], cell_details: {}, authored_details: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(incoming:, outgoing:, authored: [], cell_details: {}, authored_details: {}, responses: {}, user: nil, current_tenant: nil, tenants: [])
     @incoming = incoming
     @outgoing = outgoing
     @authored = authored
     @cell_details = cell_details
     @authored_details = authored_details
+    @responses = responses
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -81,8 +82,9 @@ class Views::Evidence::HubView < Views::Base
         plain "#{request.requester&.name || "A colleague"} asked you for evidence"
       end
       request_cell_line(request)
-      expectation_block(request)
       message_line(request)
+      # No behavioural-expectation block here — the "Provide evidence" modal
+      # carries the full cell context when you actually respond.
       respond_actions(request) if request.pending?
     end
   end
@@ -94,13 +96,52 @@ class Views::Evidence::HubView < Views::Base
         render Components::Kit::Badge.new(request.status.capitalize, variant: STATUS_VARIANT.fetch(request.status, :default))
       end
       request_cell_line(request)
-      expectation_block(request)
       message_line(request)
       if request.pending?
         a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
           class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline") { "Cancel request" }
+      elsif request.status == "responded"
+        response_card(request)
+      elsif request.status == "declined" && request.decline_reason.present?
+        p(class: "text-sm text-gray-700 dark:text-gray-200") { "Declined: #{request.decline_reason}" }
       end
     end
+  end
+
+  # The evidence the requestee provided, embedded so the requester sees the full
+  # response — content, link, and the cells it applies to — and can edit its
+  # linkage (content stays read-only; they're not the author).
+  def response_card(request)
+    response = @responses.fetch(request.id, nil)
+    return if response.nil?
+
+    item = response[:item]
+    div(class: "rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-2") do
+      div(class: "flex items-center justify-between gap-2") do
+        span(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Response from #{item.author&.name || "a colleague"}" }
+        span(class: "text-xs text-gray-600 dark:text-gray-300") { response_type_label(item) }
+      end
+      p(class: "text-sm text-gray-700 dark:text-gray-200 whitespace-pre-line") { item.content }
+      external_link(item)
+      applies_to_line(response[:links])
+      div do
+        button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
+               class: "inline-flex items-center min-h-11 text-sm font-medium text-primary cursor-pointer") { "Edit links" }
+      end
+    end
+  end
+
+  def response_type_label(item)
+    item.evidence_type == "other" ? item.custom_type_label.to_s : item.evidence_type.humanize
+  end
+
+  def applies_to_line(links)
+    return if links.blank?
+
+    labels = links.map { |l| [ l[:capability_name], l[:level_code] ].compact.join(" ") }.reject(&:blank?)
+    return if labels.empty?
+
+    p(class: "text-xs text-gray-600 dark:text-gray-300") { "Applies to: #{labels.join(" · ")}" }
   end
 
   # ── Authored evidence (edit / withdraw) ──
@@ -132,8 +173,7 @@ class Views::Evidence::HubView < Views::Base
 
   def authored_scope_label(item, detail)
     whose = item.person_id == item.author_id ? "your assessment" : "#{detail[:assessee_name] || "a colleague"}'s assessment"
-    level = detail[:level_title].present? ? "#{detail[:level_title]} (Level #{item.level_ordinal})" : "Level #{item.level_ordinal}"
-    [ detail[:role], level, "on #{whose}" ].compact.join(" · ")
+    [ detail[:role], level_short(detail, item.level_ordinal), "on #{whose}" ].compact.join(" · ")
   end
 
   def authored_type_label(item)
@@ -175,39 +215,12 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def request_scope_label(request, detail)
-    level = detail[:level_title].present? ? "#{detail[:level_title]} (Level #{request.level_ordinal})" : "Level #{request.level_ordinal}"
-    [ detail[:role], level ].compact.join(" · ")
+    [ detail[:role], level_short(detail, request.level_ordinal) ].compact.join(" · ")
   end
 
-  # The behavioural expectation (and any role illustrations) for the cell, so
-  # the responder sees exactly what behaviour they're evidencing — no lookup.
-  def expectation_block(request)
-    detail = @cell_details.fetch(request.id, {})
-    return if detail[:expectation].blank? && detail[:illustrations].blank?
-
-    div(class: "rounded-md bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 p-3 space-y-2") do
-      if detail[:expectation].present?
-        div do
-          span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "What good looks like" }
-          p(class: "mt-0.5 text-sm text-gray-700 dark:text-gray-200") { detail[:expectation] }
-        end
-      end
-      illustrations_list(detail[:illustrations]) if detail[:illustrations].present?
-    end
-  end
-
-  def illustrations_list(illustrations)
-    div do
-      span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Examples for this role" }
-      ul(class: "mt-1 space-y-1") do
-        illustrations.each do |text|
-          li(class: "flex gap-2 text-sm text-gray-700 dark:text-gray-200") do
-            span(class: "text-gray-400 dark:text-gray-500", aria: { hidden: "true" }) { "•" }
-            span { text }
-          end
-        end
-      end
-    end
+  # Compact level: the role's level code (e.g. "E3"), falling back to "L<n>".
+  def level_short(detail, level_ordinal)
+    detail[:level_code].presence || "L#{level_ordinal}"
   end
 
   def message_line(request)
