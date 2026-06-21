@@ -12,46 +12,46 @@
 # `event_callback` payloads are acknowledged (200) and dropped. Acking keeps
 # Slack from retrying and eventually disabling the subscription.
 #
-# Auth is the Slack request SIGNATURE (HMAC over the raw body with the app
-# signing secret), not a session — so, like Mcp::ServerController, this does NOT
-# inherit ApplicationController (which would force Devise) and CSRF is skipped.
+# Auth: real event payloads are authenticated by the Slack request SIGNATURE
+# (HMAC over the raw body with the app signing secret), not a session — so, like
+# Mcp::ServerController, this does NOT inherit ApplicationController (which would
+# force Devise) and CSRF is skipped. The `url_verification` handshake is the one
+# exception (see #create) and is answered without a signature.
+#
+# No Pundit `authorize`: a session-less webhook has no user/tenant identity to
+# authorize against; the signature is the trust boundary. Same model as
+# Mcp::ServerController; Pundit isn't even mixed in (ActionController::Base).
 class Slack::EventsController < ActionController::Base
   skip_forgery_protection
 
-  # No Pundit `authorize`: this is an unauthenticated-by-session webhook with no
-  # user/tenant identity to authorize against. Trust is established by the Slack
-  # request signature (verify_slack_signature, fail-closed) — the same model as
-  # Mcp::ServerController, which is token-authenticated and likewise calls no
-  # Pundit policy. Pundit's machinery isn't even mixed in here (ActionController::Base).
-  before_action :verify_slack_signature
-
   # POST /slack/events
   def create
-    case params[:type]
-    when "url_verification"
-      # Echo the challenge so Slack marks the Events URL verified.
-      render plain: params[:challenge].to_s
-    when "event_callback"
-      # TODO: dispatch params[:event] (e.g. message.im) to the evidence-reply
-      # handler once that feature is built. Ack for now so Slack doesn't retry.
-      head :ok
-    else
-      head :ok
-    end
+    # The url_verification handshake is Slack's proof-of-URL-ownership check: it
+    # POSTs a random `challenge` and expects it echoed back. It carries no
+    # sensitive data and is NOT what the signing secret protects (that's payload
+    # authenticity). Answer it WITHOUT a signature — gating the handshake on the
+    # signing secret (or on Slack signing the handshake at all, which isn't
+    # guaranteed) is the usual cause of "URL isn't verified" at setup time.
+    return render(plain: params[:challenge].to_s) if params[:type] == "url_verification"
+
+    # Everything else is a real event payload — verify it's genuinely from Slack.
+    return head(:unauthorized) unless slack_signature_valid?
+
+    # TODO: dispatch params[:event] (e.g. message.im) to the evidence-reply
+    # handler once that feature is built. Ack for now so Slack doesn't retry.
+    head :ok
   end
 
   private
 
-  # Reject anything not signed by Slack. A missing signing secret is a
-  # misconfiguration — fail closed rather than accept unsigned payloads.
-  def verify_slack_signature
-    return if Slack::RequestVerifier.valid?(
+  # @return [Boolean] whether the request is a genuine, fresh, signed Slack call.
+  #   A missing signing secret is a misconfiguration — fail closed.
+  def slack_signature_valid?
+    Slack::RequestVerifier.valid?(
       signature: request.headers["X-Slack-Signature"],
       timestamp: request.headers["X-Slack-Request-Timestamp"],
       body: request.raw_post,
       secret: Slack.oauth_config[:signing_secret]
     )
-
-    head :unauthorized
   end
 end
