@@ -18,6 +18,11 @@
 class Slack::EventsController < ActionController::Base
   skip_forgery_protection
 
+  # No Pundit `authorize`: this is an unauthenticated-by-session webhook with no
+  # user/tenant identity to authorize against. Trust is established by the Slack
+  # request signature (verify_slack_signature, fail-closed) — the same model as
+  # Mcp::ServerController, which is token-authenticated and likewise calls no
+  # Pundit policy. Pundit's machinery isn't even mixed in here (ActionController::Base).
   before_action :verify_slack_signature
 
   # POST /slack/events
