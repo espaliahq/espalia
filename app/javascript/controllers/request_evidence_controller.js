@@ -1,0 +1,99 @@
+// Drives the "request evidence" modal.
+//
+// Two roles, same controller class (mirrors evidence_modal):
+//   - PAGE instance (on the wrapper with `modal`): `load` points the lazy
+//     `#evidence-request-modal` frame at the render endpoint for the clicked
+//     cell, so the server renders the form with that cell's context + suggestions.
+//   - IN-FRAME instance (on the rendered form): `search` debounces the typeahead
+//     and repoints the `#request-candidates` frame; `add`/`remove` manage the
+//     selected recipients (client-side chips + `requestee_ids[]` hidden inputs).
+//
+// Usage (page trigger):
+//   <button data-action="request-evidence#load click->modal#open"
+//           data-modal-target-id="evidence-request-modal-overlay"
+//           data-request-evidence-assignment-id-param="…"
+//           data-request-evidence-capability-stable-id-param="…"
+//           data-request-evidence-level-ordinal-param="3">Request evidence</button>
+
+import BaseController from "controllers/base_controller"
+
+export default class extends BaseController {
+  static targets = ["frame", "search", "results", "selected", "ids", "empty", "submit", "count", "noun"]
+  static values = {
+    url: { type: String, default: "/evidence_request_modal" },
+    candidatesUrl: String
+  }
+
+  // PAGE: point the lazy frame at the modal render endpoint for this cell.
+  load(event) {
+    if (!this.hasFrameTarget) return
+    const p = event.params || {}
+    const q = new URLSearchParams()
+    if (p.assignmentId) q.set("assignment_id", p.assignmentId)
+    if (p.capabilityStableId) q.set("capability_stable_id", p.capabilityStableId)
+    if (p.levelOrdinal != null && p.levelOrdinal !== "") q.set("level_ordinal", p.levelOrdinal)
+    this.frameTarget.src = `${this.urlValue}?${q.toString()}`
+  }
+
+  // IN-FRAME: debounce keystrokes, then repoint the results frame at the query.
+  search() {
+    clearTimeout(this._t)
+    this._t = setTimeout(() => this.#runSearch(), 250)
+  }
+
+  #runSearch() {
+    const results = this.#resultsFrame()
+    if (!results) return
+    const q = (this.searchTarget.value || "").trim()
+    const url = new URL(this.candidatesUrlValue, window.location.origin)
+    url.searchParams.set("q", q)
+    results.src = url.toString()
+  }
+
+  // IN-FRAME: add a candidate to the selection (idempotent on person id).
+  add(event) {
+    const { personId, name } = event.params || {}
+    if (!personId || this.#selectedIds().includes(personId)) return
+
+    this.idsTarget.insertAdjacentHTML("beforeend",
+      `<input type="hidden" name="evidence_request[requestee_ids][]" value="${personId}" data-person-id="${personId}">`)
+    this.selectedTarget.insertAdjacentHTML("beforeend", this.#chip(personId, name))
+    if (this.hasEmptyTarget) this.emptyTarget.classList.add("hidden")
+    this.#refreshCount()
+  }
+
+  // IN-FRAME: remove a chip + its hidden input.
+  remove(event) {
+    const id = event.params?.personId
+    if (!id) return
+    this.element.querySelectorAll(`[data-person-id="${id}"]`).forEach((el) => el.remove())
+    if (this.hasEmptyTarget && this.#selectedIds().length === 0) this.emptyTarget.classList.remove("hidden")
+    this.#refreshCount()
+  }
+
+  // private
+
+  #resultsFrame() {
+    return this.hasResultsTarget ? this.resultsTarget : this.element.querySelector("turbo-frame#request-candidates")
+  }
+
+  #selectedIds() {
+    return Array.from(this.idsTarget.querySelectorAll("input")).map((i) => i.value)
+  }
+
+  #chip(personId, name) {
+    const safe = (name || "").replace(/</g, "&lt;")
+    return `<span class="inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-primary/10 text-primary text-xs font-medium" data-person-id="${personId}">
+      ${safe}
+      <button type="button" aria-label="Remove" class="leading-none text-primary/70 hover:text-primary cursor-pointer"
+        data-action="request-evidence#remove" data-request-evidence-person-id-param="${personId}">×</button>
+    </span>`
+  }
+
+  #refreshCount() {
+    const n = this.#selectedIds().length
+    if (this.hasCountTarget) this.countTarget.textContent = String(n)
+    if (this.hasNounTarget) this.nounTarget.textContent = n === 1 ? "request" : "requests"
+    if (this.hasSubmitTarget) this.submitTarget.disabled = n === 0
+  }
+}

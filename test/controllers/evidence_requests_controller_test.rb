@@ -94,6 +94,78 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
       assert_response :redirect
     end
+
+    should "send one request per recipient with a shared reason (multi-select)" do
+      peer2 = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Peer Two") }
+      sign_in @report_user
+      assert_difference -> { ActsAsTenant.with_tenant(@tenant) { EvidenceRequest.pending.count } }, 2 do
+        post evidence_requests_path, params: { evidence_request: {
+          assignment_id: @assignment.id, capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          message: "Saw you pair on the incident", requestee_ids: [ @peer.id, peer2.id ]
+        } }
+      end
+      follow_redirect!
+      assert_match(/sent to 2 people/i, flash[:notice] || response.body)
+    end
+
+    should "skip an invalid recipient and summarise" do
+      sign_in @report_user
+      # @report is the assessee — asking them is rejected and counted as skipped.
+      assert_difference -> { ActsAsTenant.with_tenant(@tenant) { EvidenceRequest.pending.count } }, 1 do
+        post evidence_requests_path, params: { evidence_request: {
+          assignment_id: @assignment.id, capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          message: "x", requestee_ids: [ @peer.id, @report.id ]
+        } }
+      end
+      assert_match(/skipped 1/i, flash[:notice].to_s)
+    end
+
+    should "deny an unrelated user" do
+      stranger = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        sp = create(:person, tenant: @tenant, email: stranger.email, name: "Stranger")
+        create(:tenant_user, tenant: @tenant, user: stranger, person: sp, role: :member)
+      end
+      sign_in stranger
+      post evidence_requests_path, params: { evidence_request: {
+        assignment_id: @assignment.id, requestee_person_id: @peer.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2
+      } }
+      assert_redirected_to root_path
+    end
+  end
+
+  context "GET evidence_request_modal" do
+    should "render the request form with the cell context for an authorised requester" do
+      sign_in @report_user
+      get evidence_request_modal_path(assignment_id: @assignment.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2)
+      assert_response :success
+      assert_match "Request evidence", response.body
+      assert_match "Critical Thinking", response.body
+    end
+
+    should "deny an unrelated user" do
+      stranger = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        sp = create(:person, tenant: @tenant, email: stranger.email, name: "Stranger")
+        create(:tenant_user, tenant: @tenant, user: stranger, person: sp, role: :member)
+      end
+      sign_in stranger
+      get evidence_request_modal_path(assignment_id: @assignment.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2)
+      assert_redirected_to root_path
+    end
+  end
+
+  context "GET evidence_request_candidates" do
+    should "return typeahead matches by name" do
+      sign_in @report_user
+      get evidence_request_candidates_path(assignment_id: @assignment.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, q: "Peer")
+      assert_response :success
+      assert_match "Peer", response.body
+    end
   end
 
   context "POST respond" do
