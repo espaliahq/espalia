@@ -49,7 +49,11 @@ class NotificationsSystemTest < ApplicationSystemTestCase
 
     visit notifications_path
     assert_text "Test: One"
-    find("a", text: "Mark all as read").click
+    # JS-dispatch the Turbo POST link so a starved CI event loop can't drop the
+    # click (Turbo's data-turbo-method listener still intercepts el.click()).
+    page.execute_script(
+      "[...document.querySelectorAll('a')].find((a) => a.textContent.trim() === 'Mark all as read').click()"
+    )
     # Once all are read the bulk link disappears.
     assert_no_selector "a", text: "Mark all as read"
 
