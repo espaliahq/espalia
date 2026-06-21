@@ -19,20 +19,17 @@ import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
   static targets = ["frame", "search", "results", "selected", "ids", "empty", "submit", "count", "noun"]
-  static values = {
-    url: { type: String, default: "/evidence_request_modal" },
-    candidatesUrl: String
-  }
+  static values = { candidatesUrl: String }
 
-  // PAGE: point the lazy frame at the modal render endpoint for this cell.
+  // PAGE: point the lazy frame at the assignment-scoped modal render endpoint.
   load(event) {
     if (!this.hasFrameTarget) return
     const p = event.params || {}
+    if (!p.assignmentId) return
     const q = new URLSearchParams()
-    if (p.assignmentId) q.set("assignment_id", p.assignmentId)
     if (p.capabilityStableId) q.set("capability_stable_id", p.capabilityStableId)
     if (p.levelOrdinal != null && p.levelOrdinal !== "") q.set("level_ordinal", p.levelOrdinal)
-    this.frameTarget.src = `${this.urlValue}?${q.toString()}`
+    this.frameTarget.src = `/assessments/${p.assignmentId}/evidence_request_modal?${q.toString()}`
   }
 
   // IN-FRAME: debounce keystrokes, then repoint the results frame at the query.
