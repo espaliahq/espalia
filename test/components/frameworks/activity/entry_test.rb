@@ -37,6 +37,11 @@ class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
                       "Updated a level&#39;s title"
     end
 
+    should "count a field intentionally cleared to blank (keyed, not value, presence)" do
+      assert_includes render_entry(kind: "role_family_updated", payload: { description: "" }),
+                      "Updated a role family&#39;s description"
+    end
+
     should "fall back to a bare summary when no known field changed" do
       assert_includes render_entry(kind: "role_updated", payload: {}), "Updated a role"
     end

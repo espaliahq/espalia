@@ -319,8 +319,18 @@ class Views::Frameworks::Activity::Entry < Views::Base
   # @param noun [String] "role family" / "role" / "level"
   # @param fields [Hash{Symbol=>String}] payload key → human label
   def org_update_summary(noun, **fields)
-    changed = fields.filter_map { |key, label| label if payload_value(key).present? }
+    changed = fields.filter_map { |key, label| label if payload_key?(key) }
     changed.empty? ? "Updated a #{noun}" : "Updated a #{noun}'s #{changed.to_sentence}"
+  end
+
+  # Whether the (compacted) update event carried this field at all — keyed
+  # presence, not value presence, so a field intentionally cleared to "" still
+  # counts as changed. The aggregate drops nil keys via `.compact`, so a present
+  # key means the field was part of the update.
+  def payload_key?(key)
+    return false unless @entry.payload.respond_to?(:key?)
+
+    @entry.payload.key?(key) || @entry.payload.key?(key.to_s)
   end
 
   # Entity word for suggestion summaries — the human label of the suggestion's
