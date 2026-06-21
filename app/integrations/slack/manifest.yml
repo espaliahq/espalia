@@ -19,17 +19,25 @@
 # (interactivity, request URLs, event subscriptions that need no new scope) are
 # config and can change with no reinstall.
 #
-# Inline responses to evidence requests — Block Kit buttons + a modal in the DM
-# we already send — need NO new scope: posting the interactive message, updating
-# it after a click (chat.update), and opening the modal (views.open) all run on
-# chat:write, which we already hold. So that feature ships as pure server code.
-# To make it fully transparent we enable Interactivity below NOW (config only,
-# no reinstall) and point it at the future /slack/interactions endpoint.
+# So that EVERY planned inbound feature can ship later with zero reinstall, the
+# scopes they need are all granted up front, even though no code uses them yet:
 #
-# The only future Slack features that WOULD force a one-time reinstall are ones
-# needing a new scope — e.g. `commands` (slash-command entry point) or
-# `im:history` (capturing a free-text DM reply instead of a button/modal). Those
-# are intentionally NOT pre-added; add them (and reinstall once) if/when wanted.
+#   chat:write     → post interactive messages, chat.update, views.open (modals)
+#   commands       → a /growthos slash-command entry point
+#   im:history     → capture a free-text DM reply to an evidence request
+#
+# With these pre-granted, the remaining work to light up each feature is pure
+# CONFIG (no reinstall):
+#   • Inline button/modal responses — flip on Interactivity (done below) + build
+#     /slack/interactions. Interactivity URLs are NOT challenge-verified, so the
+#     placeholder below is safe before the endpoint exists.
+#   • Slash command — declare the /growthos command (name + request_url) once its
+#     endpoint exists. Slash-command URLs aren't challenge-verified either.
+#   • Free-text DM replies — set messages_tab_read_only_enabled: false and add a
+#     `message.im` Events subscription. NOTE: Events API request_urls ARE
+#     challenge-verified the moment they're saved, so that subscription can't be
+#     declared here against a dead URL — add it only after /slack/events is live.
+# None of those three steps adds a scope, so none triggers a reinstall.
 
 display_information:
   name: GrowthOS
@@ -54,9 +62,16 @@ features:
 oauth_config:
   scopes:
     bot:
+      # Used today — outbound DM notifications:
       - users:read.email   # users.lookupByEmail — match a Person by email
       - im:write           # conversations.open — open the user's DM channel
-      - chat:write         # chat.postMessage — deliver the notification
+      - chat:write         # chat.postMessage — deliver the notification (and, later,
+                           #   interactive blocks / chat.update / views.open)
+      # Pre-granted for planned inbound features so they ship with NO reinstall.
+      # No code uses these yet (see the header note); they exist purely so a later
+      # config-only change can light up the feature:
+      - commands           # a /growthos slash-command entry point
+      - im:history         # capture a free-text DM reply to an evidence request
 
 settings:
   interactivity:
@@ -67,9 +82,11 @@ settings:
     # the Events API), so this placeholder is safe until the responder ships.
     is_enabled: true
     request_url: https://growthos.work/slack/interactions
-  # No event subscriptions: GrowthOS doesn't consume inbound events. Slash
-  # commands and free-text-reply capture are deferred — each needs a new scope
-  # (`commands` / `im:history`) and thus a one-time reinstall when added.
+  # No event subscriptions yet: GrowthOS consumes no inbound events today. The
+  # `im:history` scope is pre-granted (above), so adding a `message.im`
+  # subscription later needs no reinstall — but it CAN'T be declared here against
+  # a dead URL (Slack challenge-verifies Events request_urls on save). Add it once
+  # /slack/events is live.
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false

@@ -34,6 +34,21 @@ class Tenant::SlackConnectionsControllerTest < ActionDispatch::IntegrationTest
         assert_match(/state=\h+/, response.location)
       end
 
+      should "request the pre-granted scopes so inbound features need no reinstall" do
+        with_slack_configured do
+          get tenant_slack_install_path
+        end
+        query = URI.decode_www_form(URI(response.location).query).to_h
+        scope = query["scope"].split(",")
+        # The grant comes from this list, not the manifest — it must carry every
+        # scope a planned feature needs, or that feature would force a re-auth.
+        assert_includes scope, "chat:write"
+        assert_includes scope, "users:read.email"
+        assert_includes scope, "im:write"
+        assert_includes scope, "commands"
+        assert_includes scope, "im:history"
+      end
+
       should "redirect back with an alert when Slack isn't configured" do
         Slack.stub(:configured?, false) do
           get tenant_slack_install_path
