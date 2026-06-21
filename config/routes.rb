@@ -18,6 +18,12 @@ Rails.application.routes.draw do
   # register themselves so users don't paste client ids around.
   post "/oauth/register", to: "mcp/client_registrations#create", as: :oauth_register
 
+  # Inbound Slack Events API. Public (auth is the Slack request signature, not a
+  # session). Answers the url_verification challenge so the Events request URL
+  # can be verified; real events are acked and dropped until the evidence-reply
+  # handler is built. See Slack::EventsController.
+  post "/slack/events", to: "slack/events#create", as: :slack_events
+
   # User-facing settings — for now just the connected MCP clients page;
   # other settings live elsewhere historically.
   namespace :settings do
