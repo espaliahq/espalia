@@ -4,12 +4,12 @@
 # Paste this YAML, then install to your workspace. Rotate/replace the signing secret and
 # tokens via Rails credentials (config/credentials.yml.enc) — never commit them.
 #
-# Scope is deliberately minimal: GrowthOS sends OUTBOUND direct-message
-# notifications today (assessment nudges, alignment reminders, evidence-request
-# pings). The three bot scopes below are exactly what that requires and match
-# Slack::BOT_SCOPES, which the OAuth install flow requests:
+# GrowthOS sends OUTBOUND direct-message notifications today (assessment nudges,
+# alignment reminders, evidence-request pings). The scopes that power that — and
+# which the OAuth install flow requests via Slack::BOT_SCOPES — are:
 #
 #   users:read.email  → users.lookupByEmail  (map a Person's email → Slack user id)
+#   users:read        → Slack requires it as a companion to users:read.email
 #   im:write          → conversations.open   (open the 1:1 DM channel)
 #   chat:write        → chat.postMessage      (post the notification into that DM)
 #
@@ -63,6 +63,7 @@ oauth_config:
   scopes:
     bot:
       # Used today — outbound DM notifications:
+      - users:read         # Slack requires it as a companion to users:read.email
       - users:read.email   # users.lookupByEmail — match a Person by email
       - im:write           # conversations.open — open the user's DM channel
       - chat:write         # chat.postMessage — deliver the notification (and, later,

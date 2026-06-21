@@ -43,6 +43,7 @@ class Tenant::SlackConnectionsControllerTest < ActionDispatch::IntegrationTest
         # The grant comes from this list, not the manifest — it must carry every
         # scope a planned feature needs, or that feature would force a re-auth.
         assert_includes scope, "chat:write"
+        assert_includes scope, "users:read"
         assert_includes scope, "users:read.email"
         assert_includes scope, "im:write"
         assert_includes scope, "commands"

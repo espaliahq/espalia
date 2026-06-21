@@ -10,12 +10,13 @@ module Slack
 
   # Bot scopes requested at install. The grant comes from THIS list (the OAuth
   # authorize URL's `scope` param) — not the manifest — so it must carry every
-  # scope we want the token to hold. The first three power today's outbound DM
-  # notifications; `commands` and `im:history` are pre-granted so the planned
-  # inbound features (a /growthos slash command, free-text DM-reply capture) can
-  # ship as config-only changes with NO reinstall. Keep in sync with
+  # scope we want the token to hold. The first four power today's outbound DM
+  # notifications (Slack requires `users:read` as a companion to
+  # `users:read.email`); `commands` and `im:history` are pre-granted so the
+  # planned inbound features (a /growthos slash command, free-text DM-reply
+  # capture) can ship as config-only changes with NO reinstall. Keep in sync with
   # app/integrations/slack/manifest.yml.
-  BOT_SCOPES = %w[chat:write users:read.email im:write commands im:history].freeze
+  BOT_SCOPES = %w[chat:write users:read users:read.email im:write commands im:history].freeze
 
   # @return [Hash] { client_id:, client_secret:, signing_secret: }
   def self.oauth_config
