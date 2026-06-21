@@ -376,17 +376,18 @@ These do one Capybara click, and if the destination text/selector doesn't appear
 
 **Use `auto_confirm { ... }` for Turbo `data-turbo-confirm` form submissions where the test cares about the action, not the dialog text.** Capybara's `accept_confirm` registers a modal handler then yields the click block, then waits for the dialog. On slow CI, the click can fire before the modal handler is fully registered — the dialog appears, fires `confirm()` instantly with no listener, and is gone before Capybara polls. Even with retry, this can fail repeatedly because each attempt re-races the same registration window.
 
-`auto_confirm` stubs `window.confirm` to return `true` before the click, so Turbo's submit-listener resolves the confirm synchronously without ever opening a dialog. Wrap it in `click_with_retry` to also retry the click itself if dropped:
+`auto_confirm` stubs `window.confirm` to return `true` before the click and **leaves the stub in place** (a full-page navigation loads a fresh document that resets `window.confirm` on its own), so Turbo's confirm resolves to `true` with no dialog ever opening — use it bare, exactly like the rest of the suite:
 
 ```ruby
 # WRONG — accept_confirm flakes on starved CI even with retry
 accept_confirm(/Starting alignment will lock/) { click_button "Start alignment" }
 
-# CORRECT — auto-confirm + click retry
-click_with_retry(expect_text: "Aligning") do
-  auto_confirm { click_button "Start alignment" }
-end
+# CORRECT — bare auto_confirm, then assert the resulting action
+auto_confirm { click_button "Start alignment" }
+assert_text "Aligning"
 ```
+
+**Do NOT wrap `auto_confirm` in `click_with_retry`.** It's actively harmful for a `data-turbo-method` *link* (vs. a form-submit button): Turbo invokes `confirm()` *asynchronously* there, so if anything restores the native `window.confirm` between the click and that call, a real dialog opens — and `click_with_retry` then re-clicks *into* the open dialog, raising `UnexpectedAlertOpenError` (and a downstream `NoMethodError` from Selenium's alert handling) on every retry. `auto_confirm` no longer restores the stub precisely to close this race, so the bare form is reliable for both links and buttons; the retry wrapper only reopens the hole.
 
 **When NOT to use:** When the dialog's text/behaviour is itself under test. Then keep `accept_confirm` and pay the flake cost knowingly (or write the assertion at the integration test layer).
 

@@ -75,9 +75,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     visit evidence_hub_path
     assert_text "To Peer"
 
-    click_with_retry(expect_text: "Request cancelled") do
-      auto_confirm { click_link "Cancel request" }
-    end
+    auto_confirm { click_link "Cancel request" }
     assert_text "Request cancelled"
     ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.last.status }
   end

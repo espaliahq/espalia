@@ -31,11 +31,7 @@ class Tenant::SlackConnectionSystemTest < ApplicationSystemTestCase
     visit tenant_integrations_path
     assert_text "Connected to Acme HQ"
 
-    # Retry the whole block: on a starved CI runner auto_confirm's window.confirm
-    # stub can miss the click and a native dialog surfaces (UnexpectedAlertOpenError).
-    click_with_retry(expect_text: "Connect Slack") do
-      auto_confirm { find("a", text: "Disconnect").click }
-    end
+    auto_confirm { find("a", text: "Disconnect").click }
     assert_selector "a", text: "Connect Slack"
     assert_not @tenant.reload.slack_connected?
   end
