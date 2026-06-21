@@ -56,12 +56,24 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
     should "mark it responded and link the evidence" do
       id = request!
       evidence_id = SecureRandom.uuid_v7
+      @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
+        capability_stable_id: @cap, level_ordinal: 3, source: "peer",
+        evidence_type: "peer_feedback", content: "Helped ship the migration", author_id: @requestee.id)
       @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
         evidence_id: evidence_id, responded_by_id: @requestee.id)
 
       req = EvidenceRequest.find(id)
       assert_equal "responded", req.status
       assert_equal evidence_id, req.evidence_id
+    end
+
+    should "reject responding with an evidence id that doesn't exist" do
+      id = request!
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
+          evidence_id: SecureRandom.uuid_v7, responded_by_id: @requestee.id)
+      end
+      assert_match(/evidence id/i, error.message)
     end
 
     should "mark it declined with a reason" do

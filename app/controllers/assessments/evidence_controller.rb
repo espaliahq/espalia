@@ -24,6 +24,11 @@ class Assessments::EvidenceController < ApplicationController
   # RespondToEvidenceRequest), each of which authorizes its precise action against
   # the relevant policy — a single controller-level check can't capture all modes.
   def save
+    # Baseline gate: the caller must be able to record evidence on this
+    # assessment. The diff then authorizes each command precisely (update? for a
+    # content change, add_link?/remove_link? for linkage), so a tampered form
+    # can't escalate beyond what each operation permits.
+    authorize @assignment, :create?, policy_class: EvidencePolicy
     touched = apply_evidence_diff
     render turbo_stream: touched.cells.uniq.map { |cap, level| cell_evidence_stream(cap, level) }
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e

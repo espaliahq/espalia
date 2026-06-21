@@ -827,6 +827,7 @@ class PersonDevelopment::Aggregate
   # @raise [CommandError] if not assigned, request unknown, or not pending
   def respond_to_evidence_request(request_id, evidence_id:, responded_by_id:)
     state = pending_request!(request_id)
+    raise CommandError, "Unknown evidence ID" unless @evidence.key?(evidence_id)
 
     apply(PersonDevelopment::Events::EvidenceRequestResponded.new(data: {
       request_id: request_id,

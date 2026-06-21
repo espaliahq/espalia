@@ -47,6 +47,8 @@ module EvidenceDiffSubmit
 
   def diff_new(p)
     primary = parse_cell(p[:primary_cell])
+    raise Operations::Base::ParameterError, "Missing or malformed primary cell" if primary.nil?
+
     extras = desired_cells(p) - [ primary ]
 
     result = Operations::Assessments::RecordEvidence.call(context: pundit_user, params: {
@@ -107,7 +109,7 @@ module EvidenceDiffSubmit
 
   def parse_cell(token)
     cap, level = token.to_s.split("|", 2)
-    return nil if cap.blank? || level.blank?
+    return nil if cap.blank? || level !~ /\A\d+\z/
 
     [ cap, level.to_i ]
   end
