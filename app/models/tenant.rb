@@ -113,6 +113,7 @@ class Tenant < ApplicationRecord
       # per-user Slack ids no longer resolve — clear them so they re-resolve.
       tenant_users.where.not(slack_user_id: nil).update_all(slack_user_id: nil)
     end
+    true
   end
 
   # Remove the Slack connection. Cached per-user Slack ids are cleared too so a
