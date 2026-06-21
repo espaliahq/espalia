@@ -18,7 +18,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame", "search", "results", "selected", "ids", "empty", "submit", "count", "noun"]
+  static targets = ["frame", "search", "results", "selected", "ids", "empty", "submit", "label", "suggestions"]
   static values = { candidatesUrl: String }
 
   // PAGE: point the lazy frame at the assignment-scoped modal render endpoint.
@@ -56,14 +56,17 @@ export default class extends BaseController {
       `<input type="hidden" name="evidence_request[requestee_ids][]" value="${personId}" data-person-id="${personId}">`)
     this.selectedTarget.insertAdjacentHTML("beforeend", this.#chip(personId, name))
     if (this.hasEmptyTarget) this.emptyTarget.classList.add("hidden")
+    this.#toggleSuggestion(personId, false) // drop it from the suggestion list
     this.#refreshCount()
   }
 
-  // IN-FRAME: remove a chip + its hidden input.
+  // IN-FRAME: remove a chip + its hidden input; restore its suggestion if any.
   remove(event) {
     const id = event.params?.personId
     if (!id) return
-    this.element.querySelectorAll(`[data-person-id="${id}"]`).forEach((el) => el.remove())
+    this.element.querySelectorAll(`input[data-person-id="${id}"], span[data-person-id="${id}"]`)
+      .forEach((el) => el.remove())
+    this.#toggleSuggestion(id, true)
     if (this.hasEmptyTarget && this.#selectedIds().length === 0) this.emptyTarget.classList.remove("hidden")
     this.#refreshCount()
   }
@@ -87,10 +90,20 @@ export default class extends BaseController {
     </span>`
   }
 
+  // Hide (show=false) or restore (show=true) a person's suggestion chip. Use an
+  // inline display style, not a `hidden` class: the chip already carries an
+  // `inline-flex` display utility, and Tailwind's `hidden` ties it on specificity
+  // (source order wins, so the class wouldn't reliably hide it). Inline style does.
+  #toggleSuggestion(personId, show) {
+    if (!this.hasSuggestionsTarget) return
+    this.suggestionsTarget
+      .querySelectorAll(`[data-request-evidence-person-id-param="${personId}"]`)
+      .forEach((el) => { el.style.display = show ? "" : "none" })
+  }
+
   #refreshCount() {
     const n = this.#selectedIds().length
-    if (this.hasCountTarget) this.countTarget.textContent = String(n)
-    if (this.hasNounTarget) this.nounTarget.textContent = n === 1 ? "request" : "requests"
+    if (this.hasLabelTarget) this.labelTarget.textContent = n === 0 ? "Send requests" : `Send ${n} ${n === 1 ? "request" : "requests"}`
     if (this.hasSubmitTarget) this.submitTarget.disabled = n === 0
   }
 }

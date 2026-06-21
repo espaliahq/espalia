@@ -75,6 +75,9 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     JS
     within "#evidence-request-modal-overlay" do
       assert_selector "[data-request-evidence-target='selected']", text: "Pat Peer"
+      # Added recipients drop out of the suggestion list, and the button counts.
+      assert_no_selector "[data-request-evidence-target='suggestions'] button", text: "Pat Peer", visible: true
+      assert_selector "button[type='submit']", text: "Send 1 request"
       fill_in "evr-message", with: "Saw you pair on the incident"
       find("button[type='submit']", text: /Send/).click
     end

@@ -20,7 +20,7 @@
 #   q.suggestions        # => [Candidate(relation: :manager), Candidate(relation: :peer), …]
 #   q.search("pri")      # => [Candidate(person:, already_requested:, relation: nil), …]
 class Assessments::RequestCandidates
-  SEARCH_LIMIT = 8
+  SEARCH_LIMIT = 3
 
   # @!attribute person [Person]
   # @!attribute already_requested [Boolean] a pending request exists on this cell

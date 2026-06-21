@@ -99,7 +99,7 @@ class Views::Evidence::RequestForm < Views::Base
 
     div(class: "mt-3") do
       span(class: LABEL) { "Suggestions" }
-      div(class: "flex flex-wrap gap-2") do
+      div(class: "flex flex-wrap gap-2", data: { request_evidence_target: "suggestions" }) do
         @suggestions.each { |candidate| render Views::Evidence::RequestCandidate.new(candidate:, compact: true) }
       end
     end
@@ -120,11 +120,9 @@ class Views::Evidence::RequestForm < Views::Base
   def footer
     div(class: "flex items-center justify-end gap-2 pt-2") do
       button(type: "button", data: { action: "modal#close" }, class: SECONDARY_BTN) { "Cancel" }
-      button(type: "submit", disabled: true, data: { request_evidence_target: "submit" }, class: PRIMARY_BTN) do
-        plain "Send "
-        span(data: { request_evidence_target: "count" }) { "0" }
-        plain " "
-        span(data: { request_evidence_target: "noun" }) { "requests" }
+      button(type: "submit", disabled: true,
+             data: { request_evidence_target: "submit" }, class: PRIMARY_BTN) do
+        span(data: { request_evidence_target: "label" }) { "Send requests" }
       end
     end
   end
