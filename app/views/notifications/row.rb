@@ -10,8 +10,11 @@
 # follow the 302 with the anchor intact and scroll to it.
 class Views::Notifications::Row < Views::Base
   # @param notification [Noticed::Notification]
-  def initialize(notification:)
+  # @param compact [Boolean] when true (the bell peek) the title/body are
+  #   truncated to keep rows short; the full inbox passes false for complete text.
+  def initialize(notification:, compact: false)
     @notification = notification
+    @compact = compact
   end
 
   def view_template
@@ -21,8 +24,10 @@ class Views::Notifications::Row < Views::Base
       button(type: "submit", class: "#{row_classes} w-full text-left cursor-pointer") do
         unread_dot
         div(class: "min-w-0 flex-1") do
-          p(class: "text-sm font-medium text-gray-900 dark:text-white truncate") { title }
-          p(class: "mt-0.5 text-sm text-gray-600 dark:text-gray-300 line-clamp-2") { body } if body.present?
+          p(class: "text-sm font-medium text-gray-900 dark:text-white #{@compact ? 'truncate' : 'break-words'}") { title }
+          if body.present?
+            p(class: "mt-0.5 text-sm text-gray-600 dark:text-gray-300 #{@compact ? 'line-clamp-2' : 'break-words whitespace-pre-line'}") { body }
+          end
           p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { local_time_ago(@notification.created_at) }
         end
       end
