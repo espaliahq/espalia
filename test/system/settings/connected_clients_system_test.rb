@@ -14,7 +14,7 @@ class Settings::ConnectedClientsSystemTest < ApplicationSystemTestCase
   context "user dropdown" do
     should "link to the AI assistants page" do
       visit root_path
-      open_dropdown
+      open_dropdown(scope: "#user-menu")
 
       assert_selector "[role='menu'] a", text: "AI assistants", visible: true
       click_link_with_js_fallback("AI assistants", expect_text: "Connect an assistant")

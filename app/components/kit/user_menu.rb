@@ -24,9 +24,13 @@ class Components::Kit::UserMenu < Components::Base
   end
 
   def view_template
-    render Components::Kit::Dropdown.new(align: :right) do |dropdown|
-      dropdown.trigger { avatar_circle }
-      dropdown.menu { menu_content }
+    # Wrapper id lets tests scope to this dropdown specifically — the navbar now
+    # also hosts the notification bell dropdown.
+    div(id: "user-menu", class: "inline-block") do
+      render Components::Kit::Dropdown.new(align: :right) do |dropdown|
+        dropdown.trigger { avatar_circle }
+        dropdown.menu { menu_content }
+      end
     end
   end
 

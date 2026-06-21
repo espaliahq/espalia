@@ -22,7 +22,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "open dropdown with email and sign out" do
       visit root_path
-      open_dropdown
+      open_dropdown(scope: "#user-menu")
       screenshot("dropdown_open")
 
       assert_text @user.email
@@ -31,7 +31,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "close dropdown when clicking outside" do
       visit root_path
-      open_dropdown
+      open_dropdown(scope: "#user-menu")
 
       # Outside-click is handled by stimulus-use's useClickOutside which
       # registers a window capture-phase listener. Selenium's synthetic
@@ -50,7 +50,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
 
     should "sign out via dropdown" do
       visit root_path
-      open_dropdown
+      open_dropdown(scope: "#user-menu")
       # Submit the Sign out form via requestSubmit() — Capybara's click_on
       # has been dropped on starved CI runners. requestSubmit dispatches a
       # synchronous submit event that Turbo intercepts, bypassing pointer
@@ -73,7 +73,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
   context "tenant switcher" do
     should "not show tenant switcher for single-tenant user" do
       visit root_path
-      open_dropdown
+      open_dropdown(scope: "#user-menu")
       screenshot("single_tenant_no_switcher")
 
       assert_no_text "switch workspace"
@@ -86,7 +86,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       end
 
       visit root_path
-      open_dropdown
+      open_dropdown(scope: "#user-menu")
       screenshot("multi_tenant_switcher")
 
       assert_text "SWITCH WORKSPACE"
@@ -101,7 +101,7 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       end
 
       visit root_path
-      open_dropdown
+      open_dropdown(scope: "#user-menu")
       screenshot("before_tenant_switch")
 
       # Click the switch button for Beta Inc
