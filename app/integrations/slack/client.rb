@@ -16,6 +16,8 @@
 class Slack::Client
   BASE_URL = "https://slack.com/api/"
   AUTH_ERRORS = %w[invalid_auth account_inactive token_revoked not_authed no_permission].freeze
+  OPEN_TIMEOUT = 2
+  READ_TIMEOUT = 5
 
   # @param bot_token [String] workspace bot token (xoxb-…)
   def initialize(bot_token:)
@@ -65,6 +67,8 @@ class Slack::Client
     conn = Faraday.new(url: BASE_URL) do |f|
       f.request :url_encoded
       f.response :json
+      f.options.open_timeout = OPEN_TIMEOUT
+      f.options.timeout = READ_TIMEOUT
       f.adapter Faraday.default_adapter
     end
     body = conn.post("oauth.v2.access", {
@@ -73,6 +77,8 @@ class Slack::Client
     raise Slack::Errors::ApiError.new(code: body["error"]) unless body["ok"]
 
     { "bot_token" => body["access_token"], "team_id" => body.dig("team", "id"), "team_name" => body.dig("team", "name") }
+  rescue Faraday::Error
+    raise Slack::Errors::ApiError.new(code: "transport_error")
   end
 
   private
@@ -83,17 +89,26 @@ class Slack::Client
     @connection ||= Faraday.new(url: BASE_URL) do |f|
       f.request :json
       f.response :json
+      f.options.open_timeout = OPEN_TIMEOUT
+      f.options.timeout = READ_TIMEOUT
       f.adapter Faraday.default_adapter
       f.headers["Authorization"] = "Bearer #{bot_token}"
     end
   end
 
+  # Wrap transport failures (timeouts, connection refused) in the Slack::Errors
+  # contract so callers — esp. the best-effort DM delivery method — don't see a
+  # raw Faraday error and retry the job forever.
   def get(method, **params)
     check!(connection.get(method, params).body)
+  rescue Faraday::Error
+    raise Slack::Errors::ApiError.new(code: "transport_error")
   end
 
   def post(method, **payload)
     check!(connection.post(method, payload).body)
+  rescue Faraday::Error
+    raise Slack::Errors::ApiError.new(code: "transport_error")
   end
 
   # @raise [Slack::Errors::AuthenticationError, Slack::Errors::ApiError]

@@ -10,6 +10,7 @@
 # the resulting bot token is stored per tenant by Tenant#connect_slack!.
 class Tenant::SlackConnectionsController < ApplicationController
   SESSION_STATE_KEY = :slack_oauth_state
+  SESSION_TENANT_KEY = :slack_oauth_tenant_id
 
   # GET /tenant/slack/install
   def install
@@ -21,6 +22,9 @@ class Tenant::SlackConnectionsController < ApplicationController
 
     state = SecureRandom.hex(24)
     session[SESSION_STATE_KEY] = state
+    # Bind the state to the tenant the install began in, so credentials can't be
+    # written to a different workspace if the admin switches tenant mid-flow.
+    session[SESSION_TENANT_KEY] = current_tenant.id
     redirect_to slack_authorize_url(state), allow_other_host: true
   end
 
@@ -29,7 +33,9 @@ class Tenant::SlackConnectionsController < ApplicationController
     authorize :integrations, :connect?
 
     expected = session.delete(SESSION_STATE_KEY)
+    expected_tenant = session.delete(SESSION_TENANT_KEY)
     return redirect_with_alert("Slack connection could not be verified. Please try again.") if invalid_state?(expected)
+    return redirect_with_alert("Slack connection could not be verified. Please try again.") if expected_tenant != current_tenant.id
     return redirect_with_alert("Slack connection was cancelled.") if params[:error].present? || params[:code].blank?
 
     result = Slack::Client.exchange_oauth_code(

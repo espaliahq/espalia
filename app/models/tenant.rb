@@ -104,10 +104,15 @@ class Tenant < ApplicationRecord
   # @param installed_by [String, nil] Person id of the installing admin
   # @return [Boolean]
   def connect_slack!(bot_token:, team_id:, team_name: nil, installed_by: nil)
-    update!(
-      slack_team_id: team_id,
-      slack_credentials: { "bot_token" => bot_token, "team_name" => team_name, "installed_by" => installed_by }
-    )
+    transaction do
+      update!(
+        slack_team_id: team_id,
+        slack_credentials: { "bot_token" => bot_token, "team_name" => team_name, "installed_by" => installed_by }
+      )
+      # A reconnect may point at a different workspace, where the cached
+      # per-user Slack ids no longer resolve — clear them so they re-resolve.
+      tenant_users.where.not(slack_user_id: nil).update_all(slack_user_id: nil)
+    end
   end
 
   # Remove the Slack connection. Cached per-user Slack ids are cleared too so a
