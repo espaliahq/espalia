@@ -3,7 +3,7 @@
 require "test_helper"
 
 class Slack::EventsControllerTest < ActionDispatch::IntegrationTest
-  SECRET = "8f742231b10e8888abcd99yyyzzz85a5"
+  SECRET = "test-signing-secret"
 
   # POST a raw JSON body signed exactly as Slack would, with the signing secret
   # stubbed onto Slack.oauth_config.

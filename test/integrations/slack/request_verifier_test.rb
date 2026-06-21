@@ -3,7 +3,7 @@
 require "test_helper"
 
 class Slack::RequestVerifierTest < ActiveSupport::TestCase
-  SECRET = "8f742231b10e8888abcd99yyyzzz85a5"
+  SECRET = "test-signing-secret"
 
   setup do
     @now = 1_700_000_000
