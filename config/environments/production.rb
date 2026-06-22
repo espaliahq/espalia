@@ -63,7 +63,8 @@ Rails.application.configure do
   # notification links (e.g. the Slack DM "Open in GrowthOS" button, which reads
   # action_mailer.default_url_options[:host]). Defaults to the canonical
   # production host; override with APP_HOST for other deployments.
-  config.action_mailer.default_url_options = { host: ENV.fetch("APP_HOST", "growthos.work"), protocol: "https" }
+  app_host = ENV["APP_HOST"].presence || "growthos.work"
+  config.action_mailer.default_url_options = { host: app_host, protocol: "https" }
 
   # Specify outgoing SMTP server. Remember to add smtp/* credentials via bin/rails credentials:edit.
   # config.action_mailer.smtp_settings = {
