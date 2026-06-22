@@ -462,6 +462,55 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "AlignmentReopened" do
+    should "revert progress to aligning and clear completion stamps, preserving aligned values" do
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
+      cap_sid = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::AlignmentStarted,
+        cycle_id: @cycle_id, started_by_id: manager.id)
+      emit(PersonDevelopment::Events::AssessmentAligned,
+        capability_stable_id: cap_sid, level_ordinal: 3, aligned_frequency: "consistent",
+        cycle_id: @cycle_id, comment: nil, aligned_by_id: manager.id)
+      emit(PersonDevelopment::Events::FullAlignmentCompleted,
+        cycle_id: @cycle_id, completed_by_id: manager.id, framework_version: 2)
+
+      emit(PersonDevelopment::Events::AlignmentReopened,
+        cycle_id: @cycle_id, reopened_by_id: manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id)
+        assert_equal "aligning", progress.status
+        assert_nil progress.aligned_at
+        assert_nil progress.aligned_by_id
+        assert_nil progress.aligned_framework_version
+        # The original start stamps are preserved — the cycle was already aligning.
+        assert_not_nil progress.alignment_started_at
+        assert_equal manager.id, progress.alignment_started_by_id
+
+        # Agreed per-cell value survives the re-open (no clearing).
+        rating = AssessmentLevelRating.find_by(cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3)
+        assert_equal "consistent", rating.aligned_frequency
+      end
+    end
+
+    should "unfreeze the matrix builder flags once re-opened" do
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
+
+      emit(PersonDevelopment::Events::AlignmentStarted, cycle_id: @cycle_id, started_by_id: manager.id)
+      emit(PersonDevelopment::Events::FullAlignmentCompleted,
+        cycle_id: @cycle_id, completed_by_id: manager.id, framework_version: 1)
+      emit(PersonDevelopment::Events::AlignmentReopened, cycle_id: @cycle_id, reopened_by_id: manager.id)
+
+      status = ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @person_id).status
+      end
+      # alignment_locked derives from status == "aligned"; re-open lifts it.
+      assert_equal "aligning", status
+    end
+  end
+
   context "AssessmentAligned" do
     should "set aligned_frequency on the row without changing progress status" do
       cap_sid = SecureRandom.uuid_v7
@@ -513,6 +562,7 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       role_id  = SecureRandom.uuid_v7
       level_id = SecureRandom.uuid_v7
       cap_sid  = SecureRandom.uuid_v7
+      manager  = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
 
       append_and_project(PersonDevelopment::Events::PersonAssignedToFramework,
         person_id: @person_id, framework_id: @framework_id,
@@ -531,6 +581,22 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         person_id: @person_id, framework_id: @framework_id,
         cycle_id: @cycle_id, capability_stable_id: cap_sid,
         level_ordinal: 2, frequency: "occasional", source: "human")
+
+      # Full alignment lifecycle including a re-open — the reverted progress
+      # state (aligning, cleared completion stamps) must survive reset! + replay.
+      append_and_project(PersonDevelopment::Events::AlignmentStarted,
+        person_id: @person_id, framework_id: @framework_id,
+        cycle_id: @cycle_id, started_by_id: manager.id)
+      append_and_project(PersonDevelopment::Events::AssessmentAligned,
+        person_id: @person_id, framework_id: @framework_id,
+        capability_stable_id: cap_sid, level_ordinal: 2, aligned_frequency: "consistent",
+        cycle_id: @cycle_id, comment: nil, aligned_by_id: manager.id)
+      append_and_project(PersonDevelopment::Events::FullAlignmentCompleted,
+        person_id: @person_id, framework_id: @framework_id,
+        cycle_id: @cycle_id, completed_by_id: manager.id, framework_version: 1)
+      append_and_project(PersonDevelopment::Events::AlignmentReopened,
+        person_id: @person_id, framework_id: @framework_id,
+        cycle_id: @cycle_id, reopened_by_id: manager.id)
 
       before_snapshot = snapshot_read_models(PersonDevelopment::Projections::CurrentAssessment, @tenant)
       assert_equal 1, before_snapshot[:assignments].size

@@ -76,6 +76,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::AssessmentAligned,
       PersonDevelopment::Events::AlignmentCleared,
       PersonDevelopment::Events::FullAlignmentCompleted,
+      PersonDevelopment::Events::AlignmentReopened,
       PersonDevelopment::Events::FrameworkVersionMigrated
     ]
   end
@@ -120,6 +121,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::AssessmentAligned then handle_assessment_aligned(event)
     when PersonDevelopment::Events::AlignmentCleared then handle_alignment_cleared(event)
     when PersonDevelopment::Events::FullAlignmentCompleted then handle_full_alignment_completed(event)
+    when PersonDevelopment::Events::AlignmentReopened then handle_alignment_reopened(event)
     when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
     end
   end
@@ -402,6 +404,25 @@ class PersonDevelopment::Projections::CurrentAssessment
       aligned_at: now,
       aligned_by_id: event.data[:completed_by_id],
       aligned_framework_version: event.data[:framework_version]
+    )
+    broadcast_assessment_sync(event)
+  end
+
+  # Re-opens a completed alignment: returns the cycle to the `aligning`
+  # phase and clears the completion stamps. The agreed per-cell values on
+  # AssessmentLevelRating are deliberately left intact — the manager
+  # resumes the conversation where it was left and re-completes when ready.
+  # The original alignment_started_at / _by_id are preserved (the cycle was
+  # already in alignment; we're only undoing the completion).
+  def handle_alignment_reopened(event)
+    progress = find_progress(event)
+    return unless progress
+
+    progress.update!(
+      status: "aligning",
+      aligned_at: nil,
+      aligned_by_id: nil,
+      aligned_framework_version: nil
     )
     broadcast_assessment_sync(event)
   end
