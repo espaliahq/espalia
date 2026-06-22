@@ -597,6 +597,31 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Re-opens a completed alignment, returning the cycle to the `aligning`
+  # phase so a manager can correct a completion made by accident.
+  #
+  # The agreed (aligned) per-cell values are PRESERVED — re-opening only
+  # lifts the completion freeze; it does not clear or re-derive any
+  # alignment. The manager resumes editing agreed values and re-completes
+  # via {#complete_alignment} (which re-stamps the milestone; auto-align is
+  # a start-time behaviour and is NOT re-run). Issued by the assessee's
+  # current direct manager while the cycle is still open (enforced by the
+  # controller-side {AssessmentPolicy#reopen_alignment?}).
+  #
+  # @param cycle_id [String] UUID of the cycle being re-opened
+  # @param reopened_by_id [String] UUID of the person re-opening alignment
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or not completed
+  def reopen_alignment(cycle_id, reopened_by_id:)
+    ensure_in_cycle!(cycle_id)
+    raise "Alignment has not been started for this cycle" unless @alignment_started
+    raise "Alignment is not completed for this cycle" unless @alignment_completed
+
+    apply(PersonDevelopment::Events::AlignmentReopened.new(data: {
+      cycle_id: cycle_id,
+      reopened_by_id: reopened_by_id
+    }))
+  end
+
   # ── Evidence ──
   #
   # Evidence is qualitative context anchored to one or more
@@ -1123,6 +1148,12 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::FullAlignmentCompleted do |_event|
     @alignment_completed = true
+  end
+
+  on PersonDevelopment::Events::AlignmentReopened do |_event|
+    # Back to the aligning phase — agreed values (@aligned_ratings) are
+    # deliberately left intact so the manager resumes where they left off.
+    @alignment_completed = false
   end
 
   on PersonDevelopment::Events::RatingSeedSkipped do |_event|

@@ -351,6 +351,21 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Re-opens a completed alignment, returning the cycle to the `aligning`
+  # phase. Agreed per-cell values are preserved. Issued only by the
+  # assessee's current direct manager while the cycle is still open
+  # (enforced by the controller-side {AssessmentPolicy#reopen_alignment?}).
+  #
+  # @param person_id [String] UUID of the person being assessed
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle being re-opened
+  # @param reopened_by_id [String] UUID of the person re-opening alignment
+  def reopen_alignment(person_id, framework_id, cycle_id, reopened_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.reopen_alignment(cycle_id, reopened_by_id: reopened_by_id)
+    end
+  end
+
   # Seeds the current cycle's ratings from a prior cycle's aligned values.
   #
   # For each (capability, level) where the prior cycle reached an aligned
