@@ -24,7 +24,7 @@ class Assessments::AlignmentReopeningsController < ApplicationController
 
     redirect_to assessment_path(@assignment),
       notice: "Alignment re-opened — agreed ratings are kept; mark complete again when ready."
-  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError, RuntimeError => e
+  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
     Rails.logger.error("[AlignmentReopenings] #{e.class}: #{e.message}")
     redirect_to assessment_path(@assignment), alert: "Could not re-open alignment."
   end
