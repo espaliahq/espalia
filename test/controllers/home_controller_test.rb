@@ -85,6 +85,28 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, 'data-turbo-frame="_top"'
     end
 
+    should "render the evidence-requests card frame for a viewer with a pending incoming request" do
+      ActsAsTenant.with_tenant(@tenant) do
+        asker = create(:person, tenant: @tenant, name: "Asker One")
+        EvidenceRequest.create!(
+          id: SecureRandom.uuid_v7, tenant: @tenant, person_id: asker.id,
+          framework_id: SecureRandom.uuid_v7, requested_by_id: asker.id,
+          requestee_person_id: @person.id, capability_stable_id: SecureRandom.uuid_v7,
+          level_ordinal: 2, status: "pending", requested_at: Time.current
+        )
+      end
+
+      sign_in @user
+      get home_card_path(card: "evidence_requests", key: "default")
+
+      assert_response :success
+      assert_includes response.body, "Evidence requested of you"
+      assert_includes response.body, "Asker One"
+      assert_includes response.body, "Respond"
+      # CTA must break out of the lazy card frame, not navigate within it.
+      assert_includes response.body, 'data-turbo-frame="_top"'
+    end
+
     should "render the cycle-progress card frame for a manager with a report" do
       ActsAsTenant.with_tenant(@tenant) do
         report = create(:person, tenant: @tenant, name: "Report One", manager: @person)

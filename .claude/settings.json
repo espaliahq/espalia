@@ -34,7 +34,10 @@
       "Bash(bin/rails tailwindcss:build)",
       "Bash(coderabbit --version)",
       "Bash(coderabbit auth *)",
-      "Bash(coderabbit review *)"
+      "Bash(coderabbit review *)",
+      "Bash(npx -y gitshot *)",
+      "Bash(npx gitshot *)",
+      "Bash(gitshot *)"
     ]
   },
   "enabledPlugins": {
