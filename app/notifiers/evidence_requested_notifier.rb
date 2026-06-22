@@ -10,11 +10,14 @@ class EvidenceRequestedNotifier < ApplicationNotifier
 
   notification_methods do
     def inbox_title
-      "#{params[:requester_name].presence || "A colleague"} asked you for evidence"
+      base = "#{params[:requester_name].presence || "A colleague"} asked you for feedback"
+      params[:assessee_name].present? ? "#{base} regarding #{params[:assessee_name]}" : base
     end
 
     def inbox_body
-      [ params[:capability_name].presence, params[:message].presence ].compact.join(" — ").presence
+      capability = params[:capability_name].presence
+      lead = "The request is for behavioural evidence#{capability ? " for #{capability}" : ""}"
+      [ lead, params[:message].presence ].compact.join(" — ")
     end
 
     def inbox_url = EvidenceRequest.hub_path(params[:request_id])

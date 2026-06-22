@@ -45,10 +45,20 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
     EvidenceRequestedNotifier.with(
       tenant_id: request.tenant_id,
       requester_name: request.requester&.name,
+      assessee_name: regarding_assessee_name(request),
       capability_name: capability_name(request),
       message: request.message,
       request_id: request.id
     ).deliver(user)
+  end
+
+  # The assessee's name when the request is about someone other than the person
+  # who made it (a manager asking on a report's behalf); nil when asking about
+  # their own assessment, so the title omits a redundant "regarding <self>".
+  def regarding_assessee_name(request)
+    return nil if request.person_id == request.requested_by_id
+
+    request.assessee&.name
   end
 
   def notify_responded(request, event)
