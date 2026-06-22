@@ -19,6 +19,8 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param contribution [Float, nil]
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param focused_level_ordinal [Integer, nil]
+  # @param selected_levels [Hash{String => Integer}] per-capability selected
+  #   level map (`stable_id => ordinal`); this card uses `selected_levels[stable_id]`
   # @param category_id [String, nil]
   # @param frozen [Boolean]
   # @param alignment_locked [Boolean]
@@ -67,6 +69,12 @@ class Views::Assessments::CapabilityCard < Views::Base
     @focused_ordinal =
       selected_levels[@capability.stable_id] ||
       (@is_url_focused ? (focused_level_ordinal || @person_level) : @person_level)
+    # Guard against an ordinal that isn't a real level for this assessment
+    # (stale shared link, hand-edited URL) — fall back to the person's level so
+    # the expansion panel always renders something.
+    unless @merged_levels.any? { |level| level[:ordinal] == @focused_ordinal }
+      @focused_ordinal = @person_level
+    end
     @category_id = category_id
   end
 
