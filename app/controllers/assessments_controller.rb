@@ -56,6 +56,7 @@ class AssessmentsController < ApplicationController
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
         expanded_level_ordinal: focused_level_ordinal_param,
+        selected_levels: selected_levels_param,
         context: context,
         can_start_alignment: policy.start_alignment?,
         can_complete_alignment: policy.complete_alignment?,
@@ -81,6 +82,7 @@ class AssessmentsController < ApplicationController
         active_category_id: active_category_id,
         expanded_capability_id: params[:capability],
         expanded_level_ordinal: focused_level_ordinal_param,
+        selected_levels: selected_levels_param,
         context: context,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
@@ -108,6 +110,7 @@ class AssessmentsController < ApplicationController
       active_category_id: resolve_active_category_id,
       expanded_capability_id: params[:capability],
       expanded_level_ordinal: focused_level_ordinal_param,
+      selected_levels: selected_levels_param,
       viewer_person_id: current_person&.id,
       can_create_evidence: viewer_can_create_evidence?,
         can_request_evidence: viewer_can_request_evidence?,
@@ -371,6 +374,42 @@ class AssessmentsController < ApplicationController
     Integer(raw)
   rescue ArgumentError
     nil
+  end
+
+  # Per-capability selected-level map: `{ capability_stable_id => level_ordinal }`.
+  #
+  # Each capability card's expansion panel renders the level the viewer last
+  # selected for THAT capability, independently — so a selection persists across
+  # scrolling, rating, and broadcast reloads instead of every card snapping back
+  # to the current level (see assessments.md). Parsed from `?levels[<id>]=<n>`.
+  #
+  # The legacy single-focus pair (`?capability=&level_ordinal=`) is folded in so
+  # deep-links, the Continue CTA, and activity-feed navigation still render the
+  # focused card at the requested level. Unknown stable_ids are harmless — each
+  # card looks itself up, so a key matching no capability is simply never read.
+  #
+  # @return [Hash{String => Integer}]
+  def selected_levels_param
+    result = {}
+    # `levels` is a hash with dynamic capability-stable-id keys → permit it as a
+    # whole-hash param (scalar values), then coerce each ordinal to an Integer.
+    raw = params.permit(levels: {}).to_h["levels"]
+    if raw.is_a?(Hash)
+      raw.each do |stable_id, ordinal|
+        next if stable_id.blank?
+
+        ord = Integer(ordinal, exception: false)
+        result[stable_id.to_s] = ord if ord
+      end
+    end
+
+    # The explicit focus pair is the most recent deliberate selection, so it
+    # takes precedence over any map entry for the same capability on a deep-link.
+    if params[:capability].present? && focused_level_ordinal_param
+      result[params[:capability].to_s] = focused_level_ordinal_param
+    end
+
+    result
   end
 
   # Resolves the active category ID from params, defaulting to the first category.

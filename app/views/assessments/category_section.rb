@@ -15,6 +15,8 @@ class Views::Assessments::CategorySection < Views::Base
   # @param aligned_scoring [Hash, nil]
   # @param expanded_capability_id [String, nil]
   # @param focused_level_ordinal [Integer, nil]
+  # @param selected_levels [Hash{String => Integer}] per-capability selected
+  #   level map (`stable_id => ordinal`)
   # @param frozen [Boolean]
   # @param alignment_locked [Boolean]
   # @param viewer_person_id [String, nil]
@@ -26,6 +28,7 @@ class Views::Assessments::CategorySection < Views::Base
                  context: :self, scoring: {}, self_scoring: nil,
                  manager_scoring: nil, aligned_scoring: nil,
                  expanded_capability_id: nil, focused_level_ordinal: nil,
+                 selected_levels: {},
                  frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
@@ -43,6 +46,7 @@ class Views::Assessments::CategorySection < Views::Base
     @aligned_scoring = aligned_scoring
     @expanded_capability_id = expanded_capability_id
     @focused_level_ordinal = focused_level_ordinal
+    @selected_levels = selected_levels
     @frozen = frozen
     @alignment_locked = alignment_locked
     @viewer_person_id = viewer_person_id
@@ -146,6 +150,7 @@ class Views::Assessments::CategorySection < Views::Base
           contribution: contributions[stable_id],
           expanded_capability_id: @expanded_capability_id,
           focused_level_ordinal: @focused_level_ordinal,
+          selected_levels: @selected_levels,
           category_id: @category.category_id,
           frozen: @frozen,
           alignment_locked: @alignment_locked,

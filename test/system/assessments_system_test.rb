@@ -1145,6 +1145,43 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # panel. Cap1 has one level-2 illustration.
       assert_text "Cross-references docs, code, and stakeholder input before proposing solutions"
     end
+
+    should "remember each capability's selected level when another capability's level is selected" do
+      visit assessment_path(@assignment)
+      assert_text "Critical Thinking"
+      wait_for_stimulus "matrix"
+
+      # Baseline: every card auto-focuses the person's level (E2). Cap1's
+      # E2 expectation is shown.
+      assert_text "Synthesises information from multiple sources"
+
+      # Select E1 on cap1 — its expansion now shows the E1 expectation.
+      # JS-dispatched click so the Stimulus action fires reliably on
+      # starved CI (see testing.md — *Flake-Prone Click Guards*).
+      page.execute_script("document.getElementById('cell-#{@cap1_stable}-1').click()")
+      assert_text "Asks clarifying questions to understand problems", wait: 5
+      assert_no_text "Synthesises information from multiple sources"
+
+      # Select E1 on cap3 (a different capability). This reloads the whole
+      # matrix frame — which previously reset every other card back to the
+      # default level. Cap3 now shows its E1 expectation.
+      page.execute_script("document.getElementById('cell-#{@cap3_stable}-1').click()")
+      assert_text "Delivers small tasks reliably", wait: 5
+
+      # Cap1 must STILL show its chosen E1 level — not snap back to E2.
+      assert_text "Asks clarifying questions to understand problems"
+      assert_no_text "Synthesises information from multiple sources"
+
+      # And the per-capability selection is URL-driven, so it survives a
+      # full reload (shareable / broadcast-resilient): cap1 stays E1, cap3
+      # stays E1.
+      page.refresh
+      assert_text "Critical Thinking"
+      wait_for_stimulus "matrix"
+      assert_text "Asks clarifying questions to understand problems"
+      assert_text "Delivers small tasks reliably"
+      assert_no_text "Synthesises information from multiple sources"
+    end
   end
 
   context "manager-rating privacy" do

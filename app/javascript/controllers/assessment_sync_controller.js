@@ -332,6 +332,17 @@ export default class extends BaseController {
         target.searchParams.delete(name)
       }
     }
+    // Carry the per-capability selected-level map (levels[<stable>]=<ord>)
+    // so a broadcast-driven reload keeps every card on the level the viewer
+    // selected — not just the single focused cell. Replace the target's map
+    // wholesale with the browser URL's (the source of truth kept current by
+    // matrix_controller on every chip click).
+    for (const key of [...target.searchParams.keys()]) {
+      if (key.startsWith("levels[")) target.searchParams.delete(key)
+    }
+    for (const [key, value] of browser.searchParams.entries()) {
+      if (key.startsWith("levels[")) target.searchParams.append(key, value)
+    }
     return target.toString()
   }
 
