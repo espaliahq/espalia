@@ -64,6 +64,33 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_match "To Peer", response.body
     end
 
+    should "name the assessee with 'regarding' when a manager asks on a report's behalf" do
+      manager_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person, tenant: @tenant, email: manager_user.email, name: "Boss")
+        create(:tenant_user, tenant: @tenant, user: manager_user, person: manager, role: :member)
+        @report.update!(manager: manager)
+        PersonDevelopment::CommandHandler.new.request_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+          requested_by_id: manager.id, requestee_person_id: @peer.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2, message: "Saw them pair?")
+      end
+      # Incoming (the peer) names who it's regarding…
+      sign_in @peer_user
+      get evidence_hub_path
+      assert_match "Boss asked you for evidence, regarding Rep", response.body
+      # …and the requester's outgoing card does too.
+      sign_in manager_user
+      get evidence_hub_path
+      assert_match "To Peer, regarding Rep", response.body
+    end
+
+    should "omit 'regarding' when the requester asks about their own assessment" do
+      make_request! # requested_by == assessee (@report)
+      sign_in @peer_user
+      get evidence_hub_path
+      assert_no_match(/regarding/, response.body)
+    end
+
     should "embed the provided evidence on a responded outgoing request" do
       id = make_request!
       ActsAsTenant.with_tenant(@tenant) do
