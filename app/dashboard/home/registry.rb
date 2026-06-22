@@ -9,6 +9,7 @@
 module Home::Registry
   CARDS = [
     Home::AwaitingYouCard,
+    Home::EvidenceRequestsCard,
     Home::CycleProgressCard,
     Home::AssessmentProgressCard,
     Home::RecentActivityCard

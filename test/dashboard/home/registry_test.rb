@@ -12,6 +12,16 @@ class Home::RegistryTest < ActiveSupport::TestCase
 
   teardown { ActsAsTenant.current_tenant = nil }
 
+  # Create a pending evidence request row directly (no factory exists).
+  def pending_request!(requestee: @person, requester: @person, assessee: @person)
+    EvidenceRequest.create!(
+      id: SecureRandom.uuid_v7, tenant: @tenant, person_id: assessee.id,
+      framework_id: SecureRandom.uuid_v7, requested_by_id: requester.id,
+      requestee_person_id: requestee.id, capability_stable_id: SecureRandom.uuid_v7,
+      level_ordinal: 2, status: "pending", requested_at: Time.current
+    )
+  end
+
   context ".find" do
     should "resolve a card class by key and return nil for unknown" do
       assert_equal Home::AssessmentProgressCard, Home::Registry.find("assessment_progress")
@@ -99,6 +109,33 @@ class Home::RegistryTest < ActiveSupport::TestCase
       admin_ctx = AuthorizationContext.new(user: admin_tu.user, tenant_user: admin_tu, person: nil)
 
       assert Home::CycleProgressCard.audience?(admin_ctx)
+    end
+  end
+
+  context "evidence-requests card" do
+    should "be hidden when no one has asked the viewer for evidence" do
+      assert_not Home::EvidenceRequestsCard.audience?(@context)
+      assert_empty Home::EvidenceRequestsCard.instances(@context)
+    end
+
+    should "surface a single instance for a viewer with a pending incoming request" do
+      asker = create(:person, tenant: @tenant, name: "Asker")
+      pending_request!(requestee: @person, requester: asker, assessee: asker)
+
+      assert Home::EvidenceRequestsCard.audience?(@context)
+      instances = Home::EvidenceRequestsCard.instances(@context)
+      assert_equal [ "evidence_requests" ], instances.map(&:card_key)
+    end
+
+    should "ignore non-pending and outgoing requests" do
+      # Outgoing (viewer is the requester, someone else the requestee).
+      other = create(:person, tenant: @tenant, name: "Other")
+      pending_request!(requestee: other, requester: @person, assessee: @person)
+      # Incoming but already answered.
+      answered = pending_request!(requestee: @person, requester: other, assessee: other)
+      answered.update!(status: "responded")
+
+      assert_not Home::EvidenceRequestsCard.audience?(@context)
     end
   end
 

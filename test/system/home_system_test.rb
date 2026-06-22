@@ -41,6 +41,27 @@ class HomeSystemTest < ApplicationSystemTestCase
       assert_text "added evidence to"
       assert_text "Critical Thinking"
     end
+
+    should "surface the evidence-requests card when a colleague has asked the viewer for evidence" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # sign_in_as already auto-created the viewer's Person (by email); reuse it.
+        me = Person.find_or_create_by!(tenant: @tenant, email: @user.email) { |p| p.name = "Me" }
+        asker = FactoryBot.create(:person, tenant: @tenant, name: "Casey Asker")
+        EvidenceRequest.create!(
+          id: SecureRandom.uuid_v7, tenant: @tenant, person_id: asker.id,
+          framework_id: SecureRandom.uuid_v7, requested_by_id: asker.id,
+          requestee_person_id: me.id, capability_stable_id: SecureRandom.uuid_v7,
+          level_ordinal: 2, status: "pending", requested_at: Time.current
+        )
+      end
+
+      visit root_path
+
+      # The card lazy-loads its content; assert_text waits for the frame fetch.
+      assert_text "Evidence requested of you"
+      assert_text "Casey Asker"
+      assert_link "Respond →"
+    end
   end
 
   context "page layout shell on /frameworks" do
