@@ -391,8 +391,9 @@ class AssessmentsController < ApplicationController
   # @return [Hash{String => Integer}]
   def selected_levels_param
     result = {}
-    raw = params[:levels]
-    raw = raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
+    # `levels` is a hash with dynamic capability-stable-id keys → permit it as a
+    # whole-hash param (scalar values), then coerce each ordinal to an Integer.
+    raw = params.permit(levels: {}).to_h["levels"]
     if raw.is_a?(Hash)
       raw.each do |stable_id, ordinal|
         next if stable_id.blank?
@@ -402,8 +403,10 @@ class AssessmentsController < ApplicationController
       end
     end
 
+    # The explicit focus pair is the most recent deliberate selection, so it
+    # takes precedence over any map entry for the same capability on a deep-link.
     if params[:capability].present? && focused_level_ordinal_param
-      result[params[:capability].to_s] ||= focused_level_ordinal_param
+      result[params[:capability].to_s] = focused_level_ordinal_param
     end
 
     result
