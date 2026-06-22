@@ -38,8 +38,21 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
 
     notifications = @peer_user.notifications.reload
     assert_equal 1, notifications.size
-    assert_match "Alex asked you for evidence", notifications.first.inbox_title
+    # Assessee asked about their own assessment — no redundant "regarding".
+    assert_equal "Alex asked you for feedback", notifications.first.inbox_title
+    assert_match "The request is for behavioural evidence", notifications.first.inbox_body
     assert_equal "/evidence#evidence-request-#{request_id}", notifications.first.inbox_url
+  end
+
+  should "name the assessee with 'regarding' when a manager asks on a report's behalf" do
+    manager = create(:person, tenant: @tenant, name: "Morgan")
+    create(:tenant_user, tenant: @tenant, user: create(:user), person: manager, role: :member)
+    perform_enqueued_jobs do
+      @handler.request_evidence(@assessee.id, @framework_id, SecureRandom.uuid_v7,
+        requested_by_id: manager.id, requestee_person_id: @peer.id,
+        capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, message: "Pairing notes?")
+    end
+    assert_equal "Morgan asked you for feedback regarding Alex", @peer_user.notifications.reload.last.inbox_title
   end
 
   should "notify the requester when the request is responded to" do

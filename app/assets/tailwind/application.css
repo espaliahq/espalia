@@ -24,6 +24,20 @@
 }
 
 /*
+ * Let native date/time controls (and their calendar-picker glyph) follow the
+ * active colour scheme. Without this the WebKit picker indicator is dark and
+ * disappears against our dark-mode field backgrounds. `light dark` lets the
+ * browser render the control for whichever scheme prefers-color-scheme reports.
+ */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: light dark;
+}
+
+/*
  * Global keyboard focus indicator (WCAG 2.4.7 Focus Visible / 2.4.13
  * Focus Appearance). Tailwind Preflight resets the UA outline, leaving
  * many interactive elements with only the browser default. This restores

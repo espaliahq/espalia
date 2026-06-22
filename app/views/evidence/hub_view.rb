@@ -79,7 +79,7 @@ class Views::Evidence::HubView < Views::Base
   def incoming_card(request)
     card(dom_id: request.dom_id) do
       div(class: "text-sm text-gray-900 dark:text-white") do
-        plain "#{request.requester&.name || "A colleague"} asked you for evidence"
+        plain "#{request.requester&.name || "A colleague"} asked you for evidence#{regarding_suffix(request)}"
       end
       request_cell_line(request)
       message_line(request)
@@ -92,7 +92,7 @@ class Views::Evidence::HubView < Views::Base
   def outgoing_card(request)
     card(dom_id: request.dom_id) do
       div(class: "flex items-center justify-between gap-3") do
-        span(class: "text-sm text-gray-900 dark:text-white") { "To #{request.requestee&.name || "a colleague"}" }
+        span(class: "text-sm text-gray-900 dark:text-white") { "To #{request.requestee&.name || "a colleague"}#{regarding_suffix(request)}" }
         render Components::Kit::Badge.new(request.status.capitalize, variant: STATUS_VARIANT.fetch(request.status, :default))
       end
       request_cell_line(request)
@@ -212,6 +212,16 @@ class Views::Evidence::HubView < Views::Base
       p(class: "text-sm font-medium text-gray-900 dark:text-white") { detail[:name] || "Capability" }
       p(class: "text-xs text-gray-600 dark:text-gray-300") { request_scope_label(request, detail) }
     end
+  end
+
+  # ", regarding <assessee>" when the request is about someone other than the
+  # person who made it (a manager asking on a report's behalf); blank when the
+  # requester is asking about their own assessment.
+  def regarding_suffix(request)
+    return "" if request.person_id == request.requested_by_id
+
+    name = request.assessee&.name
+    name.present? ? ", regarding #{name}" : ""
   end
 
   def request_scope_label(request, detail)
