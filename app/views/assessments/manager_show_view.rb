@@ -11,6 +11,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  selected_levels: {},
                  context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
+                 can_reopen_alignment: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
@@ -29,6 +30,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @context = context
     @can_start_alignment = can_start_alignment
     @can_complete_alignment = can_complete_alignment
+    @can_reopen_alignment = can_reopen_alignment
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
     @can_request_evidence = can_request_evidence
@@ -120,6 +122,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           delegates_button if @can_manage_delegates
           mark_complete_button if @can_complete_alignment
           start_alignment_button if @can_start_alignment
+          reopen_alignment_button if @can_reopen_alignment
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
@@ -162,6 +165,26 @@ class Views::Assessments::ManagerShowView < Views::Base
                "bg-green-600 dark:bg-green-700 text-white " \
                "hover:bg-green-700 dark:hover:bg-green-600 cursor-pointer"
       ) { "Mark alignment complete" }
+    end
+  end
+
+  def reopen_alignment_button
+    confirm_msg = "Re-open alignment for this cycle? Self and manager ratings stay locked and the " \
+      "agreed values are kept — you can adjust them and mark complete again."
+    form(
+      action: assessment_alignment_reopening_path(@assignment),
+      method: "post",
+      data: { turbo_confirm: confirm_msg },
+      class: "inline"
+    ) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      button(
+        type: "submit",
+        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 " \
+               "dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
+               "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 " \
+               "cursor-pointer"
+      ) { "Re-open alignment" }
     end
   end
 

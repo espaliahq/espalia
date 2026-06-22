@@ -147,6 +147,7 @@ Rails.application.routes.draw do
     resources :alignment_ratings, only: [ :create ], controller: "assessments/alignment_ratings"
     resource :alignment_start, only: [ :create ], controller: "assessments/alignment_starts"
     resource :alignment_completion, only: [ :create ], controller: "assessments/alignment_completions"
+    resource :alignment_reopening, only: [ :create ], controller: "assessments/alignment_reopenings"
     resources :delegations, only: [ :create, :destroy ], controller: "assessments/delegations"
     resources :evidence, only: [ :create, :update, :destroy ], controller: "assessments/evidence" do
       collection do

@@ -264,6 +264,35 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "manager re-opens a completed alignment" do
+    setup { seed_alignment_completed! }
+
+    should "re-open a completed alignment back to Aligning, preserving agreed values" do
+      visit assessment_path(@report_assignment)
+      assert_text "Aligned"
+      assert_button "Re-open alignment"
+
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Re-open alignment");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
+      end
+
+      assert_text "Aligning"
+      assert_no_button "Re-open alignment"
+      assert_button "Mark alignment complete"
+
+      # The agreed value recorded before completion survives the re-open.
+      ActsAsTenant.with_tenant(@tenant) do
+        cell = AssessmentLevelRating.find_by(cycle_id: @cycle_id, person_id: @report.id,
+          capability_stable_id: @cap_stable, level_ordinal: 2)
+        assert_equal "consistent", cell.aligned_frequency
+      end
+    end
+  end
+
   private
 
   # Server-side seed: opens alignment for the cycle (sets participant to `aligning`).
@@ -274,6 +303,19 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       PersonDevelopment::CommandHandler.new.start_alignment(
         @report.id, @framework_id, @cycle_id, started_by_id: @manager.id
       )
+    end
+  end
+
+  # Server-side seed: opens AND completes alignment (participant `aligned`).
+  # Used by the re-open flow, which starts from a completed cycle.
+  def seed_alignment_completed!
+    ActsAsTenant.with_tenant(@tenant) do
+      handler = PersonDevelopment::CommandHandler.new
+      handler.start_alignment(@report.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      handler.align_assessment(@report.id, @framework_id, @cap_stable,
+        level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
+        aligned_by_id: @manager.id)
+      handler.complete_alignment(@report.id, @framework_id, @cycle_id, completed_by_id: @manager.id)
     end
   end
 end
