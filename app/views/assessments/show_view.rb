@@ -14,6 +14,9 @@ class Views::Assessments::ShowView < Views::Base
   # @param matrix_data [Hash] output from Assessments::MatrixDataBuilder
   # @param active_category_id [String, nil] highlighted category chip
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param selected_levels [Hash{String => Integer}] per-capability selected
+  #   level map (`stable_id => ordinal`) — each card renders its own selected
+  #   level (see assessments.md)
   # @param viewer_person_id [String, nil] threaded into the evidence section
   # @param can_create_evidence [Boolean] whether to render the "+ Add evidence" affordance
   # @param can_relink_others_evidence [Boolean] whether the viewer may manage

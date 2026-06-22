@@ -15,6 +15,8 @@ class Views::Assessments::CategorySection < Views::Base
   # @param aligned_scoring [Hash, nil]
   # @param expanded_capability_id [String, nil]
   # @param focused_level_ordinal [Integer, nil]
+  # @param selected_levels [Hash{String => Integer}] per-capability selected
+  #   level map (`stable_id => ordinal`)
   # @param frozen [Boolean]
   # @param alignment_locked [Boolean]
   # @param viewer_person_id [String, nil]

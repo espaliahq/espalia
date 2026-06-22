@@ -10,6 +10,8 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param active_category_id [String, nil] active tab category ID
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
+  # @param selected_levels [Hash{String => Integer}] per-capability selected
+  #   level map (`stable_id => ordinal`)
   def initialize(framework:, matrix_data:, assignment:, context: :self,
                  active_category_id: nil, expanded_capability_id: nil,
                  expanded_level_ordinal: nil, selected_levels: {},

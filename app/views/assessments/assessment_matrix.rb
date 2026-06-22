@@ -14,6 +14,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param expanded_level_ordinal [Integer, nil] level ordinal pre-focused
+  # @param selected_levels [Hash{String => Integer}] per-capability selected
+  #   level map (`stable_id => ordinal`)
   # @param viewer_person_id [String, nil] threaded into the evidence section
   # @param can_create_evidence [Boolean]
   # @param can_relink_others_evidence [Boolean]
