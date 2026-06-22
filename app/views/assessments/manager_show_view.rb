@@ -175,7 +175,10 @@ class Views::Assessments::ManagerShowView < Views::Base
       action: assessment_alignment_reopening_path(@assignment),
       method: "post",
       data: { turbo_confirm: confirm_msg },
-      class: "inline"
+      # Desktop-only, matching mark_complete_button: re-open pairs with
+      # re-completion, so both finalizing actions live at the same breakpoint
+      # (a mobile re-open with no mobile re-complete would strand the manager).
+      class: "hidden md:inline-block"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       button(
