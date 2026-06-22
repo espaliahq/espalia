@@ -653,9 +653,18 @@ export default class extends BaseController {
     let url
     try { url = new URL(currentSrc, window.location.origin) } catch { return }
 
+    // `capability` + `level_ordinal` drive the single focused cell (ring +
+    // activity narrowing). `levels[<stable>]=<ord>` is the *per-capability*
+    // selected-level map the server renders each card's expansion from — it
+    // ACCUMULATES (one entry per capability the user picks a level on), so
+    // picking a level on one capability never resets another, and the
+    // selection survives scrolling / rating / broadcast reloads. The scroll
+    // picker only ever clears `capability`/`level_ordinal`, never the map.
+    const levelKey = stableId ? `levels[${stableId}]` : null
     if (stableId) {
       url.searchParams.set("capability", stableId)
       url.searchParams.set("level_ordinal", ordinal.toString())
+      url.searchParams.set(levelKey, ordinal.toString())
     } else {
       url.searchParams.delete("capability")
       url.searchParams.delete("level_ordinal")
@@ -668,6 +677,7 @@ export default class extends BaseController {
     if (stableId) {
       browserUrl.searchParams.set("capability", stableId)
       browserUrl.searchParams.set("level_ordinal", ordinal.toString())
+      browserUrl.searchParams.set(levelKey, ordinal.toString())
     } else {
       browserUrl.searchParams.delete("capability")
       browserUrl.searchParams.delete("level_ordinal")

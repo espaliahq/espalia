@@ -31,6 +31,7 @@ class Views::Assessments::CapabilityCard < Views::Base
                  context: :self, category: nil, scoring: {},
                  blocked: false, block_reason: nil, contribution: nil,
                  expanded_capability_id: nil, focused_level_ordinal: nil,
+                 selected_levels: {},
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
@@ -58,9 +59,14 @@ class Views::Assessments::CapabilityCard < Views::Base
     @viewer_is_tenant_admin = viewer_is_tenant_admin
 
     @is_url_focused = expanded_capability_id == @capability.stable_id
-    # Every card auto-focuses the person's current level by default. When
-    # the URL specifies a different level for this capability, honour that.
-    @focused_ordinal = @is_url_focused ? (focused_level_ordinal || @person_level) : @person_level
+    # Each card renders the level the viewer last selected for THIS capability,
+    # independently per capability — so a selection persists across scrolling,
+    # rating, and broadcast reloads (`selected_levels` is the `levels[<id>]=<n>`
+    # map). Falls back to the legacy single-focus pair (deep-links / Continue
+    # CTA), then to the person's current level.
+    @focused_ordinal =
+      selected_levels[@capability.stable_id] ||
+      (@is_url_focused ? (focused_level_ordinal || @person_level) : @person_level)
     @category_id = category_id
   end
 

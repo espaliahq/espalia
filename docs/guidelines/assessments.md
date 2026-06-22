@@ -47,16 +47,17 @@ The matrix Turbo Frame still exists and still carries `id="assessment-matrix"`, 
 Active category, focused capability, and focused level ordinal are encoded as query params for shareability:
 
 ```text
-Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>&level_ordinal=<n>
-Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>&level_ordinal=<n>
+Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>&level_ordinal=<n>&levels[<stable_id>]=<n>…
+Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>&level_ordinal=<n>&levels[<stable_id>]=<n>…
 Activity:     /assessments/:id/activity?capability=<stable_id>&level_ordinal=<n>
 ```
 
 - `category` absent → server defaults to the first category for highlighting in the chip bar; all categories still render in the document.
 - `capability` is the capability's **stable_id** (cross-version UUID), never the per-version `capability_id`.
 - `level_ordinal` only honoured when `capability` is also present.
-- Every capability card auto-focuses the person's current level on render (the expansion panel is always visible for `@person_level`). When the URL specifies `?capability=` + `?level_ordinal=`, that overrides — the named card's expansion panel renders for the requested level instead.
-- `matrix_controller#syncFocusToUrl` writes `capability` and `level_ordinal` together in **one** `history.pushState` per focus change, so Back/Forward maps 1:1 to visible focus changes.
+- **`levels[<stable_id>]=<ordinal>` is the per-capability selected-level map** — the **rendering** axis, distinct from the single-cell **focus** axis (`capability`/`level_ordinal`). Each capability card's expansion panel renders the level the viewer last selected for THAT capability; the map **accumulates** one entry per capability the user picks a level on. This is what makes a level selection persist *independently per capability* across scrolling, rating, and live broadcast reloads — selecting a level on one capability never resets another (the old single-slot model did). `AssessmentsController#selected_levels_param` parses it (and folds in the legacy single `capability`/`level_ordinal` pair, so deep-links / the Continue CTA / activity-feed navigation still render the focused card at the requested level); `CapabilityCard` resolves its displayed ordinal as `selected_levels[stable_id] || person_level`. **The scroll-driven capability picker only ever touches `capability`/`level_ordinal`, never the map** — so scrolling can't disturb a rendered level. The map is threaded into the matrix frame `src` (`matrix_frame_params`) and re-merged onto the `src` on every broadcast reload (`assessment_sync_controller#mergeFocusParams`, alongside `capability`/`level_ordinal`), so a rating/alignment broadcast keeps every card on its selected level. URL length grows only with explicitly-changed capabilities (default-level cards aren't in the map).
+- Every capability card auto-focuses the person's current level on render (the expansion panel is always visible for `@person_level`). A `levels[<stable_id>]` entry (or, for back-compat, the focused `?capability=` + `?level_ordinal=` pair folded into the map) overrides — the card's expansion panel renders for the selected level instead.
+- `matrix_controller#syncFocusToUrl` writes `capability` and `level_ordinal` together in **one** `history.pushState` per focus change, so Back/Forward maps 1:1 to visible focus changes. `matrix_controller#reloadMatrixWithFocus` additionally merges `levels[<stable_id>]=<ordinal>` into both the frame `src` and the browser URL on every chip click (accumulating), so the per-capability map stays current for reloads and sharing.
 - Category chip clicks update the URL with `?category=` and dispatch a `matrix:focus-changed` event at category level so the activity feed narrows.
 
 ## Hero Summary — three bands
@@ -230,7 +231,7 @@ Structure: `card_header` (eyebrow + name + signed delta + add-evidence) + `Level
 
 ### Auto-focus on the person's level
 
-Every card auto-focuses the person's current level on first render — the expansion panel is *always* visible for `@person_level`. When `?capability=` + `?level_ordinal=` are present in the URL, the named card uses that level instead. There is no longer a "default" state with the strip but no panel.
+Every card auto-focuses the person's current level on first render — the expansion panel is *always* visible for `@person_level`. The viewer overrides a card's level by clicking a chip; that selection is remembered **per capability** in the `levels[<stable_id>]` URL map (see *URL-driven state*), so `CapabilityCard` resolves its displayed level as `selected_levels[stable_id] || @person_level`. Selections are independent and persistent across scrolling / rating / reloads — picking a level on one card never resets another. There is no longer a "default" state with the strip but no panel.
 
 There is no `×` close button. The previous design had one to drop back to "no level focused"; with auto-focus there's nothing meaningful to close *to*. Re-focusing means clicking a different level chip — handled by `matrix_controller#focusChip`, which sets the URL and reloads the matrix frame.
 
@@ -551,13 +552,13 @@ ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
 
 **The rater's own broadcast echo is suppressed.** `assessment_sync_controller#listenForOwnSubmits` arms a 5-second `_suppressReloadUntil` window on the EARLIEST signal of a user-initiated form submit — `pointerdown` / `mousedown` / `click` (capture phase) against any real submit control (`button[type='submit']`, default-type `<button>` inside a form, `input[type='submit']`), plus `turbo:submit-start` as a backstop for programmatic submits. The MutationObserver bails when within the window so the rater's own broadcast doesn't trigger a redundant frame reload (flicker + scroll reset).
 
-**Focus-param merge on reload.** `#mergeFocusParams` reads `?capability=` + `?level_ordinal=` from the BROWSER URL and stamps them onto the matrix frame's `src` before reload, so focus survives broadcast-driven frame reloads.
+**Focus-param merge on reload.** `#mergeFocusParams` reads `?capability=` + `?level_ordinal=` **and the whole `levels[<stable_id>]` map** from the BROWSER URL and stamps them onto the matrix frame's `src` before reload, so both the focused cell AND every card's per-capability selected level survive broadcast-driven frame reloads (the map is replaced wholesale from the browser URL, the source of truth kept current by `matrix_controller` on every chip click).
 
 ## Stimulus controllers
 
 | Controller | Responsibility |
 |---|---|
-| `matrix_controller.js` | Chip-click focus, card-header click focus (capability), scroll-driven capability focus via IntersectionObserver, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=`), URL-first focus restoration on connect, `data-focused` stamping on cards, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
+| `matrix_controller.js` | Chip-click focus, card-header click focus (capability), scroll-driven capability focus via IntersectionObserver, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=` for focus; accumulating `levels[<stable_id>]` map for per-capability rendered level), URL-first focus restoration on connect, `data-focused` stamping on cards, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
 | `category_nav_controller.js` | Publishes `--sticky-header-h` via `getBoundingClientRect().height` + `Math.ceil` + `ResizeObserver`. Smooth-scrolls to category sections on chip click. Updates the active chip on scroll (suppressed for 900ms after a chip click — see *Category navigation*). |
 | `assessment_sync_controller.js` | ActionCable sync, self-submit suppression window, dual-frame reload, focus-param merge before reload. |
 | `frequency_selector_controller.js` | Optimistic UI on rating button click. Form action lives in the view, not the controller. |
@@ -694,6 +695,10 @@ Both live on `.assessment-scroll-root` (the `assessment-sync` wrapper in `show_v
 ### 17. Toggling Tailwind `hidden` on an element that already has a `display` utility doesn't hide it
 
 The request modal hides a suggestion chip once it's been added to the recipient list. The first cut toggled the `hidden` class — and the chip stayed visible. Cause: the chip carries `inline-flex` (a `display` utility), and `.hidden { display:none }` ties it on specificity (both single-class selectors), so **source order decides** — Tailwind emits `inline-flex` after `hidden`, so `inline-flex` wins and `.hidden` is a no-op. The class *is* present in the DOM (so a `classList.contains("hidden")` check misleads you into thinking it worked); it just has no visual effect. Fix: toggle an **inline** `el.style.display = "none" / ""` (inline style beats any class), or render the element without a competing display utility. See `request_evidence_controller.js#toggleSuggestion`. The general rule: never rely on `hidden` to override another `display-*` utility on the *same* element — gate visibility from a parent, or use inline style.
+
+### 18. Per-card selected level needs its own *rendering* axis, separate from the single *focus* axis
+
+The selected level a card's expansion shows was originally carried by the **same** `?capability=` + `?level_ordinal=` pair that drives cell focus (ring + activity narrowing). Because that pair holds exactly ONE capability, only one card could ever show a non-default level: selecting a level on a second capability reloaded the whole matrix frame and re-rendered every other card at `@person_level` (the URL named only the new one), and the scroll-driven picker — which rewrites that pair as you scroll — *dropped* `level_ordinal` entirely, so the selection silently vanished on the next broadcast reload. The two concerns look identical (both are "a capability + a level") but have different cardinalities: **focus is singular and transient; rendered level is plural and sticky.** Conflating them caps persistence at one card and couples it to scroll. The fix is a second, additive URL axis — `levels[<stable_id>]=<ordinal>`, an accumulating map the server renders each card from (`selected_levels[stable_id] || person_level`) and that the scroll picker never touches. Lesson: when one piece of UI state is per-entity-and-sticky and another is one-at-a-time-and-transient, give them separate URL params even if each value is "a capability and a level" — don't overload one slot for both.
 
 ## Performance state machine
 

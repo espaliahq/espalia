@@ -21,7 +21,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param viewer_is_tenant_admin [Boolean]
   def initialize(matrix_data:, assessment_id:, context: :self,
                  expanded_capability_id: nil,
-                 expanded_level_ordinal: nil,
+                 expanded_level_ordinal: nil, selected_levels: {},
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
@@ -31,6 +31,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @context = context
     @expanded_capability_id = expanded_capability_id
     @expanded_level_ordinal = expanded_level_ordinal
+    @selected_levels = selected_levels
     @frozen = matrix_data[:individual_ratings_frozen] || false
     @alignment_locked = matrix_data[:alignment_locked] || false
     @viewer_person_id = viewer_person_id
@@ -65,6 +66,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
             aligned_scoring: @matrix_data[:aligned_scoring],
             expanded_capability_id: @expanded_capability_id,
             focused_level_ordinal: @expanded_level_ordinal,
+            selected_levels: @selected_levels,
             frozen: @frozen,
             alignment_locked: @alignment_locked,
             viewer_person_id: @viewer_person_id,
