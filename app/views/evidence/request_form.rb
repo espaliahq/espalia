@@ -118,6 +118,8 @@ class Views::Evidence::RequestForm < Views::Base
                placeholder: "What you'd like them to speak to…", class: INPUT)
       div(class: "mt-3") do
         label(for: "evr-due", class: LABEL) { "Due (optional)" }
+        # color-scheme is set globally on date inputs (application.css) so the
+        # native calendar glyph adapts to the active scheme — see that rule.
         input(type: "date", id: "evr-due", name: "evidence_request[due_at]", class: INPUT)
       end
     end
