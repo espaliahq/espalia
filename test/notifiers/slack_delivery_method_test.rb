@@ -55,6 +55,18 @@ class SlackDeliveryMethodTest < ActiveSupport::TestCase
     assert_equal "U123", @membership.reload.slack_user_id
   end
 
+  should "build the Open-in-GrowthOS button from the configured host, not a placeholder" do
+    fake = nil
+    Rails.application.config.action_mailer.stub(:default_url_options, { host: "growthos.work", protocol: "https" }) do
+      fake = deliver_with_fake_slack
+    end
+    blocks = fake.posted.first[:blocks]
+    button = blocks.flat_map { |b| b[:elements].to_a }.find { |e| e[:type] == "button" }
+    assert_not_nil button, "expected an Open-in-GrowthOS button"
+    assert_includes button[:url], "growthos.work"
+    assert_not_includes button[:url], "example.com"
+  end
+
   should "skip delivery when the tenant has no Slack connection" do
     @tenant.disconnect_slack!
     fake = deliver_with_fake_slack
