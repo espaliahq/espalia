@@ -119,7 +119,8 @@ class Assessments::ActivityFeedQuery
   # @return [Array<Entry>] reverse-chronological entries the viewer may see
   def call
     entries = rating_entries + relink_entries + link_entries + evidence_entries +
-              alignment_entries + comment_entries + migration_entries + authority_entries
+              alignment_entries + reopen_entries + comment_entries + migration_entries +
+              authority_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -386,6 +387,28 @@ class Assessments::ActivityFeedQuery
         end
         out
       end
+  end
+
+  # One entry per `AlignmentReopened` event on this person's stream.
+  # Sourced from the stream (not the progress row) because a re-open
+  # clears the completion timestamps the progress-derived alignment
+  # entries read — only the immutable event records that it happened.
+  # An alignment milestone, so visible to both parties like
+  # started/completed.
+  def reopen_entries
+    stream_events.filter_map do |event|
+      next unless event.is_a?(PersonDevelopment::Events::AlignmentReopened)
+
+      data = event.data.with_indifferent_access
+      Entry.new(
+        id: "alignment_reopened:#{event.event_id}",
+        kind: "alignment_reopened",
+        occurred_at: event_timestamp(event),
+        payload: { cycle_id: data[:cycle_id],
+                   reopened_by_id: data[:reopened_by_id] }.with_indifferent_access,
+        cycle_id: data[:cycle_id]
+      )
+    end
   end
 
   # Expands every `FrameworkVersionMigrated` event on this person's
