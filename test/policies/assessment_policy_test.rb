@@ -219,6 +219,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert_not AssessmentPolicy.new(assessee_context, @assignment).complete_alignment?
     end
 
+    should "deny reopen_alignment (not yet completed)" do
+      assert_not AssessmentPolicy.new(manager_context, @assignment).reopen_alignment?
+    end
+
     should "allow view_alignment for both parties" do
       assert AssessmentPolicy.new(manager_context, @assignment).view_alignment?
       assert AssessmentPolicy.new(assessee_context, @assignment).view_alignment?
@@ -258,6 +262,14 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
 
     should "deny complete_alignment (already completed)" do
       assert_not AssessmentPolicy.new(manager_context, @assignment).complete_alignment?
+    end
+
+    should "allow manager to reopen alignment" do
+      assert AssessmentPolicy.new(manager_context, @assignment).reopen_alignment?
+    end
+
+    should "deny assessee from reopening alignment" do
+      assert_not AssessmentPolicy.new(assessee_context, @assignment).reopen_alignment?
     end
   end
 

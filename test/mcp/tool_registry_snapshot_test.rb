@@ -410,6 +410,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_reopen_alignment",
+        "description" =>
+          "Re-open a completed alignment so the manager can correct it; agreed values are preserved.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" }
+          },
+          "required" => %w[assignment_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_request_evidence",
         "description" => "Ask a colleague to provide evidence for a capability × level on an assessment.",
         "inputSchema" => {
