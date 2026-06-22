@@ -919,6 +919,123 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#reopen_alignment" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(@cycle_id, 1)
+      @aggregate.start_alignment(@cycle_id, started_by_id: SecureRandom.uuid_v7)
+      @cap_sid = SecureRandom.uuid_v7
+      @aggregate.align_assessment(@cap_sid, level_ordinal: 2,
+        aligned_frequency: "consistent", cycle_id: @cycle_id)
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: SecureRandom.uuid_v7)
+      @reopened_by_id = SecureRandom.uuid_v7
+    end
+
+    should "apply AlignmentReopened event with cycle_id and reopened_by_id" do
+      @aggregate.reopen_alignment(@cycle_id, reopened_by_id: @reopened_by_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::AlignmentReopened, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+      assert_equal @reopened_by_id, event.data[:reopened_by_id]
+    end
+
+    should "lift the completion freeze so align_assessment is permitted again" do
+      @aggregate.reopen_alignment(@cycle_id, reopened_by_id: @reopened_by_id)
+
+      assert_nothing_raised do
+        @aggregate.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1,
+          aligned_frequency: "some", cycle_id: @cycle_id)
+      end
+    end
+
+    should "preserve previously agreed values (no clearing)" do
+      @aggregate.reopen_alignment(@cycle_id, reopened_by_id: @reopened_by_id)
+
+      aligned = @aggregate.instance_variable_get(:@aligned_ratings)
+      assert_equal "consistent", aligned[[ @cap_sid, 2 ]]
+    end
+
+    should "allow re-completion after re-opening" do
+      @aggregate.reopen_alignment(@cycle_id, reopened_by_id: @reopened_by_id)
+
+      assert_nothing_raised do
+        @aggregate.complete_alignment(@cycle_id, completed_by_id: SecureRandom.uuid_v7)
+      end
+      assert_kind_of PersonDevelopment::Events::FullAlignmentCompleted,
+        @aggregate.unpublished_events.to_a.last
+    end
+
+    should "raise if alignment is not completed (still aligning)" do
+      aggregate = PersonDevelopment::Aggregate.new
+      aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      cycle_id = SecureRandom.uuid_v7
+      aggregate.join_cycle(cycle_id, 1)
+      aggregate.start_alignment(cycle_id, started_by_id: SecureRandom.uuid_v7)
+
+      err = assert_raises(RuntimeError) do
+        aggregate.reopen_alignment(cycle_id, reopened_by_id: @reopened_by_id)
+      end
+      assert_match(/not completed/, err.message)
+    end
+
+    should "raise if alignment has not been started" do
+      aggregate = PersonDevelopment::Aggregate.new
+      aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      cycle_id = SecureRandom.uuid_v7
+      aggregate.join_cycle(cycle_id, 1)
+
+      err = assert_raises(RuntimeError) do
+        aggregate.reopen_alignment(cycle_id, reopened_by_id: @reopened_by_id)
+      end
+      assert_match(/has not been started/, err.message)
+    end
+
+    should "raise when the cycle_id does not match the current cycle" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.reopen_alignment(SecureRandom.uuid_v7, reopened_by_id: @reopened_by_id)
+      end
+      assert_match(/cycle/i, err.message)
+    end
+
+    should "reconstruct the re-opened (un-completed) state on replay" do
+      stream = [
+        PersonDevelopment::Events::PersonAssignedToFramework.new(data: {
+          person_id: @person_id, framework_id: @framework_id,
+          role_id: @role_id, level_id: @level_id
+        }),
+        PersonDevelopment::Events::JoinedAssessmentCycle.new(data: {
+          cycle_id: @cycle_id, framework_version: 1
+        }),
+        PersonDevelopment::Events::AlignmentStarted.new(data: {
+          cycle_id: @cycle_id, started_by_id: SecureRandom.uuid_v7
+        }),
+        PersonDevelopment::Events::AssessmentAligned.new(data: {
+          capability_stable_id: @cap_sid, level_ordinal: 2,
+          aligned_frequency: "consistent", cycle_id: @cycle_id, comment: nil,
+          aligned_by_id: SecureRandom.uuid_v7
+        }),
+        PersonDevelopment::Events::FullAlignmentCompleted.new(data: {
+          cycle_id: @cycle_id, completed_by_id: SecureRandom.uuid_v7, framework_version: 1
+        }),
+        PersonDevelopment::Events::AlignmentReopened.new(data: {
+          cycle_id: @cycle_id, reopened_by_id: @reopened_by_id
+        })
+      ]
+      replayed = PersonDevelopment::Aggregate.new
+      stream.each { |event| replayed.apply(event) }
+
+      # Completion freeze lifted, agreed value preserved.
+      assert_equal "consistent",
+        replayed.instance_variable_get(:@aligned_ratings)[[ @cap_sid, 2 ]]
+      assert_nothing_raised do
+        replayed.align_assessment(SecureRandom.uuid_v7, level_ordinal: 1,
+          aligned_frequency: "some", cycle_id: @cycle_id)
+      end
+    end
+  end
+
   # ── Evidence ──
 
   context "#record_evidence" do

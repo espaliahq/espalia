@@ -317,6 +317,43 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#reopen_alignment" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant, name: "Mgr")
+        @assessee = create(:person, tenant: @tenant, name: "Assessee")
+      end
+      @person_id = @assessee.id
+
+      @handler.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @cycle_handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1,
+        defined_by: @manager.id)
+      @cycle_handler.enroll(@cycle_id, @person_id, enrolled_by: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.complete_alignment(@person_id, @framework_id, @cycle_id, completed_by_id: @manager.id)
+    end
+
+    should "land an AlignmentReopened event on the person-development stream" do
+      @handler.reopen_alignment(@person_id, @framework_id, @cycle_id, reopened_by_id: @manager.id)
+
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      event = Rails.configuration.event_store.read.stream(stream).to_a
+        .grep(PersonDevelopment::Events::AlignmentReopened).last
+      assert_not_nil event
+      assert_equal @cycle_id, event.data[:cycle_id]
+      assert_equal @manager.id, event.data[:reopened_by_id]
+    end
+
+    should "allow the manager to re-complete after re-opening" do
+      @handler.reopen_alignment(@person_id, @framework_id, @cycle_id, reopened_by_id: @manager.id)
+
+      assert_nothing_raised do
+        @handler.complete_alignment(@person_id, @framework_id, @cycle_id, completed_by_id: @manager.id)
+      end
+    end
+  end
+
   context "#seed_ratings_from_prior_cycle" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

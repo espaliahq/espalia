@@ -60,6 +60,7 @@ class AssessmentsController < ApplicationController
         context: context,
         can_start_alignment: policy.start_alignment?,
         can_complete_alignment: policy.complete_alignment?,
+        can_reopen_alignment: policy.reopen_alignment?,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_request_evidence: viewer_can_request_evidence?,

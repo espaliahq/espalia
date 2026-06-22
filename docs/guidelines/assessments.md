@@ -576,6 +576,7 @@ Each enrolled `AssessmentCycleParticipation` walks a lifecycle the views render 
 
 ```text
 enrolled → started → aligning → aligned → withdrawn
+                        ↑___________|   (manager re-opens, cycle still open)
 ```
 
 | Status | Trigger | What's editable |
@@ -585,6 +586,21 @@ enrolled → started → aligning → aligned → withdrawn
 | `aligning` | Manager fires `AlignmentStarted` | Aligned values only — self + manager FROZEN |
 | `aligned` | Manager fires `FullAlignmentCompleted` | Nothing — all ratings frozen |
 | `withdrawn` | Person unenrolled or cycle closed | Nothing |
+
+**Re-opening a completed alignment.** A completion made by accident is
+recoverable: the assessee's direct manager (never a delegate or the assessee)
+can re-open while the cycle is still open via the "Re-open alignment" button,
+which fires `AlignmentReopened`. The cycle returns to `aligning` — the agreed
+per-cell values are **preserved** (no clearing) and the original
+`alignment_started_at` stamps are kept; only the completion stamps
+(`aligned_at` / `aligned_by_id` / `aligned_framework_version`) are cleared. The
+manager resumes editing agreed values and re-completes via the normal "Mark
+alignment complete" path (auto-align is a *start*-time behaviour and is **not**
+re-run). Gated by `AssessmentPolicy#reopen_alignment?` (manager + open cycle +
+status `aligned`). `AlignmentReopened` is a new event with no production
+history, so the `CurrentAssessment` projection added a handler without a
+`CODE_VERSION` bump or rebuild. Surfaces as an `alignment_reopened` activity
+entry (alignment group, visible to both parties).
 
 **Threading the status to the views.** `MatrixDataBuilder` reads `participant_status` and produces two boolean flags:
 
@@ -604,9 +620,9 @@ Both flags also flow through the rating controllers' Turbo Stream responses so p
 
 The per-side `Complete` is a **projected, event-sourced fact**: [`CurrentAssessment`](../../app/contexts/person_development/projections/current_assessment.rb) runs [`Assessments::LevelCoverage`](../../app/queries/assessments/level_coverage.rb) on every rating change and stamps `assessment_cycle_progress.self_completed_at` / `manager_completed_at` (original completion time preserved across edits that stay complete; cleared when coverage drops). `status` stays the lifecycle phase — the two sides complete independently, so completion can't live in a single enum. The index reads those timestamps plus one cheap "any rating per side" query for the `Not started` vs `In progress` distinction (which needs no framework structure). `LevelCoverage`'s denominator mirrors `MatrixDataBuilder` exactly (active, role-bound capabilities with an expectation at the assessed level), pinned by a test. Known limitation: a `FrameworkVersionMigrated` that changes the current-level cell set without a subsequent rating can leave a stale flag until the next rating.
 
-**Action cluster (right side).** Manager view with status `started` shows "Start alignment" (form with `data-turbo-confirm`); status `aligning` shows "Mark alignment complete". Status `aligning` or `aligned` automatically renders in alignment mode — no toggle.
+**Action cluster (right side).** Manager view with status `started` shows "Start alignment" (form with `data-turbo-confirm`); status `aligning` shows "Mark alignment complete"; status `aligned` shows "Re-open alignment". Status `aligning` or `aligned` automatically renders in alignment mode — no toggle.
 
-**`AlignmentStartsController` / `AlignmentCompletionsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment)`. Both rescue `RuntimeError` from the aggregate to surface a generic flash alert.
+**`AlignmentStartsController` / `AlignmentCompletionsController` / `AlignmentReopeningsController`** dispatch the lifecycle commands and redirect back to `assessment_path(@assignment)`. The reopening controller dispatches the shared `Operations::Assessments::ReopenAlignment`; all rescue aggregate/operation errors to surface a generic flash alert.
 
 **Auto-alignment on start.** Inside the same RES transaction as `AlignmentStarted`, `PersonDevelopment::CommandHandler#start_alignment` emits an `AssessmentAligned` event for every (capability × level) cell where both `self_rated_frequency` and `manager_rated_frequency` are explicitly recorded **and equal**. The conversation in alignment mode then focuses on disagreements and unrated cells. Default-fallback agreements are NOT auto-aligned. Auto-aligned events carry the comment "Auto-aligned: self and manager already agreed".
 
@@ -769,6 +785,8 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/controllers/assessments/alignment_ratings_controller.rb` | Per-cell alignment POST (align_assessment) |
 | `app/controllers/assessments/alignment_starts_controller.rb` | Manager-only POST — fires `AlignmentStarted`, locks individual ratings |
 | `app/controllers/assessments/alignment_completions_controller.rb` | Manager-only POST — fires `FullAlignmentCompleted`, freezes all ratings |
+| `app/controllers/assessments/alignment_reopenings_controller.rb` | Manager-only POST — dispatches `Operations::Assessments::ReopenAlignment`, returns the cycle to `aligning` (agreed values preserved) |
+| `app/operations/operations/assessments/reopen_alignment.rb` | Shared web + MCP operation — re-open a completed alignment (manager-only, cycle still open) |
 | **Data** | |
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions + `current_level_complete`. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../architecture/adrs.md) |
 | `app/queries/assessments/level_coverage.rb` | Current-level self/manager completion for a (person, framework, cycle). Mirrors the builder's denominator; consumed by the `CurrentAssessment` projection to stamp `assessment_cycle_progress.{self,manager}_completed_at` for the dual-party list status |

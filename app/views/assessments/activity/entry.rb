@@ -26,6 +26,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_withdrawn"       => "bg-gray-400",
     "alignment_started"        => "bg-amber-500",
     "alignment_completed"      => "bg-green-600",
+    "alignment_reopened"       => "bg-amber-500",
     "comment_posted"           => "bg-sky-500",
     "delegation_granted"       => "bg-indigo-500",
     "delegation_revoked"       => "bg-gray-400",
@@ -52,6 +53,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_withdrawn"      => "evidence",
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment",
+    "alignment_reopened"      => "alignment",
     "comment_posted"          => "comments",
     # No filter chip — these surface under "All" only.
     "delegation_granted"        => "authority",
@@ -169,6 +171,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
+    when "alignment_reopened"    then "Re-opened alignment"
     when "comment_posted"        then comment_posted_summary
     when "delegation_granted"    then "#{actor_name || 'Manager'} delegated rating to #{delegate_name}"
     when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"

@@ -54,6 +54,10 @@ class AssessmentPolicyDelegationTest < ActiveSupport::TestCase
       assert_not policy(@delegate).create_alignment_rating?
     end
 
+    should "deny reopen_alignment (manager-only, never a delegate)" do
+      assert_not policy(@delegate).reopen_alignment?
+    end
+
     should "deny manager rating once the delegation is expired" do
       ManagerAssessmentDelegation.where(delegate_person_id: @delegate.id)
         .update_all(expires_at: 1.day.ago)

@@ -98,6 +98,19 @@ class AssessmentPolicy < ApplicationPolicy
     current_open_cycle_participation&.status == "aligning"
   end
 
+  # Only the assessee's current direct manager can re-open a completed
+  # alignment — to correct a completion made by accident. Allowed only
+  # while the cycle is still open (the participation comes from the open
+  # cycle) and currently `aligned`. Mirrors {#complete_alignment?}: it's
+  # the inverse milestone, manager-owned, never a delegate.
+  #
+  # @return [Boolean]
+  def reopen_alignment?
+    return false unless manages_assessee?
+
+    current_open_cycle_participation&.status == "aligned"
+  end
+
   private
 
   # Whether self/manager ratings are still mutable for the current cycle.

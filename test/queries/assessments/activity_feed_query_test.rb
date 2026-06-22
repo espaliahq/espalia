@@ -116,6 +116,33 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "alignment re-opened" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.start_alignment(@assessee.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+        handler.complete_alignment(@assessee.id, @framework_id, @cycle_id, completed_by_id: @manager.id)
+        handler.reopen_alignment(@assessee.id, @framework_id, @cycle_id, reopened_by_id: @manager.id)
+      end
+      @entries = run_query(viewer: @manager, sees_all: true, context: :alignment,
+        alignment_started: true)
+    end
+
+    should "emit an alignment_reopened entry anchored to the cycle, in the alignment group" do
+      entry = @entries.find { |e| e.kind == "alignment_reopened" }
+      assert_not_nil entry
+      assert_equal @cycle_id, entry.cycle_id
+      assert_equal @manager.id, entry.payload[:reopened_by_id]
+      assert_equal "alignment", Views::Assessments::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+
+    should "be visible to the assessee too (alignment milestone, not private)" do
+      entries = run_query(viewer: @assessee, sees_all: true, context: :alignment,
+        alignment_started: true)
+      assert entries.any? { |e| e.kind == "alignment_reopened" }
+    end
+  end
+
   context "as a peer (sees_all = false)" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
