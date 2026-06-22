@@ -36,12 +36,37 @@ jobs:
 
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
+      - name: Approve the PR
+        if: steps.find-pr.outputs.pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # main requires 1 approving review. Dependabot PRs are authored by
+          # dependabot[bot] (not github-actions), so a GITHUB_TOKEN review is
+          # accepted here — a token can't approve only its OWN PR.
+          gh pr review "${{ steps.find-pr.outputs.pr }}" \
+            --repo "${{ github.repository }}" \
+            --approve
+
       - name: Merge PR
         if: steps.find-pr.outputs.pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr merge "${{ steps.find-pr.outputs.pr }}" \
-            --repo "${{ github.repository }}" \
-            --squash \
-            --delete-branch
+          # Retry to absorb the brief mergeability recompute after approval.
+          # If it never becomes mergeable (e.g. an unresolved review thread,
+          # since required_conversation_resolution is on), fail loudly rather
+          # than mask it.
+          for attempt in 1 2 3 4 5; do
+            if gh pr merge "${{ steps.find-pr.outputs.pr }}" \
+                 --repo "${{ github.repository }}" \
+                 --squash \
+                 --delete-branch; then
+              echo "Merged on attempt $attempt"
+              exit 0
+            fi
+            echo "Merge not ready (attempt $attempt); sleeping 10s…"
+            sleep 10
+          done
+          echo "::error::PR still not mergeable after retries (likely unresolved conversations or a policy not yet met)."
+          exit 1
