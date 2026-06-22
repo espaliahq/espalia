@@ -291,6 +291,16 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
         assert_equal "consistent", cell.aligned_frequency
       end
     end
+
+    # Both-viewport coverage of the button's responsive visibility: the desktop
+    # case above asserts it is shown; this asserts it is hidden on mobile, where
+    # re-open (like "Mark alignment complete") is intentionally unavailable.
+    should "hide the Re-open alignment button on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@report_assignment)
+      assert_text "Aligned"
+      assert_no_button "Re-open alignment"
+    end
   end
 
   private
