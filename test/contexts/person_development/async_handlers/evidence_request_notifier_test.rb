@@ -32,6 +32,21 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     id
   end
 
+  should "provision a user and notify a requestee who has never logged in" do
+    newcomer = create(:person, tenant: @tenant, name: "Newcomer", email: "newcomer@example.com")
+    assert_nil newcomer.user, "precondition: no linked user"
+
+    perform_enqueued_jobs do
+      @handler.request_evidence(@assessee.id, @framework_id, SecureRandom.uuid_v7,
+        requested_by_id: @assessee.id, requestee_person_id: newcomer.id,
+        capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2)
+    end
+
+    user = newcomer.reload.user
+    assert_not_nil user, "a user should have been provisioned to receive the notification"
+    assert_equal 1, user.notifications.reload.size
+  end
+
   should "notify the requestee when evidence is requested, deep-linking to the request" do
     request_id = nil
     perform_enqueued_jobs { request_id = request! }

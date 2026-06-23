@@ -30,6 +30,35 @@ class Person < ApplicationRecord
   validates :name, presence: true
   validates :status, inclusion: { in: %w[active inactive] }
 
+  # The User used to deliver a notification directed at this person, lazily
+  # provisioning one (with the linking TenantUser) when none exists yet — so a
+  # notification reaches an HRIS-imported person who has never logged in. The
+  # account starts with a random password; the person claims it later via
+  # password reset or Google SSO (both match on email), and an existing-but-
+  # unlinked membership is adopted rather than duplicated. Idempotent and safe
+  # under concurrent provisioning.
+  #
+  # @return [User]
+  def ensure_user!
+    existing = user
+    return existing if existing
+
+    ActsAsTenant.with_tenant(tenant) do
+      User.transaction do
+        account = User.find_or_create_by!(email: email.to_s.downcase) { |u| u.password = SecureRandom.hex(24) }
+        membership = TenantUser.find_or_initialize_by(tenant: tenant, user: account)
+        membership.person ||= self
+        membership.role ||= :member
+        membership.save!
+        account
+      end
+    end
+  rescue ActiveRecord::RecordNotUnique
+    # A concurrent provision won the race; re-resolve the now-linked user.
+    reload
+    user || raise
+  end
+
   # The transitive closure of `manager_id` upward — direct manager,
   # skip-level, skip-skip, etc. Used by {EvidencePolicy} to gate
   # access to anyone in the hierarchy above the assessee.

@@ -86,9 +86,10 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
     ).deliver(user)
   end
 
-  # @return [User, nil] the global User behind a person in the current tenant
+  # @return [User, nil] the User behind a person, provisioning one lazily so the
+  #   notification reaches an HRIS-imported person who has never logged in.
   def user_for(person_id)
-    Person.find_by(id: person_id)&.tenant_user&.user
+    Person.find_by(id: person_id)&.ensure_user!
   end
 
   def capability_name(request)
