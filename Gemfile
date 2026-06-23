@@ -107,7 +107,7 @@ group :test do
 
   # Shoulda
   gem "shoulda-context", "~> 3.0.0.rc1"
-  gem "shoulda-matchers", "~> 7.0.1"
+  gem "shoulda-matchers", "~> 8.0.1"
   gem "shoulda-callback-matchers", "~> 1.1.4"
 end
 

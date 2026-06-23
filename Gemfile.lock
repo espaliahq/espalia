@@ -163,7 +163,7 @@ GEM
       activesupport (>= 6.1)
     hashie (5.1.0)
       logger
-    i18n (1.14.8)
+    i18n (1.15.2)
       concurrent-ruby (~> 1.0)
     image_processing (2.0.2)
     importmap-rails (2.2.3)
@@ -451,8 +451,8 @@ GEM
     shoulda-callback-matchers (1.1.4)
       activesupport (>= 3)
     shoulda-context (3.0.0.rc1)
-    shoulda-matchers (7.0.1)
-      activesupport (>= 7.1)
+    shoulda-matchers (8.0.1)
+      activesupport (>= 7.2)
     smart_properties (1.17.0)
     snaky_hash (2.0.5)
       hashie (>= 0.1.0, < 6)
@@ -584,7 +584,7 @@ DEPENDENCIES
   selenium-webdriver
   shoulda-callback-matchers (~> 1.1.4)
   shoulda-context (~> 3.0.0.rc1)
-  shoulda-matchers (~> 7.0.1)
+  shoulda-matchers (~> 8.0.1)
   solid_cable
   solid_cache
   solid_queue
