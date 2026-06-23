@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# OAuth 2.1 provider for the MCP server. Authorization-code + PKCE only —
-# no client secrets (public clients), no implicit, no password, no refresh.
-# Tokens are bound to a single tenant at consent time; see the custom
-# Oauth::AuthorizationsController and the MCP design doc.
+# OAuth 2.1 provider for the MCP server. Authorization-code + PKCE +
+# refresh-token only — no client secrets (public clients), no implicit,
+# no password. Tokens are bound to a single tenant at consent time; see
+# the custom Oauth::AuthorizationsController and the MCP design doc.
 Doorkeeper.configure do
   orm :active_record
 
@@ -37,15 +37,23 @@ Doorkeeper.configure do
   end
 
   # OAuth 2.1 surface — explicit allow-list.
-  grant_flows %w[authorization_code]
-  use_refresh_token false           # MCP clients re-authorise; no long-lived refresh tokens
+  grant_flows %w[authorization_code refresh_token]
+  use_refresh_token                 # silent renewal — clients refresh instead of re-running the browser flow
   reuse_access_token                # idempotent token issuance per (app, user, tenant, scope)
   force_pkce                        # PKCE mandatory; rejects code grant without code_verifier
   pkce_code_challenge_methods %w[S256]
   default_scopes  :read
   optional_scopes :write
 
-  access_token_expires_in 1.hour
+  # An access token long enough that a normal working session never expires
+  # mid-use, backed by a refresh token for silent renewal beyond it. Before
+  # refresh tokens existed this was 1.hour with no renewal path, so a multi-
+  # hour MCP session forced a full browser re-authorise every hour (and the
+  # client, lacking any credential to recover, re-ran Dynamic Client
+  # Registration each time). Doorkeeper copies the tenant_id custom attribute
+  # from the prior token onto the refreshed one (see RefreshTokenRequest), so
+  # the tenant binding survives renewal.
+  access_token_expires_in 8.hours
   authorization_code_expires_in 5.minutes
 
   # Bearer-only — the MCP server consumes tokens from the Authorization header.
