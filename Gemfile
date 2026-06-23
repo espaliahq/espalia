@@ -43,7 +43,7 @@ gem "noticed", "~> 3.0"
 gem "pagy", "~> 43.5"
 gem "pundit", "~> 2.4"
 gem "typeid", "~> 0.2"
-gem "tailwindcss-rails", "~> 4.0"
+gem "tailwindcss-rails", "~> 4.6"
 
 # Phlex - Object-oriented views for semantic components
 gem "phlex", "~> 2.4.1"

@@ -485,15 +485,15 @@ GEM
     store_model (4.6.0)
       activerecord (>= 7.0)
     stringio (3.2.0)
-    tailwindcss-rails (4.4.0)
+    tailwindcss-rails (4.6.0)
       railties (>= 7.0.0)
       tailwindcss-ruby (~> 4.0)
-    tailwindcss-ruby (4.2.0)
-    tailwindcss-ruby (4.2.0-aarch64-linux-gnu)
-    tailwindcss-ruby (4.2.0-aarch64-linux-musl)
-    tailwindcss-ruby (4.2.0-arm64-darwin)
-    tailwindcss-ruby (4.2.0-x86_64-linux-gnu)
-    tailwindcss-ruby (4.2.0-x86_64-linux-musl)
+    tailwindcss-ruby (4.3.1)
+    tailwindcss-ruby (4.3.1-aarch64-linux-gnu)
+    tailwindcss-ruby (4.3.1-aarch64-linux-musl)
+    tailwindcss-ruby (4.3.1-arm64-darwin)
+    tailwindcss-ruby (4.3.1-x86_64-linux-gnu)
+    tailwindcss-ruby (4.3.1-x86_64-linux-musl)
     thor (1.5.0)
     thruster (0.1.21)
     thruster (0.1.21-aarch64-linux)
@@ -590,7 +590,7 @@ DEPENDENCIES
   solid_queue
   stimulus-rails
   store_model (~> 4.5)
-  tailwindcss-rails (~> 4.0)
+  tailwindcss-rails (~> 4.6)
   thruster
   turbo-rails
   typeid (~> 0.2)
