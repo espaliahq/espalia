@@ -25,7 +25,7 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
   parameter :custom_type_label, String # required when evidence_type == "other"
   parameter :title, String
   parameter :content, String, required: true
-  parameter :external_reference, Hash # { system:, url:, external_id: }
+  parameter :external_reference, Hash, schema: ExternalReference.json_schema
 
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
@@ -86,12 +86,10 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
   # Reject a malformed / unsafe external reference upfront — same posture as
   # the web controller — so a `javascript:` URL never lands in the stream.
   def validate_external_reference!
-    return if params[:external_reference].blank?
+    reason = ExternalReference.validation_error_for(params[:external_reference])
+    return unless reason
 
-    candidate = ExternalReference.new(params[:external_reference])
-    return if candidate.valid?
-
-    raise Operations::Base::ParameterError, "invalid external_reference: #{candidate.errors.full_messages.join(", ")}"
+    raise Operations::Base::ParameterError, "invalid external_reference: #{reason}"
   end
 
   def external_reference_payload(item)

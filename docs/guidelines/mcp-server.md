@@ -394,6 +394,36 @@ time. The prune job is scoped to **DCR-registered apps only**
 never auto-deleted. When adding fields or behaviours to `oauth_applications`,
 think about whether they should also affect the stale-DCR query.
 
+### 13. A `Hash`/`Array` param needs a published shape AND defensive content validation
+
+`parameter :external_reference, Hash` advertised a bare `{ type: "object" }`
+(see Lesson 4) — no `properties`, so a client had nothing to copy and guessed
+keys. The operation then built a typed value object from the raw payload to
+validate it (`ExternalReference.new(params[:external_reference])`), and
+StoreModel/ActiveModel **raised `ActiveModel::UnknownAttributeError` on any
+unrecognised key** (a stray `title:`). That exception isn't a
+`ParameterError`, so it fell through the request handler's final
+`rescue StandardError` and reached the client as an opaque **-32603 internal
+error** — telling them it was a *server* bug when it was a bad payload
+(alpha-tester report, June 2026).
+
+Two rules for any complex param:
+
+- **Advertise the shape.** Declare `parameter :foo, Hash, schema: <json-schema
+  fragment>` so the MCP tool schema shows the accepted keys (and enums).
+  `Mcp::OperationToTool` emits an explicit `schema:` verbatim; without it a
+  `Hash`/`Array` is a free-form object the client must reverse-engineer. Keep
+  the fragment next to the model it describes (`ExternalReference.json_schema`).
+- **Validate contents without raising.** Never let a value-object constructor,
+  AR, or StoreModel raise *through* an operation — those become -32603. Check
+  the payload first and raise `Operations::Base::ParameterError` (→ -32602) for
+  anything the client got wrong, including **unknown keys** (reject them by
+  name; don't silently drop them). `ExternalReference.validation_error_for`
+  centralises this so all three evidence-write ops share one path. The
+  request handler maps `ParameterError → -32602`; a client mistake must always
+  classify as invalid-params, never internal-error, so MCP error monitors only
+  fire on genuine server bugs.
+
 ## Approval declaration cheat sheet
 
 When declaring `approval` on a new Operation, consult this table:

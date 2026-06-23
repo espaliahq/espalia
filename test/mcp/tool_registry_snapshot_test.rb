@@ -376,7 +376,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "custom_type_label"    => { "type" => "string" },
             "title"                => { "type" => "string" },
             "content"              => { "type" => "string" },
-            "external_reference"   => { "type" => "object" },
+            "external_reference"   => external_reference_schema,
             "additional_links"     => { "type" => "array" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content],
@@ -460,7 +460,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "content"            => { "type" => "string" },
             "custom_type_label"  => { "type" => "string" },
             "title"              => { "type" => "string" },
-            "external_reference" => { "type" => "object" }
+            "external_reference" => external_reference_schema
           },
           "required" => %w[request_id evidence_type content],
           "additionalProperties" => false
@@ -519,7 +519,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "custom_type_label" => { "type" => "string" },
             "title"             => { "type" => "string" },
             "content"           => { "type" => "string" },
-            "external_reference" => { "type" => "object" }
+            "external_reference" => external_reference_schema
           },
           "required" => %w[assignment_id evidence_id evidence_type content],
           "additionalProperties" => false
@@ -1037,5 +1037,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       }
     ]
+  end
+
+  # The published JSON Schema for an evidence item's external_reference,
+  # shared by every evidence-write tool's snapshot. Mirrors
+  # ExternalReference.json_schema (deep-stringified) so clients see the
+  # accepted keys + the `system` enum instead of a bare free-form object.
+  def external_reference_schema
+    {
+      "type" => "object",
+      "description" => "Optional pointer to a supporting source in an external system.",
+      "properties" => {
+        "system"      => { "type" => "string", "enum" => ExternalReference::SYSTEMS,
+                           "description" => "Originating system." },
+        "url"         => { "type" => "string", "description" => "An http(s) link to the source." },
+        "external_id" => { "type" => "string", "description" => "The item's ID within that system." },
+        "metadata"    => { "type" => "object", "description" => "Free-form additional fields." }
+      },
+      "additionalProperties" => false
+    }
   end
 end

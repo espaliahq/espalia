@@ -51,7 +51,14 @@ class Operations::Base
   class ImpersonationReadOnlyError < StandardError; end
 
   # Describes one declared parameter on an Operation.
-  Parameter = Struct.new(:name, :type, :required, :allowed, keyword_init: true) do
+  #
+  # `schema` is an optional JSON Schema fragment used ONLY for the
+  # advertised MCP tool schema (e.g. the object shape of a Hash param so
+  # clients see the accepted keys instead of a bare free-form object).
+  # Runtime validation still uses `type`/`allowed` — `schema` documents
+  # the wire shape, it does not enforce it; the Operation validates a
+  # complex param's contents in `perform`.
+  Parameter = Struct.new(:name, :type, :required, :allowed, :schema, keyword_init: true) do
     # @param value [Object] the raw value supplied by the caller
     # @return [Object] the validated (un-coerced) value
     # @raise [ParameterError] when missing/required, wrong type, or not in `allowed`
@@ -115,9 +122,12 @@ class Operations::Base
     # @param type [Class] expected Ruby class
     # @param required [Boolean]
     # @param allowed [Array, nil] enum of allowed values
-    def parameter(name, type, required: false, allowed: nil)
+    # @param schema [Hash, nil] explicit JSON Schema fragment for the
+    #   advertised MCP tool schema (overrides the default type mapping —
+    #   use for complex Hash/Array params whose shape clients need to see)
+    def parameter(name, type, required: false, allowed: nil, schema: nil)
       parameters[name.to_sym] = Parameter.new(
-        name: name.to_sym, type: type, required: required, allowed: allowed
+        name: name.to_sym, type: type, required: required, allowed: allowed, schema: schema
       )
     end
 

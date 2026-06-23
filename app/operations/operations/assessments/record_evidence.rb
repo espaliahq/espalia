@@ -27,7 +27,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   parameter :custom_type_label, String   # required when evidence_type == "other"
   parameter :title, String
   parameter :content, String, required: true
-  parameter :external_reference, Hash    # { system:, url:, external_id: }
+  parameter :external_reference, Hash, schema: ExternalReference.json_schema
   # Optional extra cells this evidence also demonstrates. Each entry:
   # { capability_stable_id:, level_ordinal: }. The first link is the
   # required capability_stable_id/level_ordinal above; these are applied
@@ -147,12 +147,10 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   # the web controller — so a `javascript:` URL or similar XSS vector
   # never lands in the event stream and can't fail on replay.
   def validate_external_reference!
-    return if params[:external_reference].blank?
+    reason = ExternalReference.validation_error_for(params[:external_reference])
+    return unless reason
 
-    candidate = ExternalReference.new(params[:external_reference])
-    return if candidate.valid?
-
-    raise Operations::Base::ParameterError, "invalid external_reference: #{candidate.errors.full_messages.join(", ")}"
+    raise Operations::Base::ParameterError, "invalid external_reference: #{reason}"
   end
 
   def validate_level_ordinal!(ordinal = params[:level_ordinal])
