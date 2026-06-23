@@ -67,6 +67,19 @@ class OauthPkceFlowTest < ActionDispatch::IntegrationTest
       # Tenant picker is present and posts back to /oauth/authorize.
       assert_match(/name="tenant_id"/, response.body)
     end
+
+    should "render through the app layout so the Tailwind stylesheet loads (not Doorkeeper's bare layout)" do
+      sign_in @user
+      get oauth_authorization_path, params: auth_params
+
+      assert_response :success
+      # The app layout links the compiled Tailwind stylesheet; the consent
+      # screen's Phlex classes are unstyled without it (the "blank screen" bug).
+      assert_match %r{<link[^>]+href="[^"]*tailwind[^"]*\.css}, response.body,
+        "consent screen must render through layouts/application (Tailwind present)"
+      # And NOT Doorkeeper's bare layout, whose only stylesheet is doorkeeper/application.
+      assert_no_match %r{href="[^"]*doorkeeper/application[^"]*\.css}, response.body
+    end
   end
 
   context "POST /oauth/authorize" do

@@ -25,6 +25,16 @@
 #      tenant scoping disabled), which is the meaningful permission
 #      check for this controller.
 class Oauth::AuthorizationsController < Doorkeeper::AuthorizationsController
+  # Render the consent screen through the app's own layout so it picks up
+  # the Tailwind stylesheet and renders like the rest of GrowthOS (the
+  # sign-in page uses this same layout). Without this, Rails' layout
+  # resolution falls through the Doorkeeper inheritance chain to the gem's
+  # bare `layouts/doorkeeper/application`, which only links the unused
+  # `doorkeeper/application` stylesheet — so the Phlex view's Tailwind
+  # classes go unstyled and the page looks blank. Doorkeeper's own error
+  # renders force `layout: false`, so they're unaffected.
+  layout "application"
+
   def new
     render_consent_screen
   end
