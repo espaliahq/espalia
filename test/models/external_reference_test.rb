@@ -118,4 +118,45 @@ class ExternalReferenceTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context ".validation_error_for" do
+    should "return nil for a blank or nil payload" do
+      assert_nil ExternalReference.validation_error_for(nil)
+      assert_nil ExternalReference.validation_error_for({})
+    end
+
+    should "return nil for an accepted shape (string or symbol keys)" do
+      assert_nil ExternalReference.validation_error_for({ "system" => "github", "url" => "https://x.test/1" })
+      assert_nil ExternalReference.validation_error_for({ system: "slack", url: "https://x.test/2", external_id: "9" })
+      assert_nil ExternalReference.validation_error_for({ "metadata" => { "pr" => "42" } })
+    end
+
+    # The reported bug: an unknown key (e.g. `title`) made `new(payload)` raise
+    # ActiveModel::UnknownAttributeError, which surfaced to MCP clients as an
+    # opaque -32603. It must now be a clear, non-raising validation reason.
+    should "name unknown keys instead of raising (string or symbol)" do
+      %w[title].each do |_|
+        msg = ExternalReference.validation_error_for({ "url" => "https://x.test", "title" => "My link" })
+        assert_match(/unknown field/, msg)
+        assert_match(/title/, msg)
+        assert_match(/allowed: system, url, external_id, metadata/, msg)
+      end
+      assert_match(/title/, ExternalReference.validation_error_for({ url: "https://x.test", title: "x" }))
+    end
+
+    should "report an invalid system or unsafe url without raising" do
+      assert_match(/system/i, ExternalReference.validation_error_for({ "system" => "myspace" }))
+      assert_match(/url/i, ExternalReference.validation_error_for({ "url" => "javascript:alert(1)" }))
+    end
+  end
+
+  context ".json_schema" do
+    should "publish the accepted keys and the system enum" do
+      schema = ExternalReference.json_schema
+      assert_equal "object", schema[:type]
+      assert_equal %w[system url external_id metadata], schema[:properties].keys.map(&:to_s)
+      assert_equal ExternalReference::SYSTEMS, schema[:properties][:system][:enum]
+      assert_equal false, schema[:additionalProperties]
+    end
+  end
 end

@@ -197,6 +197,38 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_match(/not found/, err["message"])
       assert_no_match(/WHERE/, err["message"], "should not leak the SQL fragment in the response")
     end
+
+    # Regression (alpha-tester report): a malformed external_reference threw
+    # ActiveModel::UnknownAttributeError out of the operation, surfacing as a
+    # -32603 "internal error". A bad payload is the client's fault, so it must
+    # classify as -32602 invalid-params — the evidence-write tools validate it
+    # upfront. Here a non-object value trips the param type check; an unknown
+    # *key* takes the same ParameterError path (covered at the operation layer).
+    should "classify a malformed external_reference as -32602, not -32603" do
+      post_mcp({
+        jsonrpc: "2.0", id: 7, method: "tools/call",
+        params: {
+          name: "assessments_record_evidence",
+          arguments: {
+            assignment_id: SecureRandom.uuid_v7,
+            capability_stable_id: SecureRandom.uuid_v7,
+            level_ordinal: 2,
+            evidence_type: "code_review",
+            content: "x",
+            external_reference: "not-an-object"
+          }
+        }
+      })
+
+      assert_response :success
+      err = json_body["error"]
+      assert_equal(-32602, err["code"])
+      # Prove the -32602 came from the external_reference check specifically —
+      # param validation runs before any id lookup, so a random assignment_id
+      # can't be the source, but assert the message to lock that in.
+      assert_match(/external_reference/, err["message"])
+      assert_no_match(/internal error/i, err["message"])
+    end
   end
 
   context "audit metadata" do

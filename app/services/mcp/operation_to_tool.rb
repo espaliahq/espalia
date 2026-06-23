@@ -67,6 +67,11 @@ class Mcp::OperationToTool
   end
 
   def property_for(parameter)
+    # An explicit schema fragment (declared via `parameter ..., schema:`)
+    # wins verbatim — it's how a complex Hash/Array param advertises its
+    # real shape instead of a bare `{ type: "object" }`.
+    return parameter.schema if parameter.schema
+
     schema = { type: TYPE_MAPPING.fetch(parameter.type, "string") }
     schema[:enum] = parameter.allowed if parameter.allowed
     schema

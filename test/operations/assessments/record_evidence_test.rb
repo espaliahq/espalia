@@ -136,6 +136,19 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
       assert_match(/invalid external_reference/, err.message)
     end
 
+    # Regression: an unknown key (e.g. `title`) used to raise
+    # ActiveModel::UnknownAttributeError → -32603 internal error at the MCP
+    # boundary. It must now be a ParameterError (→ -32602) naming the key.
+    should "reject an external_reference with an unknown field as a ParameterError" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @report_ctx,
+          external_reference: { url: "https://x.test/pr/1", title: "My link" })
+      end
+      assert_match(/invalid external_reference/, err.message)
+      assert_match(/unknown field/, err.message)
+      assert_match(/title/, err.message)
+    end
+
     should "reject a level_ordinal that doesn't exist on the assignment's role" do
       err = assert_raises(Operations::Base::ParameterError) do
         call_op(ctx: @report_ctx, level_ordinal: 99)

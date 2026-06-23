@@ -71,6 +71,16 @@ class Operations::Assessments::UpdateEvidenceTest < ActiveSupport::TestCase
     end
   end
 
+  # Regression: an unknown key used to raise ActiveModel::UnknownAttributeError
+  # → -32603 internal error at the MCP boundary; must now be a ParameterError.
+  should "reject an external_reference with an unknown field as a ParameterError" do
+    err = assert_raises(Operations::Base::ParameterError) do
+      call_op(base_params(external_reference: { "url" => "https://x.test", "title" => "x" }))
+    end
+    assert_match(/unknown field/, err.message)
+    assert_match(/title/, err.message)
+  end
+
   should "deny a non-author (manager can withdraw but not edit another's words)" do
     mgr_user = create(:user)
     ActsAsTenant.with_tenant(@tenant) do

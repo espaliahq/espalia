@@ -104,6 +104,22 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       end
     end
 
+    # Regression: an unknown external_reference key (e.g. `title`) used to
+    # raise ActiveModel::UnknownAttributeError → -32603 at the MCP boundary.
+    should "reject an external_reference with an unknown field as a ParameterError" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ActsAsTenant.with_tenant(@tenant) do
+          Operations::Assessments::RespondToEvidenceRequest.call(
+            context: @peer_ctx,
+            params: { request_id: @request_id, evidence_type: "peer_feedback", content: "x",
+                      external_reference: { url: "https://x.test", title: "My link" } }
+          )
+        end
+      end
+      assert_match(/unknown field/, err.message)
+      assert_match(/title/, err.message)
+    end
+
     should "let the requestee decline with a reason" do
       ActsAsTenant.with_tenant(@tenant) do
         Operations::Assessments::DeclineEvidenceRequest.call(

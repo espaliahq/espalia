@@ -8,18 +8,18 @@ set -eu
 # Mirror the macOS Keychain Claude Code credential into ~/.claude/.credentials.json
 # so the devcontainer (which can't reach Keychain) inherits the host's identity.
 # No-op on non-macOS hosts. Silent if the Keychain entry is missing.
-if [ "$(uname -s)" = "Darwin" ] && command -v security >/dev/null 2>&1; then
-  claude_dir="$HOME/.claude"
-  if [ -d "$claude_dir" ]; then
-    if security find-generic-password -s "Claude Code-credentials" -w \
-        > "$claude_dir/.credentials.json" 2>/dev/null; then
-      chmod 600 "$claude_dir/.credentials.json"
-    else
-      rm -f "$claude_dir/.credentials.json"
-      printf 'initialize.sh: Keychain entry "Claude Code-credentials" not found; skipping creds sync\n' >&2
-    fi
-  fi
-fi
+# if [ "$(uname -s)" = "Darwin" ] && command -v security >/dev/null 2>&1; then
+#   claude_dir="$HOME/.claude"
+#   if [ -d "$claude_dir" ]; then
+#     if security find-generic-password -s "Claude Code-credentials" -w \
+#         > "$claude_dir/.credentials.json" 2>/dev/null; then
+#       chmod 600 "$claude_dir/.credentials.json"
+#     else
+#       rm -f "$claude_dir/.credentials.json"
+#       printf 'initialize.sh: Keychain entry "Claude Code-credentials" not found; skipping creds sync\n' >&2
+#     fi
+#   fi
+# fi
 
 # Seed Linux-side Claude Code onboarding flags. ~/.claude.json (top-level file)
 # is NOT in the bind mount and gets wiped on container rebuild, so Claude Code

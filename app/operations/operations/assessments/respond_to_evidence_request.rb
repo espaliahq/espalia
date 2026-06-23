@@ -15,7 +15,7 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   parameter :content,       String, required: true
   parameter :custom_type_label, String
   parameter :title, String
-  parameter :external_reference, Hash
+  parameter :external_reference, Hash, schema: ExternalReference.json_schema
 
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
@@ -72,11 +72,9 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   end
 
   def validate_external_reference!
-    return if params[:external_reference].blank?
+    reason = ExternalReference.validation_error_for(params[:external_reference])
+    return unless reason
 
-    candidate = ExternalReference.new(params[:external_reference])
-    return if candidate.valid?
-
-    raise Operations::Base::ParameterError, "invalid external_reference: #{candidate.errors.full_messages.join(", ")}"
+    raise Operations::Base::ParameterError, "invalid external_reference: #{reason}"
   end
 end
