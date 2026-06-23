@@ -223,7 +223,11 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_response :success
       err = json_body["error"]
       assert_equal(-32602, err["code"])
-      assert_no_match(/internal error/, err["message"])
+      # Prove the -32602 came from the external_reference check specifically —
+      # param validation runs before any id lookup, so a random assignment_id
+      # can't be the source, but assert the message to lock that in.
+      assert_match(/external_reference/, err["message"])
+      assert_no_match(/internal error/i, err["message"])
     end
   end
 
