@@ -68,7 +68,7 @@ class Mcp::ClientRegistrationsController < ActionController::API
       client_id: application.uid,
       client_name: application.name,
       redirect_uris: redirect_uris,
-      grant_types: [ "authorization_code" ],
+      grant_types: [ "authorization_code", "refresh_token" ],
       response_types: [ "code" ],
       token_endpoint_auth_method: "none",
       scope: application.scopes.to_s,

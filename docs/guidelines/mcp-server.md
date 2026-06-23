@@ -37,9 +37,10 @@ MCP client → POST /mcp (Bearer token)
           resources/read → same Operations (via Mcp::ResourceRegistry)
 ```
 
-The auth surface lives at `/oauth/*` (Doorkeeper, PKCE-only) with
-discovery docs at `/.well-known/oauth-{protected-resource,authorization-server}`
-and Dynamic Client Registration at `POST /oauth/register`. See
+The auth surface lives at `/oauth/*` (Doorkeeper, PKCE + refresh-token,
+public clients) with discovery docs at
+`/.well-known/oauth-{protected-resource,authorization-server}` and Dynamic
+Client Registration at `POST /oauth/register`. See
 [authorization.md](authorization.md) for the identity chain Operations
 reuse.
 
@@ -173,6 +174,16 @@ belong to multiple tenants re-authorise to switch. Implementation:
   user STILL has a `TenantUser` for the token's tenant on every
   request; if revoked, fail closed with `:membership_revoked` rather
   than processing against an empty `AuthorizationContext`.
+- **Refresh preserves the binding.** Access tokens live 8 hours and are
+  renewed by a refresh token (`use_refresh_token`) so a long MCP session
+  never forces a browser round trip — Doorkeeper's `RefreshTokenRequest`
+  copies the `tenant_id` custom attribute from the prior token onto the
+  renewed one, so the renewed token stays bound to the same tenant.
+  Switching tenants still requires a fresh `/oauth/authorize` (the picker
+  is only on the consent screen). This replaced the original 1-hour /
+  no-refresh surface, whose hourly expiry made clients re-run the full
+  browser flow — and Dynamic Client Registration — several times a
+  session (alpha-tester report, June 2026).
 
 ### 7. Discovery + DCR for self-onboarding
 

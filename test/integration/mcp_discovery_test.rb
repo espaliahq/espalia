@@ -49,7 +49,7 @@ class McpDiscoveryTest < ActionDispatch::IntegrationTest
       assert_match %r{/oauth/token\z},     body["token_endpoint"]
       assert_match %r{/oauth/register\z},  body["registration_endpoint"]
       assert_equal [ "code" ],                body["response_types_supported"]
-      assert_equal [ "authorization_code" ],  body["grant_types_supported"]
+      assert_equal [ "authorization_code", "refresh_token" ], body["grant_types_supported"]
       assert_equal [ "S256" ],                body["code_challenge_methods_supported"]
       assert_equal %w[read write],            body["scopes_supported"]
       assert_equal [ "none" ],                body["token_endpoint_auth_methods_supported"]
@@ -82,7 +82,7 @@ class McpDiscoveryTest < ActionDispatch::IntegrationTest
       assert body["client_id"].present?
       assert_equal "DCR Test",                body["client_name"]
       assert_equal [ "http://localhost:54321/cb" ], body["redirect_uris"]
-      assert_equal [ "authorization_code" ],  body["grant_types"]
+      assert_equal [ "authorization_code", "refresh_token" ], body["grant_types"]
       assert_equal "none",                    body["token_endpoint_auth_method"]
       assert_equal "read",                    body["scope"]
 

@@ -9,7 +9,7 @@ require "base64"
 #   - the consent screen lists the user's tenants and rejects foreign ones
 #   - `tenant_id` survives the round trip from consent → grant → token
 #   - PKCE is enforced (no token without code_verifier)
-#   - the configured PKCE-only / no-refresh-token surface is honoured
+#   - a refresh token is issued and renews while preserving the tenant binding
 class OauthPkceFlowTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
@@ -141,12 +141,42 @@ class OauthPkceFlowTest < ActionDispatch::IntegrationTest
       assert_response :success
       body = JSON.parse(response.body)
       assert body["access_token"].present?
-      assert_nil body["refresh_token"], "refresh tokens are disabled"
+      assert body["refresh_token"].present?, "a refresh token is issued for silent renewal"
 
       token = Mcp::AccessToken.last
       assert_equal @tenant_a.id, token.tenant_id
       assert_equal @user.id.to_s, token.resource_owner_id.to_s
       assert_equal @application.id, token.application_id
+    end
+
+    should "renew via the refresh token, preserving the tenant binding without a browser round trip" do
+      post oauth_token_path, params: {
+        grant_type: "authorization_code",
+        client_id: @application.uid,
+        redirect_uri: @application.redirect_uri,
+        code: @code,
+        code_verifier: CODE_VERIFIER
+      }
+      refresh_token = JSON.parse(response.body)["refresh_token"]
+      assert refresh_token.present?
+
+      assert_difference -> { Mcp::AccessToken.count }, 1 do
+        post oauth_token_path, params: {
+          grant_type: "refresh_token",
+          client_id: @application.uid,
+          refresh_token: refresh_token
+        }
+      end
+
+      assert_response :success
+      body = JSON.parse(response.body)
+      assert body["access_token"].present?
+
+      renewed = Mcp::AccessToken.last
+      assert_equal @tenant_a.id, renewed.tenant_id,
+        "tenant_id custom attribute must carry through the refresh exchange"
+      assert_equal @user.id.to_s, renewed.resource_owner_id.to_s
+      assert_equal @application.id, renewed.application_id
     end
 
     should "reject the exchange without code_verifier (PKCE enforced)" do
