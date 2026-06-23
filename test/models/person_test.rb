@@ -18,6 +18,50 @@ class PersonTest < ActiveSupport::TestCase
     should validate_presence_of(:name)
   end
 
+  context "#ensure_user!" do
+    setup do
+      @tenant = create(:tenant)
+      ActsAsTenant.current_tenant = @tenant
+    end
+    teardown { ActsAsTenant.current_tenant = nil }
+
+    should "return the existing linked user" do
+      person = create(:person, tenant: @tenant)
+      user = create(:user)
+      create(:tenant_user, tenant: @tenant, user: user, person: person)
+      assert_equal user, person.ensure_user!
+    end
+
+    should "provision a user + membership for a person who has none" do
+      person = create(:person, tenant: @tenant, email: "Newbie@Example.com")
+      account = nil
+      assert_difference -> { User.count } => 1, -> { TenantUser.count } => 1 do
+        account = person.ensure_user!
+      end
+      assert_equal "newbie@example.com", account.email
+      assert_equal account, person.reload.user
+      assert_equal "member", person.tenant_user.role
+    end
+
+    should "adopt an existing user (by email) + an unlinked membership rather than duplicate" do
+      person = create(:person, tenant: @tenant, email: "ada@example.com")
+      user = create(:user, email: "ada@example.com")
+      create(:tenant_user, tenant: @tenant, user: user, person: nil) # logged in, not yet linked
+      assert_no_difference -> { User.count } do
+        assert_equal user, person.ensure_user!
+      end
+      assert_equal person, user.tenant_users.first.person
+    end
+
+    should "be idempotent" do
+      person = create(:person, tenant: @tenant)
+      first = person.ensure_user!
+      assert_no_difference [ "User.count", "TenantUser.count" ] do
+        assert_equal first, person.ensure_user!
+      end
+    end
+  end
+
   context "tenant scoping" do
     should "only return people within the current tenant" do
       tenant_a = create(:tenant)
