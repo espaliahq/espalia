@@ -8,6 +8,8 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
   # @param matrix_data [Hash]
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
+  #   party — threaded down so split chips put the viewer's own rating top-left
   # @param active_category_id [String, nil] active tab category ID
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param selected_levels [Hash{String => Integer}] per-capability selected

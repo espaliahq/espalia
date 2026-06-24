@@ -9,6 +9,8 @@ class Views::Assessments::CategorySection < Views::Base
   # @param person_level [Integer]
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
+  #   party — threaded to each capability card's split chips
   # @param scoring [Hash] primary scoring
   # @param self_scoring [Hash, nil]
   # @param manager_scoring [Hash, nil]

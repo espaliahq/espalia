@@ -12,6 +12,8 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param person_level [Integer]
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
+  #   party — threaded to the level strip's split chips
   # @param category [FrameworkState::CapabilityCategory]
   # @param scoring [Hash] primary scoring from MatrixDataBuilder
   # @param blocked [Boolean]

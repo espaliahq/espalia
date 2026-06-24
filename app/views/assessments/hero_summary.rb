@@ -35,6 +35,9 @@ class Views::Assessments::HeroSummary < Views::Base
   # @param meeting_expectation_threshold [Float]
   # @param assessment_id [String]
   # @param context [Symbol]
+  # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
+  #   party — in alignment the secondary percentages lead with the viewer's
+  #   own perspective (Mgr first for the manager, Self first for the assessee)
   # @param assignment [PersonFrameworkAssignment]
   # @param can_start_alignment [Boolean]
   # @param can_complete_alignment [Boolean]
