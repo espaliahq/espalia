@@ -165,10 +165,13 @@ class AssessmentsController < ApplicationController
   end
 
   # Whether current_person is viewing a direct report's assessment.
+  # Delegates to the shared {AssessmentVisibility#viewer_is_manager?} so the
+  # page, frame, and Turbo Stream renders all derive the viewer-side flag
+  # from one predicate and can't drift apart.
   #
   # @return [Boolean]
   def manager_viewing?
-    @assignment.person_id != current_person.id
+    viewer_is_manager?
   end
 
   # Returns the assessment context based on the viewer's relationship and
