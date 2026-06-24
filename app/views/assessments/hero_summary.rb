@@ -41,11 +41,13 @@ class Views::Assessments::HeroSummary < Views::Base
   # @param assessee_name [String, nil]
   def initialize(scoring:, categories:, person_level:, merged_levels:,
                  mastery_threshold:, meeting_expectation_threshold:,
-                 assessment_id:, context: :self, assignment: nil,
+                 assessment_id:, context: :self, viewer_is_manager: false,
+                 assignment: nil,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
                  can_start_alignment: false, can_complete_alignment: false,
                  assessee_name: nil)
     @scoring = scoring
+    @viewer_is_manager = viewer_is_manager
     @self_scoring = self_scoring
     @manager_scoring = manager_scoring
     @aligned_scoring = aligned_scoring
@@ -528,14 +530,25 @@ class Views::Assessments::HeroSummary < Views::Base
   # Labelled secondary perspectives for the current context. Self is
   # alone in its view (manager/aligned data is scrubbed upstream).
   # Manager view surfaces self; alignment view surfaces both self and
-  # manager. Nil scorings drop out so a perspective with no ratings yet
-  # doesn't render as "0%".
+  # manager — ordered **viewer-first** (the viewer's own perspective
+  # leads), matching the split-chip corner rule so the two surfaces tell
+  # the same story. Nil scorings drop out so a perspective with no ratings
+  # yet doesn't render as "0%".
   def secondary_perspectives
     @secondary_perspectives ||= case @context
     when :manager   then [ [ "Self", @self_scoring ] ]
-    when :alignment then [ [ "Self", @self_scoring ], [ "Mgr", @manager_scoring ] ]
+    when :alignment then alignment_secondaries
     else []
     end.select { |_, s| s }
+  end
+
+  # In alignment both parties' ratings are secondaries (the agreed value is
+  # the primary number). Lead with the viewer's own — Mgr first for the
+  # manager-side viewer, Self first for the assessee.
+  def alignment_secondaries
+    self_entry = [ "Self", @self_scoring ]
+    mgr_entry  = [ "Mgr", @manager_scoring ]
+    @viewer_is_manager ? [ mgr_entry, self_entry ] : [ self_entry, mgr_entry ]
   end
 
   # Tiny percentage line tucked under "of expected" so the primary
@@ -543,7 +556,8 @@ class Views::Assessments::HeroSummary < Views::Base
   def secondary_percents
     return if secondary_perspectives.empty?
 
-    div(class: "text-[11px] text-gray-600 dark:text-gray-300 mt-1 tabular-nums") do
+    div(id: "hero-secondary-percents",
+        class: "text-[11px] text-gray-600 dark:text-gray-300 mt-1 tabular-nums") do
       plain(secondary_perspectives.map { |label, s| "#{label}: #{format_pct(s)}" }.join(" · "))
     end
   end

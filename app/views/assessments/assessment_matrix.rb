@@ -22,6 +22,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
   def initialize(matrix_data:, assessment_id:, context: :self,
+                 viewer_is_manager: false,
                  expanded_capability_id: nil,
                  expanded_level_ordinal: nil, selected_levels: {},
                  viewer_person_id: nil, can_create_evidence: false,
@@ -31,6 +32,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @expanded_capability_id = expanded_capability_id
     @expanded_level_ordinal = expanded_level_ordinal
     @selected_levels = selected_levels
@@ -62,6 +64,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
             person_level: @matrix_data[:person_level],
             assessment_id: @assessment_id,
             context: @context,
+            viewer_is_manager: @viewer_is_manager,
             scoring: @matrix_data[:scoring],
             self_scoring: @matrix_data[:self_scoring],
             manager_scoring: @matrix_data[:manager_scoring],

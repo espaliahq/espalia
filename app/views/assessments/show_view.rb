@@ -152,6 +152,9 @@ class Views::Assessments::ShowView < Views::Base
         meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
         assessment_id: @assignment.id,
         context: @context,
+        # The assessee's own view — in alignment their Self rating leads
+        # (top-left split / first secondary percentage).
+        viewer_is_manager: false,
         assignment: @assignment
       )
     end
@@ -185,6 +188,7 @@ class Views::Assessments::ShowView < Views::Base
         matrix_data: @matrix_data,
         assessment_id: @assignment.id,
         context: @context,
+        viewer_is_manager: false,
         expanded_capability_id: @expanded_capability_id,
         expanded_level_ordinal: @expanded_level_ordinal,
         selected_levels: @selected_levels,

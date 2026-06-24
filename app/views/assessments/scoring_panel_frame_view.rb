@@ -14,10 +14,13 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
   #   by the hero verdict to address the person in third person (e.g.
   #   "Alex is tracking on target") in manager and alignment views.
   #   Nil in self view, where the hero uses "You're …" copy.
-  def initialize(matrix_data:, context: :self, active_category_id: nil,
-                 assessment_id: nil, assessee_name: nil)
+  # @param viewer_is_manager [Boolean] viewer is the manager-side party —
+  #   orders the alignment secondary percentages viewer-first.
+  def initialize(matrix_data:, context: :self, viewer_is_manager: false,
+                 active_category_id: nil, assessment_id: nil, assessee_name: nil)
     @matrix_data = matrix_data
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @active_category_id = active_category_id
     @assessment_id = assessment_id
     @assessee_name = assessee_name
@@ -37,6 +40,7 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
         meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
         assessment_id: @assessment_id,
         context: @context,
+        viewer_is_manager: @viewer_is_manager,
         assessee_name: @assessee_name
       )
     end

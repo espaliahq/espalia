@@ -108,6 +108,7 @@ class AssessmentsController < ApplicationController
       matrix_data: @matrix_data,
       assignment: @assignment,
       context: assessment_context,
+      viewer_is_manager: manager_viewing?,
       active_category_id: resolve_active_category_id,
       expanded_capability_id: params[:capability],
       expanded_level_ordinal: focused_level_ordinal_param,
@@ -128,6 +129,7 @@ class AssessmentsController < ApplicationController
     render Views::Assessments::ScoringPanelFrameView.new(
       matrix_data: @matrix_data,
       context: assessment_context,
+      viewer_is_manager: manager_viewing?,
       active_category_id: resolve_active_category_id,
       assessment_id: @assignment.id,
       assessee_name: manager_viewing? ? @assessee&.name : nil

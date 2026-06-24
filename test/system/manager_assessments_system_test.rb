@@ -142,8 +142,9 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
     should "split the level chip diagonally when self and manager ratings disagree" do
       # Report self-rated level 2 as "occasional" (Most) in setup; the
       # manager rates "consistent" → the two visible perspectives differ,
-      # so the chip paints a diagonal split (self top-left, manager
-      # bottom-right) instead of the old amber divergence dot.
+      # so the chip paints a diagonal split. The viewer's own perspective
+      # leads (manager view → manager top-left, self bottom-right) instead
+      # of the old amber divergence dot.
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.rate_as_manager(
           @report.id, @framework_id, @cap_stable,

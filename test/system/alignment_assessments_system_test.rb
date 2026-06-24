@@ -205,6 +205,26 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       # policy/aggregate layer — they have no interactive control here.
       assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']"
     end
+
+    should "lead with the manager's own perspective in the split chip and hero" do
+      # Self rated "occasional" (green), manager "consistent" (blue) at L2 —
+      # they disagree, so the cell isn't auto-aligned and the chip splits.
+      # The viewer (manager) must see their OWN rating top-left here, exactly
+      # as in the plain manager view (pinned in manager_assessments_system_test),
+      # so the corner doesn't jump sides between the two surfaces.
+      visit assessment_path(@report_assignment, capability: @cap_stable)
+      wait_for_stimulus "matrix"
+
+      # Top-left overlay slice is the manager's "consistent" (blue-500);
+      # the base (bottom-right) is the report's "occasional" (green-500).
+      assert_selector "#cell-#{@cap_stable}-2 [data-split].bg-blue-500", visible: :all
+      assert_selector "#cell-#{@cap_stable}-2.bg-green-500"
+
+      # Hero secondary percentages lead with the viewer's own — "Mgr:" first.
+      percents = find("#hero-secondary-percents", visible: :all).text
+      assert percents.index("Mgr:") < percents.index("Self:"),
+        "expected Mgr before Self in '#{percents}'"
+    end
   end
 
   context "assessee experience during alignment" do
@@ -228,6 +248,22 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
 
       assert_selector "#rating-#{@cap_stable}-2 button[aria-haspopup='menu']"
+    end
+
+    should "lead with the assessee's own perspective in the split chip and hero" do
+      # Same cell, viewed by the assessee: their OWN "occasional" (green)
+      # rating leads top-left, the manager's "consistent" (blue) is
+      # bottom-right — the mirror of the manager's view of the same cell.
+      visit assessment_path(@report_assignment, capability: @cap_stable)
+      wait_for_stimulus "matrix"
+
+      assert_selector "#cell-#{@cap_stable}-2 [data-split].bg-green-500", visible: :all
+      assert_selector "#cell-#{@cap_stable}-2.bg-blue-500"
+
+      # Hero secondary percentages lead with the viewer's own — "Self:" first.
+      percents = find("#hero-secondary-percents", visible: :all).text
+      assert percents.index("Self:") < percents.index("Mgr:"),
+        "expected Self before Mgr in '#{percents}'"
     end
   end
 

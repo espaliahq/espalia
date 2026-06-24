@@ -13,6 +13,7 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
   # @param selected_levels [Hash{String => Integer}] per-capability selected
   #   level map (`stable_id => ordinal`)
   def initialize(framework:, matrix_data:, assignment:, context: :self,
+                 viewer_is_manager: false,
                  active_category_id: nil, expanded_capability_id: nil,
                  expanded_level_ordinal: nil, selected_levels: {},
                  viewer_person_id: nil, can_create_evidence: false,
@@ -23,6 +24,7 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
     @matrix_data = matrix_data
     @assignment = assignment
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
     @expanded_level_ordinal = expanded_level_ordinal
@@ -41,6 +43,7 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
         matrix_data: @matrix_data,
         assessment_id: @assignment.id,
         context: @context,
+        viewer_is_manager: @viewer_is_manager,
         expanded_capability_id: @expanded_capability_id,
         expanded_level_ordinal: @expanded_level_ordinal,
         selected_levels: @selected_levels,
