@@ -8,7 +8,7 @@
 # data-params. A person who already has a pending request on the cell renders
 # disabled ("Asked") so they can't be re-selected.
 class Views::Evidence::RequestCandidate < Views::Base
-  RELATION_LABELS = { manager: "manager", peer: "peer", report: "report" }.freeze
+  RELATION_LABELS = { assessee: "assessee", manager: "manager", peer: "peer", report: "report" }.freeze
 
   # @param candidate [Assessments::RequestCandidates::Candidate]
   # @param compact [Boolean] chip (suggestion) vs. row (search result)

@@ -68,8 +68,16 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_raises(Pundit::NotAuthorizedError) { request!(ctx: @peer_ctx) }
     end
 
-    should "reject requesting evidence from the assessee" do
+    should "reject requesting evidence from yourself" do
+      # default ctx is the report, so requesting from @report is self-request
       assert_raises(Operations::Base::ParameterError) { request!(requestee_person_id: @report.id) }
+    end
+
+    should "let the manager request evidence from the assessee (the report)" do
+      result = request!(ctx: @manager_ctx, requestee_person_id: @report.id)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal @report.id, EvidenceRequest.find(result[:request_id]).requestee_person_id
+      end
     end
   end
 

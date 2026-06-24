@@ -61,7 +61,9 @@ class Operations::Assessments::RequestEvidence < Operations::Base
   def validate_requestee!
     person = Person.find_by(id: params[:requestee_person_id], status: "active")
     raise Operations::Base::ParameterError, "requestee_person_id is not an active person in this workspace" if person.nil?
-    raise Operations::Base::ParameterError, "cannot request evidence from the assessee" if person.id == assignment.person_id
+    # The assessee may be asked (a manager nudging them for more evidence); only
+    # asking yourself is meaningless.
+    raise Operations::Base::ParameterError, "cannot request evidence from yourself" if person.id == context.person.id
   end
 
   def validate_capability_in_framework!

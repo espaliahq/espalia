@@ -69,6 +69,11 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     assert_text "Who can speak to this?"
   end
 
+  should "offer the assessee themselves as a recipient (a manager can ask for more evidence)" do
+    open_request_modal
+    assert_selector "[data-request-evidence-target='suggestions'] button", text: "Report Alex (assessee)"
+  end
+
   should "request evidence from a suggested peer and see it on the hub" do
     open_request_modal
 
