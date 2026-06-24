@@ -44,9 +44,14 @@ class Assessments::RequestCandidatesTest < ActiveSupport::TestCase
       assert_equal :report, relations[@report.id]
     end
 
-    should "exclude the assessee and the requester, and skip unrelated people" do
+    should "surface the assessee themselves when the requester is someone else" do
+      cands = query(requester: @manager).suggestions
+      assert_equal :assessee, cands.find { |c| c.person.id == @assessee.id }&.relation
+    end
+
+    should "exclude the requester and skip unrelated people" do
       ids = query(requester: @peer).suggestions.map { |c| c.person.id }
-      assert_not_includes ids, @assessee.id
+      assert_includes ids, @assessee.id        # a manager/peer can ask the assessee for more evidence
       assert_not_includes ids, @peer.id        # requester excluded even though a peer
       assert_not_includes ids, @stranger.id
     end
@@ -72,9 +77,14 @@ class Assessments::RequestCandidatesTest < ActiveSupport::TestCase
       assert_includes ids, @stranger.id
     end
 
-    should "never return the assessee or the requester" do
-      assert_empty query.search("Alex").map { |c| c.person.id } # assessee
+    should "never return the requester" do
+      assert_empty query.search("Alex").map { |c| c.person.id } # requester == assessee here
       assert_empty query(requester: @manager).search("Morgan").map { |c| c.person.id } # requester
+    end
+
+    should "let a non-assessee requester find the assessee" do
+      ids = query(requester: @manager).search("Alex").map { |c| c.person.id }
+      assert_includes ids, @assessee.id
     end
 
     should "flag an already-pending match instead of hiding it" do

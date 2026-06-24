@@ -831,7 +831,9 @@ class PersonDevelopment::Aggregate
                        level_ordinal:, message: nil, due_at: nil)
     ensure_assigned!
     raise CommandError, "Evidence request ID already exists" if @evidence_requests.key?(request_id)
-    raise CommandError, "Cannot request evidence from the assessee" if requestee_person_id == @person_id
+    # The assessee is a valid requestee (a manager can ask them for more
+    # evidence) — only asking yourself is meaningless.
+    raise CommandError, "Cannot request evidence from yourself" if requestee_person_id == requested_by_id
 
     apply(PersonDevelopment::Events::EvidenceRequested.new(data: {
       request_id: request_id,

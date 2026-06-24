@@ -39,11 +39,19 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_equal "Please help", req.message
     end
 
-    should "reject requesting evidence from the assessee themselves" do
+    should "reject requesting evidence from yourself" do
       error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
-        request!(requestee: @assessee)
+        request!(requestee: @assessee) # requested_by is the assessee too
       end
-      assert_match(/assessee/i, error.message)
+      assert_match(/yourself/i, error.message)
+    end
+
+    should "allow someone else to request evidence from the assessee" do
+      id = SecureRandom.uuid_v7
+      @handler.request_evidence(@assessee.id, @framework_id, id,
+        requested_by_id: @requestee.id, requestee_person_id: @assessee.id,
+        capability_stable_id: @cap, level_ordinal: 3, message: "Add more please")
+      assert_equal @assessee.id, EvidenceRequest.find(id).requestee_person_id
     end
 
     should "reject a duplicate request id" do

@@ -459,8 +459,11 @@ the response lands pre-linked to it.
   repoints the `#request-candidates` frame
   ([RequestCandidatesFrame](../../app/views/evidence/request_candidates_frame.rb));
   selection is client-side (chips + `requestee_ids[]` hidden inputs). People with a
-  **pending request on the cell are greyed "Asked"** and can't be re-selected;
-  the assessee and the requester are excluded entirely.
+  **pending request on the cell are greyed "Asked"** and can't be re-selected.
+  The **assessee themselves is a valid recipient** (surfaced as the first
+  suggestion, relation `assessee`) — a manager can nudge their report for more
+  evidence; only the **requester** (you) is excluded (asking yourself is
+  meaningless). The aggregate + operation enforce the same "not yourself" rule.
 - **Two render endpoints** (`EvidenceRequestsController#modal` / `#candidates`,
   assignment-scoped, `EvidenceRequestPolicy#request?`-authorized) feed the lazy modal
   frame and the typeahead frame.

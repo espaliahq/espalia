@@ -54,13 +54,14 @@ class Assessments::RequestCandidates
     scope.map { |person| candidate(person, relation: nil) }
   end
 
-  # The assessee's org neighbours as quick-add suggestions, de-duplicated and
-  # excluding the assessee + requester. Manager first, then peers, then reports.
+  # Quick-add suggestions, de-duplicated and excluding only the requester (you
+  # can't ask yourself). The assessee first (a manager can ask them for more
+  # evidence), then their manager, peers, and direct reports.
   #
   # @return [Array<Candidate>]
   def suggestions
     seen = Set.new
-    [ *manager_candidates, *peer_candidates, *report_candidates ].filter_map do |person, relation|
+    [ *assessee_candidate, *manager_candidates, *peer_candidates, *report_candidates ].filter_map do |person, relation|
       next if person.nil? || excluded_id?(person.id) || !seen.add?(person.id)
 
       candidate(person, relation:)
@@ -75,10 +76,11 @@ class Assessments::RequestCandidates
     @assessee ||= Person.find(assignment.person_id)
   end
 
-  # Active people in the tenant, minus the two hard exclusions. The
-  # already-pending people are NOT excluded here — they're flagged instead.
+  # Active people in the tenant, minus the requester (you can't ask yourself).
+  # The assessee IS selectable. Already-pending people are NOT excluded here —
+  # they're flagged instead.
   def selectable
-    Person.active.where.not(id: [ assessee.id, requester_person_id ])
+    Person.active.where.not(id: requester_person_id)
   end
 
   def candidate(person, relation:)
@@ -86,7 +88,11 @@ class Assessments::RequestCandidates
   end
 
   def excluded_id?(id)
-    id == assessee.id || id == requester_person_id
+    id == requester_person_id
+  end
+
+  def assessee_candidate
+    [ [ assessee, :assessee ] ]
   end
 
   # Requestee ids with a pending request on this exact cell.

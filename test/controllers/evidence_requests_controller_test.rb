@@ -137,7 +137,7 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
 
     should "skip an invalid recipient and summarise" do
       sign_in @report_user
-      # @report is the assessee — asking them is rejected and counted as skipped.
+      # @report is the signed-in requester — asking yourself is rejected and counted as skipped.
       assert_difference -> { ActsAsTenant.with_tenant(@tenant) { EvidenceRequest.pending.count } }, 1 do
         post evidence_requests_path, params: { evidence_request: {
           assignment_id: @assignment.id, capability_stable_id: @cap.stable_id, level_ordinal: 2,
