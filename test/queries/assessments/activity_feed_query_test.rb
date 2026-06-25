@@ -208,6 +208,11 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal 4, relink.level_ordinal
     end
 
+    should "attribute the relink to the actor who moved it" do
+      relink = @entries.find { |e| e.kind == "evidence_relinked" }
+      assert_equal "Assessee", relink.payload[:actor_name]
+    end
+
     should "carry the previous coords + rationale on the payload" do
       relink = @entries.find { |e| e.kind == "evidence_relinked" }
       assert_equal @cap_sid, relink.payload[:previous_capability_stable_id]
@@ -239,6 +244,7 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal 3, linked.level_ordinal
       assert_equal "Also applies here", linked.payload[:rationale]
       assert_equal "Launch", linked.payload[:evidence_title]
+      assert_equal "Assessee", linked.payload[:actor_name]
       assert_equal "evidence", Views::Assessments::Activity::Entry::KIND_GROUP[linked.kind]
     end
 
@@ -248,6 +254,7 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal @cap_sid, unlinked.capability_stable_id
       assert_equal 2, unlinked.level_ordinal
       assert_equal "Mislinked", unlinked.payload[:reason]
+      assert_equal "Assessee", unlinked.payload[:actor_name]
     end
 
     should "hide link changes a peer did not perform" do
