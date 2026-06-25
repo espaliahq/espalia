@@ -126,8 +126,8 @@ gem "store_model", "~> 4.5"
 # Event sourcing for Framework and Person Development aggregates.
 # `rails_event_store/all` is required instead of the umbrella's default entrypoint
 # because the latter loads the deprecated `rails_event_store_active_record` gem.
-gem "rails_event_store", "~> 2.16", require: "rails_event_store/all"
-gem "ruby_event_store-active_record", "~> 2.16"
+gem "rails_event_store", "~> 3.0", require: "rails_event_store/all"
+gem "ruby_event_store-active_record", "~> 3.0"
 
 # HTTP client for HRIS and external API integrations
 gem "faraday", "~> 2.0"
