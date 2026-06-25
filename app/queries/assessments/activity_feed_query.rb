@@ -98,6 +98,16 @@ class Assessments::ActivityFeedQuery
     "delegation_revoked"     => :revoked_by_id
   }.freeze
 
+  # Evidence link/relink events carry their actor's Person id under an
+  # event-specific key. Used to preload (`actor_names`) and merge an
+  # `actor_name` onto the entry payload so the feed names who linked /
+  # unlinked / moved the evidence — nil-safe for historical events.
+  EVIDENCE_LINK_ACTOR_KEYS = {
+    PersonDevelopment::Events::EvidenceLinkAdded   => :linked_by_id,
+    PersonDevelopment::Events::EvidenceLinkRemoved => :removed_by_id,
+    PersonDevelopment::Events::EvidenceRelinked    => :relinked_by_id
+  }.freeze
+
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self / :manager / :alignment
   # @param viewer_person_id [String, nil] UUID of the current viewer
@@ -196,11 +206,14 @@ class Assessments::ActivityFeedQuery
   def actor_names
     @actor_names ||= begin
       ids = stream_events.flat_map do |event|
-        kind = RATING_KINDS[event.class] || AUTHORITY_KINDS[event.class]
-        next [] unless kind
-
-        keys = [ ACTOR_ID_KEYS[kind], :delegate_person_id, :manager_id ].compact
-        keys.map { |key| event.data[key] || event.data[key.to_s] }
+        if (kind = RATING_KINDS[event.class] || AUTHORITY_KINDS[event.class])
+          keys = [ ACTOR_ID_KEYS[kind], :delegate_person_id, :manager_id ].compact
+          keys.map { |key| event.data[key] || event.data[key.to_s] }
+        elsif (key = EVIDENCE_LINK_ACTOR_KEYS[event.class])
+          [ event.data[key] || event.data[key.to_s] ]
+        else
+          []
+        end
       end.compact.uniq
       ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
     end
@@ -227,7 +240,8 @@ class Assessments::ActivityFeedQuery
         occurred_at: event_timestamp(event),
         payload: data.merge(
           previous_capability_name: capability_name_for(data[:previous_capability_stable_id]),
-          new_capability_name: capability_name_for(new_stable_id)
+          new_capability_name: capability_name_for(new_stable_id),
+          actor_name: actor_names[data[:relinked_by_id]]
         ),
         capability_stable_id: new_stable_id,
         level_ordinal: data[:new_level_ordinal],
@@ -266,7 +280,10 @@ class Assessments::ActivityFeedQuery
       id: event.event_id,
       kind: kind,
       occurred_at: event_timestamp(event),
-      payload: data.merge(evidence_title: evidence_title_for(data[:evidence_id])),
+      payload: data.merge(
+        evidence_title: evidence_title_for(data[:evidence_id]),
+        actor_name: actor_names[data[actor_key]]
+      ),
       capability_stable_id: stable_id,
       level_ordinal: data[:level_ordinal],
       cycle_id: nil,
@@ -292,6 +309,7 @@ class Assessments::ActivityFeedQuery
     scope = EvidenceItem
       .for_person(@assignment.person_id)
       .for_framework(@assignment.framework_id)
+      .includes(:author, :withdrawn_by)
     scope = scope.where(author_id: @viewer_person_id) unless @viewer_sees_all
 
     scope.flat_map do |item|

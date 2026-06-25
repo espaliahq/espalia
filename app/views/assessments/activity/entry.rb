@@ -168,7 +168,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_relinked"     then evidence_relinked_summary
     when "evidence_linked"       then evidence_link_summary("Linked")
     when "evidence_unlinked"     then evidence_link_summary("Unlinked", preposition: "from")
-    when "evidence_withdrawn"    then "Withdrew evidence on #{capability_label}"
+    when "evidence_withdrawn"    then evidence_withdrawn_summary
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
     when "alignment_reopened"    then "Re-opened alignment"
@@ -241,7 +241,11 @@ class Views::Assessments::Activity::Entry < Views::Base
     else
       "previous coordinate"
     end
-    "Relinked evidence from #{prev_label} to #{capability_label}"
+    if (name = actor_name)
+      "#{name} relinked evidence from #{prev_label} to #{capability_label}"
+    else
+      "Relinked evidence from #{prev_label} to #{capability_label}"
+    end
   end
 
   # "<Capability name> · L<n>" when both are known. Falls back to a
@@ -265,20 +269,55 @@ class Views::Assessments::Activity::Entry < Views::Base
   def evidence_recorded_summary
     item = @entry.payload
     title = item.respond_to?(:title) ? item.title.to_s : ""
+    subject = title.strip.empty? ? "evidence" : "“#{title.strip}”"
     label = capability_label
-    if title.strip.empty?
-      "Recorded evidence on #{label}"
+    if (name = evidence_author_name)
+      "#{name} recorded #{subject} on #{label}"
     else
-      "Recorded “#{title}” on #{label}"
+      "Recorded #{subject} on #{label}"
     end
   end
 
-  # "Linked evidence to <cap · Lx>" / "Unlinked evidence from <cap · Lx>",
-  # quoting the evidence title when the query resolved one.
+  # "<Actor> withdrew evidence on <cap · Lx>", falling back to a generic
+  # "Withdrew …" when the withdrawer is unknown (historical / unattributed).
+  def evidence_withdrawn_summary
+    if (name = evidence_withdrawer_name)
+      "#{name} withdrew evidence on #{capability_label}"
+    else
+      "Withdrew evidence on #{capability_label}"
+    end
+  end
+
+  # "<Actor> linked evidence to <cap · Lx>" / "… unlinked evidence from …",
+  # quoting the evidence title when the query resolved one. Falls back to a
+  # capitalised, actor-less form when the actor is unknown.
   def evidence_link_summary(verb, preposition: "to")
     title = payload_value(:evidence_title).to_s.strip.presence
     subject = title ? "“#{title}”" : "evidence"
-    "#{verb} #{subject} #{preposition} #{capability_label}"
+    if (name = actor_name)
+      "#{name} #{verb.downcase} #{subject} #{preposition} #{capability_label}"
+    else
+      "#{verb} #{subject} #{preposition} #{capability_label}"
+    end
+  end
+
+  # Author name behind an `evidence_recorded` entry (the payload is the
+  # EvidenceItem itself, with its `author` association preloaded), or nil.
+  def evidence_author_name
+    item = @entry.payload
+    return nil unless item.respond_to?(:author)
+
+    item.author&.name.to_s.strip.presence
+  end
+
+  # Withdrawer name behind an `evidence_withdrawn` entry (the payload is the
+  # EvidenceItem, with its `withdrawn_by` association preloaded), or nil —
+  # mirrors {#evidence_author_name}.
+  def evidence_withdrawer_name
+    item = @entry.payload
+    return nil unless item.respond_to?(:withdrawn_by)
+
+    item.withdrawn_by&.name.to_s.strip.presence
   end
 
   # Secondary line carries the rating frequency (with comment if present)
