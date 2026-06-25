@@ -9,6 +9,8 @@ class Views::Assessments::CategorySection < Views::Base
   # @param person_level [Integer]
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
+  #   party — threaded to each capability card's split chips
   # @param scoring [Hash] primary scoring
   # @param self_scoring [Hash, nil]
   # @param manager_scoring [Hash, nil]
@@ -25,7 +27,7 @@ class Views::Assessments::CategorySection < Views::Base
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
   def initialize(category_data:, merged_levels:, person_level:, assessment_id:,
-                 context: :self, scoring: {}, self_scoring: nil,
+                 context: :self, viewer_is_manager: false, scoring: {}, self_scoring: nil,
                  manager_scoring: nil, aligned_scoring: nil,
                  expanded_capability_id: nil, focused_level_ordinal: nil,
                  selected_levels: {},
@@ -40,6 +42,7 @@ class Views::Assessments::CategorySection < Views::Base
     @person_level = person_level
     @assessment_id = assessment_id
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @scoring = scoring
     @self_scoring = self_scoring
     @manager_scoring = manager_scoring
@@ -143,6 +146,7 @@ class Views::Assessments::CategorySection < Views::Base
           person_level: @person_level,
           assessment_id: @assessment_id,
           context: @context,
+          viewer_is_manager: @viewer_is_manager,
           category: @category,
           scoring: primary_scoring_for_context,
           blocked: statuses[stable_id] == :blocked,

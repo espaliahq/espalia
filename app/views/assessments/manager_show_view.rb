@@ -228,6 +228,9 @@ class Views::Assessments::ManagerShowView < Views::Base
         meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
         assessment_id: @assignment.id,
         context: @context,
+        # The manager-side view — the manager's own rating leads
+        # (top-left split / first secondary percentage) in alignment.
+        viewer_is_manager: true,
         assignment: @assignment,
         can_start_alignment: @can_start_alignment,
         can_complete_alignment: @can_complete_alignment,
@@ -263,6 +266,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         matrix_data: @matrix_data,
         assessment_id: @assignment.id,
         context: @context,
+        viewer_is_manager: true,
         expanded_capability_id: @expanded_capability_id,
         expanded_level_ordinal: @expanded_level_ordinal,
         selected_levels: @selected_levels,

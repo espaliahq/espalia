@@ -12,6 +12,8 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param person_level [Integer]
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
+  #   party — threaded to the level strip's split chips
   # @param category [FrameworkState::CapabilityCategory]
   # @param scoring [Hash] primary scoring from MatrixDataBuilder
   # @param blocked [Boolean]
@@ -30,7 +32,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:,
-                 context: :self, category: nil, scoring: {},
+                 context: :self, viewer_is_manager: false, category: nil, scoring: {},
                  blocked: false, block_reason: nil, contribution: nil,
                  expanded_capability_id: nil, focused_level_ordinal: nil,
                  selected_levels: {},
@@ -46,6 +48,7 @@ class Views::Assessments::CapabilityCard < Views::Base
     @person_level = person_level
     @assessment_id = assessment_id
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @category = category
     @scoring = scoring
     @blocked = blocked
@@ -111,6 +114,7 @@ class Views::Assessments::CapabilityCard < Views::Base
         capability_stable_id: @capability.stable_id,
         person_level: @person_level,
         context: @context,
+        viewer_is_manager: @viewer_is_manager,
         focused_ordinal: @focused_ordinal
       )
       # Expansion always renders — every card auto-focuses the person's

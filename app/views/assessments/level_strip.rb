@@ -13,14 +13,17 @@ class Views::Assessments::LevelStrip < Views::Base
   # @param capability_stable_id [String]
   # @param person_level [Integer]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] viewer is the manager-side party
+  #   (threaded to each {LevelChip} for the split-corner ordering)
   # @param focused_ordinal [Integer, nil] currently focused level ordinal
   def initialize(cells:, merged_levels:, capability_stable_id:, person_level:,
-                 context: :self, focused_ordinal: nil)
+                 context: :self, viewer_is_manager: false, focused_ordinal: nil)
     @cells = cells
     @merged_levels = merged_levels
     @capability_stable_id = capability_stable_id
     @person_level = person_level
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @focused_ordinal = focused_ordinal
   end
 
@@ -39,6 +42,7 @@ class Views::Assessments::LevelStrip < Views::Base
             person_level: @person_level,
             level_code: level[:level_code],
             context: @context,
+            viewer_is_manager: @viewer_is_manager,
             focused: level[:ordinal] == @focused_ordinal
           )
         end

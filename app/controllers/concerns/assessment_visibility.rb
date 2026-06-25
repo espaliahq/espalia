@@ -45,6 +45,18 @@ module AssessmentVisibility
     assessment_assessee&.managed_by?(current_person) || false
   end
 
+  # Whether the viewer is the manager-side party rather than the assessee —
+  # i.e. anyone who is not the person being assessed (the reporting manager,
+  # a manager-chain ancestor, an active rating delegate, or a tenant admin
+  # viewing). Drives the split-chip / hero ordering, where the viewer's own
+  # perspective leads. Requires `current_person` (callers run after
+  # `require_person`).
+  #
+  # @return [Boolean]
+  def viewer_is_manager?
+    @assignment.person_id != current_person&.id
+  end
+
   # Whether the viewer holds an active manager-rating delegation for this
   # assessment. Memoised — one lookup per request.
   #

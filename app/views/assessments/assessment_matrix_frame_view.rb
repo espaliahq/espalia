@@ -8,11 +8,14 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
   # @param matrix_data [Hash]
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
+  #   party — threaded down so split chips put the viewer's own rating top-left
   # @param active_category_id [String, nil] active tab category ID
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param selected_levels [Hash{String => Integer}] per-capability selected
   #   level map (`stable_id => ordinal`)
   def initialize(framework:, matrix_data:, assignment:, context: :self,
+                 viewer_is_manager: false,
                  active_category_id: nil, expanded_capability_id: nil,
                  expanded_level_ordinal: nil, selected_levels: {},
                  viewer_person_id: nil, can_create_evidence: false,
@@ -23,6 +26,7 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
     @matrix_data = matrix_data
     @assignment = assignment
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @active_category_id = active_category_id
     @expanded_capability_id = expanded_capability_id
     @expanded_level_ordinal = expanded_level_ordinal
@@ -41,6 +45,7 @@ class Views::Assessments::AssessmentMatrixFrameView < Views::Base
         matrix_data: @matrix_data,
         assessment_id: @assignment.id,
         context: @context,
+        viewer_is_manager: @viewer_is_manager,
         expanded_capability_id: @expanded_capability_id,
         expanded_level_ordinal: @expanded_level_ordinal,
         selected_levels: @selected_levels,

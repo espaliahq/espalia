@@ -142,6 +142,7 @@ class Assessments::AlignmentRatingsController < ApplicationController
             person_level: matrix_data[:person_level],
             level_code: level_code,
             context: :alignment,
+            viewer_is_manager: viewer_is_manager?,
             focused: true
           ),
           layout: false
@@ -172,6 +173,7 @@ class Assessments::AlignmentRatingsController < ApplicationController
             meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
             assessment_id: @assignment.id,
             context: :alignment,
+            viewer_is_manager: viewer_is_manager?,
             assessee_name: assessee_name_if_not_self
           ),
           layout: false

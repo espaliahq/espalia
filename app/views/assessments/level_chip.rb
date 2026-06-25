@@ -9,9 +9,9 @@
 # content language. The two never share a visual primitive:
 #
 # - **Fill** — solid colour keyed by the {FrequencyPalette} when a
-#   single perspective applies; a diagonal **split** (self top-left,
-#   manager bottom-right) when two visible perspectives disagree; a
-#   faint tint / grey when unrated. The diagonal seam *is* the
+#   single perspective applies; a diagonal **split** (the viewer's own
+#   rating top-left, the other party's bottom-right) when two visible
+#   perspectives disagree; a faint tint / grey when unrated. The seam *is* the
 #   misalignment signal — a split chip reads as "contested" regardless
 #   of the two colours, so it survives colour-blindness and the
 #   colours-too-close trap. (Replaces the former amber divergence dot.)
@@ -39,15 +39,20 @@ class Views::Assessments::LevelChip < Views::Base
   # @param person_level [Integer]
   # @param level_code [String] compact label (e.g. "E7")
   # @param context [Symbol] :self, :manager, or :alignment
+  # @param viewer_is_manager [Boolean] whether the viewer is the
+  #   manager-side party (manager or active rating delegate). Determines
+  #   which perspective takes the top-left slice of a split (see
+  #   {#paint_viewer_pair}); only consulted in :alignment context.
   # @param focused [Boolean] whether this chip is the currently focused level
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:,
-                 level_code:, context: :self, focused: false)
+                 level_code:, context: :self, viewer_is_manager: false, focused: false)
     @cell_data = cell_data
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
     @person_level = person_level
     @level_code = level_code
     @context = context
+    @viewer_is_manager = viewer_is_manager
     @focused = focused
   end
 
@@ -184,11 +189,11 @@ class Views::Assessments::LevelChip < Views::Base
     config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
   end
 
-  # The primary perspective as the top-left triangle, painted over the
-  # base (secondary) fill via a clip-path. The "/" seam runs bottom-left
-  # → top-right; by convention the *primary* perspective takes the
-  # top-left slice (manager view: manager top-left, self bottom-right;
-  # alignment: self top-left, manager bottom-right — see {#compute_fill_state}).
+  # The top-left triangle, painted over the base (bottom-right) fill via a
+  # clip-path. The "/" seam runs bottom-left → top-right; the **viewer's
+  # own** perspective takes the top-left slice and the **other party** the
+  # bottom-right, so each viewer always sees themselves in the top-left
+  # (see {#compute_fill_state}).
   def split_overlay
     span(
       class: "absolute inset-0 rounded-md #{palette_bg(fill_state[1])}",
@@ -215,15 +220,19 @@ class Views::Assessments::LevelChip < Views::Base
   #   [:solid, frequency]
   #   [:split, top_left_frequency, bottom_right_frequency]
   #
-  # The top-left slice is always the context's **primary** perspective
-  # (the customary place for it), the bottom-right the diverging
-  # secondary:
-  # - :manager   → primary is the manager → manager top-left, self bottom-right.
-  # - :alignment → primary is the aligned value; a recorded aligned
-  #   resolves the cell to :solid (no split). While unresolved there is
-  #   no primary among the two, so the perspectives being reconciled show
-  #   in reading order — self top-left, manager bottom-right — matching
-  #   the SecondaryRatingLine order.
+  # Corner position tracks **the viewer's own perspective**, not a fixed
+  # self/manager assignment: the viewer's rating takes the top-left slice,
+  # the other party's the bottom-right. So a viewer always sees their own
+  # rating in the same corner, and the manager view and the manager's
+  # alignment view read identically. (Tying position to context's "primary"
+  # perspective instead swapped the corners between manager view — manager
+  # primary, top-left — and alignment — self primary, top-left — which read
+  # as the ratings jumping sides.)
+  # - :manager   → viewer is the manager → manager top-left, self bottom-right.
+  # - :alignment → a recorded aligned value resolves the cell to :solid
+  #   (no split); while unresolved the two perspectives being reconciled
+  #   show the viewer's own top-left (manager-side viewer → manager top-left;
+  #   the assessee → self top-left).
   # A split is only produced in :manager / :alignment context, where the
   # viewer can see a second perspective. A split slice whose frequency is
   # nil (one side rated, the other not) paints grey.
@@ -239,17 +248,34 @@ class Views::Assessments::LevelChip < Views::Base
       freq = @cell_data[:current_frequency]
       freq.present? ? [ :solid, freq ] : [ :unrated ]
     when :manager
-      paint_pair(top_left: @cell_data[:manager_frequency],
-                 bottom_right: @cell_data[:current_frequency])
+      paint_viewer_pair
     when :alignment
       aligned = @cell_data[:aligned_frequency]
       return [ :solid, aligned ] if aligned.present?
 
-      paint_pair(top_left: @cell_data[:current_frequency],
-                 bottom_right: @cell_data[:manager_frequency])
+      paint_viewer_pair
     else
       [ :unrated ]
     end
+  end
+
+  # The viewer's own rating takes the top-left slice, the other party's the
+  # bottom-right — so the split reads identically whoever is looking. The
+  # manager-side party (the manager or an active rating delegate) is the
+  # viewer when {#viewer_is_manager_side?}; otherwise the assessee.
+  def paint_viewer_pair
+    self_freq = @cell_data[:current_frequency]
+    mgr_freq  = @cell_data[:manager_frequency]
+    own, other = viewer_is_manager_side? ? [ mgr_freq, self_freq ] : [ self_freq, mgr_freq ]
+    paint_pair(top_left: own, bottom_right: other)
+  end
+
+  # Whether the viewer is the manager-side party. In :manager context the
+  # viewer is the manager by definition, so we treat it as manager-side even
+  # if the flag wasn't threaded; :alignment relies on the explicit flag
+  # (either party can be viewing). :self never reaches here (it never splits).
+  def viewer_is_manager_side?
+    @viewer_is_manager || @context == :manager
   end
 
   # Both absent → unrated. Otherwise resolve each slice — an unrated
