@@ -281,9 +281,7 @@ class Views::Assessments::Activity::Entry < Views::Base
   # "<Actor> withdrew evidence on <cap · Lx>", falling back to a generic
   # "Withdrew …" when the withdrawer is unknown (historical / unattributed).
   def evidence_withdrawn_summary
-    item = @entry.payload
-    name = item.respond_to?(:withdrawn_by) ? item.withdrawn_by&.name.to_s.strip.presence : nil
-    if name
+    if (name = evidence_withdrawer_name)
       "#{name} withdrew evidence on #{capability_label}"
     else
       "Withdrew evidence on #{capability_label}"
@@ -310,6 +308,16 @@ class Views::Assessments::Activity::Entry < Views::Base
     return nil unless item.respond_to?(:author)
 
     item.author&.name.to_s.strip.presence
+  end
+
+  # Withdrawer name behind an `evidence_withdrawn` entry (the payload is the
+  # EvidenceItem, with its `withdrawn_by` association preloaded), or nil —
+  # mirrors {#evidence_author_name}.
+  def evidence_withdrawer_name
+    item = @entry.payload
+    return nil unless item.respond_to?(:withdrawn_by)
+
+    item.withdrawn_by&.name.to_s.strip.presence
   end
 
   # Secondary line carries the rating frequency (with comment if present)
