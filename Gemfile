@@ -86,7 +86,7 @@ group :development, :test do
   gem "factory_bot_rails"
 
   gem "erb_lint", require: false
-  gem "mailbin", "~> 1.1"
+  gem "mailbin", "~> 1.2"
 end
 
 group :development do

@@ -212,7 +212,7 @@ GEM
       net-imap
       net-pop
       net-smtp
-    mailbin (1.1.2)
+    mailbin (1.2.0)
       importmap-rails
       rails (>= 7.1.0)
       turbo-rails
@@ -521,7 +521,7 @@ GEM
       bindex (>= 0.4.0)
       railties (>= 8.0.0)
     websocket (1.2.11)
-    websocket-driver (0.8.1)
+    websocket-driver (0.8.2)
       base64
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.5)
@@ -561,7 +561,7 @@ DEPENDENCIES
   kamal
   lexxy (~> 0.9.18)
   local_time (~> 3.0)
-  mailbin (~> 1.1)
+  mailbin (~> 1.2)
   minitest-mock
   noticed (~> 3.0)
   omniauth-google-oauth2 (~> 1.2)
