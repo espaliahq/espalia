@@ -221,5 +221,25 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       JS
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
     end
+
+    should "name the author on an evidence-recorded feed entry" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap_stable, level_ordinal: 1, source: "self",
+          evidence_type: "project_outcome", title: "Launch",
+          content: "Shipped the thing.", author_id: @person.id
+        )
+      end
+
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_selector "#assessment-activity-pane turbo-frame#assessment-activity[complete]",
+        visible: :all
+
+      assert_selector "#assessment-activity-pane", text: "Alice recorded “Launch”", visible: true
+    end
   end
 end
