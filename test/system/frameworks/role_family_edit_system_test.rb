@@ -8,6 +8,7 @@ require "application_system_test_case"
 # (or a brand-new) department header. View mode shows no edit affordance.
 class Frameworks::RoleFamilyEditSystemTest < ApplicationSystemTestCase
   setup do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     @tenant = FactoryBot.create(:tenant)
     @admin_user = FactoryBot.create(:user, password: "password123")
 
@@ -61,6 +62,18 @@ class Frameworks::RoleFamilyEditSystemTest < ApplicationSystemTestCase
       open_family_edit_modal(@frontend_rf)
       assert_equal "Frontend", find("#role_family_edit_name").value
       assert_equal "Engineering", find("#role_family_edit_department").value
+    end
+
+    # The edit trigger lives in the role pane, which is an overlay on narrow
+    # viewports — reachable once the pane is toggled open.
+    should "reach the edit dialog on a narrow viewport via the role pane overlay" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      toggle_role_pane
+
+      open_family_edit_modal(@backend_rf)
+      assert_equal "Backend", find("#role_family_edit_name").value
     end
   end
 

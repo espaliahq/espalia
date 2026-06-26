@@ -15,9 +15,11 @@ class Frameworks::RoleFamiliesControllerTest < ActionDispatch::IntegrationTest
       @framework_id = SecureRandom.uuid_v7
       @rf_id = SecureRandom.uuid_v7
       @role_id = SecureRandom.uuid_v7
+      @role_id2 = SecureRandom.uuid_v7
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, @rf_id, "Engineering")
       handler.add_role(@framework_id, @role_id, @rf_id, "Engineer", "E", "ic")
+      handler.add_role(@framework_id, @role_id2, @rf_id, "Staff Engineer", "SE", "ic")
       handler.publish_version(@framework_id, "test")
     end
   end
@@ -64,14 +66,17 @@ class Frameworks::RoleFamiliesControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "keep the selected roles checked in the re-rendered families frame" do
+    should "thread the selection through so only the selected role stays checked" do
       sign_in @user
       patch framework_role_family_path(framework_id: @framework_id, id: @rf_id),
             params: { role_family: { department: "Finance" }, roles: [ @role_id ], track: "both" },
             headers: { "Turbo-Frame" => "role-tree-families" }
 
       assert_response :success
-      assert_includes response.body, "checked"
+      # The selected role's checkbox is checked; the unselected one is not — so a
+      # dropped `roles[]` (which would default to all-checked) fails the test.
+      assert_select "input[data-role-id=?][checked]", @role_id
+      assert_select "input[data-role-id=?]:not([checked])", @role_id2
     end
 
     should "leave the department unchanged when an unrelated field is edited" do

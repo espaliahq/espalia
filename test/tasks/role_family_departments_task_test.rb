@@ -18,7 +18,7 @@ class RoleFamilyDepartmentsTaskTest < ActiveSupport::TestCase
       handler = Frameworks::CommandHandler.new
       handler.create_framework(@framework_id, "Eng")
       # Added WITHOUT a department — the legacy event shape.
-      handler.add_role_family(@framework_id, @rf_id, "Engineering")
+      handler.add_role_family(@framework_id, @rf_id, "Engineering", description: "Builds things")
       handler.publish_version(@framework_id, "seed")
       # Simulate the old read-model-only department write.
       FrameworkState::RoleFamily
@@ -54,6 +54,13 @@ class RoleFamilyDepartmentsTaskTest < ActiveSupport::TestCase
 
     assert_equal "Product + Engineering", aggregate_department
     assert_equal 1, role_family_updated_count
+
+    # The department-only update must leave name/description untouched.
+    ActsAsTenant.with_tenant(@tenant) do
+      record = FrameworkState::RoleFamily.find_by!(role_family_id: @rf_id)
+      assert_equal "Engineering", record.name
+      assert_equal "Builds things", record.description
+    end
   end
 
   should "be idempotent on re-run" do
