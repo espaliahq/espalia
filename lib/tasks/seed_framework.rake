@@ -29,11 +29,11 @@ namespace :frameworks do
       # add_capability_category, etc.) apply live.
       handler.create_framework(framework_id, framework_data["name"])
 
-      # Collect post-publish read-model mutations (department, deficit_threshold)
-      # because the publish-time rebuild will wipe child read models and
-      # replay events from the stream — direct read-model writes made during
-      # the draft would be lost. Applied after publish.
-      pending_department_updates = []         # [[role_family_id, department], ...]
+      # Collect post-publish read-model mutations (deficit_threshold) because the
+      # publish-time rebuild will wipe child read models and replay events from
+      # the stream — direct read-model writes made during the draft would be
+      # lost. Applied after publish. (Department is now event-sourced on
+      # add_role_family, so it needs no deferral.)
       pending_category_threshold_updates = [] # [[category_id, deficit_threshold], ...]
 
       # ── Role Families, Roles, Levels ──
@@ -47,11 +47,10 @@ namespace :frameworks do
       framework_data["role_families"].select { |rf| rf["roles"] }.each do |rf_data|
         rfid = SecureRandom.uuid_v7
         puts "  Role family: #{rf_data['name']}"
-        handler.add_role_family(framework_id, rfid, rf_data["name"], description: rf_data["description"])
-
-        # Defer: department lives on the read model only (not event-sourced).
-        # Cannot set it here — the read-model row doesn't exist yet during the draft.
-        pending_department_updates << [ rfid, rf_data["department"] ] if rf_data["department"]
+        handler.add_role_family(
+          framework_id, rfid, rf_data["name"],
+          description: rf_data["description"], department: rf_data["department"]
+        )
 
         rf_data["roles"].each do |role_data|
           rid = SecureRandom.uuid_v7
@@ -147,19 +146,16 @@ namespace :frameworks do
       # Apply deferred read-model mutations now that the rebuild has created
       # the rows. find_by!/find_by raise/return nil if the rebuild didn't
       # materialise something expected — that's a desired loud failure.
-      pending_department_updates.each do |rfid, dept|
-        FrameworkState::RoleFamily.find_by!(role_family_id: rfid)
-          .update!(department: dept)
-      end
       pending_category_threshold_updates.each do |cat_id, threshold|
         FrameworkState::CapabilityCategory.find_by!(category_id: cat_id)
           .update!(deficit_threshold: threshold)
       end
 
-      # Department + deficit_threshold were applied directly to AR read
-      # models after publish — the aggregate-based snapshot written during
-      # publish doesn't see them. Rebuild the snapshot so the explorer
-      # graph reflects the final seeded state.
+      # deficit_threshold was applied directly to the AR read model after
+      # publish — the aggregate-based snapshot written during publish doesn't
+      # see it. Rebuild the snapshot so the explorer graph reflects the final
+      # seeded state. (Department is event-sourced, so it's already in the
+      # snapshot from publish.)
       Frameworks::ExplorerGraph.rebuild(framework_id)
 
       puts "\nSeed complete!"
