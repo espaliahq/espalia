@@ -85,6 +85,27 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       end
       assert_match /not found/, err.message
     end
+
+    should "clear the department as a canonical nil (key present, not '')" do
+      rfid = SecureRandom.uuid_v7
+      @aggregate.add_role_family(@framework_id, rfid, "Engineering", department: "Finance")
+      @aggregate.update_role_family(@framework_id, rfid, department: "")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert event.data.key?(:department), "the clear must keep the key so it applies"
+      assert_nil event.data[:department], "a clear is stored as nil, never ''"
+      assert_nil @aggregate.role_families[rfid][:department]
+    end
+
+    should "omit the department key when it is not supplied" do
+      rfid = SecureRandom.uuid_v7
+      @aggregate.add_role_family(@framework_id, rfid, "Engineering", department: "Finance")
+      @aggregate.update_role_family(@framework_id, rfid, name: "Software Engineering")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_not event.data.key?(:department), "an unrelated edit must not touch department"
+      assert_equal "Finance", @aggregate.role_families[rfid][:department]
+    end
   end
 
   # ── Roles ──

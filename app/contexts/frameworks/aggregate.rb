@@ -108,7 +108,8 @@ class Frameworks::Aggregate
       role_family_id: role_family_id,
       name: name,
       description: description,
-      department: department
+      # Canonical: blank → nil ("no department"), never an "" sentinel.
+      department: department.presence
     }))
   end
 
@@ -125,13 +126,13 @@ class Frameworks::Aggregate
     ensure_created!
     raise "Role family #{role_family_id} not found" unless @role_families.key?(role_family_id)
 
-    apply(Frameworks::Events::RoleFamilyUpdated.new(data: {
-      framework_id: framework_id,
-      role_family_id: role_family_id,
-      name: name,
-      description: description,
-      department: department
-    }.compact))
+    data = { framework_id: framework_id, role_family_id: role_family_id, name: name, description: description }.compact
+    # department: nil arg = "not supplied" (omit the key); a supplied value —
+    # including "" to clear — keeps the key present but canonical-nil, so the
+    # clear is applied (it would be dropped by .compact) and never stored as "".
+    data[:department] = department.presence unless department.nil?
+
+    apply(Frameworks::Events::RoleFamilyUpdated.new(data: data))
   end
 
   # Adds a role to a role family.
