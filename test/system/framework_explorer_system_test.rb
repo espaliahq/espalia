@@ -18,7 +18,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Role family: Product Design
       @pd_family_id = SecureRandom.uuid_v7
       @pd_role_id = SecureRandom.uuid_v7
-      handler.add_role_family(@framework_id, @pd_family_id, "Product Design")
+      handler.add_role_family(@framework_id, @pd_family_id, "Product Design", department: "Product + Engineering")
       handler.add_role(@framework_id, @pd_role_id, @pd_family_id, "Product Designer", "PD", "ic")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @pd_role_id, 1, "Associate Product Designer", "PD1", is_entry: true)
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @pd_role_id, 2, "Product Designer", "PD2")
@@ -27,7 +27,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       @eng_family_id = SecureRandom.uuid_v7
       @eng_role_id = SecureRandom.uuid_v7
       @em_role_id = SecureRandom.uuid_v7
-      handler.add_role_family(@framework_id, @eng_family_id, "Software Engineering")
+      handler.add_role_family(@framework_id, @eng_family_id, "Software Engineering", department: "Product + Engineering")
       handler.add_role(@framework_id, @eng_role_id, @eng_family_id, "Software Engineer", "E", "ic")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @eng_role_id, 1, "Engineer I", "E1", is_entry: true)
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @eng_role_id, 2, "Engineer II", "E2")
@@ -39,7 +39,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       # Role family: Financial Control
       @fc_family_id = SecureRandom.uuid_v7
       @fc_role_id = SecureRandom.uuid_v7
-      handler.add_role_family(@framework_id, @fc_family_id, "Financial Control")
+      handler.add_role_family(@framework_id, @fc_family_id, "Financial Control", department: "Finance")
       handler.add_role(@framework_id, @fc_role_id, @fc_family_id, "Financial Controller", "FC", "ic")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, @fc_role_id, 1, "Junior Financial Controller", "FC1", is_entry: true)
 
@@ -71,15 +71,10 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, collab_cap_id, @eng_role_id)
       handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, collab_cap_id, 1, "Builds trust with partners")
 
-      # Publish v1 so shape-changing events land in the read model.
-      # Note: rebuild wipes child read models and replays events, so direct
-      # read-model-only updates (department) must happen AFTER publish.
+      # Publish v1 so shape-changing events land in the read model. Department is
+      # event-sourced on add_role_family above, so it's already in the published
+      # read model + explorer-graph snapshot.
       handler.publish_version(@framework_id, "test")
-
-      # Department is a read-model-only field (not event-sourced) — set after publish
-      FrameworkState::RoleFamily.find_by!(role_family_id: @pd_family_id).update!(department: "Product + Engineering")
-      FrameworkState::RoleFamily.find_by!(role_family_id: @eng_family_id).update!(department: "Product + Engineering")
-      FrameworkState::RoleFamily.find_by!(role_family_id: @fc_family_id).update!(department: "Finance")
     end
 
     sign_in_as(@user)
