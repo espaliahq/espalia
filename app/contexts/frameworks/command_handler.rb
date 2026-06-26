@@ -35,9 +35,10 @@ class Frameworks::CommandHandler
   # @param role_family_id [String] UUID for the new role family
   # @param name [String] display name
   # @param description [String, nil] optional description
-  def add_role_family(framework_id, role_family_id, name, description: nil)
+  # @param department [String, nil] optional department grouping label
+  def add_role_family(framework_id, role_family_id, name, description: nil, department: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.add_role_family(framework_id, role_family_id, name, description: description)
+      framework.add_role_family(framework_id, role_family_id, name, description: description, department: department)
     end
   end
 
@@ -47,9 +48,10 @@ class Frameworks::CommandHandler
   # @param role_family_id [String] UUID of the role family
   # @param name [String, nil] updated name
   # @param description [String, nil] updated description
-  def update_role_family(framework_id, role_family_id, name: nil, description: nil)
+  # @param department [String, nil] updated department grouping label ("" clears)
+  def update_role_family(framework_id, role_family_id, name: nil, description: nil, department: nil)
     @repository.with_framework(framework_id) do |framework|
-      framework.update_role_family(framework_id, role_family_id, name: name, description: description)
+      framework.update_role_family(framework_id, role_family_id, name: name, description: description, department: department)
     end
   end
 

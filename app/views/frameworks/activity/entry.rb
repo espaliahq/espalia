@@ -292,7 +292,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"
     when "illustration_removed" then "Removed an illustration"
-    when "role_family_updated" then org_update_summary("role family", name: "name", description: "description")
+    when "role_family_updated" then org_update_summary("role family", name: "name", description: "description", department: "department")
     when "role_updated"        then org_update_summary("role", name: "name", code: "code", track: "track")
     when "level_updated"       then org_update_summary("level", title: "title", code: "code")
     when "draft_opened"        then draft_opened_summary

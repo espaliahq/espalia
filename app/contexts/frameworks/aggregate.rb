@@ -89,8 +89,9 @@ class Frameworks::Aggregate
   # @param role_family_id [String] UUID for the new role family
   # @param name [String] display name
   # @param description [String, nil] optional description
+  # @param department [String, nil] optional department grouping label
   # @raise [RuntimeError] if framework not created or role family already exists
-  def add_role_family(framework_id, role_family_id, name, description: nil)
+  def add_role_family(framework_id, role_family_id, name, description: nil, department: nil)
     ensure_created!
     raise "Role family #{role_family_id} already exists" if @role_families.key?(role_family_id)
 
@@ -98,7 +99,8 @@ class Frameworks::Aggregate
       framework_id: framework_id,
       role_family_id: role_family_id,
       name: name,
-      description: description
+      description: description,
+      department: department
     }))
   end
 
@@ -108,8 +110,10 @@ class Frameworks::Aggregate
   # @param role_family_id [String] UUID of the role family
   # @param name [String, nil] updated name
   # @param description [String, nil] updated description
+  # @param department [String, nil] updated department grouping label; pass ""
+  #   to clear the grouping, nil to leave it unchanged
   # @raise [RuntimeError] if role family does not exist
-  def update_role_family(framework_id, role_family_id, name: nil, description: nil)
+  def update_role_family(framework_id, role_family_id, name: nil, description: nil, department: nil)
     ensure_created!
     raise "Role family #{role_family_id} not found" unless @role_families.key?(role_family_id)
 
@@ -117,7 +121,8 @@ class Frameworks::Aggregate
       framework_id: framework_id,
       role_family_id: role_family_id,
       name: name,
-      description: description
+      description: description,
+      department: department
     }.compact))
   end
 
@@ -1049,7 +1054,8 @@ class Frameworks::Aggregate
   on Frameworks::Events::RoleFamilyAdded do |event|
     @role_families[event.data[:role_family_id]] = {
       name: event.data[:name],
-      description: event.data[:description]
+      description: event.data[:description],
+      department: event.data[:department]
     }
   end
 
@@ -1057,6 +1063,7 @@ class Frameworks::Aggregate
     family = @role_families[event.data[:role_family_id]]
     family[:name] = event.data[:name] if event.data.key?(:name)
     family[:description] = event.data[:description] if event.data.key?(:description)
+    family[:department] = event.data[:department] if event.data.key?(:department)
   end
 
   on Frameworks::Events::RoleAdded do |event|

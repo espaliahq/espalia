@@ -8,6 +8,8 @@
 #   @option data [String] :role_family_id UUID of the role family
 #   @option data [String] :name updated name (optional)
 #   @option data [String] :description updated description (optional)
+#   @option data [String] :department updated department grouping label
+#     (optional; "" clears the grouping)
 #
 class Frameworks::Events::RoleFamilyUpdated < RubyEventStore::Event
 end

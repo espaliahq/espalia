@@ -40,11 +40,11 @@ class Frameworks::ExplorerGraphBuilder
         role_family_id: rfid,
         name: data[:name],
         description: data[:description],
-        # `department` lives only on the AR read model today — it is not
-        # event-sourced (see seed_framework.rake). Pull it from there so the
-        # graph stays faithful without opening the aggregate up to a
-        # department event.
-        department: department_by_role_family[rfid],
+        # `department` is event-sourced on RoleFamilyAdded/Updated. Transitional
+        # fallback to the AR read model for families whose streams predate the
+        # backfill (events:backfill_role_family_departments) — remove the
+        # fallback (and `department_by_role_family`) once it has run everywhere.
+        department: data[:department].presence || department_by_role_family[rfid],
         roles: build_roles_for(rfid)
       )
     end
