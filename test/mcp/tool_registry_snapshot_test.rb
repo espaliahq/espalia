@@ -938,7 +938,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_update_role_family",
-        "description" => "Rename or re-describe a role family (owner/editor/lead only).",
+        "description" => "Update a role family's name, description, or department (owner/editor/lead only).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

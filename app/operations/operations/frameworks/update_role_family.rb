@@ -13,7 +13,7 @@
 #
 # Write — :mcp_client.
 class Operations::Frameworks::UpdateRoleFamily < Operations::Base
-  description "Rename or re-describe a role family (owner/editor/lead only)."
+  description "Update a role family's name, description, or department (owner/editor/lead only)."
   category :write
   approval :mcp_client
 
@@ -36,8 +36,10 @@ class Operations::Frameworks::UpdateRoleFamily < Operations::Base
       name: params[:name].presence, description: params[:description], department: params[:department]
     )
     {
+      # Mirror the sanitised name the command actually applied (a blank name is
+      # treated as unchanged), so the result doesn't misreport name: "".
       framework_id: framework.framework_id, role_family_id: params[:role_family_id],
-      name: params[:name], department: params[:department]
+      name: params[:name].presence, department: params[:department]
     }
   end
 
