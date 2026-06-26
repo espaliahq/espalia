@@ -162,11 +162,13 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       wait_for_turbo_idle
 
       # Highlight mode keeps the whole feed visible and accents the
-      # matches — that accent is the behaviour under test here.
+      # matches — that accent is the behaviour under test here. Drive the
+      # real toggle button (JS-dispatched click) so the Stimulus action +
+      # mode-param wiring is exercised, not just the controller method.
       page.execute_script(<<~JS)
-        const wrapper = document.querySelector("[data-controller~='activity-feed']");
-        const ctrl = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-feed");
-        ctrl.setMode({ params: { mode: "highlight" } });
+        document.querySelector(
+          "[data-activity-feed-target='modeSegment'][data-activity-feed-mode-param='highlight']"
+        ).click();
       JS
 
       click_card_header(@cap1_stable)
