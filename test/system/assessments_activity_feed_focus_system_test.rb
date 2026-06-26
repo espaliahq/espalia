@@ -161,6 +161,16 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       wait_for_turbo_idle
 
+      # Highlight mode keeps the whole feed visible and accents the
+      # matches — that accent is the behaviour under test here. Drive the
+      # real toggle button (JS-dispatched click) so the Stimulus action +
+      # mode-param wiring is exercised, not just the controller method.
+      page.execute_script(<<~JS)
+        document.querySelector(
+          "[data-activity-feed-target='modeSegment'][data-activity-feed-mode-param='highlight']"
+        ).click();
+      JS
+
       click_card_header(@cap1_stable)
 
       # Two cap1 entries (one rating, one evidence) should match; two
@@ -173,7 +183,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
   end
 
   context "focus filter mode" do
-    should "hide non-matching entries when Filter mode is selected and focus is active" do
+    should "hide non-matching entries and not accent the visible ones when Filter mode is active" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
       toggle_activity_pane
@@ -188,6 +198,11 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       assert_selector "[data-capability-stable-id='#{@cap1_stable}'][data-hidden='true']",
         visible: :all, count: 2
       assert_selector "[data-capability-stable-id='#{@cap2_stable}'][data-hidden='false']",
+        visible: :all, count: 2
+
+      # The surviving entries are already the whole focus, so they carry
+      # no amber accent — highlight styling is redundant in Filter mode.
+      assert_selector "[data-capability-stable-id='#{@cap2_stable}'][data-match='false']",
         visible: :all, count: 2
     end
   end

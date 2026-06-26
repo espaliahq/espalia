@@ -6,8 +6,11 @@
 // - matrix focus state, picked up via matrix:focus-changed
 //
 // Reapplies entry visibility + amber-accent styling whenever any of the
-// three changes. Click on a focusable entry dispatches activity:navigate
-// so the matrix expands the matching row and scrolls to it.
+// three changes. The amber accent only applies in Highlight mode, where
+// matches and non-matches coexist; in Filter mode the non-matches are
+// hidden, so the visible entries are the focus and need no accent. Click
+// on a focusable entry dispatches activity:navigate so the matrix expands
+// the matching row and scrolls to it.
 
 import BaseController from "controllers/base_controller"
 
@@ -105,7 +108,12 @@ export default class extends BaseController {
       const filterModeHidden = this.mode === "filter" && this.#hasActiveFocus() && !matches
       const filteredOut = !inFilter
 
-      entry.dataset.match = (this.#hasActiveFocus() && matches) ? "true" : "false"
+      // The amber-accent highlight only earns its keep in Highlight mode,
+      // where matching and non-matching entries sit side by side. In Filter
+      // mode the non-matches are hidden, so every visible entry already
+      // belongs to the focus — accenting them all is redundant noise.
+      const highlight = this.mode === "highlight" && this.#hasActiveFocus() && matches
+      entry.dataset.match = highlight ? "true" : "false"
       entry.dataset.hidden = (filteredOut || filterModeHidden) ? "true" : "false"
     })
 
