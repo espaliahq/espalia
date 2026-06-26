@@ -945,7 +945,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "framework_id"   => { "type" => "string" },
             "role_family_id" => { "type" => "string" },
             "name"           => { "type" => "string" },
-            "description"    => { "type" => "string" }
+            "description"    => { "type" => "string" },
+            "department"     => { "type" => "string" }
           },
           "required" => %w[framework_id role_family_id],
           "additionalProperties" => false
