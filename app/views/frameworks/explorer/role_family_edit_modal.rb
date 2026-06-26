@@ -1,0 +1,126 @@
+# frozen_string_literal: true
+
+# Shared "edit role family" modal for the Framework Explorer (edit mode). One
+# instance per page; each family's hover "edit" trigger in the role tree opens
+# it, passing the family's id / name / description / department via the trigger
+# dataset (read by the `role-family-edit-form` Stimulus controller, which also
+# points the form at that family's update endpoint).
+#
+# Edits all three role-family properties at once (name + description +
+# department). Department is a free-text grouping label with a <datalist> of the
+# framework's existing departments — typing a new value creates a group, picking
+# an existing one moves the family into it, clearing it ungroups the family.
+#
+# Submits to {Frameworks::RoleFamiliesController#update} targeting the
+# `role-tree-families` Turbo Frame, so the family re-groups in place (the
+# current role selection rides along as hidden inputs the Stimulus controller
+# fills from the URL). The modal closes on a successful submit (modal#submitted).
+class Views::Frameworks::Explorer::RoleFamilyEditModal < Views::Base
+  # @param framework_id [String]
+  # @param departments [Array<String>] existing department labels for autocomplete
+  def initialize(framework_id:, departments: [])
+    @framework_id = framework_id
+    @departments = departments
+  end
+
+  def view_template
+    render Components::Kit::Modal.new(
+      id: "role-family-edit-modal", title: "Edit role family", standalone: false
+    ) do |m|
+      m.body { form_body }
+    end
+  end
+
+  private
+
+  def form_body
+    form(
+      # __RFID__ is substituted with the role family id by role-family-edit-form
+      # when the modal opens (the id varies per trigger).
+      action: framework_role_family_path(@framework_id, "__RFID__"),
+      method: "post",
+      class: "space-y-4",
+      data: {
+        controller: "role-family-edit-form",
+        role_family_edit_form_action_template_value: framework_role_family_path(@framework_id, "__RFID__"),
+        turbo_frame: "role-tree-families",
+        action: "turbo:submit-end->modal#submitted"
+      }
+    ) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      input(type: "hidden", name: "_method", value: "patch")
+      # Current role selection + track, filled from the browser URL on open so
+      # the re-rendered tree keeps the user's selection checked.
+      div(class: "hidden", data: { role_family_edit_form_target: "scope" })
+
+      name_field
+      description_field
+      department_field
+      departments_datalist
+      actions
+    end
+  end
+
+  def name_field
+    div do
+      label(for: "role_family_edit_name", class: label_classes) { "Name" }
+      input(
+        type: "text", id: "role_family_edit_name", name: "role_family[name]",
+        required: true, class: field_classes, data: { role_family_edit_form_target: "name" }
+      )
+    end
+  end
+
+  def description_field
+    div do
+      label(for: "role_family_edit_description", class: label_classes) { "Description" }
+      textarea(
+        id: "role_family_edit_description", name: "role_family[description]", rows: "2",
+        class: field_classes, data: { role_family_edit_form_target: "description" }
+      )
+    end
+  end
+
+  def department_field
+    div do
+      label(for: "role_family_edit_department", class: label_classes) do
+        plain "Department "
+        span(class: "font-normal text-gray-500 dark:text-gray-400") { "(grouping)" }
+      end
+      input(
+        type: "text", id: "role_family_edit_department", name: "role_family[department]",
+        list: "role-family-departments", autocomplete: "off",
+        placeholder: "e.g. Product + Engineering", class: field_classes,
+        data: { role_family_edit_form_target: "department" }
+      )
+    end
+  end
+
+  def departments_datalist
+    datalist(id: "role-family-departments") do
+      @departments.each { |dept| option(value: dept) }
+    end
+  end
+
+  def actions
+    div(class: "flex items-center gap-3 pt-1") do
+      button(
+        type: "submit",
+        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
+               "text-white hover:bg-primary/90 transition-colors"
+      ) { "Save" }
+      button(
+        type: "button", data: { action: "click->modal#close" },
+        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
+      ) { "Cancel" }
+    end
+  end
+
+  def label_classes = "block text-sm font-medium text-gray-900 dark:text-white mb-1"
+
+  def field_classes
+    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+  end
+end

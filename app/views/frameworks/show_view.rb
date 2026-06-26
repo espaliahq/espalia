@@ -95,10 +95,19 @@ class Views::Frameworks::ShowView < Views::Base
     render Views::Frameworks::Explorer::BindingEditorModal.new(
       framework_id: @framework.framework_id
     )
+    render Views::Frameworks::Explorer::RoleFamilyEditModal.new(
+      framework_id: @framework.framework_id, departments: role_family_departments
+    )
   end
 
   # Whether the shared structural-edit modals (+ the `modal` controller) render.
   def structural_modals? = @mode == :edit && @can_edit_structure
+
+  # Distinct department labels across the framework's role families — feeds the
+  # role-family edit dialog's <datalist> so contributors reuse existing groups.
+  def role_family_departments
+    @role_families.filter_map { |rf| rf.department.presence }.uniq.sort
+  end
 
   # data-controller/action for the explorer root, adding the `modal`
   # controller + Esc-to-close in edit mode — it hosts both the structural
@@ -469,7 +478,8 @@ class Views::Frameworks::ShowView < Views::Base
         selected_role_ids: @selected_role_ids,
         track_filter: @track_filter,
         framework_id: @framework.framework_id,
-        mode: @mode
+        mode: @mode,
+        can_edit_structure: @can_edit_structure
       )
     end
   end
