@@ -135,7 +135,7 @@ The matrix reads from the `Frameworks::ExplorerGraph` snapshot — a persistent 
 
 **Department → Role Family → Role**
 
-Departments are a display grouping — a free-text `department` string that is an **event-sourced** property of the role family (`RoleFamilyAdded`/`RoleFamilyUpdated`, projected to the `framework_role_families.department` column). Role families without a department appear ungrouped. Moving a family between departments is just editing the string (no department entity); a brand-new string creates a group, emptying the last family out of one removes it. This mirrors organisational structure without prescribing it. Edited via the role-family edit dialog (§11).
+Departments are a display grouping — a free-text `department` string that is an **event-sourced** property of the role family (`RoleFamilyAdded`/`RoleFamilyUpdated`, projected to the `framework_role_families.department` column). Role families without a department appear ungrouped. Moving a family between departments is just editing the string (no department entity); a brand-new string creates a group, emptying the last family out of one removes it. This mirrors organisational structure without prescribing it. Two edit surfaces (§11): the role-family edit dialog moves **one** family; inline-renaming a **department header** relabels **every** family in that group at once (bulk relabel via `RenameDepartment`).
 
 ### 2. Solo Mode
 
@@ -473,6 +473,19 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   reads as "department" in the activity feed) and branches on the `Turbo-Frame`
   header — the families frame for the dialog, the per-family name frame for the
   inline rename.
+- **Department-header rename (bulk relabel)** — each department group header is
+  itself inline-editable in edit mode (`DepartmentNameFrame` + the shared
+  inline-editor pencil). Saving relabels the department across **every** family
+  in the group: `Frameworks::DepartmentsController#update` dispatches
+  `Operations::Frameworks::RenameDepartment`, which fans out to
+  `UpdateRoleFamily(department:)` per affected family (a blank target ungroups
+  them all). It re-renders the same `role-tree-families` frame so the group
+  re-labels in place; the `tree-scope-fields` controller injects the current
+  role selection at submit (via the form's `formdata` event) so checkboxes stay
+  checked. Both controllers share `Frameworks::RoleTreeFamiliesFrame` for the
+  frame render. Gated by `#update_role_family?`. A bulk rename emits one
+  `RoleFamilyUpdated` per family, so it shows as N department entries in the
+  activity feed.
 
 **Shared modals under one `modal` controller.** Archive(-capability),
 add-capability, add-category, and archive-category are four embedded `Kit::Modal`s
@@ -921,7 +934,12 @@ line (§9).
 | `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame; renders `RoleFamilyNameFrame` + `RoleNameFrame` for inline rename + the per-family edit-dialog trigger when `mode == :edit` |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
 | `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family edit dialog (name + description + department-with-`<datalist>`); submit re-renders the `role-tree-families` frame so the family re-groups |
+| `app/views/frameworks/explorer/department_name_frame.rb` | Department group header; inline-renameable in edit mode → bulk relabel of every family in the group |
 | `app/javascript/controllers/role_family_edit_form_controller.js` | Prefills the role-family edit dialog from the trigger dataset; copies the current `roles[]`/`track` selection from the URL so the re-rendered tree stays checked |
+| `app/javascript/controllers/tree_scope_fields_controller.js` | Injects the current `roles[]`/`track` selection into a form at submit (`formdata` event) — used by the department-rename inline editor |
+| `app/operations/operations/frameworks/rename_department.rb` | Shared web + MCP operation — bulk-rename a department across its role families (fans out to `UpdateRoleFamily`; blank target ungroups) |
+| `app/controllers/frameworks/departments_controller.rb` | `PATCH /frameworks/:id/departments` — dispatch `RenameDepartment`, re-render the `role-tree-families` frame |
+| `app/controllers/concerns/frameworks/role_tree_families_frame.rb` | Shared `role-tree-families` frame render (selection-preserving), used by the role-family + department controllers |
 | `app/views/frameworks/explorer/role_name_frame.rb` | Role name + edit-mode inline rename editor (direct edit) |
 | `app/views/frameworks/explorer/level_title_frame.rb` | Per-role level title + edit-mode inline rename editor (full-title header mode only) |
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
