@@ -14,7 +14,7 @@
 # inline rename keeps targeting its own per-family name frame (in-place swap).
 #
 class Frameworks::RoleFamiliesController < ApplicationController
-  FAMILIES_FRAME = "role-tree-families"
+  include Frameworks::RoleTreeFamiliesFrame
 
   before_action :set_framework
   before_action :set_role_family, only: [ :update ]
@@ -32,7 +32,7 @@ class Frameworks::RoleFamiliesController < ApplicationController
     end
 
     if request.headers["Turbo-Frame"] == FAMILIES_FRAME
-      render_families_frame
+      render_role_tree_families_frame(@framework)
     else
       render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
         role_family: @role_family.reload, framework_id: @framework.framework_id, mode: :edit
@@ -62,23 +62,6 @@ class Frameworks::RoleFamiliesController < ApplicationController
       attrs[:department] = permitted[:department]
     end
     attrs
-  end
-
-  # Re-render the role tree so Turbo swaps the `role-tree-families` frame — the
-  # edited family re-groups under its (possibly new) department header. The
-  # current role selection rides along in the form so it stays checked.
-  def render_families_frame
-    graph = Frameworks::ExplorerGraph.load(@framework.framework_id) ||
-            Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
-
-    render Views::Frameworks::Explorer::RoleTree.new(
-      role_families: graph.role_families,
-      selected_role_ids: Array.wrap(params[:roles]).select(&:present?),
-      track_filter: params[:track].presence || "both",
-      framework_id: @framework.framework_id,
-      mode: :edit,
-      can_edit_structure: true
-    ), layout: false
   end
 
   def set_framework

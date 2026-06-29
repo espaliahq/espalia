@@ -183,6 +183,9 @@ Rails.application.routes.draw do
     resources :categories,   only: [ :create, :update ], controller: "frameworks/categories"
     resources :category_archives, only: [ :create ], controller: "frameworks/category_archives"
     resources :role_families, only: [ :update ], controller: "frameworks/role_families"
+    # Bulk department rename — keyed by the label in the body (no id), so a
+    # singular resource (PATCH /frameworks/:framework_id/departments).
+    resource :departments, only: [ :update ], controller: "frameworks/departments"
     resources :roles,         only: [ :update ], controller: "frameworks/roles"
     resources :levels,        only: [ :update ], controller: "frameworks/levels"
     resources :expectations, only: [ :create, :update ], controller: "frameworks/expectations"
