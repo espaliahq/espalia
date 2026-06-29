@@ -148,11 +148,13 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
 
   def department_group(dept_name, families)
     if dept_name.present?
-      # Department header with collapsible content
+      # Department header (inline-renameable in edit mode) + collapsible content.
+      # Renaming the header relabels every family in the group at once.
       div(class: "mb-2") do
-        div(class: "px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider") do
-          dept_name
-        end
+        render Views::Frameworks::Explorer::DepartmentNameFrame.new(
+          department: dept_name, framework_id: @framework_id,
+          mode: (@mode == :edit && @can_edit_structure) ? :edit : :view
+        )
         div(class: "space-y-0.5") do
           families.sort_by(&:name).each { |rf| family_group(rf) }
         end
