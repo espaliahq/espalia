@@ -50,7 +50,9 @@ class Frameworks::RoleFamiliesController < ApplicationController
   # name IS forwarded so the operation rejects it (422 — a family can't be
   # renamed to nothing); a blank description/department is forwarded to clear it.
   def changed_role_family_attrs
-    permitted = params.fetch(:role_family, {}).permit(:name, :description, :department)
+    # params.expect fails fast (400) on a missing/malformed `role_family` envelope
+    # rather than a 500 on .permit or a silent no-op on an empty fallback.
+    permitted = params.expect(role_family: [ :name, :description, :department ])
     attrs = {}
     if permitted.key?(:name) && (permitted[:name].blank? || permitted[:name] != @role_family.name)
       attrs[:name] = permitted[:name]

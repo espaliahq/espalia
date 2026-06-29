@@ -232,7 +232,8 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   def family_edit_trigger(role_family)
     button(
       type: "button",
-      class: "opacity-0 group-hover:opacity-100 shrink-0 p-0.5 rounded-sm " \
+      class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
+             "focus-visible:opacity-100 shrink-0 p-0.5 rounded-sm " \
              "text-gray-400 hover:text-primary transition-opacity",
       data: {
         action: "click->modal#open",

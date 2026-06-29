@@ -48,6 +48,21 @@ class Frameworks::DepartmentRenameSystemTest < ApplicationSystemTestCase
       assert_text "Financial Control"
       assert_text "Finance Operations"
     end
+
+    # The header lives in the role pane, an overlay on narrow viewports —
+    # reachable once toggled open.
+    should "rename a department on a narrow viewport via the role pane overlay" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      toggle_role_pane
+      assert_selector "input[name='department[from]'][value='Finance']", visible: :all
+
+      rename_department("Finance", "Commercial Finance")
+
+      assert_selector "input[name='department[from]'][value='Commercial Finance']", visible: :all
+      assert_no_selector "input[name='department[from]'][value='Finance']", visible: :all
+    end
   end
 
   context "view mode" do
