@@ -10,7 +10,7 @@
 # grant permissions or change other people's data); the same friction as
 # recording evidence is appropriate.
 class Operations::Assessments::AddEvidenceLink < Operations::Base
-  description "Link an existing evidence item to an additional capability × level."
+  description "Link an existing feedback / evidence item to an additional capability × level."
   category :write
   approval :mcp_client
 

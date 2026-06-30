@@ -4,7 +4,7 @@
 # caller made (outgoing). Read — :none. Scoped to the caller's own person, so
 # no per-record authorization beyond "is a person" is needed.
 class Operations::Assessments::EvidenceRequestsList < Operations::Base
-  description "List evidence requests addressed to you (incoming) and ones you've made (outgoing)."
+  description "List feedback / evidence requests addressed to you (incoming) and ones you've made (outgoing)."
   category :read
   approval :none
 

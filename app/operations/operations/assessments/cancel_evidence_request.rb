@@ -4,7 +4,7 @@
 #
 # Write — :mcp_client.
 class Operations::Assessments::CancelEvidenceRequest < Operations::Base
-  description "Cancel a pending evidence request you created."
+  description "Cancel a pending feedback / evidence request you created."
   category :write
   approval :mcp_client
 

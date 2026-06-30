@@ -14,7 +14,7 @@
 # scope change (re-add the link to undo); the same friction as recording
 # evidence is appropriate.
 class Operations::Assessments::RemoveEvidenceLink < Operations::Base
-  description "Remove one capability × level link from an evidence item (it keeps its other links)."
+  description "Remove one capability × level link from a feedback / evidence item (it keeps its other links)."
   category :write
   approval :mcp_client
 

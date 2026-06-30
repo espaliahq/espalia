@@ -39,7 +39,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
     [
       {
         "name" => "assessments_add_evidence_link",
-        "description" => "Link an existing evidence item to an additional capability × level.",
+        "description" => "Link an existing feedback / evidence item to an additional capability × level.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -81,7 +81,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_cancel_evidence_request",
-        "description" => "Cancel a pending evidence request you created.",
+        "description" => "Cancel a pending feedback / evidence request you created.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -137,7 +137,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_decline_evidence_request",
-        "description" => "Decline a pending evidence request.",
+        "description" => "Decline a pending feedback / evidence request.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -213,7 +213,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_evidence_list",
-        "description" => "List active evidence on an assessment for one capability (optionally one level). " \
+        "description" => "List active feedback / evidence on an assessment for one capability (optionally one level). " \
                          "Accepts either capability_id (version-specific) or stable_id (cross-version) in " \
                          "the capability_stable_id argument. Each item carries its full set of linked cells.",
         "inputSchema" => {
@@ -234,7 +234,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_evidence_requests_list",
-        "description" => "List evidence requests addressed to you (incoming) and ones you've made (outgoing).",
+        "description" => "List feedback / evidence requests addressed to you (incoming) and ones you've made (outgoing).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -365,7 +365,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_record_evidence",
-        "description" => "Record a piece of evidence against a capability × level on an assessment.",
+        "description" => "Record a piece of feedback / evidence against a capability × level on an assessment.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -390,7 +390,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_remove_evidence_link",
-        "description" => "Remove one capability × level link from an evidence item (it keeps its other links).",
+        "description" => "Remove one capability × level link from a feedback / evidence item (it keeps its other links).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -429,7 +429,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_request_evidence",
-        "description" => "Ask a colleague to provide evidence for a capability × level on an assessment.",
+        "description" => "Ask a colleague to provide feedback / evidence for a capability × level on an assessment.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -451,7 +451,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_respond_to_evidence_request",
-        "description" => "Respond to an evidence request by providing the requested evidence.",
+        "description" => "Respond to a feedback / evidence request by providing the requested feedback.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -509,7 +509,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_update_evidence",
-        "description" => "Edit an existing evidence item's type, title, content, and external reference.",
+        "description" => "Edit an existing feedback / evidence item's type, title, content, and external reference.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -532,7 +532,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_withdraw_evidence",
-        "description" => "Withdraw an evidence item (soft delete — hides it everywhere, preserves history).",
+        "description" => "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
