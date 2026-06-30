@@ -40,13 +40,27 @@ class Frameworks::ExplorerGraphBuilder
         role_family_id: rfid,
         name: data[:name],
         description: data[:description],
-        # `department` lives only on the AR read model today — it is not
-        # event-sourced (see seed_framework.rake). Pull it from there so the
-        # graph stays faithful without opening the aggregate up to a
-        # department event.
-        department: department_by_role_family[rfid],
+        # `department` is event-sourced on RoleFamilyAdded/Updated. When an event
+        # has set it, trust the aggregate — INCLUDING a blank (cleared) value, so
+        # a clear isn't overwritten by a stale read-model row (the projection
+        # hasn't run yet at snapshot-build time). Only fall back to the read model
+        # for legacy families whose streams predate the backfill
+        # (events:backfill_role_family_departments) — remove the fallback (and
+        # `department_by_role_family`) once it has run everywhere.
+        department: department_for(rfid, data),
         roles: build_roles_for(rfid)
       )
+    end
+  end
+
+  # Trust the event-sourced value once any department event has touched the
+  # family (blank → genuinely ungrouped); otherwise fall back to the legacy
+  # read-model column.
+  def department_for(role_family_id, data)
+    if @aggregate.families_with_event_department.include?(role_family_id)
+      data[:department].presence
+    else
+      department_by_role_family[role_family_id]
     end
   end
 

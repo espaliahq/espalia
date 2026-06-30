@@ -6,6 +6,8 @@
 # If role families have no department set, they appear ungrouped at the top.
 #
 class Views::Frameworks::Explorer::RoleTree < Views::Base
+  include Phlex::Rails::Helpers::TurboFrameTag
+
   TRACK_OPTIONS = [
     { value: "both", label: "All" },
     { value: "ic", label: "IC" },
@@ -17,12 +19,16 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # @param track_filter [String] "ic", "management", or "both"
   # @param framework_id [String, nil] required in :edit mode for inline-edit form actions
   # @param mode [Symbol] :view or :edit — gates the inline rename pencils
-  def initialize(role_families:, selected_role_ids:, track_filter:, framework_id: nil, mode: :view)
+  # @param can_edit_structure [Boolean] gates the per-family "Edit" dialog trigger
+  #   (the update_role_family? bar) — keeps it off for suggest-only viewers
+  def initialize(role_families:, selected_role_ids:, track_filter:, framework_id: nil, mode: :view,
+                 can_edit_structure: false)
     @role_families = role_families
     @selected_role_ids = selected_role_ids
     @track_filter = track_filter
     @framework_id = framework_id
     @mode = mode
+    @can_edit_structure = can_edit_structure
   end
 
   def view_template
@@ -30,9 +36,16 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       header_section
       solo_hint
       div(class: "flex-1 overflow-y-auto p-3") do
-        nav(class: "space-y-1", role: "tree") do
-          departments_with_families.each do |dept_name, families|
-            department_group(dept_name, families)
+        # The grouped families live in their own Turbo Frame so a role-family
+        # edit (which can change the department grouping) re-renders just this
+        # list — moving the family under a new header — while the surrounding
+        # `tree` controller, track filter, and header stay put. See
+        # Frameworks::RoleFamiliesController#update.
+        turbo_frame_tag("role-tree-families") do
+          nav(class: "space-y-1", role: "tree") do
+            departments_with_families.each do |dept_name, families|
+              department_group(dept_name, families)
+            end
           end
         end
       end
@@ -135,11 +148,13 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
 
   def department_group(dept_name, families)
     if dept_name.present?
-      # Department header with collapsible content
+      # Department header (inline-renameable in edit mode) + collapsible content.
+      # Renaming the header relabels every family in the group at once.
       div(class: "mb-2") do
-        div(class: "px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider") do
-          dept_name
-        end
+        render Views::Frameworks::Explorer::DepartmentNameFrame.new(
+          department: dept_name, framework_id: @framework_id,
+          mode: (@mode == :edit && @can_edit_structure) ? :edit : :view
+        )
         div(class: "space-y-0.5") do
           families.sort_by(&:name).each { |rf| family_group(rf) }
         end
@@ -194,6 +209,8 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           role_family: role_family, framework_id: @framework_id, mode: @mode
         )
 
+        family_edit_trigger(role_family) if @mode == :edit && @can_edit_structure
+
         span(class: "text-xs text-gray-600 dark:text-gray-300") { visible_roles.size.to_s }
       end
 
@@ -203,6 +220,41 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         data: { tree_target: "childList", family_id: role_family.role_family_id }
       ) do
         visible_roles.each { |role| role_node(role) }
+      end
+    end
+  end
+
+  # Hover-revealed "edit role family" trigger — opens the shared role-family
+  # edit dialog (name + description + department) via the root `modal`
+  # controller, prefilled from these data attributes. Moving the family between
+  # departments is just editing its `department` string. Sits alongside the
+  # inline name pencil (which stays for quick renames).
+  def family_edit_trigger(role_family)
+    button(
+      type: "button",
+      class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
+             "focus-visible:opacity-100 shrink-0 p-0.5 rounded-sm " \
+             "text-gray-400 hover:text-primary transition-opacity",
+      data: {
+        action: "click->modal#open",
+        modal_target_id: "role-family-edit-modal",
+        role_family_edit_id: role_family.role_family_id,
+        role_family_edit_name: role_family.name,
+        role_family_edit_description: role_family.description,
+        role_family_edit_department: role_family.department
+      },
+      title: "Edit role family",
+      aria: { label: "Edit #{role_family.name}" }
+    ) do
+      svg(
+        class: "w-3.5 h-3.5", fill: "none", viewBox: "0 0 24 24",
+        stroke: "currentColor", stroke_width: "2"
+      ) do |s|
+        s.path(
+          stroke_linecap: "round", stroke_linejoin: "round",
+          d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 " \
+             "2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+        )
       end
     end
   end

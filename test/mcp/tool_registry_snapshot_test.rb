@@ -855,6 +855,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_rename_department",
+        "description" => "Rename a department grouping across all its role families (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "from"         => { "type" => "string" },
+            "to"           => { "type" => "string" }
+          },
+          "required" => %w[framework_id from],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_set_behavioural_expectation",
         "description" => "Author a behavioural expectation for an empty cell — applied directly with approval rights in editing mode, else proposed as a suggestion.",
         "inputSchema" => {
@@ -938,14 +957,15 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_update_role_family",
-        "description" => "Rename or re-describe a role family (owner/editor/lead only).",
+        "description" => "Update a role family's name, description, or department (owner/editor/lead only).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "framework_id"   => { "type" => "string" },
             "role_family_id" => { "type" => "string" },
             "name"           => { "type" => "string" },
-            "description"    => { "type" => "string" }
+            "description"    => { "type" => "string" },
+            "department"     => { "type" => "string" }
           },
           "required" => %w[framework_id role_family_id],
           "additionalProperties" => false

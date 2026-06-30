@@ -346,13 +346,19 @@ class Frameworks::Projections::PublishedState
       framework_id: event.data[:framework_id],
       role_family_id: event.data[:role_family_id],
       name: event.data[:name],
-      description: event.data[:description]
+      description: event.data[:description],
+      # Blank → nil so the grouping has a single "ungrouped" bucket (the role
+      # tree groups on nil; "" would split off a second empty-named group).
+      department: event.data[:department].presence
     )
   end
 
   def handle_role_family_updated(event)
     record = FrameworkState::RoleFamily.find_by!(role_family_id: event.data[:role_family_id])
     attrs = event.data.slice(:name, :description).compact
+    # Department clears to nil when the event carries "" (see handle_role_family_added);
+    # an absent key leaves the column unchanged.
+    attrs[:department] = event.data[:department].presence if event.data.key?(:department)
     record.update!(attrs) if attrs.any?
   end
 

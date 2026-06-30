@@ -238,4 +238,43 @@ class Frameworks::ExplorerGraphBuilderTest < ActiveSupport::TestCase
       assert_equal "Rewritten expectation", exp.description
     end
   end
+
+  context "department provenance vs. the legacy read-model fallback" do
+    # The fallback reads the read model at snapshot-build time — before the
+    # projection has applied the current event — so it can be stale. Once a
+    # department event has touched the family, the aggregate value must win,
+    # including a clear, so the fallback can't resurrect the old value.
+    should "trust a cleared event department over a stale read-model row" do
+      tenant = create(:tenant)
+      ActsAsTenant.with_tenant(tenant) do
+        FrameworkState::RoleFamily.create!(
+          tenant: tenant, framework_id: @framework_id, role_family_id: @role_family_id,
+          name: "Engineering", department: "Finance"
+        )
+        @aggregate.update_role_family(@framework_id, @role_family_id, department: "Finance")
+        @aggregate.update_role_family(@framework_id, @role_family_id, department: "")
+
+        graph = Frameworks::ExplorerGraphBuilder.new(@aggregate).build
+        family = graph.role_families.find { |rf| rf.role_family_id == @role_family_id }
+        assert_nil family.department
+      end
+    end
+
+    should "fall back to the read-model department for a legacy family with no department event" do
+      tenant = create(:tenant)
+      ActsAsTenant.with_tenant(tenant) do
+        FrameworkState::RoleFamily.create!(
+          tenant: tenant, framework_id: @framework_id, role_family_id: @role_family_id,
+          name: "Engineering", department: "Finance"
+        )
+        # Simulate a pre-change stream: department never carried by an event.
+        @aggregate.families_with_event_department.delete(@role_family_id)
+        @aggregate.role_families[@role_family_id][:department] = nil
+
+        graph = Frameworks::ExplorerGraphBuilder.new(@aggregate).build
+        family = graph.role_families.find { |rf| rf.role_family_id == @role_family_id }
+        assert_equal "Finance", family.department
+      end
+    end
+  end
 end

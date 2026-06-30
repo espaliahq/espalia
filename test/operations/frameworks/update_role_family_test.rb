@@ -57,6 +57,46 @@ class Operations::Frameworks::UpdateRoleFamilyTest < ActiveSupport::TestCase
         end
       end
     end
+
+    should "move the role family into a department live" do
+      ActsAsTenant.with_tenant(@tenant) do
+        result = Operations::Frameworks::UpdateRoleFamily.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, role_family_id: @rf_id, department: "Product + Engineering" }
+        )
+
+        assert_equal "Product + Engineering", result[:department]
+        assert_equal "Product + Engineering", role_family.department
+        assert_not framework.draft_in_progress
+      end
+    end
+
+    should "clear the department when given a blank string" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Operations::Frameworks::UpdateRoleFamily.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, role_family_id: @rf_id, department: "Finance" }
+        )
+        Operations::Frameworks::UpdateRoleFamily.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, role_family_id: @rf_id, department: "" }
+        )
+
+        assert_nil role_family.department
+      end
+    end
+
+    should "treat department as a supplied field on its own" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # department-only (no name) must not raise the "nothing to update" error
+        assert_nothing_raised do
+          Operations::Frameworks::UpdateRoleFamily.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, role_family_id: @rf_id, department: "Ops" }
+          )
+        end
+      end
+    end
   end
 
   context "as a plain tenant member" do

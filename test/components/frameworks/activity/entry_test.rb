@@ -27,6 +27,11 @@ class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
                       "Updated a role&#39;s name"
     end
 
+    should "name the department for a role-family move" do
+      assert_includes render_entry(kind: "role_family_updated", payload: { department: "Finance" }),
+                      "Updated a role family&#39;s department"
+    end
+
     should "list multiple changed fields" do
       assert_includes render_entry(kind: "role_updated", payload: { name: "X", track: "management" }),
                       "Updated a role&#39;s name and track"

@@ -34,6 +34,13 @@ class Frameworks::Aggregate
     @added_during_draft = Set.new
     @archives_needing_mapping = Set.new
 
+    # Native IDs of role families whose `department` has been set by an event
+    # (RoleFamilyAdded/Updated carrying the key). Lets the ExplorerGraphBuilder
+    # tell "department is event-sourced (trust it, even when blank/cleared)"
+    # from "legacy, department only on the read model (fall back)". Never reset
+    # — provenance spans the whole stream.
+    @families_with_event_department = Set.new
+
     # ── ExplorerGraph projection support ──
     # Native-ID Sets of entities added during the current open draft. The
     # ExplorerGraphBuilder reads these to tag graph nodes with
@@ -56,7 +63,8 @@ class Frameworks::Aggregate
               :expectations, :illustrations, :current_version,
               :draft_in_progress, :draft_version, :added_during_draft,
               :draft_added_level_ids, :draft_added_capability_ids,
-              :draft_added_binding_ids, :draft_added_expectation_ids
+              :draft_added_binding_ids, :draft_added_expectation_ids,
+              :families_with_event_department
 
   # Creates a new framework and opens its bootstrap v1 draft.
   #
@@ -89,8 +97,9 @@ class Frameworks::Aggregate
   # @param role_family_id [String] UUID for the new role family
   # @param name [String] display name
   # @param description [String, nil] optional description
+  # @param department [String, nil] optional department grouping label
   # @raise [RuntimeError] if framework not created or role family already exists
-  def add_role_family(framework_id, role_family_id, name, description: nil)
+  def add_role_family(framework_id, role_family_id, name, description: nil, department: nil)
     ensure_created!
     raise "Role family #{role_family_id} already exists" if @role_families.key?(role_family_id)
 
@@ -98,7 +107,9 @@ class Frameworks::Aggregate
       framework_id: framework_id,
       role_family_id: role_family_id,
       name: name,
-      description: description
+      description: description,
+      # Canonical: blank → nil ("no department"), never an "" sentinel.
+      department: department.presence
     }))
   end
 
@@ -108,17 +119,20 @@ class Frameworks::Aggregate
   # @param role_family_id [String] UUID of the role family
   # @param name [String, nil] updated name
   # @param description [String, nil] updated description
+  # @param department [String, nil] updated department grouping label; pass ""
+  #   to clear the grouping, nil to leave it unchanged
   # @raise [RuntimeError] if role family does not exist
-  def update_role_family(framework_id, role_family_id, name: nil, description: nil)
+  def update_role_family(framework_id, role_family_id, name: nil, description: nil, department: nil)
     ensure_created!
     raise "Role family #{role_family_id} not found" unless @role_families.key?(role_family_id)
 
-    apply(Frameworks::Events::RoleFamilyUpdated.new(data: {
-      framework_id: framework_id,
-      role_family_id: role_family_id,
-      name: name,
-      description: description
-    }.compact))
+    data = { framework_id: framework_id, role_family_id: role_family_id, name: name, description: description }.compact
+    # department: nil arg = "not supplied" (omit the key); a supplied value —
+    # including "" to clear — keeps the key present but canonical-nil, so the
+    # clear is applied (it would be dropped by .compact) and never stored as "".
+    data[:department] = department.presence unless department.nil?
+
+    apply(Frameworks::Events::RoleFamilyUpdated.new(data: data))
   end
 
   # Adds a role to a role family.
@@ -1047,16 +1061,25 @@ class Frameworks::Aggregate
   end
 
   on Frameworks::Events::RoleFamilyAdded do |event|
-    @role_families[event.data[:role_family_id]] = {
+    rfid = event.data[:role_family_id]
+    @role_families[rfid] = {
       name: event.data[:name],
-      description: event.data[:description]
+      description: event.data[:description],
+      department: event.data[:department]
     }
+    # Legacy events lack the key; new events always carry it (even as nil).
+    @families_with_event_department << rfid if event.data.key?(:department)
   end
 
   on Frameworks::Events::RoleFamilyUpdated do |event|
-    family = @role_families[event.data[:role_family_id]]
+    rfid = event.data[:role_family_id]
+    family = @role_families[rfid]
     family[:name] = event.data[:name] if event.data.key?(:name)
     family[:description] = event.data[:description] if event.data.key?(:description)
+    if event.data.key?(:department)
+      family[:department] = event.data[:department]
+      @families_with_event_department << rfid
+    end
   end
 
   on Frameworks::Events::RoleAdded do |event|

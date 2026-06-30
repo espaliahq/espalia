@@ -24,10 +24,10 @@ class SeedFrameworkTaskTest < ActiveSupport::TestCase
     assert_equal 1, framework.current_published_version
     assert_not framework.draft_in_progress
 
-    # Proof that deferred updates ran post-publish — the read-model rows
-    # exist (rebuild replayed the structural events) AND the inline
-    # department / deficit_threshold mutations from the rake task found
-    # them. At least one seeded category (Finance Core) has a deficit_threshold.
+    # Department is event-sourced on add_role_family, so it reaches the read
+    # model via the normal projection path. deficit_threshold is still a
+    # deferred post-publish read-model mutation (at least one seeded category —
+    # Finance Core — has one).
     assert FrameworkState::RoleFamily.where.not(department: nil).exists?
     assert FrameworkState::CapabilityCategory.where.not(deficit_threshold: nil).exists?
   end
