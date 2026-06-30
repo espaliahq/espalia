@@ -17,7 +17,7 @@ class EvidenceItemsController < ApplicationController
     authorize evidence_item, :add_link?, policy_class: EvidencePolicy
 
     apply_evidence_diff
-    redirect_to evidence_hub_path, notice: "Evidence updated."
+    redirect_to evidence_hub_path, notice: "Feedback updated."
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
     redirect_to evidence_hub_path, alert: e.message, status: :see_other
   end
@@ -30,7 +30,7 @@ class EvidenceItemsController < ApplicationController
       context: pundit_user,
       params: { assignment_id: assignment_id, evidence_id: evidence_item.id, reason: params.dig(:evidence, :reason) }
     )
-    redirect_to evidence_hub_path, notice: "Evidence withdrawn.", status: :see_other
+    redirect_to evidence_hub_path, notice: "Feedback withdrawn.", status: :see_other
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
     redirect_to evidence_hub_path, alert: e.message, status: :see_other
   end

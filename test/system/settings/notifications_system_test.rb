@@ -12,7 +12,7 @@ class Settings::NotificationsSystemTest < ApplicationSystemTestCase
 
   should "let a user turn off a channel for a notification type" do
     visit settings_notifications_path
-    assert_text "Evidence requested from you"
+    assert_text "Feedback requested from you"
 
     # Slack defaults on for evidence_requested.
     assert page.has_checked_field?("notif-evidence_requested-slack", visible: :all)

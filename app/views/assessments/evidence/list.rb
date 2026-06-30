@@ -70,7 +70,7 @@ class Views::Assessments::Evidence::List < Views::Base
   end
 
   def header_label_content
-    span { "Evidence" }
+    span { "Feedback / Evidence" }
     span(class: "font-mono") { "(#{@items.size})" } if @items.any?
   end
 
@@ -81,7 +81,7 @@ class Views::Assessments::Evidence::List < Views::Base
         class: "rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
                "dark:hover:bg-gray-700 dark:hover:text-gray-200",
         data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-        aria: { label: "Evidence actions", haspopup: "menu", expanded: "false" }
+        aria: { label: "Feedback / evidence actions", haspopup: "menu", expanded: "false" }
       ) { span(class: "block leading-none text-base", aria_hidden: "true") { "⋮" } }
       div(
         class: "hidden absolute right-0 mt-1 w-48 rounded-md border border-gray-200 dark:border-gray-700 " \
@@ -106,7 +106,7 @@ class Views::Assessments::Evidence::List < Views::Base
         evidence_modal_level_ordinal_param: @level_ordinal,
         evidence_modal_return_to_param: "assessment:#{@assessment_id}"
       }
-    ) { "Add evidence" }
+    ) { "Add feedback / evidence" }
   end
 
   def request_menu_item
@@ -119,7 +119,7 @@ class Views::Assessments::Evidence::List < Views::Base
         request_evidence_capability_stable_id_param: @capability_stable_id,
         request_evidence_level_ordinal_param: @level_ordinal
       }
-    ) { "Request evidence" }
+    ) { "Request feedback / evidence" }
   end
 
   def menu_item_classes

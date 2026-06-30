@@ -96,7 +96,7 @@ class Views::Assessments::Activity::Feed < Views::Base
   def empty_state
     div(class: "rounded-lg border border-dashed border-gray-200 dark:border-gray-700 " \
                "p-4 text-center text-xs text-gray-600 dark:text-gray-300") do
-      "No activity yet. Record evidence or update a rating to begin."
+      "No activity yet. Record feedback or update a rating to begin."
     end
   end
 end

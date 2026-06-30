@@ -55,7 +55,7 @@ class EvidenceRequestsController < ApplicationController
     authorize evidence_request, :respond?, policy_class: EvidenceRequestPolicy
 
     apply_evidence_diff
-    redirect_to evidence_hub_path, notice: "Evidence provided. Thank you!"
+    redirect_to evidence_hub_path, notice: "Feedback provided. Thank you!"
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
     redirect_to evidence_hub_path, alert: e.message, status: :see_other
   end
@@ -150,7 +150,7 @@ class EvidenceRequestsController < ApplicationController
   def request_flash(sent, skipped)
     return { alert: "No requests sent — #{skipped.to_sentence} already asked or unavailable.", status: :see_other } if sent.zero?
 
-    notice = "Evidence #{'request'.pluralize(sent)} sent to #{sent} #{'person'.pluralize(sent)}."
+    notice = "Feedback #{'request'.pluralize(sent)} sent to #{sent} #{'person'.pluralize(sent)}."
     notice += " Skipped #{skipped.size} (already asked or unavailable)." if skipped.any?
     { notice: notice }
   end

@@ -48,7 +48,7 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       sign_in @peer_user
       get evidence_hub_path
       assert_response :success
-      assert_match "Rep asked you for evidence", response.body
+      assert_match "Rep asked you for feedback", response.body
       assert_match "Critical Thinking", response.body
       # Compact context — role + level code; the full expectation/examples live
       # in the modal you open to respond, not on the card.
@@ -77,7 +77,7 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       # Incoming (the peer) names who it's regarding…
       sign_in @peer_user
       get evidence_hub_path
-      assert_match "Boss asked you for evidence, regarding Rep", response.body
+      assert_match "Boss asked you for feedback, regarding Rep", response.body
       # …and the requester's outgoing card does too.
       sign_in manager_user
       get evidence_hub_path
@@ -168,7 +168,7 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       get evidence_request_modal_path(assignment_id: @assignment.id,
         capability_stable_id: @cap.stable_id, level_ordinal: 2)
       assert_response :success
-      assert_match "Request evidence", response.body
+      assert_match "Request feedback / evidence", response.body
       assert_match "Critical Thinking", response.body
     end
 
@@ -228,11 +228,11 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "render a Provide evidence modal trigger on the incoming card" do
+    should "render a Provide feedback / evidence modal trigger on the incoming card" do
       make_request!
       sign_in @peer_user
       get evidence_hub_path
-      assert_select "button[data-evidence-modal-mode-param='respond']", text: "Provide evidence"
+      assert_select "button[data-evidence-modal-mode-param='respond']", text: "Provide feedback / evidence"
     end
 
     should "deny a non-requestee" do

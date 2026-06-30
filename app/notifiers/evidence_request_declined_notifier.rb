@@ -6,7 +6,7 @@ class EvidenceRequestDeclinedNotifier < ApplicationNotifier
 
   notification_methods do
     def inbox_title
-      "#{params[:decliner_name].presence || "A colleague"} declined your evidence request"
+      "#{params[:decliner_name].presence || "A colleague"} declined your feedback request"
     end
 
     def inbox_body

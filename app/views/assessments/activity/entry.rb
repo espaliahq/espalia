@@ -242,9 +242,9 @@ class Views::Assessments::Activity::Entry < Views::Base
       "previous coordinate"
     end
     if (name = actor_name)
-      "#{name} relinked evidence from #{prev_label} to #{capability_label}"
+      "#{name} relinked feedback from #{prev_label} to #{capability_label}"
     else
-      "Relinked evidence from #{prev_label} to #{capability_label}"
+      "Relinked feedback from #{prev_label} to #{capability_label}"
     end
   end
 
@@ -269,7 +269,7 @@ class Views::Assessments::Activity::Entry < Views::Base
   def evidence_recorded_summary
     item = @entry.payload
     title = item.respond_to?(:title) ? item.title.to_s : ""
-    subject = title.strip.empty? ? "evidence" : "“#{title.strip}”"
+    subject = title.strip.empty? ? "feedback" : "“#{title.strip}”"
     label = capability_label
     if (name = evidence_author_name)
       "#{name} recorded #{subject} on #{label}"
@@ -278,22 +278,22 @@ class Views::Assessments::Activity::Entry < Views::Base
     end
   end
 
-  # "<Actor> withdrew evidence on <cap · Lx>", falling back to a generic
+  # "<Actor> withdrew feedback on <cap · Lx>", falling back to a generic
   # "Withdrew …" when the withdrawer is unknown (historical / unattributed).
   def evidence_withdrawn_summary
     if (name = evidence_withdrawer_name)
-      "#{name} withdrew evidence on #{capability_label}"
+      "#{name} withdrew feedback on #{capability_label}"
     else
-      "Withdrew evidence on #{capability_label}"
+      "Withdrew feedback on #{capability_label}"
     end
   end
 
-  # "<Actor> linked evidence to <cap · Lx>" / "… unlinked evidence from …",
-  # quoting the evidence title when the query resolved one. Falls back to a
+  # "<Actor> linked feedback to <cap · Lx>" / "… unlinked feedback from …",
+  # quoting the feedback title when the query resolved one. Falls back to a
   # capitalised, actor-less form when the actor is unknown.
   def evidence_link_summary(verb, preposition: "to")
     title = payload_value(:evidence_title).to_s.strip.presence
-    subject = title ? "“#{title}”" : "evidence"
+    subject = title ? "“#{title}”" : "feedback"
     if (name = actor_name)
       "#{name} #{verb.downcase} #{subject} #{preposition} #{capability_label}"
     else

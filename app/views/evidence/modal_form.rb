@@ -79,7 +79,7 @@ class Views::Evidence::ModalForm < Views::Base
   end
 
   def title
-    { new: "Add evidence", edit: "Edit evidence", respond: "Provide evidence" }.fetch(@mode)
+    { new: "Add feedback / evidence", edit: "Edit feedback / evidence", respond: "Provide feedback / evidence" }.fetch(@mode)
   end
 
   # Primary-cell context: capability · level, the behavioural expectation, and
@@ -138,7 +138,7 @@ class Views::Evidence::ModalForm < Views::Base
   def content_fields
     unless @content_editable
       p(class: "text-xs text-amber-700 dark:text-amber-400") do
-        "You're linking #{@evidence&.author&.name || "someone else"}'s evidence — the content can't be edited here, only where it applies."
+        "You're linking #{@evidence&.author&.name || "someone else"}'s feedback — the content can't be edited here, only where it applies."
       end
     end
     type_field
@@ -268,7 +268,7 @@ class Views::Evidence::ModalForm < Views::Base
   end
 
   def submit_label
-    { new: "Add evidence", edit: "Save changes", respond: "Provide evidence" }.fetch(@mode)
+    { new: "Add feedback / evidence", edit: "Save changes", respond: "Provide feedback / evidence" }.fetch(@mode)
   end
 
   def selected_type

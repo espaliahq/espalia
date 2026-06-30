@@ -39,7 +39,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     make_request!
     sign_in_as(@peer_user)
     visit evidence_hub_path
-    assert_text "Rep asked you for evidence"
+    assert_text "Rep asked you for feedback"
 
     # Open the unified modal in respond mode, fill it, and submit. JS-dispatch
     # the click so a starved CI event loop can't silently drop it (the trigger is
@@ -59,7 +59,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
       f.requestSubmit();
     JS
 
-    assert_text "Evidence provided"
+    assert_text "Feedback provided"
     ActsAsTenant.with_tenant(@tenant) do
       request = EvidenceRequest.last
       assert_equal "responded", request.status

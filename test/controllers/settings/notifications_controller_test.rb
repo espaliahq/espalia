@@ -21,7 +21,7 @@ class Settings::NotificationsControllerTest < ActionDispatch::IntegrationTest
       sign_in @user
       get settings_notifications_path
       assert_response :success
-      assert_match "Evidence requested from you", response.body
+      assert_match "Feedback requested from you", response.body
       assert_match "notification_preferences[evidence_requested][slack]", response.body
     end
   end

@@ -94,12 +94,12 @@ class Assessments::EvidenceController < ApplicationController
       format.html do
         redirect_to assessment_path(@assignment,
                       redirect_params(attrs[:capability_stable_id], level_ordinal: level_ordinal)),
-          status: :see_other, notice: "Evidence recorded."
+          status: :see_other, notice: "Feedback recorded."
       end
     end
   rescue PersonDevelopment::Aggregate::CommandError => e
     redirect_back fallback_location: assessment_path(@assignment),
-      alert: "Could not record evidence: #{e.message}"
+      alert: "Could not record feedback: #{e.message}"
   end
 
   # PATCH /assessments/:assessment_id/evidence/:id
@@ -133,13 +133,13 @@ class Assessments::EvidenceController < ApplicationController
 
     redirect_to assessment_path(@assignment,
                   redirect_params(item.capability_stable_id, level_ordinal: item.level_ordinal)),
-      status: :see_other, notice: "Evidence updated."
+      status: :see_other, notice: "Feedback updated."
   rescue ActiveRecord::RecordNotFound
     head :not_found
   rescue PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
-      alert: "Could not update evidence: #{e.message}"
+      alert: "Could not update feedback: #{e.message}"
   end
 
   # POST /assessments/:assessment_id/evidence/:id/add_link
@@ -176,7 +176,7 @@ class Assessments::EvidenceController < ApplicationController
       end
       format.html do
         redirect_to assessment_path(@assignment, redirect_params(from_cap, level_ordinal: from_level)),
-          status: :see_other, notice: "Evidence linked."
+          status: :see_other, notice: "Feedback linked."
       end
     end
   rescue ActiveRecord::RecordNotFound
@@ -184,7 +184,7 @@ class Assessments::EvidenceController < ApplicationController
   rescue PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
-      alert: "Could not link evidence: #{e.message}"
+      alert: "Could not link feedback: #{e.message}"
   end
 
   # POST /assessments/:assessment_id/evidence/:id/remove_link
@@ -222,7 +222,7 @@ class Assessments::EvidenceController < ApplicationController
       format.html do
         redirect_to assessment_path(@assignment,
                       redirect_params(attrs[:capability_stable_id], level_ordinal: level)),
-          status: :see_other, notice: "Evidence link removed."
+          status: :see_other, notice: "Feedback link removed."
       end
     end
   rescue ActiveRecord::RecordNotFound
@@ -230,7 +230,7 @@ class Assessments::EvidenceController < ApplicationController
   rescue PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
-      alert: "Could not remove evidence link: #{e.message}"
+      alert: "Could not remove feedback link: #{e.message}"
   end
 
   # DELETE /assessments/:assessment_id/evidence/:id
@@ -247,13 +247,13 @@ class Assessments::EvidenceController < ApplicationController
 
     redirect_to assessment_path(@assignment,
                   redirect_params(item.capability_stable_id, level_ordinal: item.level_ordinal)),
-      status: :see_other, notice: "Evidence withdrawn."
+      status: :see_other, notice: "Feedback withdrawn."
   rescue ActiveRecord::RecordNotFound
     head :not_found
   rescue PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
-      alert: "Could not withdraw evidence: #{e.message}"
+      alert: "Could not withdraw feedback: #{e.message}"
   end
 
   private

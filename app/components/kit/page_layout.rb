@@ -75,7 +75,7 @@ class Components::Kit::PageLayout < Components::Base
       ]
       assessment_link = assessment_nav_link
       links << assessment_link if assessment_link
-      links << { label: "Evidence", href: "/evidence" } if show_evidence_link?
+      links << { label: "Feedback / Evidence", href: "/evidence" } if show_evidence_link?
       links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
       links << { label: "Admin", href: "/tenant" } if show_admin_link?
       links

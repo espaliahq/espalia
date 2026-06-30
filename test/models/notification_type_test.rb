@@ -6,7 +6,7 @@ class NotificationTypeTest < ActiveSupport::TestCase
   context ".all / .find / .exists?" do
     should "expose registered definitions" do
       assert_includes NotificationType.all.map(&:key), :evidence_requested
-      assert_equal "Evidence requested from you", NotificationType.find(:evidence_requested).label
+      assert_equal "Feedback requested from you", NotificationType.find(:evidence_requested).label
       assert NotificationType.exists?("evidence_requested")
       assert_not NotificationType.exists?(:nonexistent_type)
     end

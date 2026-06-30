@@ -31,20 +31,20 @@ class NotificationType
   DEFINITIONS = {
     evidence_requested: Definition.new(
       key: :evidence_requested,
-      label: "Evidence requested from you",
-      description: "A colleague asks you to provide evidence for someone's assessment.",
+      label: "Feedback requested from you",
+      description: "A colleague asks you to provide feedback for someone's assessment.",
       defaults: { in_app: true, slack: true, email: true }
     ),
     evidence_request_responded: Definition.new(
       key: :evidence_request_responded,
-      label: "Your evidence request was answered",
-      description: "Someone you asked has provided the evidence you requested.",
+      label: "Your feedback request was answered",
+      description: "Someone you asked has provided the feedback you requested.",
       defaults: { in_app: true, slack: false, email: false }
     ),
     evidence_request_declined: Definition.new(
       key: :evidence_request_declined,
-      label: "Your evidence request was declined",
-      description: "Someone you asked has declined to provide evidence.",
+      label: "Your feedback request was declined",
+      description: "Someone you asked has declined to provide feedback.",
       defaults: { in_app: true, slack: false, email: false }
     )
   }.freeze

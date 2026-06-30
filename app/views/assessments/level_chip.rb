@@ -421,7 +421,7 @@ class Views::Assessments::LevelChip < Views::Base
 
   def activity_title
     parts = []
-    parts << "#{evidence_count} #{evidence_count == 1 ? 'evidence item' : 'evidence items'}" if evidence_count.positive?
+    parts << "#{evidence_count} #{evidence_count == 1 ? 'feedback item' : 'feedback items'}" if evidence_count.positive?
     parts << "#{comment_count} #{comment_count == 1 ? 'comment' : 'comments'}" if comment_count.positive?
     parts.join(", ")
   end
