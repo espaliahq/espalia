@@ -193,7 +193,7 @@ class Views::Assessments::Evidence::Card < Views::Base
       class: "rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
              "dark:hover:bg-gray-700 dark:hover:text-gray-200",
       data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { label: "Evidence actions", haspopup: "menu", expanded: "false" }
+      aria: { label: "Feedback / evidence actions", haspopup: "menu", expanded: "false" }
     ) do
       # Vertical 3-dot kebab — kept inline so we don't depend on an icon set.
       span(class: "block leading-none -mt-1 text-base", aria_hidden: "true") { "⋮" }
@@ -258,14 +258,14 @@ class Views::Assessments::Evidence::Card < Views::Base
         class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
                "hover:bg-gray-100 dark:hover:bg-gray-700",
         role: "menuitem",
-        form: { data: { turbo_confirm: "Unlink this evidence from this capability?" } }
+        form: { data: { turbo_confirm: "Unlink this feedback from this capability?" } }
       ) { "Unlink from this capability" }
     else
       span(
         class: "block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-600 cursor-not-allowed",
         role: "menuitem",
         aria: { disabled: "true" },
-        title: "This is the only place this evidence is linked — withdraw it instead."
+        title: "This is the only place this feedback is linked — withdraw it instead."
       ) { "Unlink from this capability" }
     end
   end
@@ -277,7 +277,7 @@ class Views::Assessments::Evidence::Card < Views::Base
       class: "block w-full text-left px-3 py-1.5 text-red-700 dark:text-red-300 " \
              "hover:bg-red-50 dark:hover:bg-red-900/30",
       role: "menuitem",
-      form: { data: { turbo_confirm: "Withdraw this evidence?" } }
+      form: { data: { turbo_confirm: "Withdraw this feedback?" } }
     ) { "Withdraw" }
   end
 end

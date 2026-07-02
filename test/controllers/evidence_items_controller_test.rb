@@ -40,7 +40,7 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       sign_in @author_user
       get evidence_hub_path
       assert_response :success
-      assert_match "Evidence you&#39;ve provided", response.body
+      assert_match "Feedback / Evidence you&#39;ve provided", response.body
       assert_match "Original content", response.body
       assert_select "form[action=?]", evidence_item_path(@evidence_id)
     end

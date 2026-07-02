@@ -6,7 +6,7 @@ class EvidenceRequestRespondedNotifier < ApplicationNotifier
 
   notification_methods do
     def inbox_title
-      "#{params[:responder_name].presence || "A colleague"} answered your evidence request"
+      "#{params[:responder_name].presence || "A colleague"} answered your feedback request"
     end
 
     def inbox_body = params[:capability_name].presence

@@ -34,10 +34,10 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       assert_includes html, "Recorded “Launch” on Critical Thinking · L2"
     end
 
-    should "say 'evidence' when there is no title" do
+    should "say 'feedback' when there is no title" do
       item = Item.new(title: "", content: "Shipped X.", author: Person.new("Ada"))
       html = render_entry(kind: "evidence_recorded", payload: item)
-      assert_includes html, "Ada recorded evidence on Critical Thinking · L2"
+      assert_includes html, "Ada recorded feedback on Critical Thinking · L2"
     end
   end
 
@@ -66,7 +66,7 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       html = render_entry(kind: "evidence_relinked", payload: {
         actor_name: "Ada", previous_capability_name: "Old Cap", previous_level_ordinal: 1
       })
-      assert_includes html, "Ada relinked evidence from Old Cap · L1 to Critical Thinking · L2"
+      assert_includes html, "Ada relinked feedback from Old Cap · L1 to Critical Thinking · L2"
     end
   end
 
@@ -74,7 +74,7 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
     should "name who withdrew the evidence" do
       item = Item.new(withdrawn_by: Person.new("Ada"))
       html = render_entry(kind: "evidence_withdrawn", payload: item)
-      assert_includes html, "Ada withdrew evidence on Critical Thinking · L2"
+      assert_includes html, "Ada withdrew feedback on Critical Thinking · L2"
     end
   end
 end

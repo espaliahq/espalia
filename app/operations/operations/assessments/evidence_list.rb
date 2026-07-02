@@ -16,7 +16,7 @@
 # active item. Withdrawn items and removed links are omitted (matching the
 # matrix's `.active` scope).
 class Operations::Assessments::EvidenceList < Operations::Base
-  description "List active evidence on an assessment for one capability (optionally one level). " \
+  description "List active feedback / evidence on an assessment for one capability (optionally one level). " \
               "Accepts either capability_id (version-specific) or stable_id (cross-version) in " \
               "the capability_stable_id argument. Each item carries its full set of linked cells."
   category :read

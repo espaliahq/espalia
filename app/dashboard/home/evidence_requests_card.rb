@@ -24,7 +24,7 @@ class Home::EvidenceRequestsCard < Home::Card
     return [] unless person
     return [] unless pending_incoming(person).exists?
 
-    [ build_instance(priority: PRIORITY, title: "Evidence requested of you") ]
+    [ build_instance(priority: PRIORITY, title: "Feedback / Evidence requested of you") ]
   end
 
   # Pending evidence requests addressed to this person — the only actionable

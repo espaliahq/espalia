@@ -62,7 +62,7 @@ class Views::Home::Cards::RecentActivity < Views::Base
     when "assessment_aligned"
       phrase(actor, " aligned ", assessee_clause, cap_link(item))
     when "evidence_recorded"
-      phrase(actor, " added evidence to ", assessee_clause, cap_link(item))
+      phrase(actor, " added feedback to ", assessee_clause, cap_link(item))
     when "comment_posted"
       comment_sentence(item, actor, assessee_clause)
     when "alignment_started"

@@ -4,7 +4,7 @@
 #
 # Write — :mcp_client.
 class Operations::Assessments::DeclineEvidenceRequest < Operations::Base
-  description "Decline a pending evidence request."
+  description "Decline a pending feedback / evidence request."
   category :write
   approval :mcp_client
 

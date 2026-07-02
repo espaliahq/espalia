@@ -6,7 +6,7 @@
 # Write — :mcp_client. It's additive (creates a request + notifies), changes
 # no permissions, and a manager asking on behalf of a report is routine.
 class Operations::Assessments::RequestEvidence < Operations::Base
-  description "Ask a colleague to provide evidence for a capability × level on an assessment."
+  description "Ask a colleague to provide feedback / evidence for a capability × level on an assessment."
   category :write
   approval :mcp_client
 

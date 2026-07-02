@@ -100,7 +100,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       get home_card_path(card: "evidence_requests", key: "default")
 
       assert_response :success
-      assert_includes response.body, "Evidence requested of you"
+      assert_includes response.body, "Feedback / Evidence requested of you"
       assert_includes response.body, "Asker One"
       assert_includes response.body, "Respond"
       # CTA must break out of the lazy card frame, not navigate within it.

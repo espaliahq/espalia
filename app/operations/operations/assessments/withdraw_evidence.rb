@@ -10,7 +10,7 @@
 # author-scoped action and is recoverable by recording the evidence again;
 # the same friction as recording it is appropriate.
 class Operations::Assessments::WithdrawEvidence < Operations::Base
-  description "Withdraw an evidence item (soft delete — hides it everywhere, preserves history)."
+  description "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history)."
   category :write
   approval :mcp_client
 

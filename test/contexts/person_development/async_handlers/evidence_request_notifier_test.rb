@@ -55,7 +55,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     assert_equal 1, notifications.size
     # Assessee asked about their own assessment — no redundant "regarding".
     assert_equal "Alex asked you for feedback", notifications.first.inbox_title
-    assert_match "The request is for behavioural evidence", notifications.first.inbox_body
+    assert_match "The request is for behavioural feedback", notifications.first.inbox_body
     assert_equal "/evidence#evidence-request-#{request_id}", notifications.first.inbox_url
   end
 
@@ -82,7 +82,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     end
 
     titles = @assessee_user.notifications.reload.map(&:inbox_title)
-    assert_includes titles, "Jordan answered your evidence request"
+    assert_includes titles, "Jordan answered your feedback request"
   end
 
   should "notify the requester when the request is declined" do
@@ -92,6 +92,6 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     end
 
     titles = @assessee_user.notifications.reload.map(&:inbox_title)
-    assert_includes titles, "Jordan declined your evidence request"
+    assert_includes titles, "Jordan declined your feedback request"
   end
 end

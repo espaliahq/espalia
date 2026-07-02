@@ -4,6 +4,8 @@ This document captures the design decisions, interaction patterns, and hard-won 
 
 > **See also:** [scoring-model.md](../architecture/scoring-model.md) for the scoring engine, performance-state vocabulary, and configurable thresholds.
 
+> **Terminology — "Feedback / Evidence" on the surface, "evidence" in the domain.** User testing showed the bare word "evidence" discouraged people from contributing constructive feedback, so the **user-facing UI and the MCP tool descriptions** call this concept **"Feedback / Evidence"** (prominent labels, nav, headings, modal titles) or **"feedback"** (running prose, flashes, activity-feed sentences, notifications). The **domain vocabulary is unchanged**: events, commands, handlers, read models (`EvidenceItem`, `EvidenceRequest`, `EvidenceLink`), DB columns, form param namespaces (`evidence[...]`), routes (`/evidence`), Stimulus controllers (`evidence-modal`, `request-evidence`), turbo-frame ids, the `data-glyph="evidence"` attribute, activity `KIND_GROUP`/kind values (`evidence_recorded`…), and the MCP **tool names** (`assessments_record_evidence`…) all stay "evidence". The relabel is presentational only — no migration or projection rebuild. When adding a surface, follow the same split: label it "Feedback / Evidence", keep the identifier "evidence".
+
 ## Overview
 
 The assessment UX is a **card-based, single-scroll** layout. The page renders one tall document — a unified sticky header on top, then a vertical stack of category sections, each containing a stack of capability cards. There is no matrix table and no tabbed category swap. Category chips in the header anchor-jump to the section below; the entire document is in view at all scroll positions.

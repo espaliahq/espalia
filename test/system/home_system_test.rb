@@ -38,7 +38,7 @@ class HomeSystemTest < ApplicationSystemTestCase
 
       # The card lazy-loads its content; assert_text waits for the frame fetch.
       assert_text "Recent activity"
-      assert_text "added evidence to"
+      assert_text "added feedback to"
       assert_text "Critical Thinking"
     end
 
@@ -58,7 +58,7 @@ class HomeSystemTest < ApplicationSystemTestCase
       visit root_path
 
       # The card lazy-loads its content; assert_text waits for the frame fetch.
-      assert_text "Evidence requested of you"
+      assert_text "Feedback / Evidence requested of you"
       assert_text "Casey Asker"
       assert_link "Respond →"
     end

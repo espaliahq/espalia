@@ -59,11 +59,11 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     # Open the evidence-actions kebab, then the "Request evidence" item.
     # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
     page.execute_script(<<~JS)
-      document.querySelector("button[aria-label='Evidence actions']")?.click()
+      document.querySelector("button[aria-label='Feedback / evidence actions']")?.click()
     JS
     page.execute_script(<<~JS)
       [...document.querySelectorAll("button")]
-        .find((b) => b.textContent.trim() === "Request evidence")?.click()
+        .find((b) => b.textContent.trim() === "Request feedback / evidence")?.click()
     JS
     assert_selector "#evidence-request-modal-overlay", visible: true
     assert_text "Who can speak to this?"
@@ -91,7 +91,7 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
       find("button[type='submit']", text: /Send/).click
     end
 
-    assert_text "Evidence request"
+    assert_text "Feedback request"
     ActsAsTenant.with_tenant(@tenant) do
       req = EvidenceRequest.where(requestee_person_id: @peer.id, person_id: @report.id).first
       assert_not_nil req
@@ -104,6 +104,6 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     visit assessment_path(@report_assignment)
     assert_text "Critical Thinking"
-    assert_selector "button[aria-label='Evidence actions']", visible: :all
+    assert_selector "button[aria-label='Feedback / evidence actions']", visible: :all
   end
 end

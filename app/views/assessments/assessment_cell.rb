@@ -310,10 +310,10 @@ class Views::Assessments::AssessmentCell < Views::Base
   def evidence_indicator
     div(class: "flex items-center gap-1") do
       span(class: "w-1.5 h-1.5 rounded-full bg-amber-500") { }
-      # "evidence" is treated as uncountable here — matches the card's
-      # body copy and avoids "evidences"/"piece of evidence" awkwardness.
+      # "feedback" is treated as uncountable here — matches the card's
+      # body copy and avoids "feedbacks"/"piece of feedback" awkwardness.
       span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
-        "#{@cell_data[:evidence_count]} evidence"
+        "#{@cell_data[:evidence_count]} feedback"
       end
     end
   end

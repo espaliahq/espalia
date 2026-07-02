@@ -45,9 +45,9 @@ class Views::Evidence::HubView < Views::Base
 
   def header
     div do
-      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Evidence" }
+      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Feedback / Evidence" }
       p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
-        "Requests for evidence addressed to you, ones you've sent, and the evidence you've provided."
+        "Requests for feedback addressed to you, ones you've sent, and the feedback you've provided."
       end
     end
   end
@@ -58,7 +58,7 @@ class Views::Evidence::HubView < Views::Base
     section do
       section_heading("Asked of you")
       if @incoming.empty?
-        empty("No one has asked you for evidence.")
+        empty("No one has asked you for feedback.")
       else
         div(class: "space-y-4") { @incoming.each { |r| incoming_card(r) } }
       end
@@ -69,7 +69,7 @@ class Views::Evidence::HubView < Views::Base
     section do
       section_heading("Your requests")
       if @outgoing.empty?
-        empty("You haven't requested any evidence yet.")
+        empty("You haven't requested any feedback yet.")
       else
         div(class: "space-y-4") { @outgoing.each { |r| outgoing_card(r) } }
       end
@@ -79,12 +79,12 @@ class Views::Evidence::HubView < Views::Base
   def incoming_card(request)
     card(dom_id: request.dom_id) do
       div(class: "text-sm text-gray-900 dark:text-white") do
-        plain "#{request.requester&.name || "A colleague"} asked you for evidence#{regarding_suffix(request)}"
+        plain "#{request.requester&.name || "A colleague"} asked you for feedback#{regarding_suffix(request)}"
       end
       request_cell_line(request)
       message_line(request)
-      # No behavioural-expectation block here — the "Provide evidence" modal
-      # carries the full cell context when you actually respond.
+      # No behavioural-expectation block here — the "Provide feedback / evidence"
+      # modal carries the full cell context when you actually respond.
       respond_actions(request) if request.pending?
     end
   end
@@ -148,9 +148,9 @@ class Views::Evidence::HubView < Views::Base
 
   def authored_section
     section do
-      section_heading("Evidence you've provided")
+      section_heading("Feedback / Evidence you've provided")
       if @authored.empty?
-        empty("You haven't provided any evidence yet.")
+        empty("You haven't provided any feedback yet.")
       else
         div(class: "space-y-4") { @authored.each { |item| authored_card(item) } }
       end
@@ -198,7 +198,7 @@ class Views::Evidence::HubView < Views::Base
       button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
              class: "inline-flex items-center min-h-11 text-sm font-medium text-primary cursor-pointer") { "Edit" }
       form_with(url: evidence_item_path(item), method: :delete) do
-        button(type: "submit", data: { turbo_confirm: "Withdraw this evidence? It will be hidden everywhere it appears." },
+        button(type: "submit", data: { turbo_confirm: "Withdraw this feedback? It will be hidden everywhere it appears." },
                class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline cursor-pointer") { "Withdraw" }
       end
     end
@@ -244,7 +244,7 @@ class Views::Evidence::HubView < Views::Base
   def respond_actions(request)
     div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3") do
       button(type: "button", data: modal_trigger_data(mode: "respond", request_id: request.id),
-             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { "Provide evidence" }
+             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { "Provide feedback / evidence" }
       decline_form(request)
     end
   end

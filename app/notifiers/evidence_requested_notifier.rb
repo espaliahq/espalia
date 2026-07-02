@@ -16,7 +16,7 @@ class EvidenceRequestedNotifier < ApplicationNotifier
 
     def inbox_body
       capability = params[:capability_name].presence
-      lead = "The request is for behavioural evidence#{capability ? " for #{capability}" : ""}"
+      lead = "The request is for behavioural feedback#{capability ? " for #{capability}" : ""}"
       [ lead, params[:message].presence ].compact.join(" — ")
     end
 

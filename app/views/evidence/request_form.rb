@@ -59,7 +59,7 @@ class Views::Evidence::RequestForm < Views::Base
 
   def header
     div(class: "flex items-start justify-between mb-3") do
-      h2(class: "text-base font-semibold text-gray-900 dark:text-white") { "Request evidence" }
+      h2(class: "text-base font-semibold text-gray-900 dark:text-white") { "Request feedback / evidence" }
       button(type: "button", aria: { label: "Close" }, data: { action: "modal#close" },
              class: "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none") { "×" }
     end

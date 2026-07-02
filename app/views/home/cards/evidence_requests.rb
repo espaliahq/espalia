@@ -12,7 +12,7 @@ class Views::Home::Cards::EvidenceRequests < Views::Base
   end
 
   def view_template
-    render Components::Kit::Card.new(title: "Evidence requested of you", heading_level: :h2) do |card|
+    render Components::Kit::Card.new(title: "Feedback / Evidence requested of you", heading_level: :h2) do |card|
       card.body do
         summary_line
         request_list
@@ -26,7 +26,7 @@ class Views::Home::Cards::EvidenceRequests < Views::Base
   def summary_line
     count = @requests.size
     p(class: "text-sm text-gray-600 dark:text-gray-300") do
-      "#{count} #{count == 1 ? "colleague is" : "colleagues are"} waiting on your evidence."
+      "#{count} #{count == 1 ? "colleague is" : "colleagues are"} waiting on your feedback."
     end
   end
 
