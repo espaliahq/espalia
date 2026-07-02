@@ -165,12 +165,18 @@ class ApplicationController < ActionController::Base
   # Always auto-selects the first tenant. Multi-tenant users can switch
   # tenants via the user menu dropdown in the navbar.
   #
+  # Honours a stored return-to location (`session[:user_return_to]`) so a
+  # deep link that bounced through sign-in — most notably the MCP OAuth
+  # `/oauth/authorize` flow, whose `resource_owner_authenticator` stashes
+  # the original URL before redirecting an anonymous user to sign-in — lands
+  # back on its target instead of the home page. Falls back to `root_path`.
+  #
   # @param resource [User]
   # @return [String] redirect path
   def after_sign_in_path_for(resource)
     # Use without_tenant — no tenant is set yet at sign-in time.
     first_membership = ActsAsTenant.without_tenant { resource.tenant_users.first }
     session[:current_tenant_id] = first_membership.tenant_id if first_membership
-    root_path
+    stored_location_for(resource) || root_path
   end
 end
