@@ -55,6 +55,24 @@ class OauthPkceFlowTest < ActionDispatch::IntegrationTest
       assert_redirected_to new_user_session_path
     end
 
+    should "return to the original authorize URL after signing in (deep link honoured)" do
+      # Anonymous hit stashes the full authorize URL and bounces to sign-in.
+      get oauth_authorization_path, params: auth_params
+      assert_redirected_to new_user_session_path
+      assert_includes session[:user_return_to], "/oauth/authorize?"
+      assert_includes session[:user_return_to], "client_id=#{@application.uid}"
+
+      # Signing in through the real form must land back on the authorize URL,
+      # not the home page — otherwise the MCP OAuth flow dead-ends.
+      post user_session_path, params: {
+        user: { email: @user.email, password: "password123" }
+      }
+
+      assert_response :redirect
+      assert_includes response.location, "/oauth/authorize"
+      assert_includes response.location, "client_id=#{@application.uid}"
+    end
+
     should "render the consent screen with a tenant picker for the signed-in user's tenants" do
       sign_in @user
       get oauth_authorization_path, params: auth_params
