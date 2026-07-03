@@ -226,7 +226,7 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
       end
     else
       div do
-        span(class: "inline-flex min-w-14 items-center justify-center rounded-md px-2 py-0.5 text-sm font-semibold #{pct_classes(cell.at_or_above_pct)}") do
+        span(class: "inline-flex min-w-14 items-center justify-center rounded-md px-2 py-0.5 text-sm font-semibold #{pct_classes(cell)}") do
           "#{cell.at_or_above_pct}%"
         end
         coverage_line(cell)
@@ -257,8 +257,13 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
     ) { "n = #{n_in_group}" }
   end
 
-  # Heatmap tint tiers for the at-or-above share.
-  def pct_classes(pct)
+  # Heatmap tint tiers for the at-or-above share. A cell nobody has been
+  # assessed on yet stays neutral — "not yet assessed" must not read as
+  # "failing" (the 0% only reflects the below-by-default rule).
+  def pct_classes(cell)
+    return "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300" if cell.n_assessed.zero?
+
+    pct = cell.at_or_above_pct
     if pct >= 80
       "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
     elsif pct >= 60
