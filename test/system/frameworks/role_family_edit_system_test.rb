@@ -43,7 +43,7 @@ class Frameworks::RoleFamilyEditSystemTest < ApplicationSystemTestCase
 
       open_family_edit_modal(@backend_rf)
       # The datalist offers the existing "Engineering" group.
-      assert_selector "datalist#role-family-departments option[value='Engineering']", visible: :all
+      assert_selector "datalist#role-family-edit-modal-departments option[value='Engineering']", visible: :all
 
       set_department_and_save("Finance")
 
@@ -60,8 +60,8 @@ class Frameworks::RoleFamilyEditSystemTest < ApplicationSystemTestCase
       assert_text "Frontend"
 
       open_family_edit_modal(@frontend_rf)
-      assert_equal "Frontend", find("#role_family_edit_name").value
-      assert_equal "Engineering", find("#role_family_edit_department").value
+      assert_equal "Frontend", find("#role-family-edit-modal-name").value
+      assert_equal "Engineering", find("#role-family-edit-modal-department").value
     end
 
     # The edit trigger lives in the role pane, which is an overlay on narrow
@@ -73,7 +73,7 @@ class Frameworks::RoleFamilyEditSystemTest < ApplicationSystemTestCase
       toggle_role_pane
 
       open_family_edit_modal(@backend_rf)
-      assert_equal "Backend", find("#role_family_edit_name").value
+      assert_equal "Backend", find("#role-family-edit-modal-name").value
     end
   end
 
@@ -102,7 +102,7 @@ class Frameworks::RoleFamilyEditSystemTest < ApplicationSystemTestCase
   # submit the form synchronously (Turbo re-renders the families frame).
   def set_department_and_save(value)
     page.execute_script(<<~JS, value)
-      const input = document.querySelector("#role_family_edit_department");
+      const input = document.querySelector("#role-family-edit-modal-department");
       input.value = arguments[0];
       input.dispatchEvent(new Event("input", { bubbles: true }));
     JS

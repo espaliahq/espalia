@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 # Direct edits of a role family from the Framework Explorer's edit-mode role
-# tree — the inline name rename (in-place) and the full edit dialog (name +
-# description + department). Org-structure edits are **direct** (shape-
-# preserving, applied live) — unlike capability/category text, they do NOT
-# route through the suggested-edit path, so there is no pending decoration or
-# approval tier. Gated by FrameworkPolicy#update_role_family?.
+# tree — the inline name rename (in-place), the full edit dialog (name +
+# description + department), and creation via the new-family modal (POST).
+# Org-structure edits are **direct** (shape-preserving, applied live) — unlike
+# capability/category text, they do NOT route through the suggested-edit path,
+# so there is no pending decoration or approval tier. Gated by
+# FrameworkPolicy#update_role_family? / #add_role_family?.
 #
 # The dialog can change the department grouping, so its submit targets the
 # `role-tree-families` Turbo Frame and we re-render the whole role tree (Turbo
@@ -18,6 +19,26 @@ class Frameworks::RoleFamiliesController < ApplicationController
 
   before_action :set_framework
   before_action :set_role_family, only: [ :update ]
+
+  # POST /frameworks/:framework_id/role_families
+  #
+  # From the shared new-family modal (the tree-foot "+ Add role family"). Re-
+  # renders the `role-tree-families` frame so the new family appears in place —
+  # under its department header when one was given — ghost-wiggled (no roles
+  # yet), selection preserved.
+  def create
+    authorize @framework, :add_role_family?
+
+    permitted = params.expect(role_family: [ :name, :description, :department ])
+    Operations::Frameworks::AddRoleFamily.call(
+      context: pundit_user,
+      params: { framework_id: @framework.framework_id, **permitted.to_h.symbolize_keys }
+    )
+
+    render_role_tree_families_frame(@framework)
+  rescue Operations::Base::ParameterError
+    head :unprocessable_content
+  end
 
   # PATCH /frameworks/:framework_id/role_families/:id
   def update

@@ -671,6 +671,66 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "adding org structure via the tree" do
+    should "not show the add affordances in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_text "Test Framework"
+      assert_no_selector "button[data-modal-target-id='role-family-new-modal']"
+      assert_no_selector "button[data-modal-target-id='add-role-modal']"
+    end
+
+    should "add a role family via the tree-foot modal" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='role-family-new-modal']\").click();"
+      )
+      assert_selector "#role-family-new-modal", visible: true
+      within "#role-family-new-modal" do
+        fill_in "role-family-new-modal-name", with: "Design"
+        fill_in "role-family-new-modal-department", with: "Product + Design"
+      end
+      click_button_with_js_fallback("Add role family", expect_text: "No roles yet")
+
+      within "[data-controller~='tree']" do
+        # New family lands under its department header (rendered uppercase via
+        # CSS text-transform — assertions must match the rendered case).
+        assert_text "PRODUCT + DESIGN"
+        assert_selector "span.decoration-wavy", text: "Design"
+        assert_text "No roles yet"
+      end
+      assert_no_selector "#role-family-new-modal", visible: true
+    end
+
+    should "add a role via a family's add-role row, parent implied by placement" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-role-modal']\").click();"
+      )
+      assert_selector "#add-role-modal", visible: true
+      within "#add-role-modal" do
+        assert_text "In Engineering" # family prefilled from the trigger
+        fill_in "add-role-name", with: "Engineering Manager"
+        fill_in "add-role-code", with: "EM"
+        select "Management", from: "add-role-track"
+      end
+      click_button_with_js_fallback("Add role", expect_text: "Engineering Manager")
+
+      within "[data-controller~='tree']" do
+        # New role appears under its family as a ghost (no published levels).
+        assert_selector "span.decoration-wavy[title*='Not in the published framework']",
+                        text: "Engineering Manager"
+      end
+      assert_no_selector "#add-role-modal", visible: true
+    end
+  end
+
   context "ghost org-structure entities (no published levels)" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

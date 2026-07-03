@@ -116,6 +116,42 @@ class Frameworks::RoleFamiliesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "POST /frameworks/:framework_id/role_families" do
+    should "create the family and re-render the families frame with it ghost-wiggled" do
+      sign_in @user
+      post framework_role_families_path(framework_id: @framework_id),
+           params: { role_family: { name: "Design", department: "Product + Design" } }
+
+      assert_response :success
+      assert_includes response.body, "role-tree-families"
+      assert_includes response.body, "Design"
+      assert_includes response.body, "Product + Design"
+      # No roles yet → the new family renders as a ghost with the wiggle.
+      assert_includes response.body, "No roles yet"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        family = FrameworkState::RoleFamily.find_by(framework_id: @framework_id, name: "Design")
+        assert family
+        assert_equal "Product + Design", family.department
+      end
+    end
+
+    should "deny non-contributor viewers" do
+      viewer = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: viewer, role: :member) }
+      sign_in viewer
+
+      post framework_role_families_path(framework_id: @framework_id),
+           params: { role_family: { name: "Blocked" } }
+
+      assert_response :redirect
+      assert_match(/not authorized/i, flash[:alert])
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil FrameworkState::RoleFamily.find_by(framework_id: @framework_id, name: "Blocked")
+      end
+    end
+  end
+
   private
 
   def sign_in(user)

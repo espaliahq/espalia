@@ -1,13 +1,35 @@
 # frozen_string_literal: true
 
-# Inline rename of a role from the Framework Explorer's edit-mode role tree.
-# Direct org-structure edit (shape-preserving, applied live) — not the
-# suggested-edit path. Gated by FrameworkPolicy#update_role?. (Code/track edits
-# are exposed via the Operation/MCP; the inline UI only renames for now.)
+# Inline rename of a role (PATCH) and creation of a new role (POST) from the
+# Framework Explorer's edit-mode role tree. Direct org-structure edits
+# (shape-preserving, applied live) — not the suggested-edit path. Gated by
+# FrameworkPolicy#update_role? / #add_role?. (Code/track edits are exposed via
+# the Operation/MCP; the inline UI only renames for now.)
 #
 class Frameworks::RolesController < ApplicationController
+  include Frameworks::RoleTreeFamiliesFrame
+
   before_action :set_framework
   before_action :set_role, only: [ :update ]
+
+  # POST /frameworks/:framework_id/roles
+  #
+  # From the shared add-role modal (a family's "+ Add role" row). Re-renders
+  # the `role-tree-families` frame so the new role appears under its family in
+  # place, ghost-wiggled (no published levels yet), selection preserved.
+  def create
+    authorize @framework, :add_role?
+
+    permitted = params.expect(role: [ :role_family_id, :name, :code, :track ])
+    Operations::Frameworks::AddRole.call(
+      context: pundit_user,
+      params: { framework_id: @framework.framework_id, **permitted.to_h.symbolize_keys }
+    )
+
+    render_role_tree_families_frame(@framework)
+  rescue Operations::Base::ParameterError
+    head :unprocessable_content
+  end
 
   # PATCH /frameworks/:framework_id/roles/:id
   def update

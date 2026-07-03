@@ -52,6 +52,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
               department_group(dept_name, families)
             end
           end
+          add_role_family_row if @mode == :edit && @can_edit_structure
         end
       end
     end
@@ -230,6 +231,49 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         if visible_roles.empty?
           div(class: "px-3 py-1 text-xs italic text-gray-400 dark:text-gray-500") { "No roles yet" }
         end
+        add_role_row(role_family) if @mode == :edit && @can_edit_structure
+      end
+    end
+  end
+
+  # "+ Add role" row at the foot of a family's role list — opens the shared
+  # add-role modal, naming this family via the trigger dataset (the parent is
+  # implied by placement, so the modal needs no family picker). Mirrors the
+  # matrix's "+ Add capability" affordance one pane over.
+  def add_role_row(role_family)
+    div(class: "px-3 py-1") do
+      button(
+        type: "button",
+        class: "inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline",
+        data: {
+          action: "click->modal#open",
+          modal_target_id: "add-role-modal",
+          add_role_family_id: role_family.role_family_id,
+          add_role_family_name: role_family.name
+        }
+      ) do
+        span(class: "text-sm leading-none") { "+" }
+        plain "Add role"
+      end
+    end
+  end
+
+  # "+ Add role family" at the foot of the tree — opens the shared new-family
+  # modal (the RoleFamilyEditModal in :new mode). Inside the families frame so
+  # it survives frame re-renders.
+  def add_role_family_row
+    div(class: "px-3 pt-2 mt-1 border-t border-gray-100 dark:border-gray-800") do
+      button(
+        type: "button",
+        class: "inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline",
+        data: {
+          action: "click->modal#open",
+          modal_target_id: "role-family-new-modal",
+          role_family_new: "1"
+        }
+      ) do
+        span(class: "text-sm leading-none") { "+" }
+        plain "Add role family"
       end
     end
   end
