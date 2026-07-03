@@ -689,10 +689,10 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         "document.querySelector(\"button[data-modal-target-id='role-family-new-modal']\").click();"
       )
       assert_selector "#role-family-new-modal", visible: true
-      within "#role-family-new-modal" do
-        fill_in "role-family-new-modal-name", with: "Design"
-        fill_in "role-family-new-modal-department", with: "Product + Design"
-      end
+      # Assertion-critical values — JS-set + dispatch instead of send_keys,
+      # which drops characters on starved CI.
+      js_set_field "#role-family-new-modal-name", "Design"
+      js_set_field "#role-family-new-modal-department", "Product + Design"
       click_button_with_js_fallback("Add role family", expect_text: "No roles yet")
 
       within "[data-controller~='tree']" do
@@ -716,10 +716,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "#add-role-modal", visible: true
       within "#add-role-modal" do
         assert_text "In Engineering" # family prefilled from the trigger
-        fill_in "add-role-name", with: "Engineering Manager"
-        fill_in "add-role-code", with: "EM"
         select "Management", from: "add-role-track"
       end
+      # Assertion-critical values — JS-set + dispatch instead of send_keys.
+      js_set_field "#add-role-name", "Engineering Manager"
+      js_set_field "#add-role-code", "EM"
       click_button_with_js_fallback("Add role", expect_text: "Engineering Manager")
 
       within "[data-controller~='tree']" do
@@ -774,6 +775,19 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # JS-sets a form field's value + dispatches input/change events — the
+  # deterministic alternative to fill_in for assertion-critical values
+  # (Selenium send_keys drops characters on starved CI runners).
+  def js_set_field(selector, value)
+    el = find(selector)
+    page.execute_script(<<~JS, el, value)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
+  end
 
   # Sets the framework-explorer capability search box to `query` via a JS
   # value assignment + input/change events. Selenium's send_keys drops
