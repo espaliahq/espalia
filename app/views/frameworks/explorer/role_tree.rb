@@ -5,8 +5,13 @@
 # Three-level hierarchy: Department → Role Family → Role.
 # If role families have no department set, they appear ungrouped at the top.
 #
+# Visibility per mode: view mode hides **ghost** roles (no published levels)
+# and families with nothing visible — the published view stays clean; edit
+# mode shows everything, with ghosts wiggled (see GhostEntities).
+#
 class Views::Frameworks::Explorer::RoleTree < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
+  include Views::Frameworks::Explorer::Concerns::GhostEntities
 
   TRACK_OPTIONS = [
     { value: "both", label: "All" },
@@ -139,7 +144,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # @return [Array<Array>] ordered pairs of [dept_name, families]
   def departments_with_families
     grouped = @role_families
-      .select { |rf| rf.roles.any? { |r| track_visible?(r) } }
+      .select { |rf| family_visible?(rf) }
       .group_by { |rf| rf.respond_to?(:department) ? rf.department : nil }
 
     # Sort: named departments first (alphabetically), then ungrouped
@@ -166,10 +171,10 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   end
 
   def family_group(role_family)
-    visible_roles = role_family.roles.select { |r| track_visible?(r) }.sort_by(&:name)
-    return if visible_roles.empty?
+    visible_roles = role_family.roles.select { |r| role_visible?(r) }.sort_by(&:name)
+    return if visible_roles.empty? && @mode != :edit
 
-    all_checked = visible_roles.all? { |r| role_checked?(r) }
+    all_checked = visible_roles.any? && visible_roles.all? { |r| role_checked?(r) }
     some_checked = visible_roles.any? { |r| role_checked?(r) }
 
     div(
@@ -220,6 +225,11 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         data: { tree_target: "childList", family_id: role_family.role_family_id }
       ) do
         visible_roles.each { |role| role_node(role) }
+        # Only reachable in edit mode (the empty-family guard above) — a ghost
+        # family renders its emptiness explicitly rather than a bare header.
+        if visible_roles.empty?
+          div(class: "px-3 py-1 text-xs italic text-gray-400 dark:text-gray-500") { "No roles yet" }
+        end
       end
     end
   end
@@ -289,6 +299,22 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   end
 
   # ── Helpers ──
+
+  # View mode shows only what the published framework view contains: ghost
+  # roles (no published levels — freshly added live, or levels still in draft)
+  # are hidden, and a family with nothing visible is hidden with them. Edit
+  # mode shows everything — ghosts render with the wiggle (GhostEntities), and
+  # an empty family stays visible so it can be populated (the empty-category
+  # rule, Hard-Won Lesson 18, one pane left).
+  def family_visible?(role_family)
+    return true if @mode == :edit && role_family.roles.empty?
+
+    role_family.roles.any? { |r| role_visible?(r) }
+  end
+
+  def role_visible?(role)
+    track_visible?(role) && (@mode == :edit || published_role?(role))
+  end
 
   def track_visible?(role)
     case @track_filter

@@ -9,9 +9,15 @@
 # pending-suggestion decoration here. Display mode shows the plain name;
 # :edit adds a hover pencil + inline form.
 #
+# A **ghost** family (no role with published levels — hidden from the view-mode
+# tree) wears the wiggle on its name, self-computed so PATCH re-renders stay
+# decorated without threading a flag.
+#
 class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
   include Views::Frameworks::Explorer::Concerns::InlineEditable
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::GhostEntities
 
   # @param role_family [FrameworkState::RoleFamily, Frameworks::ExplorerGraph::RoleFamily]
   # @param framework_id [String]
@@ -35,7 +41,12 @@ class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
   private
 
   def plain_name
-    span(class: "text-sm font-medium text-gray-700 dark:text-gray-300 truncate") { @role_family.name }
+    ghost = ghost_role_family?(@role_family)
+    span(
+      class: "text-sm font-medium text-gray-700 dark:text-gray-300 truncate " \
+             "#{suggestion_text_classes(added_in_draft: ghost)}",
+      title: (role_family_ghost_title if ghost)
+    ) { @role_family.name }
   end
 
   def editable

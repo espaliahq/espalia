@@ -18,7 +18,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
-      rfid = SecureRandom.uuid_v7
+      @rfid = rfid = SecureRandom.uuid_v7
       rid = SecureRandom.uuid_v7
       cat_id = SecureRandom.uuid_v7
       cap_id = SecureRandom.uuid_v7
@@ -667,6 +667,48 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         # refines it), not the original value.
         textarea = find("textarea[name='capability[description]']", visible: :all)
         assert_equal "Considers long-term impact", textarea.value
+      end
+    end
+  end
+
+  context "ghost org-structure entities (no published levels)" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        # A live-added role with no levels in an existing family, and a
+        # brand-new empty family — both invisible in the published view.
+        handler.add_role(@framework_id, SecureRandom.uuid_v7, @rfid, "Engineering Manager", "EM", "management")
+        handler.add_role_family(@framework_id, SecureRandom.uuid_v7, "Design")
+      end
+    end
+
+    should "hide a ghost role and an empty family from the view-mode tree" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_text "Test Framework"
+
+      within "[data-controller~='tree']" do
+        assert_text "Software Engineer"
+        assert_no_text "Engineering Manager"
+        assert_no_text "Design"
+      end
+    end
+
+    should "show ghosts with the wiggle and an empty-family placeholder in edit mode" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      within "[data-controller~='tree']" do
+        # Ghost role: rendered, wiggled, tooltip conveys the meaning non-visually.
+        assert_selector "span.decoration-wavy[title*='Not in the published framework']",
+                        text: "Engineering Manager"
+        # Ghost (empty) family: rendered with wiggle + explicit emptiness.
+        assert_selector "span.decoration-wavy[title*='Not in the published framework']",
+                        text: "Design"
+        assert_text "No roles yet"
+        # A published role stays undecorated.
+        assert_no_selector "span.decoration-wavy", text: "Software Engineer"
       end
     end
   end

@@ -9,9 +9,15 @@
 # hover pencil + inline form. (Code/track edits are exposed via the
 # Operation/MCP; no inline UI field yet.)
 #
+# A **ghost** role (no published levels — hidden from the view-mode tree) wears
+# the wiggle on its name, self-computed from the role so the controllers' PATCH
+# re-renders stay decorated without threading a flag.
+#
 class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
   include Views::Frameworks::Explorer::Concerns::InlineEditable
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::GhostEntities
 
   # @param role [FrameworkState::Role, Frameworks::ExplorerGraph::Role]
   # @param framework_id [String]
@@ -35,7 +41,12 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
   private
 
   def plain_name
-    span(class: "text-sm text-gray-600 dark:text-gray-400 truncate") { @role.name }
+    ghost = ghost_role?(@role)
+    span(
+      class: "text-sm text-gray-600 dark:text-gray-400 truncate " \
+             "#{suggestion_text_classes(added_in_draft: ghost)}",
+      title: (role_ghost_title if ghost)
+    ) { @role.name }
   end
 
   def editable
