@@ -612,6 +612,47 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_add_role",
+        "description" => "Add a role to a role family (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "role_family_id" => { "type" => "string" },
+            "name" => { "type" => "string" },
+            "code" => { "type" => "string" },
+            "track" => { "type" => "string", "enum" => %w[ic management] }
+          },
+          "required" => %w[framework_id role_family_id name code track],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_add_role_family",
+        "description" => "Add a role family to a framework (owner/editor/lead only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "name" => { "type" => "string" },
+            "description" => { "type" => "string" },
+            "department" => { "type" => "string" }
+          },
+          "required" => %w[framework_id name],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_amend_suggestion",
         "description" => "Revise your own pending framework suggested edit (author only).",
         "inputSchema" => {

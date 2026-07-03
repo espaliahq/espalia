@@ -101,6 +101,16 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def update_level? = edit_structure?
 
+  # Org-structure adds — new role family / role. Shape-preserving (a family or
+  # role without published levels changes no rating grid; it renders as a ghost
+  # until publish), on the same edit-rights bar as the other structural adds.
+  #
+  # @return [Boolean]
+  def add_role_family? = edit_structure?
+
+  # @return [Boolean]
+  def add_role? = edit_structure?
+
   # Edit a capability-role binding's weight / individual tolerance.
   # Shape-preserving (applies live) but still a structural edit, so it sits
   # on the edit-rights bar like the other binding/structure mutations.

@@ -41,6 +41,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "role_family_updated"       => "bg-indigo-500",
     "role_updated"              => "bg-indigo-500",
     "level_updated"             => "bg-indigo-500",
+    "role_family_added"         => "bg-emerald-500",
+    "role_added"                => "bg-emerald-500",
     "draft_opened"              => "bg-purple-500",
     "version_published"         => "bg-green-600",
     "migration_mapping_defined" => "bg-purple-500",
@@ -71,6 +73,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "capability_archived"       => "structural",
     "category_added"            => "structural",
     "category_archived"         => "structural",
+    "role_family_added"         => "structural",
+    "role_added"                => "structural",
     "binding_added"             => "structural",
     "binding_updated"           => "structural",
     "binding_removed"           => "structural",
@@ -295,6 +299,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "role_family_updated" then org_update_summary("role family", name: "name", description: "description", department: "department")
     when "role_updated"        then org_update_summary("role", name: "name", code: "code", track: "track")
     when "level_updated"       then org_update_summary("level", title: "title", code: "code")
+    when "role_family_added"   then "Added a role family"
+    when "role_added"          then "Added a role"
     when "draft_opened"        then draft_opened_summary
     when "version_published"   then "Published v#{payload_value(:version)}"
     when "migration_mapping_defined" then "Defined a migration mapping"
@@ -374,8 +380,10 @@ class Views::Frameworks::Activity::Entry < Views::Base
       payload_value(:description)
     when "expectation_updated", "illustration_updated"
       payload_value(:new_description)
-    when "role_family_updated", "role_updated"
+    when "role_family_updated", "role_updated", "role_family_added"
       payload_value(:name)
+    when "role_added"
+      [ payload_value(:code), payload_value(:name) ].compact_blank.join(" · ").presence
     when "level_updated"
       payload_value(:title)
     when "migration_mapping_defined"
