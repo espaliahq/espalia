@@ -218,6 +218,9 @@ Rails.application.routes.draw do
       # Cohort progress roll-up — broader audience than the admin-only
       # management surface (any manager, scoped to their subtree).
       get :cohort, to: "assessment_cycles/cohorts#show"
+      # Capability attainment heatmap — same audience as the cohort view,
+      # with small-cohort suppression for subtree-scoped viewers.
+      get :attainment, to: "assessment_cycles/attainments#show"
     end
     resources :enrollments, only: [ :create, :destroy ],
                             controller: "assessment_cycles/enrollments" do
