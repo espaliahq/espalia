@@ -85,7 +85,10 @@ class Views::Frameworks::Explorer::AddRoleModal < Views::Base
       end
       div do
         label(for: "add-role-track", class: label_classes) { "Track" }
-        select(id: "add-role-track", name: "role[track]", class: field_classes) do
+        select(
+          id: "add-role-track", name: "role[track]", class: field_classes,
+          data: { add_role_form_target: "track" }
+        ) do
           option(value: "ic") { "IC" }
           option(value: "management") { "Management" }
         end
