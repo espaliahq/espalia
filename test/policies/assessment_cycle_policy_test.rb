@@ -27,6 +27,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       refute policy.update?
       refute policy.cohort?
       refute policy.cohort_full_access?
+      refute policy.attainment?
     end
   end
 
@@ -51,11 +52,12 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       refute policy.update?
     end
 
-    should "deny the cohort view when they have no reports in the cycle" do
+    should "deny the cohort and attainment views when they have no reports in the cycle" do
       policy = AssessmentCyclePolicy.new(@context, @cycle)
       ActsAsTenant.with_tenant(@tenant) do
         refute policy.cohort?
         refute policy.cohort_full_access?
+        refute policy.attainment?
       end
     end
   end
@@ -74,10 +76,11 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @manager)
     end
 
-    should "permit the cohort view but not full access or mutations" do
+    should "permit the cohort and attainment views but not full access or mutations" do
       policy = AssessmentCyclePolicy.new(@context, @cycle)
       ActsAsTenant.with_tenant(@tenant) do
         assert policy.cohort?
+        assert policy.attainment?
         refute policy.cohort_full_access?
         refute policy.update?
       end
@@ -107,9 +110,11 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @manager)
     end
 
-    should "deny the cohort view" do
+    should "deny the cohort and attainment views" do
       ActsAsTenant.with_tenant(@tenant) do
-        refute AssessmentCyclePolicy.new(@context, @cycle).cohort?
+        policy = AssessmentCyclePolicy.new(@context, @cycle)
+        refute policy.cohort?
+        refute policy.attainment?
       end
     end
   end
@@ -132,6 +137,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.update?
       assert policy.cohort?
       assert policy.cohort_full_access?
+      assert policy.attainment?
     end
   end
 
@@ -152,6 +158,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.update?
       assert policy.cohort?
       assert policy.cohort_full_access?
+      assert policy.attainment?
     end
   end
 end
