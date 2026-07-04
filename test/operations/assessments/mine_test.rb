@@ -80,6 +80,36 @@ class Operations::Assessments::MineTest < ActiveSupport::TestCase
     end
   end
 
+  context "skip_level_reports" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @grand_report = create(:person, tenant: @tenant, manager_id: @report.id, name: "Dave")
+        PersonDevelopment::CommandHandler.new.assign_to_framework(
+          @grand_report.id, @framework.framework_id, @role.role_id, @level.level_id
+        )
+      end
+    end
+
+    should "include reports-of-reports but never direct reports or outsiders" do
+      result = call_op
+
+      skip_names = result[:skip_level_reports].map { |r| r.dig(:assessee, :name) }
+      assert_equal [ "Dave" ], skip_names
+      assert_equal [ "Bob" ], result[:direct_reports].map { |r| r.dig(:assessee, :name) }
+    end
+
+    should "return an empty array for a leaf manager" do
+      report_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        tu = create(:tenant_user, tenant: @tenant, user: report_user, person: @report, role: :member)
+        ctx = AuthorizationContext.new(user: report_user, tenant_user: tu, person: @report)
+        result = Operations::Assessments::Mine.call(context: ctx)
+        assert_equal [ "Dave" ], result[:direct_reports].map { |r| r.dig(:assessee, :name) }
+        assert_equal [], result[:skip_level_reports]
+      end
+    end
+  end
+
   context "policy" do
     should "deny callers without a linked Person" do
       stranger_user = create(:user)

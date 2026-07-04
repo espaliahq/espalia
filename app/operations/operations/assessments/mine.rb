@@ -1,16 +1,18 @@
 # frozen_string_literal: true
 
 # Lists the caller's own framework assignments plus those of their
-# direct reports — the data behind the web Assessments index. Read-only;
-# scoped by acts_as_tenant and AssessmentPolicy#index? (`person.present?`).
+# direct reports and their skip-level reports (the rest of their org
+# subtree, view-only) — the data behind the web Assessments index.
+# Read-only; scoped by acts_as_tenant and AssessmentPolicy#index?
+# (`person.present?`).
 #
-# Returns a single hash with `own:` and `direct_reports:` arrays so an
-# MCP client can present them as separate lists without re-grouping.
-# Each row includes enough identity, framework, and open-cycle context
-# to pick the next drill-in (a future assessments_get tool) without an
-# extra round trip.
+# Returns a single hash with `own:`, `direct_reports:`, and
+# `skip_level_reports:` arrays so an MCP client can present them as
+# separate lists without re-grouping. Each row includes enough identity,
+# framework, and open-cycle context to pick the next drill-in
+# (assessments_get) without an extra round trip.
 class Operations::Assessments::Mine < Operations::Base
-  description "List the caller's own assessment assignments and those of their direct reports."
+  description "List the caller's own assessment assignments plus their direct reports' and skip-level reports' (view-only)."
   category :read
   approval :none
 
@@ -20,21 +22,25 @@ class Operations::Assessments::Mine < Operations::Base
     authorize PersonFrameworkAssignment, :index?
   end
 
-  # @return [Hash{Symbol=>Array<Hash>}] two-key payload:
+  # @return [Hash{Symbol=>Array<Hash>}] three-key payload:
   #   - `:own` — assignments where the caller is the assessee. Each row has
   #     `:id, :framework{id,name,current_published_version}, :role{id,code,name},
   #     :level{id,ordinal,title}, :current_cycle{id,name,status,planned_end_at}|nil`.
   #   - `:direct_reports` — same shape, plus `:assessee{id,name,email}` for
   #     the person being assessed.
+  #   - `:skip_level_reports` — same shape as `:direct_reports`, for people
+  #     deeper in the caller's org subtree (viewable, not ratable).
   def perform
     own = preload(PersonFrameworkAssignment.for_person(context.person.id)).to_a
     reports = report_assignments
-    open_cycles = AssessmentCycle.open_cycles_for(cycle_keys(own + reports))
-    reports_by_person = Person.where(id: reports.map(&:person_id)).index_by(&:id)
+    skip_levels = skip_level_assignments
+    open_cycles = AssessmentCycle.open_cycles_for(cycle_keys(own + reports + skip_levels))
+    people_by_id = Person.where(id: (reports + skip_levels).map(&:person_id)).index_by(&:id)
 
     {
       own: own.map { |a| serialize(a, open_cycles) },
-      direct_reports: reports.map { |a| serialize(a, open_cycles, assessee: reports_by_person[a.person_id]) }
+      direct_reports: reports.map { |a| serialize(a, open_cycles, assessee: people_by_id[a.person_id]) },
+      skip_level_reports: skip_levels.map { |a| serialize(a, open_cycles, assessee: people_by_id[a.person_id]) }
     }
   end
 
@@ -45,10 +51,21 @@ class Operations::Assessments::Mine < Operations::Base
   end
 
   def report_assignments
-    report_ids = context.person.direct_reports.pluck(:id)
-    return [] if report_ids.empty?
+    return [] if direct_report_person_ids.empty?
 
-    preload(PersonFrameworkAssignment.where(person_id: report_ids)).to_a
+    preload(PersonFrameworkAssignment.where(person_id: direct_report_person_ids)).to_a
+  end
+
+  # Assignments for the caller's subtree below their direct reports.
+  def skip_level_assignments
+    skip_ids = context.person.all_reports.pluck(:id) - direct_report_person_ids
+    return [] if skip_ids.empty?
+
+    preload(PersonFrameworkAssignment.where(person_id: skip_ids)).to_a
+  end
+
+  def direct_report_person_ids
+    @direct_report_person_ids ||= context.person.direct_reports.pluck(:id)
   end
 
   def cycle_keys(assignments)

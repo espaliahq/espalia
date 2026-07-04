@@ -168,6 +168,33 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, @person.name
     end
 
+    should "not show skip-level section to a manager with no skip-level reports" do
+      sign_in @manager_user
+      get assessments_path
+
+      assert_response :success
+      assert_not_includes response.body, "Skip-Level Assessments"
+    end
+
+    should "show skip-level assessments section to the manager's manager" do
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+      end
+
+      sign_in skip_user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Skip-Level Assessments"
+      assert_includes response.body, @person.name
+      # The direct-report team section only renders when a direct report has
+      # an assignment — the manager in between has none here.
+      assert_not_includes response.body, "Team Assessments"
+    end
+
     should "render read-only manager view for a skip-level manager" do
       skip_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do

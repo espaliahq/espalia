@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# Assessment UI for the current user's own assessments and their
-# direct reports' assessments (manager view).
+# Assessment UI for the current user's own assessments, their direct
+# reports' assessments (manager view), and — read-only — the assessments
+# of everyone deeper in their org subtree (skip-level view).
 #
 # The assessment ID in URLs is the framework_id — an assessment is a
 # projection derived from the PersonDevelopment event stream, not a
@@ -19,9 +20,12 @@ class AssessmentsController < ApplicationController
     @own_assignments = PersonFrameworkAssignment.for_person(current_person.id)
       .includes(:framework, :role, :level)
     @report_assignments = load_report_assignments
-    @report_people = Person.where(id: @report_assignments.map(&:person_id)).index_by(&:id)
+    @skip_level_assignments = load_skip_level_assignments
+    @report_people = Person.where(
+      id: (@report_assignments.map(&:person_id) + @skip_level_assignments.map(&:person_id)).uniq
+    ).index_by(&:id)
 
-    all_assignments = @own_assignments.to_a + @report_assignments.to_a
+    all_assignments = @own_assignments.to_a + @report_assignments.to_a + @skip_level_assignments.to_a
     cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
     @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
     @card_statuses = build_card_statuses(@open_cycles)
@@ -29,6 +33,7 @@ class AssessmentsController < ApplicationController
     render Views::Assessments::IndexView.new(
       assignments: @own_assignments,
       report_assignments: @report_assignments,
+      skip_level_assignments: @skip_level_assignments,
       report_people: @report_people,
       open_cycles: @open_cycles,
       card_statuses: @card_statuses,
@@ -363,11 +368,30 @@ class AssessmentsController < ApplicationController
     end
   end
 
-  def direct_report_assignment_ids
-    report_ids = current_person.direct_reports.pluck(:id)
-    return [] if report_ids.empty?
+  # Assignments for people below the current person's direct reports —
+  # skip-level reports and deeper (the whole subtree minus the direct line).
+  # Anything already surfaced in the Team section (direct reports + active
+  # delegations) is excluded so a card never appears twice.
+  #
+  # @return [ActiveRecord::Relation<PersonFrameworkAssignment>]
+  def load_skip_level_assignments
+    skip_person_ids = current_person.all_reports.pluck(:id) - direct_report_person_ids
+    return PersonFrameworkAssignment.none if skip_person_ids.empty?
 
-    PersonFrameworkAssignment.where(person_id: report_ids).ids
+    team_ids = (direct_report_assignment_ids + delegated_assignment_ids).uniq
+    scope = PersonFrameworkAssignment.where(person_id: skip_person_ids)
+    scope = scope.where.not(id: team_ids) if team_ids.any?
+    scope.includes(:framework, :role, :level)
+  end
+
+  def direct_report_person_ids
+    @direct_report_person_ids ||= current_person.direct_reports.pluck(:id)
+  end
+
+  def direct_report_assignment_ids
+    return [] if direct_report_person_ids.empty?
+
+    PersonFrameworkAssignment.where(person_id: direct_report_person_ids).ids
   end
 
   # Assignment ids the current person holds an active delegation to rate.
