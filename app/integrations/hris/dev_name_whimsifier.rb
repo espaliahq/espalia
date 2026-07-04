@@ -130,9 +130,8 @@ class Hris::DevNameWhimsifier
     # @param seed [String]
     def rewrite_name_keys(hash, seed)
       first, last = name_parts(seed)
-      hash["firstName"] = first if hash.key?("firstName")
-      hash["surname"] = last if hash.key?("surname")
-      hash["displayName"] = "#{first} #{last}" if hash.key?("displayName")
+      values = { "firstName" => first, "surname" => last, "displayName" => "#{first} #{last}" }
+      NAME_KEYS.each { |key| hash[key] = values.fetch(key) if hash.key?(key) }
     end
   end
 end
