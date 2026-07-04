@@ -13,6 +13,43 @@
 > CI runs the system tests; it does not run the MCP, so the MCP pass never
 > substitutes for writing one.
 
+## Delegate the driving to the `chrome-driver` subagent (default)
+
+Driving the browser in the main context is expensive: each `take_snapshot` is a
+5–30k-token element tree and a typical pass burns 10–15 tool calls. **Default to
+dispatching the [`chrome-driver`](../../.claude/agents/chrome-driver.md) agent**
+(Agent tool, `subagent_type: "chrome-driver"`) with the flow to drive and a
+short task name; all the snapshot/interaction noise stays in its context. It
+signs in, drives the flow at both viewports, saves screenshots under
+`tmp/visual/<task>/`, collects console errors, and returns a compact report
+(steps, errors verbatim, screenshot paths, anomalies).
+
+**The delegation covers driving only — never the visual judgment
+(NON-NEGOTIABLE).** After the agent returns, `Read` the saved screenshots and
+judge them yourself: layout, contrast, responsive behaviour, whether the change
+actually looks right. "The subagent said it looked fine" does not discharge the
+visual pass — the whole point of this gate is that *you* lay eyes on the change.
+Treat the agent's "anomalies" section as leads, not verdicts.
+
+Practical notes:
+
+- **Model:** the agent defaults to Haiku — right for scripted capture ("log in,
+  go to X, click Y, screenshot both viewports"). For exploratory bug repro,
+  where the driver must notice something unexpected and adapt, pass
+  `model: "sonnet"` on the Agent call.
+- **One driver at a time.** `chrome-debug` is a single shared browser — never
+  run two driving agents concurrently.
+- **Inline driving is still fine for trivial checks** — a single
+  `evaluate_script` or one screenshot doesn't warrant a dispatch. The moment a
+  flow needs snapshots or multiple interactions, delegate.
+- If the flow is already pinned by a system test, `SCREENSHOTS=1` +
+  `/screenshot-test` is cheaper still — deterministic artifacts, no browser
+  driving at all.
+
+The rest of this document is the recipe the subagent's definition bakes in —
+you still need it when driving inline, debugging the agent, or updating its
+definition (keep the two in sync when gotchas change).
+
 ## How it's wired (devcontainer)
 
 - Claude Code runs in the **`rails-app`** container. The browser is a **separate
