@@ -1036,6 +1036,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "reporting_capability_attainment",
+        "description" => "Aggregate capability attainment for an assessment cycle across the caller's " \
+          "org subtree (admins see the whole cycle): per role and role family, the share " \
+          "of people at or above their assessed level on each capability with assessed " \
+          "coverage, plus the share passing each category gate. Small groups are " \
+          "suppressed for non-admin viewers. Returns aggregates only — never individual " \
+          "ratings.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cycle_id" => { "type" => "string" },
+            "perspective" => { "type" => "string", "enum" => [ "effective", "self", "manager", "aligned" ] },
+            "scope" => { "type" => "string", "enum" => [ "mine", "all" ] }
+          },
+          "required" => [ "cycle_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "reporting_cycle_cohort",
         "description" => "Aggregate progress for an assessment cycle across the caller's org subtree " \
           "(admins see the whole cycle): the self/manager/aligned funnel, lifecycle status " \

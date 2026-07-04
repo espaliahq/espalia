@@ -67,6 +67,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
         render Views::AssessmentCycles::CycleNameFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
       div(class: "flex items-center gap-3") do
+        attainment_link if @can_view_cohort
         cohort_link if @can_view_cohort
         render Components::Kit::Badge.new(
           @cycle.open? ? "Open" : "Closed",
@@ -87,6 +88,17 @@ class Views::AssessmentCycles::ShowView < Views::Base
              "text-gray-800 shadow-xs hover:bg-gray-200 transition-colors " \
              "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
     ) { "Cohort progress →" }
+  end
+
+  # Link to the capability attainment heatmap. Same audience as the cohort
+  # roll-up — see AssessmentCyclePolicy#attainment?.
+  def attainment_link
+    a(
+      href: attainment_assessment_cycle_path(@cycle),
+      class: "inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
+             "text-gray-800 shadow-xs hover:bg-gray-200 transition-colors " \
+             "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+    ) { "Capability attainment →" }
   end
 
   def close_button

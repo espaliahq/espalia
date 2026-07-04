@@ -18,9 +18,47 @@ Time-series of aligned ratings per capability using `capability_stable_id` acros
 
 ---
 
-## 4.3 Aggregate Gap Report
+## 4.3 Aggregate Gap Report — Capability Attainment (shipped)
 
-Per role: count below/at/above expected level per capability. Weighted by binding weights.
+Per role and role family: the share of an assessment cycle's participants at or
+above their assessed level on each bound capability, plus a category roll-up.
+**Compute-on-read** (no projection, no new tables): `Reporting::CapabilityAttainment`
+([app/queries/reporting/capability_attainment.rb](../../app/queries/reporting/capability_attainment.rb))
+builds one `PersonDevelopment::Scoring` per participant at their **enrollment-snapshot**
+role/level (ADR-19) from a single bulk `AssessmentLevelRating` query.
+
+- **Buckets** per person × capability, from `Scoring#agreed_level_for` (highest
+  level rated consistent): `above` (> assessed level), `at` (=), `below`
+  (otherwise — including not-yet-assessed, so every cell carries
+  `n_assessed / n_in_group` coverage and the UI renders them together).
+- **Perspective-parameterised**: effective (default, aligned → manager → self),
+  self-only, manager-only, aligned-only — the report labels which is active.
+- **Family roll-ups** use per-capability denominators (only people whose role
+  binds the capability). **Category roll-up** is the share of people passing
+  the existing category gate (`Scoring#category_results`) — deliberately not
+  arithmetically composed from the capability cells.
+- Keyed on `capability_stable_id` → survives framework version migrations.
+
+**Privacy — small-cohort suppression.** This is the first surface exposing
+rating-*derived* values in aggregate to viewers who can't open the underlying
+individual assessments (managers see their subtree, including skip-levels).
+For subtree-scoped viewers, any cell under `MIN_COHORT` (4) people keeps its
+coverage counts but hides buckets/percentages; family cells add a differencing
+guard (suppressed when the remainder behind visible role cells is a
+reconstructable 1..3 people). Admin/HR viewers are unsuppressed — they can
+already open individual assessments. Never exposes individual ratings.
+
+**Surfaces** (one implementation, two entry points):
+- Drill-down heatmap — `GET /assessment_cycles/:id/attainment`
+  (`AssessmentCycles::AttainmentsController`; categories × capabilities rows,
+  role/family columns, perspective + axis + scope switchers). Linked from the
+  cycle page and the cohort view.
+- MCP — `Operations::Reporting::CapabilityAttainment`
+  (`reporting_capability_attainment`).
+
+**Authorization**: `AssessmentCyclePolicy#attainment?` — same bar as `cohort?`
+(any manager with a participant in their subtree; admins/HR whole-cycle, with
+the same `?scope=mine` toggle).
 
 ---
 

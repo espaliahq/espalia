@@ -34,6 +34,14 @@ class AssessmentCyclePolicy < ApplicationPolicy
     tenant_admin?
   end
 
+  # Whether the viewer may see the capability attainment report for this
+  # cycle. Same audience as the cohort roll-up — but unlike the cohort view
+  # this surface exposes rating-derived aggregates, so subtree-scoped viewers
+  # get small-cohort suppression (see Reporting::CapabilityAttainment).
+  def attainment?
+    cohort?
+  end
+
   def show?
     tenant_admin? || tenant_member?
   end

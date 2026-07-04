@@ -63,6 +63,8 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
         h1(class: "text-2xl font-semibold text-gray-900 dark:text-white") { "#{cycle.name} — cohort progress" }
         span(class: "text-sm text-gray-600 dark:text-gray-300") { "#{@result.total} enrolled" }
         deadline_badge
+        a(href: attainment_assessment_cycle_path(cycle),
+          class: "text-sm text-primary hover:underline") { "Capability attainment →" }
       end
       p(class: "mt-2 text-xs text-gray-600 dark:text-gray-300") do
         "Ratings stay private to each person and their manager until alignment. This view shows progress only."
