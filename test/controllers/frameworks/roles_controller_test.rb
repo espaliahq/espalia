@@ -97,6 +97,30 @@ class Frameworks::RolesControllerTest < ActionDispatch::IntegrationTest
         .read.stream("tenant-#{@tenant.id}/Framework-#{@framework_id}").to_a
       assert_empty events.select { |e| e.is_a?(Frameworks::Events::RoleUpdated) }
     end
+
+    should "exclude unchanged fields from the update event when one field changes" do
+      sign_in @user
+      patch framework_role_path(framework_id: @framework_id, id: @role_id),
+            params: { role: { name: "Software Engineer", code: "SE", track: "ic" } },
+            headers: { "Turbo-Frame" => "role-tree-families" }
+
+      assert_response :success
+      updates = Rails.configuration.event_store
+        .read.stream("tenant-#{@tenant.id}/Framework-#{@framework_id}").to_a
+        .select { |e| e.is_a?(Frameworks::Events::RoleUpdated) }
+      assert_equal 1, updates.size
+      # Only the changed field rides the (compacted) event — the feed reads
+      # present keys as "what changed".
+      assert_equal "SE", updates.first.data[:code]
+      assert_not updates.first.data.key?(:name)
+      assert_not updates.first.data.key?(:track)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        role = FrameworkState::Role.find_by(role_id: @role_id)
+        assert_equal "SE", role.code
+        assert_equal "Software Engineer", role.name
+      end
+    end
   end
 
   context "POST /frameworks/:framework_id/roles" do

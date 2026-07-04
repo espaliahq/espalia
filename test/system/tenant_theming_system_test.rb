@@ -39,15 +39,27 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
       switch_selector = "form[action='#{users_tenant_switch_path}']"
       assert_selector switch_selector, visible: :all, count: 1
 
-      submit_switch = -> { page.execute_script("document.querySelector(#{switch_selector.inspect}).requestSubmit();") }
-      submit_switch.call
+      # The retry must target tenant B's form SPECIFICALLY: after a successful
+      # switch the re-rendered page's only form points back to tenant A, so a
+      # blind resubmit would undo a slow-but-successful switch. Targeting B
+      # makes the retry a no-op once switched (the ?. chain finds no form) and
+      # only refires when the first submit was genuinely dropped.
+      submit_switch_to_b = lambda do
+        page.execute_script(<<~JS)
+          const form = [...document.querySelectorAll(#{switch_selector.inspect})]
+            .find(f => f.querySelector("input[name='tenant_id']")?.value === #{@tenant_b.id.to_json});
+          form?.requestSubmit();
+        JS
+      end
+      submit_switch_to_b.call
       screenshot("after_switch")
 
       # The switch is a Turbo form POST that re-renders the page with new
       # theme variables. On a starved runner the fetch itself has been
-      # observed to drop — re-submit once if the style hasn't changed.
+      # observed to drop — re-submit (B-targeted, so undo-safe) if the style
+      # hasn't changed.
       changed_xpath = "//style[@id='tenant-theme'][text()=#{initial_style.inspect}]"
-      submit_switch.call unless page.has_no_xpath?(changed_xpath, wait: 8)
+      submit_switch_to_b.call unless page.has_no_xpath?(changed_xpath, wait: 8)
 
       assert page.has_no_xpath?(
         changed_xpath,
