@@ -46,6 +46,10 @@ database. Key properties:
   (SHA-256 → curated word lists), so re-syncs map the same employee to the
   same name, and the manager's name inside a report's `reportsTo` raw payload
   matches the manager's own record.
+- **Uniform and collision-resistant** — lists are power-of-two sized (no
+  modulo bias) and surnames are composed stem + ending (32 × 16 = 512), so
+  duplicate surnames — which read as family relations — stay rare even for
+  large orgs.
 - **Covers the raw payload too** — `firstName` / `surname` / `displayName` are
   scrubbed in `hris_raw_data` (top level and `work.reportsTo`), not just the
   mapped `name`.

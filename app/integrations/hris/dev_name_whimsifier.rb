@@ -15,35 +15,42 @@
 #
 # @example
 #   Hris::DevNameWhimsifier.whimsical_name("bob-001")
-#   # => "Peregrine Thistledown"  (stable for "bob-001" forever)
+#   # => "Peregrine Fizzleduck"  (stable for "bob-001" forever)
 #
 class Hris::DevNameWhimsifier
+  # All three lists are sized to powers of two so `16-bit hash word % length`
+  # is exactly uniform — no name is ever preferred over another. Surnames are
+  # composed stem + ending (32 × 16 = 512), which keeps the pool big enough
+  # that duplicate surnames — which read as family relations — stay rare even
+  # for large orgs (full-name space: 64 × 512 = 32,768).
   FIRST_NAMES = %w[
-    Amaranth Archibald Balthazar Barnaby Beatrix Bertram Bramble Casimir
-    Clementine Clover Cornelius Dandelion Evangeline Ferdinand Fitzwilliam
-    Hawthorn Humphrey Ignatius Isadora Juniper Lavender Leopold Marigold
-    Marzipan Millicent Mortimer Obadiah Ottoline Peregrine Petronella
-    Pippin Primrose Prudence Quillon Rosalind Sorrel Sylvester Tamsin
-    Tansy Thaddeus Tuppence Ulysses Verbena Wilhelmina Winifred Wolfgang
-    Xanthe Zinnia
+    Amaranth Ambrose Archibald Balthazar Barnaby Beatrix Bertram Blossom
+    Bramble Casimir Caspian Clementine Clover Cornelius Dandelion Delphine
+    Eulalie Evangeline Fennel Ferdinand Fitzwilliam Gideon Hawthorn Humphrey
+    Hyacinth Ignatius Isadora Jessamine Juniper Lavender Leopold Marigold
+    Marzipan Meriwether Millicent Mortimer Obadiah Octavia Ottoline Percival
+    Peregrine Petronella Pippin Primrose Prudence Quillon Rosalind Seraphina
+    Sorrel Sylvester Tamsin Tansy Thaddeus Theodora Tuppence Ulysses
+    Verbena Waldo Wilhelmina Winifred Wolfgang Xanthe Zephyr Zinnia
   ].freeze
 
-  SURNAMES = %w[
-    Applethwaite Bindlestitch Bumblethorpe Cloudberry Crumpetworth
-    Dabblewick Elderflower Fiddleford Fizzlewick Frostwhistle Gigglesworth
-    Gooseberry Hobblepot Honeywhistle Inklewhistle Jellicoe Kettleworth
-    Kindlewick Lillypond Mossberry Muddlefoot Nettlewick Oakenshaw
-    Otterby Pettigrew Plumtree Puddleduck Quibbleton Quincewood
-    Rambleberry Sassafras Snickelby Snodgrass Thistledown Tootlebury
-    Twinkleton Umbergrove Wafflesmith Wigglesworth Wobblesworth
-    Yonderberry Ziggleswade
+  SURNAME_STEMS = %w[
+    Apple Bindle Bumble Cloud Crumpet Dapple Elder Fiddle
+    Fizzle Frost Giggle Goose Hobble Honey Inkle Jingle
+    Kettle Kindle Lilly Moss Muddle Nettle Oaken Otter
+    Pebble Plum Puddle Quibble Quince Ramble Thistle Wobble
+  ].freeze
+
+  SURNAME_ENDINGS = %w[
+    berry brook duck field foot ford pond shaw
+    smith thorpe ton tree whistle wick wood worth
   ].freeze
 
   # Raw HiBob payload keys that carry a person's name.
   NAME_KEYS = %w[firstName surname displayName].freeze
 
   # Version tag in the digest input — bump to reshuffle every pseudonym.
-  DIGEST_PREFIX = "growthos-dev-whimsy-v1"
+  DIGEST_PREFIX = "growthos-dev-whimsy-v2"
 
   class << self
     # @return [Boolean] whether whimsification applies (development only)
@@ -79,7 +86,7 @@ class Hris::DevNameWhimsifier
     # The stable whimsical pseudonym for a given HRIS identifier.
     #
     # @param seed [String] stable per-person identifier (HRIS external id)
-    # @return [String] e.g. "Clementine Puddleduck"
+    # @return [String] e.g. "Clementine Puddlewhistle"
     def whimsical_name(seed)
       first, last = name_parts(seed)
       "#{first} #{last}"
@@ -90,8 +97,11 @@ class Hris::DevNameWhimsifier
     # @param seed [String]
     # @return [Array(String, String)] first name and surname
     def name_parts(seed)
-      hi, lo = Digest::SHA256.digest("#{DIGEST_PREFIX}:#{seed}").unpack("nn")
-      [ FIRST_NAMES[hi % FIRST_NAMES.length], SURNAMES[lo % SURNAMES.length] ]
+      first, stem, ending = Digest::SHA256.digest("#{DIGEST_PREFIX}:#{seed}").unpack("nnn")
+      [
+        FIRST_NAMES[first % FIRST_NAMES.length],
+        "#{SURNAME_STEMS[stem % SURNAME_STEMS.length]}#{SURNAME_ENDINGS[ending % SURNAME_ENDINGS.length]}"
+      ]
     end
 
     # Deep-dups the raw HiBob employee hash and rewrites its name fields —

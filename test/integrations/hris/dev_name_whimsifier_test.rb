@@ -37,13 +37,20 @@ class Hris::DevNameWhimsifierTest < ActiveSupport::TestCase
 
     should "compose from the curated whimsical word lists" do
       first, last = Hris::DevNameWhimsifier.whimsical_name("bob-001").split(" ")
+
       assert_includes Hris::DevNameWhimsifier::FIRST_NAMES, first
-      assert_includes Hris::DevNameWhimsifier::SURNAMES, last
+      stem = Hris::DevNameWhimsifier::SURNAME_STEMS.find { |s| last.start_with?(s) }
+      assert stem, "surname #{last} does not start with a known stem"
+      assert_includes Hris::DevNameWhimsifier::SURNAME_ENDINGS, last.delete_prefix(stem)
     end
 
-    should "vary across seeds" do
-      names = ("a".."z").map { |s| Hris::DevNameWhimsifier.whimsical_name(s) }.uniq
-      assert_operator names.length, :>, 20
+    should "spread surnames widely enough that an org-sized cohort rarely collides" do
+      surnames = (1..200).map { |i| Hris::DevNameWhimsifier.whimsical_name("emp-#{i}").split(" ").last }
+
+      # 512 possible surnames; 200 seeds should stay overwhelmingly distinct
+      # (deterministic — this pins the composed-surname pool size).
+      assert_operator surnames.uniq.length, :>=, 160
+      assert_operator surnames.tally.values.max, :<=, 4
     end
   end
 
