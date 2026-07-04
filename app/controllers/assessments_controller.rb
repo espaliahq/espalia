@@ -207,6 +207,22 @@ class AssessmentsController < ApplicationController
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
     ).build
+    apply_viewer_rating_lock
+  end
+
+  # View-only manager-side viewers (manager-chain ancestors who are neither
+  # the recorded reporting manager nor an active rating delegate) get static
+  # rating pills — the rating policies would reject their POSTs, so no
+  # interactive affordance should render. Rating-capable viewers keep the
+  # lifecycle-derived flags untouched.
+  def apply_viewer_rating_lock
+    return unless manager_viewing?
+
+    policy = AssessmentPolicy.new(pundit_user, @assignment)
+    @matrix_data[:individual_ratings_frozen] = true unless policy.create_manager_rating?
+    if assessment_context == :alignment && !policy.create_alignment_rating?
+      @matrix_data[:alignment_locked] = true
+    end
   end
 
   # `viewer_sees_all_evidence?`, `viewer_can_relink_others_evidence?`, and

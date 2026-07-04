@@ -168,6 +168,32 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, @person.name
     end
 
+    should "render read-only manager view for a skip-level manager" do
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+      end
+
+      sign_in skip_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, @person.name
+      # View-only: no interactive manager-rating form may render for a
+      # chain ancestor who is not the recorded reporting manager.
+      assert_not_includes response.body, assessment_manager_ratings_path(@assignment)
+    end
+
+    should "keep the manager-rating form interactive for the direct manager" do
+      sign_in @manager_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, assessment_manager_ratings_path(@assignment)
+    end
+
     should "redirect if not manager and not assignee" do
       other_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do

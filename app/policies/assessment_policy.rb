@@ -2,16 +2,21 @@
 
 # Authorization policy for assessment resources.
 #
-# The record is a {PersonFrameworkAssignment}. Access is granted to
-# the person themselves (for self-assessment) or their manager
-# (for manager rating and alignment).
+# The record is a {PersonFrameworkAssignment}. Viewing is granted to the
+# person themselves, anyone in their manager chain (direct, skip-level, …),
+# and an active rating delegate. Rating and alignment authority stay much
+# narrower — the recorded reporting manager (plus a delegate for the manager
+# rating only).
 #
 class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def index? = person.present?
 
   # @return [Boolean]
-  def show? = owns_assessment? || manages_assessee? || active_rating_delegate?
+  def show?
+    owns_assessment? || manages_assessee? || in_assessee_manager_chain? ||
+      active_rating_delegate?
+  end
 
   # @return [Boolean]
   def matrix? = show?
@@ -38,7 +43,7 @@ class AssessmentPolicy < ApplicationPolicy
   #
   # @return [Boolean]
   def delegate_manager_rating?
-    tenant_admin? || assessee_managed_by_actor?
+    tenant_admin? || in_assessee_manager_chain?
   end
 
   # @return [Boolean]
@@ -72,7 +77,7 @@ class AssessmentPolicy < ApplicationPolicy
   #
   # @return [Boolean]
   def view_alignment?
-    return false unless owns_assessment? || manages_assessee? || active_rating_delegate?
+    return false unless show?
 
     %w[aligning aligned].include?(current_open_cycle_participation&.status)
   end
@@ -150,8 +155,7 @@ class AssessmentPolicy < ApplicationPolicy
   # non-HRIS tenant, or pre-backfill), so those tenants keep working.
   #
   # Alignment-related actions remain manager-only (a 1:1 conversation);
-  # delegates are excluded from them. Skip-level access for evidence is granted
-  # through {EvidencePolicy}, not this policy.
+  # delegates and manager-chain ancestors are excluded from them.
   #
   # @return [Boolean]
   def manages_assessee?
@@ -179,10 +183,15 @@ class AssessmentPolicy < ApplicationPolicy
   end
 
   # Whether the actor is anywhere in the assessee's manager chain (direct,
-  # skip-level, …) — used to gate who may grant/revoke a delegation.
+  # skip-level, …). Grants full view access ({#show?}) and gates who may
+  # grant/revoke a delegation — but never rating or alignment authority,
+  # which stay with the recorded reporting manager ({#manages_assessee?}).
+  #
+  # Walks the live org chart (`Person#managed_by?`), unlike the
+  # recorded-authoritative direct-manager check.
   #
   # @return [Boolean]
-  def assessee_managed_by_actor?
+  def in_assessee_manager_chain?
     return false unless person.present?
 
     assessee = Person.find_by(id: record.person_id)

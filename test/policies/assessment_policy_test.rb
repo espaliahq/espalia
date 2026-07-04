@@ -70,6 +70,47 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "as a skip-level manager (manager's manager)" do
+    setup do
+      @user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        @grand_manager = create(:person, tenant: @tenant, name: "Grand Manager")
+        @manager.update!(manager: @grand_manager)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: @grand_manager)
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @grand_manager)
+    end
+
+    should "allow show" do
+      assert policy.show?
+    end
+
+    should "allow matrix and scoring" do
+      assert policy.matrix?
+      assert policy.scoring?
+    end
+
+    should "deny create_self_rating" do
+      assert_not policy.create_self_rating?
+    end
+
+    should "deny create_manager_rating (view-only, rating stays with the reporting manager)" do
+      assert_not policy.create_manager_rating?
+    end
+
+    should "deny create_alignment_rating" do
+      assert_not policy.create_alignment_rating?
+    end
+
+    should "deny start_alignment" do
+      assert_not policy.start_alignment?
+    end
+
+    should "allow delegate_manager_rating (ancestor may set up a delegation)" do
+      assert policy.delegate_manager_rating?
+    end
+  end
+
   context "as an unrelated person" do
     setup do
       @user = create(:user)
@@ -227,6 +268,13 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert AssessmentPolicy.new(manager_context, @assignment).view_alignment?
       assert AssessmentPolicy.new(assessee_context, @assignment).view_alignment?
     end
+
+    should "allow skip-level manager to view alignment but never record or complete it" do
+      ctx = skip_level_context
+      assert AssessmentPolicy.new(ctx, @assignment).view_alignment?
+      assert_not AssessmentPolicy.new(ctx, @assignment).create_alignment_rating?
+      assert_not AssessmentPolicy.new(ctx, @assignment).complete_alignment?
+    end
   end
 
   context "with an open cycle in :aligned state" do
@@ -293,5 +341,16 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       create(:tenant_user, tenant: @tenant, user: user, person: @manager)
     end
     AuthorizationContext.new(user: user, tenant_user: tu, person: @manager)
+  end
+
+  def skip_level_context
+    user = create(:user)
+    grand_manager = nil
+    tu = ActsAsTenant.with_tenant(@tenant) do
+      grand_manager = create(:person, tenant: @tenant, name: "Grand Manager")
+      @manager.update!(manager: grand_manager)
+      create(:tenant_user, tenant: @tenant, user: user, person: grand_manager)
+    end
+    AuthorizationContext.new(user: user, tenant_user: tu, person: grand_manager)
   end
 end
