@@ -787,6 +787,25 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       js_set_field "#add-level-ordinal", "2"
       assert_no_text "This role already has a level 1"
     end
+
+    # The "+ level" trigger lives in the role pane, an overlay on narrow
+    # viewports — reachable once toggled open (mirrors the role-family dialog's
+    # narrow-viewport test; the modal itself is viewport-independent).
+    should "reach the add-level modal on a narrow viewport via the role pane overlay" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      toggle_role_pane
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-level-modal']\").click();"
+      )
+      assert_selector "#add-level-modal", visible: true
+      within "#add-level-modal" do
+        assert_text "For Software Engineer"
+        assert_equal "2", find("#add-level-ordinal").value
+      end
+    end
   end
 
   context "ghost org-structure entities (no published levels)" do
