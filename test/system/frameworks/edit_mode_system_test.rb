@@ -717,11 +717,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "#add-role-modal", visible: true
       within "#add-role-modal" do
         assert_text "In Engineering" # family prefilled from the trigger
-        select "Management", from: "add-role-track"
+        select "Management", from: "add-role-modal-track"
       end
       # Assertion-critical values — JS-set + dispatch instead of send_keys.
-      js_set_field "#add-role-name", "Engineering Manager"
-      js_set_field "#add-role-code", "EM"
+      js_set_field "#add-role-modal-name", "Engineering Manager"
+      js_set_field "#add-role-modal-code", "EM"
       click_button_with_js_fallback("Add role", expect_text: "Engineering Manager")
 
       within "[data-controller~='tree']" do
@@ -806,6 +806,134 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_equal "2", find("#add-level-ordinal").value
       end
     end
+  end
+
+  context "org-structure field editors" do
+    should "edit a role's code and track via the kebab dialog" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # The kebab menu item carries the prefill dataset; JS-click it directly
+      # (hover-revealed trigger + menu — pointer clicks flake on CI).
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='role-edit-modal']\").click();"
+      )
+      assert_selector "#role-edit-modal", visible: true
+      within "#role-edit-modal" do
+        assert_equal "Software Engineer", find("#role-edit-modal-name").value
+        assert_equal "E", find("#role-edit-modal-code").value
+        assert_equal "ic", find("#role-edit-modal-track").value
+        select "Management", from: "role-edit-modal-track"
+      end
+      js_set_field "#role-edit-modal-code", "SWE"
+      # Success signal: the modal (its visible "Edit role" title) goes away.
+      click_button_with_js_fallback("Save", expect_no_text: "Edit role")
+
+      # Tree frame re-rendered with the updated trigger dataset (kebab items
+      # are hidden until the menu opens — assert on the DOM, not visibility).
+      assert_selector "button[data-role-edit-code='SWE']", visible: :all
+      assert_selector "button[data-role-edit-track='management']", visible: :all
+      assert_no_selector "#role-edit-modal", visible: true
+    end
+
+    should "manage levels via the editor: row save, entry flag, add, duplicate error" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='level-editor-modal']\").click();"
+      )
+      assert_selector "#level-editor-modal", visible: true
+      within "#level-editor-modal" do
+        assert_text "Levels of Software Engineer"
+        assert_selector "input[name='level[title]'][value='Engineer I']"
+
+        # Row save: change the code.
+        row = find("li", text: "L1")
+        js_set_field "#level-editor li input[name='level[code]']", "ENG1"
+        page.execute_script("arguments[0].querySelector('form').requestSubmit();", row)
+        assert_selector "input[name='level[code]'][value='ENG1']"
+
+        # Entry flag: set L1 as entry — badge appears.
+        assert_no_text "Entry", exact: true
+        page.execute_script(<<~JS)
+          const row = [...document.querySelectorAll('#level-editor-modal li')].find(li => li.textContent.includes('L1'));
+          [...row.querySelectorAll('form')].at(-1).requestSubmit();
+        JS
+        assert_selector "span", text: "Entry", exact_text: true
+
+        # Add a level from the foot row (prefilled next ordinal = 2).
+        assert_equal "2", find("#level-editor-add-ordinal").value
+        js_set_field "#level-editor-add-title", "Engineer II"
+        js_set_field "#level-editor-add-code", "E2"
+        page.execute_script(<<~JS)
+          document.querySelector('#level-editor-add-title').closest('form').requestSubmit();
+        JS
+        assert_text "L2"
+        assert_selector "input[name='level[title]'][value='Engineer II']"
+
+        # Duplicate ordinal → in-frame error, list intact.
+        js_set_field "#level-editor-add-ordinal", "1"
+        js_set_field "#level-editor-add-title", "Dup"
+        js_set_field "#level-editor-add-code", "D1"
+        page.execute_script(<<~JS)
+          document.querySelector('#level-editor-add-title').closest('form').requestSubmit();
+        JS
+        assert_text "already has a level at ordinal 1"
+        assert_text "L2"
+      end
+    end
+  end
+
+  context "role kebab menu stacking" do
+    # Regression: the kebab menu was clipped by the tree pane's overflow
+    # containers (rendered "under" the matrix). JS-dispatched clicks bypass
+    # hit-testing, so only a real elementFromPoint probe catches this class.
+    should "open the menu fully visible and hit-testable above the matrix" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[aria-label='Role actions']\").click();"
+      )
+      assert_selector "[role='menu']", visible: true, text: "Edit role…"
+
+      # The fixed-position clamp runs in requestAnimationFrame after the menu
+      # opens — poll until geometry is stable across reads before asserting.
+      result = nil
+      5.times do
+        result = read_menu_geometry
+        break if result["fixed"] && result["onScreen"] && result["allHit"]
+
+        sleep 0.1
+      end
+
+      assert result["fixed"], "menu should use the fixed strategy"
+      assert result["onScreen"], "menu must be fully on-screen, not clipped by the pane"
+      assert result["allHit"], "every menu item must be the top-most element at its center"
+    end
+  end
+
+  def read_menu_geometry
+    page.evaluate_script(<<~JS)
+        (() => {
+          const menu = document.querySelector("[role='menu']:not(.hidden)");
+          const items = [...menu.querySelectorAll("[role='menuitem']")];
+          const rect = menu.getBoundingClientRect();
+          return {
+            fixed: getComputedStyle(menu).position === "fixed",
+            onScreen: rect.left >= 0 && rect.right <= window.innerWidth,
+            allHit: items.every(item => {
+              const r = item.getBoundingClientRect();
+              const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              return el === item || item.contains(el);
+            })
+          };
+        })()
+      JS
   end
 
   context "ghost org-structure entities (no published levels)" do

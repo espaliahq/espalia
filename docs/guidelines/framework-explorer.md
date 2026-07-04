@@ -460,8 +460,26 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   deferred from the published read model until publish, so the parent role
   stays a ghost meanwhile. The submit redirects back to the edit explorer
   (selection preserved via `tree-scope-fields`) so the draft column, the
-  draft pill, and the flash land in one render. The operation guards duplicate
-  ordinals per role (the aggregate only guards level ids).
+  draft pill, and the flash land in one render. Duplicate ordinals are blocked
+  at three layers: inline in the modal as you type (taken ordinals ride the
+  trigger dataset), in the Operation (ParameterError → -32602 for MCP), and in
+  the aggregate (serialized against the stream).
+- **Role-row kebab (⋮) → Edit role… / Edit levels…** — the scalable home for
+  the role's dialogs (edit + `can_edit_structure`; the MatrixRow-kebab
+  precedent — "+ level" stays a direct affordance). **Edit role…** opens the
+  `AddRoleModal` in `:edit` mode (name + code + track — one form with create,
+  so they can't drift; code/track are dialog-only by design: track is an enum,
+  a code edit ripples through the matrix header). **Edit levels…** opens the
+  **levels editor** — a binding-editor-style `level-editor` Turbo Frame listing
+  the role's levels (graph-sourced, so draft-added levels are editable —
+  Lesson 17 — wearing the wiggle): per-row title/code saves, an add row at the
+  foot with in-frame error surfacing, and the **entry flag as
+  radio-with-clear** ("Set as entry" moves the badge; the controller clears the
+  previous holder — a web-layer convenience over the per-level Operation, MCP
+  parity untouched). Both surfaces fire `org-structure:updated` on success →
+  `matrix#refresh`, since role/level codes render in the matrix header, which
+  tree/frame re-renders can't reach. Reordering lands into the levels editor
+  next.
 
 **Ghost org-structure entities.** A role with **no published level** (freshly
 added live, or its levels still draft-born) — and a family with no such role —
@@ -495,9 +513,8 @@ a ghost role contributes no columns in view mode.
   (> 3 roles) stays read-only — titles are hidden there, so the user renames with
   fewer roles in scope. `MatrixDataBuilder#build_merged_levels` carries a
   per-role `level_id` in each `role_codes` entry so the editor targets one
-  specific level. The inline UI is **rename-only** today — the Operations also
-  accept role code/track and level code for MCP, and `is_entry` is deferred until
-  `Operations::Base` grows Boolean-param support.
+  specific level. The inline pencils are **rename-only** — code / track / the
+  entry flag are edited via the role-row kebab's dialogs (see §11).
 - **Role-family edit dialog** — a hover "edit" trigger on each family row opens
   the shared `RoleFamilyEditModal` (name + description + **department**),
   *alongside* the inline name pencil (kept for quick renames). Gated on
@@ -978,9 +995,12 @@ line (§9).
 | `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame; renders `RoleFamilyNameFrame` + `RoleNameFrame` for inline rename + the per-family edit-dialog trigger when `mode == :edit`; hides ghost roles/families in view mode, shows them (+ "No roles yet" + the "+ Add role" / "+ Add role family" triggers) in edit mode |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
 | `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family dialog — `:edit` (per-family trigger, PATCH) or `:new` (tree-foot "+ Add role family", POST → `AddRoleFamily`); submit re-renders the `role-tree-families` frame so the family re-groups / appears ghost-wiggled |
-| `app/views/frameworks/explorer/add_role_modal.rb` | Shared "new role" modal (name + code + track; family implied by the "+ Add role" trigger) → `Frameworks::RolesController#create` → `AddRole` |
+| `app/views/frameworks/explorer/add_role_modal.rb` | Shared role modal — `:new` ("+ Add role" trigger, family implied, POST → `AddRole`) or `:edit` (role-row kebab, PATCH via id template → `UpdateRole`) |
+| `app/views/frameworks/explorer/level_editor_modal.rb` | Shared "Edit levels" modal (embedded) — body is the `level-editor` Turbo Frame; opened by the role-row kebab |
+| `app/views/frameworks/explorer/level_editor_frame.rb` | Levels-editor frame body — per-row title/code saves, radio-with-clear entry flag, add row with in-frame errors; re-renders in place |
+| `app/javascript/controllers/level_editor_form_controller.js` | Points the level-editor frame at the clicked role on `modal:open`; fires `org-structure:updated` after in-frame saves |
 | `app/views/frameworks/explorer/concerns/ghost_entities.rb` | Ghost predicates (`published_role?` / `ghost_role?` / `ghost_role_family?`) + tooltip copy — "not visible in the published view yet", derived from published-level presence |
-| `app/javascript/controllers/add_role_form_controller.js` | Prefills the add-role modal from the "+ Add role" trigger (hidden family id + context line); selection rides along via `tree-scope-fields` |
+| `app/javascript/controllers/add_role_form_controller.js` | Prefills the role modal from its trigger (`:new` — family id + clears; `:edit` — action template + name/code/track); fires `org-structure:updated` after an edit; selection rides along via `tree-scope-fields` |
 | `app/operations/operations/frameworks/{add_role_family,add_role}.rb` | Shared web + MCP operations — org-structure adds (shape-preserving, live; new entity is a ghost until publish) |
 | `app/operations/operations/frameworks/add_level.rb` | Shared web + MCP operation — add a level (shape-changing: auto-opens a draft, deferred until publish; guards duplicate ordinals against the graph) |
 | `app/views/frameworks/explorer/add_level_modal.rb` | Shared "new level" modal (ordinal + title + code + entry flag; role implied by the role-row "+ level" trigger) → `Frameworks::LevelsController#create` |

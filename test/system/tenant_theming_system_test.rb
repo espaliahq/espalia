@@ -31,20 +31,38 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
 
       # Find the tenant-switch form directly by its action URL — bypasses any
       # dropdown visibility race and pointer-click dropouts on starved CI.
-      # The form is in the DOM from server render; opening the dropdown only
-      # toggles its visibility, not its presence.
-      switch_path = users_tenant_switch_path
-      page.execute_script(<<~JS)
-        const form = document.querySelector("form[action='#{switch_path}']");
-        form?.requestSubmit();
-      JS
+      # The form is in the DOM from server render (non-current tenants only,
+      # so with two tenants it's unambiguous); opening the dropdown only
+      # toggles its visibility, not its presence. Assert presence first — a
+      # silent `form?.` no-op turned any drift into a baffling
+      # style-unchanged failure on CI.
+      switch_selector = "form[action='#{users_tenant_switch_path}']"
+      assert_selector switch_selector, visible: :all, count: 1
+
+      # The retry must target tenant B's form SPECIFICALLY: after a successful
+      # switch the re-rendered page's only form points back to tenant A, so a
+      # blind resubmit would undo a slow-but-successful switch. Targeting B
+      # makes the retry a no-op once switched (the ?. chain finds no form) and
+      # only refires when the first submit was genuinely dropped.
+      submit_switch_to_b = lambda do
+        page.execute_script(<<~JS)
+          const form = [...document.querySelectorAll(#{switch_selector.inspect})]
+            .find(f => f.querySelector("input[name='tenant_id']")?.value === #{@tenant_b.id.to_json});
+          form?.requestSubmit();
+        JS
+      end
+      submit_switch_to_b.call
       screenshot("after_switch")
 
-      # The tenant switch is a form POST that re-renders the page with new
-      # theme variables. Read the style only after Capybara has waited for
-      # the new DOM to commit — has_no_xpath? polls within Capybara's wait.
+      # The switch is a Turbo form POST that re-renders the page with new
+      # theme variables. On a starved runner the fetch itself has been
+      # observed to drop — re-submit (B-targeted, so undo-safe) if the style
+      # hasn't changed.
+      changed_xpath = "//style[@id='tenant-theme'][text()=#{initial_style.inspect}]"
+      submit_switch_to_b.call unless page.has_no_xpath?(changed_xpath, wait: 8)
+
       assert page.has_no_xpath?(
-        "//style[@id='tenant-theme'][text()=#{initial_style.inspect}]",
+        changed_xpath,
         wait: Capybara.default_max_wait_time
       ), "CSS variables should change after tenant switch"
 

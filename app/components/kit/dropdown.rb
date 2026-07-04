@@ -20,6 +20,14 @@
 #     dropdown.trigger { "Menu" }
 #     dropdown.menu { "Content" }
 #   end
+#
+# @example Inside an overflow container (e.g. the role tree's scroll pane)
+#   render Components::Kit::Dropdown.new(strategy: :fixed) do |dropdown|
+#     ...
+#   end
+#   # CSS `absolute` positioning clips at the nearest overflow ancestor —
+#   # :fixed makes the controller position the open menu against the
+#   # viewport instead, so it can escape scroll panes.
 class Components::Kit::Dropdown < Components::Base
   ALIGNMENT_CLASSES = {
     right: "right-0 origin-top-right",
@@ -27,8 +35,12 @@ class Components::Kit::Dropdown < Components::Base
   }.freeze
 
   # @param align [Symbol] Menu alignment relative to trigger (:left or :right)
-  def initialize(align: :right)
+  # @param strategy [Symbol] :absolute (default, pure CSS) or :fixed —
+  #   viewport-positioned by the controller so the menu escapes
+  #   overflow-clipping ancestors
+  def initialize(align: :right, strategy: :absolute)
     @align = align
+    @strategy = strategy
   end
 
   def view_template
@@ -36,8 +48,10 @@ class Components::Kit::Dropdown < Components::Base
       class: "relative inline-block text-left",
       data: {
         controller: "dropdown",
+        dropdown_fixed_value: (@strategy == :fixed ? "true" : nil),
+        dropdown_align_value: (@align.to_s if @strategy == :fixed),
         action: "keydown.esc@window->dropdown#close"
-      }
+      }.compact
     ) do
       yield(self)
     end
