@@ -808,6 +808,85 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "org-structure field editors" do
+    should "edit a role's code and track via the kebab dialog" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      # The kebab menu item carries the prefill dataset; JS-click it directly
+      # (hover-revealed trigger + menu — pointer clicks flake on CI).
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='role-edit-modal']\").click();"
+      )
+      assert_selector "#role-edit-modal", visible: true
+      within "#role-edit-modal" do
+        assert_equal "Software Engineer", find("#role-edit-modal-name").value
+        assert_equal "E", find("#role-edit-modal-code").value
+        assert_equal "ic", find("#role-edit-modal-track").value
+        select "Management", from: "role-edit-modal-track"
+      end
+      js_set_field "#role-edit-modal-code", "SWE"
+      # Success signal: the modal (its visible "Edit role" title) goes away.
+      click_button_with_js_fallback("Save", expect_no_text: "Edit role")
+
+      # Tree frame re-rendered with the updated trigger dataset (kebab items
+      # are hidden until the menu opens — assert on the DOM, not visibility).
+      assert_selector "button[data-role-edit-code='SWE']", visible: :all
+      assert_selector "button[data-role-edit-track='management']", visible: :all
+      assert_no_selector "#role-edit-modal", visible: true
+    end
+
+    should "manage levels via the editor: row save, entry flag, add, duplicate error" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='level-editor-modal']\").click();"
+      )
+      assert_selector "#level-editor-modal", visible: true
+      within "#level-editor-modal" do
+        assert_text "Levels of Software Engineer"
+        assert_selector "input[name='level[title]'][value='Engineer I']"
+
+        # Row save: change the code.
+        row = find("li", text: "L1")
+        row.find("input[name='level[code]']").set("ENG1")
+        page.execute_script("arguments[0].querySelector('form').requestSubmit();", row)
+        assert_selector "input[name='level[code]'][value='ENG1']"
+
+        # Entry flag: set L1 as entry — badge appears.
+        assert_no_text "Entry", exact: true
+        page.execute_script(<<~JS)
+          const row = [...document.querySelectorAll('#level-editor-modal li')].find(li => li.textContent.includes('L1'));
+          [...row.querySelectorAll('form')].at(-1).requestSubmit();
+        JS
+        assert_selector "span", text: "Entry", exact_text: true
+
+        # Add a level from the foot row (prefilled next ordinal = 2).
+        assert_equal "2", find("#level-editor-add-ordinal").value
+        find("#level-editor-add-title").set("Engineer II")
+        find("#level-editor-add-code").set("E2")
+        page.execute_script(<<~JS)
+          document.querySelector('#level-editor-add-title').closest('form').requestSubmit();
+        JS
+        assert_text "L2"
+        assert_selector "input[name='level[title]'][value='Engineer II']"
+
+        # Duplicate ordinal → in-frame error, list intact.
+        find("#level-editor-add-ordinal").set("1")
+        find("#level-editor-add-title").set("Dup")
+        find("#level-editor-add-code").set("D1")
+        page.execute_script(<<~JS)
+          document.querySelector('#level-editor-add-title').closest('form').requestSubmit();
+        JS
+        assert_text "already has a level at ordinal 1"
+        assert_text "L2"
+      end
+    end
+  end
+
   context "ghost org-structure entities (no published levels)" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
