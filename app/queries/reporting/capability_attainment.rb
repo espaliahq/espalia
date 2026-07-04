@@ -122,8 +122,7 @@ class Reporting::CapabilityAttainment
   def load_structure(enrollments)
     role_ids = enrollments.map(&:role_id).uniq
 
-    @roles = FrameworkState::Role.where(role_id: role_ids)
-      .includes(:role_family).index_by(&:role_id)
+    @roles = FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
     @bindings_by_role = FrameworkState::CapabilityRoleBinding
       .joins(:capability)
       .where(role_id: role_ids, framework_capabilities: { status: "active" })
@@ -300,17 +299,23 @@ class Reporting::CapabilityAttainment
     @family_labels[family_key] || "Ungrouped roles"
   end
 
+  # Constant across the whole call — memoized so per-participant scoring
+  # doesn't rebuild it.
   def framework_thresholds
-    framework = @cycle.framework
-    return {} unless framework
-
-    {
-      mastery_threshold: framework.mastery_threshold&.to_f,
-      meeting_expectation_threshold: framework.meeting_expectation_threshold&.to_f,
-      underperforming_threshold: framework.underperforming_threshold&.to_f,
-      overperformance_cap: framework.overperformance_cap,
-      deficit_threshold: framework.deficit_threshold&.to_f
-    }
+    @framework_thresholds ||= begin
+      framework = @cycle.framework
+      if framework
+        {
+          mastery_threshold: framework.mastery_threshold&.to_f,
+          meeting_expectation_threshold: framework.meeting_expectation_threshold&.to_f,
+          underperforming_threshold: framework.underperforming_threshold&.to_f,
+          overperformance_cap: framework.overperformance_cap,
+          deficit_threshold: framework.deficit_threshold&.to_f
+        }
+      else
+        {}
+      end
+    end
   end
 
   # Bound capabilities across all scoped roles, ordered by category then name —
