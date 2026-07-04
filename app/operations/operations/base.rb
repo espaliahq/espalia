@@ -59,8 +59,19 @@ class Operations::Base
   # the wire shape, it does not enforce it; the Operation validates a
   # complex param's contents in `perform`.
   Parameter = Struct.new(:name, :type, :required, :allowed, :schema, keyword_init: true) do
+    # Boolean-ish strings accepted for a `:boolean` parameter. MCP clients send
+    # JSON true/false; web forms submit strings ("1"/"0" from checkboxes,
+    # "true"/"false" from selects) — both surfaces share one Operation, so the
+    # cast lives here. Anything outside this table is rejected, never coerced
+    # (ActiveModel's everything-truthy cast would turn "banana" into true).
+    BOOLEAN_CASTS = {
+      true => true, false => false,
+      "true" => true, "false" => false, "1" => true, "0" => false,
+      "t" => true, "f" => false, "on" => true, "off" => false
+    }.freeze
+
     # @param value [Object] the raw value supplied by the caller
-    # @return [Object] the validated (un-coerced) value
+    # @return [Object] the validated value (cast only for `:boolean`)
     # @raise [ParameterError] when missing/required, wrong type, or not in `allowed`
     def validate!(value)
       if value.nil?
@@ -68,6 +79,8 @@ class Operations::Base
 
         return nil
       end
+
+      return validate_boolean!(value) if type == :boolean
 
       unless value.is_a?(type)
         raise ParameterError, "#{name} must be a #{type}, got #{value.class}"
@@ -78,6 +91,16 @@ class Operations::Base
       end
 
       value
+    end
+
+    # @param value [Object]
+    # @return [Boolean]
+    # @raise [ParameterError] when the value isn't recognisably boolean
+    def validate_boolean!(value)
+      key = value.is_a?(String) ? value.downcase : value
+      BOOLEAN_CASTS.fetch(key) do
+        raise ParameterError, "#{name} must be a boolean, got #{value.inspect}"
+      end
     end
   end
 
@@ -119,7 +142,9 @@ class Operations::Base
     # Declares one input parameter.
     #
     # @param name [Symbol]
-    # @param type [Class] expected Ruby class
+    # @param type [Class, Symbol] expected Ruby class, or `:boolean` — Ruby has
+    #   no Boolean class, so the sentinel accepts true/false (and casts the
+    #   boolean-ish strings web forms submit; see Parameter::BOOLEAN_CASTS)
     # @param required [Boolean]
     # @param allowed [Array, nil] enum of allowed values
     # @param schema [Hash, nil] explicit JSON Schema fragment for the
