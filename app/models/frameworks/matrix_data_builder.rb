@@ -129,7 +129,10 @@ class Frameworks::MatrixDataBuilder
           level_id: level.level_id,
           role_code: role.code,
           level_code: level.code,
-          level_title: level.title
+          level_title: level.title,
+          # Header badges wiggle draft-born levels (edit mode only reaches
+          # here with them — view mode filters via entity_visible? above).
+          added_in_draft: level.respond_to?(:added_in_draft) ? !!level.added_in_draft : false
         }
       end
     end

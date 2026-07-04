@@ -96,7 +96,8 @@ class Frameworks::LevelsController < ApplicationController
     else
       render Views::Frameworks::Explorer::LevelTitleFrame.new(
         level_id: @level.level_id, title: attrs[:title].presence || @level.title,
-        framework_id: @framework.framework_id, mode: :edit
+        framework_id: @framework.framework_id, mode: :edit,
+        added_in_draft: @level.added_in_draft
       ), layout: false
     end
   rescue Operations::Base::ParameterError
