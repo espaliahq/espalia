@@ -108,6 +108,41 @@ class Operations::Assessments::MineTest < ActiveSupport::TestCase
         assert_equal [], result[:skip_level_reports]
       end
     end
+
+    should "file a skip-level assignment under direct_reports once it is delegated to the caller" do
+      # Dave's manager (Bob) delegates the rating to Alice — the web index
+      # files the card under Team, so the MCP payload must match: the
+      # assignment moves out of skip_level_reports into direct_reports.
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @grand_report.id,
+          framework_id: @framework.framework_id, delegate_person_id: @person.id,
+          granted_by_id: @report.id)
+      end
+
+      result = call_op
+
+      assert_includes result[:direct_reports].map { |r| r.dig(:assessee, :name) }, "Dave"
+      assert_equal [], result[:skip_level_reports]
+    end
+  end
+
+  context "delegated assignments" do
+    should "appear under direct_reports for a delegate outside the assessee's chain" do
+      delegate_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        delegate = create(:person, tenant: @tenant, name: "Erin") # not in Bob's chain
+        tu = create(:tenant_user, tenant: @tenant, user: delegate_user, person: delegate, role: :member)
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @report.id,
+          framework_id: @framework.framework_id, delegate_person_id: delegate.id,
+          granted_by_id: @person.id)
+
+        ctx = AuthorizationContext.new(user: delegate_user, tenant_user: tu, person: delegate)
+        result = Operations::Assessments::Mine.call(context: ctx)
+
+        assert_equal [ "Bob" ], result[:direct_reports].map { |r| r.dig(:assessee, :name) }
+        assert_equal [], result[:skip_level_reports]
+      end
+    end
   end
 
   context "policy" do

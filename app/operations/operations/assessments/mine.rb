@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
-# Lists the caller's own framework assignments plus those of their
-# direct reports and their skip-level reports (the rest of their org
-# subtree, view-only) — the data behind the web Assessments index.
-# Read-only; scoped by acts_as_tenant and AssessmentPolicy#index?
-# (`person.present?`).
+# Lists the caller's own framework assignments plus the assignments they
+# review — the data behind the web Assessments index, split the same way
+# via {Assessments::ReviewableAssignments}: `direct_reports:` is the Team
+# list (direct reports + assignments the caller holds an active
+# manager-rating delegation for), `skip_level_reports:` is the view-only
+# rest of their org subtree. Read-only; scoped by acts_as_tenant and
+# AssessmentPolicy#index? (`person.present?`).
 #
 # Returns a single hash with `own:`, `direct_reports:`, and
 # `skip_level_reports:` arrays so an MCP client can present them as
@@ -12,7 +14,7 @@
 # framework, and open-cycle context to pick the next drill-in
 # (assessments_get) without an extra round trip.
 class Operations::Assessments::Mine < Operations::Base
-  description "List the caller's own assessment assignments plus their direct reports' and skip-level reports' (view-only)."
+  description "List the caller's own assessment assignments plus the ones they review: their team's (direct reports and active rating delegations) and, view-only, their skip-level reports' assignments."
   category :read
   approval :none
 
@@ -27,13 +29,16 @@ class Operations::Assessments::Mine < Operations::Base
   #     `:id, :framework{id,name,current_published_version}, :role{id,code,name},
   #     :level{id,ordinal,title}, :current_cycle{id,name,status,planned_end_at}|nil`.
   #   - `:direct_reports` — same shape, plus `:assessee{id,name,email}` for
-  #     the person being assessed.
+  #     the person being assessed. Includes assignments the caller holds an
+  #     active manager-rating delegation for, mirroring the web Team section.
   #   - `:skip_level_reports` — same shape as `:direct_reports`, for people
   #     deeper in the caller's org subtree (viewable, not ratable).
   def perform
-    own = preload(PersonFrameworkAssignment.for_person(context.person.id)).to_a
-    reports = report_assignments
-    skip_levels = skip_level_assignments
+    own = PersonFrameworkAssignment.for_person(context.person.id)
+      .includes(:framework, :role, :level).to_a
+    reviewable = Assessments::ReviewableAssignments.new(context.person)
+    reports = reviewable.team.to_a
+    skip_levels = reviewable.skip_level.to_a
     open_cycles = AssessmentCycle.open_cycles_for(cycle_keys(own + reports + skip_levels))
     people_by_id = Person.where(id: (reports + skip_levels).map(&:person_id)).index_by(&:id)
 
@@ -45,28 +50,6 @@ class Operations::Assessments::Mine < Operations::Base
   end
 
   private
-
-  def preload(scope)
-    scope.includes(:framework, :role, :level)
-  end
-
-  def report_assignments
-    return [] if direct_report_person_ids.empty?
-
-    preload(PersonFrameworkAssignment.where(person_id: direct_report_person_ids)).to_a
-  end
-
-  # Assignments for the caller's subtree below their direct reports.
-  def skip_level_assignments
-    skip_ids = context.person.all_reports.pluck(:id) - direct_report_person_ids
-    return [] if skip_ids.empty?
-
-    preload(PersonFrameworkAssignment.where(person_id: skip_ids)).to_a
-  end
-
-  def direct_report_person_ids
-    @direct_report_person_ids ||= context.person.direct_reports.pluck(:id)
-  end
 
   def cycle_keys(assignments)
     assignments.map { |a| [ a.framework_id, a.person_id ] }

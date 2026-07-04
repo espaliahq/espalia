@@ -266,7 +266,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_mine",
-        "description" => "List the caller's own assessment assignments plus their direct reports' and skip-level reports' (view-only).",
+        "description" => "List the caller's own assessment assignments plus the ones they review: their team's (direct reports and active rating delegations) and, view-only, their skip-level reports' assignments.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},

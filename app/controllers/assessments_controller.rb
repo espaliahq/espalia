@@ -19,8 +19,9 @@ class AssessmentsController < ApplicationController
     authorize PersonFrameworkAssignment, :index?
     @own_assignments = PersonFrameworkAssignment.for_person(current_person.id)
       .includes(:framework, :role, :level)
-    @report_assignments = load_report_assignments
-    @skip_level_assignments = load_skip_level_assignments
+    reviewable = Assessments::ReviewableAssignments.new(current_person)
+    @report_assignments = reviewable.team
+    @skip_level_assignments = reviewable.skip_level
     @report_people = Person.where(
       id: (@report_assignments.map(&:person_id) + @skip_level_assignments.map(&:person_id)).uniq
     ).index_by(&:id)
@@ -320,18 +321,6 @@ class AssessmentsController < ApplicationController
       .candidate_people(assignment: @assignment, actor_person_id: current_person.id).to_a
   end
 
-  # Loads framework assignments the current person reviews: their direct
-  # reports, plus any assignment they hold an active manager-rating delegation
-  # for (e.g. a report seconded into their team).
-  #
-  # @return [ActiveRecord::Relation<PersonFrameworkAssignment>]
-  def load_report_assignments
-    ids = (direct_report_assignment_ids + delegated_assignment_ids).uniq
-    return PersonFrameworkAssignment.none if ids.empty?
-
-    PersonFrameworkAssignment.where(id: ids).includes(:framework, :role, :level)
-  end
-
   # Builds per-card status for the index, keyed by [framework_id, person_id].
   # Combines the projected per-side completion (AssessmentCycleProgress) with a
   # single cheap "any rating exists per side" query so the view can render the
@@ -371,45 +360,6 @@ class AssessmentsController < ApplicationController
         manager_any: any[:manager_any] || false
       }
     end
-  end
-
-  # Assignments for people below the current person's direct reports —
-  # skip-level reports and deeper (the whole subtree minus the direct line).
-  # Anything already surfaced in the Team section (direct reports + active
-  # delegations) is excluded so a card never appears twice.
-  #
-  # @return [ActiveRecord::Relation<PersonFrameworkAssignment>]
-  def load_skip_level_assignments
-    skip_person_ids = current_person.all_reports.pluck(:id) - direct_report_person_ids
-    return PersonFrameworkAssignment.none if skip_person_ids.empty?
-
-    team_ids = (direct_report_assignment_ids + delegated_assignment_ids).uniq
-    scope = PersonFrameworkAssignment.where(person_id: skip_person_ids)
-    scope = scope.where.not(id: team_ids) if team_ids.any?
-    scope.includes(:framework, :role, :level)
-  end
-
-  def direct_report_person_ids
-    @direct_report_person_ids ||= current_person.direct_reports.pluck(:id)
-  end
-
-  def direct_report_assignment_ids
-    return [] if direct_report_person_ids.empty?
-
-    PersonFrameworkAssignment.where(person_id: direct_report_person_ids).ids
-  end
-
-  # Assignment ids the current person holds an active delegation to rate.
-  #
-  # @return [Array<String>]
-  def delegated_assignment_ids
-    pairs = ManagerAssessmentDelegation.active.for_delegate(current_person.id)
-      .pluck(:person_id, :framework_id)
-    return [] if pairs.empty?
-
-    scope = pairs.map { |pid, fid| PersonFrameworkAssignment.where(person_id: pid, framework_id: fid) }
-                 .reduce(:or)
-    scope.ids
   end
 
   # Cell-level focus param. Only meaningful when paired with `?capability=`;
