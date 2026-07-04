@@ -360,7 +360,10 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         modal_target_id: "add-level-modal",
         add_level_role_id: role.role_id,
         add_level_role_name: role.name,
-        add_level_next_ordinal: next_ordinal_for(role)
+        add_level_next_ordinal: next_ordinal_for(role),
+        # Draft levels included (graph-sourced) — feeds the modal's instant
+        # duplicate-ordinal validation.
+        add_level_taken_ordinals: role.levels.map(&:ordinal).sort.join(",")
       },
       title: "Add level",
       aria: { label: "Add level to #{role.name}" }

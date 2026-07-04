@@ -758,6 +758,35 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "v2 draft"
       assert_text "Level 2"
     end
+
+    should "block a duplicate ordinal inline, in the modal, without a round-trip" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-level-modal']\").click();"
+      )
+      assert_selector "#add-level-modal", visible: true
+
+      # The seeded role already has L1 — typing it shows the error immediately.
+      js_set_field "#add-level-ordinal", "1"
+      assert_text "This role already has a level 1"
+
+      js_set_field "#add-level-title", "Dup"
+      js_set_field "#add-level-code", "D1"
+      page.execute_script(
+        "document.querySelector('#add-level-modal form').requestSubmit();"
+      )
+
+      # Submit blocked client-side: modal stays open, no draft opened.
+      assert_selector "#add-level-modal", visible: true
+      assert_no_text "v2 draft"
+
+      # Correcting the ordinal clears the error.
+      js_set_field "#add-level-ordinal", "2"
+      assert_no_text "This role already has a level 1"
+    end
   end
 
   context "ghost org-structure entities (no published levels)" do

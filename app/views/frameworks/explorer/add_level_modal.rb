@@ -37,7 +37,7 @@ class Views::Frameworks::Explorer::AddLevelModal < Views::Base
       class: "space-y-4",
       data: {
         controller: "add-level-form tree-scope-fields",
-        action: "turbo:submit-end->modal#submitted"
+        action: "submit->add-level-form#validate turbo:submit-end->modal#submitted"
       }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
@@ -45,6 +45,7 @@ class Views::Frameworks::Explorer::AddLevelModal < Views::Base
 
       role_context_line
       ordinal_and_code_fields
+      ordinal_error_line
       title_field
       is_entry_field
       actions
@@ -67,7 +68,10 @@ class Views::Frameworks::Explorer::AddLevelModal < Views::Base
         input(
           type: "number", id: "add-level-ordinal", name: "level[ordinal]",
           min: "1", required: true, class: field_classes,
-          data: { add_level_form_target: "ordinal" }
+          data: {
+            add_level_form_target: "ordinal",
+            action: "input->add-level-form#ordinalChanged"
+          }
         )
       end
       div do
@@ -79,6 +83,16 @@ class Views::Frameworks::Explorer::AddLevelModal < Views::Base
         )
       end
     end
+  end
+
+  # Instant duplicate-ordinal feedback — shown/hidden by add-level-form as the
+  # user types; the same rule is enforced by the Operation and the aggregate.
+  def ordinal_error_line
+    p(
+      class: "hidden text-sm text-red-600 dark:text-red-400",
+      data: { add_level_form_target: "ordinalError" },
+      aria: { live: "polite" }
+    )
   end
 
   def title_field
