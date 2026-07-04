@@ -887,6 +887,43 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "role kebab menu stacking" do
+    # Regression: the kebab menu was clipped by the tree pane's overflow
+    # containers (rendered "under" the matrix). JS-dispatched clicks bypass
+    # hit-testing, so only a real elementFromPoint probe catches this class.
+    should "open the menu fully visible and hit-testable above the matrix" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[aria-label='Role actions']\").click();"
+      )
+      assert_selector "[role='menu']", visible: true, text: "Edit role…"
+
+      result = page.evaluate_script(<<~JS)
+        (() => {
+          const menu = document.querySelector("[role='menu']:not(.hidden)");
+          const items = [...menu.querySelectorAll("[role='menuitem']")];
+          const rect = menu.getBoundingClientRect();
+          return {
+            fixed: getComputedStyle(menu).position === "fixed",
+            onScreen: rect.left >= 0 && rect.right <= window.innerWidth,
+            allHit: items.every(item => {
+              const r = item.getBoundingClientRect();
+              const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              return el === item || item.contains(el);
+            })
+          };
+        })()
+      JS
+
+      assert result["fixed"], "menu should use the fixed strategy"
+      assert result["onScreen"], "menu must be fully on-screen, not clipped by the pane"
+      assert result["allHit"], "every menu item must be the top-most element at its center"
+    end
+  end
+
   context "ghost org-structure entities (no published levels)" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

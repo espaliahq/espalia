@@ -351,7 +351,9 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # kebab precedent). "+ level" stays a direct affordance (highest-frequency
   # during construction); dialogs live here.
   def role_actions_kebab(role)
-    render Components::Kit::Dropdown.new(align: :left) do |dd|
+    # :fixed — the tree pane is an overflow container (aside overflow-hidden +
+    # the scroll list), which clips an absolutely-positioned menu at its edge.
+    render Components::Kit::Dropdown.new(align: :left, strategy: :fixed) do |dd|
       dd.trigger(label: "Role actions") do
         span(
           class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
