@@ -678,6 +678,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "Test Framework"
       assert_no_selector "button[data-modal-target-id='role-family-new-modal']"
       assert_no_selector "button[data-modal-target-id='add-role-modal']"
+      assert_no_selector "button[data-modal-target-id='add-level-modal']"
     end
 
     should "add a role family via the tree-foot modal" do
@@ -729,6 +730,33 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
                         text: "Engineering Manager"
       end
       assert_no_selector "#add-role-modal", visible: true
+    end
+  end
+
+  context "adding a level via the role row" do
+    should "prefill the next ordinal, join a draft, and render the new column" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-level-modal']\").click();"
+      )
+      assert_selector "#add-level-modal", visible: true
+      within "#add-level-modal" do
+        assert_text "For Software Engineer" # role prefilled from the trigger
+        # Next free ordinal — the seeded role has L1.
+        assert_equal "2", find("#add-level-ordinal").value
+        assert_text "joins the draft"
+      end
+      js_set_field "#add-level-title", "Engineer II"
+      js_set_field "#add-level-code", "E2"
+      click_button_with_js_fallback("Add level", expect_text: "Added level")
+
+      # Shape-changing: the draft opened (auto), and the edit-mode matrix
+      # renders the new draft column immediately.
+      assert_text "v2 draft"
+      assert_text "Level 2"
     end
   end
 

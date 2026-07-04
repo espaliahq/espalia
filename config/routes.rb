@@ -187,7 +187,7 @@ Rails.application.routes.draw do
     # singular resource (PATCH /frameworks/:framework_id/departments).
     resource :departments, only: [ :update ], controller: "frameworks/departments"
     resources :roles,         only: [ :create, :update ], controller: "frameworks/roles"
-    resources :levels,        only: [ :update ], controller: "frameworks/levels"
+    resources :levels,        only: [ :create, :update ], controller: "frameworks/levels"
     resources :expectations, only: [ :create, :update ], controller: "frameworks/expectations"
     resource :settings, only: [ :show, :update ], controller: "frameworks/settings"
     resource :publication, only: [ :new, :create ], controller: "frameworks/publications"

@@ -14,7 +14,7 @@ class Frameworks::LevelsControllerTest < ActionDispatch::IntegrationTest
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
       rf_id = SecureRandom.uuid_v7
-      role_id = SecureRandom.uuid_v7
+      @role_id = role_id = SecureRandom.uuid_v7
       @level_id = SecureRandom.uuid_v7
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rf_id, "Engineering")
@@ -65,6 +65,49 @@ class Frameworks::LevelsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :redirect
       assert_match(/not authorized/i, flash[:alert])
+    end
+  end
+
+  context "POST /frameworks/:framework_id/levels" do
+    should "add the level into a draft and redirect back to edit, selection preserved" do
+      sign_in @user
+      post framework_levels_path(framework_id: @framework_id),
+           params: { level: { role_id: @role_id, ordinal: "2", title: "Software Engineer II",
+                              code: "E2", is_entry: "0" },
+                     roles: [ @role_id ], track: "both" }
+
+      assert_redirected_to edit_framework_path(@framework_id, roles: [ @role_id ], track: "both")
+      assert_match(/Added level/, flash[:notice])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        # Shape-changing: draft opened, level deferred from the published read model.
+        assert FrameworkState::Framework.find_by(framework_id: @framework_id).draft_in_progress
+        assert_nil FrameworkState::Level.find_by(role_id: @role_id, ordinal: 2)
+      end
+    end
+
+    should "surface a duplicate ordinal as a flash alert, not a 500" do
+      sign_in @user
+      post framework_levels_path(framework_id: @framework_id),
+           params: { level: { role_id: @role_id, ordinal: "1", title: "Dup", code: "D1" } }
+
+      assert_response :redirect
+      assert_match(/already has a level at ordinal 1/, flash[:alert])
+    end
+
+    should "deny non-contributor viewers" do
+      viewer = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: viewer, role: :member) }
+      sign_in viewer
+
+      post framework_levels_path(framework_id: @framework_id),
+           params: { level: { role_id: @role_id, ordinal: "2", title: "Blocked", code: "B2" } }
+
+      assert_response :redirect
+      assert_match(/not authorized/i, flash[:alert])
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_not FrameworkState::Framework.find_by(framework_id: @framework_id).draft_in_progress
+      end
     end
   end
 
