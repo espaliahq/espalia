@@ -612,6 +612,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_add_level",
+        "description" => "Add a level to a role (owner/editor/lead only; opens/joins a draft, published on the next version).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "role_id"      => { "type" => "string" },
+            "ordinal"      => { "type" => "integer" },
+            "title"        => { "type" => "string" },
+            "code"         => { "type" => "string" },
+            "is_entry"     => { "type" => "boolean" }
+          },
+          "required" => %w[framework_id role_id ordinal title code],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_add_role",
         "description" => "Add a role to a role family (owner/editor/lead only).",
         "inputSchema" => {

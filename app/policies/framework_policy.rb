@@ -111,6 +111,12 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def add_role? = edit_structure?
 
+  # Add a level to a role — shape-changing (new rating rows), draft-gated in
+  # the aggregate, same edit-rights bar.
+  #
+  # @return [Boolean]
+  def add_level? = edit_structure?
+
   # Edit a capability-role binding's weight / individual tolerance.
   # Shape-preserving (applies live) but still a structural edit, so it sits
   # on the edit-rights bar like the other binding/structure mutations.

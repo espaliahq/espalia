@@ -72,6 +72,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_level?
       assert_not policy.add_role_family?
       assert_not policy.add_role?
+      assert_not policy.add_level?
     end
 
     should "deny settings" do
@@ -162,6 +163,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "allow org-structure add predicates" do
       assert policy.add_role_family?
       assert policy.add_role?
+      assert policy.add_level?
     end
   end
 
@@ -247,6 +249,7 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     should "allow org-structure add predicates (editor has edit rights)" do
       assert policy.add_role_family?
       assert policy.add_role?
+      assert policy.add_level?
     end
 
     should "deny settings (requires tenant admin)" do

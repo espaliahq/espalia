@@ -41,9 +41,9 @@ class Frameworks::ActivityFeedQuery
 
   # Event class → feed kind string. Drives both which events become feed
   # entries and the kind the view renders. Events not in this map (e.g.
-  # FrameworkCreated, ScoringThresholdsConfigured, LevelAdded, reorders) are
-  # deliberately out of scope; org-structure *renames* (RoleFamilyUpdated /
-  # RoleUpdated / LevelUpdated) and *adds* (RoleFamilyAdded / RoleAdded) are
+  # FrameworkCreated, ScoringThresholdsConfigured, reorders) are deliberately
+  # out of scope; org-structure *renames* (RoleFamilyUpdated / RoleUpdated /
+  # LevelUpdated) and *adds* (RoleFamilyAdded / RoleAdded / LevelAdded) are
   # covered.
   KINDS = {
     Frameworks::Events::EditSuggested              => "suggestion_edit",
@@ -75,6 +75,7 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::LevelUpdated               => "level_updated",
     Frameworks::Events::RoleFamilyAdded            => "role_family_added",
     Frameworks::Events::RoleAdded                  => "role_added",
+    Frameworks::Events::LevelAdded                 => "level_added",
     Frameworks::Events::CollaboratorAdded          => "collaborator_added",
     Frameworks::Events::CollaboratorRoleChanged    => "collaborator_role_changed",
     Frameworks::Events::CollaboratorRemoved        => "collaborator_removed"
@@ -261,6 +262,9 @@ class Frameworks::ActivityFeedQuery
       extra.merge!(meta) if meta
     end
     extra.merge!(binding_metadata(kind, data)) if BINDING_KINDS.include?(kind)
+    if kind == "level_added" && role_labels.key?(data[:role_id])
+      extra[:level_role_label] = role_labels[data[:role_id]]
+    end
     extra[:expectation_level] = structural_expectation_level(kind, data) if EXPECTATION_KINDS.include?(kind)
     extra
   end
