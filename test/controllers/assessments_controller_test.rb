@@ -168,6 +168,103 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, @person.name
     end
 
+    should "not show skip-level section to a manager with no skip-level reports" do
+      sign_in @manager_user
+      get assessments_path
+
+      assert_response :success
+      assert_not_includes response.body, "Skip-Level Assessments"
+    end
+
+    should "show skip-level assessments section to the manager's manager" do
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+      end
+
+      sign_in skip_user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Skip-Level Assessments"
+      assert_includes response.body, @person.name
+      # The direct-report team section only renders when a direct report has
+      # an assignment — the manager in between has none here.
+      assert_not_includes response.body, "Team Assessments"
+    end
+
+    should "paginate the skip-level section beyond #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE} assignments" do
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+
+        handler = PersonDevelopment::CommandHandler.new
+        AssessmentsController::SKIP_LEVEL_PAGE_SIZE.times do |i|
+          extra = create(:person, tenant: @tenant, name: "Extra Skip #{i}", manager: @manager)
+          handler.assign_to_framework(extra.id, @framework.framework_id, @role.role_id, @level.level_id)
+        end
+      end
+
+      sign_in skip_user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Page 1 of 2"
+      # 13 skip-level assignments, ordered by id (creation order): the last
+      # one created falls on page 2.
+      assert_not_includes response.body, "Extra Skip #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE - 1}"
+
+      get assessments_path(skip_page: 2)
+
+      assert_response :success
+      assert_includes response.body, "Page 2 of 2"
+      assert_includes response.body, "Extra Skip #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE - 1}"
+      assert_not_includes response.body, "Extra Skip 0"
+    end
+
+    should "render read-only manager view for a skip-level manager" do
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+      end
+
+      sign_in skip_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, @person.name
+      # View-only: no interactive manager-rating form may render for a
+      # chain ancestor who is not the recorded reporting manager.
+      assert_not_includes response.body, assessment_manager_ratings_path(@assignment)
+      # The priming hero renders passive copy — no "Rate …" imperative or
+      # rate-next CTA for a viewer without rating authority.
+      assert_includes response.body, "No score for #{@person.name.split.first} yet"
+      assert_not_includes response.body, "Rate next capability"
+    end
+
+    should "keep the imperative priming hero for the direct manager" do
+      sign_in @manager_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Rate #{@person.name.split.first} to see their score"
+      assert_includes response.body, "Rate next capability"
+    end
+
+    should "keep the manager-rating form interactive for the direct manager" do
+      sign_in @manager_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, assessment_manager_ratings_path(@assignment)
+    end
+
     should "redirect if not manager and not assignee" do
       other_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do

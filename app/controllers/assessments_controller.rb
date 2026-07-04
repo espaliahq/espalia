@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# Assessment UI for the current user's own assessments and their
-# direct reports' assessments (manager view).
+# Assessment UI for the current user's own assessments, their direct
+# reports' assessments (manager view), and — read-only — the assessments
+# of everyone deeper in their org subtree (skip-level view).
 #
 # The assessment ID in URLs is the framework_id — an assessment is a
 # projection derived from the PersonDevelopment event stream, not a
@@ -9,6 +10,10 @@
 #
 class AssessmentsController < ApplicationController
   include AssessmentVisibility
+
+  # Skip-level subtrees can be large for senior managers — the section is
+  # paginated rather than rendering an unbounded card grid.
+  SKIP_LEVEL_PAGE_SIZE = 12
 
   before_action :require_person
   before_action :set_assignment, only: [ :show, :matrix, :scoring ]
@@ -18,10 +23,16 @@ class AssessmentsController < ApplicationController
     authorize PersonFrameworkAssignment, :index?
     @own_assignments = PersonFrameworkAssignment.for_person(current_person.id)
       .includes(:framework, :role, :level)
-    @report_assignments = load_report_assignments
-    @report_people = Person.where(id: @report_assignments.map(&:person_id)).index_by(&:id)
+    reviewable = Assessments::ReviewableAssignments.new(current_person)
+    @report_assignments = reviewable.team
+    @skip_level_pagy, @skip_level_assignments = pagy(
+      reviewable.skip_level, limit: SKIP_LEVEL_PAGE_SIZE, page_key: "skip_page"
+    )
+    @report_people = Person.where(
+      id: (@report_assignments.map(&:person_id) + @skip_level_assignments.map(&:person_id)).uniq
+    ).index_by(&:id)
 
-    all_assignments = @own_assignments.to_a + @report_assignments.to_a
+    all_assignments = @own_assignments.to_a + @report_assignments.to_a + @skip_level_assignments.to_a
     cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
     @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
     @card_statuses = build_card_statuses(@open_cycles)
@@ -29,6 +40,8 @@ class AssessmentsController < ApplicationController
     render Views::Assessments::IndexView.new(
       assignments: @own_assignments,
       report_assignments: @report_assignments,
+      skip_level_assignments: @skip_level_assignments,
+      skip_level_pagy: @skip_level_pagy,
       report_people: @report_people,
       open_cycles: @open_cycles,
       card_statuses: @card_statuses,
@@ -44,7 +57,7 @@ class AssessmentsController < ApplicationController
     load_assessment_data
     active_category_id = resolve_active_category_id
     context = assessment_context
-    policy = AssessmentPolicy.new(pundit_user, @assignment)
+    policy = assignment_policy
     activity_entries = load_activity_entries
     can_relink_others = viewer_can_relink_others_evidence?
     if manager_viewing?
@@ -71,6 +84,7 @@ class AssessmentsController < ApplicationController
         can_manage_delegates: policy.delegate_manager_rating?,
         active_delegations: load_active_delegations(policy),
         candidate_delegates: load_candidate_delegates(policy),
+        viewer_can_rate: policy.rating_participant?,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -132,7 +146,8 @@ class AssessmentsController < ApplicationController
       viewer_is_manager: manager_viewing?,
       active_category_id: resolve_active_category_id,
       assessment_id: @assignment.id,
-      assessee_name: manager_viewing? ? @assessee&.name : nil
+      assessee_name: manager_viewing? ? @assessee&.name : nil,
+      viewer_can_rate: assignment_policy.rating_participant?
     ), layout: false
   end
 
@@ -207,6 +222,25 @@ class AssessmentsController < ApplicationController
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
     ).build
+    apply_viewer_rating_lock
+  end
+
+  # View-only manager-side viewers (manager-chain ancestors who are neither
+  # the recorded reporting manager nor an active rating delegate) get static
+  # rating pills — the rating policies would reject their POSTs, so no
+  # interactive affordance should render. Rating-capable viewers keep the
+  # lifecycle-derived flags untouched.
+  def apply_viewer_rating_lock
+    return unless manager_viewing?
+
+    @matrix_data[:individual_ratings_frozen] = true unless assignment_policy.create_manager_rating?
+    if assessment_context == :alignment && !assignment_policy.create_alignment_rating?
+      @matrix_data[:alignment_locked] = true
+    end
+  end
+
+  def assignment_policy
+    @assignment_policy ||= AssessmentPolicy.new(pundit_user, @assignment)
   end
 
   # `viewer_sees_all_evidence?`, `viewer_can_relink_others_evidence?`, and
@@ -294,18 +328,6 @@ class AssessmentsController < ApplicationController
       .candidate_people(assignment: @assignment, actor_person_id: current_person.id).to_a
   end
 
-  # Loads framework assignments the current person reviews: their direct
-  # reports, plus any assignment they hold an active manager-rating delegation
-  # for (e.g. a report seconded into their team).
-  #
-  # @return [ActiveRecord::Relation<PersonFrameworkAssignment>]
-  def load_report_assignments
-    ids = (direct_report_assignment_ids + delegated_assignment_ids).uniq
-    return PersonFrameworkAssignment.none if ids.empty?
-
-    PersonFrameworkAssignment.where(id: ids).includes(:framework, :role, :level)
-  end
-
   # Builds per-card status for the index, keyed by [framework_id, person_id].
   # Combines the projected per-side completion (AssessmentCycleProgress) with a
   # single cheap "any rating exists per side" query so the view can render the
@@ -345,26 +367,6 @@ class AssessmentsController < ApplicationController
         manager_any: any[:manager_any] || false
       }
     end
-  end
-
-  def direct_report_assignment_ids
-    report_ids = current_person.direct_reports.pluck(:id)
-    return [] if report_ids.empty?
-
-    PersonFrameworkAssignment.where(person_id: report_ids).ids
-  end
-
-  # Assignment ids the current person holds an active delegation to rate.
-  #
-  # @return [Array<String>]
-  def delegated_assignment_ids
-    pairs = ManagerAssessmentDelegation.active.for_delegate(current_person.id)
-      .pluck(:person_id, :framework_id)
-    return [] if pairs.empty?
-
-    scope = pairs.map { |pid, fid| PersonFrameworkAssignment.where(person_id: pid, framework_id: fid) }
-                 .reduce(:or)
-    scope.ids
   end
 
   # Cell-level focus param. Only meaningful when paired with `?capability=`;

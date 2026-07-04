@@ -1,16 +1,20 @@
 # frozen_string_literal: true
 
-# Lists the caller's own framework assignments plus those of their
-# direct reports — the data behind the web Assessments index. Read-only;
-# scoped by acts_as_tenant and AssessmentPolicy#index? (`person.present?`).
+# Lists the caller's own framework assignments plus the assignments they
+# review — the data behind the web Assessments index, split the same way
+# via {Assessments::ReviewableAssignments}: `direct_reports:` is the Team
+# list (direct reports + assignments the caller holds an active
+# manager-rating delegation for), `skip_level_reports:` is the view-only
+# rest of their org subtree. Read-only; scoped by acts_as_tenant and
+# AssessmentPolicy#index? (`person.present?`).
 #
-# Returns a single hash with `own:` and `direct_reports:` arrays so an
-# MCP client can present them as separate lists without re-grouping.
-# Each row includes enough identity, framework, and open-cycle context
-# to pick the next drill-in (a future assessments_get tool) without an
-# extra round trip.
+# Returns a single hash with `own:`, `direct_reports:`, and
+# `skip_level_reports:` arrays so an MCP client can present them as
+# separate lists without re-grouping. Each row includes enough identity,
+# framework, and open-cycle context to pick the next drill-in
+# (assessments_get) without an extra round trip.
 class Operations::Assessments::Mine < Operations::Base
-  description "List the caller's own assessment assignments and those of their direct reports."
+  description "List the caller's own assessment assignments plus the ones they review: their team's (direct reports and active rating delegations) and, view-only, their skip-level reports' assignments."
   category :read
   approval :none
 
@@ -20,36 +24,32 @@ class Operations::Assessments::Mine < Operations::Base
     authorize PersonFrameworkAssignment, :index?
   end
 
-  # @return [Hash{Symbol=>Array<Hash>}] two-key payload:
+  # @return [Hash{Symbol=>Array<Hash>}] three-key payload:
   #   - `:own` — assignments where the caller is the assessee. Each row has
   #     `:id, :framework{id,name,current_published_version}, :role{id,code,name},
   #     :level{id,ordinal,title}, :current_cycle{id,name,status,planned_end_at}|nil`.
   #   - `:direct_reports` — same shape, plus `:assessee{id,name,email}` for
-  #     the person being assessed.
+  #     the person being assessed. Includes assignments the caller holds an
+  #     active manager-rating delegation for, mirroring the web Team section.
+  #   - `:skip_level_reports` — same shape as `:direct_reports`, for people
+  #     deeper in the caller's org subtree (viewable, not ratable).
   def perform
-    own = preload(PersonFrameworkAssignment.for_person(context.person.id)).to_a
-    reports = report_assignments
-    open_cycles = AssessmentCycle.open_cycles_for(cycle_keys(own + reports))
-    reports_by_person = Person.where(id: reports.map(&:person_id)).index_by(&:id)
+    own = PersonFrameworkAssignment.for_person(context.person.id)
+      .includes(:framework, :role, :level).to_a
+    reviewable = Assessments::ReviewableAssignments.new(context.person)
+    reports = reviewable.team.to_a
+    skip_levels = reviewable.skip_level.to_a
+    open_cycles = AssessmentCycle.open_cycles_for(cycle_keys(own + reports + skip_levels))
+    people_by_id = Person.where(id: (reports + skip_levels).map(&:person_id)).index_by(&:id)
 
     {
       own: own.map { |a| serialize(a, open_cycles) },
-      direct_reports: reports.map { |a| serialize(a, open_cycles, assessee: reports_by_person[a.person_id]) }
+      direct_reports: reports.map { |a| serialize(a, open_cycles, assessee: people_by_id[a.person_id]) },
+      skip_level_reports: skip_levels.map { |a| serialize(a, open_cycles, assessee: people_by_id[a.person_id]) }
     }
   end
 
   private
-
-  def preload(scope)
-    scope.includes(:framework, :role, :level)
-  end
-
-  def report_assignments
-    report_ids = context.person.direct_reports.pluck(:id)
-    return [] if report_ids.empty?
-
-    preload(PersonFrameworkAssignment.where(person_id: report_ids)).to_a
-  end
 
   def cycle_keys(assignments)
     assignments.map { |a| [ a.framework_id, a.person_id ] }

@@ -88,8 +88,16 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-request-evidence-target='suggestions'] button", text: "Pat Peer", visible: true
       assert_selector "button[type='submit']", text: "Send 1 request"
       fill_in "evr-message", with: "Saw you pair on the incident"
-      find("button[type='submit']", text: /Send/).click
     end
+
+    # Submit via requestSubmit() — the pointer click on the modal's Send
+    # button was dropped on a starved CI runner (modal still open at the
+    # next assertion). See testing.md, "Inline-Editor Form Submits —
+    # requestSubmit() Over Click".
+    page.execute_script(<<~JS)
+      document.querySelector("#evidence-request-modal-overlay button[type='submit']")
+        .closest("form").requestSubmit()
+    JS
 
     assert_text "Feedback request"
     ActsAsTenant.with_tenant(@tenant) do

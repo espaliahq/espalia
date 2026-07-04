@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# Assessment dashboard listing the current user's framework assignments
-# and their direct reports' assessments (manager view).
+# Assessment dashboard listing the current user's framework assignments,
+# their direct reports' assessments (manager view), and — when they manage
+# managers — a view-only skip-level section for the rest of their subtree.
 #
 class Views::Assessments::IndexView < Views::Base
   # Per-side completion state → [badge variant, label].
@@ -13,15 +14,19 @@ class Views::Assessments::IndexView < Views::Base
 
   # @param assignments [Array<PersonFrameworkAssignment>] own assignments
   # @param report_assignments [Array<PersonFrameworkAssignment>] direct reports
-  # @param report_people [Hash{String => Person}] preloaded person records by ID
+  # @param skip_level_assignments [Array<PersonFrameworkAssignment>] current page of reports deeper in the viewer's subtree (view-only)
+  # @param skip_level_pagy [Pagy::Offset, nil] pagination for the skip-level section
+  # @param report_people [Hash{String => Person}] preloaded person records by ID (direct + skip-level)
   # @param open_cycles [Hash{Array(String, String) => AssessmentCycle}] preloaded open cycles keyed by [framework_id, person_id]
   # @param card_statuses [Hash{Array(String, String) => Hash}] per-card status keyed by [framework_id, person_id]
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignments:, report_assignments: [], report_people: {}, open_cycles: {}, card_statuses: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignments:, report_assignments: [], skip_level_assignments: [], skip_level_pagy: nil, report_people: {}, open_cycles: {}, card_statuses: {}, user: nil, current_tenant: nil, tenants: [])
     @assignments = assignments
     @report_assignments = report_assignments
+    @skip_level_assignments = skip_level_assignments
+    @skip_level_pagy = skip_level_pagy
     @report_people = report_people
     @open_cycles = open_cycles
     @card_statuses = card_statuses
@@ -37,6 +42,7 @@ class Views::Assessments::IndexView < Views::Base
       page_header
       assignments_list
       report_assignments_section if @report_assignments.any?
+      skip_level_assignments_section if @skip_level_assignments.any?
     end
   end
 
@@ -70,6 +76,57 @@ class Views::Assessments::IndexView < Views::Base
       div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
         @report_assignments.each { |a| report_assignment_card(a) }
       end
+    end
+  end
+
+  # Skip-level reports and deeper — the viewer can open these read-only
+  # (the manager chain has full view access), but rating stays with each
+  # person's own reporting manager. Cards share the report-card layout.
+  # Paginated (pagy) — a senior manager's subtree can hold hundreds.
+  def skip_level_assignments_section
+    div(id: "skip-level-assessments", class: "mt-10") do
+      h2(class: "text-xl font-bold text-gray-900 dark:text-white mb-1") { "Skip-Level Assessments" }
+      p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
+        "Assessments across your wider team — people reporting below your direct reports."
+      end
+      div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
+        @skip_level_assignments.each { |a| report_assignment_card(a) }
+      end
+      skip_level_pager if @skip_level_pagy && @skip_level_pagy.last > 1
+    end
+  end
+
+  # Compact prev/next pager for the skip-level section. Links carry the
+  # `skip_page` param plus the section anchor so paging keeps the viewer at
+  # the section instead of jumping back to the top of the dashboard.
+  def skip_level_pager
+    pagy = @skip_level_pagy
+    div(class: "mt-4 flex flex-wrap items-center justify-between gap-2") do
+      span(class: "text-xs text-gray-500 dark:text-gray-400 tabular-nums") do
+        "Showing #{pagy.from}–#{pagy.to} of #{pagy.count}"
+      end
+      div(class: "flex items-center gap-2") do
+        skip_level_page_link("← Previous", pagy.previous)
+        span(class: "text-xs text-gray-500 dark:text-gray-400 tabular-nums") do
+          "Page #{pagy.page} of #{pagy.last}"
+        end
+        skip_level_page_link("Next →", pagy.next)
+      end
+    end
+  end
+
+  # @param label [String]
+  # @param page [Integer, nil] nil renders a disabled placeholder
+  def skip_level_page_link(label, page)
+    shared = "inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium"
+    if page
+      a(
+        href: assessments_path(skip_page: page, anchor: "skip-level-assessments"),
+        class: "#{shared} border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
+               "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+      ) { label }
+    else
+      span(class: "#{shared} border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600") { label }
     end
   end
 

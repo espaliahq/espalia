@@ -18,6 +18,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
                  can_manage_delegates: false, active_delegations: [], candidate_delegates: [],
+                 viewer_can_rate: true,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @assessee = assessee
@@ -41,6 +42,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @can_manage_delegates = can_manage_delegates
     @active_delegations = active_delegations
     @candidate_delegates = candidate_delegates
+    @viewer_can_rate = viewer_can_rate
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -234,7 +236,8 @@ class Views::Assessments::ManagerShowView < Views::Base
         assignment: @assignment,
         can_start_alignment: @can_start_alignment,
         can_complete_alignment: @can_complete_alignment,
-        assessee_name: @assessee.name
+        assessee_name: @assessee.name,
+        viewer_can_rate: @viewer_can_rate
       )
     end
   end

@@ -392,4 +392,60 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#cell-#{@cap_stable}-1", wait: 10
     end
   end
+
+  context "skip-level manager" do
+    setup do
+      @skip_user = FactoryBot.create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        @grand_manager = FactoryBot.create(
+          :person, tenant: @tenant, email: @skip_user.email, name: "Director Dana"
+        )
+        FactoryBot.create(:tenant_user, tenant: @tenant, user: @skip_user, person: @grand_manager)
+        @manager.update!(manager: @grand_manager)
+      end
+      sign_in_as(@skip_user)
+    end
+
+    should "list the skip-level report and open their assessment read-only" do
+      visit assessments_path
+      assert_text "Skip-Level Assessments"
+      assert_text "Report Alex"
+
+      click_link_with_js_fallback(
+        "Review Assessment", expect_text: "Synthesises information from multiple sources"
+      )
+      assert_selector "h1", text: "Report Alex"
+      wait_for_stimulus "matrix"
+
+      # View-only: no interactive manager-rating form anywhere on the page —
+      # the pill renders as a static span for a chain ancestor who can't rate.
+      assert_no_selector "form[action*='manager_ratings']", visible: :all
+
+      # The priming hero renders passive copy — no "Rate …" imperative or
+      # rate-next CTA for a viewer without rating authority.
+      assert_text "No score for Report yet"
+      assert_no_text "Rate next capability"
+    end
+
+    should "page through a large skip-level section" do
+      page_size = AssessmentsController::SKIP_LEVEL_PAGE_SIZE
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        level = FrameworkState::Level.find_by!(level_id: @level2_id)
+        page_size.times do |i|
+          extra = FactoryBot.create(:person, tenant: @tenant, name: "Extra Skip #{i}", manager: @manager)
+          handler.assign_to_framework(extra.id, @framework_id, @role_id, level.level_id)
+        end
+      end
+
+      visit assessments_path
+      assert_text "Skip-Level Assessments"
+      assert_text "Page 1 of 2"
+      assert_no_text "Extra Skip #{page_size - 1}"
+
+      click_link_with_js_fallback("Next →", expect_text: "Extra Skip #{page_size - 1}")
+      assert_text "Page 2 of 2"
+      assert_no_text "Extra Skip 0"
+    end
+  end
 end

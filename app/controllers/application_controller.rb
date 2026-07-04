@@ -3,6 +3,7 @@
 class ApplicationController < ActionController::Base
   include Pundit::Authorization
   include Impersonatable
+  include Pagy::Method
 
   set_current_tenant_through_filter
 
