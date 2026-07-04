@@ -16,7 +16,7 @@ class Views::Frameworks::Explorer::LevelEditorModal < Views::Base
 
   def view_template
     render Components::Kit::Modal.new(
-      id: "level-editor-modal", title: "Edit levels", standalone: false
+      id: "level-editor-modal", title: "Edit levels", size: :lg, standalone: false
     ) do |m|
       m.body { body }
     end

@@ -97,15 +97,19 @@ class Views::Frameworks::Explorer::LevelEditorFrame < Views::Base
         # instead of collapsing to an unusable sliver.
         class: "min-w-32 flex-1 #{field_classes}"
       )
-      input(
-        type: "text", name: "level[code]", value: level.code, required: true,
-        aria: { label: "Code for level #{level.ordinal}" },
-        class: "w-20 #{field_classes}"
-      )
-      button(
-        type: "submit",
-        class: "rounded px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
-      ) { "Save" }
+      # Code + Save stay one unbreakable cluster — when the row is tight, the
+      # title wraps to its own line rather than Save orphaning below the code.
+      div(class: "flex items-center gap-2 shrink-0") do
+        input(
+          type: "text", name: "level[code]", value: level.code, required: true,
+          aria: { label: "Code for level #{level.ordinal}" },
+          class: "w-20 #{field_classes}"
+        )
+        button(
+          type: "submit",
+          class: "rounded px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
+        ) { "Save" }
+      end
     end
   end
 
