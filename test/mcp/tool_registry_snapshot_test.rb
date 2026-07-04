@@ -957,14 +957,15 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_update_level",
-        "description" => "Update a level's title or code (owner/editor/lead only).",
+        "description" => "Update a level's title, code, or entry-level flag (owner/editor/lead only).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "framework_id" => { "type" => "string" },
             "level_id"     => { "type" => "string" },
             "title"        => { "type" => "string" },
-            "code"         => { "type" => "string" }
+            "code"         => { "type" => "string" },
+            "is_entry"     => { "type" => "boolean" }
           },
           "required" => %w[framework_id level_id],
           "additionalProperties" => false
