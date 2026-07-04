@@ -852,7 +852,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
         # Row save: change the code.
         row = find("li", text: "L1")
-        row.find("input[name='level[code]']").set("ENG1")
+        js_set_field "#level-editor li input[name='level[code]']", "ENG1"
         page.execute_script("arguments[0].querySelector('form').requestSubmit();", row)
         assert_selector "input[name='level[code]'][value='ENG1']"
 
@@ -866,8 +866,8 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
         # Add a level from the foot row (prefilled next ordinal = 2).
         assert_equal "2", find("#level-editor-add-ordinal").value
-        find("#level-editor-add-title").set("Engineer II")
-        find("#level-editor-add-code").set("E2")
+        js_set_field "#level-editor-add-title", "Engineer II"
+        js_set_field "#level-editor-add-code", "E2"
         page.execute_script(<<~JS)
           document.querySelector('#level-editor-add-title').closest('form').requestSubmit();
         JS
@@ -875,9 +875,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         assert_selector "input[name='level[title]'][value='Engineer II']"
 
         # Duplicate ordinal → in-frame error, list intact.
-        find("#level-editor-add-ordinal").set("1")
-        find("#level-editor-add-title").set("Dup")
-        find("#level-editor-add-code").set("D1")
+        js_set_field "#level-editor-add-ordinal", "1"
+        js_set_field "#level-editor-add-title", "Dup"
+        js_set_field "#level-editor-add-code", "D1"
         page.execute_script(<<~JS)
           document.querySelector('#level-editor-add-title').closest('form').requestSubmit();
         JS
