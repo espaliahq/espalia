@@ -21,7 +21,10 @@ import { useClickOutside, useTransition } from "stimulus-use"
 
 export default class extends BaseController {
   static targets = ["menu", "trigger"]
-  static values = { fixed: { type: Boolean, default: false } }
+  static values = {
+    fixed: { type: Boolean, default: false },
+    align: { type: String, default: "left" }
+  }
 
   connect() {
     super.connect()
@@ -32,6 +35,7 @@ export default class extends BaseController {
 
   disconnect() {
     window.removeEventListener("scroll", this._onAnyScroll, true)
+    super.disconnect()
   }
 
   toggle() {
@@ -78,9 +82,12 @@ export default class extends BaseController {
   #positionFixed() {
     const rect = this.triggerTarget.getBoundingClientRect()
     const menu = this.menuTarget
-    const width = 224 // w-56; measured post-open clamp handles the rest
+    const width = 224 // w-56; the post-open clamp handles height
+    // Honour the component's align: left anchors the menu's left edge to the
+    // trigger's left, right anchors its right edge to the trigger's right.
+    const anchored = this.alignValue === "right" ? rect.right - width : rect.left
     menu.style.position = "fixed"
-    menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`
+    menu.style.left = `${Math.max(8, Math.min(anchored, window.innerWidth - width - 8))}px`
     menu.style.top = `${rect.bottom + 4}px`
     menu.style.right = "auto"
     menu.style.marginTop = "0"

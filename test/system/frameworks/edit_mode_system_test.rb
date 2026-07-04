@@ -901,7 +901,24 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       )
       assert_selector "[role='menu']", visible: true, text: "Edit role…"
 
-      result = page.evaluate_script(<<~JS)
+      # The fixed-position clamp runs in requestAnimationFrame after the menu
+      # opens — poll until geometry is stable across reads before asserting.
+      result = nil
+      5.times do
+        result = read_menu_geometry
+        break if result["fixed"] && result["onScreen"] && result["allHit"]
+
+        sleep 0.1
+      end
+
+      assert result["fixed"], "menu should use the fixed strategy"
+      assert result["onScreen"], "menu must be fully on-screen, not clipped by the pane"
+      assert result["allHit"], "every menu item must be the top-most element at its center"
+    end
+  end
+
+  def read_menu_geometry
+    page.evaluate_script(<<~JS)
         (() => {
           const menu = document.querySelector("[role='menu']:not(.hidden)");
           const items = [...menu.querySelectorAll("[role='menuitem']")];
@@ -917,11 +934,6 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
           };
         })()
       JS
-
-      assert result["fixed"], "menu should use the fixed strategy"
-      assert result["onScreen"], "menu must be fully on-screen, not clipped by the pane"
-      assert result["allHit"], "every menu item must be the top-most element at its center"
-    end
   end
 
   context "ghost org-structure entities (no published levels)" do

@@ -49,6 +49,7 @@ class Components::Kit::Dropdown < Components::Base
       data: {
         controller: "dropdown",
         dropdown_fixed_value: (@strategy == :fixed ? "true" : nil),
+        dropdown_align_value: (@align.to_s if @strategy == :fixed),
         action: "keydown.esc@window->dropdown#close"
       }.compact
     ) do
