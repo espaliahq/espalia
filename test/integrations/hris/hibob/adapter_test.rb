@@ -78,6 +78,25 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
     end
 
+    should "pseudonymise names end to end when the dev whimsifier is enabled" do
+      Hris::DevNameWhimsifier.stub(:enabled?, true) do
+        adapter = build_adapter(@fixture["employees"])
+        adapter.sync_people
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        alice = Person.find_by(external_id: "bob-001")
+        bob = Person.find_by(external_id: "bob-002")
+
+        assert_equal Hris::DevNameWhimsifier.whimsical_name("bob-001"), alice.name
+        assert_equal Hris::DevNameWhimsifier.whimsical_name("bob-002"), bob.name
+        refute_equal "Alice Smith", alice.name
+        assert_equal bob.name.split(" ").last, alice.hris_raw_data.dig("work", "reportsTo", "surname")
+        assert_equal "alice@example.com", alice.email
+        assert_equal bob, alice.manager
+      end
+    end
+
     should "mark inactive employees from HiBob as inactive" do
       adapter = build_adapter(@fixture["employees"])
       adapter.sync_people

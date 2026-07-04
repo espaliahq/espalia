@@ -10,6 +10,7 @@ app/
   integrations/
     hris/
       base_adapter.rb                  # Abstract interface (Hris::BaseAdapter)
+      dev_name_whimsifier.rb           # Dev-only deterministic name pseudonymizer
       hibob/
         client.rb                      # Hris::Hibob::Client — Faraday HTTP
         adapter.rb                     # Hris::Hibob::Adapter — 5-pass sync
@@ -32,6 +33,35 @@ app/
 - **Errors namespaced under `Errors` module.** Zeitwerk expects one constant per file; the errors module holds all error classes in a single `errors.rb`: `Hris::Hibob::Errors::AuthenticationError`.
 - **Tenant metadata on RES commands.** When dispatching PersonDevelopment commands (assign/change role/change level) from an adapter, wrap the loop in `Rails.configuration.event_store.with_metadata(tenant_id: tenant.id)`. The projection reads this to set `ActsAsTenant` context.
 - **Record the reporting manager.** Pass 5 also dispatches `record_reporting_manager(person_id, framework_id, person.manager_id, source: "hris")` for every touched person that has an assignment — independent of the title-mapping outcome, so a re-managed-but-unmapped person stays fresh. Like every other PersonDevelopment command above, it runs **inside the same `with_metadata(tenant_id: tenant.id)` block** (the Pass 5 loop is already wrapped) so the projection gets tenant context. Idempotent (no-op when unchanged or manager nil). This is the authoritative source for manager-rating authority (`RecordedReportingManager`); seed existing streams once via `bin/rails events:backfill_reporting_managers`. See [docs/guidelines/authorization.md](authorization.md#assessment-permissions).
+
+## Development PII guard — whimsical pseudonyms
+
+Dev environments sync against **real** HRIS accounts to validate the
+integration, so `Hris::DevNameWhimsifier` (applied in the adapter's Pass 1,
+development env only) deterministically replaces every person's name with a
+whimsical pseudonym ("Clementine Puddleduck") before it touches the local
+database. Key properties:
+
+- **Deterministic** — the pseudonym is a pure function of the HRIS external id
+  (SHA-256 → curated word lists), so re-syncs map the same employee to the
+  same name, and the manager's name inside a report's `reportsTo` raw payload
+  matches the manager's own record.
+- **Uniform and collision-resistant** — lists are power-of-two sized (no
+  modulo bias) and surnames are composed stem + ending (32 × 16 = 512), so
+  duplicate surnames — which read as family relations — stay rare even for
+  large orgs.
+- **Covers the raw payload too** — `firstName` / `surname` / `displayName` are
+  scrubbed in `hris_raw_data` (top level and `work.reportsTo`), not just the
+  mapped `name`.
+- **Emails are NOT scrambled** — TenantUser auto-linking (Pass 4) and SSO both
+  match on email; changing them would break dev sign-in. Emails remain the one
+  piece of real PII in a dev database.
+- A dev database seeded before this guard existed still holds real names —
+  re-running the sync (`bin/rails db:seed` or `HrisSyncJob`) rewrites them.
+- Outside development `.call` is a pass-through; test/production data is
+  untouched. Bump `DIGEST_PREFIX` to reshuffle all pseudonyms.
+- **New providers must apply it too** — a future adapter (BambooHR, …) wraps
+  its own mapped attrs the same way: `Hris::DevNameWhimsifier.call(attrs)`.
 
 ## Configuring role/level mappings
 

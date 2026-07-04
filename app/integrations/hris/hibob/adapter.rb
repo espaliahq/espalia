@@ -45,7 +45,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           raw_employee,
           level_field_id: config.level_field_id
         )
-        attrs = mapper.call
+        # Dev-only PII guard — pass-through outside development.
+        attrs = Hris::DevNameWhimsifier.call(mapper.call)
         manager_ext_id = mapper.manager_external_id
 
         person = upsert_person(attrs, result)
