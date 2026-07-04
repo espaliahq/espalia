@@ -435,6 +435,36 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
 - **Draft pill** (`vN draft`, teal) + **Publish button** — header, edit-mode +
   draft-open only; Publish links to the publish-review page where mappings are
   validated before the version is cut. (Draft lifecycle: see ADR-16/17.)
+- **"+ Add role family" / "+ Add role"** — in the left role tree (edit +
+  `can_edit_structure`): "+ Add role family" at the tree foot, "+ Add role" at
+  the foot of each family's role list (the parent is implied by placement — no
+  family picker), mirroring the matrix's add-category / add-capability split.
+  The family modal is the `RoleFamilyEditModal` in **`:new` mode** (same
+  name/description/department form + `<datalist>`, POST instead of PATCH) so
+  create and edit never drift; the new `AddRoleModal` captures name + code +
+  track only — levels are deliberately NOT captured (a role is created light).
+  Both dispatch `Operations::Frameworks::{AddRoleFamily,AddRole}` (web + MCP)
+  and re-render the `role-tree-families` frame in place, selection preserved.
+  **Shape-preserving, applies live** — a family/role without published levels
+  changes no rating grid — but the new entity renders as a **ghost**: hidden
+  from the view-mode tree, wiggled in the edit-mode tree (see *Ghost
+  org-structure entities* below). An empty family shows an explicit "No roles
+  yet" line where its "+ Add role" affordance sits.
+
+**Ghost org-structure entities.** A role with **no published level** (freshly
+added live, or its levels still draft-born) — and a family with no such role —
+is not visible in the published framework view, so the view-mode tree hides it
+(the empty-category rule, Lesson 18, one pane left) and the edit-mode tree
+renders it with the wiggle + a tooltip ("Not in the published framework yet…").
+Derived, not stored: the `GhostEntities` concern (`published_role?` /
+`ghost_role?` / `ghost_role_family?`) computes it from level presence — graph
+levels carry `added_in_draft`; AR read-model levels are published by
+construction — so ghost state self-clears at publish with no event, flag, or
+projection change. The role/family name frames self-compute their ghost
+decoration, so controller PATCH re-renders stay decorated for free. The matrix
+needs nothing: `build_merged_levels` already filters draft levels per mode, so
+a ghost role contributes no columns in view mode.
+
 - **Org-structure inline renames** — hover-pencil inline editors on the
   **role-family name** and **role name** in the left role tree
   (`RoleFamilyNameFrame` / `RoleNameFrame`, rendered by `RoleTree` when
@@ -879,8 +909,9 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > Turbo Stream and bumps the running count — cursor-paginated on `before:` (the
 > oldest loaded event id) with a `loaded` running total. `activity_more_controller`
 > issues the request; a live broadcast reload resets to the most-recent batch.
-> Still deferred (note when adding): role/level/binding structural events,
-> reorders, and threaded suggestion comments (`SuggestionCommented` unwired). The
+> Role-family / role **adds** now surface too (structural group, framework-level
+> anchor). Still deferred (note when adding): level adds, reorders, and threaded
+> suggestion comments (`SuggestionCommented` unwired). The
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
 > standalone suggestion index, not the pane.
 
@@ -931,11 +962,15 @@ line (§9).
 |------|---------|
 | `app/views/frameworks/show_view.rb` | Three-pane shell, stats bar, layout |
 | `app/views/frameworks/matrix_frame_view.rb` | Turbo Frame wrapper for matrix endpoint |
-| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame; renders `RoleFamilyNameFrame` + `RoleNameFrame` for inline rename + the per-family edit-dialog trigger when `mode == :edit` |
+| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame; renders `RoleFamilyNameFrame` + `RoleNameFrame` for inline rename + the per-family edit-dialog trigger when `mode == :edit`; hides ghost roles/families in view mode, shows them (+ "No roles yet" + the "+ Add role" / "+ Add role family" triggers) in edit mode |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
-| `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family edit dialog (name + description + department-with-`<datalist>`); submit re-renders the `role-tree-families` frame so the family re-groups |
+| `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family dialog — `:edit` (per-family trigger, PATCH) or `:new` (tree-foot "+ Add role family", POST → `AddRoleFamily`); submit re-renders the `role-tree-families` frame so the family re-groups / appears ghost-wiggled |
+| `app/views/frameworks/explorer/add_role_modal.rb` | Shared "new role" modal (name + code + track; family implied by the "+ Add role" trigger) → `Frameworks::RolesController#create` → `AddRole` |
+| `app/views/frameworks/explorer/concerns/ghost_entities.rb` | Ghost predicates (`published_role?` / `ghost_role?` / `ghost_role_family?`) + tooltip copy — "not visible in the published view yet", derived from published-level presence |
+| `app/javascript/controllers/add_role_form_controller.js` | Prefills the add-role modal from the "+ Add role" trigger (hidden family id + context line); selection rides along via `tree-scope-fields` |
+| `app/operations/operations/frameworks/{add_role_family,add_role}.rb` | Shared web + MCP operations — org-structure adds (shape-preserving, live; new entity is a ghost until publish) |
 | `app/views/frameworks/explorer/department_name_frame.rb` | Department group header; inline-renameable in edit mode → bulk relabel of every family in the group |
-| `app/javascript/controllers/role_family_edit_form_controller.js` | Prefills the role-family edit dialog from the trigger dataset; copies the current `roles[]`/`track` selection from the URL so the re-rendered tree stays checked |
+| `app/javascript/controllers/role_family_edit_form_controller.js` | Prefills the role-family dialog from the trigger dataset (`:edit` fills, `:new` clears); copies the current `roles[]`/`track` selection from the URL so the re-rendered tree stays checked |
 | `app/javascript/controllers/tree_scope_fields_controller.js` | Injects the current `roles[]`/`track` selection into a form at submit (`formdata` event) — used by the department-rename inline editor |
 | `app/operations/operations/frameworks/rename_department.rb` | Shared web + MCP operation — bulk-rename a department across its role families (fans out to `UpdateRoleFamily`; blank target ungroups) |
 | `app/controllers/frameworks/departments_controller.rb` | `PATCH /frameworks/:id/departments` — dispatch `RenameDepartment`, re-render the `role-tree-families` frame |
@@ -1003,7 +1038,7 @@ line (§9).
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
-| `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`. `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
+| `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; `role_families`/`roles` also serve POST creates from the add modals → `{AddRoleFamily,AddRole}` (re-render the `role-tree-families` frame). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |

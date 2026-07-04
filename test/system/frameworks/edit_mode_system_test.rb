@@ -18,7 +18,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
-      rfid = SecureRandom.uuid_v7
+      @rfid = rfid = SecureRandom.uuid_v7
       rid = SecureRandom.uuid_v7
       cat_id = SecureRandom.uuid_v7
       cap_id = SecureRandom.uuid_v7
@@ -671,7 +671,123 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "adding org structure via the tree" do
+    should "not show the add affordances in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_text "Test Framework"
+      assert_no_selector "button[data-modal-target-id='role-family-new-modal']"
+      assert_no_selector "button[data-modal-target-id='add-role-modal']"
+    end
+
+    should "add a role family via the tree-foot modal" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='role-family-new-modal']\").click();"
+      )
+      assert_selector "#role-family-new-modal", visible: true
+      # Assertion-critical values — JS-set + dispatch instead of send_keys,
+      # which drops characters on starved CI.
+      js_set_field "#role-family-new-modal-name", "Design"
+      js_set_field "#role-family-new-modal-department", "Product + Design"
+      click_button_with_js_fallback("Add role family", expect_text: "No roles yet")
+
+      within "[data-controller~='tree']" do
+        # New family lands under its department header (rendered uppercase via
+        # CSS text-transform — assertions must match the rendered case).
+        assert_text "PRODUCT + DESIGN"
+        assert_selector "span.decoration-wavy", text: "Design"
+        assert_text "No roles yet"
+      end
+      assert_no_selector "#role-family-new-modal", visible: true
+    end
+
+    should "add a role via a family's add-role row, parent implied by placement" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-modal-target-id='add-role-modal']\").click();"
+      )
+      assert_selector "#add-role-modal", visible: true
+      within "#add-role-modal" do
+        assert_text "In Engineering" # family prefilled from the trigger
+        select "Management", from: "add-role-track"
+      end
+      # Assertion-critical values — JS-set + dispatch instead of send_keys.
+      js_set_field "#add-role-name", "Engineering Manager"
+      js_set_field "#add-role-code", "EM"
+      click_button_with_js_fallback("Add role", expect_text: "Engineering Manager")
+
+      within "[data-controller~='tree']" do
+        # New role appears under its family as a ghost (no published levels).
+        assert_selector "span.decoration-wavy[title*='Not in the published framework']",
+                        text: "Engineering Manager"
+      end
+      assert_no_selector "#add-role-modal", visible: true
+    end
+  end
+
+  context "ghost org-structure entities (no published levels)" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        # A live-added role with no levels in an existing family, and a
+        # brand-new empty family — both invisible in the published view.
+        handler.add_role(@framework_id, SecureRandom.uuid_v7, @rfid, "Engineering Manager", "EM", "management")
+        handler.add_role_family(@framework_id, SecureRandom.uuid_v7, "Design")
+      end
+    end
+
+    should "hide a ghost role and an empty family from the view-mode tree" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_text "Test Framework"
+
+      within "[data-controller~='tree']" do
+        assert_text "Software Engineer"
+        assert_no_text "Engineering Manager"
+        assert_no_text "Design"
+      end
+    end
+
+    should "show ghosts with the wiggle and an empty-family placeholder in edit mode" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      within "[data-controller~='tree']" do
+        # Ghost role: rendered, wiggled, tooltip conveys the meaning non-visually.
+        assert_selector "span.decoration-wavy[title*='Not in the published framework']",
+                        text: "Engineering Manager"
+        # Ghost (empty) family: rendered with wiggle + explicit emptiness.
+        assert_selector "span.decoration-wavy[title*='Not in the published framework']",
+                        text: "Design"
+        assert_text "No roles yet"
+        # A published role stays undecorated.
+        assert_no_selector "span.decoration-wavy", text: "Software Engineer"
+      end
+    end
+  end
+
   private
+
+  # JS-sets a form field's value + dispatches input/change events — the
+  # deterministic alternative to fill_in for assertion-critical values
+  # (Selenium send_keys drops characters on starved CI runners).
+  def js_set_field(selector, value)
+    el = find(selector)
+    page.execute_script(<<~JS, el, value)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
+  end
 
   # Sets the framework-explorer capability search box to `query` via a JS
   # value assignment + input/change events. Selenium's send_keys drops

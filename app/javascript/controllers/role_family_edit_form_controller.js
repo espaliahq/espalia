@@ -1,14 +1,18 @@
-// Prefills the shared role-family edit modal from the role tree's hover "edit"
-// trigger.
+// Prefills the shared role-family modal (edit or new mode) when its trigger
+// opens it.
 //
-// On the window `modal:open` event it self-gates on `roleFamilyEditId`, points
-// the form at that family's update endpoint (built from a path template with
-// the id substituted), fills the name / description / department fields, and
-// copies the current role selection (`roles[]` + `track`) from the browser URL
-// into hidden inputs so the re-rendered tree keeps the selection checked.
+// On the window `modal:open` event it self-gates on the trigger dataset —
+// `roleFamilyEditId` for the edit dialog, `roleFamilyNew` for the tree-foot
+// "+ Add role family" trigger. Edit mode points the form at that family's
+// update endpoint (built from a path template with the id substituted) and
+// fills the name / description / department fields; new mode clears them (the
+// POST action is static). Both copy the current role selection (`roles[]` +
+// `track`) from the browser URL into hidden inputs so the re-rendered tree
+// keeps the selection checked.
 //
 // Usage:
 //   <form data-controller="role-family-edit-form"
+//         data-role-family-edit-form-mode-value="edit|new"
 //         data-role-family-edit-form-action-template-value="/frameworks/F/role_families/__RFID__"
 //         data-turbo-frame="role-tree-families"
 //         data-action="turbo:submit-end->modal#submitted">
@@ -22,7 +26,10 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["scope", "name", "description", "department"]
-  static values = { actionTemplate: String }
+  static values = {
+    actionTemplate: String,
+    mode: { type: String, default: "edit" }
+  }
 
   connect() {
     this._onOpen = this.#onOpen.bind(this)
@@ -37,16 +44,29 @@ export default class extends Controller {
 
   #onOpen(event) {
     const data = event.detail?.dataset || {}
-    // Only respond to role-family edit triggers (others share the modal:open bus).
-    if (data.roleFamilyEditId === undefined) return
 
-    this.element.action = this.actionTemplateValue.replace("__RFID__", data.roleFamilyEditId)
-
-    if (this.hasNameTarget) this.nameTarget.value = data.roleFamilyEditName || ""
-    if (this.hasDescriptionTarget) this.descriptionTarget.value = data.roleFamilyEditDescription || ""
-    if (this.hasDepartmentTarget) this.departmentTarget.value = data.roleFamilyEditDepartment || ""
+    if (this.modeValue === "new") {
+      // Only respond to the "+ Add role family" trigger.
+      if (data.roleFamilyNew === undefined) return
+      this.#fillFields({})
+    } else {
+      // Only respond to role-family edit triggers (others share the modal:open bus).
+      if (data.roleFamilyEditId === undefined) return
+      this.element.action = this.actionTemplateValue.replace("__RFID__", data.roleFamilyEditId)
+      this.#fillFields({
+        name: data.roleFamilyEditName,
+        description: data.roleFamilyEditDescription,
+        department: data.roleFamilyEditDepartment
+      })
+    }
 
     this.#fillScope()
+  }
+
+  #fillFields({ name, description, department }) {
+    if (this.hasNameTarget) this.nameTarget.value = name || ""
+    if (this.hasDescriptionTarget) this.descriptionTarget.value = description || ""
+    if (this.hasDepartmentTarget) this.departmentTarget.value = department || ""
   }
 
   // Mirror the current role/track selection from the URL so the family-frame

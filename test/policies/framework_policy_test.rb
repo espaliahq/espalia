@@ -70,6 +70,8 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_role_family?
       assert_not policy.update_role?
       assert_not policy.update_level?
+      assert_not policy.add_role_family?
+      assert_not policy.add_role?
     end
 
     should "deny settings" do
@@ -156,6 +158,11 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.update_role?
       assert policy.update_level?
     end
+
+    should "allow org-structure add predicates" do
+      assert policy.add_role_family?
+      assert policy.add_role?
+    end
   end
 
   context "as a global admin" do
@@ -235,6 +242,11 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert policy.update_role_family?
       assert policy.update_role?
       assert policy.update_level?
+    end
+
+    should "allow org-structure add predicates (editor has edit rights)" do
+      assert policy.add_role_family?
+      assert policy.add_role?
     end
 
     should "deny settings (requires tenant admin)" do

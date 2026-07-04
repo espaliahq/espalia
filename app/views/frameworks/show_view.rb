@@ -98,6 +98,12 @@ class Views::Frameworks::ShowView < Views::Base
     render Views::Frameworks::Explorer::RoleFamilyEditModal.new(
       framework_id: @framework.framework_id, departments: role_family_departments
     )
+    render Views::Frameworks::Explorer::RoleFamilyEditModal.new(
+      framework_id: @framework.framework_id, departments: role_family_departments, mode: :new
+    )
+    render Views::Frameworks::Explorer::AddRoleModal.new(
+      framework_id: @framework.framework_id
+    )
   end
 
   # Whether the shared structural-edit modals (+ the `modal` controller) render.

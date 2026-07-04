@@ -13,7 +13,7 @@ class Frameworks::RolesControllerTest < ActionDispatch::IntegrationTest
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
-      rf_id = SecureRandom.uuid_v7
+      @rf_id = rf_id = SecureRandom.uuid_v7
       @role_id = SecureRandom.uuid_v7
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rf_id, "Engineering")
@@ -60,6 +60,47 @@ class Frameworks::RolesControllerTest < ActionDispatch::IntegrationTest
 
       patch framework_role_path(framework_id: @framework_id, id: @role_id),
             params: { role: { name: "blocked" } }
+
+      assert_response :redirect
+      assert_match(/not authorized/i, flash[:alert])
+    end
+  end
+
+  context "POST /frameworks/:framework_id/roles" do
+    should "create the role and re-render the families frame with it ghost-wiggled" do
+      sign_in @user
+      post framework_roles_path(framework_id: @framework_id),
+           params: { role: { role_family_id: @rf_id, name: "Engineering Manager",
+                             code: "EM", track: "management" } }
+
+      assert_response :success
+      assert_includes response.body, "role-tree-families"
+      assert_includes response.body, "Engineering Manager"
+      # No published levels yet → wiggled ghost in the tree.
+      assert_includes response.body, "Not in the published framework yet"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        role = FrameworkState::Role.find_by(role_family_id: @rf_id, name: "Engineering Manager")
+        assert role
+        assert_equal "management", role.track
+      end
+    end
+
+    should "return unprocessable for a family outside this framework" do
+      sign_in @user
+      post framework_roles_path(framework_id: @framework_id),
+           params: { role: { role_family_id: SecureRandom.uuid_v7, name: "X", code: "X", track: "ic" } }
+
+      assert_response :unprocessable_content
+    end
+
+    should "deny non-contributor viewers" do
+      viewer = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: viewer, role: :member) }
+      sign_in viewer
+
+      post framework_roles_path(framework_id: @framework_id),
+           params: { role: { role_family_id: @rf_id, name: "Blocked", code: "B", track: "ic" } }
 
       assert_response :redirect
       assert_match(/not authorized/i, flash[:alert])

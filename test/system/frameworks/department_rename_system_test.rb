@@ -24,9 +24,17 @@ class Frameworks::DepartmentRenameSystemTest < ApplicationSystemTestCase
       handler.add_role_family(@framework_id, fc, "Financial Control", department: "Finance")
       handler.add_role_family(@framework_id, fo, "Finance Operations", department: "Finance")
       handler.add_role_family(@framework_id, eng, "Engineering", department: "Engineering")
-      handler.add_role(@framework_id, SecureRandom.uuid_v7, fc, "Controller", "FC", "ic")
-      handler.add_role(@framework_id, SecureRandom.uuid_v7, fo, "Ops", "FO", "ic")
-      handler.add_role(@framework_id, SecureRandom.uuid_v7, eng, "Engineer", "E", "ic")
+      fc_role = SecureRandom.uuid_v7
+      fo_role = SecureRandom.uuid_v7
+      eng_role = SecureRandom.uuid_v7
+      handler.add_role(@framework_id, fc_role, fc, "Controller", "FC", "ic")
+      handler.add_role(@framework_id, fo_role, fo, "Ops", "FO", "ic")
+      handler.add_role(@framework_id, eng_role, eng, "Engineer", "E", "ic")
+      # Published levels keep the roles out of the ghost state — a level-less
+      # role (and its family) is hidden from the view-mode tree.
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, fc_role, 1, "FC I", "FC1", is_entry: true)
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, fo_role, 1, "FO I", "FO1", is_entry: true)
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, eng_role, 1, "E I", "E1", is_entry: true)
       handler.publish_version(@framework_id, "test")
     end
   end

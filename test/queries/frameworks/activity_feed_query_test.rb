@@ -268,6 +268,37 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "org-structure adds" do
+    should "emit a framework-level role_family_added entry in the structural group" do
+      append(Frameworks::Events::RoleFamilyAdded,
+        data: { framework_id: @fwid, role_family_id: SecureRandom.uuid_v7,
+                name: "Design", description: nil, department: "Product + Design" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "role_family_added" }
+      assert entry
+      assert_nil entry.capability_id, "org-structure adds carry no matrix anchor"
+      assert_nil entry.category_id
+      assert_equal "Ada Author", entry.actor_name
+      assert_equal "Design", entry.payload[:name]
+      assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+
+    should "emit a framework-level role_added entry in the structural group" do
+      append(Frameworks::Events::RoleAdded,
+        data: { framework_id: @fwid, role_id: SecureRandom.uuid_v7,
+                role_family_id: SecureRandom.uuid_v7, name: "Engineering Manager",
+                code: "EM", track: "management" })
+
+      entry = entries.find { |e| e.kind == "role_added" }
+      assert entry
+      assert_nil entry.capability_id
+      assert_equal "Engineering Manager", entry.payload[:name]
+      assert_equal "EM", entry.payload[:code]
+      assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+  end
+
   context "binding lifecycle" do
     setup do
       @role_family = create(:framework_role_family, framework_id: @fwid, tenant: @tenant)
