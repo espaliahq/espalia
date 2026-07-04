@@ -63,8 +63,12 @@ class Frameworks::LevelsController < ApplicationController
     end
   rescue Operations::Base::ParameterError, RuntimeError => e
     if editor_request?
-      render_editor_frame(graph_role(attrs[:role_id], reload: true),
-                          error: e.message, status: :unprocessable_content)
+      # A bad role_id reaches this rescue (the operation rejects it) — there is
+      # no role to render an editor for, so 404 instead of crashing the frame.
+      role = graph_role(attrs[:role_id], reload: true)
+      return head :not_found unless role
+
+      render_editor_frame(role, error: e.message, status: :unprocessable_content)
     else
       redirect_to edit_framework_path(@framework.framework_id, **selection_params), alert: e.message
     end
@@ -76,11 +80,15 @@ class Frameworks::LevelsController < ApplicationController
 
     attrs = changed_level_attrs
     if attrs.present?
-      Operations::Frameworks::UpdateLevel.call(
-        context: pundit_user,
-        params: { framework_id: @framework.framework_id, level_id: @level.level_id, **attrs }
-      )
-      clear_other_entry_levels if ActiveModel::Type::Boolean.new.cast(attrs[:is_entry])
+      # One DB transaction so an entry transfer (set + clear-others) is
+      # all-or-nothing — a mid-loop failure can't leave two entry badges.
+      ApplicationRecord.transaction do
+        Operations::Frameworks::UpdateLevel.call(
+          context: pundit_user,
+          params: { framework_id: @framework.framework_id, level_id: @level.level_id, **attrs }
+        )
+        clear_other_entry_levels if ActiveModel::Type::Boolean.new.cast(attrs[:is_entry])
+      end
     end
 
     if editor_request?
