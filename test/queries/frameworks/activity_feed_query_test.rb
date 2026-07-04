@@ -297,6 +297,24 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "EM", entry.payload[:code]
       assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
     end
+
+    should "emit a framework-level level_added entry naming the role, in the structural group" do
+      family = create(:framework_role_family, framework_id: @fwid, tenant: @tenant)
+      role = create(:framework_role, role_family_id: family.role_family_id, tenant: @tenant,
+        name: "Engineering Manager", code: "EM")
+      append(Frameworks::Events::LevelAdded,
+        data: { framework_id: @fwid, level_id: SecureRandom.uuid_v7, role_id: role.role_id,
+                ordinal: 4, title: "Senior EM", code: "EM4", is_entry: false },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "level_added" }
+      assert entry
+      assert_nil entry.capability_id, "level adds carry no matrix anchor"
+      assert_equal "EM · Engineering Manager", entry.payload[:level_role_label]
+      assert_equal 4, entry.payload[:ordinal]
+      assert_equal "Senior EM", entry.payload[:title]
+      assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+    end
   end
 
   context "binding lifecycle" do

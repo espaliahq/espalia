@@ -194,6 +194,12 @@ class Frameworks::Aggregate
     ensure_draft_in_progress!
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
     raise "Level #{level_id} already exists" if @levels.key?(level_id)
+    # The merged-level grid keys rows by ordinal per role — enforce uniqueness
+    # here (serialized against the stream), not just in the Operation's
+    # advisory pre-check, so no dispatch path can create a duplicate.
+    if @levels.values.any? { |l| l[:role_id] == role_id && l[:ordinal] == ordinal }
+      raise "Role #{role_id} already has a level at ordinal #{ordinal}"
+    end
 
     apply(Frameworks::Events::LevelAdded.new(data: {
       framework_id: framework_id,

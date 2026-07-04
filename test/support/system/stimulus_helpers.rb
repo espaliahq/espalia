@@ -198,14 +198,23 @@ module StimulusHelpers
 
   # Like +click_link_with_js_fallback+ but for buttons (incl. form submits).
   #
+  # Pass +expect_no_text+ when the click's success signal is content
+  # *disappearing* (e.g. "Stop impersonating" removing the banner). An
+  # appearance signal must be text that only exists AFTER the click — text
+  # already on the page satisfies the landed-check instantly and the fallback
+  # never arms, so a dropped click sails through to the caller's assertions.
+  #
   # @param locator [String] button text/locator
   # @param expect_text [String, nil] text expected after the click
   # @param expect_selector [String, nil] selector expected after the click
-  def click_button_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
-    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+  # @param expect_no_text [String, nil] text expected to DISAPPEAR after the click
+  def click_button_with_js_fallback(locator, expect_text: nil, expect_selector: nil, expect_no_text: nil)
+    unless expect_text || expect_selector || expect_no_text
+      raise ArgumentError, "expect_text, expect_selector, or expect_no_text required"
+    end
 
     click_button locator
-    return if landed?(expect_text, expect_selector, wait: 8)
+    return if landed?(expect_text, expect_selector, expect_no_text, wait: 8)
 
     # First click dropped — fall back to JS click, which fires synchronously
     # and bypasses Selenium pointer hit-testing.
@@ -219,7 +228,7 @@ module StimulusHelpers
       if (btn) btn.click();
     JS
 
-    return if landed?(expect_text, expect_selector, wait: 8)
+    return if landed?(expect_text, expect_selector, expect_no_text, wait: 8)
 
     # JS click also dropped (or the synthetic click event bypassed Turbo's
     # submit interceptor). Submit the button's form via requestSubmit() —
@@ -236,16 +245,20 @@ module StimulusHelpers
 
     if expect_text
       assert_text expect_text, wait: Capybara.default_max_wait_time
-    else
+    elsif expect_selector
       assert_selector expect_selector, wait: Capybara.default_max_wait_time
+    else
+      assert_no_text expect_no_text, wait: Capybara.default_max_wait_time
     end
   end
 
-  def landed?(expect_text, expect_selector, wait:)
+  def landed?(expect_text, expect_selector, expect_no_text = nil, wait:)
     if expect_text
       page.has_text?(expect_text, wait: wait)
-    else
+    elsif expect_selector
       page.has_css?(expect_selector, wait: wait)
+    else
+      page.has_no_text?(expect_no_text, wait: wait)
     end
   end
 

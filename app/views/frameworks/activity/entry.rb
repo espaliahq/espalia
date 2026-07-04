@@ -43,6 +43,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "level_updated"             => "bg-indigo-500",
     "role_family_added"         => "bg-emerald-500",
     "role_added"                => "bg-emerald-500",
+    "level_added"               => "bg-emerald-500",
     "draft_opened"              => "bg-purple-500",
     "version_published"         => "bg-green-600",
     "migration_mapping_defined" => "bg-purple-500",
@@ -75,6 +76,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "category_archived"         => "structural",
     "role_family_added"         => "structural",
     "role_added"                => "structural",
+    "level_added"               => "structural",
     "binding_added"             => "structural",
     "binding_updated"           => "structural",
     "binding_removed"           => "structural",
@@ -301,6 +303,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "level_updated"       then org_update_summary("level", title: "title", code: "code")
     when "role_family_added"   then "Added a role family"
     when "role_added"          then "Added a role"
+    when "level_added"         then level_added_summary
     when "draft_opened"        then draft_opened_summary
     when "version_published"   then "Published v#{payload_value(:version)}"
     when "migration_mapping_defined" then "Defined a migration mapping"
@@ -314,6 +317,14 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def draft_opened_summary
     base = "Opened draft v#{payload_value(:target_version)}"
     payload_value(:auto_opened) ? "#{base} (auto)" : base
+  end
+
+  # "Added L4 to EM · Engineering Manager" — the level's ordinal plus the role
+  # it belongs to, when the role label resolved (nil-safe for history).
+  def level_added_summary
+    base = "Added L#{payload_value(:ordinal)}"
+    role = payload_value(:level_role_label)
+    role.present? ? "#{base} to #{role}" : base
   end
 
   # Summary for a direct org-structure edit (role family / role / level) that
@@ -384,6 +395,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
       payload_value(:name)
     when "role_added"
       [ payload_value(:code), payload_value(:name) ].compact_blank.join(" · ").presence
+    when "level_added"
+      [ payload_value(:code), payload_value(:title) ].compact_blank.join(" · ").presence
     when "level_updated"
       payload_value(:title)
     when "migration_mapping_defined"

@@ -450,6 +450,18 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   from the view-mode tree, wiggled in the edit-mode tree (see *Ghost
   org-structure entities* below). An empty family shows an explicit "No roles
   yet" line where its "+ Add role" affordance sits.
+- **"+ level" (add a level)** — hover-revealed on each tree **role row** (edit +
+  `can_edit_structure`), NOT the matrix header: a ghost role has no columns
+  yet, so the tree is the only surface that can always reach it. Opens the
+  `AddLevelModal` prefilled with the role and its next free ordinal (computed
+  against the graph, draft levels included); captures ordinal + title + code +
+  the entry flag. Dispatches `Operations::Frameworks::AddLevel` (web + MCP) —
+  **shape-changing**: the aggregate auto-opens a draft and the level is
+  deferred from the published read model until publish, so the parent role
+  stays a ghost meanwhile. The submit redirects back to the edit explorer
+  (selection preserved via `tree-scope-fields`) so the draft column, the
+  draft pill, and the flash land in one render. The operation guards duplicate
+  ordinals per role (the aggregate only guards level ids).
 
 **Ghost org-structure entities.** A role with **no published level** (freshly
 added live, or its levels still draft-born) — and a family with no such role —
@@ -909,8 +921,9 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > Turbo Stream and bumps the running count — cursor-paginated on `before:` (the
 > oldest loaded event id) with a `loaded` running total. `activity_more_controller`
 > issues the request; a live broadcast reload resets to the most-recent batch.
-> Role-family / role **adds** now surface too (structural group, framework-level
-> anchor). Still deferred (note when adding): level adds, reorders, and threaded
+> Role-family / role / **level adds** now surface too (structural group,
+> framework-level anchor; the level entry names its role — "Added L4 to EM ·
+> Engineering Manager"). Still deferred (note when adding): reorders and threaded
 > suggestion comments (`SuggestionCommented` unwired). The
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
 > standalone suggestion index, not the pane.
@@ -969,6 +982,9 @@ line (§9).
 | `app/views/frameworks/explorer/concerns/ghost_entities.rb` | Ghost predicates (`published_role?` / `ghost_role?` / `ghost_role_family?`) + tooltip copy — "not visible in the published view yet", derived from published-level presence |
 | `app/javascript/controllers/add_role_form_controller.js` | Prefills the add-role modal from the "+ Add role" trigger (hidden family id + context line); selection rides along via `tree-scope-fields` |
 | `app/operations/operations/frameworks/{add_role_family,add_role}.rb` | Shared web + MCP operations — org-structure adds (shape-preserving, live; new entity is a ghost until publish) |
+| `app/operations/operations/frameworks/add_level.rb` | Shared web + MCP operation — add a level (shape-changing: auto-opens a draft, deferred until publish; guards duplicate ordinals against the graph) |
+| `app/views/frameworks/explorer/add_level_modal.rb` | Shared "new level" modal (ordinal + title + code + entry flag; role implied by the role-row "+ level" trigger) → `Frameworks::LevelsController#create` |
+| `app/javascript/controllers/add_level_form_controller.js` | Prefills the add-level modal from the "+ level" trigger (role id/name + next free ordinal); selection rides along via `tree-scope-fields` |
 | `app/views/frameworks/explorer/department_name_frame.rb` | Department group header; inline-renameable in edit mode → bulk relabel of every family in the group |
 | `app/javascript/controllers/role_family_edit_form_controller.js` | Prefills the role-family dialog from the trigger dataset (`:edit` fills, `:new` clears); copies the current `roles[]`/`track` selection from the URL so the re-rendered tree stays checked |
 | `app/javascript/controllers/tree_scope_fields_controller.js` | Injects the current `roles[]`/`track` selection into a form at submit (`formdata` event) — used by the department-rename inline editor |
@@ -1038,7 +1054,7 @@ line (§9).
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
-| `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; `role_families`/`roles` also serve POST creates from the add modals → `{AddRoleFamily,AddRole}` (re-render the `role-tree-families` frame). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
+| `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; all three also serve POST creates from the add modals → `{AddRoleFamily,AddRole,AddLevel}` (`role_families`/`roles` re-render the `role-tree-families` frame; `levels` redirects to the edit explorer, selection preserved). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |

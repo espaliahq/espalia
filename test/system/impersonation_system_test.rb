@@ -39,8 +39,10 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
     assert_text "Casey Member"
     assert_text "read-only"
 
-    # Stopping returns to root, which renders the Home dashboard.
-    click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
+    # Stopping returns to root — but the Home dashboard text is ALSO on the
+    # impersonated page, so it can't arm the dropped-click fallback. The only
+    # signal unique to a processed stop is the banner disappearing.
+    click_button_with_js_fallback "Stop impersonating", expect_no_text: "Viewing as"
     assert_no_text "Viewing as"
   end
 

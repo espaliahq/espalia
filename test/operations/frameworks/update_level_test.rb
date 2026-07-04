@@ -65,6 +65,33 @@ class Operations::Frameworks::UpdateLevelTest < ActiveSupport::TestCase
         end
       end
     end
+
+    should "flip is_entry on its own — false is a supplied value, not 'nothing to update'" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Operations::Frameworks::UpdateLevel.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, level_id: @level_id, is_entry: true }
+        )
+        assert level.is_entry
+
+        Operations::Frameworks::UpdateLevel.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, level_id: @level_id, is_entry: false }
+        )
+        assert_not level.is_entry
+        assert_not framework.draft_in_progress
+      end
+    end
+
+    should "cast a web-form is_entry string" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Operations::Frameworks::UpdateLevel.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, level_id: @level_id, is_entry: "1" }
+        )
+        assert level.is_entry
+      end
+    end
   end
 
   context "as a plain tenant member" do

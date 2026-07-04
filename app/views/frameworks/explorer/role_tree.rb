@@ -331,6 +331,8 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         role: role, framework_id: @framework_id, mode: @mode
       )
 
+      add_level_trigger(role) if @mode == :edit && @can_edit_structure
+
       button(
         type: "button",
         class: "opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
@@ -340,6 +342,38 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         title: "Solo — focus on this role only"
       ) { "solo" }
     end
+  end
+
+  # Hover-revealed "+ level" trigger on the role row — opens the shared
+  # add-level modal, naming this role and its next free ordinal via the trigger
+  # dataset. Lives on the tree (not the matrix header) so it's reachable for a
+  # ghost role, which has no columns yet.
+  def add_level_trigger(role)
+    button(
+      type: "button",
+      class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
+             "focus-visible:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
+             "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
+             "hover:bg-primary/20 hover:text-primary transition-opacity",
+      data: {
+        action: "click->modal#open",
+        modal_target_id: "add-level-modal",
+        add_level_role_id: role.role_id,
+        add_level_role_name: role.name,
+        add_level_next_ordinal: next_ordinal_for(role),
+        # Draft levels included (graph-sourced) — feeds the modal's instant
+        # duplicate-ordinal validation.
+        add_level_taken_ordinals: role.levels.map(&:ordinal).sort.join(",")
+      },
+      title: "Add level",
+      aria: { label: "Add level to #{role.name}" }
+    ) { "+ level" }
+  end
+
+  # Next free ordinal for the role — max across ALL its levels (draft-added
+  # included; the graph carries them) so the prefill never collides.
+  def next_ordinal_for(role)
+    (role.levels.map(&:ordinal).max || 0) + 1
   end
 
   # ── Helpers ──

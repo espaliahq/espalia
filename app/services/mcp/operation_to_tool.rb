@@ -24,6 +24,8 @@ class Mcp::OperationToTool
     Numeric    => "number",
     TrueClass  => "boolean",
     FalseClass => "boolean",
+    # The Operations::Base `:boolean` sentinel (Ruby has no Boolean class).
+    :boolean   => "boolean",
     Hash       => "object",
     Array      => "array"
   }.freeze

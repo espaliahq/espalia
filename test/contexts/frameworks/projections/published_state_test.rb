@@ -877,10 +877,11 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
 
     should "not broadcast for an event the feed does not surface" do
-      # LevelAdded is (still) not in ActivityFeedQuery::KINDS — RoleAdded, the
-      # previous example here, became feed-relevant with the org-structure adds.
-      event = Frameworks::Events::LevelAdded.new(
-        data: { framework_id: @framework_id, level_id: SecureRandom.uuid_v7 },
+      # FrameworkCreated is the stable non-feed example — RoleAdded and then
+      # LevelAdded (the previous examples) each became feed-relevant as the
+      # org-structure passes landed.
+      event = Frameworks::Events::FrameworkCreated.new(
+        data: { framework_id: @framework_id, name: "X" },
         metadata: { tenant_id: @tenant.id })
 
       broadcasts = capture_activity_broadcasts { @projection.send(:broadcast_framework_activity, event) }

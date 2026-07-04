@@ -111,6 +111,46 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  BooleanFixture = Class.new(Operations::Base) do
+    parameter :flag, :boolean
+    parameter :required_flag, :boolean, required: true
+    def policy_check = nil
+    def perform = params
+  end
+
+  context ":boolean parameter" do
+    should "pass true and false through" do
+      out = BooleanFixture.call(context: build_context, params: { flag: true, required_flag: false })
+      assert_equal true, out[:flag]
+      assert_equal false, out[:required_flag]
+    end
+
+    should "cast the boolean-ish strings web forms submit" do
+      out = BooleanFixture.call(context: build_context, params: { flag: "1", required_flag: "false" })
+      assert_equal true, out[:flag]
+      assert_equal false, out[:required_flag]
+    end
+
+    should "reject an unrecognisable value rather than coerce it truthy" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        BooleanFixture.new(context: build_context, params: { flag: "banana", required_flag: true })
+      end
+      assert_match(/flag must be a boolean/, err.message)
+    end
+
+    should "treat a missing optional boolean as nil (not false)" do
+      out = BooleanFixture.call(context: build_context, params: { required_flag: true })
+      assert_nil out[:flag]
+    end
+
+    should "still enforce required" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        BooleanFixture.new(context: build_context, params: {})
+      end
+      assert_match(/required_flag/, err.message)
+    end
+  end
+
   context "#call pipeline" do
     should "invoke policy_check before perform" do
       events = []

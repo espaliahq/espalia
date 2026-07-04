@@ -368,7 +368,7 @@ end
 | Helper | Replaces |
 |--------|----------|
 | `click_link_with_js_fallback(locator, expect_text:)` | `click_with_retry { click_link "..." }` |
-| `click_button_with_js_fallback(locator, expect_text:)` | `click_with_retry { click_button "..." }` |
+| `click_button_with_js_fallback(locator, expect_text:)` (or `expect_no_text:` when the success signal is content *disappearing* — an appearance signal already on the page can never arm the fallback) | `click_with_retry { click_button "..." }` |
 
 These do one Capybara click, and if the destination text/selector doesn't appear within 8s, dispatch a synchronous `el.click()` via `execute_script` — bypasses Selenium pointer hit-testing entirely so the second attempt is guaranteed to fire.
 
