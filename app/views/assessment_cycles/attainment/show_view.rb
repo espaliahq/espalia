@@ -19,6 +19,12 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
 
   BY_TABS = { "role" => "By role", "family" => "By role family" }.freeze
 
+  # The capability column stays pinned while the role columns scroll
+  # horizontally. Sticky cells need an opaque background (matching their row
+  # over the card) so scrolled content doesn't bleed through; the right border
+  # marks the frozen edge.
+  FROZEN_COLUMN_CLASSES = "sticky left-0 z-[1] border-r border-gray-200 dark:border-gray-700"
+
   # @param result [Reporting::CapabilityAttainment::Result]
   # @param perspective [String] active perspective param key
   # @param by [String] column axis ("role" | "family")
@@ -154,7 +160,7 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   def heatmap_head
     thead do
       tr(class: "border-b border-gray-200 dark:border-gray-700") do
-        th(class: "px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400", scope: "col") { "Capability" }
+        th(class: "#{FROZEN_COLUMN_CLASSES} bg-white px-4 py-3 text-left font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400", scope: "col") { "Capability" }
         groups.each do |group|
           th(class: "px-3 py-3 text-center align-bottom", scope: "col") do
             div(class: "text-sm font-semibold text-gray-900 dark:text-white") { group.label }
@@ -184,7 +190,7 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
 
   def category_row(category)
     tr(class: "border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/60") do
-      th(class: "px-4 py-2 text-left text-xs font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-200", scope: "row") do
+      th(class: "#{FROZEN_COLUMN_CLASSES} bg-gray-50 px-4 py-2 text-left text-xs font-semibold tracking-wide text-gray-700 uppercase dark:bg-gray-800 dark:text-gray-200", scope: "row") do
         category.name
       end
       groups.each do |group|
@@ -207,7 +213,7 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
 
   def capability_row(capability)
     tr(class: "border-b border-gray-100 dark:border-gray-700/60") do
-      th(class: "max-w-56 px-4 py-2 text-left font-normal text-gray-900 dark:text-white", scope: "row") do
+      th(class: "#{FROZEN_COLUMN_CLASSES} max-w-56 bg-white px-4 py-2 text-left font-normal text-gray-900 dark:bg-gray-800 dark:text-white", scope: "row") do
         capability.name
       end
       groups.each do |group|

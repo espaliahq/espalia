@@ -61,6 +61,26 @@ class AssessmentCycles::AttainmentSystemTest < ApplicationSystemTestCase
     assert_not body_overflows, "page body must not scroll horizontally on mobile"
   end
 
+  should "keep the capability column frozen while scrolling right" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    visit attainment_assessment_cycle_path(@cycle)
+    assert_text "Strategic Thinking"
+
+    # Scroll the table's own container fully right; the sticky first column
+    # must stay put (viewport-relative position unchanged).
+    before_left = page.evaluate_script(
+      "document.querySelector('tbody th').getBoundingClientRect().left"
+    )
+    page.execute_script(
+      "const c = document.querySelector('.overflow-x-auto'); c.scrollLeft = c.scrollWidth;"
+    )
+    after_left = page.evaluate_script(
+      "document.querySelector('tbody th').getBoundingClientRect().left"
+    )
+    assert_in_delta before_left, after_left, 1.0,
+      "capability column must stay pinned while the role columns scroll"
+  end
+
   should "switch the perspective and column axis" do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     visit attainment_assessment_cycle_path(@cycle)
