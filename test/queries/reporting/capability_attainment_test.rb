@@ -83,7 +83,7 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
 
       cell = engineer_group.cells[@cap2.stable_id]
       assert_equal 0, cell.n_assessed
-      assert_equal :below, bucket_of(cell, expected_below: 4)
+      assert_equal 4, cell.below
     end
 
     should "expose the row skeleton sorted by category then capability name" do
@@ -272,11 +272,6 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
 
   def family_group(family_key)
     result.families.find { |group| group.key == family_key }
-  end
-
-  def bucket_of(cell, expected_below:)
-    assert_equal expected_below, cell.below
-    :below
   end
 
   def bind(capability, role)
