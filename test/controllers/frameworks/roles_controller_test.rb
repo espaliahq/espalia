@@ -66,6 +66,39 @@ class Frameworks::RolesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "PATCH via the edit dialog (role-tree-families frame)" do
+    should "update code and track and re-render the families frame" do
+      sign_in @user
+      patch framework_role_path(framework_id: @framework_id, id: @role_id),
+            params: { role: { name: "Software Engineer", code: "SE", track: "management" },
+                      roles: [ @role_id ], track: "both" },
+            headers: { "Turbo-Frame" => "role-tree-families" }
+
+      assert_response :success
+      assert_includes response.body, "role-tree-families"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        role = FrameworkState::Role.find_by(role_id: @role_id)
+        assert_equal "SE", role.code
+        assert_equal "management", role.track
+        assert_equal "Software Engineer", role.name
+      end
+    end
+
+    should "forward only changed fields (unchanged name emits no rename)" do
+      sign_in @user
+      patch framework_role_path(framework_id: @framework_id, id: @role_id),
+            params: { role: { name: "Software Engineer", code: "E", track: "ic" } },
+            headers: { "Turbo-Frame" => "role-tree-families" }
+
+      assert_response :success
+      # Nothing changed → no event appended beyond the seed history.
+      events = Rails.configuration.event_store
+        .read.stream("tenant-#{@tenant.id}/Framework-#{@framework_id}").to_a
+      assert_empty events.select { |e| e.is_a?(Frameworks::Events::RoleUpdated) }
+    end
+  end
+
   context "POST /frameworks/:framework_id/roles" do
     should "create the role and re-render the families frame with it ghost-wiggled" do
       sign_in @user

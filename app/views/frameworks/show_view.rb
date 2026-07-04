@@ -104,6 +104,9 @@ class Views::Frameworks::ShowView < Views::Base
     render Views::Frameworks::Explorer::AddRoleModal.new(
       framework_id: @framework.framework_id
     )
+    render Views::Frameworks::Explorer::AddRoleModal.new(
+      framework_id: @framework.framework_id, mode: :edit
+    )
     render Views::Frameworks::Explorer::AddLevelModal.new(
       framework_id: @framework.framework_id
     )
@@ -451,7 +454,8 @@ class Views::Frameworks::ShowView < Views::Base
         action: "tree:changed->matrix#updateSelection " \
                 "framework-search:changed@window->matrix#updateSearch " \
                 "suggestion:navigate@window->matrix#navigateToEntity " \
-                "suggestion:resolved@window->matrix#refresh"
+                "suggestion:resolved@window->matrix#refresh " \
+                "org-structure:updated@window->matrix#refresh"
       }
     ) do
       left_pane

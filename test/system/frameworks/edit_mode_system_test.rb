@@ -717,11 +717,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "#add-role-modal", visible: true
       within "#add-role-modal" do
         assert_text "In Engineering" # family prefilled from the trigger
-        select "Management", from: "add-role-track"
+        select "Management", from: "add-role-modal-track"
       end
       # Assertion-critical values — JS-set + dispatch instead of send_keys.
-      js_set_field "#add-role-name", "Engineering Manager"
-      js_set_field "#add-role-code", "EM"
+      js_set_field "#add-role-modal-name", "Engineering Manager"
+      js_set_field "#add-role-modal-code", "EM"
       click_button_with_js_fallback("Add role", expect_text: "Engineering Manager")
 
       within "[data-controller~='tree']" do

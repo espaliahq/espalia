@@ -341,7 +341,48 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         data: { action: "tree#solo", role_id: role.role_id },
         title: "Solo — focus on this role only"
       ) { "solo" }
+
+      role_actions_kebab(role) if @mode == :edit && @can_edit_structure
     end
+  end
+
+  # Role-row actions kebab (⋮) — the scalable home for the role's dialogs, so
+  # the hover row doesn't accumulate one button per action (the MatrixRow
+  # kebab precedent). "+ level" stays a direct affordance (highest-frequency
+  # during construction); dialogs live here.
+  def role_actions_kebab(role)
+    render Components::Kit::Dropdown.new(align: :left) do |dd|
+      dd.trigger(label: "Role actions") do
+        span(
+          class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
+                 "inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
+                 "text-gray-400 hover:text-primary"
+        ) do
+          svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
+            s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
+                      "6a2 2 0 100 4 2 2 0 000-4z")
+          end
+        end
+      end
+      dd.menu do
+        button(
+          type: "button", role: "menuitem", class: kebab_item_classes,
+          data: {
+            action: "click->modal#open",
+            modal_target_id: "role-edit-modal",
+            role_edit_id: role.role_id,
+            role_edit_name: role.name,
+            role_edit_code: role.code,
+            role_edit_track: role.track
+          }
+        ) { "Edit role…" }
+      end
+    end
+  end
+
+  def kebab_item_classes
+    "w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 " \
+      "hover:bg-gray-100 dark:hover:bg-gray-700"
   end
 
   # Hover-revealed "+ level" trigger on the role row — opens the shared

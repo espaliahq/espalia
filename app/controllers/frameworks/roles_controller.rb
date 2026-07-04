@@ -32,26 +32,49 @@ class Frameworks::RolesController < ApplicationController
   end
 
   # PATCH /frameworks/:framework_id/roles/:id
+  #
+  # Serves both the inline name rename (re-renders the per-role name frame) and
+  # the kebab's edit dialog (name + code + track — re-renders the
+  # `role-tree-families` frame on the `Turbo-Frame` header, selection
+  # preserved; the dialog separately asks the matrix to re-fetch, since code /
+  # track ripple through the header badges).
   def update
     authorize @framework, :update_role?
 
-    Operations::Frameworks::UpdateRole.call(
-      context: pundit_user,
-      params: {
-        framework_id: @framework.framework_id,
-        role_id: @role.role_id,
-        name: params.expect(role: [ :name ])[:name]
-      }
-    )
+    attrs = changed_role_attrs
+    if attrs.present?
+      Operations::Frameworks::UpdateRole.call(
+        context: pundit_user,
+        params: { framework_id: @framework.framework_id, role_id: @role.role_id, **attrs }
+      )
+    end
 
-    render Views::Frameworks::Explorer::RoleNameFrame.new(
-      role: @role.reload, framework_id: @framework.framework_id, mode: :edit
-    ), layout: false
+    if request.headers["Turbo-Frame"] == FAMILIES_FRAME
+      render_role_tree_families_frame(@framework)
+    else
+      render Views::Frameworks::Explorer::RoleNameFrame.new(
+        role: @role.reload, framework_id: @framework.framework_id, mode: :edit
+      ), layout: false
+    end
   rescue Operations::Base::ParameterError
     head :unprocessable_content
   end
 
   private
+
+  # Only forward fields that actually changed (the update event is compacted,
+  # so present keys read as "changed" in the activity feed). A blank name IS
+  # forwarded so the operation rejects it (422 — a role can't be unnamed).
+  def changed_role_attrs
+    permitted = params.expect(role: [ :name, :code, :track ])
+    attrs = {}
+    if permitted.key?(:name) && (permitted[:name].blank? || permitted[:name] != @role.name)
+      attrs[:name] = permitted[:name]
+    end
+    attrs[:code] = permitted[:code] if permitted.key?(:code) && permitted[:code] != @role.code
+    attrs[:track] = permitted[:track] if permitted.key?(:track) && permitted[:track] != @role.track
+    attrs
+  end
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:framework_id))
