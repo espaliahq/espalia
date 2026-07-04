@@ -68,6 +68,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     should "deny create_self_rating" do
       assert_not policy.create_self_rating?
     end
+
+    should "be a rating_participant" do
+      assert policy.rating_participant?
+    end
   end
 
   context "as a skip-level manager (manager's manager)" do
@@ -108,6 +112,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
 
     should "allow delegate_manager_rating (ancestor may set up a delegation)" do
       assert policy.delegate_manager_rating?
+    end
+
+    should "not be a rating_participant (view-only hero copy)" do
+      assert_not policy.rating_participant?
     end
   end
 

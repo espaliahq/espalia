@@ -49,7 +49,7 @@ class AssessmentsController < ApplicationController
     load_assessment_data
     active_category_id = resolve_active_category_id
     context = assessment_context
-    policy = AssessmentPolicy.new(pundit_user, @assignment)
+    policy = assignment_policy
     activity_entries = load_activity_entries
     can_relink_others = viewer_can_relink_others_evidence?
     if manager_viewing?
@@ -76,6 +76,7 @@ class AssessmentsController < ApplicationController
         can_manage_delegates: policy.delegate_manager_rating?,
         active_delegations: load_active_delegations(policy),
         candidate_delegates: load_candidate_delegates(policy),
+        viewer_can_rate: policy.rating_participant?,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -137,7 +138,8 @@ class AssessmentsController < ApplicationController
       viewer_is_manager: manager_viewing?,
       active_category_id: resolve_active_category_id,
       assessment_id: @assignment.id,
-      assessee_name: manager_viewing? ? @assessee&.name : nil
+      assessee_name: manager_viewing? ? @assessee&.name : nil,
+      viewer_can_rate: assignment_policy.rating_participant?
     ), layout: false
   end
 
@@ -223,11 +225,14 @@ class AssessmentsController < ApplicationController
   def apply_viewer_rating_lock
     return unless manager_viewing?
 
-    policy = AssessmentPolicy.new(pundit_user, @assignment)
-    @matrix_data[:individual_ratings_frozen] = true unless policy.create_manager_rating?
-    if assessment_context == :alignment && !policy.create_alignment_rating?
+    @matrix_data[:individual_ratings_frozen] = true unless assignment_policy.create_manager_rating?
+    if assessment_context == :alignment && !assignment_policy.create_alignment_rating?
       @matrix_data[:alignment_locked] = true
     end
+  end
+
+  def assignment_policy
+    @assignment_policy ||= AssessmentPolicy.new(pundit_user, @assignment)
   end
 
   # `viewer_sees_all_evidence?`, `viewer_can_relink_others_evidence?`, and

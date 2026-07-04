@@ -42,13 +42,17 @@ class Views::Assessments::HeroSummary < Views::Base
   # @param can_start_alignment [Boolean]
   # @param can_complete_alignment [Boolean]
   # @param assessee_name [String, nil]
+  # @param viewer_can_rate [Boolean] whether the viewer can act on the
+  #   "rate" prompts (assessee, recorded manager, or active delegate).
+  #   False for view-only manager-chain ancestors — the priming hero then
+  #   renders passive copy and every rate-CTA is withheld.
   def initialize(scoring:, categories:, person_level:, merged_levels:,
                  mastery_threshold:, meeting_expectation_threshold:,
                  assessment_id:, context: :self, viewer_is_manager: false,
                  assignment: nil,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
                  can_start_alignment: false, can_complete_alignment: false,
-                 assessee_name: nil)
+                 assessee_name: nil, viewer_can_rate: true)
     @scoring = scoring
     @viewer_is_manager = viewer_is_manager
     @self_scoring = self_scoring
@@ -65,6 +69,7 @@ class Views::Assessments::HeroSummary < Views::Base
     @can_start_alignment = can_start_alignment
     @can_complete_alignment = can_complete_alignment
     @assessee_name = assessee_name
+    @viewer_can_rate = viewer_can_rate
   end
 
   def view_template
@@ -130,7 +135,7 @@ class Views::Assessments::HeroSummary < Views::Base
         div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
           h2(class: "text-xl font-bold text-gray-900 dark:text-white") { verdict_headline }
           promotion_pill
-          continue_assessing_cta(target) if target
+          continue_assessing_cta(target) if target && @viewer_can_rate
           coverage_chip if @context != :alignment && !coverage_complete?
         end
         # Gloss + divergent secondary verdicts share one line as long
@@ -163,7 +168,7 @@ class Views::Assessments::HeroSummary < Views::Base
         div(class: "min-w-0 flex-1") do
           h2(class: "text-xl font-bold text-gray-900 dark:text-white") { priming_headline }
           p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") { priming_gloss }
-          div(class: "mt-3") { priming_cta(target) } if target
+          div(class: "mt-3") { priming_cta(target) } if target && @viewer_can_rate
         end
         div(class: "text-right shrink-0") do
           span(class: "text-4xl font-bold leading-none text-gray-900 dark:text-white tabular-nums") do
@@ -177,7 +182,11 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def priming_headline
-    if @context == :self
+    if !@viewer_can_rate
+      # View-only chain ancestor — an imperative "Rate …" would prompt an
+      # action this viewer isn't permitted to take.
+      @assessee_name.present? ? "No score for #{@assessee_name.split.first} yet" : "No score yet"
+    elsif @context == :self
       "Rate yourself to see your score"
     elsif @assessee_name.present?
       "Rate #{@assessee_name.split.first} to see their score"
@@ -188,6 +197,10 @@ class Views::Assessments::HeroSummary < Views::Base
 
   def priming_gloss
     level_code = level_code(@person_level) || "L#{@person_level}"
+    unless @viewer_can_rate
+      return "The score appears once at least half of these #{level_code} capabilities are rated."
+    end
+
     whose = @context == :self ? "your" : "these"
     "Rate at least half of #{whose} #{level_code} capabilities and the score appears."
   end

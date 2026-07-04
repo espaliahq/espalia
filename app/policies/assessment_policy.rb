@@ -18,6 +18,17 @@ class AssessmentPolicy < ApplicationPolicy
       active_rating_delegate?
   end
 
+  # Whether the viewer is an active rating-side participant — the assessee,
+  # the recorded reporting manager, or an active rating delegate — as opposed
+  # to a view-only manager-chain ancestor. Phase-independent (ignores cycle
+  # freezing): drives UI copy such as the hero's "Rate …" prompts, not access
+  # control.
+  #
+  # @return [Boolean]
+  def rating_participant?
+    owns_assessment? || manages_assessee? || active_rating_delegate?
+  end
+
   # @return [Boolean]
   def matrix? = show?
 

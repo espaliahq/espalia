@@ -16,14 +16,18 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
   #   Nil in self view, where the hero uses "You're …" copy.
   # @param viewer_is_manager [Boolean] viewer is the manager-side party —
   #   orders the alignment secondary percentages viewer-first.
+  # @param viewer_can_rate [Boolean] false for view-only manager-chain
+  #   ancestors — the hero withholds its "Rate …" copy and CTAs.
   def initialize(matrix_data:, context: :self, viewer_is_manager: false,
-                 active_category_id: nil, assessment_id: nil, assessee_name: nil)
+                 active_category_id: nil, assessment_id: nil, assessee_name: nil,
+                 viewer_can_rate: true)
     @matrix_data = matrix_data
     @context = context
     @viewer_is_manager = viewer_is_manager
     @active_category_id = active_category_id
     @assessment_id = assessment_id
     @assessee_name = assessee_name
+    @viewer_can_rate = viewer_can_rate
   end
 
   def view_template
@@ -41,7 +45,8 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
         assessment_id: @assessment_id,
         context: @context,
         viewer_is_manager: @viewer_is_manager,
-        assessee_name: @assessee_name
+        assessee_name: @assessee_name,
+        viewer_can_rate: @viewer_can_rate
       )
     end
   end

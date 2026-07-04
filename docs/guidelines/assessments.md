@@ -95,6 +95,7 @@ Before enough current-level capabilities are rated, the hero does **not** show a
 - **`unlock_target`** = `(current_level_total * 0.5).ceil`. The bar fills toward this target (not 100%) — a concrete "Score unlocks at 6" reads as a closer goal than an abstract %.
 - **Once unlocked, the score is shown as-is** (option 1) — remaining unrated current-level cells still depress it, and the "X of Y rated" chip is the signal that it will keep moving. We deliberately do **not** score provisionally over only-rated cells (that would let the score *drop* at completion — confusing).
 - **`:alignment` context is exempt** — it always shows the scoring hero (individual ratings are frozen by then and coverage is high by construction). A role with zero current-level cells also unlocks, to avoid a permanently-stuck prompt.
+- **View-only viewers get passive copy.** A manager-chain ancestor without rating authority (`AssessmentPolicy#rating_participant?` false, threaded as `viewer_can_rate:` from the controller through `ManagerShowView` / `ScoringPanelFrameView`) sees "No score for `<name>` yet" instead of the "Rate `<name>` …" imperative, and neither the priming "Rate next capability" CTA nor the unlocked header's Continue chip renders — those prompt an action the viewer can't take.
 - Later: `COVERAGE_UNLOCK_THRESHOLD` could become framework-configurable like the other scoring thresholds.
 
 ### Header band

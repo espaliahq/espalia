@@ -420,6 +420,11 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # View-only: no interactive manager-rating form anywhere on the page —
       # the pill renders as a static span for a chain ancestor who can't rate.
       assert_no_selector "form[action*='manager_ratings']", visible: :all
+
+      # The priming hero renders passive copy — no "Rate …" imperative or
+      # rate-next CTA for a viewer without rating authority.
+      assert_text "No score for Report yet"
+      assert_no_text "Rate next capability"
     end
   end
 end

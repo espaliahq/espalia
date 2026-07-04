@@ -211,6 +211,19 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       # View-only: no interactive manager-rating form may render for a
       # chain ancestor who is not the recorded reporting manager.
       assert_not_includes response.body, assessment_manager_ratings_path(@assignment)
+      # The priming hero renders passive copy — no "Rate …" imperative or
+      # rate-next CTA for a viewer without rating authority.
+      assert_includes response.body, "No score for #{@person.name.split.first} yet"
+      assert_not_includes response.body, "Rate next capability"
+    end
+
+    should "keep the imperative priming hero for the direct manager" do
+      sign_in @manager_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Rate #{@person.name.split.first} to see their score"
+      assert_includes response.body, "Rate next capability"
     end
 
     should "keep the manager-rating form interactive for the direct manager" do
