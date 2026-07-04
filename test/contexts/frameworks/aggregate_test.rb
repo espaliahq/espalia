@@ -175,6 +175,25 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       end
       assert_match /not found/, err.message
     end
+
+    should "raise on a duplicate ordinal for the same role" do
+      @aggregate.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 1, "Engineer I", "E1")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 1, "Dup", "D1")
+      end
+      assert_match /already has a level at ordinal 1/, err.message
+    end
+
+    should "allow the same ordinal on a different role (merged columns are per-ordinal)" do
+      other_rid = SecureRandom.uuid_v7
+      @aggregate.add_role(@framework_id, other_rid, @rfid, "Engineering Manager", "EM", "management")
+      @aggregate.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 1, "Engineer I", "E1")
+
+      assert_nothing_raised do
+        @aggregate.add_level(@framework_id, SecureRandom.uuid_v7, other_rid, 1, "EM I", "EM1")
+      end
+    end
   end
 
   # ── Capability Categories ──
