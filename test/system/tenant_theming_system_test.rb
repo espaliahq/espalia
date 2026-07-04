@@ -31,20 +31,26 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
 
       # Find the tenant-switch form directly by its action URL — bypasses any
       # dropdown visibility race and pointer-click dropouts on starved CI.
-      # The form is in the DOM from server render; opening the dropdown only
-      # toggles its visibility, not its presence.
-      switch_path = users_tenant_switch_path
-      page.execute_script(<<~JS)
-        const form = document.querySelector("form[action='#{switch_path}']");
-        form?.requestSubmit();
-      JS
+      # The form is in the DOM from server render (non-current tenants only,
+      # so with two tenants it's unambiguous); opening the dropdown only
+      # toggles its visibility, not its presence. Assert presence first — a
+      # silent `form?.` no-op turned any drift into a baffling
+      # style-unchanged failure on CI.
+      switch_selector = "form[action='#{users_tenant_switch_path}']"
+      assert_selector switch_selector, visible: :all, count: 1
+
+      submit_switch = -> { page.execute_script("document.querySelector(#{switch_selector.inspect}).requestSubmit();") }
+      submit_switch.call
       screenshot("after_switch")
 
-      # The tenant switch is a form POST that re-renders the page with new
-      # theme variables. Read the style only after Capybara has waited for
-      # the new DOM to commit — has_no_xpath? polls within Capybara's wait.
+      # The switch is a Turbo form POST that re-renders the page with new
+      # theme variables. On a starved runner the fetch itself has been
+      # observed to drop — re-submit once if the style hasn't changed.
+      changed_xpath = "//style[@id='tenant-theme'][text()=#{initial_style.inspect}]"
+      submit_switch.call unless page.has_no_xpath?(changed_xpath, wait: 8)
+
       assert page.has_no_xpath?(
-        "//style[@id='tenant-theme'][text()=#{initial_style.inspect}]",
+        changed_xpath,
         wait: Capybara.default_max_wait_time
       ), "CSS variables should change after tenant switch"
 
