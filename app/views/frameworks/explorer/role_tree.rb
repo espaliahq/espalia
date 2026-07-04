@@ -376,6 +376,14 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
             role_edit_track: role.track
           }
         ) { "Edit role…" }
+        button(
+          type: "button", role: "menuitem", class: kebab_item_classes,
+          data: {
+            action: "click->modal#open",
+            modal_target_id: "level-editor-modal",
+            level_editor_role_id: role.role_id
+          }
+        ) { "Edit levels…" }
       end
     end
   end
