@@ -7,6 +7,8 @@
 # When many roles are selected, shows compact level codes.
 #
 class Views::Frameworks::Explorer::MatrixHeader < Views::Base
+  include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+
   # Threshold: show full titles when this many or fewer distinct roles
   FULL_TITLE_THRESHOLD = 3
 
@@ -66,7 +68,8 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
         if @mode == :edit && rc[:level_id]
           render Views::Frameworks::Explorer::LevelTitleFrame.new(
             level_id: rc[:level_id], title: rc[:level_title],
-            framework_id: @framework_id, mode: @mode
+            framework_id: @framework_id, mode: @mode,
+            added_in_draft: rc[:added_in_draft]
           )
         else
           span(class: "text-xs text-gray-600 dark:text-gray-300") { rc[:level_title] }
@@ -82,8 +85,9 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
         span(
           class: "inline-flex items-center rounded-full px-2 py-0.5 " \
                  "text-[10px] font-medium bg-gray-200 dark:bg-gray-700 " \
-                 "text-gray-600 dark:text-gray-300",
-          title: rc[:level_title]
+                 "text-gray-600 dark:text-gray-300 " \
+                 "#{suggestion_text_classes(added_in_draft: rc[:added_in_draft])}".strip,
+          title: [ rc[:level_title], draft_change_title(rc[:added_in_draft]) ].compact.join(" — ")
         ) { rc[:level_code] }
       end
     end

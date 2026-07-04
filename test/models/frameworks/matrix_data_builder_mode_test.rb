@@ -122,6 +122,12 @@ class Frameworks::MatrixDataBuilderModeTest < ActiveSupport::TestCase
       assert_equal [ 1, 2 ], ordinals
     end
 
+    should "flag draft-born levels in role_codes so header badges can wiggle them" do
+      by_ordinal = @result[:merged_levels].index_by { |l| l[:ordinal] }
+      assert_not by_ordinal[1][:role_codes].first[:added_in_draft]
+      assert by_ordinal[2][:role_codes].first[:added_in_draft]
+    end
+
     should "include draft expectations in cells" do
       cap_row = @result[:categories].first[:capabilities].find { |c| c[:capability].name == "Live Capability" }
       assert_not_nil cap_row[:cells][2], "draft expectation at level 2 should appear in edit mode"

@@ -19,7 +19,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
       @rfid = rfid = SecureRandom.uuid_v7
-      rid = SecureRandom.uuid_v7
+      @rid = rid = SecureRandom.uuid_v7
       cat_id = SecureRandom.uuid_v7
       cap_id = SecureRandom.uuid_v7
       eid = SecureRandom.uuid_v7
@@ -754,9 +754,38 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       click_button_with_js_fallback("Add level", expect_text: "Added level")
 
       # Shape-changing: the draft opened (auto), and the edit-mode matrix
-      # renders the new draft column immediately.
+      # renders the new draft column immediately — its title wiggled (the
+      # differs-from-published signal) in the header.
       assert_text "v2 draft"
       assert_text "Level 2"
+      within "thead" do
+        assert_selector "span.decoration-wavy", text: "Engineer II"
+      end
+    end
+
+    should "replace the header title with the inline editor, not render beside it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second level so the full-title header has content to edit at L2.
+        handler = Frameworks::CommandHandler.new
+        handler.add_level(@framework_id, SecureRandom.uuid_v7, @rid, 2, "Engineer II", "E2")
+      end
+
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      frame = find("turbo-frame[id^='level-title-']", match: :first)
+      page.execute_script(
+        "arguments[0].querySelector('[data-inline-editor-target=\"display\"] button').click();", frame
+      )
+
+      within frame do
+        assert_selector "form", visible: true
+        # The display target must actually hide — `hidden` loses to a
+        # competing `inline-flex` on the same element (assessments.md
+        # Lesson 17), which left the editor rendering BESIDE the title.
+        assert_no_selector "[data-inline-editor-target='display']", visible: true
+      end
     end
 
     should "block a duplicate ordinal inline, in the modal, without a round-trip" do
