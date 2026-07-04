@@ -11,6 +11,10 @@
 class AssessmentsController < ApplicationController
   include AssessmentVisibility
 
+  # Skip-level subtrees can be large for senior managers — the section is
+  # paginated rather than rendering an unbounded card grid.
+  SKIP_LEVEL_PAGE_SIZE = 12
+
   before_action :require_person
   before_action :set_assignment, only: [ :show, :matrix, :scoring ]
 
@@ -21,7 +25,9 @@ class AssessmentsController < ApplicationController
       .includes(:framework, :role, :level)
     reviewable = Assessments::ReviewableAssignments.new(current_person)
     @report_assignments = reviewable.team
-    @skip_level_assignments = reviewable.skip_level
+    @skip_level_pagy, @skip_level_assignments = pagy(
+      reviewable.skip_level, limit: SKIP_LEVEL_PAGE_SIZE, page_key: "skip_page"
+    )
     @report_people = Person.where(
       id: (@report_assignments.map(&:person_id) + @skip_level_assignments.map(&:person_id)).uniq
     ).index_by(&:id)
@@ -35,6 +41,7 @@ class AssessmentsController < ApplicationController
       assignments: @own_assignments,
       report_assignments: @report_assignments,
       skip_level_assignments: @skip_level_assignments,
+      skip_level_pagy: @skip_level_pagy,
       report_people: @report_people,
       open_cycles: @open_cycles,
       card_statuses: @card_statuses,

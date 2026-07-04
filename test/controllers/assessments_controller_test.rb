@@ -195,6 +195,37 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Team Assessments"
     end
 
+    should "paginate the skip-level section beyond #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE} assignments" do
+      skip_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        grand_manager = create(:person, tenant: @tenant, email: skip_user.email, name: "Grand Manager")
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: grand_manager)
+        @manager.update!(manager: grand_manager)
+
+        handler = PersonDevelopment::CommandHandler.new
+        AssessmentsController::SKIP_LEVEL_PAGE_SIZE.times do |i|
+          extra = create(:person, tenant: @tenant, name: "Extra Skip #{i}", manager: @manager)
+          handler.assign_to_framework(extra.id, @framework.framework_id, @role.role_id, @level.level_id)
+        end
+      end
+
+      sign_in skip_user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Page 1 of 2"
+      # 13 skip-level assignments, ordered by id (creation order): the last
+      # one created falls on page 2.
+      assert_not_includes response.body, "Extra Skip #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE - 1}"
+
+      get assessments_path(skip_page: 2)
+
+      assert_response :success
+      assert_includes response.body, "Page 2 of 2"
+      assert_includes response.body, "Extra Skip #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE - 1}"
+      assert_not_includes response.body, "Extra Skip 0"
+    end
+
     should "render read-only manager view for a skip-level manager" do
       skip_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do

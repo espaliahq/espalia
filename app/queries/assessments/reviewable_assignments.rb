@@ -30,6 +30,10 @@ class Assessments::ReviewableAssignments
     end
   end
 
+  # Deterministically ordered (oldest assignment first; id tiebreak — the PK
+  # is a deterministic UUIDv5, so it is stable but not time-ordered) so
+  # offset pagination is stable.
+  #
   # @return [ActiveRecord::Relation<PersonFrameworkAssignment>]
   def skip_level
     @skip_level ||= begin
@@ -42,7 +46,7 @@ class Assessments::ReviewableAssignments
           rel = PersonFrameworkAssignment.where(person_id: skip_person_ids)
           team_ids.any? ? rel.where.not(id: team_ids) : rel
         end
-      preload(scope)
+      preload(scope.order(:created_at, :id))
     end
   end
 

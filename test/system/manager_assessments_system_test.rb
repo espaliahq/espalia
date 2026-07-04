@@ -426,5 +426,26 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "No score for Report yet"
       assert_no_text "Rate next capability"
     end
+
+    should "page through a large skip-level section" do
+      page_size = AssessmentsController::SKIP_LEVEL_PAGE_SIZE
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        level = FrameworkState::Level.find_by!(level_id: @level2_id)
+        page_size.times do |i|
+          extra = FactoryBot.create(:person, tenant: @tenant, name: "Extra Skip #{i}", manager: @manager)
+          handler.assign_to_framework(extra.id, @framework_id, @role_id, level.level_id)
+        end
+      end
+
+      visit assessments_path
+      assert_text "Skip-Level Assessments"
+      assert_text "Page 1 of 2"
+      assert_no_text "Extra Skip #{page_size - 1}"
+
+      click_link_with_js_fallback("Next →", expect_text: "Extra Skip #{page_size - 1}")
+      assert_text "Page 2 of 2"
+      assert_no_text "Extra Skip 0"
+    end
   end
 end
