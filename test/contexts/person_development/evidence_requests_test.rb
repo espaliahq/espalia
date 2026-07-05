@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/projection_replay"
 
 # Exercises the evidence-request lifecycle end to end: command handler →
 # aggregate → events → EvidenceRequests projection → EvidenceRequest read model.
 class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
+  include ProjectionReplayHelpers
+
   setup do
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
@@ -165,6 +168,27 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
       end
+    end
+
+    # The reason reminders are events, not job-written columns: a projection
+    # rebuild must reproduce reminder state, or the next sweep re-nudges
+    # everyone whose request is still pending.
+    should "survive reset! + replay with identical read-model state" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      before_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceRequests, @tenant)
+      assert_not_nil before_snapshot[:evidence_requests].first["no_response_reminded_at"]
+
+      PersonDevelopment::Projections::EvidenceRequests.reset!(tenant: @tenant)
+      assert_equal 0, EvidenceRequest.count
+
+      Projections::Replayer.replay(
+        projection_class: PersonDevelopment::Projections::EvidenceRequests,
+        tenant: @tenant
+      )
+
+      assert_equal before_snapshot, snapshot_read_models(PersonDevelopment::Projections::EvidenceRequests, @tenant)
     end
   end
 end
