@@ -19,7 +19,8 @@ class PersonDevelopment::Projections::EvidenceRequests
       PersonDevelopment::Events::EvidenceRequested,
       PersonDevelopment::Events::EvidenceRequestResponded,
       PersonDevelopment::Events::EvidenceRequestDeclined,
-      PersonDevelopment::Events::EvidenceRequestCancelled
+      PersonDevelopment::Events::EvidenceRequestCancelled,
+      PersonDevelopment::Events::EvidenceRequestReminderSent
     ]
   end
 
@@ -44,6 +45,7 @@ class PersonDevelopment::Projections::EvidenceRequests
     when PersonDevelopment::Events::EvidenceRequestResponded then handle_responded(event)
     when PersonDevelopment::Events::EvidenceRequestDeclined then handle_declined(event)
     when PersonDevelopment::Events::EvidenceRequestCancelled then handle_cancelled(event)
+    when PersonDevelopment::Events::EvidenceRequestReminderSent then handle_reminder_sent(event)
     end
   end
 
@@ -87,6 +89,14 @@ class PersonDevelopment::Projections::EvidenceRequests
     EvidenceRequest.where(id: event.data[:request_id]).update_all(
       status: "cancelled",
       cancelled_at: event.metadata[:timestamp],
+      updated_at: Time.current
+    )
+  end
+
+  def handle_reminder_sent(event)
+    column = event.data[:kind] == "due_soon" ? :due_soon_reminded_at : :no_response_reminded_at
+    EvidenceRequest.where(id: event.data[:request_id]).update_all(
+      column => event.metadata[:timestamp],
       updated_at: Time.current
     )
   end

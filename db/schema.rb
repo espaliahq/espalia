@@ -188,10 +188,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_092447) do
     t.text "decline_reason"
     t.datetime "declined_at"
     t.datetime "due_at"
+    t.datetime "due_soon_reminded_at"
     t.uuid "evidence_id"
     t.uuid "framework_id", null: false
     t.integer "level_ordinal", null: false
     t.text "message"
+    t.datetime "no_response_reminded_at"
     t.uuid "person_id", null: false
     t.datetime "requested_at", null: false
     t.uuid "requested_by_id", null: false

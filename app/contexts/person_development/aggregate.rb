@@ -28,6 +28,7 @@ class PersonDevelopment::Aggregate
   FREQUENCIES = %w[none some occasional consistent].freeze
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
+  EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon].freeze
 
   def initialize
     @person_id = nil
@@ -877,6 +878,26 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # Record that the requestee was nudged about a still-pending request.
+  #
+  # System-initiated (the reminder sweep); each kind fires at most once per
+  # request, so a sweep that races a response — or re-runs — is rejected here
+  # rather than double-pinging the requestee.
+  #
+  # @param kind [String] "no_response" | "due_soon"
+  # @raise [CommandError] if not assigned, request unknown, not pending,
+  #   kind unknown, or this kind was already sent
+  def remind_evidence_request(request_id, kind:)
+    state = pending_request!(request_id)
+    raise CommandError, "Unknown reminder kind #{kind}" unless EVIDENCE_REQUEST_REMINDER_KINDS.include?(kind.to_s)
+    raise CommandError, "#{kind} reminder already sent" if state[:reminder_kinds]&.include?(kind.to_s)
+
+    apply(PersonDevelopment::Events::EvidenceRequestReminderSent.new(data: {
+      request_id: request_id,
+      kind: kind.to_s
+    }))
+  end
+
   # Cancel a still-pending request (requester or admin).
   #
   # @raise [CommandError] if not assigned, request unknown, or not pending
@@ -1251,8 +1272,14 @@ class PersonDevelopment::Aggregate
       status: "pending",
       requestee_person_id: event.data[:requestee_person_id],
       capability_stable_id: event.data[:capability_stable_id],
-      level_ordinal: event.data[:level_ordinal]
+      level_ordinal: event.data[:level_ordinal],
+      reminder_kinds: []
     }
+  end
+
+  on PersonDevelopment::Events::EvidenceRequestReminderSent do |event|
+    state = @evidence_requests[event.data[:request_id]]
+    (state[:reminder_kinds] ||= []) << event.data[:kind] if state
   end
 
   on PersonDevelopment::Events::EvidenceRequestResponded do |event|

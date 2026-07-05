@@ -14,6 +14,20 @@
 class EvidenceRequest < ApplicationRecord
   STATUSES = %w[pending responded declined cancelled].freeze
 
+  # ── Reminder timing policy (consumed by EvidenceRequestReminderSweepJob) ──
+  # A pending request is nudged once per kind: `no_response` after 7 quiet
+  # days, `due_soon` 2 days before the optional due date — whichever threshold
+  # is crossed first, never within 24h of the ask, never twice within 3 days,
+  # and never for requests older than 30 days (so rollout doesn't dredge up
+  # ancient asks). The sent-once guarantee itself lives in the aggregate; these
+  # constants are the when, not the whether.
+  REMINDER_KINDS = %w[no_response due_soon].freeze
+  NO_RESPONSE_REMINDER_AFTER = 7.days
+  DUE_SOON_REMINDER_WINDOW = 2.days
+  MIN_REMINDER_REQUEST_AGE = 24.hours
+  REMINDER_GAP = 3.days
+  MAX_REMINDER_REQUEST_AGE = 30.days
+
   acts_as_tenant :tenant
 
   belongs_to :tenant
@@ -24,6 +38,7 @@ class EvidenceRequest < ApplicationRecord
   validates :status, inclusion: { in: STATUSES }
 
   scope :pending, -> { where(status: "pending") }
+  scope :reminder_candidates, -> { pending.where(requested_at: MAX_REMINDER_REQUEST_AGE.ago..MIN_REMINDER_REQUEST_AGE.ago) }
   scope :incoming_for, ->(person_id) { where(requestee_person_id: person_id) }
   scope :outgoing_for, ->(person_id) { where(requested_by_id: person_id) }
   scope :for_assessment, ->(person_id, framework_id) { where(person_id: person_id, framework_id: framework_id) }
@@ -32,6 +47,28 @@ class EvidenceRequest < ApplicationRecord
   # @return [Boolean] whether the request can still be acted on
   def pending?
     status == "pending"
+  end
+
+  # @return [Time, nil] when the requestee was last nudged, whichever kind
+  def last_reminded_at
+    [ no_response_reminded_at, due_soon_reminded_at ].compact.max
+  end
+
+  # The reminder kind whose threshold has been crossed and not yet sent — nil
+  # when nothing is due. When both kinds are due at once, the one whose
+  # threshold came first wins; the REMINDER_GAP then holds the other back so
+  # one request never pings twice in the same few days.
+  #
+  # @param now [Time]
+  # @return [String, nil] "no_response" | "due_soon" | nil
+  def due_reminder_kind(now: Time.current)
+    return nil unless pending?
+    return nil if last_reminded_at && now < last_reminded_at + REMINDER_GAP
+
+    candidates = {}
+    candidates["no_response"] = requested_at + NO_RESPONSE_REMINDER_AFTER if no_response_reminder_due?(now)
+    candidates["due_soon"] = due_at - DUE_SOON_REMINDER_WINDOW if due_soon_reminder_due?(now)
+    candidates.min_by { |_kind, threshold| threshold }&.first
   end
 
   # DOM id of this request's card on the evidence hub — the anchor that
@@ -56,5 +93,18 @@ class EvidenceRequest < ApplicationRecord
   # @return [String]
   def dom_id
     self.class.dom_id(id)
+  end
+
+  private
+
+  def no_response_reminder_due?(now)
+    no_response_reminded_at.nil? && now >= requested_at + NO_RESPONSE_REMINDER_AFTER
+  end
+
+  # Only before the due date — chasing an already-missed deadline is a
+  # different (out-of-scope) "overdue" concept, not a due-soon nudge.
+  def due_soon_reminder_due?(now)
+    due_soon_reminded_at.nil? && due_at.present? &&
+      now >= due_at - DUE_SOON_REMINDER_WINDOW && now <= due_at
   end
 end

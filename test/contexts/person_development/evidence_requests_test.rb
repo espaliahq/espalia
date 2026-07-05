@@ -109,4 +109,62 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "remind_evidence_request" do
+    should "stamp the per-kind reminded-at column on the read model" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      req = EvidenceRequest.find(id)
+      assert_not_nil req.no_response_reminded_at
+      assert_nil req.due_soon_reminded_at
+      assert_equal req.no_response_reminded_at, req.last_reminded_at
+    end
+
+    should "stamp due_soon independently of no_response" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "due_soon")
+
+      req = EvidenceRequest.find(id)
+      assert_not_nil req.due_soon_reminded_at
+      assert_nil req.no_response_reminded_at
+    end
+
+    should "reject sending the same kind twice" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+      end
+      assert_match(/already sent/i, error.message)
+    end
+
+    should "allow the other kind after one was sent" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "due_soon")
+
+      req = EvidenceRequest.find(id)
+      assert_not_nil req.no_response_reminded_at
+      assert_not_nil req.due_soon_reminded_at
+    end
+
+    should "reject an unknown kind" do
+      id = request!
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "overdue")
+      end
+      assert_match(/unknown reminder kind/i, error.message)
+    end
+
+    should "reject reminding a resolved request" do
+      id = request!
+      @handler.decline_evidence_request(@assessee.id, @framework_id, id, declined_by_id: @requestee.id)
+
+      assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+      end
+    end
+  end
 end

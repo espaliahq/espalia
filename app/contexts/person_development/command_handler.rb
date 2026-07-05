@@ -629,6 +629,16 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Records that the requestee was nudged about a still-pending evidence
+  # request. System-initiated (the reminder sweep job) — no actor.
+  #
+  # @param kind [String] "no_response" | "due_soon"
+  def remind_evidence_request(person_id, framework_id, request_id, kind:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.remind_evidence_request(request_id, kind: kind)
+    end
+  end
+
   # Cancels a still-pending evidence request (requester or admin).
   #
   # @param cancelled_by_id [String]
