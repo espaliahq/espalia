@@ -260,6 +260,12 @@ module StimulusHelpers
     else
       page.has_no_text?(expect_no_text, wait: wait)
     end
+  rescue Selenium::WebDriver::Error::StaleElementReferenceError, Selenium::WebDriver::Error::UnknownError
+    # A Turbo render replacing the document mid-probe can surface as a raw
+    # inspector error ("Node with given id does not belong to the document").
+    # That's "not landed yet", not a test failure — report false so the
+    # caller's JS fallback / final assertion takes over.
+    false
   end
 
   # Stubs +window.confirm+ to always return true, then runs the block.
