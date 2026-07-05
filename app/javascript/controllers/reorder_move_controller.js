@@ -36,6 +36,10 @@ export default class extends BaseController {
       if (response.ok) {
         window.dispatchEvent(new CustomEvent("org-structure:updated"))
       }
+    } catch (error) {
+      // Network failure — no refresh (the matrix still shows server state);
+      // don't let the rejection escape the fire-and-forget action.
+      console.warn("reorder-move: move request failed", error)
     } finally {
       this._inFlight = false
     }

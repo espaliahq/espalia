@@ -66,6 +66,11 @@ export default class extends BaseController {
       if (response.ok) {
         placement === "before" ? target.before(item) : target.after(item)
       }
+    } catch (error) {
+      // A network failure means the server never applied the move — leave the
+      // DOM untouched (it still reflects server state) instead of surfacing
+      // an unhandled promise rejection from the fire-and-forget action.
+      console.warn("reorder-list: move request failed", error)
     } finally {
       this._inFlight = false
     }
