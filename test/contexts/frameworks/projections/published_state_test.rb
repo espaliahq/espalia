@@ -380,6 +380,33 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "CapabilityReordered" do
+    should "update capability ordinals, skipping ids with no read-model row" do
+      cat_id = SecureRandom.uuid_v7
+      cap1 = SecureRandom.uuid_v7
+      cap2 = SecureRandom.uuid_v7
+      draft_cap = SecureRandom.uuid_v7 # never added → no row
+
+      emit(Frameworks::Events::CapabilityCategoryAdded,
+        framework_id: @framework_id, category_id: cat_id, name: "Thinking")
+      emit(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap1, stable_id: SecureRandom.uuid_v7,
+        category_id: cat_id, name: "Alpha")
+      emit(Frameworks::Events::CapabilityAdded,
+        framework_id: @framework_id, capability_id: cap2, stable_id: SecureRandom.uuid_v7,
+        category_id: cat_id, name: "Beta")
+      emit(Frameworks::Events::CapabilityReordered,
+        framework_id: @framework_id, category_id: cat_id,
+        new_ordering: [ draft_cap, cap2, cap1 ])
+
+      within_tenant do
+        assert_equal 3, FrameworkState::Capability.find_by(capability_id: cap1).ordinal
+        assert_equal 2, FrameworkState::Capability.find_by(capability_id: cap2).ordinal
+        assert_nil FrameworkState::Capability.find_by(capability_id: draft_cap)
+      end
+    end
+  end
+
   context "full lifecycle" do
     should "build complete framework from events" do
       rfid = SecureRandom.uuid_v7

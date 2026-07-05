@@ -149,6 +149,12 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def reorder_categories? = edit_structure?
 
+  # Reorder the capabilities within a category (display order only,
+  # shape-preserving). Same edit-rights bar.
+  #
+  # @return [Boolean]
+  def reorder_capabilities? = edit_structure?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]

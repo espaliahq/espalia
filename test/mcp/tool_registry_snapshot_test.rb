@@ -937,6 +937,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_reorder_capabilities",
+        "description" => "Reorder the capabilities within one category (owner/editor/lead only). " \
+                         "Pass the complete list of the category's active capability ids in the desired display order.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "category_id"  => { "type" => "string" },
+            "new_ordering" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "Every active capability id in this category, in the desired display order"
+            }
+          },
+          "required" => %w[framework_id category_id new_ordering],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_reorder_categories",
         "description" => "Reorder the framework's capability categories (owner/editor/lead only). " \
                          "Pass the complete list of active category ids in the desired display order.",

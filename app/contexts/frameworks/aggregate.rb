@@ -310,6 +310,37 @@ class Frameworks::Aggregate
   #
   # @param framework_id [String] UUID of the framework
   # @param category_id [String] UUID of the category
+  # Reorders a category's capabilities. Display-order only — shape-preserving,
+  # applies live. Takes the COMPLETE new order over the category's active
+  # capabilities so a reorder is one atomic event. (A capability archived in
+  # the open draft has status :archived here — struck through on screen and
+  # not reorderable — so it is excluded from the required set.)
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param new_ordering [Array<String>] every active capability_id in the
+  #   category, in order
+  # @raise [RuntimeError] if the category is unknown or the ordering is not an
+  #   exact permutation of its active capabilities
+  def reorder_capabilities(framework_id, category_id, new_ordering)
+    ensure_created!
+    raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
+
+    current_ids = @capabilities
+      .select { |_cid, d| d[:category_id] == category_id && d[:status] != :archived }
+      .keys
+    unless new_ordering.sort == current_ids.sort
+      raise "New ordering must be a permutation of the #{current_ids.size} active capability id(s) " \
+            "in category #{category_id}"
+    end
+
+    apply(Frameworks::Events::CapabilityReordered.new(data: {
+      framework_id: framework_id,
+      category_id: category_id,
+      new_ordering: new_ordering
+    }))
+  end
+
   # Reorders the capability categories. Display-order only — shape-preserving,
   # applies live. Takes the COMPLETE new order over the active categories so a
   # reorder is one atomic event.
@@ -1174,6 +1205,12 @@ class Frameworks::Aggregate
   on Frameworks::Events::CapabilityCategoryReordered do |event|
     event.data[:new_ordering].each_with_index do |category_id, index|
       @capability_categories[category_id][:ordinal] = index + 1 if @capability_categories.key?(category_id)
+    end
+  end
+
+  on Frameworks::Events::CapabilityReordered do |event|
+    event.data[:new_ordering].each_with_index do |capability_id, index|
+      @capabilities[capability_id][:ordinal] = index + 1 if @capabilities.key?(capability_id)
     end
   end
 

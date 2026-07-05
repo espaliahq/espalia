@@ -44,8 +44,8 @@ class Frameworks::ActivityFeedQuery
   # FrameworkCreated, ScoringThresholdsConfigured) are deliberately out of
   # scope; org-structure *renames* (RoleFamilyUpdated / RoleUpdated /
   # LevelUpdated), *adds* (RoleFamilyAdded / RoleAdded / LevelAdded) and
-  # *reorders* (RoleIllustrationReordered / CapabilityCategoryReordered) are
-  # covered.
+  # *reorders* (RoleIllustrationReordered / CapabilityCategoryReordered /
+  # CapabilityReordered) are covered.
   KINDS = {
     Frameworks::Events::EditSuggested              => "suggestion_edit",
     Frameworks::Events::EntityCreationSuggested    => "suggestion_create",
@@ -60,6 +60,7 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::CapabilityAdded            => "capability_added",
     Frameworks::Events::CapabilityArchived         => "capability_archived",
     Frameworks::Events::CapabilityUpdated          => "capability_updated",
+    Frameworks::Events::CapabilityReordered        => "capability_reordered",
     Frameworks::Events::CapabilityCategoryAdded    => "category_added",
     Frameworks::Events::CapabilityCategoryArchived => "category_archived",
     Frameworks::Events::CapabilityCategoryUpdated  => "category_updated",
@@ -316,7 +317,9 @@ class Frameworks::ActivityFeedQuery
     case kind
     when "capability_added", "capability_archived", "capability_updated"
       from_capability(data[:capability_id])
-    when "category_added", "category_archived", "category_updated"
+    when "category_added", "category_archived", "category_updated", "capability_reordered"
+      # capability_reordered touches every capability in the category, so it
+      # anchors at the category, not any single capability.
       { capability_id: nil, category_id: data[:category_id] }
     when "binding_added"
       from_capability(data[:capability_id])

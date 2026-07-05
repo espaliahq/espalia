@@ -27,6 +27,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "capability_added"          => "bg-emerald-500",
     "capability_archived"       => "bg-amber-500",
     "capability_updated"        => "bg-indigo-500",
+    "capability_reordered"      => "bg-indigo-500",
     "category_added"            => "bg-emerald-500",
     "category_archived"         => "bg-amber-500",
     "category_updated"          => "bg-indigo-500",
@@ -75,6 +76,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "level_updated"             => "edits",
     "capability_added"          => "structural",
     "capability_archived"       => "structural",
+    "capability_reordered"      => "structural",
     "category_added"            => "structural",
     "category_archived"         => "structural",
     "category_reordered"        => "structural",
@@ -291,6 +293,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "capability_added"    then "Added a capability"
     when "capability_archived" then "Archived a capability"
     when "capability_updated"  then "Updated a capability"
+    when "capability_reordered" then "Reordered the capabilities"
     when "category_added"      then "Added a category"
     when "category_archived"   then "Archived a category"
     when "category_updated"    then "Updated a category"

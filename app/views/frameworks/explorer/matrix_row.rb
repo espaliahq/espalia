@@ -17,9 +17,12 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # @param mode [Symbol] :view or :edit
   # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
   #   don't each fire a `FrameworkState::Role.find_by` query
+  # @param prev_capability_id [String, nil] the movable row above (for "Move up")
+  # @param next_capability_id [String, nil] the movable row below (for "Move down")
   def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
                  roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
-                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none,
+                 prev_capability_id: nil, next_capability_id: nil)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
@@ -30,6 +33,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     @search_query = search_query
     @can_edit_structure = can_edit_structure
     @approval_authority = approval_authority
+    @prev_capability_id = prev_capability_id
+    @next_capability_id = next_capability_id
     @capability = capability_data[:capability]
     @bound = capability_data[:bound_to_selected]
     @cells = capability_data[:cells]
@@ -168,7 +173,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # toggleRow ignores clicks inside `[data-controller~='dropdown']`, so opening
   # the menu never also expands the row.
   def show_row_kebab?
-    @mode == :edit && (show_archive_action? || capability_edit_actions.any? || show_binding_action?)
+    @mode == :edit && (show_archive_action? || capability_edit_actions.any? || show_binding_action? ||
+      show_move_actions?)
   end
 
   # "Edit roles…" — manage this capability's role bindings. A direct structural
@@ -221,6 +227,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       end
       dd.menu do
         capability_edit_actions.each { |action| kebab_edit_items(action) }
+        kebab_move_items if show_move_actions?
         kebab_binding_item if show_binding_action?
         kebab_archive_item if show_archive_action?
       end
@@ -253,6 +260,35 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
         reject_preview: action[:preview]
       }
     ) { "Reject #{action[:field_label]} change" }
+  end
+
+  # "Move up / Move down" — reorder within the category, relative to the
+  # movable row the viewer sees in that direction (struck pending-archive rows
+  # are skipped; a struck row itself gets no move items). Direct structural
+  # edit on the edit-structure bar. Each item POSTs via reorder-move and, on
+  # 204, dispatches org-structure:updated → matrix#refresh — fresh neighbour
+  # ids every render, like the category header chevrons.
+  def show_move_actions?
+    @can_edit_structure && !@struck && (@prev_capability_id || @next_capability_id)
+  end
+
+  def kebab_move_items
+    kebab_move_item("Move up", @prev_capability_id, "before") if @prev_capability_id
+    kebab_move_item("Move down", @next_capability_id, "after") if @next_capability_id
+  end
+
+  def kebab_move_item(label, target_id, placement)
+    button(
+      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
+      data: {
+        controller: "reorder-move",
+        reorder_move_url_value: framework_capability_reorders_path(framework_id: @framework_id),
+        reorder_move_body_value: {
+          reorder: { capability_id: @capability.capability_id, target_id: target_id, placement: placement }
+        }.to_json,
+        action: "reorder-move#move"
+      }
+    ) { label }
   end
 
   def kebab_binding_item

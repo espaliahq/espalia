@@ -322,6 +322,17 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Reorders a category's capabilities (display order).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param new_ordering [Array<String>] every active capability_id, in order
+  def reorder_capabilities(framework_id, category_id, new_ordering)
+    @repository.with_framework(framework_id) do |framework|
+      framework.reorder_capabilities(framework_id, category_id, new_ordering)
+    end
+  end
+
   # ── Collaborator commands ──
 
   # Adds a collaborator to a framework.

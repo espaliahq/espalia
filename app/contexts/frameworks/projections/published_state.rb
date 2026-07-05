@@ -62,6 +62,7 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::RoleIllustrationRemoved,
       Frameworks::Events::RoleIllustrationReordered,
       Frameworks::Events::CapabilityCategoryReordered,
+      Frameworks::Events::CapabilityReordered,
       Frameworks::Events::DraftVersionStarted,
       Frameworks::Events::FrameworkVersionPublished,
       Frameworks::Events::MigrationMappingDefined,
@@ -157,6 +158,7 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
     when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
     when Frameworks::Events::CapabilityCategoryReordered then handle_category_reordered(event)
+    when Frameworks::Events::CapabilityReordered then handle_capability_reordered(event)
 
     # ── Shape-changing — deferred while draft_in_progress, replayed on publish ──
     else
@@ -560,6 +562,16 @@ class Frameworks::Projections::PublishedState
   def handle_category_reordered(event)
     event.data[:new_ordering].each_with_index do |category_id, index|
       record = FrameworkState::CapabilityCategory.find_by(category_id: category_id)
+      record&.update!(ordinal: index + 1)
+    end
+  end
+
+  # A draft-added capability has no read-model row until publish — `&.` skips
+  # it; its graph ordinal is authoritative for the edit matrix meanwhile, and
+  # it sorts nil-last in the read model after publish until the next reorder.
+  def handle_capability_reordered(event)
+    event.data[:new_ordering].each_with_index do |capability_id, index|
+      record = FrameworkState::Capability.find_by(capability_id: capability_id)
       record&.update!(ordinal: index + 1)
     end
   end

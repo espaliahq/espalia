@@ -179,6 +179,7 @@ Rails.application.routes.draw do
     resources :illustration_reorders, only: [ :create ], controller: "frameworks/illustration_reorders"
     resources :capabilities, only: [ :create, :update ], controller: "frameworks/capabilities"
     resources :capability_archives, only: [ :create ], controller: "frameworks/capability_archives"
+    resources :capability_reorders, only: [ :create ], controller: "frameworks/capability_reorders"
     resources :capability_bindings, only: [ :index, :create, :update, :destroy ],
               controller: "frameworks/capability_bindings"
     resources :categories,   only: [ :create, :update ], controller: "frameworks/categories"

@@ -248,7 +248,10 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   end
 
   def capability_rows
+    movable = movable_capability_ids
     @capabilities.each do |cap_data|
+      cap_id = cap_data[:capability].capability_id
+      index = movable.index(cap_id)
       render Views::Frameworks::Explorer::MatrixRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
@@ -259,8 +262,22 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         current_person_id: @current_person_id,
         search_query: @search_query,
         can_edit_structure: @can_edit_structure,
-        approval_authority: @approval_authority
+        approval_authority: @approval_authority,
+        prev_capability_id: index&.positive? ? movable[index - 1] : nil,
+        next_capability_id: index ? movable[index + 1] : nil
       )
+    end
+  end
+
+  # Rows the ↑/↓ kebab items can move or target: the visible rows minus the
+  # struck pending-archive ones (they're going away at publish — not part of
+  # the reorderable order the server validates against).
+  def movable_capability_ids
+    @capabilities.filter_map do |cap_data|
+      cap = cap_data[:capability]
+      next if cap.respond_to?(:pending_archive) && cap.pending_archive
+
+      cap.capability_id
     end
   end
 end

@@ -566,6 +566,27 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_empty(first.map(&:id) & second.map(&:id), "batches must not overlap")
     end
   end
+  context "capability reorder" do
+    should "emit a category-anchored capability_reordered entry (structural group)" do
+      append(Frameworks::Events::CapabilityReordered,
+        data: { category_id: @cat.category_id, new_ordering: [ @cap.capability_id ] },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "capability_reordered" }
+      assert_not_nil entry, "expected a capability_reordered entry"
+      assert_nil entry.capability_id
+      assert_equal @cat.category_id, entry.category_id
+      assert_equal "structural", Views::Frameworks::Activity::Entry::KIND_GROUP.fetch(entry.kind)
+
+      # Anchored at the category: visible under that category's focus, hidden
+      # under the other category's.
+      assert entries(focus: :category, category_id: @cat.category_id)
+        .any? { |e| e.kind == "capability_reordered" }
+      assert_not entries(focus: :category, category_id: @other_cat.category_id)
+        .any? { |e| e.kind == "capability_reordered" }
+    end
+  end
+
   context "category reorder" do
     should "emit a framework-level category_reordered entry (structural group)" do
       append(Frameworks::Events::CapabilityCategoryReordered,

@@ -1036,6 +1036,50 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       el.dispatchEvent(new Event("change", { bubbles: true }));
     JS
   end
+  context "reordering capabilities" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second capability in the same category so the kebab move items
+        # render, bound to the role so it is visible in the filtered matrix.
+        h = Frameworks::CommandHandler.new
+        cap2 = SecureRandom.uuid_v7
+        h.add_capability(@framework_id, cap2, SecureRandom.uuid_v7,
+                         FrameworkState::CapabilityCategory.find_by!(name: "Thinking").category_id,
+                         "Critical Thinking")
+        h.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap2, @rid)
+        h.publish_version(@framework_id, "cap2")
+      end
+    end
+
+    should "move a capability up via the row kebab and re-render in the new order" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_text "Critical Thinking"
+
+      # Open the SECOND capability row's kebab, then JS-dispatch its "Move up"
+      # item (hover-revealed Stimulus actions drop pointer clicks on CI).
+      page.execute_script(<<~JS)
+        const row = [...document.querySelectorAll("tr[data-capability-id]")]
+          .find(tr => tr.textContent.includes("Critical Thinking") &&
+                      tr.querySelector("[data-controller='reorder-move']"));
+        const item = [...row.querySelectorAll("[data-controller='reorder-move']")]
+          .find(el => el.textContent.trim() === "Move up");
+        item.click();
+      JS
+
+      # A successful move dispatches org-structure:updated → matrix#refresh.
+      assert_selector "tbody tr[data-capability-id]:nth-of-type(2)", text: "Critical Thinking"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        ordered = FrameworkState::Capability
+          .where(name: [ "Strategic Thinking", "Critical Thinking" ])
+          .order(:ordinal, :id).pluck(:name)
+        assert_equal [ "Critical Thinking", "Strategic Thinking" ], ordered
+      end
+    end
+  end
+
   context "reordering categories" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

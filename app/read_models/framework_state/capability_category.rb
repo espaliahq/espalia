@@ -25,7 +25,11 @@ class FrameworkState::CapabilityCategory < ApplicationRecord
   belongs_to :framework, class_name: "FrameworkState::Framework",
              primary_key: :framework_id, foreign_key: :framework_id, inverse_of: :capability_categories,
              optional: true
-  has_many :capabilities, class_name: "FrameworkState::Capability",
+  # Display-canonical order: reorder ordinals first (PG sorts ASC nulls-last),
+  # then id (uuidv7 ≈ insertion) so never-reordered capabilities keep their
+  # creation order and ones added after a reorder land at the end.
+  has_many :capabilities, -> { order(:ordinal, :id) },
+           class_name: "FrameworkState::Capability",
            primary_key: :category_id, foreign_key: :category_id, inverse_of: :category,
            dependent: :destroy
 

@@ -283,6 +283,45 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#reorder_capabilities" do
+    setup do
+      @cat_id = SecureRandom.uuid_v7
+      @cap_a = SecureRandom.uuid_v7
+      @cap_b = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, @cat_id, "Thinking")
+      @aggregate.add_capability(@framework_id, @cap_a, SecureRandom.uuid_v7, @cat_id, "Alpha")
+      @aggregate.add_capability(@framework_id, @cap_b, SecureRandom.uuid_v7, @cat_id, "Beta")
+    end
+
+    should "apply CapabilityReordered for an exact permutation" do
+      @aggregate.reorder_capabilities(@framework_id, @cat_id, [ @cap_b, @cap_a ])
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityReordered, event
+      assert_equal @cat_id, event.data[:category_id]
+      assert_equal [ @cap_b, @cap_a ], event.data[:new_ordering]
+    end
+
+    should "raise when the ordering smuggles another category's capability" do
+      other_cat = SecureRandom.uuid_v7
+      other_cap = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, other_cat, "Delivery")
+      @aggregate.add_capability(@framework_id, other_cap, SecureRandom.uuid_v7, other_cat, "Shipping")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_capabilities(@framework_id, @cat_id, [ other_cap, @cap_a ])
+      end
+      assert_match(/permutation/, err.message)
+    end
+
+    should "raise for an unknown category" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_capabilities(@framework_id, "nonexistent", [ @cap_a, @cap_b ])
+      end
+      assert_match(/not found/, err.message)
+    end
+  end
+
   context "#reorder_capability_categories" do
     setup do
       @cat_a = SecureRandom.uuid_v7
