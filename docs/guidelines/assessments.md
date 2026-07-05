@@ -515,7 +515,8 @@ An unanswered request doesn't rely on the requestee's memory:
 **Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"
-(same split, recent first, response/decline detail) → authored evidence.
+(subsections *Asked of you* / *Your requests* / *Feedback / Evidence you've
+provided* — the viewer's authored evidence, edit/withdraw).
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 

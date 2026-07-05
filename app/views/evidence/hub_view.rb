@@ -43,7 +43,6 @@ class Views::Evidence::HubView < Views::Base
           header
           open_requests_group
           completed_requests_group
-          authored_section
         end
         render Views::Evidence::ModalShell.new
       end
@@ -86,7 +85,7 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def completed_requests_group
-    return if @completed_incoming.empty? && @completed_outgoing.empty?
+    return if @completed_incoming.empty? && @completed_outgoing.empty? && @authored.empty?
 
     section do
       group_heading("Completed requests")
@@ -99,6 +98,11 @@ class Views::Evidence::HubView < Views::Base
         unless @completed_outgoing.empty?
           subsection("Your requests") do
             div(class: "space-y-4") { @completed_outgoing.each { |r| outgoing_card(r) } }
+          end
+        end
+        unless @authored.empty?
+          subsection("Feedback / Evidence you've provided") do
+            div(class: "space-y-4") { @authored.each { |item| authored_card(item) } }
           end
         end
       end
@@ -192,18 +196,7 @@ class Views::Evidence::HubView < Views::Base
     p(class: "text-xs text-gray-600 dark:text-gray-300") { "Applies to: #{labels.join(" · ")}" }
   end
 
-  # ── Authored evidence (edit / withdraw) ──
-
-  def authored_section
-    section do
-      section_heading("Feedback / Evidence you've provided")
-      if @authored.empty?
-        empty("You haven't provided any feedback yet.")
-      else
-        div(class: "space-y-4") { @authored.each { |item| authored_card(item) } }
-      end
-    end
-  end
+  # ── Authored evidence (edit / withdraw) — a Completed subsection ──
 
   def authored_card(item)
     detail = @authored_details.fetch(item.id, {})
@@ -369,10 +362,6 @@ class Views::Evidence::HubView < Views::Base
         class: "scroll-mt-20 rounded-lg border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 p-4 space-y-2 " \
                "target:ring-2 target:ring-primary target:border-primary", &)
-  end
-
-  def section_heading(text)
-    h2(class: "text-lg font-semibold text-gray-900 dark:text-white mb-3") { text }
   end
 
   def group_heading(text)
