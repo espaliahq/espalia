@@ -19,9 +19,12 @@ class Frameworks::CategoryReordersControllerTest < ActionDispatch::IntegrationTe
       @cat_c = SecureRandom.uuid_v7
       h = Frameworks::CommandHandler.new
       h.create_framework(@framework_id, "Eng")
-      h.add_capability_category(@framework_id, @cat_a, "Thinking")
-      h.add_capability_category(@framework_id, @cat_b, "Delivery")
-      h.add_capability_category(@framework_id, @cat_c, "Collaboration")
+      # Explicit starting ordinals: with all-nil ordinals the id tiebreak
+      # (uuidv7) is not monotonic within one millisecond, so creation-order
+      # assumptions flake.
+      h.add_capability_category(@framework_id, @cat_a, "Thinking", ordinal: 1)
+      h.add_capability_category(@framework_id, @cat_b, "Delivery", ordinal: 2)
+      h.add_capability_category(@framework_id, @cat_c, "Collaboration", ordinal: 3)
       h.publish_version(@framework_id, "seed")
     end
   end
@@ -50,25 +53,30 @@ class Frameworks::CategoryReordersControllerTest < ActionDispatch::IntegrationTe
     end
 
     should "answer 422 for a target outside the framework" do
+      # Capture the pre-move order rather than assuming creation order —
+      # with all ordinals nil the id tiebreak (uuidv7) is not monotonic
+      # within one millisecond.
+      before = ordered_ids
       sign_in @admin_user
       post framework_category_reorders_path(framework_id: @framework_id),
            params: { reorder: { category_id: @cat_a, target_id: SecureRandom.uuid_v7, placement: "after" } },
            as: :json
 
       assert_response :unprocessable_content
-      assert_equal [ @cat_a, @cat_b, @cat_c ], ordered_ids
+      assert_equal before, ordered_ids
     end
   end
 
   context "POST create as non-admin member" do
     should "deny the reorder and leave the order untouched" do
+      before = ordered_ids
       sign_in @member_user
       post framework_category_reorders_path(framework_id: @framework_id),
            params: { reorder: { category_id: @cat_c, target_id: @cat_a, placement: "before" } },
            as: :json
 
       assert_response :redirect
-      assert_equal [ @cat_a, @cat_b, @cat_c ], ordered_ids
+      assert_equal before, ordered_ids
     end
   end
 end

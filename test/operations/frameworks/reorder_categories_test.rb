@@ -22,9 +22,12 @@ class Operations::Frameworks::ReorderCategoriesTest < ActiveSupport::TestCase
       @cat_c = SecureRandom.uuid_v7
       h = Frameworks::CommandHandler.new
       h.create_framework(@framework_id, "Eng")
-      h.add_capability_category(@framework_id, @cat_a, "Thinking")
-      h.add_capability_category(@framework_id, @cat_b, "Delivery")
-      h.add_capability_category(@framework_id, @cat_c, "Collaboration")
+      # Explicit starting ordinals: with all-nil ordinals the id tiebreak
+      # (uuidv7) is not monotonic within one millisecond, so creation-order
+      # assumptions flake.
+      h.add_capability_category(@framework_id, @cat_a, "Thinking", ordinal: 1)
+      h.add_capability_category(@framework_id, @cat_b, "Delivery", ordinal: 2)
+      h.add_capability_category(@framework_id, @cat_c, "Collaboration", ordinal: 3)
       h.publish_version(@framework_id, "seed")
     end
 
