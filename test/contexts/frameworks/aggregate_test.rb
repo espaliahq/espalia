@@ -1046,6 +1046,28 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       end
       assert_match /not found/, err.message
     end
+
+    should "raise when another level of the same role already holds the ordinal" do
+      other_lid = SecureRandom.uuid_v7
+      @aggregate.add_level(@framework_id, other_lid, @rid, 2, "L2", "R2")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.change_level_ordinal(@framework_id, @lid, 2, reason: "collide")
+      end
+      assert_match(/already has a level at ordinal 2/, err.message)
+    end
+
+    should "allow the same ordinal on a different role" do
+      other_rid = SecureRandom.uuid_v7
+      other_lid = SecureRandom.uuid_v7
+      @aggregate.add_role(@framework_id, other_rid, @rfid, "M", "M", "management")
+      @aggregate.add_level(@framework_id, other_lid, other_rid, 3, "M3", "M3")
+
+      @aggregate.change_level_ordinal(@framework_id, @lid, 3, reason: "fine")
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::LevelOrdinalChanged, event
+      assert_equal 3, event.data[:new_ordinal]
+    end
   end
 
   # ── Migration mapping enforcement at publish ──

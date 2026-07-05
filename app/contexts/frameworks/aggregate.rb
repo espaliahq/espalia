@@ -250,6 +250,15 @@ class Frameworks::Aggregate
     previous_ordinal = @levels[level_id][:ordinal]
     return if previous_ordinal == new_ordinal
 
+    # Same per-role uniqueness invariant add_level enforces — the merged-level
+    # grid keys rows by ordinal per role, and the read model carries a unique
+    # index on (role_id, ordinal), so a collision here would corrupt the grid
+    # (and crash the projection) instead of failing the command.
+    role_id = @levels[level_id][:role_id]
+    if @levels.any? { |lid, l| lid != level_id && l[:role_id] == role_id && l[:ordinal] == new_ordinal }
+      raise "Role #{role_id} already has a level at ordinal #{new_ordinal}"
+    end
+
     apply(Frameworks::Events::LevelOrdinalChanged.new(data: {
       framework_id: framework_id,
       level_id: level_id,
