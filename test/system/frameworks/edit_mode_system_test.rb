@@ -1069,7 +1069,16 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       JS
 
       # A successful move dispatches org-structure:updated → matrix#refresh.
-      assert_selector "tbody tr[data-capability-id]:nth-of-type(2)", text: "Critical Thinking"
+      # Assert by capability id + document order (general-sibling combinator),
+      # not row position — the tr count shifts as rows are added around the
+      # list (header rows, expanded rows, the add-capability row).
+      moved_id = ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::Capability.find_by!(name: "Critical Thinking").capability_id
+      end
+      other_id = ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::Capability.find_by!(name: "Strategic Thinking").capability_id
+      end
+      assert_selector "tr[data-capability-id='#{moved_id}'] ~ tr[data-capability-id='#{other_id}']"
 
       ActsAsTenant.with_tenant(@tenant) do
         ordered = FrameworkState::Capability
