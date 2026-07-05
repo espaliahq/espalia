@@ -128,8 +128,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     sign_in_as(@report_user)
     visit evidence_hub_path
     assert_text "To Peer"
-    click_button "Send a nudge"
-    assert_text "Nudge sent to Peer"
+    click_button_with_js_fallback "Send a nudge", expect_text: "Nudge sent to Peer"
     within "[data-testid='request-history']" do
       assert_text(/Nudged by Rep .* ago/)
     end
