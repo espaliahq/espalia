@@ -28,11 +28,13 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
   end
 
   def make_request!
+    id = SecureRandom.uuid_v7
     ActsAsTenant.with_tenant(@tenant) do
-      PersonDevelopment::CommandHandler.new.request_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+      PersonDevelopment::CommandHandler.new.request_evidence(@report.id, @framework_id, id,
         requested_by_id: @report.id, requestee_person_id: @peer.id,
         capability_stable_id: @cap.stable_id, level_ordinal: 2, message: "Pairing notes?")
     end
+    id
   end
 
   should "let the requestee respond with evidence" do
@@ -80,7 +82,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.last.status }
   end
 
-  should "show the requester when a pending request was last reminded" do
+  should "show the request history on an open outgoing card" do
     make_request!
     ActsAsTenant.with_tenant(@tenant) do
       request = EvidenceRequest.last
@@ -92,6 +94,47 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     sign_in_as(@report_user)
     visit evidence_hub_path
     assert_text "To Peer"
-    assert_text(/Reminded .* ago/)
+    within "[data-testid='request-history']" do
+      assert_text(/Requested .* ago/)
+      assert_text(/Reminder sent .* ago/)
+    end
+  end
+
+  should "group requests into open and completed, incoming and outgoing" do
+    make_request!
+    declined = make_request!
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.decline_evidence_request(
+        @report.id, @framework_id, declined, declined_by_id: @peer.id
+      )
+    end
+
+    sign_in_as(@report_user)
+    visit evidence_hub_path
+    assert_text "Open requests"
+    assert_text "Completed requests"
+    # One "Your requests" subsection under each group: the pending outgoing
+    # card sits under Open, the declined one under Completed with its badge.
+    assert_selector "h3", text: /Your requests/i, count: 2
+    assert_text "Declined"
+  end
+
+  should "let the requester nudge a stale open request" do
+    make_request!
+    ActsAsTenant.with_tenant(@tenant) do
+      EvidenceRequest.last.update_column(:requested_at, 3.days.ago)
+    end
+
+    sign_in_as(@report_user)
+    visit evidence_hub_path
+    assert_text "To Peer"
+    click_button "Send a nudge"
+    assert_text "Nudge sent to Peer"
+    within "[data-testid='request-history']" do
+      assert_text(/Nudged by Rep .* ago/)
+    end
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal "manual", EvidenceRequest.last.reminder_history.sole["kind"]
+    end
   end
 end

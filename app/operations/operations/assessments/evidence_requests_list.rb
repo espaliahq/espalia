@@ -42,6 +42,7 @@ class Operations::Assessments::EvidenceRequestsList < Operations::Base
         requested_at: req.requested_at&.iso8601,
         due_at: req.due_at&.iso8601,
         last_reminded_at: req.last_reminded_at&.iso8601,
+        reminders: req.reminder_history,
         evidence_id: req.evidence_id
       }
     end

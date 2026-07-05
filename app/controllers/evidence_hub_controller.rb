@@ -10,22 +10,32 @@ class EvidenceHubController < ApplicationController
   def show
     authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
 
-    incoming = EvidenceRequest.incoming_for(current_person.id).recent_first.includes(:requester)
-    outgoing = EvidenceRequest.outgoing_for(current_person.id).recent_first.includes(:requestee)
+    incoming = EvidenceRequest.incoming_for(current_person.id).includes(:requester)
+    outgoing = EvidenceRequest.outgoing_for(current_person.id).includes(:requestee)
+
+    # Open lists lead with the stalest request (least recently requested or
+    # reminded); completed lists read as recent history.
+    open_incoming = incoming.pending.least_recently_touched.to_a
+    open_outgoing = outgoing.pending.least_recently_touched.to_a
+    completed_incoming = incoming.resolved.recent_first.to_a
+    completed_outgoing = outgoing.resolved.recent_first.to_a
 
     authored = EvidenceItem.active.where(author_id: current_person.id).order(recorded_at: :desc).limit(50).to_a
 
+    all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
     # One combined context lookup for every cell on the page — request ids and
     # evidence ids are all distinct UUIDs, so a single id-keyed hash serves both.
-    details = Evidence::CellContextResolver.new(incoming.to_a + outgoing.to_a + authored).by_id
+    details = Evidence::CellContextResolver.new(all_requests + authored).by_id
 
     render Views::Evidence::HubView.new(
-      incoming: incoming.to_a,
-      outgoing: outgoing.to_a,
+      open_incoming: open_incoming,
+      open_outgoing: open_outgoing,
+      completed_incoming: completed_incoming,
+      completed_outgoing: completed_outgoing,
       authored: authored,
       cell_details: details,
       authored_details: details,
-      responses: responses_for(outgoing.to_a),
+      responses: responses_for(completed_outgoing),
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants

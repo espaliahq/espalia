@@ -1,24 +1,32 @@
 # frozen_string_literal: true
 
-# The evidence-request hub: incoming requests (respond / decline), outgoing
-# requests (cancel), and evidence you've authored (edit / withdraw). The
+# The evidence-request hub: open requests (incoming — respond / decline;
+# outgoing — nudge / cancel, stalest first, each with its reminder history),
+# completed requests, and evidence you've authored (edit / withdraw). The
 # surface notifications deep-link to.
 class Views::Evidence::HubView < Views::Base
   include Phlex::Rails::Helpers::FormWith
+  include Phlex::Rails::Helpers::ButtonTo
   include Phlex::Rails::Helpers::TimeAgoInWords
 
   STATUS_VARIANT = {
     "pending" => :warning, "responded" => :success, "declined" => :default, "cancelled" => :default
   }.freeze
 
-  # @param incoming [Array<EvidenceRequest>] requests addressed to the viewer
-  # @param outgoing [Array<EvidenceRequest>] requests the viewer made
+  # @param open_incoming [Array<EvidenceRequest>] pending requests addressed to the viewer, stalest first
+  # @param open_outgoing [Array<EvidenceRequest>] pending requests the viewer made, stalest first
+  # @param completed_incoming [Array<EvidenceRequest>] resolved requests addressed to the viewer
+  # @param completed_outgoing [Array<EvidenceRequest>] resolved requests the viewer made
   # @param authored [Array<EvidenceItem>] active evidence the viewer authored
   # @param cell_details [Hash{String=>Hash}] request_id => { name:, role:, level_title:, expectation:, illustrations: }
   # @param authored_details [Hash{String=>Hash}] evidence_id => { assessee_name:, capability_name:, role:, level_title:, assignment_id: }
-  def initialize(incoming:, outgoing:, authored: [], cell_details: {}, authored_details: {}, responses: {}, user: nil, current_tenant: nil, tenants: [])
-    @incoming = incoming
-    @outgoing = outgoing
+  def initialize(open_incoming:, open_outgoing:, completed_incoming: [], completed_outgoing: [],
+                 authored: [], cell_details: {}, authored_details: {}, responses: {},
+                 user: nil, current_tenant: nil, tenants: [])
+    @open_incoming = open_incoming
+    @open_outgoing = open_outgoing
+    @completed_incoming = completed_incoming
+    @completed_outgoing = completed_outgoing
     @authored = authored
     @cell_details = cell_details
     @authored_details = authored_details
@@ -33,8 +41,8 @@ class Views::Evidence::HubView < Views::Base
       div(data: { controller: "modal evidence-modal", action: "keydown.esc@window->modal#close" }) do
         div(class: "max-w-3xl mx-auto space-y-10") do
           header
-          incoming_section
-          outgoing_section
+          open_requests_group
+          completed_requests_group
           authored_section
         end
         render Views::Evidence::ModalShell.new
@@ -53,37 +61,61 @@ class Views::Evidence::HubView < Views::Base
     end
   end
 
-  # ── Incoming / outgoing requests ──
+  # ── Open / completed request groups ──
 
-  def incoming_section
+  def open_requests_group
     section do
-      section_heading("Asked of you")
-      if @incoming.empty?
-        empty("No one has asked you for feedback.")
-      else
-        div(class: "space-y-4") { @incoming.each { |r| incoming_card(r) } }
+      group_heading("Open requests")
+      div(class: "space-y-8") do
+        subsection("Asked of you") do
+          if @open_incoming.empty?
+            empty("No one is waiting on you.")
+          else
+            div(class: "space-y-4") { @open_incoming.each { |r| incoming_card(r) } }
+          end
+        end
+        subsection("Your requests") do
+          if @open_outgoing.empty?
+            empty("You have no open requests.")
+          else
+            div(class: "space-y-4") { @open_outgoing.each { |r| outgoing_card(r) } }
+          end
+        end
       end
     end
   end
 
-  def outgoing_section
+  def completed_requests_group
+    return if @completed_incoming.empty? && @completed_outgoing.empty?
+
     section do
-      section_heading("Your requests")
-      if @outgoing.empty?
-        empty("You haven't requested any feedback yet.")
-      else
-        div(class: "space-y-4") { @outgoing.each { |r| outgoing_card(r) } }
+      group_heading("Completed requests")
+      div(class: "space-y-8") do
+        unless @completed_incoming.empty?
+          subsection("Asked of you") do
+            div(class: "space-y-4") { @completed_incoming.each { |r| incoming_card(r) } }
+          end
+        end
+        unless @completed_outgoing.empty?
+          subsection("Your requests") do
+            div(class: "space-y-4") { @completed_outgoing.each { |r| outgoing_card(r) } }
+          end
+        end
       end
     end
   end
 
   def incoming_card(request)
     card(dom_id: request.dom_id) do
-      div(class: "text-sm text-gray-900 dark:text-white") do
-        plain "#{request.requester&.name || "A colleague"} asked you for feedback#{regarding_suffix(request)}"
+      div(class: "flex items-center justify-between gap-3") do
+        span(class: "text-sm text-gray-900 dark:text-white") do
+          "#{request.requester&.name || "A colleague"} asked you for feedback#{regarding_suffix(request)}"
+        end
+        status_badge(request) unless request.pending?
       end
       request_cell_line(request)
       message_line(request)
+      history_timeline(request)
       # No behavioural-expectation block here — the "Provide feedback / evidence"
       # modal carries the full cell context when you actually respond.
       respond_actions(request) if request.pending?
@@ -94,19 +126,33 @@ class Views::Evidence::HubView < Views::Base
     card(dom_id: request.dom_id) do
       div(class: "flex items-center justify-between gap-3") do
         span(class: "text-sm text-gray-900 dark:text-white") { "To #{request.requestee&.name || "a colleague"}#{regarding_suffix(request)}" }
-        render Components::Kit::Badge.new(request.status.capitalize, variant: STATUS_VARIANT.fetch(request.status, :default))
+        status_badge(request)
       end
       request_cell_line(request)
       message_line(request)
-      reminded_line(request)
+      history_timeline(request)
       if request.pending?
-        a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
-          class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline") { "Cancel request" }
+        outgoing_open_actions(request)
       elsif request.status == "responded"
         response_card(request)
       elsif request.status == "declined" && request.decline_reason.present?
         p(class: "text-sm text-gray-700 dark:text-gray-200") { "Declined: #{request.decline_reason}" }
       end
+    end
+  end
+
+  def status_badge(request)
+    render Components::Kit::Badge.new(request.status.capitalize, variant: STATUS_VARIANT.fetch(request.status, :default))
+  end
+
+  def outgoing_open_actions(request)
+    div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4") do
+      if request.can_nudge?
+        button_to("Send a nudge", nudge_evidence_request_path(request),
+          class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline cursor-pointer")
+      end
+      a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
+        class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline") { "Cancel request" }
     end
   end
 
@@ -241,15 +287,46 @@ class Views::Evidence::HubView < Views::Base
     p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{request.message}”" }
   end
 
-  # On an outgoing pending card: when the system last nudged the requestee —
-  # answers "should I chase this myself?" without opening the activity trail.
-  def reminded_line(request)
+  # On every open request card: the request's life so far — when it was asked
+  # (and when it's due) plus each reminder that has gone out, so both parties
+  # see the same story without opening an activity trail.
+  def history_timeline(request)
     return unless request.pending?
 
-    reminded_at = request.last_reminded_at
-    return if reminded_at.nil?
+    div(class: "space-y-0.5", data: { testid: "request-history" }) do
+      timeline_line("Requested #{time_ago_in_words(request.requested_at)} ago#{due_suffix(request)}")
+      request.reminder_history.each { |entry| timeline_line(reminder_entry_label(request, entry)) }
+    end
+  end
 
-    p(class: "text-xs text-gray-500 dark:text-gray-400") { "Reminded #{time_ago_in_words(reminded_at)} ago" }
+  def timeline_line(text)
+    p(class: "text-xs text-gray-500 dark:text-gray-400") { text }
+  end
+
+  def due_suffix(request)
+    request.due_at.present? ? " · due #{request.due_at.strftime("%a %-d %b")}" : ""
+  end
+
+  # @param entry [Hash] { "kind" =>, "at" =>, "by_id" => (manual only) }
+  def reminder_entry_label(request, entry)
+    at = begin
+      Time.zone.parse(entry["at"].to_s)
+    rescue ArgumentError
+      nil
+    end
+    ago = at ? "#{time_ago_in_words(at)} ago" : nil
+    label = case entry["kind"]
+    when "due_soon" then "Due-date reminder sent"
+    when "manual" then "Nudged by #{nudger_name(request, entry["by_id"])}"
+    else "Reminder sent"
+    end
+    [ label, ago ].compact.join(" ")
+  end
+
+  # The nudger is almost always the requester (already loaded); anyone else
+  # with nudge rights is a tenant admin.
+  def nudger_name(request, by_id)
+    by_id == request.requested_by_id ? (request.requester&.name || "the requester") : "an admin"
   end
 
   # ── Respond / edit (open the unified modal) ──
@@ -296,6 +373,17 @@ class Views::Evidence::HubView < Views::Base
 
   def section_heading(text)
     h2(class: "text-lg font-semibold text-gray-900 dark:text-white mb-3") { text }
+  end
+
+  def group_heading(text)
+    h2(class: "text-lg font-semibold text-gray-900 dark:text-white mb-4") { text }
+  end
+
+  def subsection(title, &)
+    div do
+      h3(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-3") { title }
+      yield
+    end
   end
 
   def empty(text)
