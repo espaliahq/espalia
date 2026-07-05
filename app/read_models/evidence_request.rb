@@ -63,6 +63,7 @@ class EvidenceRequest < ApplicationRecord
   # @return [String, nil] "no_response" | "due_soon" | nil
   def due_reminder_kind(now: Time.current)
     return nil unless pending?
+    return nil if now < requested_at + MIN_REMINDER_REQUEST_AGE
     return nil if last_reminded_at && now < last_reminded_at + REMINDER_GAP
 
     candidates = {}

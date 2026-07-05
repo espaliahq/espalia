@@ -37,6 +37,14 @@ class EvidenceRequestTest < ActiveSupport::TestCase
       assert_nil req.due_reminder_kind
     end
 
+    should "hold the 24h floor even when the due date is imminent" do
+      # The reminder_candidates scope also enforces this, but the method must
+      # be self-sufficient — a due date right after the ask is the case that
+      # would otherwise double-ping.
+      req = request(requested_at: 2.hours.ago, due_at: 20.hours.from_now)
+      assert_nil req.due_reminder_kind
+    end
+
     should "pick the earlier threshold when both kinds are due" do
       # no_response threshold (requested + 7d = 2d ago) precedes due_soon's
       # (due - 2d = 1d ago) → no_response wins.
