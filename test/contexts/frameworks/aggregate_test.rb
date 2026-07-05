@@ -283,6 +283,30 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#reorder_capability_categories" do
+    setup do
+      @cat_a = SecureRandom.uuid_v7
+      @cat_b = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, @cat_a, "Thinking")
+      @aggregate.add_capability_category(@framework_id, @cat_b, "Delivery")
+    end
+
+    should "apply CapabilityCategoryReordered for an exact permutation" do
+      @aggregate.reorder_capability_categories(@framework_id, [ @cat_b, @cat_a ])
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityCategoryReordered, event
+      assert_equal [ @cat_b, @cat_a ], event.data[:new_ordering]
+    end
+
+    should "raise when the ordering is not a permutation of the active categories" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_capability_categories(@framework_id, [ @cat_b ])
+      end
+      assert_match(/permutation/, err.message)
+    end
+  end
+
   context "#archive_capability_category" do
     setup do
       @cat_id = SecureRandom.uuid_v7

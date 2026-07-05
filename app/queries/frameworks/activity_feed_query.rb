@@ -44,7 +44,8 @@ class Frameworks::ActivityFeedQuery
   # FrameworkCreated, ScoringThresholdsConfigured) are deliberately out of
   # scope; org-structure *renames* (RoleFamilyUpdated / RoleUpdated /
   # LevelUpdated), *adds* (RoleFamilyAdded / RoleAdded / LevelAdded) and
-  # *reorders* (RoleIllustrationReordered) are covered.
+  # *reorders* (RoleIllustrationReordered / CapabilityCategoryReordered) are
+  # covered.
   KINDS = {
     Frameworks::Events::EditSuggested              => "suggestion_edit",
     Frameworks::Events::EntityCreationSuggested    => "suggestion_create",
@@ -62,6 +63,7 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::CapabilityCategoryAdded    => "category_added",
     Frameworks::Events::CapabilityCategoryArchived => "category_archived",
     Frameworks::Events::CapabilityCategoryUpdated  => "category_updated",
+    Frameworks::Events::CapabilityCategoryReordered => "category_reordered",
     Frameworks::Events::CapabilityRoleBindingCreated => "binding_added",
     Frameworks::Events::CapabilityRoleBindingUpdated => "binding_updated",
     Frameworks::Events::CapabilityRoleBindingRemoved => "binding_removed",
@@ -334,7 +336,8 @@ class Frameworks::ActivityFeedQuery
       from_capability(expectation_to_capability[illustration_to_expectation[data[:illustration_id]]])
     else
       # draft_opened, version_published, migration_mapping_defined,
-      # collaborator_* — framework-level, no matrix anchor.
+      # collaborator_*, category_reordered (touches every category) —
+      # framework-level, no matrix anchor.
       empty_anchor
     end
   end

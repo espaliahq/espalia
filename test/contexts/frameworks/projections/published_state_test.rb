@@ -361,6 +361,25 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "CapabilityCategoryReordered" do
+    should "update category ordinals" do
+      cat1 = SecureRandom.uuid_v7
+      cat2 = SecureRandom.uuid_v7
+
+      emit(Frameworks::Events::CapabilityCategoryAdded,
+        framework_id: @framework_id, category_id: cat1, name: "Thinking")
+      emit(Frameworks::Events::CapabilityCategoryAdded,
+        framework_id: @framework_id, category_id: cat2, name: "Delivery")
+      emit(Frameworks::Events::CapabilityCategoryReordered,
+        framework_id: @framework_id, new_ordering: [ cat2, cat1 ])
+
+      within_tenant do
+        assert_equal 2, FrameworkState::CapabilityCategory.find_by(category_id: cat1).ordinal
+        assert_equal 1, FrameworkState::CapabilityCategory.find_by(category_id: cat2).ordinal
+      end
+    end
+  end
+
   context "full lifecycle" do
     should "build complete framework from events" do
       rfid = SecureRandom.uuid_v7

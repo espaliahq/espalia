@@ -30,6 +30,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "category_added"            => "bg-emerald-500",
     "category_archived"         => "bg-amber-500",
     "category_updated"          => "bg-indigo-500",
+    "category_reordered"        => "bg-indigo-500",
     "binding_added"             => "bg-emerald-500",
     "binding_updated"           => "bg-indigo-500",
     "binding_removed"           => "bg-gray-400",
@@ -76,6 +77,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "capability_archived"       => "structural",
     "category_added"            => "structural",
     "category_archived"         => "structural",
+    "category_reordered"        => "structural",
     "role_family_added"         => "structural",
     "role_added"                => "structural",
     "level_added"               => "structural",
@@ -292,6 +294,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "category_added"      then "Added a category"
     when "category_archived"   then "Archived a category"
     when "category_updated"    then "Updated a category"
+    when "category_reordered"  then "Reordered the categories"
     when "expectation_added"   then "Added an expectation#{expectation_level}"
     when "binding_added"       then binding_role ? "Bound to #{binding_role}" : "Bound a capability to a role"
     when "binding_updated"     then binding_role ? "Updated the #{binding_role} binding" : "Updated a capability-role binding"

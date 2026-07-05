@@ -71,7 +71,7 @@ class Frameworks::ExplorerGraph::ArBuilder
   def build_capability_categories
     @framework.capability_categories
       .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
+      .order(:ordinal, :id) # PG sorts ASC nulls-last; id (uuidv7) tiebreak keeps it deterministic
       .map do |cat|
         Frameworks::ExplorerGraph::CapabilityCategory.new(
           category_id: cat.category_id,

@@ -61,6 +61,7 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::RoleIllustrationUpdated,
       Frameworks::Events::RoleIllustrationRemoved,
       Frameworks::Events::RoleIllustrationReordered,
+      Frameworks::Events::CapabilityCategoryReordered,
       Frameworks::Events::DraftVersionStarted,
       Frameworks::Events::FrameworkVersionPublished,
       Frameworks::Events::MigrationMappingDefined,
@@ -155,6 +156,7 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::RoleIllustrationUpdated then handle_illustration_updated(event)
     when Frameworks::Events::RoleIllustrationRemoved then handle_illustration_removed(event)
     when Frameworks::Events::RoleIllustrationReordered then handle_illustration_reordered(event)
+    when Frameworks::Events::CapabilityCategoryReordered then handle_category_reordered(event)
 
     # ── Shape-changing — deferred while draft_in_progress, replayed on publish ──
     else
@@ -551,6 +553,13 @@ class Frameworks::Projections::PublishedState
   def handle_illustration_reordered(event)
     event.data[:new_ordering].each_with_index do |illustration_id, index|
       record = FrameworkState::RoleIllustration.find_by(illustration_id: illustration_id)
+      record&.update!(ordinal: index + 1)
+    end
+  end
+
+  def handle_category_reordered(event)
+    event.data[:new_ordering].each_with_index do |category_id, index|
+      record = FrameworkState::CapabilityCategory.find_by(category_id: category_id)
       record&.update!(ordinal: index + 1)
     end
   end

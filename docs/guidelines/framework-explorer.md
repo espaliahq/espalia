@@ -430,6 +430,22 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   silently renumber another expectation's list). Surfaces in the feed as
   `illustration_reordered` ("Reordered the E · Software Engineer
   illustrations", edits group).
+- **Category ↑/↓ reorder chevrons** — hover-revealed on the category header
+  next to the archive control (edit + `can_edit_structure`; each direction
+  only when a **visible** neighbour exists — role/search filters can hide
+  categories, and a move is relative to what the viewer sees). Shape-
+  preserving, applies live. Each chevron is a `reorder-move` button POSTing
+  the neighbour-relative move to `CategoryReordersController`, which
+  re-inserts the category next to that neighbour within the full active order
+  and dispatches `Operations::Frameworks::ReorderCategories` (web + MCP,
+  complete-list + permutation-validated like illustrations). On 204 the
+  button dispatches `org-structure:updated` → `matrix#refresh` (a category is
+  a contiguous *block* of rows — no DOM surgery), so neighbour ids re-render
+  fresh after every move. Graph + AR read models sort categories
+  nil-ordinal-LAST with a stable tiebreak, so a category added after a
+  reorder lands at the end instead of jumping to the front. Feed:
+  `category_reordered` ("Reordered the categories", structural group,
+  framework-level anchor).
 - **Row-actions kebab (⋮) → Edit roles…** — offered to **edit-structure
   holders** (a direct structural edit, like add-capability, not the broader
   suggest bar). Opens the shared **binding-editor modal** whose body is the
@@ -1094,12 +1110,15 @@ line (§9).
 | `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; all three also serve POST creates from the add modals → `{AddRoleFamily,AddRole,AddLevel}` (`role_families`/`roles` re-render the `role-tree-families` frame; `levels` redirects to the edit explorer, selection preserved). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/illustration_reorders_controller.rb` | Move an illustration before/after a sibling (POST → `ReorderIllustrations`; 204, client moves the DOM node) |
+| `app/controllers/frameworks/category_reorders_controller.rb` | Move a category before/after a visible sibling (POST → `ReorderCategories`; 204 → `org-structure:updated` refresh) |
+| `app/javascript/controllers/reorder_move_controller.js` | Single-move POST button — on success dispatches `org-structure:updated` (matrix refresh) for entities that can't be DOM-moved in place |
 | `app/javascript/controllers/reorder_list_controller.js` | ↑/↓ list reordering — POSTs the neighbour-relative move, repositions the item's node on success |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
 | `app/operations/operations/frameworks/{add,update,remove}_capability_role_binding.rb` | Shared web + MCP binding operations — add/remove (shape-changing, draft) and weight/tolerance update (shape-preserving). |
 | `app/operations/operations/frameworks/reorder_illustrations.rb` | Shared web + MCP operation — reorder one expectation × role's illustrations (complete-list, permutation-validated, shape-preserving). |
+| `app/operations/operations/frameworks/reorder_categories.rb` | Shared web + MCP operation — reorder the active capability categories (complete-list, permutation-validated, shape-preserving). |
 | `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
 | `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code for MCP). `update_level` defers `is_entry` (no Boolean param support in `Operations::Base` yet). |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |

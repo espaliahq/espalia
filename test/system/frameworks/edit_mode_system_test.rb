@@ -1036,6 +1036,51 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       el.dispatchEvent(new Event("change", { bubbles: true }));
     JS
   end
+  context "reordering categories" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second category so the header ↑/↓ chevrons render.
+        Frameworks::CommandHandler.new.add_capability_category(
+          @framework_id, SecureRandom.uuid_v7, "Delivery", ordinal: 2
+        )
+      end
+    end
+
+    should "move a category up via the header chevron and re-render in the new order" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_text "Delivery"
+
+      # JS-dispatch the second category's hover-revealed "move up" chevron
+      # (pointer clicks on hover-revealed Stimulus actions drop on starved CI).
+      page.execute_script(<<~JS)
+        document.querySelectorAll("button[aria-label='Move category up']")[0].click();
+      JS
+
+      # A successful move dispatches org-structure:updated → matrix#refresh;
+      # the re-rendered matrix lists Delivery's header before Thinking's.
+      assert_selector "tbody tr:first-child", text: "Delivery"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        ordered = FrameworkState::CapabilityCategory
+          .where(framework_id: @framework_id, status: "active")
+          .order(:ordinal, :id).pluck(:name)
+        assert_equal [ "Delivery", "Thinking" ], ordered
+      end
+    end
+
+    should "not render category move chevrons in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      # The empty "Delivery" category is hidden in view mode (Lesson 18) —
+      # sync on the published category instead.
+      assert_text "Thinking"
+      assert_no_selector "button[aria-label='Move category up']"
+      assert_no_selector "button[aria-label='Move category down']"
+    end
+  end
+
   context "reordering illustrations" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

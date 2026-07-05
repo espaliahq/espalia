@@ -310,6 +310,28 @@ class Frameworks::Aggregate
   #
   # @param framework_id [String] UUID of the framework
   # @param category_id [String] UUID of the category
+  # Reorders the capability categories. Display-order only — shape-preserving,
+  # applies live. Takes the COMPLETE new order over the active categories so a
+  # reorder is one atomic event.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param new_ordering [Array<String>] every active category_id, in order
+  # @raise [RuntimeError] if the ordering is not an exact permutation of the
+  #   active categories
+  def reorder_capability_categories(framework_id, new_ordering)
+    ensure_created!
+
+    current_ids = @capability_categories.reject { |_cid, d| d[:status] == :archived }.keys
+    unless new_ordering.sort == current_ids.sort
+      raise "New ordering must be a permutation of the #{current_ids.size} active category id(s)"
+    end
+
+    apply(Frameworks::Events::CapabilityCategoryReordered.new(data: {
+      framework_id: framework_id,
+      new_ordering: new_ordering
+    }))
+  end
+
   # @param reason [String] reason for archiving
   # @raise [RuntimeError] if no draft in progress, category not found,
   #   already archived, or active capabilities remain in the category
@@ -1147,6 +1169,12 @@ class Frameworks::Aggregate
       ordinal: event.data[:ordinal],
       status: :active
     }
+  end
+
+  on Frameworks::Events::CapabilityCategoryReordered do |event|
+    event.data[:new_ordering].each_with_index do |category_id, index|
+      @capability_categories[category_id][:ordinal] = index + 1 if @capability_categories.key?(category_id)
+    end
   end
 
   on Frameworks::Events::CapabilityCategoryUpdated do |event|
