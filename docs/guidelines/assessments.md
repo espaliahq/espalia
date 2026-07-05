@@ -485,6 +485,38 @@ controller, so **every** evidence/request trigger names its overlay via
 `data-modal-target-id` (`evidence-modal-overlay` / `evidence-request-modal-overlay`) —
 framework-explorer Hard-Won Lesson 19.
 
+### Reminders and nudges on open requests
+
+An unanswered request doesn't rely on the requestee's memory:
+
+- **Automatic reminders** — the hourly `EvidenceRequestReminderSweepJob` emits
+  `EvidenceRequestReminderSent` (kinds `no_response` after 7 quiet days /
+  `due_soon` 2 days before the optional due date, whichever comes first; each
+  automatic kind at most once, aggregate-guarded). Timing policy — incl. the
+  24h floor, 3-day gap, and 30-day rollout cap — lives on
+  [`EvidenceRequest`](../../app/read_models/evidence_request.rb); events carry
+  `acting_via: "system"` provenance.
+- **Manual nudges** — the requester (or a tenant admin) can chase an open
+  request via `Operations::Assessments::NudgeEvidenceRequest`
+  (`POST /evidence_requests/:id/nudge` on the web,
+  `assessments_nudge_evidence_request` over MCP), repeatable once
+  `EvidenceRequest::NUDGE_GAP` (2 days) has passed since the last reminder of
+  any kind. Automatic reminders and manual nudges share one clock — a nudge
+  defers the sweep and vice versa.
+- **Delivery** rides the notification chain: `evidence_request_reminder`
+  Noticed type (in-app + Slack default, email deferred) with kind-aware copy;
+  the manual copy names the nudger. The async handler drops the nudge if the
+  request resolved before the job ran.
+- **History** — every reminder is appended to the projected
+  `reminder_history` (kind, at, by_id) and stamps `last_reminded_at`, both
+  replay-safe. The hub renders the history on every open card and sorts open
+  lists stalest-first (`least_recently_touched`).
+
+**Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): "Open
+requests" (subsections *Asked of you* / *Your requests*, stalest first, with
+history + respond/decline or nudge/cancel actions) → "Completed requests"
+(same split, recent first, response/decline detail) → authored evidence.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 **Every action a user can take on the assessment screen MUST produce a
