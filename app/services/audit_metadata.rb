@@ -54,7 +54,7 @@ module AuditMetadata
   # Block form. Restores any prior context on exit so nested calls
   # (e.g. an HRIS sync that invokes an Operation) behave predictably.
   #
-  # @param acting_via [Symbol] :web | :mcp | :hris
+  # @param acting_via [Symbol] :web | :mcp | :hris | :system
   # @param actor_id [String, nil] uuid of the Person triggering the write
   # @param impersonator_id [String, nil] uuid of the real Person when an
   #   impersonation session is active
