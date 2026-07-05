@@ -19,6 +19,10 @@ class EvidenceRequestReminderSweepJob < ApplicationJob
     AuditMetadata.with(acting_via: :system, correlation_id: job_id) do
       Tenant.find_each do |tenant|
         ActsAsTenant.with_tenant(tenant) { sweep }
+      rescue => e
+        # One tenant's failure must not starve every tenant after it in the
+        # run; the next hourly sweep catches whatever this one missed.
+        Rails.logger.error("[EvidenceRequestReminderSweep] Tenant #{tenant.id} sweep failed: #{e.message}")
       end
     end
   end
