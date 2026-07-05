@@ -29,6 +29,7 @@ class PersonDevelopment::Aggregate
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
   EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon manual].freeze
+  EVIDENCE_REQUEST_NUDGE_GAP = EvidenceRequest::NUDGE_GAP
 
   def initialize
     @person_id = nil
@@ -884,18 +885,24 @@ class PersonDevelopment::Aggregate
   # fire at most once per request, so a sweep that races a response — or
   # re-runs — is rejected here rather than double-pinging the requestee.
   # "manual" (a requester-initiated nudge, carrying `nudged_by_id`) may
-  # repeat; its 2-day spacing is timing policy enforced at the operation
-  # layer, like the sweep's thresholds.
+  # repeat, but never within EVIDENCE_REQUEST_NUDGE_GAP of the last reminder
+  # of any kind — enforced here as well as at the operation layer, so two
+  # near-simultaneous nudges can't both land.
   #
   # @param kind [String] "no_response" | "due_soon" | "manual"
   # @param nudged_by_id [String, nil] the Person nudging (manual kind only)
   # @raise [CommandError] if not assigned, request unknown, not pending,
-  #   kind unknown, or an automatic kind was already sent
+  #   kind unknown, an automatic kind was already sent, or a manual nudge
+  #   lands within the gap
   def remind_evidence_request(request_id, kind:, nudged_by_id: nil)
     state = pending_request!(request_id)
     raise CommandError, "Unknown reminder kind #{kind}" unless EVIDENCE_REQUEST_REMINDER_KINDS.include?(kind.to_s)
     if kind.to_s != "manual" && state[:reminder_kinds]&.include?(kind.to_s)
       raise CommandError, "#{kind} reminder already sent"
+    end
+    if kind.to_s == "manual" && state[:last_reminded_at] &&
+       Time.current < state[:last_reminded_at] + EVIDENCE_REQUEST_NUDGE_GAP
+      raise CommandError, "A reminder was sent within the last 2 days"
     end
 
     apply(PersonDevelopment::Events::EvidenceRequestReminderSent.new(data: {
@@ -1286,7 +1293,12 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::EvidenceRequestReminderSent do |event|
     state = @evidence_requests[event.data[:request_id]]
-    (state[:reminder_kinds] ||= []) << event.data[:kind] if state
+    if state
+      (state[:reminder_kinds] ||= []) << event.data[:kind]
+      # Loaded events carry the publish timestamp; a freshly-applied event
+      # hasn't been stamped yet, so "now" is the accurate value.
+      state[:last_reminded_at] = event.metadata[:timestamp] || Time.current
+    end
   end
 
   on PersonDevelopment::Events::EvidenceRequestResponded do |event|

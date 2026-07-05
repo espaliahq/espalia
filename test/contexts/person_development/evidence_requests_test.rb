@@ -7,6 +7,7 @@ require_relative "../../support/projection_replay"
 # aggregate → events → EvidenceRequests projection → EvidenceRequest read model.
 class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
   include ProjectionReplayHelpers
+  include ActiveSupport::Testing::TimeHelpers
 
   setup do
     @tenant = create(:tenant)
@@ -161,9 +162,12 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_match(/unknown reminder kind/i, error.message)
     end
 
-    should "allow repeated manual nudges with actor attribution in the history" do
-      id = request!
-      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+    should "allow repeated manual nudges once the gap passes, with actor attribution" do
+      id = nil
+      travel_to(5.days.ago) { id = request! }
+      travel_to(3.days.ago) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+      end
       @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
 
       req = EvidenceRequest.find(id)
@@ -171,6 +175,17 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_equal [ @assessee.id ] * 2, req.reminder_history.map { |e| e["by_id"] }
       assert_not_nil req.last_reminded_at
       assert_nil req.no_response_reminded_at
+    end
+
+    should "reject a manual nudge within the gap of the last reminder" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+      end
+      assert_match(/within the last 2 days/i, error.message)
+      assert_equal 1, EvidenceRequest.find(id).reminder_history.size
     end
 
     should "append automatic reminders to the history without an actor" do
