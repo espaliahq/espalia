@@ -40,6 +40,8 @@ class Operations::Assessments::EvidenceRequestsList < Operations::Base
         requestee: { id: req.requestee_person_id, name: req.requestee&.name },
         message: req.message,
         requested_at: req.requested_at&.iso8601,
+        due_at: req.due_at&.iso8601,
+        last_reminded_at: req.last_reminded_at&.iso8601,
         evidence_id: req.evidence_id
       }
     end

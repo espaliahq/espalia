@@ -162,5 +162,21 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_equal 1, outgoing[:outgoing].size
       assert_empty outgoing[:incoming]
     end
+
+    should "surface due date and reminder state" do
+      due = 5.days.from_now
+      result = request!(due_at: due.iso8601)
+      ActsAsTenant.with_tenant(@tenant) do
+        req = EvidenceRequest.find(result[:request_id])
+        PersonDevelopment::CommandHandler.new.remind_evidence_request(
+          req.person_id, req.framework_id, req.id, kind: "no_response"
+        )
+
+        row = Operations::Assessments::EvidenceRequestsList
+          .call(context: @report_ctx, params: {})[:outgoing].first
+        assert_in_delta due.to_i, Time.zone.parse(row[:due_at]).to_i, 1
+        assert_not_nil row[:last_reminded_at]
+      end
+    end
   end
 end

@@ -79,4 +79,19 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_text "Request cancelled"
     ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.last.status }
   end
+
+  should "show the requester when a pending request was last reminded" do
+    make_request!
+    ActsAsTenant.with_tenant(@tenant) do
+      request = EvidenceRequest.last
+      PersonDevelopment::CommandHandler.new.remind_evidence_request(
+        request.person_id, request.framework_id, request.id, kind: "no_response"
+      )
+    end
+
+    sign_in_as(@report_user)
+    visit evidence_hub_path
+    assert_text "To Peer"
+    assert_text(/Reminded .* ago/)
+  end
 end

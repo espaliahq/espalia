@@ -5,6 +5,7 @@
 # surface notifications deep-link to.
 class Views::Evidence::HubView < Views::Base
   include Phlex::Rails::Helpers::FormWith
+  include Phlex::Rails::Helpers::TimeAgoInWords
 
   STATUS_VARIANT = {
     "pending" => :warning, "responded" => :success, "declined" => :default, "cancelled" => :default
@@ -97,6 +98,7 @@ class Views::Evidence::HubView < Views::Base
       end
       request_cell_line(request)
       message_line(request)
+      reminded_line(request)
       if request.pending?
         a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
           class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline") { "Cancel request" }
@@ -237,6 +239,17 @@ class Views::Evidence::HubView < Views::Base
     return if request.message.blank?
 
     p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{request.message}”" }
+  end
+
+  # On an outgoing pending card: when the system last nudged the requestee —
+  # answers "should I chase this myself?" without opening the activity trail.
+  def reminded_line(request)
+    return unless request.pending?
+
+    reminded_at = request.last_reminded_at
+    return if reminded_at.nil?
+
+    p(class: "text-xs text-gray-500 dark:text-gray-400") { "Reminded #{time_ago_in_words(reminded_at)} ago" }
   end
 
   # ── Respond / edit (open the unified modal) ──
