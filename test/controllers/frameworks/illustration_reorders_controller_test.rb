@@ -70,6 +70,26 @@ class Frameworks::IllustrationReordersControllerTest < ActionDispatch::Integrati
       assert_equal [ @ill_b, @ill_a, @ill_c ], ordered_ids
     end
 
+    should "answer 422 for a self-target move" do
+      sign_in @admin_user
+      post framework_illustration_reorders_path(framework_id: @framework_id),
+           params: { reorder: { illustration_id: @ill_a, target_id: @ill_a, placement: "before" } },
+           as: :json
+
+      assert_response :unprocessable_content
+      assert_equal [ @ill_a, @ill_b, @ill_c ], ordered_ids
+    end
+
+    should "answer 422 for a malformed placement" do
+      sign_in @admin_user
+      post framework_illustration_reorders_path(framework_id: @framework_id),
+           params: { reorder: { illustration_id: @ill_a, target_id: @ill_b, placement: "sideways" } },
+           as: :json
+
+      assert_response :unprocessable_content
+      assert_equal [ @ill_a, @ill_b, @ill_c ], ordered_ids
+    end
+
     should "answer 422 for a stale target that is not in the list" do
       sign_in @admin_user
       post framework_illustration_reorders_path(framework_id: @framework_id),

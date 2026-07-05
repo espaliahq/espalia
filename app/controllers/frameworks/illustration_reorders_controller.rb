@@ -60,12 +60,23 @@ class Frameworks::IllustrationReordersController < ApplicationController
 
     moving = illustration.illustration_id
     target = reorder_params[:target_id].to_s
-    raise ActiveRecord::RecordNotFound, "target #{target} not in this list" unless ids.include?(target)
+    unless ids.include?(target) && target != moving
+      raise ActiveRecord::RecordNotFound, "target #{target} not a distinct member of this list"
+    end
 
     ids.delete(moving)
-    index = ids.index(target) + (reorder_params[:placement] == "after" ? 1 : 0)
-    ids.insert(index, moving)
+    ids.insert(ids.index(target) + placement_offset, moving)
     ids
+  end
+
+  # Fail a malformed placement fast (422) instead of silently treating any
+  # non-"after" value as "before".
+  def placement_offset
+    case reorder_params[:placement]
+    when "before" then 0
+    when "after" then 1
+    else raise Operations::Base::ParameterError, "placement must be before or after"
+    end
   end
 
   def set_framework
