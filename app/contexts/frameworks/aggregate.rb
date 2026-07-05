@@ -250,6 +250,15 @@ class Frameworks::Aggregate
     previous_ordinal = @levels[level_id][:ordinal]
     return if previous_ordinal == new_ordinal
 
+    # Same per-role uniqueness invariant add_level enforces — the merged-level
+    # grid keys rows by ordinal per role, and the read model carries a unique
+    # index on (role_id, ordinal), so a collision here would corrupt the grid
+    # (and crash the projection) instead of failing the command.
+    role_id = @levels[level_id][:role_id]
+    if @levels.any? { |lid, l| lid != level_id && l[:role_id] == role_id && l[:ordinal] == new_ordinal }
+      raise "Role #{role_id} already has a level at ordinal #{new_ordinal}"
+    end
+
     apply(Frameworks::Events::LevelOrdinalChanged.new(data: {
       framework_id: framework_id,
       level_id: level_id,
@@ -310,6 +319,59 @@ class Frameworks::Aggregate
   #
   # @param framework_id [String] UUID of the framework
   # @param category_id [String] UUID of the category
+  # Reorders a category's capabilities. Display-order only — shape-preserving,
+  # applies live. Takes the COMPLETE new order over the category's active
+  # capabilities so a reorder is one atomic event. (A capability archived in
+  # the open draft has status :archived here — struck through on screen and
+  # not reorderable — so it is excluded from the required set.)
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param new_ordering [Array<String>] every active capability_id in the
+  #   category, in order
+  # @raise [RuntimeError] if the category is unknown or the ordering is not an
+  #   exact permutation of its active capabilities
+  def reorder_capabilities(framework_id, category_id, new_ordering)
+    ensure_created!
+    raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
+
+    current_ids = @capabilities
+      .select { |_cid, d| d[:category_id] == category_id && d[:status] != :archived }
+      .keys
+    unless new_ordering.sort == current_ids.sort
+      raise "New ordering must be a permutation of the #{current_ids.size} active capability id(s) " \
+            "in category #{category_id}"
+    end
+
+    apply(Frameworks::Events::CapabilityReordered.new(data: {
+      framework_id: framework_id,
+      category_id: category_id,
+      new_ordering: new_ordering
+    }))
+  end
+
+  # Reorders the capability categories. Display-order only — shape-preserving,
+  # applies live. Takes the COMPLETE new order over the active categories so a
+  # reorder is one atomic event.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param new_ordering [Array<String>] every active category_id, in order
+  # @raise [RuntimeError] if the ordering is not an exact permutation of the
+  #   active categories
+  def reorder_capability_categories(framework_id, new_ordering)
+    ensure_created!
+
+    current_ids = @capability_categories.reject { |_cid, d| d[:status] == :archived }.keys
+    unless new_ordering.sort == current_ids.sort
+      raise "New ordering must be a permutation of the #{current_ids.size} active category id(s)"
+    end
+
+    apply(Frameworks::Events::CapabilityCategoryReordered.new(data: {
+      framework_id: framework_id,
+      new_ordering: new_ordering
+    }))
+  end
+
   # @param reason [String] reason for archiving
   # @raise [RuntimeError] if no draft in progress, category not found,
   #   already archived, or active capabilities remain in the category
@@ -579,11 +641,23 @@ class Frameworks::Aggregate
   # @param expectation_id [String] UUID of the expectation
   # @param role_id [String] UUID of the role
   # @param new_ordering [Array<String>] ordered list of illustration_ids
-  # @raise [RuntimeError] if expectation or role does not exist
+  # @raise [RuntimeError] if expectation or role does not exist, or the
+  #   ordering is not a permutation of that expectation × role's illustrations
   def reorder_role_illustrations(framework_id, expectation_id, role_id, new_ordering)
     ensure_created!
     raise "Expectation #{expectation_id} not found" unless @expectations.key?(expectation_id)
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
+
+    # A foreign / missing / duplicated id would silently renumber illustrations
+    # belonging to another expectation (handlers update by illustration_id
+    # alone) — refuse anything that isn't an exact permutation.
+    current_ids = @illustrations
+      .select { |_iid, d| d[:expectation_id] == expectation_id && d[:role_id] == role_id }
+      .keys
+    unless new_ordering.sort == current_ids.sort
+      raise "New ordering must be a permutation of the #{current_ids.size} illustration id(s) " \
+            "for expectation #{expectation_id} and role #{role_id}"
+    end
 
     apply(Frameworks::Events::RoleIllustrationReordered.new(data: {
       framework_id: framework_id,
@@ -1135,6 +1209,18 @@ class Frameworks::Aggregate
       ordinal: event.data[:ordinal],
       status: :active
     }
+  end
+
+  on Frameworks::Events::CapabilityCategoryReordered do |event|
+    event.data[:new_ordering].each_with_index do |category_id, index|
+      @capability_categories[category_id][:ordinal] = index + 1 if @capability_categories.key?(category_id)
+    end
+  end
+
+  on Frameworks::Events::CapabilityReordered do |event|
+    event.data[:new_ordering].each_with_index do |capability_id, index|
+      @capabilities[capability_id][:ordinal] = index + 1 if @capabilities.key?(capability_id)
+    end
   end
 
   on Frameworks::Events::CapabilityCategoryUpdated do |event|

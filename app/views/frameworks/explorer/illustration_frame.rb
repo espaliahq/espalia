@@ -20,16 +20,24 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   #   ({ suggested_value:, suggestion_id:, created_at: }) — when present, the
   #   description renders as an inline diff instead of the plain value.
   # @param mode [Symbol] :view or :edit — gates the pencil affordance
-  def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view)
+  # @param can_reorder [Boolean] render the ↑/↓ move chevrons (edit-rights
+  #   holders, list has >1 item) — the enclosing UL carries the reorder-list
+  #   Stimulus controller these buttons dispatch to
+  def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view,
+                 can_reorder: false)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
     @mode = mode
+    @can_reorder = can_reorder
   end
 
   def view_template
-    turbo_frame_tag("illustration-#{@illustration.illustration_id}") do
+    turbo_frame_tag(
+      "illustration-#{@illustration.illustration_id}",
+      data: { reorder_item_id: @illustration.illustration_id }
+    ) do
       attrs = {
         class: "group/ill relative text-xs text-gray-600 dark:text-gray-400"
       }
@@ -58,8 +66,33 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
         span(class: "flex-1 #{decoration}".strip) { @illustration.description }
       end
       if @mode == :edit
+        reorder_buttons if @can_reorder
         edit_button
         archive_button
+      end
+    end
+  end
+
+  # ↑/↓ move-within-list chevrons, hover-revealed like the pencil. The action
+  # handlers live on the enclosing UL's reorder-list controller, which POSTs
+  # the neighbour-relative move and repositions this frame's node on success.
+  def reorder_buttons
+    reorder_button("Move illustration up", "reorder-list#moveUp", "M4.5 15.75l7.5-7.5 7.5 7.5")
+    reorder_button("Move illustration down", "reorder-list#moveDown", "M19.5 8.25l-7.5 7.5-7.5-7.5")
+  end
+
+  def reorder_button(label, action, chevron_path)
+    button(
+      type: "button",
+      class: "opacity-0 group-hover/ill:opacity-100 " \
+             "group-focus-within/ill:opacity-100 focus-visible:opacity-100 " \
+             "transition-opacity text-gray-400 hover:text-primary shrink-0 mt-0.5",
+      data: { action: action },
+      aria_label: label
+    ) do
+      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
+          stroke: "currentColor", stroke_width: "2") do |s|
+        s.path(stroke_linecap: "round", stroke_linejoin: "round", d: chevron_path)
       end
     end
   end

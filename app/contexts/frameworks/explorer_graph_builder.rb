@@ -109,9 +109,13 @@ class Frameworks::ExplorerGraphBuilder
   end
 
   def build_capability_categories
+    # nil-last with an insertion-order tiebreak: categories never reordered
+    # keep their event order; one added AFTER a reorder (ordinal nil) lands at
+    # the end instead of jumping to the front (which `|| 0` would do).
     @aggregate.capability_categories
-      .sort_by { |_cid, data| data[:ordinal] || 0 }
-      .map do |cat_id, data|
+      .each_with_index
+      .sort_by { |(_cid, data), index| [ data[:ordinal] || Float::INFINITY, index ] }
+      .map do |(cat_id, data), _index|
         Frameworks::ExplorerGraph::CapabilityCategory.new(
           category_id: cat_id,
           name: data[:name],
@@ -126,9 +130,13 @@ class Frameworks::ExplorerGraphBuilder
   end
 
   def build_capabilities_for(category_id)
+    # Same stable nil-last sort as categories: never-reordered capabilities
+    # keep their event order; ones added after a reorder land at the end.
     @aggregate.capabilities
       .select { |_cid, data| data[:category_id] == category_id }
-      .map do |cap_id, data|
+      .each_with_index
+      .sort_by { |(_cid, data), index| [ data[:ordinal] || Float::INFINITY, index ] }
+      .map do |(cap_id, data), _index|
         status = data[:status]
         pending_archive = pending_archive?(data)
         # Keep the published-world status for view-mode consumers — a

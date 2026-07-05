@@ -27,9 +27,11 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "capability_added"          => "bg-emerald-500",
     "capability_archived"       => "bg-amber-500",
     "capability_updated"        => "bg-indigo-500",
+    "capability_reordered"      => "bg-indigo-500",
     "category_added"            => "bg-emerald-500",
     "category_archived"         => "bg-amber-500",
     "category_updated"          => "bg-indigo-500",
+    "category_reordered"        => "bg-indigo-500",
     "binding_added"             => "bg-emerald-500",
     "binding_updated"           => "bg-indigo-500",
     "binding_removed"           => "bg-gray-400",
@@ -38,6 +40,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "bg-indigo-500",
     "illustration_updated"      => "bg-indigo-500",
     "illustration_removed"      => "bg-gray-400",
+    "illustration_reordered"    => "bg-indigo-500",
     "role_family_updated"       => "bg-indigo-500",
     "role_updated"              => "bg-indigo-500",
     "level_updated"             => "bg-indigo-500",
@@ -67,13 +70,16 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "edits",
     "illustration_updated"      => "edits",
     "illustration_removed"      => "edits",
+    "illustration_reordered"    => "edits",
     "role_family_updated"       => "edits",
     "role_updated"              => "edits",
     "level_updated"             => "edits",
     "capability_added"          => "structural",
     "capability_archived"       => "structural",
+    "capability_reordered"      => "structural",
     "category_added"            => "structural",
     "category_archived"         => "structural",
+    "category_reordered"        => "structural",
     "role_family_added"         => "structural",
     "role_added"                => "structural",
     "level_added"               => "structural",
@@ -287,9 +293,11 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "capability_added"    then "Added a capability"
     when "capability_archived" then "Archived a capability"
     when "capability_updated"  then "Updated a capability"
+    when "capability_reordered" then "Reordered the capabilities"
     when "category_added"      then "Added a category"
     when "category_archived"   then "Archived a category"
     when "category_updated"    then "Updated a category"
+    when "category_reordered"  then "Reordered the categories"
     when "expectation_added"   then "Added an expectation#{expectation_level}"
     when "binding_added"       then binding_role ? "Bound to #{binding_role}" : "Bound a capability to a role"
     when "binding_updated"     then binding_role ? "Updated the #{binding_role} binding" : "Updated a capability-role binding"
@@ -298,6 +306,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"
     when "illustration_removed" then "Removed an illustration"
+    when "illustration_reordered" then illustration_reordered_summary
     when "role_family_updated" then org_update_summary("role family", name: "name", description: "description", department: "department")
     when "role_updated"        then org_update_summary("role", name: "name", code: "code", track: "track")
     when "level_updated"       then org_update_summary("level", title: "title", code: "code")
@@ -325,6 +334,13 @@ class Views::Frameworks::Activity::Entry < Views::Base
     base = "Added L#{payload_value(:ordinal)}"
     role = payload_value(:level_role_label)
     role.present? ? "#{base} to #{role}" : base
+  end
+
+  # Names the role whose illustration list was reordered when the query
+  # resolved a label (the anchor context line locates the capability).
+  def illustration_reordered_summary
+    role = payload_value(:reorder_role_label).to_s.strip.presence
+    role ? "Reordered the #{role} illustrations" : "Reordered illustrations"
   end
 
   # Summary for a direct org-structure edit (role family / role / level) that

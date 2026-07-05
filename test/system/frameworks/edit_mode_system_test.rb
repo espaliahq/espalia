@@ -22,7 +22,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       @rid = rid = SecureRandom.uuid_v7
       cat_id = SecureRandom.uuid_v7
       cap_id = SecureRandom.uuid_v7
-      eid = SecureRandom.uuid_v7
+      @eid = eid = SecureRandom.uuid_v7
 
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rfid, "Engineering")
@@ -1035,5 +1035,150 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
     JS
+  end
+  context "reordering capabilities" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second capability in the same category so the kebab move items
+        # render, bound to the role so it is visible in the filtered matrix.
+        h = Frameworks::CommandHandler.new
+        cap2 = SecureRandom.uuid_v7
+        h.add_capability(@framework_id, cap2, SecureRandom.uuid_v7,
+                         FrameworkState::CapabilityCategory.find_by!(name: "Thinking").category_id,
+                         "Critical Thinking")
+        h.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap2, @rid)
+        h.publish_version(@framework_id, "cap2")
+      end
+    end
+
+    should "move a capability up via the row kebab and re-render in the new order" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_text "Critical Thinking"
+
+      # Open the SECOND capability row's kebab, then JS-dispatch its "Move up"
+      # item (hover-revealed Stimulus actions drop pointer clicks on CI).
+      page.execute_script(<<~JS)
+        const row = [...document.querySelectorAll("tr[data-capability-id]")]
+          .find(tr => tr.textContent.includes("Critical Thinking") &&
+                      tr.querySelector("[data-controller='reorder-move']"));
+        const item = [...row.querySelectorAll("[data-controller='reorder-move']")]
+          .find(el => el.textContent.trim() === "Move up");
+        item.click();
+      JS
+
+      # A successful move dispatches org-structure:updated → matrix#refresh.
+      # Assert by capability id + document order (general-sibling combinator),
+      # not row position — the tr count shifts as rows are added around the
+      # list (header rows, expanded rows, the add-capability row).
+      moved_id = ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::Capability.find_by!(name: "Critical Thinking").capability_id
+      end
+      other_id = ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::Capability.find_by!(name: "Strategic Thinking").capability_id
+      end
+      assert_selector "tr[data-capability-id='#{moved_id}'] ~ tr[data-capability-id='#{other_id}']"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        ordered = FrameworkState::Capability
+          .where(name: [ "Strategic Thinking", "Critical Thinking" ])
+          .order(:ordinal, :id).pluck(:name)
+        assert_equal [ "Critical Thinking", "Strategic Thinking" ], ordered
+      end
+    end
+  end
+
+  context "reordering categories" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second category so the header ↑/↓ chevrons render.
+        Frameworks::CommandHandler.new.add_capability_category(
+          @framework_id, SecureRandom.uuid_v7, "Delivery", ordinal: 2
+        )
+      end
+    end
+
+    should "move a category up via the header chevron and re-render in the new order" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_text "Delivery"
+
+      # JS-dispatch the second category's hover-revealed "move up" chevron
+      # (pointer clicks on hover-revealed Stimulus actions drop on starved CI).
+      page.execute_script(<<~JS)
+        document.querySelectorAll("button[aria-label='Move category up']")[0].click();
+      JS
+
+      # A successful move dispatches org-structure:updated → matrix#refresh;
+      # the re-rendered matrix lists Delivery's header before Thinking's.
+      assert_selector "tbody tr:first-child", text: "Delivery"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        ordered = FrameworkState::CapabilityCategory
+          .where(framework_id: @framework_id, status: "active")
+          .order(:ordinal, :id).pluck(:name)
+        assert_equal [ "Delivery", "Thinking" ], ordered
+      end
+    end
+
+    should "not render category move chevrons in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      # The empty "Delivery" category is hidden in view mode (Lesson 18) —
+      # sync on the published category instead.
+      assert_text "Thinking"
+      assert_no_selector "button[aria-label='Move category up']"
+      assert_no_selector "button[aria-label='Move category down']"
+    end
+  end
+
+  context "reordering illustrations" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second illustration so the ↑/↓ chevrons render (they need >1).
+        # Illustration adds are shape-preserving, so post-publish is live.
+        Frameworks::CommandHandler.new.add_role_illustration(
+          @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+          @eid, @rid, 2, "Beta second illustration"
+        )
+      end
+    end
+
+    should "move an illustration up via the chevron and persist the order" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Beta second illustration"
+
+      # JS-dispatch the second frame's "move up" chevron — hover-revealed
+      # buttons drop pointer clicks on starved CI (see stimulus helpers doc).
+      page.execute_script(<<~JS)
+        const items = document.querySelectorAll("ul[id^='illustrations-'] [data-reorder-item-id]");
+        items[1].querySelector("button[aria-label='Move illustration up']").click();
+      JS
+
+      # The reorder-list controller repositions the frame only after the
+      # server answers 204, so DOM order flipping proves the round trip.
+      assert_selector "ul[id^='illustrations-'] turbo-frame:first-of-type",
+                      text: "Beta second illustration"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        ordered = FrameworkState::RoleIllustration
+          .where(expectation_id: @eid, role_id: @rid)
+          .order(:ordinal, :id).pluck(:description)
+        assert_equal [ "Beta second illustration", "Seeks guidance from tech lead" ], ordered
+      end
+    end
+
+    should "not render reorder chevrons in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Beta second illustration"
+      assert_no_selector "button[aria-label='Move illustration up']"
+    end
   end
 end

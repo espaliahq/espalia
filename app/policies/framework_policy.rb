@@ -136,6 +136,25 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def remove_binding? = edit_structure?
 
+  # Reorder the illustrations for one expectation × role. Display-order only
+  # (shape-preserving, applies live) — a direct structural edit, not the
+  # suggest path, so it sits on the edit-rights bar.
+  #
+  # @return [Boolean]
+  def reorder_illustrations? = edit_structure?
+
+  # Reorder the framework's capability categories (display order only,
+  # shape-preserving). Same edit-rights bar.
+  #
+  # @return [Boolean]
+  def reorder_categories? = edit_structure?
+
+  # Reorder the capabilities within a category (display order only,
+  # shape-preserving). Same edit-rights bar.
+  #
+  # @return [Boolean]
+  def reorder_capabilities? = edit_structure?
+
   # Convenience method for views to conditionally render admin UI.
   #
   # @return [Boolean]

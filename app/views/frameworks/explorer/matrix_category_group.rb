@@ -14,9 +14,12 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
   # @param mode [Symbol] :view or :edit
   # @param roles_by_id [Hash] { role_id => Role } — passed through to rows to avoid per-cell AR lookups
+  # @param prev_category_id [String, nil] the visible category above (for the ↑ move chevron)
+  # @param next_category_id [String, nil] the visible category below (for the ↓ move chevron)
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
                  roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
-                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none,
+                 prev_category_id: nil, next_category_id: nil)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
@@ -32,6 +35,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @search_query = search_query
     @can_edit_structure = can_edit_structure
     @approval_authority = approval_authority
+    @prev_category_id = prev_category_id
+    @next_category_id = next_category_id
   end
 
   def view_template
@@ -141,6 +146,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
                 end
               end
 
+              category_reorder_chevrons if show_reorder_chevrons?
               archive_category_kebab if show_archive_category_kebab?
             end
 
@@ -159,6 +165,47 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
             end
           end
         end
+      end
+    end
+  end
+
+  # ↑/↓ move chevrons — edit mode + edit-structure rights, each rendered only
+  # when a visible neighbour exists in that direction. Same hover-revealed
+  # icon-button vocabulary as the archive control beside them; a successful
+  # move refreshes the matrix (org-structure:updated), which re-renders with
+  # fresh neighbour ids.
+  def show_reorder_chevrons?
+    @mode == :edit && @can_edit_structure && (@prev_category_id || @next_category_id)
+  end
+
+  def category_reorder_chevrons
+    if @prev_category_id
+      category_move_chevron("Move category up", @prev_category_id, "before", "M4.5 15.75l7.5-7.5 7.5 7.5")
+    end
+    if @next_category_id
+      category_move_chevron("Move category down", @next_category_id, "after", "M19.5 8.25l-7.5 7.5-7.5-7.5")
+    end
+  end
+
+  def category_move_chevron(label, target_id, placement, chevron_path)
+    button(
+      type: "button",
+      class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 " \
+             "transition-opacity inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
+             "text-gray-400 hover:text-primary",
+      data: {
+        controller: "reorder-move",
+        reorder_move_url_value: framework_category_reorders_path(framework_id: @framework_id),
+        reorder_move_body_value: {
+          reorder: { category_id: @category.category_id, target_id: target_id, placement: placement }
+        }.to_json,
+        action: "reorder-move#move"
+      },
+      aria_label: label
+    ) do
+      svg(class: "w-4 h-4", fill: "none", viewBox: "0 0 24 24",
+          stroke: "currentColor", stroke_width: "2") do |s|
+        s.path(stroke_linecap: "round", stroke_linejoin: "round", d: chevron_path)
       end
     end
   end
@@ -201,7 +248,10 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   end
 
   def capability_rows
+    movable = movable_capability_ids
     @capabilities.each do |cap_data|
+      cap_id = cap_data[:capability].capability_id
+      index = movable.index(cap_id)
       render Views::Frameworks::Explorer::MatrixRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
@@ -212,8 +262,22 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         current_person_id: @current_person_id,
         search_query: @search_query,
         can_edit_structure: @can_edit_structure,
-        approval_authority: @approval_authority
+        approval_authority: @approval_authority,
+        prev_capability_id: index&.positive? ? movable[index - 1] : nil,
+        next_capability_id: index ? movable[index + 1] : nil
       )
+    end
+  end
+
+  # Rows the ↑/↓ kebab items can move or target: the visible rows minus the
+  # struck pending-archive ones (they're going away at publish — not part of
+  # the reorderable order the server validates against).
+  def movable_capability_ids
+    @capabilities.filter_map do |cap_data|
+      cap = cap_data[:capability]
+      next if cap.respond_to?(:pending_archive) && cap.pending_archive
+
+      cap.capability_id
     end
   end
 end

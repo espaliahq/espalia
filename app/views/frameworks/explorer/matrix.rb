@@ -65,7 +65,7 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
         mode: @mode
       )
       tbody do
-        @categories.each do |cat_data|
+        @categories.each_with_index do |cat_data, index|
           render Views::Frameworks::Explorer::MatrixCategoryGroup.new(
             category_data: cat_data,
             merged_levels: @merged_levels,
@@ -76,7 +76,12 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             current_person_id: @current_person_id,
             search_query: @matrix_data[:search_query],
             can_edit_structure: @can_edit_structure,
-            approval_authority: @approval_authority
+            approval_authority: @approval_authority,
+            # Visible neighbours for the header's ↑/↓ move chevrons — a move is
+            # relative to what the viewer SEES (filters can hide categories),
+            # and the matrix re-renders after each move so these stay fresh.
+            prev_category_id: index.positive? ? @categories[index - 1][:category].category_id : nil,
+            next_category_id: @categories[index + 1]&.dig(:category)&.category_id
           )
         end
       end

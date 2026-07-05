@@ -283,6 +283,69 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#reorder_capabilities" do
+    setup do
+      @cat_id = SecureRandom.uuid_v7
+      @cap_a = SecureRandom.uuid_v7
+      @cap_b = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, @cat_id, "Thinking")
+      @aggregate.add_capability(@framework_id, @cap_a, SecureRandom.uuid_v7, @cat_id, "Alpha")
+      @aggregate.add_capability(@framework_id, @cap_b, SecureRandom.uuid_v7, @cat_id, "Beta")
+    end
+
+    should "apply CapabilityReordered for an exact permutation" do
+      @aggregate.reorder_capabilities(@framework_id, @cat_id, [ @cap_b, @cap_a ])
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityReordered, event
+      assert_equal @cat_id, event.data[:category_id]
+      assert_equal [ @cap_b, @cap_a ], event.data[:new_ordering]
+    end
+
+    should "raise when the ordering smuggles another category's capability" do
+      other_cat = SecureRandom.uuid_v7
+      other_cap = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, other_cat, "Delivery")
+      @aggregate.add_capability(@framework_id, other_cap, SecureRandom.uuid_v7, other_cat, "Shipping")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_capabilities(@framework_id, @cat_id, [ other_cap, @cap_a ])
+      end
+      assert_match(/permutation/, err.message)
+    end
+
+    should "raise for an unknown category" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_capabilities(@framework_id, "nonexistent", [ @cap_a, @cap_b ])
+      end
+      assert_match(/not found/, err.message)
+    end
+  end
+
+  context "#reorder_capability_categories" do
+    setup do
+      @cat_a = SecureRandom.uuid_v7
+      @cat_b = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, @cat_a, "Thinking")
+      @aggregate.add_capability_category(@framework_id, @cat_b, "Delivery")
+    end
+
+    should "apply CapabilityCategoryReordered for an exact permutation" do
+      @aggregate.reorder_capability_categories(@framework_id, [ @cat_b, @cat_a ])
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityCategoryReordered, event
+      assert_equal [ @cat_b, @cat_a ], event.data[:new_ordering]
+    end
+
+    should "raise when the ordering is not a permutation of the active categories" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_capability_categories(@framework_id, [ @cat_b ])
+      end
+      assert_match(/permutation/, err.message)
+    end
+  end
+
   context "#archive_capability_category" do
     setup do
       @cat_id = SecureRandom.uuid_v7
@@ -568,6 +631,53 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
         @aggregate.add_role_illustration(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, @eid, "nonexistent", 1, "X")
       end
       assert_match /not found/, err.message
+    end
+  end
+
+  context "#reorder_role_illustrations" do
+    setup do
+      @rfid = SecureRandom.uuid_v7
+      @rid = SecureRandom.uuid_v7
+      @cat_id = SecureRandom.uuid_v7
+      @cap_id = SecureRandom.uuid_v7
+      @eid = SecureRandom.uuid_v7
+      @ill_a = SecureRandom.uuid_v7
+      @ill_b = SecureRandom.uuid_v7
+
+      @aggregate.add_role_family(@framework_id, @rfid, "Engineering")
+      @aggregate.add_role(@framework_id, @rid, @rfid, "Engineer", "E", "ic")
+      @aggregate.add_capability_category(@framework_id, @cat_id, "Thinking")
+      @aggregate.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, @cat_id, "Cap")
+      @aggregate.set_behavioural_expectation(@framework_id, @eid, SecureRandom.uuid_v7, @cap_id, 1, "Asks questions")
+      @aggregate.add_role_illustration(@framework_id, @ill_a, SecureRandom.uuid_v7, @eid, @rid, 1, "First")
+      @aggregate.add_role_illustration(@framework_id, @ill_b, SecureRandom.uuid_v7, @eid, @rid, 2, "Second")
+    end
+
+    should "apply RoleIllustrationReordered for an exact permutation" do
+      @aggregate.reorder_role_illustrations(@framework_id, @eid, @rid, [ @ill_b, @ill_a ])
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::RoleIllustrationReordered, event
+      assert_equal [ @ill_b, @ill_a ], event.data[:new_ordering]
+    end
+
+    should "raise when the ordering is missing an illustration" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_role_illustrations(@framework_id, @eid, @rid, [ @ill_b ])
+      end
+      assert_match(/permutation/, err.message)
+    end
+
+    should "raise when the ordering smuggles a foreign illustration id" do
+      other_eid = SecureRandom.uuid_v7
+      other_ill = SecureRandom.uuid_v7
+      @aggregate.set_behavioural_expectation(@framework_id, other_eid, SecureRandom.uuid_v7, @cap_id, 2, "Digs deeper")
+      @aggregate.add_role_illustration(@framework_id, other_ill, SecureRandom.uuid_v7, other_eid, @rid, 1, "Elsewhere")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_role_illustrations(@framework_id, @eid, @rid, [ other_ill, @ill_a ])
+      end
+      assert_match(/permutation/, err.message)
     end
   end
 
@@ -935,6 +1045,28 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
         @aggregate.change_level_ordinal(@framework_id, "nonexistent", 5, reason: "test")
       end
       assert_match /not found/, err.message
+    end
+
+    should "raise when another level of the same role already holds the ordinal" do
+      other_lid = SecureRandom.uuid_v7
+      @aggregate.add_level(@framework_id, other_lid, @rid, 2, "L2", "R2")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.change_level_ordinal(@framework_id, @lid, 2, reason: "collide")
+      end
+      assert_match(/already has a level at ordinal 2/, err.message)
+    end
+
+    should "allow the same ordinal on a different role" do
+      other_rid = SecureRandom.uuid_v7
+      other_lid = SecureRandom.uuid_v7
+      @aggregate.add_role(@framework_id, other_rid, @rfid, "M", "M", "management")
+      @aggregate.add_level(@framework_id, other_lid, other_rid, 3, "M3", "M3")
+
+      @aggregate.change_level_ordinal(@framework_id, @lid, 3, reason: "fine")
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::LevelOrdinalChanged, event
+      assert_equal 3, event.data[:new_ordinal]
     end
   end
 

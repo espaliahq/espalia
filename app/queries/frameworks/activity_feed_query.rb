@@ -41,10 +41,11 @@ class Frameworks::ActivityFeedQuery
 
   # Event class → feed kind string. Drives both which events become feed
   # entries and the kind the view renders. Events not in this map (e.g.
-  # FrameworkCreated, ScoringThresholdsConfigured, reorders) are deliberately
-  # out of scope; org-structure *renames* (RoleFamilyUpdated / RoleUpdated /
-  # LevelUpdated) and *adds* (RoleFamilyAdded / RoleAdded / LevelAdded) are
-  # covered.
+  # FrameworkCreated, ScoringThresholdsConfigured) are deliberately out of
+  # scope; org-structure *renames* (RoleFamilyUpdated / RoleUpdated /
+  # LevelUpdated), *adds* (RoleFamilyAdded / RoleAdded / LevelAdded) and
+  # *reorders* (RoleIllustrationReordered / CapabilityCategoryReordered /
+  # CapabilityReordered) are covered.
   KINDS = {
     Frameworks::Events::EditSuggested              => "suggestion_edit",
     Frameworks::Events::EntityCreationSuggested    => "suggestion_create",
@@ -59,9 +60,11 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::CapabilityAdded            => "capability_added",
     Frameworks::Events::CapabilityArchived         => "capability_archived",
     Frameworks::Events::CapabilityUpdated          => "capability_updated",
+    Frameworks::Events::CapabilityReordered        => "capability_reordered",
     Frameworks::Events::CapabilityCategoryAdded    => "category_added",
     Frameworks::Events::CapabilityCategoryArchived => "category_archived",
     Frameworks::Events::CapabilityCategoryUpdated  => "category_updated",
+    Frameworks::Events::CapabilityCategoryReordered => "category_reordered",
     Frameworks::Events::CapabilityRoleBindingCreated => "binding_added",
     Frameworks::Events::CapabilityRoleBindingUpdated => "binding_updated",
     Frameworks::Events::CapabilityRoleBindingRemoved => "binding_removed",
@@ -70,6 +73,7 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::RoleIllustrationAdded      => "illustration_added",
     Frameworks::Events::RoleIllustrationUpdated    => "illustration_updated",
     Frameworks::Events::RoleIllustrationRemoved    => "illustration_removed",
+    Frameworks::Events::RoleIllustrationReordered  => "illustration_reordered",
     Frameworks::Events::RoleFamilyUpdated          => "role_family_updated",
     Frameworks::Events::RoleUpdated                => "role_updated",
     Frameworks::Events::LevelUpdated               => "level_updated",
@@ -262,6 +266,9 @@ class Frameworks::ActivityFeedQuery
       extra.merge!(meta) if meta
     end
     extra.merge!(binding_metadata(kind, data)) if BINDING_KINDS.include?(kind)
+    if kind == "illustration_reordered" && role_labels.key?(data[:role_id])
+      extra[:reorder_role_label] = role_labels[data[:role_id]]
+    end
     if kind == "level_added" && role_labels.key?(data[:role_id])
       extra[:level_role_label] = role_labels[data[:role_id]]
     end
@@ -310,7 +317,9 @@ class Frameworks::ActivityFeedQuery
     case kind
     when "capability_added", "capability_archived", "capability_updated"
       from_capability(data[:capability_id])
-    when "category_added", "category_archived", "category_updated"
+    when "category_added", "category_archived", "category_updated", "capability_reordered"
+      # capability_reordered touches every capability in the category, so it
+      # anchors at the category, not any single capability.
       { capability_id: nil, category_id: data[:category_id] }
     when "binding_added"
       from_capability(data[:capability_id])
@@ -324,13 +333,14 @@ class Frameworks::ActivityFeedQuery
       from_capability(data[:capability_id])
     when "expectation_updated"
       from_capability(expectation_to_capability[data[:expectation_id]])
-    when "illustration_added"
+    when "illustration_added", "illustration_reordered"
       from_capability(expectation_to_capability[data[:expectation_id]])
     when "illustration_updated", "illustration_removed"
       from_capability(expectation_to_capability[illustration_to_expectation[data[:illustration_id]]])
     else
       # draft_opened, version_published, migration_mapping_defined,
-      # collaborator_* — framework-level, no matrix anchor.
+      # collaborator_*, category_reordered (touches every category) —
+      # framework-level, no matrix anchor.
       empty_anchor
     end
   end
