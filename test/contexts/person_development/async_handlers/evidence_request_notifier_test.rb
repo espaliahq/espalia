@@ -94,4 +94,43 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     titles = @assessee_user.notifications.reload.map(&:inbox_title)
     assert_includes titles, "Jordan declined your feedback request"
   end
+
+  should "nudge the requestee on a no_response reminder" do
+    id = request!
+    perform_enqueued_jobs do
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+    end
+
+    notification = @peer_user.notifications.reload.max_by(&:created_at)
+    assert_equal "Reminder: Alex is still waiting on your feedback", notification.inbox_title
+    assert_match "The request is for behavioural feedback", notification.inbox_body
+    assert_equal "/evidence#evidence-request-#{id}", notification.inbox_url
+  end
+
+  should "name the due date on a due_soon reminder" do
+    id = SecureRandom.uuid_v7
+    due = 2.days.from_now
+    @handler.request_evidence(@assessee.id, @framework_id, id,
+      requested_by_id: @assessee.id, requestee_person_id: @peer.id,
+      capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, due_at: due.iso8601)
+    perform_enqueued_jobs do
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "due_soon")
+    end
+
+    notification = @peer_user.notifications.reload.max_by(&:created_at)
+    assert_equal "Reminder: Alex's feedback request is due #{due.strftime('%a %-d %b')}",
+      notification.inbox_title
+  end
+
+  should "not nudge when the request was resolved before the job ran" do
+    id = request!
+    # Reminder event lands first, but the decline resolves the request before
+    # the async notifier job performs — the nudge must be dropped.
+    @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+    @handler.decline_evidence_request(@assessee.id, @framework_id, id, declined_by_id: @peer.id)
+    perform_enqueued_jobs
+
+    titles = @peer_user.notifications.reload.map(&:inbox_title)
+    assert_not titles.any? { |t| t.start_with?("Reminder:") }, "reminder should be dropped: #{titles}"
+  end
 end
