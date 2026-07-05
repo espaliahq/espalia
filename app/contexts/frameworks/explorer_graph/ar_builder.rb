@@ -71,7 +71,11 @@ class Frameworks::ExplorerGraph::ArBuilder
   def build_capability_categories
     @framework.capability_categories
       .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal, :id) # PG sorts ASC nulls-last; id (uuidv7) tiebreak keeps it deterministic
+      # PG sorts ASC nulls-last. created_at (µs precision, projection writes in
+      # event order) tracks the live builder's insertion-order tiebreak far
+      # more faithfully than uuidv7 ids, which are NOT monotonic within one
+      # millisecond; id is the final total-order tiebreak.
+      .order(:ordinal, :created_at, :id)
       .map do |cat|
         Frameworks::ExplorerGraph::CapabilityCategory.new(
           category_id: cat.category_id,
