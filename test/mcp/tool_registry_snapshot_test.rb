@@ -937,6 +937,31 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_reorder_illustrations",
+        "description" => "Reorder the illustrations for one expectation and role (owner/editor/lead only). " \
+                         "Pass the complete list of illustration ids in the desired display order.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"   => { "type" => "string" },
+            "expectation_id" => { "type" => "string" },
+            "role_id"        => { "type" => "string" },
+            "new_ordering"   => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "Every illustration id for this expectation × role, in the desired order"
+            }
+          },
+          "required" => %w[framework_id expectation_id role_id new_ordering],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_set_behavioural_expectation",
         "description" => "Author a behavioural expectation for an empty cell — applied directly with approval rights in editing mode, else proposed as a suggestion.",
         "inputSchema" => {

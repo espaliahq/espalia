@@ -67,7 +67,10 @@ class Frameworks::IllustrationsController < ApplicationController
       framework_id: @framework.framework_id,
       mode: :edit,
       pending_edit_count: pending_edits_on_illustration,
-      pending_edit: latest_pending_edit
+      pending_edit: latest_pending_edit,
+      # The frame swap must not drop the ↑/↓ chevrons (Hard-Won Lesson 13/16
+      # class — controller responses re-thread every affordance-gating flag).
+      can_reorder: can_reorder_illustrations?
     ), layout: false
   rescue ActiveRecord::RecordNotFound, RuntimeError
     head :unprocessable_content
@@ -134,7 +137,8 @@ class Frameworks::IllustrationsController < ApplicationController
           Views::Frameworks::Explorer::IllustrationFrame.new(
             illustration: illustration,
             framework_id: @framework.framework_id,
-            mode: :edit
+            mode: :edit,
+            can_reorder: can_reorder_illustrations?
           ),
           layout: false
         )
@@ -179,5 +183,13 @@ class Frameworks::IllustrationsController < ApplicationController
         )
       )
     ]
+  end
+
+  # Whether the re-rendered frame should carry the ↑/↓ move chevrons — the
+  # initial render gates on can_edit_structure (plus list size, which the
+  # UL-level controller makes moot for a lone item: moving first-up / last-down
+  # no-ops), so the swap mirrors the policy half of that gate.
+  def can_reorder_illustrations?
+    policy(@framework).reorder_illustrations?
   end
 end

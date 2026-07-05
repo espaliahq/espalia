@@ -571,6 +571,53 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#reorder_role_illustrations" do
+    setup do
+      @rfid = SecureRandom.uuid_v7
+      @rid = SecureRandom.uuid_v7
+      @cat_id = SecureRandom.uuid_v7
+      @cap_id = SecureRandom.uuid_v7
+      @eid = SecureRandom.uuid_v7
+      @ill_a = SecureRandom.uuid_v7
+      @ill_b = SecureRandom.uuid_v7
+
+      @aggregate.add_role_family(@framework_id, @rfid, "Engineering")
+      @aggregate.add_role(@framework_id, @rid, @rfid, "Engineer", "E", "ic")
+      @aggregate.add_capability_category(@framework_id, @cat_id, "Thinking")
+      @aggregate.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, @cat_id, "Cap")
+      @aggregate.set_behavioural_expectation(@framework_id, @eid, SecureRandom.uuid_v7, @cap_id, 1, "Asks questions")
+      @aggregate.add_role_illustration(@framework_id, @ill_a, SecureRandom.uuid_v7, @eid, @rid, 1, "First")
+      @aggregate.add_role_illustration(@framework_id, @ill_b, SecureRandom.uuid_v7, @eid, @rid, 2, "Second")
+    end
+
+    should "apply RoleIllustrationReordered for an exact permutation" do
+      @aggregate.reorder_role_illustrations(@framework_id, @eid, @rid, [ @ill_b, @ill_a ])
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::RoleIllustrationReordered, event
+      assert_equal [ @ill_b, @ill_a ], event.data[:new_ordering]
+    end
+
+    should "raise when the ordering is missing an illustration" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_role_illustrations(@framework_id, @eid, @rid, [ @ill_b ])
+      end
+      assert_match(/permutation/, err.message)
+    end
+
+    should "raise when the ordering smuggles a foreign illustration id" do
+      other_eid = SecureRandom.uuid_v7
+      other_ill = SecureRandom.uuid_v7
+      @aggregate.set_behavioural_expectation(@framework_id, other_eid, SecureRandom.uuid_v7, @cap_id, 2, "Digs deeper")
+      @aggregate.add_role_illustration(@framework_id, other_ill, SecureRandom.uuid_v7, other_eid, @rid, 1, "Elsewhere")
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.reorder_role_illustrations(@framework_id, @eid, @rid, [ other_ill, @ill_a ])
+      end
+      assert_match(/permutation/, err.message)
+    end
+  end
+
   context "#remove_role_illustration" do
     should "apply RoleIllustrationRemoved event" do
       rfid = SecureRandom.uuid_v7

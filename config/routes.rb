@@ -176,6 +176,7 @@ Rails.application.routes.draw do
     end
     resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
     resources :illustration_archives, only: [ :create ], controller: "frameworks/illustration_archives"
+    resources :illustration_reorders, only: [ :create ], controller: "frameworks/illustration_reorders"
     resources :capabilities, only: [ :create, :update ], controller: "frameworks/capabilities"
     resources :capability_archives, only: [ :create ], controller: "frameworks/capability_archives"
     resources :capability_bindings, only: [ :index, :create, :update, :destroy ],

@@ -38,6 +38,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "bg-indigo-500",
     "illustration_updated"      => "bg-indigo-500",
     "illustration_removed"      => "bg-gray-400",
+    "illustration_reordered"    => "bg-indigo-500",
     "role_family_updated"       => "bg-indigo-500",
     "role_updated"              => "bg-indigo-500",
     "level_updated"             => "bg-indigo-500",
@@ -67,6 +68,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_added"        => "edits",
     "illustration_updated"      => "edits",
     "illustration_removed"      => "edits",
+    "illustration_reordered"    => "edits",
     "role_family_updated"       => "edits",
     "role_updated"              => "edits",
     "level_updated"             => "edits",
@@ -298,6 +300,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "illustration_added"  then "Added an illustration"
     when "illustration_updated" then "Updated an illustration"
     when "illustration_removed" then "Removed an illustration"
+    when "illustration_reordered" then illustration_reordered_summary
     when "role_family_updated" then org_update_summary("role family", name: "name", description: "description", department: "department")
     when "role_updated"        then org_update_summary("role", name: "name", code: "code", track: "track")
     when "level_updated"       then org_update_summary("level", title: "title", code: "code")
@@ -325,6 +328,13 @@ class Views::Frameworks::Activity::Entry < Views::Base
     base = "Added L#{payload_value(:ordinal)}"
     role = payload_value(:level_role_label)
     role.present? ? "#{base} to #{role}" : base
+  end
+
+  # Names the role whose illustration list was reordered when the query
+  # resolved a label (the anchor context line locates the capability).
+  def illustration_reordered_summary
+    role = payload_value(:reorder_role_label).to_s.strip.presence
+    role ? "Reordered the #{role} illustrations" : "Reordered illustrations"
   end
 
   # Summary for a direct org-structure edit (role family / role / level) that

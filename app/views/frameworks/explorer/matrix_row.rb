@@ -327,17 +327,31 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
         div(class: "mb-2 last:mb-0") do
           render Components::Kit::Badge.new(role.code, variant: :default)
-          ul(
+          ul_attrs = {
             id: "illustrations-#{expectation.expectation_id}-#{role_id}",
             class: "mt-1 space-y-1"
-          ) do
+          }
+          # ↑/↓ reordering — edit-rights holders only, and only when there is
+          # something to reorder. The controller moves the DOM node on a 204,
+          # so the expanded row never collapses (no matrix refresh).
+          can_reorder = @mode == :edit && @can_edit_structure && illustrations.size > 1
+          if can_reorder
+            ul_attrs[:data] = {
+              controller: "reorder-list",
+              reorder_list_url_value:
+                framework_illustration_reorders_path(framework_id: @framework_id),
+              reorder_list_param_name_value: "illustration_id"
+            }
+          end
+          ul(**ul_attrs) do
             illustrations.each do |ill|
               render Views::Frameworks::Explorer::IllustrationFrame.new(
                 illustration: ill,
                 framework_id: @framework_id,
                 pending_edit_count: ill_pending_edits[ill.illustration_id] || 0,
                 pending_edit: ill_pending_edit_details[ill.illustration_id],
-                mode: @mode
+                mode: @mode,
+                can_reorder: can_reorder
               )
             end
             role_pending_creates.each do |suggestion|

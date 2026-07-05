@@ -579,11 +579,23 @@ class Frameworks::Aggregate
   # @param expectation_id [String] UUID of the expectation
   # @param role_id [String] UUID of the role
   # @param new_ordering [Array<String>] ordered list of illustration_ids
-  # @raise [RuntimeError] if expectation or role does not exist
+  # @raise [RuntimeError] if expectation or role does not exist, or the
+  #   ordering is not a permutation of that expectation × role's illustrations
   def reorder_role_illustrations(framework_id, expectation_id, role_id, new_ordering)
     ensure_created!
     raise "Expectation #{expectation_id} not found" unless @expectations.key?(expectation_id)
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
+
+    # A foreign / missing / duplicated id would silently renumber illustrations
+    # belonging to another expectation (handlers update by illustration_id
+    # alone) — refuse anything that isn't an exact permutation.
+    current_ids = @illustrations
+      .select { |_iid, d| d[:expectation_id] == expectation_id && d[:role_id] == role_id }
+      .keys
+    unless new_ordering.sort == current_ids.sort
+      raise "New ordering must be a permutation of the #{current_ids.size} illustration id(s) " \
+            "for expectation #{expectation_id} and role #{role_id}"
+    end
 
     apply(Frameworks::Events::RoleIllustrationReordered.new(data: {
       framework_id: framework_id,

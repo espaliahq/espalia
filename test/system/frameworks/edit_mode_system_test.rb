@@ -22,7 +22,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       @rid = rid = SecureRandom.uuid_v7
       cat_id = SecureRandom.uuid_v7
       cap_id = SecureRandom.uuid_v7
-      eid = SecureRandom.uuid_v7
+      @eid = eid = SecureRandom.uuid_v7
 
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rfid, "Engineering")
@@ -1035,5 +1035,52 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
     JS
+  end
+  context "reordering illustrations" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second illustration so the ↑/↓ chevrons render (they need >1).
+        # Illustration adds are shape-preserving, so post-publish is live.
+        Frameworks::CommandHandler.new.add_role_illustration(
+          @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+          @eid, @rid, 2, "Beta second illustration"
+        )
+      end
+    end
+
+    should "move an illustration up via the chevron and persist the order" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Beta second illustration"
+
+      # JS-dispatch the second frame's "move up" chevron — hover-revealed
+      # buttons drop pointer clicks on starved CI (see stimulus helpers doc).
+      page.execute_script(<<~JS)
+        const items = document.querySelectorAll("ul[id^='illustrations-'] [data-reorder-item-id]");
+        items[1].querySelector("button[aria-label='Move illustration up']").click();
+      JS
+
+      # The reorder-list controller repositions the frame only after the
+      # server answers 204, so DOM order flipping proves the round trip.
+      assert_selector "ul[id^='illustrations-'] turbo-frame:first-of-type",
+                      text: "Beta second illustration"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        ordered = FrameworkState::RoleIllustration
+          .where(expectation_id: @eid, role_id: @rid)
+          .order(:ordinal, :id).pluck(:description)
+        assert_equal [ "Beta second illustration", "Seeks guidance from tech lead" ], ordered
+      end
+    end
+
+    should "not render reorder chevrons in view mode" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Beta second illustration"
+      assert_no_selector "button[aria-label='Move illustration up']"
+    end
   end
 end

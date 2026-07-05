@@ -413,6 +413,23 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   (`IllustrationFrame`) → `Operations::Frameworks::ArchiveIllustration`: direct
   `remove_role_illustration` vs `suggest_delete("role_illustration")`, no
   migration mapping since illustrations carry no ratings.)*
+- **Illustration ↑/↓ reorder chevrons** — hover-revealed on each illustration
+  in the expanded row, next to the pencil/archive (edit +
+  `can_edit_structure`, list >1). Display-order only → **shape-preserving,
+  applies live**. The `reorder-list` Stimulus controller (on the per-role
+  `<ul>`) POSTs a neighbour-relative move (`{ illustration_id, target_id,
+  placement }`) to `IllustrationReordersController`, which translates it into
+  the complete ordered list for the shared
+  `Operations::Frameworks::ReorderIllustrations` (web + MCP — the MCP tool
+  takes the full list, no N-swap dance). On a 204 the controller moves the
+  frame's DOM node in place — **no matrix refresh**, so the expanded row and
+  scroll position survive repeated moves; other viewers pick the order up on
+  their next interaction (feed-live / matrix-not, Lesson 21). The Operation
+  and the aggregate both refuse any list that isn't an exact permutation of
+  that expectation × role's illustrations (a smuggled foreign id would
+  silently renumber another expectation's list). Surfaces in the feed as
+  `illustration_reordered` ("Reordered the E · Software Engineer
+  illustrations", edits group).
 - **Row-actions kebab (⋮) → Edit roles…** — offered to **edit-structure
   holders** (a direct structural edit, like add-capability, not the broader
   suggest bar). Opens the shared **binding-editor modal** whose body is the
@@ -1018,7 +1035,7 @@ line (§9).
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Edit roles… (binding editor) + Archive (§11, §12) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
-| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil |
+| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil + ↑/↓ reorder chevrons (edit-structure holders) |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
 | `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
@@ -1076,10 +1093,13 @@ line (§9).
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
 | `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; all three also serve POST creates from the add modals → `{AddRoleFamily,AddRole,AddLevel}` (`role_families`/`roles` re-render the `role-tree-families` frame; `levels` redirects to the edit explorer, selection preserved). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
+| `app/controllers/frameworks/illustration_reorders_controller.rb` | Move an illustration before/after a sibling (POST → `ReorderIllustrations`; 204, client moves the DOM node) |
+| `app/javascript/controllers/reorder_list_controller.js` | ↑/↓ list reordering — POSTs the neighbour-relative move, repositions the item's node on success |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
 | `app/operations/operations/frameworks/{add,update,remove}_capability_role_binding.rb` | Shared web + MCP binding operations — add/remove (shape-changing, draft) and weight/tolerance update (shape-preserving). |
+| `app/operations/operations/frameworks/reorder_illustrations.rb` | Shared web + MCP operation — reorder one expectation × role's illustrations (complete-list, permutation-validated, shape-preserving). |
 | `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
 | `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code for MCP). `update_level` defers `is_entry` (no Boolean param support in `Operations::Base` yet). |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
