@@ -19,3 +19,6 @@ production:
   mcp_prune_stale_clients:
     class: Mcp::PruneStaleClientsJob
     schedule: at 3am every day
+  evidence_request_reminders:
+    class: EvidenceRequestReminderSweepJob
+    schedule: every hour at minute 40
