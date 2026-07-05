@@ -73,6 +73,18 @@ class EvidenceRequestsController < ApplicationController
     redirect_to evidence_hub_path, alert: e.message, status: :see_other
   end
 
+  # POST /evidence_requests/:id/nudge — manual reminder from the requester
+  def nudge
+    authorize evidence_request, :nudge?, policy_class: EvidenceRequestPolicy
+
+    Operations::Assessments::NudgeEvidenceRequest.call(
+      context: pundit_user, params: { request_id: evidence_request.id }
+    )
+    redirect_to evidence_hub_path, notice: "Nudge sent to #{evidence_request.requestee&.name || "the requestee"}."
+  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
+    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+  end
+
   # DELETE /evidence_requests/:id — cancel
   def destroy
     authorize evidence_request, :cancel?, policy_class: EvidenceRequestPolicy

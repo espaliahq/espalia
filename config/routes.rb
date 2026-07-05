@@ -126,6 +126,7 @@ Rails.application.routes.draw do
     member do
       post :respond
       post :decline
+      post :nudge
     end
   end
   resources :evidence_items, only: [ :update, :destroy ]

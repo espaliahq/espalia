@@ -122,6 +122,16 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
       notification.inbox_title
   end
 
+  should "name the nudger on a manual nudge" do
+    id = request!
+    perform_enqueued_jobs do
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+    end
+
+    notification = @peer_user.notifications.reload.max_by(&:created_at)
+    assert_equal "Alex nudged you about their feedback request", notification.inbox_title
+  end
+
   should "not nudge when the request was resolved before the job ran" do
     id = request!
     # Reminder event lands first, but the decline resolves the request before

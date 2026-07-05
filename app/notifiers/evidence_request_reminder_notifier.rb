@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-# Nudges the requestee about a still-pending evidence request — either it has
-# sat unanswered (`kind: "no_response"`) or its due date is approaching
-# (`kind: "due_soon"`).
+# Nudges the requestee about a still-pending evidence request — it has sat
+# unanswered (`kind: "no_response"`), its due date is approaching
+# (`kind: "due_soon"`), or the requester nudged them (`kind: "manual"`).
 #
 # Fired by the async handler off EvidenceRequestReminderSent (which the
-# reminder sweep job emits at most once per kind per request). Delivered
+# reminder sweep job — or a requester's manual nudge — emits). Delivered
 # in-app immediately and over Slack after the escalation delay if unread, per
 # the recipient's `evidence_request_reminder` preferences. The deep link lands
 # on the hub card where responding AND declining are both one click — a
@@ -17,10 +17,10 @@ class EvidenceRequestReminderNotifier < ApplicationNotifier
     def inbox_title
       requester = params[:requester_name].presence || "A colleague"
       regarding = params[:assessee_name].present? ? " regarding #{params[:assessee_name]}" : ""
-      if params[:kind] == "due_soon"
-        "Reminder: #{requester}'s feedback request#{regarding} is due #{due_phrase}"
-      else
-        "Reminder: #{requester} is still waiting on your feedback#{regarding}"
+      case params[:kind]
+      when "due_soon" then "Reminder: #{requester}'s feedback request#{regarding} is due #{due_phrase}"
+      when "manual" then "#{requester} nudged you about their feedback request#{regarding}"
+      else "Reminder: #{requester} is still waiting on your feedback#{regarding}"
       end
     end
 

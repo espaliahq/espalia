@@ -179,4 +179,61 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       end
     end
   end
+
+  # Backdate a request so the NUDGE_GAP timing gate opens (the gate reads the
+  # read model, so a direct column update is sufficient for these tests).
+  def age_request!(requested_at)
+    ActsAsTenant.with_tenant(@tenant) do
+      EvidenceRequest.find(@request_id).update_column(:requested_at, requested_at)
+    end
+  end
+
+  context "nudge_evidence_request" do
+    setup do
+      @request_id = request!()[:request_id]
+    end
+
+    should "let the requester nudge once the gap has passed, attributing them" do
+      age_request!(3.days.ago)
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::NudgeEvidenceRequest.call(context: @report_ctx, params: { request_id: @request_id })
+      end
+
+      assert_equal "pending", result[:status]
+      assert_not_nil result[:last_reminded_at]
+      ActsAsTenant.with_tenant(@tenant) do
+        entry = EvidenceRequest.find(@request_id).reminder_history.sole
+        assert_equal "manual", entry["kind"]
+        assert_equal @report.id, entry["by_id"]
+      end
+    end
+
+    should "reject a nudge within the gap" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ActsAsTenant.with_tenant(@tenant) do
+          Operations::Assessments::NudgeEvidenceRequest.call(context: @report_ctx, params: { request_id: @request_id })
+        end
+      end
+      assert_match(/nudge again 2 days/i, err.message)
+    end
+
+    should "deny anyone but the requester or an admin" do
+      age_request!(3.days.ago)
+      assert_raises(Pundit::NotAuthorizedError) do
+        ActsAsTenant.with_tenant(@tenant) do
+          Operations::Assessments::NudgeEvidenceRequest.call(context: @peer_ctx, params: { request_id: @request_id })
+        end
+      end
+    end
+
+    should "reject nudging a resolved request" do
+      age_request!(3.days.ago)
+      ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::CancelEvidenceRequest.call(context: @report_ctx, params: { request_id: @request_id })
+        assert_raises(Operations::Base::ParameterError) do
+          Operations::Assessments::NudgeEvidenceRequest.call(context: @report_ctx, params: { request_id: @request_id })
+        end
+      end
+    end
+  end
 end

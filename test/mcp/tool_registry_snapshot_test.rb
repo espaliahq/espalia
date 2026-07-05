@@ -280,6 +280,21 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_nudge_evidence_request",
+        "description" => "Nudge the requestee about an open feedback / evidence request you made (available once 2 days have passed since the last reminder).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "request_id" => { "type" => "string" } },
+          "required" => [ "request_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "assessments_post_comment",
         "description" => "Post a comment on a capability × level of an assessment (optionally as a reply).",
         "inputSchema" => {
