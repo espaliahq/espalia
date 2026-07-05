@@ -28,7 +28,7 @@ class PersonDevelopment::Aggregate
   FREQUENCIES = %w[none some occasional consistent].freeze
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
-  EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon].freeze
+  EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon manual].freeze
 
   def initialize
     @person_id = nil
@@ -880,21 +880,28 @@ class PersonDevelopment::Aggregate
 
   # Record that the requestee was nudged about a still-pending request.
   #
-  # System-initiated (the reminder sweep); each kind fires at most once per
-  # request, so a sweep that races a response — or re-runs — is rejected here
-  # rather than double-pinging the requestee.
+  # Automatic kinds ("no_response" / "due_soon", from the reminder sweep)
+  # fire at most once per request, so a sweep that races a response — or
+  # re-runs — is rejected here rather than double-pinging the requestee.
+  # "manual" (a requester-initiated nudge, carrying `nudged_by_id`) may
+  # repeat; its 2-day spacing is timing policy enforced at the operation
+  # layer, like the sweep's thresholds.
   #
-  # @param kind [String] "no_response" | "due_soon"
+  # @param kind [String] "no_response" | "due_soon" | "manual"
+  # @param nudged_by_id [String, nil] the Person nudging (manual kind only)
   # @raise [CommandError] if not assigned, request unknown, not pending,
-  #   kind unknown, or this kind was already sent
-  def remind_evidence_request(request_id, kind:)
+  #   kind unknown, or an automatic kind was already sent
+  def remind_evidence_request(request_id, kind:, nudged_by_id: nil)
     state = pending_request!(request_id)
     raise CommandError, "Unknown reminder kind #{kind}" unless EVIDENCE_REQUEST_REMINDER_KINDS.include?(kind.to_s)
-    raise CommandError, "#{kind} reminder already sent" if state[:reminder_kinds]&.include?(kind.to_s)
+    if kind.to_s != "manual" && state[:reminder_kinds]&.include?(kind.to_s)
+      raise CommandError, "#{kind} reminder already sent"
+    end
 
     apply(PersonDevelopment::Events::EvidenceRequestReminderSent.new(data: {
       request_id: request_id,
-      kind: kind.to_s
+      kind: kind.to_s,
+      nudged_by_id: nudged_by_id
     }))
   end
 

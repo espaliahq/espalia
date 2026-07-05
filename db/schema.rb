@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_05_092447) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -191,10 +191,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_092447) do
     t.datetime "due_soon_reminded_at"
     t.uuid "evidence_id"
     t.uuid "framework_id", null: false
+    t.datetime "last_reminded_at"
     t.integer "level_ordinal", null: false
     t.text "message"
     t.datetime "no_response_reminded_at"
     t.uuid "person_id", null: false
+    t.jsonb "reminder_history", default: [], null: false
     t.datetime "requested_at", null: false
     t.uuid "requested_by_id", null: false
     t.uuid "requestee_person_id", null: false

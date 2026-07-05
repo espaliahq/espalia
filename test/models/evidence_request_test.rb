@@ -59,14 +59,19 @@ class EvidenceRequestTest < ActiveSupport::TestCase
 
     should "suppress a second kind within the reminder gap" do
       req = request(requested_at: 9.days.ago, due_at: 1.day.from_now,
-                    no_response_reminded_at: 1.day.ago)
+                    no_response_reminded_at: 1.day.ago, last_reminded_at: 1.day.ago)
       assert_nil req.due_reminder_kind
     end
 
     should "allow the second kind once the gap has passed" do
       req = request(requested_at: 12.days.ago, due_at: 1.day.from_now,
-                    no_response_reminded_at: 4.days.ago)
+                    no_response_reminded_at: 4.days.ago, last_reminded_at: 4.days.ago)
       assert_equal "due_soon", req.due_reminder_kind
+    end
+
+    should "defer automatic reminders after a recent manual nudge" do
+      req = request(requested_at: 9.days.ago, last_reminded_at: 1.day.ago)
+      assert_nil req.due_reminder_kind
     end
 
     should "not repeat a kind that was already sent" do
@@ -91,11 +96,34 @@ class EvidenceRequestTest < ActiveSupport::TestCase
     end
   end
 
-  context "#last_reminded_at" do
-    should "return the most recent of the per-kind stamps" do
-      req = request(no_response_reminded_at: 3.days.ago, due_soon_reminded_at: 1.day.ago)
-      assert_in_delta 1.day.ago.to_f, req.last_reminded_at.to_f, 1.0
-      assert_nil request.last_reminded_at
+  context "#can_nudge?" do
+    should "allow a nudge once the gap since the last reminder has passed" do
+      assert request(requested_at: 9.days.ago, last_reminded_at: 3.days.ago).can_nudge?
+    end
+
+    should "block a nudge within the gap of the last reminder" do
+      assert_not request(requested_at: 9.days.ago, last_reminded_at: 1.day.ago).can_nudge?
+    end
+
+    should "measure from the ask when never reminded" do
+      assert request(requested_at: 3.days.ago).can_nudge?
+      assert_not request(requested_at: 1.day.ago).can_nudge?
+    end
+
+    should "never allow nudging a resolved request" do
+      assert_not request(requested_at: 9.days.ago, status: "responded").can_nudge?
+    end
+  end
+
+  context ".least_recently_touched" do
+    should "order by the later of requested and last-reminded, stalest first" do
+      recently_reminded = create(:evidence_request, tenant: @tenant,
+        requested_at: 10.days.ago, last_reminded_at: 1.day.ago)
+      stale = create(:evidence_request, tenant: @tenant, requested_at: 6.days.ago)
+      fresh = create(:evidence_request, tenant: @tenant, requested_at: 2.days.ago)
+
+      assert_equal [ stale.id, fresh.id, recently_reminded.id ],
+        EvidenceRequest.least_recently_touched.pluck(:id)
     end
   end
 end

@@ -161,6 +161,28 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_match(/unknown reminder kind/i, error.message)
     end
 
+    should "allow repeated manual nudges with actor attribution in the history" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+
+      req = EvidenceRequest.find(id)
+      assert_equal %w[manual manual], req.reminder_history.map { |e| e["kind"] }
+      assert_equal [ @assessee.id ] * 2, req.reminder_history.map { |e| e["by_id"] }
+      assert_not_nil req.last_reminded_at
+      assert_nil req.no_response_reminded_at
+    end
+
+    should "append automatic reminders to the history without an actor" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      entry = EvidenceRequest.find(id).reminder_history.sole
+      assert_equal "no_response", entry["kind"]
+      assert_not_nil entry["at"]
+      assert_nil entry["by_id"]
+    end
+
     should "reject reminding a resolved request" do
       id = request!
       @handler.decline_evidence_request(@assessee.id, @framework_id, id, declined_by_id: @requestee.id)

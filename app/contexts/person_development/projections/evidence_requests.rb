@@ -93,12 +93,27 @@ class PersonDevelopment::Projections::EvidenceRequests
     )
   end
 
+  AUTO_REMINDER_COLUMNS = {
+    "no_response" => :no_response_reminded_at,
+    "due_soon" => :due_soon_reminded_at
+  }.freeze
+
   def handle_reminder_sent(event)
-    column = event.data[:kind] == "due_soon" ? :due_soon_reminded_at : :no_response_reminded_at
-    EvidenceRequest.where(id: event.data[:request_id]).update_all(
-      column => event.metadata[:timestamp],
+    request = EvidenceRequest.find_by(id: event.data[:request_id])
+    return if request.nil?
+
+    at = event.metadata[:timestamp]
+    entry = { "kind" => event.data[:kind], "at" => at.iso8601 }
+    entry["by_id"] = event.data[:nudged_by_id] if event.data[:nudged_by_id].present?
+
+    updates = {
+      reminder_history: request.reminder_history + [ entry ],
+      last_reminded_at: at,
       updated_at: Time.current
-    )
+    }
+    column = AUTO_REMINDER_COLUMNS[event.data[:kind]]
+    updates[column] = at if column
+    request.update_columns(updates)
   end
 
   def broadcast_assessment_sync(event)

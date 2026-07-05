@@ -630,12 +630,14 @@ class PersonDevelopment::CommandHandler
   end
 
   # Records that the requestee was nudged about a still-pending evidence
-  # request. System-initiated (the reminder sweep job) — no actor.
+  # request — by the reminder sweep (automatic kinds, no actor) or by the
+  # requester themselves (kind "manual", carrying nudged_by_id).
   #
-  # @param kind [String] "no_response" | "due_soon"
-  def remind_evidence_request(person_id, framework_id, request_id, kind:)
+  # @param kind [String] "no_response" | "due_soon" | "manual"
+  # @param nudged_by_id [String, nil] the Person nudging (manual kind only)
+  def remind_evidence_request(person_id, framework_id, request_id, kind:, nudged_by_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.remind_evidence_request(request_id, kind: kind)
+      aggregate.remind_evidence_request(request_id, kind: kind, nudged_by_id: nudged_by_id)
     end
   end
 
