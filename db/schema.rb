@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_05_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -207,6 +207,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
     t.index ["person_id", "framework_id"], name: "index_evidence_requests_on_person_id_and_framework_id"
     t.index ["requested_by_id"], name: "index_evidence_requests_on_requested_by_id"
     t.index ["requestee_person_id"], name: "index_evidence_requests_on_requestee_person_id"
+    t.index ["status", "requested_at"], name: "index_evidence_requests_on_status_and_requested_at"
     t.index ["status"], name: "index_evidence_requests_on_status"
     t.index ["tenant_id"], name: "index_evidence_requests_on_tenant_id"
   end
