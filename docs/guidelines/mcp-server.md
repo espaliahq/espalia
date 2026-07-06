@@ -87,7 +87,7 @@ at boot.
 |---|---|---|
 | `:none` | Reads, ambient ops | `frameworks_list`, `assessments_get`, `system_whoami` |
 | `:mcp_client` | Writes the MCP client's standard prompt is sufficient friction for | `assessments_rate_self`, `assessments_record_evidence` (additive, no permissions changed) |
-| `:in_app` | Writes that need user confirmation in the web UI (irreversible, permission-changing, tenant settings) | `frameworks_publish_version`, `assessment_cycles_close`, `frameworks_add_collaborator` (when shipped) |
+| `:in_app` | Writes that need user confirmation in the web UI (irreversible, permission-changing, tenant settings) | `frameworks_publish_version`, `assessment_cycles_close`, `frameworks_add_collaborator` |
 
 `:in_app` operations don't execute inside MCP; the request handler
 persists a `Mcp::PendingApproval` row and returns a URL the user opens
