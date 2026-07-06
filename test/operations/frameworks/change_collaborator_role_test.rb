@@ -110,7 +110,6 @@ class Operations::Frameworks::ChangeCollaboratorRoleTest < ActiveSupport::TestCa
         end
       end
     end
-
   end
 
   context "as a plain tenant member" do
