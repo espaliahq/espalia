@@ -29,7 +29,10 @@ class Tenant::Users::CollaboratorsController < ApplicationController
       }
     )
     redirect_to tenant_user_path(@tenant_user), notice: "Collaborator added."
-  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError => e
+  rescue ActiveRecord::RecordNotFound
+    # AR's default message leaks model/schema detail — keep the flash generic.
+    redirect_to tenant_user_path(@tenant_user), alert: "Framework or scope not found."
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to tenant_user_path(@tenant_user), alert: e.message
   end
 
@@ -52,7 +55,9 @@ class Tenant::Users::CollaboratorsController < ApplicationController
       }
     )
     redirect_to tenant_user_path(@tenant_user), notice: "Collaborator removed."
-  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError => e
+  rescue ActiveRecord::RecordNotFound
+    redirect_to tenant_user_path(@tenant_user), alert: "Framework or scope not found."
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to tenant_user_path(@tenant_user), alert: e.message
   end
 

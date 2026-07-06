@@ -53,7 +53,11 @@ class Frameworks::CollaboratorsController < ApplicationController
     )
     redirect_to framework_settings_path(@framework.framework_id),
                 notice: "Collaborator added."
-  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError => e
+  rescue ActiveRecord::RecordNotFound
+    # AR's default message leaks model/schema detail — keep the flash generic.
+    redirect_to framework_settings_path(@framework.framework_id),
+                alert: "Person or scope not found."
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_settings_path(@framework.framework_id), alert: e.message
   end
 
@@ -75,7 +79,10 @@ class Frameworks::CollaboratorsController < ApplicationController
     )
     redirect_to framework_settings_path(@framework.framework_id),
                 notice: "Collaborator removed."
-  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError => e
+  rescue ActiveRecord::RecordNotFound
+    redirect_to framework_settings_path(@framework.framework_id),
+                alert: "Person or scope not found."
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_settings_path(@framework.framework_id), alert: e.message
   end
 
