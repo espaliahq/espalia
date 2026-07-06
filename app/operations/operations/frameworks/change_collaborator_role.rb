@@ -25,6 +25,8 @@ class Operations::Frameworks::ChangeCollaboratorRole < Operations::Base
   parameter :scope_type,   String, allowed: SCOPE_BY_ROLE.values
   parameter :scope_id,     String
 
+  # Tenant admins and framework owners may curate collaborators.
+  # @raise [Pundit::NotAuthorizedError]
   def policy_check
     authorize framework, :manage_collaborators?
   end
