@@ -59,14 +59,16 @@ class Operations::Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
     assert_equal "Engineering", result[:families].first[:label]
   end
 
-  should "suppress small cohorts for a subtree-scoped manager" do
+  should "return unsuppressed values for a subtree-scoped manager" do
     result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
 
-    assert_equal Reporting::CapabilityAttainment::MIN_COHORT, result[:suppression_floor]
+    # The manager chain can open every assessment in its subtree, so the
+    # aggregate discloses nothing new — no small-cohort floor applies.
+    assert_nil result[:suppression_floor]
     cell = result[:roles].first[:cells][@cap.stable_id]
-    assert cell[:suppressed]
-    assert_nil cell[:at_or_above_pct]
-    assert_nil cell[:at]
+    assert_not cell[:suppressed]
+    assert_equal 100, cell[:at_or_above_pct]
+    assert_equal 1, cell[:at]
     assert_equal 1, cell[:n_in_group]
     assert_equal 1, cell[:n_assessed]
   end

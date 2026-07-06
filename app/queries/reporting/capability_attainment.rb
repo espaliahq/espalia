@@ -22,15 +22,19 @@
 #
 # == Privacy — small-cohort suppression
 #
-# This is the first surface exposing rating-derived values in aggregate to
-# viewers who cannot open the underlying individual assessments (managers see
-# their subtree, including skip-levels). With `suppress_small_groups: true`,
-# any cell whose denominator is under {MIN_COHORT} keeps its coverage counts
-# but nils the buckets/percentages. Family cells apply a secondary guard: when
-# the people hidden behind suppressed role cells number 1..MIN_COHORT-1, the
+# The invariant: never show an aggregate derived from data the viewer cannot
+# open at the individual level. With `suppress_small_groups: true`, any cell
+# whose denominator is under {MIN_COHORT} keeps its coverage counts but nils
+# the buckets/percentages. Family cells apply a secondary guard: when the
+# people hidden behind suppressed role cells number 1..MIN_COHORT-1, the
 # family cell is suppressed too — otherwise subtracting the visible role cells
-# from the family cell would reconstruct the small cohort. Full-access viewers
-# (admin/HR) pass `false` — they can already open individual assessments.
+# from the family cell would reconstruct the small cohort.
+#
+# Since AssessmentPolicy#show? grants the full live manager chain individual
+# view access, every current attainment viewer's scope is covered and callers
+# pass `false` (see AssessmentCyclePolicy#attainment_unsuppressed?). The
+# machinery is retained for future audiences whose individual-level visibility
+# does not cover their aggregate scope (e.g. org-wide member transparency).
 class Reporting::CapabilityAttainment
   MIN_COHORT = 4
 

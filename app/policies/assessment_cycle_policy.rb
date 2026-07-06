@@ -35,11 +35,27 @@ class AssessmentCyclePolicy < ApplicationPolicy
   end
 
   # Whether the viewer may see the capability attainment report for this
-  # cycle. Same audience as the cohort roll-up — but unlike the cohort view
-  # this surface exposes rating-derived aggregates, so subtree-scoped viewers
-  # get small-cohort suppression (see Reporting::CapabilityAttainment).
+  # cycle. Same audience as the cohort roll-up.
   def attainment?
     cohort?
+  end
+
+  # Whether the viewer sees attainment aggregates without the small-cohort
+  # suppression floor.
+  #
+  # The invariant suppression enforces: never show an aggregate derived from
+  # data the viewer cannot open at the individual level. Since
+  # AssessmentPolicy#show? grants the entire live manager chain full view of
+  # each report's assessment, a manager's attainment scope (Person#all_reports,
+  # the same live chart walk) is exactly the set whose individual assessments
+  # they can already open — so the aggregate discloses nothing new and every
+  # attainment viewer is currently unsuppressed. The suppression machinery in
+  # Reporting::CapabilityAttainment stays for future audiences whose
+  # individual-level visibility does NOT cover their aggregate scope (e.g.
+  # org-wide transparency for members, department-scoped HR viewers) — such an
+  # audience must return false here.
+  def attainment_unsuppressed?
+    attainment?
   end
 
   def show?

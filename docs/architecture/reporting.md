@@ -39,14 +39,21 @@ role/level (ADR-19) from a single bulk `AssessmentLevelRating` query.
   arithmetically composed from the capability cells.
 - Keyed on `capability_stable_id` → survives framework version migrations.
 
-**Privacy — small-cohort suppression.** This is the first surface exposing
-rating-*derived* values in aggregate to viewers who can't open the underlying
-individual assessments (managers see their subtree, including skip-levels).
-For subtree-scoped viewers, any cell under `MIN_COHORT` (4) people keeps its
+**Privacy — small-cohort suppression.** The invariant: never show an
+aggregate derived from data the viewer cannot open at the individual level.
+When suppression applies, any cell under `MIN_COHORT` (4) people keeps its
 coverage counts but hides buckets/percentages; family cells add a differencing
 guard (suppressed when the remainder behind visible role cells is a
-reconstructable 1..3 people). Admin/HR viewers are unsuppressed — they can
-already open individual assessments. Never exposes individual ratings.
+reconstructable 1..3 people). **Currently every attainment viewer is
+unsuppressed** (`AssessmentCyclePolicy#attainment_unsuppressed?`): since
+`AssessmentPolicy#show?` grants the full live manager chain individual view
+access, a manager's aggregate scope (`Person#all_reports`, the same live chart
+walk) is exactly the set whose assessments they can already open — the
+aggregate discloses nothing new. The suppression machinery is retained in the
+query for future audiences whose individual-level visibility does not cover
+their aggregate scope (e.g. org-wide member transparency, department-scoped HR
+viewers) — wire such an audience by returning false from
+`attainment_unsuppressed?`. Never exposes individual ratings.
 
 **Surfaces** (one implementation, two entry points):
 - Drill-down heatmap — `GET /assessment_cycles/:id/attainment`

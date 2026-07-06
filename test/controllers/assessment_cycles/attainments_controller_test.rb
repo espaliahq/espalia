@@ -51,15 +51,17 @@ class AssessmentCycles::AttainmentsControllerTest < ActionDispatch::IntegrationT
       assert_includes response.body, "1/1 assessed"
     end
 
-    should "suppress small cohorts for a subtree-scoped manager" do
+    should "render unsuppressed values for a subtree-scoped manager" do
       sign_in @manager_user
       get attainment_assessment_cycle_path(@cycle)
 
       assert_response :success
       assert_includes response.body, "Strategic Thinking"
-      # One report is under the MIN_COHORT floor — coverage only, no %.
-      assert_includes response.body, "n = 1"
-      assert_not_includes response.body, "100%"
+      # The manager chain can open every assessment in its subtree, so the
+      # aggregate discloses nothing new — no small-cohort floor applies.
+      assert_includes response.body, "100%"
+      assert_includes response.body, "1/1 assessed"
+      assert_not_includes response.body, "n = 1"
     end
 
     should "honour the perspective param" do

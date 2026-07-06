@@ -3,9 +3,10 @@
 # Capability attainment report for an assessment cycle — per role and role
 # family, the share of people at or above their assessed level on each bound
 # capability, with a category-gate roll-up. Same audience as the cohort view
-# (managers see their subtree; admins/HR the whole cycle), but because this
-# surface aggregates rating-derived values, subtree-scoped viewers get
-# small-cohort suppression (see Reporting::CapabilityAttainment).
+# (managers see their subtree; admins/HR the whole cycle). Small-cohort
+# suppression applies only to viewers who cannot open their scope's individual
+# assessments — see AssessmentCyclePolicy#attainment_unsuppressed? (currently
+# every attainment viewer qualifies as unsuppressed).
 class AssessmentCycles::AttainmentsController < ApplicationController
   # URL param → PersonDevelopment::Scoring perspective.
   PERSPECTIVES = {
@@ -25,7 +26,7 @@ class AssessmentCycles::AttainmentsController < ApplicationController
       cycle: @cycle,
       scope_person_ids: attainment_scope_ids,
       perspective: PERSPECTIVES.fetch(perspective_param),
-      suppress_small_groups: !policy(@cycle).cohort_full_access?
+      suppress_small_groups: !policy(@cycle).attainment_unsuppressed?
     ).call
 
     render Views::AssessmentCycles::Attainment::ShowView.new(
