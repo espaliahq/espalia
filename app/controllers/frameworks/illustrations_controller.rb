@@ -23,16 +23,15 @@ class Frameworks::IllustrationsController < ApplicationController
     role_id = ill_params[:role_id]
     description = ill_params[:description]
 
-    ordinal = FrameworkState::RoleIllustration
-      .where(expectation_id: expectation_id, role_id: role_id)
-      .count + 1
-
+    # No ordinal here — the aggregate allocates the next one inside the
+    # event-serialized write path when the create is applied, so concurrent
+    # creates can't race a read-model COUNT into duplicate ordinals.
     result = Operations::Frameworks::SuggestCreate.call(
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
         entity_type: "role_illustration",
-        proposed_attributes: { role_id: role_id, description: description, ordinal: ordinal },
+        proposed_attributes: { role_id: role_id, description: description },
         parent_id: expectation_id,
         mode: framework_edit_mode.to_s
       }
