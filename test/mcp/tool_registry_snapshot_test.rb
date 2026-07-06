@@ -627,6 +627,33 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_add_collaborator",
+        "description" => "Grant a person a collaborator role on a framework — framework-wide (owner/editor/collaborator/viewer) or scoped via scope_type + scope_id (the four lead roles).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "person_id" => { "type" => "string" },
+            "role" => {
+              "type" => "string",
+              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
+            },
+            "scope_type" => {
+              "type" => "string",
+              "enum" => %w[role_family role capability_category capability]
+            },
+            "scope_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id person_id role],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_add_level",
         "description" => "Add a level to a role (owner/editor/lead only; opens/joins a draft, published on the next version).",
         "inputSchema" => {
@@ -808,6 +835,37 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_change_collaborator_role",
+        "description" => "Change a collaborator's role on a framework within the same scope (e.g. viewer → editor). Moving between differently-scoped roles requires remove + add.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "person_id" => { "type" => "string" },
+            "old_role" => {
+              "type" => "string",
+              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
+            },
+            "new_role" => {
+              "type" => "string",
+              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
+            },
+            "scope_type" => {
+              "type" => "string",
+              "enum" => %w[role_family role capability_category capability]
+            },
+            "scope_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id person_id old_role new_role],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_define_migration_mapping",
         "description" => "Define or edit a capability migration mapping for the current draft (owner/editor only).",
         "inputSchema" => {
@@ -930,6 +988,33 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => false,
           "destructiveHint" => false,
           "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_remove_collaborator",
+        "description" => "Remove a collaborator role from a person on a framework (their other roles on the framework are untouched).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "person_id" => { "type" => "string" },
+            "role" => {
+              "type" => "string",
+              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
+            },
+            "scope_type" => {
+              "type" => "string",
+              "enum" => %w[role_family role capability_category capability]
+            },
+            "scope_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id person_id role],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
         }
       },
       {

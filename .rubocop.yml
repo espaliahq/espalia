@@ -35,9 +35,7 @@ GrowthOs/ControllersMustUseOperations:
     - "app/controllers/assessments/evidence_controller.rb"
     - "app/controllers/assessments/manager_ratings_controller.rb"
     - "app/controllers/assessments/ratings_controller.rb"
-    - "app/controllers/frameworks/collaborators_controller.rb"
     - "app/controllers/frameworks/settings_controller.rb"
-    - "app/controllers/tenant/users/collaborators_controller.rb"
 
 # Overwrite or add rules to create your own house style
 #

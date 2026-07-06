@@ -3,9 +3,11 @@
 # Manages a tenant user's framework collaborator assignments from the
 # tenant user detail screen.
 #
-# Accepts framework + role + optional scope and dispatches the matching
-# RES command via Frameworks::CommandHandler. Authorization is delegated
-# to TenantUserPolicy#manage_collaborators? (tenant admins only).
+# Accepts framework + role + optional scope and dispatches the shared
+# Operations::Frameworks::{AddCollaborator,RemoveCollaborator} (the same
+# implementation the MCP tools use). Authorization is delegated to
+# TenantUserPolicy#manage_collaborators? (tenant admins only) here, with
+# the Operations' own FrameworkPolicy check as the second layer.
 #
 class Tenant::Users::CollaboratorsController < ApplicationController
   before_action :set_tenant_user
@@ -16,14 +18,21 @@ class Tenant::Users::CollaboratorsController < ApplicationController
     person = @tenant_user.ensure_person!
     p = params.expect(collaborator: [ :framework_id, :role, :scope_type, :scope_id ])
 
-    Frameworks::CommandHandler.new.add_collaborator(
-      p[:framework_id], person.id, p[:role],
-      scope_type: p[:scope_type].presence,
-      scope_id:   p[:scope_id].presence,
-      added_by:   current_person&.id
+    Operations::Frameworks::AddCollaborator.call(
+      context: pundit_user,
+      params: {
+        framework_id: p[:framework_id],
+        person_id: person.id,
+        role: p[:role],
+        scope_type: p[:scope_type].presence,
+        scope_id: p[:scope_id].presence
+      }
     )
     redirect_to tenant_user_path(@tenant_user), notice: "Collaborator added."
-  rescue RuntimeError => e
+  rescue ActiveRecord::RecordNotFound
+    # AR's default message leaks model/schema detail — keep the flash generic.
+    redirect_to tenant_user_path(@tenant_user), alert: "Framework or scope not found."
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to tenant_user_path(@tenant_user), alert: e.message
   end
 
@@ -35,14 +44,20 @@ class Tenant::Users::CollaboratorsController < ApplicationController
     person = @tenant_user.ensure_person!
     fw_id, role, scope_type, scope_id = params.expect(:id).split(":", 4)
 
-    Frameworks::CommandHandler.new.remove_collaborator(
-      fw_id, person.id, role,
-      scope_type: scope_type.presence,
-      scope_id:   scope_id.presence,
-      removed_by: current_person&.id
+    Operations::Frameworks::RemoveCollaborator.call(
+      context: pundit_user,
+      params: {
+        framework_id: fw_id,
+        person_id: person.id,
+        role: role,
+        scope_type: scope_type.presence,
+        scope_id: scope_id.presence
+      }
     )
     redirect_to tenant_user_path(@tenant_user), notice: "Collaborator removed."
-  rescue RuntimeError => e
+  rescue ActiveRecord::RecordNotFound
+    redirect_to tenant_user_path(@tenant_user), alert: "Framework or scope not found."
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to tenant_user_path(@tenant_user), alert: e.message
   end
 
