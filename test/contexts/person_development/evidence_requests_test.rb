@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/projection_replay"
 
 # Exercises the evidence-request lifecycle end to end: command handler →
 # aggregate → events → EvidenceRequests projection → EvidenceRequest read model.
 class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
+  include ProjectionReplayHelpers
+  include ActiveSupport::Testing::TimeHelpers
+
   setup do
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
@@ -107,6 +111,121 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @handler.decline_evidence_request(@assessee.id, @framework_id, id, declined_by_id: @requestee.id)
       end
+    end
+  end
+
+  context "remind_evidence_request" do
+    should "stamp the per-kind reminded-at column on the read model" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      req = EvidenceRequest.find(id)
+      assert_not_nil req.no_response_reminded_at
+      assert_nil req.due_soon_reminded_at
+      assert_equal req.no_response_reminded_at, req.last_reminded_at
+    end
+
+    should "stamp due_soon independently of no_response" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "due_soon")
+
+      req = EvidenceRequest.find(id)
+      assert_not_nil req.due_soon_reminded_at
+      assert_nil req.no_response_reminded_at
+    end
+
+    should "reject sending the same kind twice" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+      end
+      assert_match(/already sent/i, error.message)
+    end
+
+    should "allow the other kind after one was sent" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "due_soon")
+
+      req = EvidenceRequest.find(id)
+      assert_not_nil req.no_response_reminded_at
+      assert_not_nil req.due_soon_reminded_at
+    end
+
+    should "reject an unknown kind" do
+      id = request!
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "overdue")
+      end
+      assert_match(/unknown reminder kind/i, error.message)
+    end
+
+    should "allow repeated manual nudges once the gap passes, with actor attribution" do
+      id = nil
+      travel_to(5.days.ago) { id = request! }
+      travel_to(3.days.ago) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+      end
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+
+      req = EvidenceRequest.find(id)
+      assert_equal %w[manual manual], req.reminder_history.map { |e| e["kind"] }
+      assert_equal [ @assessee.id ] * 2, req.reminder_history.map { |e| e["by_id"] }
+      assert_not_nil req.last_reminded_at
+      assert_nil req.no_response_reminded_at
+    end
+
+    should "reject a manual nudge within the gap of the last reminder" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "manual", nudged_by_id: @assessee.id)
+      end
+      assert_match(/within the last 2 days/i, error.message)
+      assert_equal 1, EvidenceRequest.find(id).reminder_history.size
+    end
+
+    should "append automatic reminders to the history without an actor" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      entry = EvidenceRequest.find(id).reminder_history.sole
+      assert_equal "no_response", entry["kind"]
+      assert_not_nil entry["at"]
+      assert_nil entry["by_id"]
+    end
+
+    should "reject reminding a resolved request" do
+      id = request!
+      @handler.decline_evidence_request(@assessee.id, @framework_id, id, declined_by_id: @requestee.id)
+
+      assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+      end
+    end
+
+    # The reason reminders are events, not job-written columns: a projection
+    # rebuild must reproduce reminder state, or the next sweep re-nudges
+    # everyone whose request is still pending.
+    should "survive reset! + replay with identical read-model state" do
+      id = request!
+      @handler.remind_evidence_request(@assessee.id, @framework_id, id, kind: "no_response")
+
+      before_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceRequests, @tenant)
+      assert_not_nil before_snapshot[:evidence_requests].first["no_response_reminded_at"]
+
+      PersonDevelopment::Projections::EvidenceRequests.reset!(tenant: @tenant)
+      assert_equal 0, EvidenceRequest.count
+
+      Projections::Replayer.replay(
+        projection_class: PersonDevelopment::Projections::EvidenceRequests,
+        tenant: @tenant
+      )
+
+      assert_equal before_snapshot, snapshot_read_models(PersonDevelopment::Projections::EvidenceRequests, @tenant)
     end
   end
 end

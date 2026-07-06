@@ -9,6 +9,13 @@ class EvidenceRequestsController < ApplicationController
 
   before_action :require_person
 
+  # respond / decline / nudge / destroy all surface domain rejections the same
+  # way: back to the hub with the message as a flash alert.
+  rescue_from Operations::Base::ParameterError,
+              PersonDevelopment::Aggregate::CommandError do |e|
+    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+  end
+
   # GET /assessments/:assignment_id/evidence_request_modal — the request form,
   # rendered into the lazy #evidence-request-modal frame for a cell.
   def modal
@@ -56,8 +63,6 @@ class EvidenceRequestsController < ApplicationController
 
     apply_evidence_diff
     redirect_to evidence_hub_path, notice: "Feedback provided. Thank you!"
-  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
   end
 
   # POST /evidence_requests/:id/decline
@@ -69,8 +74,16 @@ class EvidenceRequestsController < ApplicationController
       params: { request_id: evidence_request.id, reason: params.dig(:evidence_request, :reason) }
     )
     redirect_to evidence_hub_path, notice: "Request declined."
-  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+  end
+
+  # POST /evidence_requests/:id/nudge — manual reminder from the requester
+  def nudge
+    authorize evidence_request, :nudge?, policy_class: EvidenceRequestPolicy
+
+    Operations::Assessments::NudgeEvidenceRequest.call(
+      context: pundit_user, params: { request_id: evidence_request.id }
+    )
+    redirect_to evidence_hub_path, notice: "Nudge sent to #{evidence_request.requestee&.name || "the requestee"}."
   end
 
   # DELETE /evidence_requests/:id — cancel
@@ -81,8 +94,6 @@ class EvidenceRequestsController < ApplicationController
       context: pundit_user, params: { request_id: evidence_request.id }
     )
     redirect_to evidence_hub_path, notice: "Request cancelled.", status: :see_other
-  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
   end
 
   private

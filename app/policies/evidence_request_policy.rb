@@ -45,6 +45,11 @@ class EvidenceRequestPolicy < ApplicationPolicy
     record.respond_to?(:requested_by_id) && (record.requested_by_id == person.id || tenant_admin?)
   end
 
+  # POST nudge — same bar as cancel: it's the requester chasing their own ask.
+  def nudge?
+    cancel?
+  end
+
   private
 
   def requestee?

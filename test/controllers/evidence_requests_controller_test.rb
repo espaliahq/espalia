@@ -261,4 +261,36 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.find(id).status }
     end
   end
+
+  context "POST nudge" do
+    should "let the requester nudge once the gap has passed" do
+      id = make_request!
+      ActsAsTenant.with_tenant(@tenant) { EvidenceRequest.find(id).update_column(:requested_at, 3.days.ago) }
+
+      sign_in @report_user
+      post nudge_evidence_request_path(id)
+      assert_redirected_to evidence_hub_path
+      assert_match(/Nudge sent to Peer/, flash[:notice])
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "manual", EvidenceRequest.find(id).reminder_history.sole["kind"] }
+    end
+
+    should "flash the gap message when nudging too soon" do
+      id = make_request!
+      sign_in @report_user
+      post nudge_evidence_request_path(id)
+      assert_redirected_to evidence_hub_path
+      assert_match(/nudge again 2 days/i, flash[:alert])
+      ActsAsTenant.with_tenant(@tenant) { assert_empty EvidenceRequest.find(id).reminder_history }
+    end
+
+    should "deny anyone but the requester" do
+      id = make_request!
+      ActsAsTenant.with_tenant(@tenant) { EvidenceRequest.find(id).update_column(:requested_at, 3.days.ago) }
+
+      sign_in @peer_user
+      post nudge_evidence_request_path(id)
+      assert_redirected_to root_path
+      ActsAsTenant.with_tenant(@tenant) { assert_empty EvidenceRequest.find(id).reminder_history }
+    end
+  end
 end

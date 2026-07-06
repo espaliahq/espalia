@@ -37,6 +37,7 @@
       "Bash(coderabbit review *)",
       "Bash(npx -y gitshot *)",
       "Bash(npx gitshot *)",
+      "Bash(npx -y gitshot:*)",
       "Bash(gitshot *)"
     ]
   },

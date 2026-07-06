@@ -46,6 +46,12 @@ class NotificationType
       label: "Your feedback request was declined",
       description: "Someone you asked has declined to provide feedback.",
       defaults: { in_app: true, slack: false, email: false }
+    ),
+    evidence_request_reminder: Definition.new(
+      key: :evidence_request_reminder,
+      label: "Reminder about a feedback request",
+      description: "A feedback request you haven't answered is going stale or coming due.",
+      defaults: { in_app: true, slack: true, email: false }
     )
   }.freeze
 

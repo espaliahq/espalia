@@ -19,7 +19,8 @@ class PersonDevelopment::Projections::EvidenceRequests
       PersonDevelopment::Events::EvidenceRequested,
       PersonDevelopment::Events::EvidenceRequestResponded,
       PersonDevelopment::Events::EvidenceRequestDeclined,
-      PersonDevelopment::Events::EvidenceRequestCancelled
+      PersonDevelopment::Events::EvidenceRequestCancelled,
+      PersonDevelopment::Events::EvidenceRequestReminderSent
     ]
   end
 
@@ -44,6 +45,7 @@ class PersonDevelopment::Projections::EvidenceRequests
     when PersonDevelopment::Events::EvidenceRequestResponded then handle_responded(event)
     when PersonDevelopment::Events::EvidenceRequestDeclined then handle_declined(event)
     when PersonDevelopment::Events::EvidenceRequestCancelled then handle_cancelled(event)
+    when PersonDevelopment::Events::EvidenceRequestReminderSent then handle_reminder_sent(event)
     end
   end
 
@@ -89,6 +91,29 @@ class PersonDevelopment::Projections::EvidenceRequests
       cancelled_at: event.metadata[:timestamp],
       updated_at: Time.current
     )
+  end
+
+  AUTO_REMINDER_COLUMNS = {
+    "no_response" => :no_response_reminded_at,
+    "due_soon" => :due_soon_reminded_at
+  }.freeze
+
+  def handle_reminder_sent(event)
+    request = EvidenceRequest.find_by(id: event.data[:request_id])
+    return if request.nil?
+
+    at = event.metadata[:timestamp]
+    entry = { "kind" => event.data[:kind], "at" => at.iso8601 }
+    entry["by_id"] = event.data[:nudged_by_id] if event.data[:nudged_by_id].present?
+
+    updates = {
+      reminder_history: request.reminder_history + [ entry ],
+      last_reminded_at: at,
+      updated_at: Time.current
+    }
+    column = AUTO_REMINDER_COLUMNS[event.data[:kind]]
+    updates[column] = at if column
+    request.update_columns(updates)
   end
 
   def broadcast_assessment_sync(event)

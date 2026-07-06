@@ -63,4 +63,13 @@ class EvidenceRequestPolicyTest < ActiveSupport::TestCase
       assert_not EvidenceRequestPolicy.new(ctx(@peer), @request).cancel?
     end
   end
+
+  context "nudge?" do
+    should "mirror cancel: requester and tenant admin only" do
+      assert EvidenceRequestPolicy.new(ctx(@report), @request).nudge?
+      assert EvidenceRequestPolicy.new(ctx(@admin, tenant_user: @admin_tu), @request).nudge?
+      assert_not EvidenceRequestPolicy.new(ctx(@peer), @request).nudge?
+      assert_not EvidenceRequestPolicy.new(ctx(@manager), @request).nudge?
+    end
+  end
 end

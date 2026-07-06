@@ -3,9 +3,10 @@
 # Async RES handler that turns evidence-request lifecycle events into
 # notifications (in-app + Slack, per the recipient's preferences).
 #
-#   EvidenceRequested          → notify the requestee ("you've been asked")
-#   EvidenceRequestResponded   → notify the requester ("answered")
-#   EvidenceRequestDeclined    → notify the requester ("declined")
+#   EvidenceRequested            → notify the requestee ("you've been asked")
+#   EvidenceRequestResponded     → notify the requester ("answered")
+#   EvidenceRequestDeclined      → notify the requester ("declined")
+#   EvidenceRequestReminderSent  → nudge the requestee ("still waiting" / "due soon")
 #
 # Runs via SolidQueue (prepended AsyncHandler). NOT a projection — it
 # dispatches side effects and must never be registered in
@@ -18,7 +19,8 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
     [
       PersonDevelopment::Events::EvidenceRequested,
       PersonDevelopment::Events::EvidenceRequestResponded,
-      PersonDevelopment::Events::EvidenceRequestDeclined
+      PersonDevelopment::Events::EvidenceRequestDeclined,
+      PersonDevelopment::Events::EvidenceRequestReminderSent
     ]
   end
 
@@ -32,6 +34,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
       when PersonDevelopment::Events::EvidenceRequested then notify_requested(request)
       when PersonDevelopment::Events::EvidenceRequestResponded then notify_responded(request, event)
       when PersonDevelopment::Events::EvidenceRequestDeclined then notify_declined(request, event)
+      when PersonDevelopment::Events::EvidenceRequestReminderSent then notify_reminder(request, event)
       end
     end
   end
@@ -83,6 +86,26 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
       decliner_name: Person.find_by(id: event.data[:declined_by_id])&.name,
       capability_name: capability_name(request),
       reason: event.data[:reason]
+    ).deliver(user)
+  end
+
+  def notify_reminder(request, event)
+    # A response can land between the reminder event and this async job — a
+    # "still waiting" ping seconds after they answered reads as broken.
+    return unless request.pending?
+
+    user = user_for(request.requestee_person_id)
+    return if user.nil?
+
+    EvidenceRequestReminderNotifier.with(
+      tenant_id: request.tenant_id,
+      request_id: request.id,
+      kind: event.data[:kind],
+      requester_name: request.requester&.name,
+      assessee_name: regarding_assessee_name(request),
+      capability_name: capability_name(request),
+      message: request.message,
+      due_at: request.due_at&.iso8601
     ).deliver(user)
   end
 
