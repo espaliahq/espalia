@@ -53,7 +53,9 @@ class Frameworks::CategoriesController < ApplicationController
 
     @category.reload
     render frame_for(field), layout: false
-  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
+  rescue Operations::Base::ParameterError, RuntimeError
     head :unprocessable_content
   end
 

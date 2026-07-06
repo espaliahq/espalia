@@ -72,6 +72,8 @@ class Frameworks::ExpectationsController < ApplicationController
       pending_edit_count: pending_edits_on_expectation,
       pending_edit: latest_pending_edit
     ), layout: false
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
   rescue Operations::Base::ParameterError, RuntimeError
     head :unprocessable_content
   end

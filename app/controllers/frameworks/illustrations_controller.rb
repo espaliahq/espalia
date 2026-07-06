@@ -76,7 +76,9 @@ class Frameworks::IllustrationsController < ApplicationController
       # class — controller responses re-thread every affordance-gating flag).
       can_reorder: can_reorder_illustrations?
     ), layout: false
-  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
+  rescue Operations::Base::ParameterError, RuntimeError
     head :unprocessable_content
   end
 
