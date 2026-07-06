@@ -6,16 +6,17 @@
 # coverage), plus the share passing each category gate.
 #
 # Scoped to the caller's org subtree (admins/HR see the whole cycle).
-# Subtree-scoped viewers get small-cohort suppression — cells under the floor
-# carry coverage counts only. Returns aggregates only, never individual
-# ratings.
+# Small-cohort suppression applies only to viewers who cannot open their
+# scope's individual assessments (AssessmentCyclePolicy#attainment_unsuppressed?
+# — currently every attainment viewer qualifies as unsuppressed, since the
+# manager chain has full individual view access). Returns aggregates only,
+# never individual ratings.
 class Operations::Reporting::CapabilityAttainment < Operations::Base
   description "Aggregate capability attainment for an assessment cycle across the caller's " \
               "org subtree (admins see the whole cycle): per role and role family, the share " \
               "of people at or above their assessed level on each capability with assessed " \
-              "coverage, plus the share passing each category gate. Small groups are " \
-              "suppressed for non-admin viewers. Returns aggregates only — never individual " \
-              "ratings."
+              "coverage, plus the share passing each category gate. Returns aggregates only " \
+              "— never individual ratings."
   category :read
   approval :none
 
@@ -41,7 +42,7 @@ class Operations::Reporting::CapabilityAttainment < Operations::Base
       cycle: cycle,
       scope_person_ids: scope_person_ids,
       perspective: PERSPECTIVES.fetch(params[:perspective] || "effective"),
-      suppress_small_groups: !policy.cohort_full_access?
+      suppress_small_groups: !policy.attainment_unsuppressed?
     ).call
 
     serialize(result)

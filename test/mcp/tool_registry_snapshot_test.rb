@@ -1324,9 +1324,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Aggregate capability attainment for an assessment cycle across the caller's " \
           "org subtree (admins see the whole cycle): per role and role family, the share " \
           "of people at or above their assessed level on each capability with assessed " \
-          "coverage, plus the share passing each category gate. Small groups are " \
-          "suppressed for non-admin viewers. Returns aggregates only — never individual " \
-          "ratings.",
+          "coverage, plus the share passing each category gate. Returns aggregates only " \
+          "— never individual ratings.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

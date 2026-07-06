@@ -28,6 +28,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       refute policy.cohort?
       refute policy.cohort_full_access?
       refute policy.attainment?
+      refute policy.attainment_unsuppressed?
     end
   end
 
@@ -81,6 +82,9 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         assert policy.cohort?
         assert policy.attainment?
+        # Chain visibility covers the manager's whole aggregate scope, so the
+        # small-cohort floor does not apply to them.
+        assert policy.attainment_unsuppressed?
         refute policy.cohort_full_access?
         refute policy.update?
       end
@@ -115,6 +119,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
         policy = AssessmentCyclePolicy.new(@context, @cycle)
         refute policy.cohort?
         refute policy.attainment?
+        refute policy.attainment_unsuppressed?
       end
     end
   end
@@ -138,6 +143,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.cohort?
       assert policy.cohort_full_access?
       assert policy.attainment?
+      assert policy.attainment_unsuppressed?
     end
   end
 
@@ -159,6 +165,7 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.cohort?
       assert policy.cohort_full_access?
       assert policy.attainment?
+      assert policy.attainment_unsuppressed?
     end
   end
 end
