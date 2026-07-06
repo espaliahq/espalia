@@ -7,7 +7,6 @@
 #
 class Frameworks::CapabilitiesController < ApplicationController
   include FrameworkEditMode
-  include InlineSuggestedEdits
 
   before_action :set_framework
   before_action :set_capability, only: [ :update ]
@@ -46,27 +45,32 @@ class Frameworks::CapabilitiesController < ApplicationController
     field, value = edited_field
     return head(:unprocessable_content) unless field
 
-    submit_inline_suggested_edit(
-      framework_id: @framework.framework_id,
-      entity_type: "capability", entity_id: @capability.capability_id,
-      field: field, value: value, author_id: resolve_author_id, mode: framework_edit_mode
+    Operations::Frameworks::SuggestEdit.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        entity_type: "capability", entity_id: @capability.capability_id,
+        field: field, value: value, mode: framework_edit_mode.to_s
+      }
     )
 
     render frame_for(field), layout: false
-  rescue ActiveRecord::RecordNotFound, RuntimeError
+  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError
     head :unprocessable_content
   end
 
   private
 
-  # The single field the inline editor submitted. `name` must be present;
-  # `description` may be blank (clearing it). Returns [field, value] or [nil, nil].
+  # The single field the inline editor submitted. Blank values are rejected
+  # for both fields — the SuggestedEdit read model requires a suggested_value,
+  # so a blank submission can't become a suggestion. Returns [field, value] or
+  # [nil, nil].
   def edited_field
     permitted = params.expect(capability: [ :name, :description ])
     if permitted.key?(:name)
       permitted[:name].blank? ? [ nil, nil ] : [ "name", permitted[:name] ]
     elsif permitted.key?(:description)
-      [ "description", permitted[:description].to_s ]
+      permitted[:description].blank? ? [ nil, nil ] : [ "description", permitted[:description] ]
     else
       [ nil, nil ]
     end
@@ -113,10 +117,6 @@ class Frameworks::CapabilitiesController < ApplicationController
   def explorer_graph
     @explorer_graph ||= Frameworks::ExplorerGraph.load(@framework.framework_id) ||
                         Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
-  end
-
-  def resolve_author_id
-    current_person.id.to_s
   end
 
   def pending_count_for(field)

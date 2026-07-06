@@ -8,7 +8,6 @@
 #
 class Frameworks::ExpectationsController < ApplicationController
   include FrameworkEditMode
-  include InlineSuggestedEdits
 
   before_action :set_framework
   before_action :set_expectation, only: [ :update ]
@@ -54,10 +53,13 @@ class Frameworks::ExpectationsController < ApplicationController
     new_description = params.expect(behavioural_expectation: [ :description ])[:description]
     return head(:unprocessable_content) if new_description.blank?
 
-    submit_inline_suggested_edit(
-      framework_id: @framework.framework_id,
-      entity_type: "behavioural_expectation", entity_id: @expectation.expectation_id,
-      field: "description", value: new_description, author_id: resolve_author_id, mode: framework_edit_mode
+    Operations::Frameworks::SuggestEdit.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        entity_type: "behavioural_expectation", entity_id: @expectation.expectation_id,
+        field: "description", value: new_description, mode: framework_edit_mode.to_s
+      }
     )
 
     render Views::Frameworks::Explorer::ExpectationTextFrame.new(
@@ -70,7 +72,7 @@ class Frameworks::ExpectationsController < ApplicationController
       pending_edit_count: pending_edits_on_expectation,
       pending_edit: latest_pending_edit
     ), layout: false
-  rescue RuntimeError
+  rescue Operations::Base::ParameterError, RuntimeError
     head :unprocessable_content
   end
 
@@ -101,10 +103,6 @@ class Frameworks::ExpectationsController < ApplicationController
   def explorer_graph
     @explorer_graph ||= Frameworks::ExplorerGraph.load(@framework.framework_id) ||
                         Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
-  end
-
-  def resolve_author_id
-    current_person.id.to_s
   end
 
   def pending_edits_on_expectation

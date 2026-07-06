@@ -4,9 +4,9 @@
 #
 # Lists pending and resolved suggestions for a framework, lets reviewers with
 # the appropriate tier authority approve / reject, and lets authors amend or
-# withdraw their own pending suggestions. Acts as a thin wrapper around
-# {Frameworks::CommandHandler}; all tier rules are enforced via
-# {FrameworkSuggestionPolicy}.
+# withdraw their own pending suggestions. Every write dispatches an
+# {Operations::Frameworks} class (web + MCP parity); all tier rules are
+# enforced via {FrameworkSuggestionPolicy}.
 #
 class Frameworks::SuggestionsController < ApplicationController
   before_action :set_framework
@@ -46,43 +46,46 @@ class Frameworks::SuggestionsController < ApplicationController
   # authority — because this controller is the "propose a change" endpoint,
   # not the "make a change" endpoint. Approvers use the existing approve action
   # to apply the change. Edit-kind suggestions are submitted by per-entity
-  # controllers (e.g. IllustrationsController) which call
-  # Frameworks::CommandHandler#suggest_edit directly.
+  # controllers (e.g. IllustrationsController) via
+  # {Operations::Frameworks::SuggestEdit}.
   def create
     authorize @framework, :submit_suggestion?
 
     attrs = suggestion_create_params
-    suggestion_id = SecureRandom.uuid_v7
-    handler = Frameworks::CommandHandler.new
 
-    case attrs[:kind]
-    when "create"
-      handler.suggest_create(
-        @framework.framework_id, suggestion_id,
-        attrs[:target_entity_type],
-        (attrs[:proposed_attributes] || {}).to_h.symbolize_keys,
-        parent_id: attrs[:parent_id].presence,
-        author_id: current_person.id.to_s,
-        rationale: attrs[:rationale].presence,
-        mode: :suggesting
-      )
-    when "delete"
-      handler.suggest_delete(
-        @framework.framework_id, suggestion_id,
-        attrs[:target_entity_type], attrs[:target_entity_id],
-        author_id: current_person.id.to_s,
-        rationale: attrs[:rationale].presence,
-        mode: :suggesting
-      )
-    else
-      return redirect_to framework_suggestions_path(@framework.framework_id),
-                         status: :see_other,
-                         alert: "Unknown suggestion kind: #{attrs[:kind]}"
-    end
+    result =
+      case attrs[:kind]
+      when "create"
+        Operations::Frameworks::SuggestCreate.call(
+          context: pundit_user,
+          params: {
+            framework_id: @framework.framework_id,
+            entity_type: attrs[:target_entity_type],
+            proposed_attributes: (attrs[:proposed_attributes] || {}).to_h,
+            parent_id: attrs[:parent_id].presence,
+            rationale: attrs[:rationale].presence,
+            mode: "suggesting"
+          }
+        )
+      when "delete"
+        Operations::Frameworks::SuggestDelete.call(
+          context: pundit_user,
+          params: {
+            framework_id: @framework.framework_id,
+            entity_type: attrs[:target_entity_type],
+            entity_id: attrs[:target_entity_id],
+            rationale: attrs[:rationale].presence
+          }
+        )
+      else
+        return redirect_to framework_suggestions_path(@framework.framework_id),
+                           status: :see_other,
+                           alert: "Unknown suggestion kind: #{attrs[:kind]}"
+      end
 
-    redirect_to framework_suggestion_path(@framework.framework_id, suggestion_id),
+    redirect_to framework_suggestion_path(@framework.framework_id, result[:suggestion_id]),
                 notice: "Suggestion submitted."
-  rescue RuntimeError => e
+  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_suggestions_path(@framework.framework_id),
                 status: :see_other,
                 alert: e.message

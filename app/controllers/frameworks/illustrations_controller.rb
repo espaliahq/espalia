@@ -4,17 +4,18 @@
 #
 class Frameworks::IllustrationsController < ApplicationController
   include FrameworkEditMode
-  include InlineSuggestedEdits
 
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
 
   # POST /frameworks/:framework_id/illustrations
   #
-  # Routes all creates through suggest_create. Users with approval rights
-  # for role_illustration (tier 1) are auto-approved — the illustration is
-  # created immediately. Users without approval rights get a pending
-  # suggestion that shows as a ghost entry until approved.
+  # Routes all creates through the suggest/approve path
+  # ({Operations::Frameworks::SuggestCreate}). Users with approval rights
+  # for role_illustration (tier 1) are auto-approved in editing mode — the
+  # illustration is created immediately. Users without approval rights (or in
+  # suggesting mode) get a pending suggestion that shows as a ghost entry
+  # until approved.
   def create
     authorize @framework, :submit_suggestion?
     ill_params = params.expect(illustration: [ :expectation_id, :role_id, :description ])
@@ -22,30 +23,30 @@ class Frameworks::IllustrationsController < ApplicationController
     role_id = ill_params[:role_id]
     description = ill_params[:description]
 
-    suggestion_id = SecureRandom.uuid_v7
     ordinal = FrameworkState::RoleIllustration
       .where(expectation_id: expectation_id, role_id: role_id)
       .count + 1
 
-    created_entity_id = Frameworks::CommandHandler.new.suggest_create(
-      @framework.framework_id,
-      suggestion_id,
-      "role_illustration",
-      { role_id: role_id, description: description, ordinal: ordinal },
-      parent_id: expectation_id,
-      author_id: resolve_author_id,
-      mode: framework_edit_mode
+    result = Operations::Frameworks::SuggestCreate.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        entity_type: "role_illustration",
+        proposed_attributes: { role_id: role_id, description: description, ordinal: ordinal },
+        parent_id: expectation_id,
+        mode: framework_edit_mode.to_s
+      }
     )
 
-    if created_entity_id
-      render_created_turbo_stream(created_entity_id, expectation_id, role_id)
+    if result[:applied]
+      render_created_turbo_stream(result[:created_entity_id], expectation_id, role_id)
     else
-      suggestion = FrameworkState::SuggestedEdit.find_by!(suggestion_id: suggestion_id)
+      suggestion = FrameworkState::SuggestedEdit.find_by!(suggestion_id: result[:suggestion_id])
       render_pending_turbo_stream(suggestion, expectation_id, role_id)
     end
   rescue ActiveRecord::RecordNotFound
     head :not_found
-  rescue RuntimeError
+  rescue Operations::Base::ParameterError, RuntimeError
     head :unprocessable_content
   end
 
@@ -54,10 +55,13 @@ class Frameworks::IllustrationsController < ApplicationController
     authorize @framework, :suggest_edit?
     new_description = params.expect(illustration: [ :description ])[:description]
 
-    submit_inline_suggested_edit(
-      framework_id: @framework.framework_id,
-      entity_type: "role_illustration", entity_id: @illustration.illustration_id,
-      field: "description", value: new_description, author_id: resolve_author_id, mode: framework_edit_mode
+    Operations::Frameworks::SuggestEdit.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        entity_type: "role_illustration", entity_id: @illustration.illustration_id,
+        field: "description", value: new_description, mode: framework_edit_mode.to_s
+      }
     )
 
     @illustration.reload
@@ -72,7 +76,7 @@ class Frameworks::IllustrationsController < ApplicationController
       # class — controller responses re-thread every affordance-gating flag).
       can_reorder: can_reorder_illustrations?
     ), layout: false
-  rescue ActiveRecord::RecordNotFound, RuntimeError
+  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError
     head :unprocessable_content
   end
 
@@ -88,16 +92,6 @@ class Frameworks::IllustrationsController < ApplicationController
     @illustration = FrameworkState::RoleIllustration.find_by!(illustration_id: params.expect(:id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
-  end
-
-  # Returns the current Person's id — the canonical author identity for
-  # framework suggestions. ApplicationController#auto_link_person guarantees
-  # every authenticated TenantUser has a linked Person, so current_person
-  # is present here.
-  #
-  # @return [String]
-  def resolve_author_id
-    current_person.id.to_s
   end
 
   def pending_edits_on_illustration
