@@ -26,11 +26,6 @@ GrowthOs/ControllersMustUseOperations:
   # migrate one PR at a time. When you port a controller, remove its
   # entry from this list in the same PR.
   Exclude:
-    # Shared concern for the grandfathered inline-edit controllers below —
-    # inline suggested edits are web-only (suggest_edit/amend_suggestion have
-    # no dedicated MCP tool), so the concern dispatches the command handler
-    # directly, same as its includers.
-    - "app/controllers/concerns/inline_suggested_edits.rb"
     - "app/controllers/assessment_cycles_controller.rb"
     - "app/controllers/assessment_cycles/enrollments_controller.rb"
     - "app/controllers/assessments/alignment_completions_controller.rb"
@@ -40,13 +35,8 @@ GrowthOs/ControllersMustUseOperations:
     - "app/controllers/assessments/evidence_controller.rb"
     - "app/controllers/assessments/manager_ratings_controller.rb"
     - "app/controllers/assessments/ratings_controller.rb"
-    - "app/controllers/frameworks/capabilities_controller.rb"
-    - "app/controllers/frameworks/categories_controller.rb"
     - "app/controllers/frameworks/collaborators_controller.rb"
-    - "app/controllers/frameworks/expectations_controller.rb"
-    - "app/controllers/frameworks/illustrations_controller.rb"
     - "app/controllers/frameworks/settings_controller.rb"
-    - "app/controllers/frameworks/suggestions_controller.rb"
     - "app/controllers/tenant/users/collaborators_controller.rb"
 
 # Overwrite or add rules to create your own house style

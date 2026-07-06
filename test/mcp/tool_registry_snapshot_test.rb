@@ -1045,6 +1045,95 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_suggest_create",
+        "description" => "Propose creating a framework entity (illustration, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "entity_type"  => {
+              "type" => "string",
+              "enum" => %w[role_illustration behavioural_expectation capability capability_category role role_family level]
+            },
+            "proposed_attributes" => {
+              "type" => "object",
+              "description" => "Attributes for the new entity. Required keys by entity_type — " \
+                               "role_illustration: role_id, description · behavioural_expectation: level_ordinal, description · " \
+                               "capability: name · capability_category: name · role: name, code, track · " \
+                               "role_family: name · level: ordinal, title, code.",
+              "properties" => {
+                "name"          => { "type" => "string" },
+                "description"   => { "type" => "string" },
+                "title"         => { "type" => "string" },
+                "code"          => { "type" => "string" },
+                "track"         => { "type" => "string", "enum" => %w[ic management] },
+                "role_id"       => { "type" => "string" },
+                "level_ordinal" => { "type" => "integer" },
+                "ordinal"       => { "type" => "integer" },
+                "is_entry"      => { "type" => "boolean" }
+              },
+              "additionalProperties" => false
+            },
+            "parent_id" => { "type" => "string" },
+            "rationale" => { "type" => "string" },
+            "mode"      => { "type" => "string", "enum" => %w[editing suggesting] }
+          },
+          "required" => %w[framework_id entity_type proposed_attributes],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_suggest_delete",
+        "description" => "Propose deleting a framework entity (capability or illustration) as a pending suggestion — nothing is removed until a reviewer approves.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "entity_type"  => { "type" => "string", "enum" => %w[role_illustration capability] },
+            "entity_id"    => { "type" => "string" },
+            "rationale"    => { "type" => "string" }
+          },
+          "required" => %w[framework_id entity_type entity_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_suggest_edit",
+        "description" => "Edit framework content (capability/category name or description, expectation or illustration text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "entity_type"  => {
+              "type" => "string",
+              "enum" => %w[capability capability_category behavioural_expectation role_illustration]
+            },
+            "entity_id" => { "type" => "string" },
+            "field"     => { "type" => "string", "enum" => %w[name description] },
+            "value"     => { "type" => "string" },
+            "rationale" => { "type" => "string" },
+            "mode"      => { "type" => "string", "enum" => %w[editing suggesting] }
+          },
+          "required" => %w[framework_id entity_type entity_id field value],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_update_capability_role_binding",
         "description" => "Update a capability-role binding's weight and/or individual tolerance (owner/editor/lead only).",
         "inputSchema" => {

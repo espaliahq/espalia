@@ -167,12 +167,14 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
 
-    should "return 422 for unknown expectation passed to aggregate" do
+    should "return 404 for an unknown expectation" do
       sign_in @user
       post framework_illustrations_path(framework_id: @framework_id),
            params: { illustration: { expectation_id: SecureRandom.uuid_v7, role_id: @rid, description: "X" } }
 
-      assert_response :unprocessable_content
+      # The Operation pre-validates the parent against the explorer graph and
+      # raises RecordNotFound — a bad id is a 404, not a 422.
+      assert_response :not_found
     end
 
     should "redirect unauthenticated users to sign in" do

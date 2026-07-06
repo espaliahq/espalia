@@ -422,7 +422,7 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :redirect
       follow_redirect!
-      assert_match(/Illustration .* not found/, flash[:alert])
+      assert_match(/role_illustration .* not found/, flash[:alert])
 
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal 0, FrameworkState::SuggestedEdit.deletes.count
