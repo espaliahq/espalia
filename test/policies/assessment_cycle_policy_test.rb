@@ -168,4 +168,55 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       assert policy.attainment_unsuppressed?
     end
   end
+
+  # Cross-policy regression guard for the suppression invariant: an
+  # unsuppressed attainment viewer must be able to open every individual
+  # assessment in their aggregate scope (subtree ∩ enrolled). This is what
+  # justifies attainment_unsuppressed? returning true for managers — it holds
+  # today because AssessmentPolicy#show? grants the full live manager chain
+  # and the attainment scope (Person#all_reports) walks the same live chart.
+  # If either side changes (chain visibility narrowed, scope source swapped),
+  # this fails: re-enable suppression for the affected audience via
+  # attainment_unsuppressed? before shipping that change.
+  context "suppression invariant across policies" do
+    setup do
+      @user = create(:user)
+      @tenant_user = create(:tenant_user, user: @user, tenant: @tenant, role: :member)
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant, name: "Top Manager")
+        @tenant_user.update!(person: @manager)
+        lead = create(:person, tenant: @tenant, name: "Lead", manager: @manager)
+        @skip_level = create(:person, tenant: @tenant, name: "Skip IC", manager: lead)
+        create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: @cycle, person_id: @skip_level.id, status: "enrolled")
+        @assignment = create(:person_framework_assignment,
+          tenant: @tenant, person_id: @skip_level.id, framework_id: @cycle.framework_id)
+      end
+      @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @manager)
+    end
+
+    should "only grant unsuppressed attainment when every scoped assessment is individually viewable" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert AssessmentCyclePolicy.new(@context, @cycle).attainment_unsuppressed?,
+          "precondition: a manager with an enrolled skip-level is an unsuppressed viewer"
+
+        enrolled_in_scope = AssessmentCycleEnrollment.active
+          .where(cycle_id: @cycle.cycle_id, person_id: @manager.all_reports.select(:id))
+          .pluck(:person_id)
+        assert_includes enrolled_in_scope, @skip_level.id,
+          "precondition: the skip-level report is in the aggregate scope"
+
+        enrolled_in_scope.each do |person_id|
+          assignment = PersonFrameworkAssignment.find_by(
+            person_id: person_id, framework_id: @cycle.framework_id
+          )
+          next unless assignment
+
+          assert AssessmentPolicy.new(@context, assignment).show?,
+            "aggregate scope includes person #{person_id} whose assessment the viewer cannot open — " \
+            "suppression must be re-enabled for this audience"
+        end
+      end
+    end
+  end
 end
