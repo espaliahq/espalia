@@ -66,14 +66,14 @@ class Tenant::Users::CollaboratorsControllerTest < ActionDispatch::IntegrationTe
         end
       end
 
-      should "surface aggregate errors as a flash alert" do
-        # Add the same role twice — aggregate raises "already has this role"
+      should "surface a duplicate grant as a flash alert" do
+        # Add the same role twice — the Operation pre-checks the duplicate
         post tenant_user_collaborators_path(@member_tu),
              params: { collaborator: { framework_id: @framework_id, role: "editor" } }
         post tenant_user_collaborators_path(@member_tu),
              params: { collaborator: { framework_id: @framework_id, role: "editor" } }
         follow_redirect!
-        assert_includes response.body, "already has this role"
+        assert_includes response.body, "already holds editor"
       end
     end
 

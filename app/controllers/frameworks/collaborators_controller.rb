@@ -41,15 +41,19 @@ class Frameworks::CollaboratorsController < ApplicationController
     authorize @framework, :manage_collaborators?
     p = params.expect(collaborator: [ :person_id, :role, :scope_type, :scope_id ])
 
-    Frameworks::CommandHandler.new.add_collaborator(
-      @framework.framework_id, p[:person_id], p[:role],
-      scope_type: p[:scope_type].presence,
-      scope_id:   p[:scope_id].presence,
-      added_by:   current_person&.id
+    Operations::Frameworks::AddCollaborator.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        person_id: p[:person_id],
+        role: p[:role],
+        scope_type: p[:scope_type].presence,
+        scope_id: p[:scope_id].presence
+      }
     )
     redirect_to framework_settings_path(@framework.framework_id),
                 notice: "Collaborator added."
-  rescue RuntimeError => e
+  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_settings_path(@framework.framework_id), alert: e.message
   end
 
@@ -59,15 +63,19 @@ class Frameworks::CollaboratorsController < ApplicationController
     authorize @framework, :manage_collaborators?
     person_id, role, scope_type, scope_id = params.expect(:id).split(":", 4)
 
-    Frameworks::CommandHandler.new.remove_collaborator(
-      @framework.framework_id, person_id, role,
-      scope_type: scope_type.presence,
-      scope_id:   scope_id.presence,
-      removed_by: current_person&.id
+    Operations::Frameworks::RemoveCollaborator.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        person_id: person_id,
+        role: role,
+        scope_type: scope_type.presence,
+        scope_id: scope_id.presence
+      }
     )
     redirect_to framework_settings_path(@framework.framework_id),
                 notice: "Collaborator removed."
-  rescue RuntimeError => e
+  rescue ActiveRecord::RecordNotFound, Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_settings_path(@framework.framework_id), alert: e.message
   end
 
