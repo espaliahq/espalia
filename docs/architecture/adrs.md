@@ -139,15 +139,17 @@ Domain-facing code (commands, events, projections) references `person_id`, never
 
 ---
 
-## ADR-13: Authorization enforced in the command handler, not in controllers
+## ADR-13: Suggestion-approval authority derived from aggregate state
 
-**Decision:** Write-path authorization lives in the command handler (derived from aggregate state), not in Pundit policies in controllers. Controllers pass `author_id` and call the command handler; they never decide whether an action is permitted.
+**Decision:** The authority that decides whether a submitted edit auto-applies — `framework.can_approve?(author_id, target_entity_type:)` — lives in the command handler, derived from the aggregate's collaborator state, not in controller-level Pundit policies. Every non-HTTP entry point (background jobs, MCP, admin tooling) gets the same enforcement for free.
 
-**Why:** Framework collaborators are part of the Framework aggregate — stored as events and rebuilt into aggregate state. Enforcing authorization at the controller level would duplicate state the aggregate already owns, and would allow bypassing checks from background jobs, admin tooling, or any other non-HTTP entry point. The aggregate is the single source of truth for who can do what.
+**Why:** Framework collaborators are part of the Framework aggregate — stored as events and rebuilt into aggregate state. Enforcing approval routing at the controller level would duplicate state the aggregate already owns, and would allow bypassing checks from any non-HTTP entry point. The aggregate is the single source of truth for approval authority.
 
-**Auto-approval pattern:** When an authorized user (one where `framework.can_approve?(author_id)` returns true) submits an edit in `:editing` mode, the command handler immediately follows `EditSuggested` with `SuggestionApproved` and the resulting content-change event — three events, instant effect. Users without approval authority emit `EditSuggested` only; the suggestion stays pending until a reviewer acts. A future `mode: :suggesting` parameter lets authorized users explicitly create a pending suggestion for peer review regardless of their approval authority.
+*Amended (defense in depth):* the original decision read "not in controllers". Practice has since layered Pundit on top rather than instead: controllers call `authorize` on every action and `Operations::*` classes run a `policy_check` (see [authorization.md](../guidelines/authorization.md), which lists "authorization is enforced in the command handler" as an anti-pattern when used *alone*). The aggregate remains authoritative for the approval-routing decision this ADR is about — who can approve what tier — while Pundit gates who may reach each surface at all.
 
-**Stub until collaborators land:** `can_approve?` currently returns `true` for all users. When the collaborator model is implemented (via `CollaboratorAdded` events), it will query `@collaborators[user_id]&.[](:role)` against the tier-appropriate approval roles.
+**Auto-approval pattern:** When an authorized user (one where `framework.can_approve?(author_id, target_entity_type:)` returns true) submits an edit in `:editing` mode, the command handler immediately follows `EditSuggested` with `SuggestionApproved` and the resulting content-change event — three events, instant effect. Users without approval authority emit `EditSuggested` only; the suggestion stays pending until a reviewer acts. The `mode: :suggesting` parameter — originally sketched here as future work — is **implemented**: the web's Editing/Suggesting toggle and the `frameworks_suggest_{edit,create}` MCP tools pass it through `Operations::Frameworks::SuggestEdit` / `SuggestCreate`, letting authorized users explicitly land a pending suggestion for peer review regardless of their authority (see [framework-explorer.md](../guidelines/framework-explorer.md), "Editing vs Suggesting toggle").
+
+**Collaborator model (shipped):** the "stub until collaborators land" note is obsolete — `can_approve?` queries `@collaborators` (folded from `CollaboratorAdded` / `CollaboratorRoleChanged` / `CollaboratorRemoved` events) against the tier-appropriate approval roles, falling back to permissive only when a framework has no collaborators at all (bootstrapping). Collaborator management itself is Operations-first: `Operations::Frameworks::{AddCollaborator,ChangeCollaboratorRole,RemoveCollaborator}` (`:in_app` approval — permission-changing).
 
 ---
 
