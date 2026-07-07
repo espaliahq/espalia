@@ -48,10 +48,12 @@ class Operations::Frameworks::ConfigureScoringThresholds < Operations::Base
       # model, so "revert to system default" writes the default value itself
       # rather than nil (nil would fail the projection's numericality
       # validation — previously a latent 500 when the web form was cleared).
-      overperformance_cap: params[:overperformance_cap] ||
-                           PersonDevelopment::Scoring::DEFAULT_OVERPERFORMANCE_CAP,
-      deficit_threshold: decimal(:deficit_threshold) ||
-                         BigDecimal(PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD.to_s)
+      overperformance_cap: integer_or_default(
+        :overperformance_cap, PersonDevelopment::Scoring::DEFAULT_OVERPERFORMANCE_CAP
+      ),
+      deficit_threshold: decimal_or_default(
+        :deficit_threshold, PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD
+      )
     )
 
     stored = framework.reload
@@ -91,6 +93,16 @@ class Operations::Frameworks::ConfigureScoringThresholds < Operations::Base
   def decimal(key)
     value = params[key]
     value.nil? ? nil : BigDecimal(value.to_s)
+  end
+
+  # For NOT-NULL read-model columns: an omitted value writes the system
+  # default itself instead of nil.
+  def decimal_or_default(key, default)
+    decimal(key) || BigDecimal(default.to_s)
+  end
+
+  def integer_or_default(key, default)
+    params[key] || default
   end
 
   def framework
