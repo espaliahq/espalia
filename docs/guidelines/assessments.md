@@ -512,11 +512,24 @@ An unanswered request doesn't rely on the requestee's memory:
   replay-safe. The hub renders the history on every open card and sorts open
   lists stalest-first (`least_recently_touched`).
 
+**Resolution notifications carry the response.** The requester's "answered" /
+"declined" notification (in-app + Slack) quotes the response itself — the
+evidence content, or the decline reason — excerpted at
+`ApplicationNotifier::EXCERPT_LIMIT` (280 chars, shared `quoted_excerpt`
+helper) so the Slack DM reads the feedback without a round trip to the hub;
+the deep link still lands on the hub card for the full text.
+
 **Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"
 (subsections *Asked of you* / *Your requests* / *Feedback / Evidence you've
-provided* — the viewer's authored evidence, edit/withdraw).
+provided* — the viewer's authored evidence, edit/withdraw). Every evidence
+item on the hub (authored cards + embedded responses) carries a **"View in
+assessment"** deep link to its **first active linkage**
+(`?capability=` + `?level_ordinal=` — focuses and scrolls the card) so the
+feedback can be read in situ; the controller renders it only when
+`AssessmentPolicy#show?` admits the viewer, so a peer who provided feedback on
+a colleague's assessment gets no dead link.
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 
