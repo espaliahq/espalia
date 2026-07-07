@@ -67,6 +67,25 @@ class SlackDeliveryMethodTest < ActiveSupport::TestCase
     assert_not_includes button[:url], "example.com"
   end
 
+  should "escape Slack mrkdwn control characters in user-written text" do
+    fake = FakeSlackClient.new
+    Slack::Client.stub(:new, fake) do
+      perform_enqueued_jobs do
+        InboxTestNotifier.with(
+          title: "A <script> title", body: "See <https://evil.example|the runbook> & <!channel>",
+          tenant_id: @tenant.id
+        ).deliver(@user)
+      end
+    end
+
+    dm = fake.posted.first
+    assert_includes dm[:text], "&lt;https://evil.example|the runbook&gt; &amp; &lt;!channel&gt;"
+    body_block = dm[:blocks].find { |b| b.dig(:text, :text)&.include?("runbook") }
+    assert_equal "See &lt;https://evil.example|the runbook&gt; &amp; &lt;!channel&gt;", body_block.dig(:text, :text)
+    title_block = dm[:blocks].first
+    assert_includes title_block.dig(:text, :text), "A &lt;script&gt; title"
+  end
+
   should "skip delivery when the tenant has no Slack connection" do
     @tenant.disconnect_slack!
     fake = deliver_with_fake_slack
