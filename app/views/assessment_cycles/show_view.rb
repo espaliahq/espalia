@@ -20,16 +20,21 @@ class Views::AssessmentCycles::ShowView < Views::Base
   # @param eligible_people [Array<Person>] people who can be enrolled (admin only)
   # @param is_admin [Boolean] whether the viewer can enroll/unenroll/close
   # @param can_view_cohort [Boolean] whether to render the cohort progress link
+  # @param viewable_assignments [Hash{String => PersonFrameworkAssignment}]
+  #   person_id → assignment for participants whose assessment the viewer may
+  #   open — their names render as links to the assessment
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(cycle:, framework:, eligible_people:, is_admin:,
-                 can_view_cohort: false, user: nil, current_tenant: nil, tenants: [])
+                 can_view_cohort: false, viewable_assignments: {},
+                 user: nil, current_tenant: nil, tenants: [])
     @cycle = cycle
     @framework = framework
     @eligible_people = eligible_people
     @is_admin = is_admin
     @can_view_cohort = can_view_cohort
+    @viewable_assignments = viewable_assignments
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -234,7 +239,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
   def participant_row(participant)
     tr do
       td(class: "py-2 text-gray-900 dark:text-white") do
-        plain participant.person&.name || "(unknown)"
+        participant_name(participant)
       end
       td(class: "py-2 text-gray-600 dark:text-gray-300") do
         plain participant.person&.email || "—"
@@ -264,6 +269,19 @@ class Views::AssessmentCycles::ShowView < Views::Base
       elsif @is_admin && @cycle.open?
         td(class: "py-2")
       end
+    end
+  end
+
+  # The name links to the participant's assessment when the viewer may open it
+  # (AssessmentPolicy#show?, resolved in bulk by the controller); otherwise it
+  # renders as plain text.
+  def participant_name(participant)
+    name = participant.person&.name || "(unknown)"
+    assignment = @viewable_assignments[participant.person_id]
+    if assignment
+      a(href: assessment_path(assignment), class: "font-medium text-primary hover:underline") { name }
+    else
+      plain name
     end
   end
 
