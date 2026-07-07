@@ -124,5 +124,15 @@ class ApplicationNotifier < Noticed::Event
 
       "“#{text.truncate(ApplicationNotifier::EXCERPT_LIMIT, omission: "…")}”"
     end
+
+    # A context label plus an optional quoted excerpt, joined for an inbox
+    # body — the shared shape of the answered / declined notifications.
+    #
+    # @param label [String, nil]
+    # @param text [String, nil]
+    # @return [String, nil]
+    def labeled_excerpt(label, text)
+      [ label.presence, quoted_excerpt(text) ].compact.join(" — ").presence
+    end
   end
 end

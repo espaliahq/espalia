@@ -12,7 +12,7 @@ class EvidenceRequestRespondedNotifier < ApplicationNotifier
     end
 
     def inbox_body
-      [ params[:capability_name].presence, quoted_excerpt(params[:response]) ].compact.join(" — ").presence
+      labeled_excerpt(params[:capability_name], params[:response])
     end
 
     def inbox_url = EvidenceRequest.hub_path(params[:request_id])
