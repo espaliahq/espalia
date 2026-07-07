@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
-# Notifies the original requester that their evidence request was answered.
+# Notifies the original requester that their evidence request was answered,
+# carrying the response itself (quoted, excerpted) so the Slack DM / inbox row
+# reads the feedback without a round trip to the hub.
 class EvidenceRequestRespondedNotifier < ApplicationNotifier
   notifies :evidence_request_responded
 
@@ -9,7 +11,9 @@ class EvidenceRequestRespondedNotifier < ApplicationNotifier
       "#{params[:responder_name].presence || "A colleague"} answered your feedback request"
     end
 
-    def inbox_body = params[:capability_name].presence
+    def inbox_body
+      [ params[:capability_name].presence, quoted_excerpt(params[:response]) ].compact.join(" — ").presence
+    end
 
     def inbox_url = EvidenceRequest.hub_path(params[:request_id])
   end

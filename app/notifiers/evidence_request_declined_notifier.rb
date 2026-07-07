@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
-# Notifies the original requester that their evidence request was declined.
+# Notifies the original requester that their evidence request was declined,
+# carrying the decliner's reason (quoted, excerpted) so the Slack DM / inbox
+# row reads the response without a round trip to the hub.
 class EvidenceRequestDeclinedNotifier < ApplicationNotifier
   notifies :evidence_request_declined
 
@@ -10,7 +12,7 @@ class EvidenceRequestDeclinedNotifier < ApplicationNotifier
     end
 
     def inbox_body
-      [ params[:capability_name].presence, params[:reason].presence ].compact.join(" — ").presence
+      [ params[:capability_name].presence, quoted_excerpt(params[:reason]) ].compact.join(" — ").presence
     end
 
     def inbox_url = EvidenceRequest.hub_path(params[:request_id])

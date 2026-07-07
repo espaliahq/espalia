@@ -72,7 +72,8 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier < ApplicationJob
       tenant_id: request.tenant_id,
       request_id: request.id,
       responder_name: Person.find_by(id: event.data[:responded_by_id])&.name,
-      capability_name: capability_name(request)
+      capability_name: capability_name(request),
+      response: EvidenceItem.find_by(id: event.data[:evidence_id])&.content
     ).deliver(user)
   end
 
