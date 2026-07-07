@@ -37,7 +37,7 @@ class Assessments::ViewableAssessments
   private
 
   def viewable_person_ids(candidate_ids)
-    return candidate_ids if tenant_admin?
+    return candidate_ids if @viewer.tenant_admin?
 
     person = @viewer.person
     return [] unless person
@@ -48,10 +48,6 @@ class Assessments::ViewableAssessments
     ids.merge(recorded_report_ids)
     ids.merge(active_delegation_ids)
     candidate_ids.select { |id| ids.include?(id) }
-  end
-
-  def tenant_admin?
-    @viewer.user&.global_admin? || @viewer.tenant_user&.admin? || false
   end
 
   # People whose recorded reporting manager is the viewer — covers the case

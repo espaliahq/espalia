@@ -111,6 +111,7 @@ class Assessments::ViewableAssessmentsTest < ActiveSupport::TestCase
 
       viewers = {
         "admin" => context_for(@outsider, admin: true),
+        "global admin" => global_admin_context_for(@outsider),
         "grand manager" => context_for(@grand_manager),
         "manager" => context_for(@manager),
         "report" => context_for(@report),
@@ -142,6 +143,14 @@ class Assessments::ViewableAssessmentsTest < ActiveSupport::TestCase
     user = create(:user)
     tenant_user = create(:tenant_user, tenant: @tenant, user: user, person: person,
                          role: admin ? :admin : :member)
+    AuthorizationContext.new(user: user, tenant_user: tenant_user, person: person)
+  end
+
+  # A platform admin who is only a plain member of the tenant — exercises the
+  # `global_admin?` branch of `AuthorizationContext#tenant_admin?`.
+  def global_admin_context_for(person)
+    user = create(:user, global_admin: true)
+    tenant_user = create(:tenant_user, tenant: @tenant, user: user, person: person, role: :member)
     AuthorizationContext.new(user: user, tenant_user: tenant_user, person: person)
   end
 end
