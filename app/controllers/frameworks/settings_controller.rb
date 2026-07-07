@@ -27,18 +27,21 @@ class Frameworks::SettingsController < ApplicationController
     authorize @framework, :update_settings?
     settings = settings_params
 
-    Frameworks::CommandHandler.new.configure_scoring_thresholds(
-      @framework.framework_id,
-      mastery_threshold: resolve_value(settings[:mastery_threshold], :mastery_threshold),
-      promotion_score_threshold: resolve_value(settings[:meeting_expectation_threshold], :meeting_expectation_threshold),
-      underperforming_threshold: resolve_value(settings[:underperforming_threshold], :underperforming_threshold),
-      overperformance_cap: resolve_int_value(settings[:overperformance_cap], :overperformance_cap),
-      deficit_threshold: resolve_value(settings[:deficit_threshold], :deficit_threshold)
+    Operations::Frameworks::ConfigureScoringThresholds.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        mastery_threshold: resolve_value(settings[:mastery_threshold], :mastery_threshold),
+        meeting_expectation_threshold: resolve_value(settings[:meeting_expectation_threshold], :meeting_expectation_threshold),
+        underperforming_threshold: resolve_value(settings[:underperforming_threshold], :underperforming_threshold),
+        overperformance_cap: resolve_int_value(settings[:overperformance_cap], :overperformance_cap),
+        deficit_threshold: resolve_value(settings[:deficit_threshold], :deficit_threshold)
+      }
     )
 
     redirect_to framework_settings_path(@framework.framework_id),
                 notice: "Scoring settings updated."
-  rescue RuntimeError => e
+  rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to framework_settings_path(@framework.framework_id),
                 alert: e.message
   end

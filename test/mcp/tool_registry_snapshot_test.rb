@@ -866,6 +866,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_configure_scoring_thresholds",
+        "description" => "Replace a framework's scoring-threshold configuration (tenant admin only). Omitted thresholds revert to system defaults — this is a full replacement, not a partial update.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "mastery_threshold" => { "type" => "number" },
+            "meeting_expectation_threshold" => { "type" => "number" },
+            "underperforming_threshold" => { "type" => "number" },
+            "overperformance_cap" => { "type" => "integer" },
+            "deficit_threshold" => { "type" => "number" }
+          },
+          "required" => %w[framework_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_define_migration_mapping",
         "description" => "Define or edit a capability migration mapping for the current draft (owner/editor only).",
         "inputSchema" => {
