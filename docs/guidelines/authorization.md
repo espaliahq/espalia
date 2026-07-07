@@ -99,7 +99,7 @@ Access to person development streams is based on the person/manager relationship
 |--------|-----|
 | Self-rating | Person themselves (`record.person_id == person.id`) |
 | Manager rating | Recorded reporting manager **OR an active rating delegate** |
-| View assessment | Person, **anyone in their manager chain** (direct, skip-level, …), **or an active delegate**. Chain ancestors above the reporting manager view read-only (static rating pills); delegates see alignment read-only |
+| View assessment | Person, **anyone in their manager chain** (direct, skip-level, …), **an active delegate**, **or a tenant/global admin** (HR view). Chain ancestors above the reporting manager and admins view read-only (static rating pills); delegates see alignment read-only |
 | Start / complete / record alignment | Reporting manager only — never a delegate |
 | Grant / revoke a rating delegation | Any ancestor manager (`Person#managed_by?`) or a tenant admin |
 | Unassign from framework (`unassign?`) | Tenant admin only — a destructive org-structure change, not the assessee or their manager |
