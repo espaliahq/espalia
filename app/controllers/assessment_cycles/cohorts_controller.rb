@@ -17,11 +17,20 @@ class AssessmentCycles::CohortsController < ApplicationController
       mode: :full
     ).call
 
+    # Which participant names link to their assessment: only those the viewer
+    # may open (AssessmentPolicy#show? — admin / own / subtree / delegate).
+    viewable_assignments = Assessments::ViewableAssessments.new(
+      viewer: pundit_user,
+      framework_id: @cycle.framework_id,
+      person_ids: result.participants.map(&:person_id)
+    ).call
+
     render Views::AssessmentCycles::Cohort::ShowView.new(
       result: result,
       pivot: pivot_param,
       scope: scope_param,
       can_scope_to_self: can_scope_to_self?,
+      viewable_assignments: viewable_assignments,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
