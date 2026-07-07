@@ -119,6 +119,24 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_text "Declined"
   end
 
+  should "navigate from authored evidence to its linkage on the assessment" do
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "self",
+        evidence_type: "project_outcome", content: "Shipped the migration", author_id: @report.id)
+    end
+
+    sign_in_as(@report_user)
+    visit evidence_hub_path
+    assert_text "Shipped the migration"
+
+    # The in-situ link deep-links into the assessment with the linked
+    # capability focused; the evidence reads in place in the expanded card.
+    click_link_with_js_fallback "View in assessment", expect_text: "Rate yourself to see your score"
+    assert_selector "[data-focused='true']", text: "Critical Thinking"
+    assert_text "Shipped the migration"
+  end
+
   should "let the requester nudge a stale open request" do
     make_request!
     ActsAsTenant.with_tenant(@tenant) do

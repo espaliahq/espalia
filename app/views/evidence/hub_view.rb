@@ -20,9 +20,11 @@ class Views::Evidence::HubView < Views::Base
   # @param authored [Array<EvidenceItem>] active evidence the viewer authored
   # @param cell_details [Hash{String=>Hash}] request_id => { name:, role:, level_title:, expectation:, illustrations: }
   # @param authored_details [Hash{String=>Hash}] evidence_id => { assessee_name:, capability_name:, role:, level_title:, assignment_id: }
+  # @param in_situ_paths [Hash{String=>String}] evidence_id => assessment deep link
+  #   to the item's first linkage (absent when the viewer may not see it)
   def initialize(open_incoming:, open_outgoing:, completed_incoming: [], completed_outgoing: [],
                  authored: [], cell_details: {}, authored_details: {}, responses: {},
-                 user: nil, current_tenant: nil, tenants: [])
+                 in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [])
     @open_incoming = open_incoming
     @open_outgoing = open_outgoing
     @completed_incoming = completed_incoming
@@ -31,6 +33,7 @@ class Views::Evidence::HubView < Views::Base
     @cell_details = cell_details
     @authored_details = authored_details
     @responses = responses
+    @in_situ_paths = in_situ_paths
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -176,9 +179,10 @@ class Views::Evidence::HubView < Views::Base
       p(class: "text-sm text-gray-700 dark:text-gray-200 whitespace-pre-line") { item.content }
       external_link(item)
       applies_to_line(response[:links])
-      div do
+      div(class: "flex items-center gap-4") do
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
                class: "inline-flex items-center min-h-11 text-sm font-medium text-primary cursor-pointer") { "Edit links" }
+        view_in_assessment_link(item)
       end
     end
   end
@@ -221,6 +225,19 @@ class Views::Evidence::HubView < Views::Base
     item.evidence_type == "other" ? item.custom_type_label.to_s : item.evidence_type.humanize
   end
 
+  # Deep link to the item's first linkage on the assessment, so the feedback
+  # can be read in situ — next to the expectation, ratings, and the rest of the
+  # cell's evidence. Present only when the viewer may see that assessment (the
+  # controller applies AssessmentPolicy#show?), so a peer never gets a dead link.
+  def view_in_assessment_link(item)
+    path = @in_situ_paths[item.id]
+    return if path.blank?
+
+    a(href: path, class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline") do
+      "View in assessment"
+    end
+  end
+
   def external_link(item)
     url = item.external_reference&.url
     return if url.blank?
@@ -236,6 +253,7 @@ class Views::Evidence::HubView < Views::Base
     return if detail[:assignment_id].blank?
 
     div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4") do
+      view_in_assessment_link(item)
       button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
              class: "inline-flex items-center min-h-11 text-sm font-medium text-primary cursor-pointer") { "Edit" }
       form_with(url: evidence_item_path(item), method: :delete) do

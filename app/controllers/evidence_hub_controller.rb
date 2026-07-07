@@ -26,6 +26,7 @@ class EvidenceHubController < ApplicationController
     # One combined context lookup for every cell on the page — request ids and
     # evidence ids are all distinct UUIDs, so a single id-keyed hash serves both.
     details = Evidence::CellContextResolver.new(all_requests + authored).by_id
+    responses = responses_for(completed_outgoing)
 
     render Views::Evidence::HubView.new(
       open_incoming: open_incoming,
@@ -35,7 +36,8 @@ class EvidenceHubController < ApplicationController
       authored: authored,
       cell_details: details,
       authored_details: details,
-      responses: responses_for(completed_outgoing),
+      responses: responses,
+      in_situ_paths: in_situ_paths_for(authored + responses.values.map { |r| r[:item] }),
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -79,6 +81,34 @@ class EvidenceHubController < ApplicationController
         { capability_name: ctx[:name], level_code: ctx[:level_code], level_ordinal: level_ordinal }
       end
       acc[req.id] = { item: item, links: links }
+    end
+  end
+
+  # For each evidence item on the page, a deep link to its FIRST active linkage
+  # on the assessment (`?capability=` + `?level_ordinal=` focus + scroll the
+  # capability card), so the item can be seen in situ. Rendered only when the
+  # viewer may see that assessment (AssessmentPolicy#show?) — a peer who
+  # provided feedback on a colleague's assessment gets no dead link.
+  #
+  # @param items [Array<EvidenceItem>]
+  # @return [Hash{String => String}] evidence_id => assessment path
+  def in_situ_paths_for(items)
+    items = items.compact.uniq
+    return {} if items.empty?
+
+    first_links = EvidenceLink.active.where(evidence_id: items.map(&:id))
+      .order(:linked_at, :id).group_by(&:evidence_id).transform_values(&:first)
+    assignments = PersonFrameworkAssignment
+      .where(framework_id: items.map(&:framework_id).uniq, person_id: items.map(&:person_id).uniq)
+      .index_by { |a| [ a.framework_id, a.person_id ] }
+
+    items.each_with_object({}) do |item, acc|
+      link = first_links[item.id]
+      assignment = assignments[[ item.framework_id, item.person_id ]]
+      next if link.nil? || assignment.nil? || !policy(assignment).show?
+
+      acc[item.id] = assessment_path(assignment,
+        capability: link.capability_stable_id, level_ordinal: link.level_ordinal)
     end
   end
 
