@@ -265,6 +265,22 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, assessment_manager_ratings_path(@assignment)
     end
 
+    should "render the read-only manager view for a tenant admin outside the chain" do
+      admin_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = create(:person, tenant: @tenant, email: admin_user.email, name: "HR Admin")
+        create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+      end
+
+      sign_in admin_user
+      get assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, @person.name
+      # No manager-rating endpoint rendered — the admin views, never rates.
+      assert_not_includes response.body, assessment_manager_ratings_path(@assignment)
+    end
+
     should "redirect if not manager and not assignee" do
       other_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do

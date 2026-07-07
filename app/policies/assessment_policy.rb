@@ -4,9 +4,12 @@
 #
 # The record is a {PersonFrameworkAssignment}. Viewing is granted to the
 # person themselves, anyone in their manager chain (direct, skip-level, …),
-# and an active rating delegate. Rating and alignment authority stay much
-# narrower — the recorded reporting manager (plus a delegate for the manager
-# rating only).
+# an active rating delegate, and tenant/global admins (HR view, read-only —
+# they already see manager-perspective activity and evidence via
+# {AssessmentVisibility#viewer_sees_all_evidence?}, and unsuppressed
+# whole-cycle attainment aggregates). Rating and alignment authority stay
+# much narrower — the recorded reporting manager (plus a delegate for the
+# manager rating only).
 #
 class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
@@ -14,8 +17,8 @@ class AssessmentPolicy < ApplicationPolicy
 
   # @return [Boolean]
   def show?
-    owns_assessment? || manages_assessee? || in_assessee_manager_chain? ||
-      active_rating_delegate?
+    tenant_admin? || owns_assessment? || manages_assessee? ||
+      in_assessee_manager_chain? || active_rating_delegate?
   end
 
   # Whether the viewer is an active rating-side participant — the assessee,

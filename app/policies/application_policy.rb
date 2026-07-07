@@ -20,9 +20,7 @@ class ApplicationPolicy
   delegate :user, :tenant_user, :person, to: :context
 
   # @return [Boolean] whether the user is a tenant admin or global admin
-  def tenant_admin?
-    user&.global_admin? || tenant_user&.admin?
-  end
+  delegate :tenant_admin?, to: :context
 
   # @return [Boolean] whether the user has any membership in the current tenant
   def tenant_member?

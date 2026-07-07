@@ -48,8 +48,9 @@ class AssessmentCyclePolicy < ApplicationPolicy
   # AssessmentPolicy#show? grants the entire live manager chain full view of
   # each report's assessment, a manager's attainment scope (Person#all_reports,
   # the same live chart walk) is exactly the set whose individual assessments
-  # they can already open — so the aggregate discloses nothing new and every
-  # attainment viewer is currently unsuppressed. The suppression machinery in
+  # they can already open — and tenant/global admins (whole-cycle scope) hold
+  # AssessmentPolicy#show? on every assessment too — so the aggregate discloses
+  # nothing new and every attainment viewer is currently unsuppressed. The suppression machinery in
   # Reporting::CapabilityAttainment stays for future audiences whose
   # individual-level visibility does NOT cover their aggregate scope (e.g.
   # org-wide transparency for members, department-scoped HR viewers) — such an

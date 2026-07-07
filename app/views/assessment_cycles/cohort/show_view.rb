@@ -22,12 +22,16 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   # @param pivot [String] active grouping pivot ("manager" | "role" | "level")
   # @param scope [String] active viewer scope ("all" | "mine")
   # @param can_scope_to_self [Boolean] whether to offer the My-org/Whole-cycle toggle
+  # @param viewable_assignments [Hash{String => PersonFrameworkAssignment}]
+  #   person_id → assignment for participants whose assessment the viewer may
+  #   open — their names render as links to the assessment
   def initialize(result:, pivot: "manager", scope: "all", can_scope_to_self: false,
-                 user: nil, current_tenant: nil, tenants: [])
+                 viewable_assignments: {}, user: nil, current_tenant: nil, tenants: [])
     @result = result
     @pivot = pivot
     @scope = scope
     @can_scope_to_self = can_scope_to_self
+    @viewable_assignments = viewable_assignments
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -150,7 +154,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
           ul(class: "mt-2 space-y-1") do
             at_risk.first(8).each do |participant|
               li(class: "text-sm text-gray-600 dark:text-gray-300") do
-                plain participant.name
+                participant_name(participant)
                 span(class: "text-gray-600 dark:text-gray-300") { " · #{participant.role_name || "—"}" }
               end
             end
@@ -233,7 +237,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   def participant_row(participant)
     div(class: "flex flex-wrap items-center justify-between gap-2 px-6 py-3") do
       div do
-        span(class: "text-sm font-medium text-gray-900 dark:text-white") { participant.name }
+        span(class: "text-sm font-medium text-gray-900 dark:text-white") { participant_name(participant) }
         span(class: "ml-2 text-xs text-gray-600 dark:text-gray-300") do
           [ participant.role_name, participant.level_ordinal && "L#{participant.level_ordinal}" ].compact.join(" · ")
         end
@@ -244,6 +248,19 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
         status_badge(participant)
         render(Components::Kit::Badge.new("At risk", variant: :warning)) if participant.at_risk
       end
+    end
+  end
+
+  # The name links to the participant's assessment when the viewer may open it
+  # (AssessmentPolicy#show?, resolved in bulk by the controller); otherwise it
+  # renders as plain text. The cohort itself stays lifecycle-only — the link is
+  # the drill-down for viewers who could already open the assessment anyway.
+  def participant_name(participant)
+    assignment = @viewable_assignments[participant.person_id]
+    if assignment
+      a(href: assessment_path(assignment), class: "text-primary hover:underline") { participant.name }
+    else
+      plain participant.name
     end
   end
 

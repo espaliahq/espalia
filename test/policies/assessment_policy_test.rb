@@ -119,6 +119,57 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "as a tenant admin outside the manager chain" do
+    setup do
+      @user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        @admin_person = create(:person, tenant: @tenant, name: "HR Admin")
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user,
+                              person: @admin_person, role: :admin)
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @admin_person)
+    end
+
+    should "allow show, matrix and scoring (read-only HR view)" do
+      assert policy.show?
+      assert policy.matrix?
+      assert policy.scoring?
+    end
+
+    should "deny all rating and alignment authority" do
+      assert_not policy.create_self_rating?
+      assert_not policy.create_manager_rating?
+      assert_not policy.create_alignment_rating?
+      assert_not policy.start_alignment?
+      assert_not policy.complete_alignment?
+      assert_not policy.reopen_alignment?
+    end
+
+    should "not be a rating_participant (view-only hero copy)" do
+      assert_not policy.rating_participant?
+    end
+  end
+
+  context "as a global admin outside the tenant's manager chain" do
+    setup do
+      @user = create(:user, global_admin: true)
+      ActsAsTenant.with_tenant(@tenant) do
+        @admin_person = create(:person, tenant: @tenant, name: "Platform Admin")
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: @admin_person)
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @admin_person)
+    end
+
+    should "allow show" do
+      assert policy.show?
+    end
+
+    should "deny rating authority" do
+      assert_not policy.create_self_rating?
+      assert_not policy.create_manager_rating?
+    end
+  end
+
   context "as an unrelated person" do
     setup do
       @user = create(:user)

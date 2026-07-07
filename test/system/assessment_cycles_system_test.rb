@@ -179,6 +179,31 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "participant assessment links" do
+    should "open a participant's assessment from the cycle page" do
+      cycle = nil
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = FactoryBot.create(:assessment_cycle, tenant: @tenant, name: "Q1 2026",
+          framework_id: @framework_id, status: "open")
+        FactoryBot.create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
+          person_id: @assigned_person.id, role_id: @role.role_id,
+          level_ordinal: 2, status: "enrolled")
+      end
+      assignment = ActsAsTenant.with_tenant(@tenant) do
+        PersonFrameworkAssignment.for_person(@assigned_person.id).first
+      end
+
+      sign_in @admin_user
+      visit assessment_cycle_path(cycle)
+      assert_text "Participants"
+
+      # The admin can open the participant's assessment, so the name is a link.
+      click_link_with_js_fallback("Assigned Person", expect_text: "E2")
+
+      assert_current_path assessment_path(assignment)
+    end
+  end
+
   context "auto-enrollment on new assignment" do
     should "auto-enroll a newly-assigned person into the open cycle" do
       # Define a cycle first via the rails layer so the UI test stays focused

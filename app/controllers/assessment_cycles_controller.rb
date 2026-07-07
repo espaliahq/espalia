@@ -44,12 +44,21 @@ class AssessmentCyclesController < ApplicationController
     @cycle.enrollments.includes(:person).load
     framework = FrameworkState::Framework.find_by(framework_id: @cycle.framework_id)
 
+    # Which participant names link to their assessment: only those the viewer
+    # may open (AssessmentPolicy#show? — admin / own / subtree / delegate).
+    viewable_assignments = Assessments::ViewableAssessments.new(
+      viewer: pundit_user,
+      framework_id: @cycle.framework_id,
+      person_ids: @cycle.enrollments.map(&:person_id)
+    ).call
+
     render Views::AssessmentCycles::ShowView.new(
       cycle: @cycle,
       framework: framework,
       eligible_people: @cycle.eligible_people.to_a,
       is_admin: policy(@cycle).enroll?,
       can_view_cohort: policy(@cycle).cohort?,
+      viewable_assignments: viewable_assignments,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants

@@ -263,6 +263,57 @@ class AssessmentCyclesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "participant assessment links on GET /assessment_cycles/:id" do
+    setup do
+      @cycle = open_cycle
+      ActsAsTenant.with_tenant(@tenant) do
+        @participant = create(:person, tenant: @tenant, name: "Enrolled Person")
+        @participant_assignment = create(:person_framework_assignment,
+          tenant: @tenant, person_id: @participant.id,
+          framework_id: @framework.framework_id,
+          role_id: @role.role_id, level_id: @level.level_id)
+        create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: @cycle, person_id: @participant.id, status: "enrolled")
+      end
+    end
+
+    should "link the participant name to their assessment for an admin" do
+      sign_in @admin_user
+      get assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, assessment_path(@participant_assignment)
+    end
+
+    should "render the name as plain text for a member outside the participant's chain" do
+      ActsAsTenant.with_tenant(@tenant) do
+        unrelated = create(:person, tenant: @tenant, email: @member_user.email, name: "Unrelated")
+        TenantUser.find_by(user_id: @member_user.id).update!(person: unrelated)
+      end
+
+      sign_in @member_user
+      get assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, "Enrolled Person"
+      assert_not_includes response.body, assessment_path(@participant_assignment)
+    end
+
+    should "link the participant name for their manager" do
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person, tenant: @tenant, email: @member_user.email, name: "Line Manager")
+        TenantUser.find_by(user_id: @member_user.id).update!(person: manager)
+        @participant.update!(manager: manager)
+      end
+
+      sign_in @member_user
+      get assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, assessment_path(@participant_assignment)
+    end
+  end
+
   context "as tenant member" do
     should "deny GET /assessment_cycles" do
       sign_in @member_user

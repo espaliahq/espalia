@@ -81,6 +81,44 @@ class AssessmentCycles::CohortsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "participant assessment links" do
+    setup do
+      @report_assignment = ActsAsTenant.with_tenant(@tenant) do
+        create(:person_framework_assignment, tenant: @tenant,
+          person_id: @report.id, framework_id: @framework_id,
+          role_id: @role.role_id)
+      end
+    end
+
+    should "link the participant name to their assessment for an admin" do
+      sign_in @admin_user
+      get cohort_assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, assessment_path(@report_assignment)
+    end
+
+    should "link the participant name to their assessment for their manager" do
+      sign_in @manager_user
+      get cohort_assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, assessment_path(@report_assignment)
+    end
+
+    should "render the name as plain text when the participant has no assignment" do
+      path = assessment_path(@report_assignment)
+      @report_assignment.destroy!
+
+      sign_in @admin_user
+      get cohort_assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_includes response.body, "Report One"
+      assert_not_includes response.body, path
+    end
+  end
+
   context "viewer scope" do
     should "default an admin to the whole cycle" do
       sign_in @admin_user
