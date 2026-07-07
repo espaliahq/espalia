@@ -70,7 +70,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     assert_equal "Morgan asked you for feedback regarding Alex", @peer_user.notifications.reload.last.inbox_title
   end
 
-  should "notify the requester when the request is responded to" do
+  should "notify the requester with the response when the request is responded to" do
     id = request!
     evidence_id = SecureRandom.uuid_v7
     @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
@@ -81,18 +81,50 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
         evidence_id: evidence_id, responded_by_id: @peer.id)
     end
 
-    titles = @assessee_user.notifications.reload.map(&:inbox_title)
-    assert_includes titles, "Jordan answered your feedback request"
+    notification = @assessee_user.notifications.reload
+      .find { |n| n.inbox_title == "Jordan answered your feedback request" }
+    assert_not_nil notification
+    assert_equal "“Paired on the incident”", notification.inbox_body
   end
 
-  should "notify the requester when the request is declined" do
+  should "truncate a long response in the notification body" do
+    id = request!
+    evidence_id = SecureRandom.uuid_v7
+    @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
+      capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, source: "peer",
+      evidence_type: "peer_feedback", content: "detail " * 100, author_id: @peer.id)
+    perform_enqueued_jobs do
+      @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
+        evidence_id: evidence_id, responded_by_id: @peer.id)
+    end
+
+    body = @assessee_user.notifications.reload.max_by(&:created_at).inbox_body
+    assert_operator body.length, :<=, ApplicationNotifier::EXCERPT_LIMIT + 2 # + the quote marks
+    assert_match(/…”\z/, body)
+  end
+
+  should "notify the requester with the reason when the request is declined" do
     id = request!
     perform_enqueued_jobs do
       @handler.decline_evidence_request(@assessee.id, @framework_id, id, declined_by_id: @peer.id, reason: "No overlap")
     end
 
-    titles = @assessee_user.notifications.reload.map(&:inbox_title)
-    assert_includes titles, "Jordan declined your feedback request"
+    notification = @assessee_user.notifications.reload
+      .find { |n| n.inbox_title == "Jordan declined your feedback request" }
+    assert_not_nil notification
+    assert_equal "“No overlap”", notification.inbox_body
+  end
+
+  should "notify a reasonless decline with an empty body" do
+    id = request!
+    perform_enqueued_jobs do
+      @handler.decline_evidence_request(@assessee.id, @framework_id, id, declined_by_id: @peer.id)
+    end
+
+    notification = @assessee_user.notifications.reload
+      .find { |n| n.inbox_title == "Jordan declined your feedback request" }
+    assert_not_nil notification
+    assert_nil notification.inbox_body
   end
 
   should "nudge the requestee on a no_response reminder" do

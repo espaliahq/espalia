@@ -107,6 +107,11 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_match "Solid pairing partner.", response.body
       assert_match "Applies to: Critical Thinking E2", response.body
       assert_select "button[data-evidence-modal-mode-param='edit']", text: "Edit links"
+      # The response deep-links to its first linkage on the requester's own
+      # (viewable) assessment so it can be read in situ.
+      assert_select "a[href=?]",
+        assessment_path(@assignment, capability: @cap.stable_id, level_ordinal: 2),
+        text: "View in assessment"
     end
   end
 

@@ -46,15 +46,16 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
   end
 
   def message_text
-    [ notification.inbox_title, notification.inbox_body ].compact.join(" — ")
+    [ notification.inbox_title, notification.inbox_body ].compact
+      .map { |part| mrkdwn_escape(part) }.join(" — ")
   end
 
   # Block Kit payload: the headline + body, then a button to the in-app surface
   # when an absolute URL can be built.
   def message_blocks
-    blocks = [ { type: "section", text: { type: "mrkdwn", text: "*#{notification.inbox_title}*" } } ]
+    blocks = [ { type: "section", text: { type: "mrkdwn", text: "*#{mrkdwn_escape(notification.inbox_title)}*" } } ]
     body = notification.inbox_body
-    blocks << { type: "section", text: { type: "mrkdwn", text: body } } if body.present?
+    blocks << { type: "section", text: { type: "mrkdwn", text: mrkdwn_escape(body) } } if body.present?
 
     url = absolute_url(notification.inbox_url)
     if url
@@ -64,6 +65,20 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
       }
     end
     blocks
+  end
+
+  # Notification titles and bodies carry user-written free text (a request
+  # message, a decline reason, a quoted evidence response). Slack parses both
+  # the `text` fallback and mrkdwn section blocks for control sequences, so
+  # `<https://evil.example|innocent label>` or `<!channel>` typed by a user
+  # would render as a masked link / broadcast. Escape the three control
+  # characters per Slack's "Escaping text" rules; styling chars (*_~) are
+  # deliberately left alone — cosmetic at worst.
+  #
+  # @param text [String]
+  # @return [String]
+  def mrkdwn_escape(text)
+    text.to_s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
   end
 
   # @return [String, nil] absolute URL for a relative app path, or nil when no

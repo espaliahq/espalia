@@ -25,6 +25,10 @@ class ApplicationNotifier < Noticed::Event
   # notification"). Applied only when the recipient surfaces this type in-app.
   ESCALATION_DELAY = 5.minutes
 
+  # Longest quoted free-text excerpt (a response body, a decline reason) a
+  # notification body will carry — see `quoted_excerpt`.
+  EXCERPT_LIMIT = 280
+
   # The NotificationType key this notifier delivers. Set via `notifies`.
   class_attribute :notification_type_key, instance_writer: false
 
@@ -104,6 +108,31 @@ class ApplicationNotifier < Noticed::Event
     # @return [String] where the inbox row links to (the actionable surface)
     def inbox_url
       params[:url].presence || "/"
+    end
+
+    private
+
+    # Free text someone wrote (an evidence response, a decline reason), quoted
+    # for a notification body and truncated so a long write-up doesn't flood
+    # Slack or the inbox — the deep link carries the reader to the full text.
+    #
+    # @param text [String, nil]
+    # @return [String, nil] nil when there is nothing to quote
+    def quoted_excerpt(text)
+      text = text.to_s.strip
+      return nil if text.blank?
+
+      "“#{text.truncate(ApplicationNotifier::EXCERPT_LIMIT, omission: "…")}”"
+    end
+
+    # A context label plus an optional quoted excerpt, joined for an inbox
+    # body — the shared shape of the answered / declined notifications.
+    #
+    # @param label [String, nil]
+    # @param text [String, nil]
+    # @return [String, nil]
+    def labeled_excerpt(label, text)
+      [ label.presence, quoted_excerpt(text) ].compact.join(" — ").presence
     end
   end
 end
