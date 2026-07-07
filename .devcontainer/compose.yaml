@@ -16,7 +16,12 @@ services:
     environment:
       DB_HOST: postgres
       SELENIUM_HOST: selenium-hub
-      CAPYBARA_SERVER_PORT: "45678"
+      # Must sit BELOW the Linux ephemeral port range (32768–60999, see
+      # net.ipv4.ip_local_port_range): each test worker binds base+worker as a
+      # fixed port, and an ephemeral-range pin collides with whatever outbound
+      # connection happens to hold that local port (recurring mid-suite
+      # Errno::EADDRINUSE on "rails-app").
+      CAPYBARA_SERVER_PORT: "28100"
       SYSTEM_TEST_WORKERS: "4"
 
     depends_on:
