@@ -471,7 +471,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "type" => "object",
           "properties" => {
             "request_id"         => { "type" => "string" },
-            "evidence_type"      => { "type" => "string", "enum" => %w[peer_feedback project_outcome code_review design_review customer_feedback incident_response presentation mentoring observation other] },
+            "evidence_type"      => { "type" => "string", "enum" => %w[peer_feedback manager_feedback customer_feedback impact project_outcome code_review design_review incident_response presentation mentoring observation other] },
             "content"            => { "type" => "string" },
             "custom_type_label"  => { "type" => "string" },
             "title"              => { "type" => "string" },

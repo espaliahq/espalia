@@ -10,9 +10,10 @@ class Views::Evidence::ModalForm < Views::Base
   include Phlex::Rails::Helpers::FormWith
 
   TYPE_OPTIONS = [
+    [ "Peer feedback", "peer_feedback" ], [ "Manager feedback", "manager_feedback" ],
+    [ "Customer feedback", "customer_feedback" ], [ "Impact", "impact" ],
     [ "Project outcome", "project_outcome" ], [ "Code review", "code_review" ],
-    [ "Design review", "design_review" ], [ "Customer feedback", "customer_feedback" ],
-    [ "Peer feedback", "peer_feedback" ], [ "Incident response", "incident_response" ],
+    [ "Design review", "design_review" ], [ "Incident response", "incident_response" ],
     [ "Presentation", "presentation" ], [ "Mentoring", "mentoring" ],
     [ "Observation", "observation" ], [ "Other (describe)", "other" ]
   ].freeze

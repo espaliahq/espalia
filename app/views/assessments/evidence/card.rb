@@ -23,10 +23,12 @@ class Views::Assessments::Evidence::Card < Views::Base
 
   TYPE_LABEL = {
     "peer_feedback"     => "Peer feedback",
+    "manager_feedback"  => "Manager feedback",
+    "customer_feedback" => "Customer feedback",
+    "impact"            => "Impact",
     "project_outcome"   => "Project outcome",
     "code_review"       => "Code review",
     "design_review"     => "Design review",
-    "customer_feedback" => "Customer feedback",
     "incident_response" => "Incident response",
     "presentation"      => "Presentation",
     "mentoring"         => "Mentoring",
