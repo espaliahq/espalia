@@ -51,6 +51,13 @@ class FrameworkPolicy < ApplicationPolicy
   # @return [Boolean]
   def view_suggestions? = tenant_admin? || framework_collaborator_can_suggest?
 
+  # Post to a suggestion's discussion thread — the same bar as submitting a
+  # suggestion (any collaborator with suggest rights, or a tenant admin).
+  # Commenting isn't approving, so no review-tier gating applies.
+  #
+  # @return [Boolean]
+  def comment_on_suggestion? = tenant_admin? || framework_collaborator_can_suggest?
+
   # Publish the current draft as a new framework version. Restricted to
   # tenant admins and collaborators with publish rights (owner / editor) —
   # publishing fires cross-stream assessment migrations, rebuilds the
