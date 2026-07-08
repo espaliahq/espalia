@@ -59,8 +59,8 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   #   recorded_at, links }` — the durable identifying fields plus the
   #   resolved `source` so the LLM can confirm how the system
   #   categorised the caller's relationship to the assessee, and `links`
-  #   (every active `{ capability_stable_id, level_ordinal }` the item is
-  #   attached to).
+  #   (every active `{ capability_stable_id, level_ordinal, valence }` the
+  #   item is attached to).
   def perform
     validate_evidence_type_label!
     validate_external_reference!

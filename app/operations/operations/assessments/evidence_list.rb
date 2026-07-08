@@ -34,7 +34,7 @@ class Operations::Assessments::EvidenceList < Operations::Base
   #   where each evidence entry carries `{ evidence_id, evidence_type,
   #   custom_type_label, title, content, source, author{id,name},
   #   external_reference|nil, recorded_at, edited_at|nil, links[] }`. `links`
-  #   is every active `{ capability_stable_id, level_ordinal }` the item is
+  #   is every active `{ capability_stable_id, level_ordinal, valence }` the item is
   #   attached to — so a multi-linked item shows where else it counts.
   def perform
     found = items

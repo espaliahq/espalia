@@ -46,7 +46,7 @@ class PersonDevelopment::Aggregate
     @self_ratings = {}    # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     @aligned_ratings = {} # [stable_id, level_ordinal] => frequency
-    @evidence = {}       # evidence_id => { links: Set[[capability_stable_id, level_ordinal], ...], status: }
+    @evidence = {}       # evidence_id => { links: { [capability_stable_id, level_ordinal] => valence, ... }, status: }
     @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
