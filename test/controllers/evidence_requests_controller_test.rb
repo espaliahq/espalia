@@ -56,6 +56,25 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_no_match "Synthesises competing trade-offs", response.body
     end
 
+    should "disclose response visibility on an open incoming card" do
+      make_request!
+      sign_in @peer_user
+      get evidence_hub_path
+      assert_match "Your response will be visible to Rep, their managers, and workspace admins", response.body
+    end
+
+    should "not disclose visibility when the requestee is the assessee" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # The requester asks the assessee themselves for more evidence.
+        PersonDevelopment::CommandHandler.new.request_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+          requested_by_id: @peer.id, requestee_person_id: @report.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2)
+      end
+      sign_in @report_user
+      get evidence_hub_path
+      assert_no_match(/workspace admins/, response.body)
+    end
+
     should "show outgoing requests to the requester" do
       make_request!
       sign_in @report_user

@@ -478,6 +478,12 @@ the response lands pre-linked to it.
   `Operations::Assessments::RequestEvidence` once per `requestee_ids[]` entry (shared
   message + due), flashing a per-batch summary ("Sent to N people · Skipped M"). MCP
   parity is preserved — the op is unchanged; multi-send is a web convenience.
+- **Visibility is disclosed to the requestee** before they write a word: the open
+  incoming hub card and the respond modal both state the response will be visible
+  to the assessee, their managers, and workspace admins (the `EvidencePolicy` view
+  rules). Skipped when the requestee IS the assessee. Keep the copy in the two
+  surfaces (`HubView#response_visibility_note` / `ModalForm#visibility_note`) in
+  step with the policy if view rules ever change.
 
 **Two modal overlays, one `modal` controller.** The assessment screen now hosts both
 the evidence modal and the request modal under the wrapper's single `modal`

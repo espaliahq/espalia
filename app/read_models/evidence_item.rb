@@ -30,10 +30,12 @@ class EvidenceItem < ApplicationRecord
   SOURCES = %w[self manager peer].freeze
   EVIDENCE_TYPES = %w[
     peer_feedback
+    manager_feedback
+    customer_feedback
+    impact
     project_outcome
     code_review
     design_review
-    customer_feedback
     incident_response
     presentation
     mentoring

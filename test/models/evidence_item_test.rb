@@ -38,6 +38,15 @@ class EvidenceItemTest < ActiveSupport::TestCase
       end
     end
 
+    should "accept the feedback-family and impact evidence_types" do
+      ActsAsTenant.with_tenant(@tenant) do
+        %w[manager_feedback customer_feedback impact].each do |type|
+          item = build(:evidence_item, tenant: @tenant, evidence_type: type)
+          assert item.valid?, "#{type}: #{item.errors.full_messages.to_sentence}"
+        end
+      end
+    end
+
     should "require custom_type_label when type is 'other'" do
       ActsAsTenant.with_tenant(@tenant) do
         item = build(:evidence_item, tenant: @tenant, evidence_type: "other", custom_type_label: nil)
