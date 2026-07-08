@@ -18,6 +18,11 @@ class Frameworks::ActivityController < ApplicationController
   def show
     authorize @framework, :view_suggestions?
 
+    # Suggestion focus swaps the pane from feed mode to one suggestion's
+    # consolidated card (proposal + approve/reject + discussion thread) —
+    # same Turbo Frame, different content.
+    return render_suggestion_card if suggestion_focus?
+
     query = Frameworks::ActivityFeedQuery.new(
       framework: @framework,
       focus: focus_param,
@@ -56,6 +61,38 @@ class Frameworks::ActivityController < ApplicationController
   end
 
   private
+
+  def suggestion_focus?
+    params[:focus].to_s == "suggestion" && params[:suggestion_id].present?
+  end
+
+  # Renders the pane's suggestion card. An unknown suggestion (withdrawn from
+  # under a stale link, wrong framework) falls back to the framework feed
+  # rather than blanking the pane.
+  def render_suggestion_card
+    suggestion = FrameworkState::SuggestedEdit
+      .where(framework_id: @framework.framework_id)
+      .find_by(suggestion_id: params[:suggestion_id])
+    return redirect_to framework_activity_path(@framework.framework_id, layout: "panel") if suggestion.nil?
+
+    comments = FrameworkState::SuggestionComment
+      .for_suggestion(suggestion.suggestion_id)
+      .includes(:author)
+      .chronological
+      .to_a
+
+    render Views::Frameworks::Activity::SuggestionCardFrame.new(
+      framework: @framework,
+      suggestion: suggestion,
+      comments: comments,
+      author_name: Person.find_by(id: suggestion.author_id)&.name,
+      clear_path: framework_activity_path(@framework.framework_id, layout: "panel"),
+      approval_authority: approval_authority,
+      viewer_person_id: current_person&.id,
+      can_comment: current_person.present? && policy(@framework).comment_on_suggestion?,
+      tenant_admin: policy(@framework).admin?
+    ), layout: false
+  end
 
   # URL for the next (older) batch — preserves the active focus/role scope so
   # pagination stays within the same view.

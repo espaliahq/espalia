@@ -33,6 +33,11 @@ class Frameworks::SuggestionsController < ApplicationController
       can_approve: policy(@suggestion).approve?,
       can_amend: policy(@suggestion).amend?,
       can_withdraw: policy(@suggestion).withdraw?,
+      comments: FrameworkState::SuggestionComment
+        .for_suggestion(@suggestion.suggestion_id).includes(:author).chronological.to_a,
+      viewer_person_id: current_person&.id,
+      can_comment: current_person.present? && policy(@framework).comment_on_suggestion?,
+      tenant_admin: policy(@framework).admin?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants_for_navbar

@@ -36,6 +36,7 @@ export default class extends BaseController {
       capabilityId: null,
       levelOrdinal: null,
       expectationId: null,
+      suggestionId: null,
       roleIds: [...this.initialRoleIdsValue],
       track: this.initialTrackValue
     }
@@ -72,6 +73,26 @@ export default class extends BaseController {
     this.state.capabilityId = capabilityId || null
     this.state.levelOrdinal = (typeof levelOrdinal === "number") ? levelOrdinal : null
     this.state.expectationId = expectationId || null
+    // An explicit matrix interaction moves focus — including out of a
+    // suggestion card (most-specific-wins, same as every other level).
+    this.state.suggestionId = null
+    this.#rebuildFrameSrc()
+    this.#pushBrowserUrl()
+  }
+
+  // Opens the pane's suggestion card (focus=suggestion) from an entry's
+  // discussion affordance. Deliberately does NOT navigate the matrix —
+  // matrix:focus-changed would immediately overwrite this focus (the row
+  // body click remains the way to jump the grid to the entity).
+  openSuggestionCard(event) {
+    const id = event.currentTarget?.dataset?.suggestionId
+    if (!id) return
+    this.state.focus = "suggestion"
+    this.state.suggestionId = id
+    this.state.categoryId = null
+    this.state.capabilityId = null
+    this.state.levelOrdinal = null
+    this.state.expectationId = null
     this.#rebuildFrameSrc()
     this.#pushBrowserUrl()
   }
@@ -89,6 +110,7 @@ export default class extends BaseController {
 
   // Resets the explorer to framework-level focus — collapses any expanded row.
   clearFocus() {
+    this.state.suggestionId = null
     window.dispatchEvent(new CustomEvent("suggestion:navigate", {
       detail: { level: "framework", categoryId: null, capabilityId: null, levelOrdinal: null }
     }))
@@ -128,7 +150,13 @@ export default class extends BaseController {
     if (!this.hasSignalTarget) return
 
     this._syncObserver = new MutationObserver(() => {
-      if (this.hasFrameTarget) this.frameTarget.reload()
+      if (!this.hasFrameTarget) return
+      // Never reload over a half-written comment: a broadcast landing while
+      // the suggestion card's composer (or an inline reply/edit form) is
+      // focused or holds text would destroy the draft. The next broadcast —
+      // or the form's own submit — catches the pane up.
+      if (this.#composerDirty()) return
+      this.frameTarget.reload()
     })
     this._syncObserver.observe(this.signalTarget.parentElement, {
       childList: true,
@@ -146,6 +174,7 @@ export default class extends BaseController {
     this.state.capabilityId = url.searchParams.get("capability_id") || null
     const levelOrdinal = url.searchParams.get("level_ordinal")
     this.state.levelOrdinal = levelOrdinal ? parseInt(levelOrdinal, 10) : null
+    this.state.suggestionId = url.searchParams.get("suggestion_id") || null
 
     // Always prime the frame src on connect — in edit mode the pane is
     // visible at page load and Turbo's lazy fetch fires immediately, so we
@@ -164,6 +193,9 @@ export default class extends BaseController {
     if (this.state.focus && this.state.focus !== "framework") {
       url.searchParams.set("focus", this.state.focus)
     }
+    if (this.state.focus === "suggestion" && this.state.suggestionId) {
+      url.searchParams.set("suggestion_id", this.state.suggestionId)
+    }
     if (this.state.categoryId) url.searchParams.set("category_id", this.state.categoryId)
     if (this.state.capabilityId) url.searchParams.set("capability_id", this.state.capabilityId)
     if (this.state.levelOrdinal != null) {
@@ -179,15 +211,27 @@ export default class extends BaseController {
     this.frameTarget.src = next
   }
 
+  // Whether any textarea in the pane is focused or holds unsent text —
+  // the guard that keeps broadcast reloads from eating comment drafts.
+  #composerDirty() {
+    const areas = this.element.querySelectorAll("textarea")
+    return Array.from(areas).some(
+      t => t.value.trim() !== "" || t === document.activeElement
+    )
+  }
+
   #pushBrowserUrl() {
     const url = new URL(window.location.href)
-    const keysToClear = ["focus", "category_id", "capability_id", "level_ordinal"]
+    const keysToClear = ["focus", "category_id", "capability_id", "level_ordinal", "suggestion_id"]
 
     // Clear focus params first; re-add only the relevant ones.
     keysToClear.forEach(k => url.searchParams.delete(k))
 
     if (this.state.focus && this.state.focus !== "framework") {
       url.searchParams.set("focus", this.state.focus)
+    }
+    if (this.state.focus === "suggestion" && this.state.suggestionId) {
+      url.searchParams.set("suggestion_id", this.state.suggestionId)
     }
     if (this.state.categoryId) url.searchParams.set("category_id", this.state.categoryId)
     if (this.state.capabilityId) url.searchParams.set("capability_id", this.state.capabilityId)

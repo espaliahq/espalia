@@ -80,6 +80,58 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "suggestion focus (the pane card)" do
+    setup do
+      @suggestion_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.suggest_edit(@framework_id, @suggestion_id,
+          "capability", @cap_id, "description",
+          "Weighs long-term impact", @admin_person.id.to_s, mode: :suggesting)
+        @comment_id = SecureRandom.uuid_v7
+        handler.comment_on_suggestion(@framework_id, @suggestion_id, @comment_id,
+          body: "Is this the right frame?", author_id: @admin_person.id.to_s)
+        handler.comment_on_suggestion(@framework_id, @suggestion_id, SecureRandom.uuid_v7,
+          body: "I believe so", author_id: @admin_person.id.to_s, parent_id: @comment_id)
+      end
+    end
+
+    should "render the suggestion card with proposal, actions, thread, and composer" do
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel",
+                                  focus: "suggestion", suggestion_id: @suggestion_id)
+
+      assert_response :success
+      assert_select "turbo-frame#suggestion-panel"
+      assert_match "Weighs long-term impact", response.body
+      assert_match "Back to activity", response.body
+      # Pending + owner authority -> inline approve; the discussion thread and
+      # its composer render; the reply carries the one-level indent.
+      assert_match "Approve", response.body
+      assert_match "Is this the right frame?", response.body
+      assert_match "I believe so", response.body
+      assert_select "li.pl-5", minimum: 1
+      assert_select "textarea[name='comment[body]']"
+    end
+
+    should "fall back to the feed for an unknown suggestion" do
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel",
+                                  focus: "suggestion", suggestion_id: SecureRandom.uuid_v7)
+
+      assert_redirected_to framework_activity_path(@framework_id, layout: "panel")
+    end
+
+    should "advertise the discussion on the feed entry" do
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel")
+
+      assert_response :success
+      # Two active comments on the suggestion -> count + latest excerpt chip.
+      assert_match "2 · I believe so", response.body
+    end
+  end
+
   context "load older (pagination)" do
     setup do
       cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT

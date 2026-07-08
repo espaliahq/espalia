@@ -125,6 +125,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
         secondary_line if secondary_text
         footer
         action_row if actionable?
+        discussion_row if discussable?
       end
     end
   end
@@ -217,6 +218,62 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def reject_preview
     # Amendments carry the proposed value under :new_suggested_value.
     (payload_value(:suggested_value) || payload_value(:new_suggested_value)).to_s.strip.presence
+  end
+
+  # Every suggestion-anchored entry advertises its discussion and is one
+  # click from the pane's suggestion card (focus=suggestion) — count +
+  # latest excerpt when a thread exists, a quiet "Discuss" otherwise. The
+  # affordance is a button, so the row's focusSuggestion navigation bails
+  # on it (see context_pane_controller#focusSuggestion).
+  def discussable?
+    @framework_id.present? && @entry.suggestion_id.present?
+  end
+
+  def discussion_row
+    div(class: "mt-1") do
+      button(
+        type: "button",
+        class: "inline-flex items-center gap-1 max-w-full rounded px-1.5 py-0.5 text-[10px] " \
+               "text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-primary/10 " \
+               "transition-colors",
+        data: {
+          action: "click->context-pane#openSuggestionCard",
+          suggestion_id: @entry.suggestion_id
+        },
+        aria: { label: "Open this suggestion's discussion" }
+      ) do
+        discussion_icon
+        span(class: "truncate") { discussion_label }
+      end
+    end
+  end
+
+  def discussion_label
+    count = @entry.comment_count.to_i
+    return "Discuss" if count.zero?
+
+    excerpt = @entry.latest_comment.to_s.strip.truncate(60)
+    "#{count} · #{excerpt}"
+  end
+
+  # Tiny speech-bubble icon (Heroicons chat-bubble-oval-left outline).
+  def discussion_icon
+    svg(
+      class: "w-3 h-3 shrink-0",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      stroke_width: "2",
+      aria_hidden: "true"
+    ) do |s|
+      s.path(
+        stroke_linecap: "round",
+        stroke_linejoin: "round",
+        d: "M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 " \
+           "4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 " \
+           "5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
+      )
+    end
   end
 
   def dom_safe_id
