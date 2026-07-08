@@ -48,7 +48,7 @@ class EvidenceModalController < ApplicationController
       mode: :edit, assignment: assignment, evidence: item, content_editable: policy.update?,
       primary_cell: { capability_stable_id: item.capability_stable_id, level_ordinal: item.level_ordinal },
       primary_valence: valences[[ item.capability_stable_id, item.level_ordinal ]],
-      linked_coords: extra_link_coords(item), link_valences: valences
+      linked_coords: extra_link_coords(item, valences), link_valences: valences
     )
   end
 
@@ -93,8 +93,9 @@ class EvidenceModalController < ApplicationController
   end
 
   # Active link cells for an item, excluding its origin cell (the primary).
-  def extra_link_coords(item)
-    EvidenceLink.active.where(evidence_id: item.id).pluck(:capability_stable_id, :level_ordinal)
+  # Derived from the already-loaded valence map — no second links query.
+  def extra_link_coords(item, link_valences)
+    link_valences.keys
       .reject { |cap, level| cap == item.capability_stable_id && level == item.level_ordinal }
   end
 
