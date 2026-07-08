@@ -11,7 +11,7 @@ class EvidenceHubController < ApplicationController
     authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
 
     incoming = EvidenceRequest.incoming_for(current_person.id).includes(:requester, :assessee)
-    outgoing = EvidenceRequest.outgoing_for(current_person.id).includes(:requestee)
+    outgoing = EvidenceRequest.outgoing_for(current_person.id).includes(:requestee, :assessee)
 
     # Open lists lead with the stalest request (least recently requested or
     # reminded); completed lists read as recent history.
