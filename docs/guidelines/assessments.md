@@ -482,16 +482,17 @@ Design rules — all deliberate, don't relitigate piecemeal:
   read "Demonstrates" in one cell and "Growth area" in another, via the
   transient `EvidenceItem#link_valences` map) and on the hub response cards'
   "Applies to" chips.
-- **Modal UX**: one shared judgment dropdown (`ModalForm#valence_select`),
-  used three ways — the primary cell's judgment sits **directly after "What
-  happened?"** (hierarchy: what happened, then what it says; deliberately no
-  default — required on new/respond); the "also applies to" **picker**
-  carries the same dropdown so the judgment is chosen *at add time* (+ Add
-  refuses without it) and lands pre-set on the staged row; each staged/
-  existing row keeps its own select for adjustment. In edit mode a
-  pre-valence (nil) link renders an optional "Judgment…" placeholder; a
-  classified link can be re-judged but not cleared. Per-link valences submit
-  as `evidence[link_valences][<cap>|<level>]` alongside the untouched
+- **Modal UX**: one shared valence dropdown (`ModalForm#valence_select`;
+  surface term is "valence", never "judgment"). The primary cell's valence
+  sits **directly after "What happened?"** (hierarchy: what happened, then
+  what it says; deliberately no default — required on new/respond). The
+  "also applies to" picker stays a plain capability + level pick; the
+  **staged row** carries the required valence select (blank "Valence…"
+  placeholder blocks submit until chosen — mandatory for every new link
+  without overloading the add). In edit mode a pre-valence (nil) link
+  renders an optional "Valence…" placeholder; a classified link can be
+  re-classified but not cleared. Per-link valences submit as
+  `evidence[link_valences][<cap>|<level>]` alongside the untouched
   `desired_links[]` tokens; `EvidenceDiffSubmit` validates every new link's
   valence BEFORE any write, then derives add-with-valence / revalence
   deltas from the map.

@@ -187,14 +187,14 @@ class Views::Evidence::ModalForm < Views::Base
     end
   end
 
-  # The one valence dropdown, shared by the primary field, the "also
-  # applies to" picker, and each link row. A blank placeholder renders
-  # only while nothing is chosen (a classified link can be re-judged but
-  # never cleared back to unspecified).
+  # The one valence dropdown, shared by the primary field and each link
+  # row. A blank placeholder renders only while nothing is chosen (a
+  # classified link can be re-classified but never cleared back to
+  # unspecified).
   def valence_select(name:, current:, required:, css:, id: nil, data: {})
     select(id: id, name: name, required: required, class: css, data: data,
-           aria: { label: "What does this say about the behaviour?" }) do
-      option(value: "", selected: current.nil?) { "Judgment…" } if current.nil?
+           aria: { label: "Evidence valence" }) do
+      option(value: "", selected: current.nil?) { "Valence…" } if current.nil?
       Views::Evidence::Valence::OPTIONS.each do |text, value|
         option(value: value, selected: value == current) { text }
       end
@@ -278,17 +278,13 @@ class Views::Evidence::ModalForm < Views::Base
       end
       # Levels are populated by the controller from the chosen capability's valid
       # cells, with already-linked levels disabled (see #capabilityChanged).
-      div(class: "w-32") do
+      div(class: "w-44") do
         select(class: INPUT, data: { evidence_modal_target: "linkLevel" }, aria: { label: "Level to also link" }) do
           option(value: "") { "Level…" }
         end
       end
-      # The judgment is chosen AT add time — same dropdown as the primary;
-      # + Add refuses until all three are picked (see evidence-modal#addLink).
-      div(class: "w-40") do
-        valence_select(name: nil, current: nil, required: false, css: INPUT,
-                       data: { evidence_modal_target: "linkValence" })
-      end
+      # The staged row carries the (required) valence dropdown — the picker
+      # stays a plain capability + level pick.
       button(type: "button", data: { action: "evidence-modal#addLink" }, class: SECONDARY_BTN) { "+ Add" }
     end
   end
@@ -307,10 +303,11 @@ class Views::Evidence::ModalForm < Views::Base
     end
   end
 
-  # Per-link valence. A classified link can be re-judged but never cleared
-  # (no blank option); a pre-valence (nil) link keeps a blank "Judgment…"
-  # placeholder and stays optional — existing links are never
-  # force-reclassified by an edit.
+  # Per-link valence. A classified link can be re-classified but never
+  # cleared (no blank option); a pre-valence (nil) link keeps a blank
+  # "Valence…" placeholder and stays optional — existing links are never
+  # force-reclassified by an edit. (JS-staged rows render their own
+  # REQUIRED copy of this select — see evidence_modal_controller.js.)
   def link_row_valence_select(token, current)
     valence_select(name: "evidence[link_valences][#{token}]", current: current,
                    required: false, css: "mt-1 #{INPUT} text-xs w-auto")

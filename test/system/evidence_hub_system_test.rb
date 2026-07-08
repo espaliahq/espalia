@@ -56,8 +56,8 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     # The modal repeats the visibility disclosure where the response is written.
     assert_text "Your feedback will be added to Rep's assessment"
 
-    # The judgment is a forced choice on every new link — without it the
-    # required radio group blocks requestSubmit.
+    # The valence is a forced choice on every new link — without it the
+    # required select blocks requestSubmit.
     page.execute_script(<<~JS)
       const f = document.querySelector("#evidence-modal form");
       f.querySelector("#evm-type").value = "peer_feedback";
@@ -79,7 +79,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
   end
 
-  should "block the respond submit until a judgment is chosen" do
+  should "block the respond submit until a valence is chosen" do
     make_request!
     sign_in_as(@peer_user)
     visit evidence_hub_path
@@ -90,7 +90,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_selector "#evidence-modal-overlay", visible: true
     assert_selector "#evm-content", visible: true
 
-    # Fill everything EXCEPT the valence — the required judgment select
+    # Fill everything EXCEPT the valence — the required valence select
     # keeps the form invalid, so a submit can't fire.
     valid = page.evaluate_script(<<~JS)
       (() => {
@@ -100,7 +100,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
         return f.checkValidity();
       })()
     JS
-    assert_equal false, valid, "form must be invalid until a judgment is picked"
+    assert_equal false, valid, "form must be invalid until a valence is picked"
     ActsAsTenant.with_tenant(@tenant) { assert_equal "pending", EvidenceRequest.last.status }
   end
 

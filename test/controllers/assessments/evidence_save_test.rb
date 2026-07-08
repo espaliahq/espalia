@@ -168,7 +168,7 @@ class Assessments::EvidenceSaveTest < ActionDispatch::IntegrationTest
       id = record!
       sign_in @author_user
       # Content change + one valence-less new link in a single submit: the
-      # missing judgment must reject the whole diff up front, not land the
+      # missing valence must reject the whole diff up front, not land the
       # content edit (or earlier links) before aborting.
       post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
         assignment_id: @assignment.id, evidence_id: id, primary_cell: cell(@cap1),

@@ -103,18 +103,17 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-modal-overlay", visible: true
       assert_selector "#evm-content", visible: true
 
-      # Add cap2 · L1 via the "also applies to" picker — the judgment is
-      # part of the pick (+ Add refuses without it) and lands pre-set on
-      # the staged row — then save (links-only). Selecting the capability
-      # populates its valid levels (change event).
+      # Add cap2 · L1 via the "also applies to" picker, set the staged
+      # row's (required) valence, then save (links-only). Selecting the
+      # capability populates its valid levels (change event).
       page.execute_script(<<~JS)
         const m = document.querySelector("#evidence-modal");
         const cap = m.querySelector("[data-evidence-modal-target='linkCapability']");
         cap.value = "#{@cap2_stable}";
         cap.dispatchEvent(new Event("change", { bubbles: true }));
         m.querySelector("[data-evidence-modal-target='linkLevel']").value = "1";
-        m.querySelector("[data-evidence-modal-target='linkValence']").value = "growth_area";
         m.querySelector("[data-action*='evidence-modal#addLink']").click();
+        m.querySelector("select[name='evidence[link_valences][#{@cap2_stable}|1]']").value = "growth_area";
         m.querySelector("form").requestSubmit();
       JS
 
