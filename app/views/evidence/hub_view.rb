@@ -125,7 +125,22 @@ class Views::Evidence::HubView < Views::Base
       history_timeline(request)
       # No behavioural-expectation block here — the "Provide feedback / evidence"
       # modal carries the full cell context when you actually respond.
-      respond_actions(request) if request.pending?
+      if request.pending?
+        response_visibility_note(request)
+        respond_actions(request)
+      end
+    end
+  end
+
+  # Before the requestee writes anything, be explicit about who will read the
+  # response: the assessee, their manager chain, and workspace admins (the
+  # EvidencePolicy view rules). Skipped when the requestee IS the assessee.
+  def response_visibility_note(request)
+    return if request.requestee_person_id == request.person_id
+
+    name = request.assessee&.name || "the assessee"
+    p(class: "text-xs text-gray-500 dark:text-gray-400", data: { testid: "visibility-note" }) do
+      "Your response will be visible to #{name}, their managers, and workspace admins."
     end
   end
 

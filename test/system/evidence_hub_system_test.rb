@@ -42,6 +42,8 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     sign_in_as(@peer_user)
     visit evidence_hub_path
     assert_text "Rep asked you for feedback"
+    # The card is upfront that the response won't be private to the requester.
+    assert_text "Your response will be visible to Rep, their managers, and workspace admins"
 
     # Open the unified modal in respond mode, fill it, and submit. JS-dispatch
     # the click so a starved CI event loop can't silently drop it (the trigger is
@@ -51,6 +53,8 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     )
     assert_selector "#evidence-modal-overlay", visible: true
     assert_selector "#evm-content", visible: true
+    # The modal repeats the visibility disclosure where the response is written.
+    assert_text "Your feedback will be added to Rep's assessment"
 
     page.execute_script(<<~JS)
       const f = document.querySelector("#evidence-modal form");

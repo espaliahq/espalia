@@ -53,6 +53,7 @@ class Views::Evidence::ModalForm < Views::Base
       div(class: "p-5", data: { controller: "evidence-modal" }) do
         header
         context_card
+        visibility_note
         # _top so the submit isn't captured by the #evidence-modal frame: the
         # hub's redirect must navigate the page, and turbo_stream responses (the
         # assessment surface) still apply globally regardless of frame target.
@@ -109,6 +110,23 @@ class Views::Evidence::ModalForm < Views::Base
   def scope_label(cx)
     level = cx[:level_title].present? ? "#{cx[:level_title]} (Level #{@primary_cell[:level_ordinal]})" : "Level #{@primary_cell[:level_ordinal]}"
     [ cx[:role], level, ("on #{cx[:assessee_name]}'s assessment" if cx[:assessee_name]) ].compact.join(" · ")
+  end
+
+  # When responding to a request about someone ELSE's assessment, be explicit
+  # about who will read the response before the requestee writes it: the
+  # assessee themselves, their manager chain, and workspace admins
+  # (EvidencePolicy view rules). Skipped when the requestee IS the assessee —
+  # writing on your own assessment needs no warning.
+  def visibility_note
+    return unless @mode == :respond && @request && @request.requestee_person_id != @request.person_id
+
+    assessee = @context_block[:assessee_name].presence || "the assessee"
+    div(class: "rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-3 py-2 mb-4",
+        data: { testid: "visibility-note" }) do
+      p(class: "text-xs text-blue-800 dark:text-blue-200") do
+        "Your feedback will be added to #{assessee}'s assessment — visible to #{assessee}, their managers, and workspace admins."
+      end
+    end
   end
 
   def illustrations(list)

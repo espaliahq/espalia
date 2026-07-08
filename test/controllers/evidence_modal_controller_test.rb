@@ -39,6 +39,17 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # An evidence request on @author's assessment.
+  def make_request!(requested_by:, requestee:)
+    id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.request_evidence(@author.id, @framework_id, id,
+        requested_by_id: requested_by.id, requestee_person_id: requestee.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2)
+    end
+    id
+  end
+
   context "GET /evidence_modal mode=new" do
     should "render the form with the primary-cell expectation + examples" do
       sign_in @author_user
@@ -77,6 +88,24 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       get evidence_modal_path(mode: "edit", evidence_id: @evidence_id, return_to: "hub")
       assert_response :success
       assert_match(/on Author/, response.body)
+    end
+  end
+
+  context "GET /evidence_modal mode=respond" do
+    should "disclose who will see the response when responding about someone else" do
+      request_id = make_request!(requested_by: @author, requestee: @manager)
+      sign_in @manager_user
+      get evidence_modal_path(mode: "respond", request_id: request_id, return_to: "hub")
+      assert_response :success
+      assert_match "visible to Author, their managers, and workspace admins", response.body
+    end
+
+    should "not disclose visibility when the requestee is the assessee" do
+      request_id = make_request!(requested_by: @manager, requestee: @author)
+      sign_in @author_user
+      get evidence_modal_path(mode: "respond", request_id: request_id, return_to: "hub")
+      assert_response :success
+      assert_no_match(/workspace admins/, response.body)
     end
   end
 
