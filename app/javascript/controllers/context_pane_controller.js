@@ -50,11 +50,19 @@ export default class extends BaseController {
     window.addEventListener("popstate", this.onPopState)
 
     this.#observeSyncSignal()
+
+    // Catch-up hooks for reloads skipped while a draft was open: fire on
+    // focus leaving a composer and on input (covers clearing the text).
+    this.onComposerSettle = () => setTimeout(() => this.#catchUpAfterComposer(), 0)
+    this.element.addEventListener("focusout", this.onComposerSettle)
+    this.element.addEventListener("input", this.onComposerSettle)
   }
 
   disconnect() {
     super.disconnect()
     window.removeEventListener("popstate", this.onPopState)
+    this.element.removeEventListener("focusout", this.onComposerSettle)
+    this.element.removeEventListener("input", this.onComposerSettle)
     this._syncObserver?.disconnect()
   }
 
@@ -153,9 +161,13 @@ export default class extends BaseController {
       if (!this.hasFrameTarget) return
       // Never reload over a half-written comment: a broadcast landing while
       // the suggestion card's composer (or an inline reply/edit form) is
-      // focused or holds text would destroy the draft. The next broadcast —
-      // or the form's own submit — catches the pane up.
-      if (this.#composerDirty()) return
+      // focused or holds an edited draft would destroy it. The skipped
+      // reload is remembered and re-fired once the composers are clean
+      // again (see #catchUpAfterComposer).
+      if (this.#composerDirty()) {
+        this._missedReload = true
+        return
+      }
       this.frameTarget.reload()
     })
     this._syncObserver.observe(this.signalTarget.parentElement, {
@@ -211,13 +223,28 @@ export default class extends BaseController {
     this.frameTarget.src = next
   }
 
-  // Whether any textarea in the pane is focused or holds unsent text —
+  // Whether any textarea in the pane is focused or holds an unsent DRAFT —
   // the guard that keeps broadcast reloads from eating comment drafts.
+  // Dirty means the value DIFFERS from the server-rendered defaultValue:
+  // the hidden per-comment edit forms are prefilled with the comment body,
+  // so a non-empty check would flag every viewer who has ever commented
+  // and suppress reloads permanently.
   #composerDirty() {
     const areas = this.element.querySelectorAll("textarea")
     return Array.from(areas).some(
-      t => t.value.trim() !== "" || t === document.activeElement
+      t => t.value !== t.defaultValue || t === document.activeElement
     )
+  }
+
+  // A reload skipped while a draft was in flight is re-armed here: once
+  // every composer is clean again (submit clears it, cancel restores the
+  // defaultValue, blur releases focus), the missed reload fires so the
+  // pane catches up instead of staying stale until the next broadcast.
+  #catchUpAfterComposer() {
+    if (!this._missedReload) return
+    if (this.#composerDirty()) return
+    this._missedReload = false
+    if (this.hasFrameTarget) this.frameTarget.reload()
   }
 
   #pushBrowserUrl() {
