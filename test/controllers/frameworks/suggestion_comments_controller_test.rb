@@ -104,6 +104,24 @@ class Frameworks::SuggestionCommentsControllerTest < ActionDispatch::Integration
       assert_equal "deleted", comment.reload.status
     end
 
+    should "read a comment addressed via a different suggestion's URL as not found" do
+      post_comment(body: "Original")
+      comment = FrameworkState::SuggestionComment.sole
+      other_suggestion_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_edit(
+          @framework_id, other_suggestion_id, "capability", @cap_id,
+          "name", "Systems Thinking", @collab_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      patch framework_suggestion_comment_path(@framework_id, other_suggestion_id, comment.id),
+            params: { comment: { body: "Cross-thread edit" } }
+
+      assert_match(/not found/, flash[:alert])
+      assert_equal "Original", comment.reload.body
+    end
+
     should "be denied editing someone else's comment" do
       post_comment(body: "Original")
       comment = FrameworkState::SuggestionComment.sole

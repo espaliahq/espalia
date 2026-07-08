@@ -11,6 +11,21 @@
 class Frameworks::SuggestionCommentsController < ApplicationController
   before_action :set_framework
 
+  rescue_from ActiveRecord::RecordNotFound do
+    redirect_to thread_path, alert: "Comment or suggestion not found.", status: :see_other
+  end
+  rescue_from Operations::Base::ParameterError, RuntimeError do |e|
+    redirect_to thread_path, alert: e.message, status: :see_other
+  end
+  # Two collaborators writing to the same framework stream at once — chat
+  # cadence makes this collision far likelier than for structural edits.
+  # RES raises WrongExpectedEventVersion (a StandardError, NOT a
+  # RuntimeError), which would otherwise surface as a 500.
+  rescue_from RubyEventStore::WrongExpectedEventVersion do
+    redirect_to thread_path, status: :see_other,
+                alert: "Someone else updated this framework at the same moment — please try again."
+  end
+
   # POST /frameworks/:framework_id/suggestions/:suggestion_id/comments
   def create
     authorize @framework, :comment_on_suggestion?
@@ -26,10 +41,6 @@ class Frameworks::SuggestionCommentsController < ApplicationController
       }
     )
     redirect_to thread_path, notice: "Comment posted."
-  rescue ActiveRecord::RecordNotFound
-    redirect_to thread_path, alert: "Suggestion not found."
-  rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to thread_path, alert: e.message
   end
 
   # PATCH /frameworks/:framework_id/suggestions/:suggestion_id/comments/:id
@@ -40,15 +51,11 @@ class Frameworks::SuggestionCommentsController < ApplicationController
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
-        comment_id: params.expect(:id),
+        comment_id: comment.id,
         body: params.expect(comment: [ :body ])[:body].to_s
       }
     )
     redirect_to thread_path, notice: "Comment updated."
-  rescue ActiveRecord::RecordNotFound
-    redirect_to thread_path, alert: "Comment not found."
-  rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to thread_path, alert: e.message
   end
 
   # DELETE /frameworks/:framework_id/suggestions/:suggestion_id/comments/:id
@@ -59,14 +66,10 @@ class Frameworks::SuggestionCommentsController < ApplicationController
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
-        comment_id: params.expect(:id)
+        comment_id: comment.id
       }
     )
-    redirect_to thread_path, notice: "Comment deleted."
-  rescue ActiveRecord::RecordNotFound
-    redirect_to thread_path, alert: "Comment not found."
-  rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to thread_path, alert: e.message
+    redirect_to thread_path, notice: "Comment deleted.", status: :see_other
   end
 
   private
@@ -77,9 +80,13 @@ class Frameworks::SuggestionCommentsController < ApplicationController
     redirect_to frameworks_path
   end
 
+  # Scoped to the framework AND the URL's suggestion so a comment id from a
+  # different thread reads as not-found rather than mutating a record the
+  # redirect target won't show.
   def comment
     @comment ||= FrameworkState::SuggestionComment
       .for_framework(@framework.framework_id)
+      .for_suggestion(params.expect(:suggestion_id))
       .find(params.expect(:id))
   end
 
