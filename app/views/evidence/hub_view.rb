@@ -8,6 +8,7 @@ class Views::Evidence::HubView < Views::Base
   include Phlex::Rails::Helpers::FormWith
   include Phlex::Rails::Helpers::ButtonTo
   include Phlex::Rails::Helpers::TimeAgoInWords
+  include Views::Evidence::Valence
 
   STATUS_VARIANT = {
     "pending" => :warning, "responded" => :success, "declined" => :default, "cancelled" => :default
@@ -209,10 +210,21 @@ class Views::Evidence::HubView < Views::Base
   def applies_to_line(links)
     return if links.blank?
 
-    labels = links.map { |l| [ l[:capability_name], l[:level_code] ].compact.join(" ") }.reject(&:blank?)
-    return if labels.empty?
+    entries = links.filter_map do |l|
+      label = [ l[:capability_name], l[:level_code] ].compact.join(" ")
+      [ label, l[:valence] ] if label.present?
+    end
+    return if entries.empty?
 
-    p(class: "text-xs text-gray-600 dark:text-gray-300") { "Applies to: #{labels.join(" · ")}" }
+    div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-300") do
+      span { "Applies to:" }
+      entries.each do |label, valence|
+        span(class: "inline-flex items-center gap-1") do
+          span { label }
+          valence_badge(valence)
+        end
+      end
+    end
   end
 
   # ── Authored evidence (edit / withdraw) — a Completed subsection ──

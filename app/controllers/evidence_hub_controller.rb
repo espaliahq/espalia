@@ -61,9 +61,9 @@ class EvidenceHubController < ApplicationController
 
     items = EvidenceItem.where(id: responded.map(&:evidence_id)).includes(:author).index_by(&:id)
     link_rows = EvidenceLink.active.where(evidence_id: items.keys)
-      .pluck(:evidence_id, :capability_stable_id, :level_ordinal)
+      .pluck(:evidence_id, :capability_stable_id, :level_ordinal, :valence)
 
-    cells = link_rows.map do |evidence_id, capability_stable_id, level_ordinal|
+    cells = link_rows.map do |evidence_id, capability_stable_id, level_ordinal, _valence|
       item = items[evidence_id]
       Evidence::CellContextResolver::Cell.new(
         id: [ evidence_id, capability_stable_id, level_ordinal ], framework_id: item.framework_id,
@@ -76,10 +76,12 @@ class EvidenceHubController < ApplicationController
       item = items[req.evidence_id]
       next unless item
 
-      links = link_rows.select { |evidence_id, _, _| evidence_id == item.id }.map do |_, capability_stable_id, level_ordinal|
-        ctx = link_ctx[[ item.id, capability_stable_id, level_ordinal ]] || {}
-        { capability_name: ctx[:name], level_code: ctx[:level_code], level_ordinal: level_ordinal }
-      end
+      links = link_rows.select { |evidence_id, _, _, _| evidence_id == item.id }
+        .map do |_, capability_stable_id, level_ordinal, valence|
+          ctx = link_ctx[[ item.id, capability_stable_id, level_ordinal ]] || {}
+          { capability_name: ctx[:name], level_code: ctx[:level_code],
+            level_ordinal: level_ordinal, valence: valence }
+        end
       acc[req.id] = { item: item, links: links }
     end
   end

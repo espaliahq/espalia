@@ -26,6 +26,9 @@
 #   @option data [Hash, nil] :external_reference optional pointer to an
 #     external system. Shape: { system:, url:, external_id:, metadata: }
 #   @option data [String] :author_id UUID of the Person recording the evidence
+#   @option data [String] :valence the origin link's valence — one of
+#     EvidenceLink::VALENCES. Required on new events; absent on events
+#     published before valence existed (consumers must tolerate nil).
 #
 class PersonDevelopment::Events::EvidenceRecorded < RubyEventStore::Event
 end

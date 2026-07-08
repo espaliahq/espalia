@@ -60,6 +60,28 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       end
     end
 
+    should "store the origin link's valence, and leave it nil for pre-valence events" do
+      with_valence = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: with_valence, capability_stable_id: SecureRandom.uuid_v7,
+        level_ordinal: 2, source: "self", evidence_type: "project_outcome",
+        custom_type_label: nil, title: nil, content: "x",
+        external_reference: nil, author_id: @author.id, valence: "growth_area")
+
+      # Historical shape — no :valence key at all.
+      pre_valence = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: pre_valence, capability_stable_id: SecureRandom.uuid_v7,
+        level_ordinal: 2, source: "self", evidence_type: "project_outcome",
+        custom_type_label: nil, title: nil, content: "y",
+        external_reference: nil, author_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "growth_area", EvidenceLink.find_by(evidence_id: with_valence).valence
+        assert_nil EvidenceLink.find_by(evidence_id: pre_valence).valence
+      end
+    end
+
     should "default external_reference to empty when nil" do
       evidence_id = SecureRandom.uuid_v7
 
@@ -125,6 +147,39 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_equal 1, EvidenceLink.where(evidence_id: evidence_id,
                                            capability_stable_id: cap_sid2, level_ordinal: 4).count
       end
+    end
+  end
+
+  context "EvidenceLinkRevalenced" do
+    should "update the link's valence in place" do
+      evidence_id = SecureRandom.uuid_v7
+      cap_sid = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+        title: nil, content: "x", external_reference: nil, author_id: @author.id,
+        valence: "demonstrated")
+
+      emit(PersonDevelopment::Events::EvidenceLinkRevalenced,
+        evidence_id: evidence_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        previous_valence: "demonstrated", valence: "significant_growth_area",
+        changed_by_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        link = EvidenceLink.find_by(evidence_id: evidence_id)
+        assert_equal "significant_growth_area", link.valence
+        assert_equal "active", link.link_status
+      end
+    end
+
+    should "be a no-op when the link row is missing" do
+      emit(PersonDevelopment::Events::EvidenceLinkRevalenced,
+        evidence_id: SecureRandom.uuid_v7, capability_stable_id: SecureRandom.uuid_v7,
+        level_ordinal: 2, previous_valence: nil, valence: "demonstrated",
+        changed_by_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) { assert_equal 0, EvidenceLink.count }
     end
   end
 

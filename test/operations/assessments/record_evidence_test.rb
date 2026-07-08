@@ -64,7 +64,8 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
       capability_stable_id: @cap.stable_id,
       level_ordinal: 2,
       evidence_type: "project_outcome",
-      content: "Led the refactor of the payments pipeline."
+      content: "Led the refactor of the payments pipeline.",
+      valence: "demonstrated"
     }
     ActsAsTenant.with_tenant(@tenant) do
       Operations::Assessments::RecordEvidence.call(context: ctx, params: base.merge(overrides))
@@ -112,7 +113,8 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
             capability_stable_id: @cap.stable_id,
             level_ordinal: 2,
             evidence_type: "peer_feedback",
-            content: "Pairs effectively across teams."
+            content: "Pairs effectively across teams.",
+            valence: "demonstrated"
           }
         )
         assert_equal "peer", result[:source]

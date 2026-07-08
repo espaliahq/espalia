@@ -49,6 +49,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           title: "Launched the migration",
           content: "Shipped on time."
         }
@@ -73,6 +74,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           content: "Done."
         }
       }
@@ -88,6 +90,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           content: "Done."
         }
       }
@@ -104,6 +107,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           title: "Cookie monster",
           content: "Done."
         }
@@ -122,6 +126,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: "",
           level_ordinal: 2,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           content: "x"
         }
       }
@@ -135,6 +140,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "code_review",
+          valence: "demonstrated",
           content: "Strong refactor instinct."
         }
       }
@@ -154,6 +160,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "code_review",
+          valence: "demonstrated",
           title: "Code review note",
           content: "Strong refactor."
         }
@@ -175,6 +182,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "code_review",
+          valence: "demonstrated",
           content: "x",
           external_reference: { system: "", url: "" }
         }
@@ -194,6 +202,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "peer_feedback",
+          valence: "demonstrated",
           content: "Strong collaborator."
         }
       }
@@ -213,6 +222,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 99,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           content: "Ship it."
         }
       }
@@ -226,6 +236,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "code_review",
+          valence: "demonstrated",
           content: "Reviewed PR.",
           external_reference: { system: "github", url: "https://github.com/o/r/pull/3" }
         }
@@ -245,6 +256,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           content: "x"
         }
       }
@@ -258,6 +270,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id,
           level_ordinal: 2,
           evidence_type: "project_outcome",
+          valence: "demonstrated",
           content: "x"
         }
       }
@@ -279,7 +292,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           @assessee.id, @assignment.framework_id, @evidence_id,
           capability_stable_id: @cap.stable_id, level_ordinal: 2,
           source: "manager", evidence_type: "code_review",
-          content: "Original.", author_id: @manager.id
+          content: "Original.", author_id: @manager.id, valence: "demonstrated"
         )
         @item = EvidenceItem.find(@evidence_id)
       end
@@ -289,7 +302,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       sign_in @manager_user
       post add_link_assessment_evidence_path(@assignment, @item.id), params: {
         evidence: {
-          capability_stable_id: @new_cap.stable_id, level_ordinal: 2,
+          capability_stable_id: @new_cap.stable_id, level_ordinal: 2, valence: "growth_area",
           from_capability_stable_id: @cap.stable_id, from_level_ordinal: 2,
           rationale: "Also applies"
         }
@@ -301,7 +314,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
     should "let the assessee add a link to evidence they didn't author" do
       sign_in @assessee_user
       post add_link_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 2 }
+        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 2, valence: "demonstrated" }
       }
       assert_response :redirect
       assert_includes active_links, [ @new_cap.stable_id, 2 ]
@@ -310,7 +323,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
     should "deny an unrelated peer from adding a link" do
       sign_in @peer_user
       post add_link_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 2 }
+        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 2, valence: "demonstrated" }
       }
       assert_response :redirect
       assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "links should be unchanged"
@@ -319,7 +332,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
     should "reject an invalid level_ordinal on add_link" do
       sign_in @manager_user
       post add_link_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 99 }
+        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 99, valence: "demonstrated" }
       }
       assert_response :unprocessable_content
     end
@@ -334,7 +347,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
 
       sign_in @manager_user
       post add_link_assessment_evidence_path(@assignment, @item.id), params: {
-        evidence: { capability_stable_id: foreign_cap.stable_id, level_ordinal: 2 }
+        evidence: { capability_stable_id: foreign_cap.stable_id, level_ordinal: 2, valence: "demonstrated" }
       }
       assert_response :unprocessable_content
       assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "no foreign-cell link should be created"
@@ -345,7 +358,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.add_evidence_link(
           @assessee.id, @assignment.framework_id, @evidence_id,
-          capability_stable_id: @new_cap.stable_id, level_ordinal: 2, linked_by_id: @manager.id)
+          capability_stable_id: @new_cap.stable_id, level_ordinal: 2, linked_by_id: @manager.id, valence: "demonstrated")
       end
 
       post remove_link_assessment_evidence_path(@assignment, @item.id), params: {
@@ -374,7 +387,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap.stable_id, level_ordinal: 2,
           source: "manager", evidence_type: "code_review",
           content: "Original content.", title: "Original title",
-          author_id: @manager.id
+          author_id: @manager.id, valence: "demonstrated"
         )
         @item = EvidenceItem.find(@evidence_id)
       end
@@ -385,6 +398,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       patch assessment_evidence_path(@assignment, @item.id), params: {
         evidence: {
           evidence_type: "code_review",
+          valence: "demonstrated",
           title: "Updated title",
           content: "Revised content."
         }
@@ -411,6 +425,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       patch assessment_evidence_path(@assignment, @item.id), params: {
         evidence: {
           evidence_type: "code_review",
+          valence: "demonstrated",
           content: "x",
           external_reference: { system: "github", url: "https://github.com/o/r/pull/9" }
         }
@@ -429,6 +444,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       patch assessment_evidence_path(@assignment, @item.id), params: {
         evidence: {
           evidence_type: "code_review",
+          valence: "demonstrated",
           content: "x",
           external_reference: { system: "github", url: "javascript:alert(1)" }
         }
@@ -446,6 +462,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       patch assessment_evidence_path(@assignment, @item.id), params: {
         evidence: {
           evidence_type: "code_review",
+          valence: "demonstrated",
           content: "Hijacked content."
         }
       }
@@ -461,6 +478,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       patch assessment_evidence_path(@assignment, @item.id), params: {
         evidence: {
           evidence_type: "code_review",
+          valence: "demonstrated",
           content: "Hijacked."
         }
       }
@@ -480,7 +498,7 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
           @assessee.id, @assignment.framework_id, @evidence_id,
           capability_stable_id: @cap.stable_id, level_ordinal: 2,
           source: "manager", evidence_type: "code_review",
-          content: "Reviewed PR.", author_id: @manager.id
+          content: "Reviewed PR.", author_id: @manager.id, valence: "demonstrated"
         )
         @item = EvidenceItem.find(@evidence_id)
       end

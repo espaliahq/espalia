@@ -37,7 +37,7 @@ class Assessments::DelegateVisibilityTest < ActionDispatch::IntegrationTest
       handler.record_evidence(@report.id, framework_id, SecureRandom.uuid_v7,
         capability_stable_id: cap.stable_id, level_ordinal: 2, source: "self",
         evidence_type: "project_outcome", content: "Shipped the payments revamp.",
-        author_id: @report.id, title: "Payments revamp")
+        author_id: @report.id, title: "Payments revamp", valence: "demonstrated")
 
       create(:manager_assessment_delegation, tenant: @tenant, person_id: @report.id,
         framework_id: framework_id, delegate_person_id: @delegate.id, granted_by_id: @manager.id)

@@ -491,17 +491,19 @@ class PersonDevelopment::CommandHandler
   # @param custom_type_label [String, nil] only when evidence_type == "other"
   # @param title [String, nil] optional one-line summary
   # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
+  # @param valence [String] the origin link's valence — one of
+  #   EvidenceLink::VALENCES (required on every new link)
   # @param additional_links [Array<Hash>] extra { capability_stable_id:,
-  #   level_ordinal: } links applied atomically alongside the first link
+  #   level_ordinal:, valence: } links applied atomically alongside the first link
   def record_evidence(person_id, framework_id, evidence_id,
                       capability_stable_id:, level_ordinal:, source:, evidence_type:,
-                      content:, author_id:, custom_type_label: nil, title: nil,
+                      content:, author_id:, valence:, custom_type_label: nil, title: nil,
                       external_reference: nil, additional_links: [])
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.record_evidence(evidence_id,
         capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
         source: source, evidence_type: evidence_type, content: content,
-        author_id: author_id, custom_type_label: custom_type_label,
+        author_id: author_id, valence: valence, custom_type_label: custom_type_label,
         title: title, external_reference: external_reference,
         additional_links: additional_links)
     end
@@ -515,14 +517,34 @@ class PersonDevelopment::CommandHandler
   # @param capability_stable_id [String] target capability
   # @param level_ordinal [Integer] target level
   # @param linked_by_id [String] UUID of the Person adding the link
+  # @param valence [String] the linker's judgment — one of EvidenceLink::VALENCES
   # @param rationale [String, nil] optional explanation
   def add_evidence_link(person_id, framework_id, evidence_id,
-                        capability_stable_id:, level_ordinal:, linked_by_id:, rationale: nil)
+                        capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.add_evidence_link(evidence_id,
         capability_stable_id: capability_stable_id,
         level_ordinal: level_ordinal,
-        linked_by_id: linked_by_id, rationale: rationale)
+        linked_by_id: linked_by_id, valence: valence, rationale: rationale)
+    end
+  end
+
+  # Reclassifies an evidence link's valence (no-op when unchanged).
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param evidence_id [String] UUID of the evidence
+  # @param capability_stable_id [String] the link's capability
+  # @param level_ordinal [Integer] the link's level
+  # @param valence [String] one of EvidenceLink::VALENCES
+  # @param changed_by_id [String] UUID of the Person reclassifying
+  def set_evidence_link_valence(person_id, framework_id, evidence_id,
+                                capability_stable_id:, level_ordinal:, valence:, changed_by_id:)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.set_evidence_link_valence(evidence_id,
+        capability_stable_id: capability_stable_id,
+        level_ordinal: level_ordinal,
+        valence: valence, changed_by_id: changed_by_id)
     end
   end
 

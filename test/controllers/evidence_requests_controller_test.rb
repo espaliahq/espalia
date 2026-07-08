@@ -117,14 +117,17 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
         handler = PersonDevelopment::CommandHandler.new
         handler.record_evidence(@report.id, @framework_id, evidence_id,
           capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer",
-          evidence_type: "peer_feedback", content: "Solid pairing partner.", author_id: @peer.id)
+          evidence_type: "peer_feedback", content: "Solid pairing partner.", author_id: @peer.id, valence: "demonstrated")
         handler.respond_to_evidence_request(@report.id, @framework_id, id, evidence_id: evidence_id, responded_by_id: @peer.id)
       end
       sign_in @report_user
       get evidence_hub_path
       assert_match "Response from Peer", response.body
       assert_match "Solid pairing partner.", response.body
-      assert_match "Applies to: Critical Thinking E2", response.body
+      assert_match "Applies to:", response.body
+      assert_match "Critical Thinking E2", response.body
+      # The link chip carries its valence badge.
+      assert_match "data-valence=\"demonstrated\"", response.body
       assert_select "button[data-evidence-modal-mode-param='edit']", text: "Edit links"
       # The response deep-links to its first linkage on the requester's own
       # (viewable) assessment so it can be read in situ.
@@ -226,6 +229,7 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       cell = "#{@cap.stable_id}|2"
       post respond_evidence_request_path(id), params: { return_to: "hub", evidence: {
         request_id: id, primary_cell: cell, desired_links: [ cell ],
+        link_valences: { cell => "demonstrated" },
         evidence_type: "peer_feedback", content: "Great pairing."
       } }
       assert_redirected_to evidence_hub_path
@@ -238,6 +242,7 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       cell = "#{@cap.stable_id}|2"
       post respond_evidence_request_path(id), params: { return_to: "hub", evidence: {
         request_id: id, primary_cell: cell, desired_links: [ cell ],
+        link_valences: { cell => "strongly_demonstrated" },
         evidence_type: "code_review", title: "Pairing on the parser",
         content: "Drove the recursive-descent refactor together.",
         external_reference: { system: "github", url: "https://github.com/example/repo/pull/9" }

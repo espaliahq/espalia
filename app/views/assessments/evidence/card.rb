@@ -14,6 +14,7 @@
 class Views::Assessments::Evidence::Card < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
   include Phlex::Rails::Helpers::ButtonTo
+  include Views::Evidence::Valence
 
   SOURCE_DOT = {
     "self"    => "bg-emerald-500",
@@ -104,12 +105,20 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def header_line
-    div(class: "flex flex-wrap items-center gap-x-2 text-[11px]") do
+    div(class: "flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]") do
       span(class: "font-medium text-gray-600 dark:text-gray-300") do
         type_label
       end
+      # THIS cell's link valence (per-link, so the same item can read
+      # "Demonstrates" in one cell and "Growth area" in another). No badge
+      # for pre-valence links — unclassified stays visually quiet.
+      valence_badge(cell_valence)
       external_chip if @item.external_reference&.present?
     end
+  end
+
+  def cell_valence
+    @item.link_valences&.[]([ @current_capability_stable_id, @current_level_ordinal.to_i ])
   end
 
   def title_line

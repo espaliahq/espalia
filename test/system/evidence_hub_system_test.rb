@@ -56,12 +56,15 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     # The modal repeats the visibility disclosure where the response is written.
     assert_text "Your feedback will be added to Rep's assessment"
 
+    # The judgment is a forced choice on every new link — without it the
+    # required radio group blocks requestSubmit.
     page.execute_script(<<~JS)
       const f = document.querySelector("#evidence-modal form");
       f.querySelector("#evm-type").value = "peer_feedback";
       f.querySelector("#evm-title").value = "Incident retro";
       f.querySelector("#evm-content").value = "Strong systems thinking during the incident.";
       f.querySelector("#evm-url").value = "https://slack.example/archives/p1";
+      f.querySelector("#evm-valence-strongly_demonstrated").click();
       f.requestSubmit();
     JS
 
@@ -72,7 +75,33 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
       item = EvidenceItem.find(request.evidence_id)
       assert_equal "Incident retro", item.title
       assert_equal "https://slack.example/archives/p1", item.external_reference.url
+      assert_equal "strongly_demonstrated", EvidenceLink.find_by(evidence_id: item.id).valence
     end
+  end
+
+  should "block the respond submit until a judgment is chosen" do
+    make_request!
+    sign_in_as(@peer_user)
+    visit evidence_hub_path
+    assert_text "Rep asked you for feedback"
+    page.execute_script(
+      "document.querySelector(\"button[data-evidence-modal-mode-param='respond']\").click()"
+    )
+    assert_selector "#evidence-modal-overlay", visible: true
+    assert_selector "#evm-content", visible: true
+
+    # Fill everything EXCEPT the valence — the required radio group keeps
+    # the form invalid, so a submit can't fire.
+    valid = page.evaluate_script(<<~JS)
+      (() => {
+        const f = document.querySelector("#evidence-modal form");
+        f.querySelector("#evm-type").value = "peer_feedback";
+        f.querySelector("#evm-content").value = "Filled but unjudged.";
+        return f.checkValidity();
+      })()
+    JS
+    assert_equal false, valid, "form must be invalid until a judgment is picked"
+    ActsAsTenant.with_tenant(@tenant) { assert_equal "pending", EvidenceRequest.last.status }
   end
 
   should "let the requester cancel an outgoing request" do
@@ -127,7 +156,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     ActsAsTenant.with_tenant(@tenant) do
       PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
         capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "self",
-        evidence_type: "project_outcome", content: "Shipped the migration", author_id: @report.id)
+        evidence_type: "project_outcome", content: "Shipped the migration", author_id: @report.id, valence: "demonstrated")
     end
 
     sign_in_as(@report_user)

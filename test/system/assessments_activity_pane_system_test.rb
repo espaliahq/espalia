@@ -79,7 +79,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
           @person.id, @framework_id, SecureRandom.uuid_v7,
           capability_stable_id: @cap_stable, level_ordinal: 1, source: "self",
           evidence_type: "project_outcome", title: "Launch",
-          content: "Shipped the thing.", author_id: @person.id
+          content: "Shipped the thing.", author_id: @person.id, valence: "demonstrated"
         )
       end
 
@@ -115,7 +115,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
           pd_handler.record_evidence(@person.id, @framework_id, SecureRandom.uuid_v7,
             capability_stable_id: @cap_stable, level_ordinal: 1, source: "self",
             evidence_type: "project_outcome", title: "Entry #{i}",
-            content: "Body content for entry #{i}.", author_id: @person.id)
+            content: "Body content for entry #{i}.", author_id: @person.id, valence: "demonstrated")
         end
       end
 
@@ -228,7 +228,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
           @person.id, @framework_id, SecureRandom.uuid_v7,
           capability_stable_id: @cap_stable, level_ordinal: 1, source: "self",
           evidence_type: "project_outcome", title: "Launch",
-          content: "Shipped the thing.", author_id: @person.id
+          content: "Shipped the thing.", author_id: @person.id, valence: "demonstrated"
         )
       end
 

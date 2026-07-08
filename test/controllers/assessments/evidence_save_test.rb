@@ -47,7 +47,7 @@ class Assessments::EvidenceSaveTest < ActionDispatch::IntegrationTest
     ActsAsTenant.with_tenant(@tenant) do
       PersonDevelopment::CommandHandler.new.record_evidence(@author.id, @framework_id, id,
         capability_stable_id: @cap1.stable_id, level_ordinal: 2, source: "self",
-        evidence_type: "project_outcome", content: content, author_id: @author.id)
+        evidence_type: "project_outcome", content: content, author_id: @author.id, valence: "demonstrated")
     end
     id
   end
@@ -56,16 +56,38 @@ class Assessments::EvidenceSaveTest < ActionDispatch::IntegrationTest
     ActsAsTenant.with_tenant(@tenant) { EvidenceLink.active.where(evidence_id: id).pluck(:capability_stable_id, :level_ordinal).to_set }
   end
 
+  def valences_for(id)
+    ActsAsTenant.with_tenant(@tenant) do
+      EvidenceLink.active.where(evidence_id: id)
+        .pluck(:capability_stable_id, :level_ordinal, :valence)
+        .to_h { |cap, level, valence| [ [ cap, level ], valence ] }
+    end
+  end
+
   context "new" do
-    should "record evidence linked to the primary + extra cell" do
+    should "record evidence linked to the primary + extra cell, each with its own valence" do
       sign_in @author_user
       post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
         assignment_id: @assignment.id, primary_cell: cell(@cap1),
-        evidence_type: "project_outcome", content: "Fresh", desired_links: [ cell(@cap1), cell(@cap2) ]
+        evidence_type: "project_outcome", content: "Fresh", desired_links: [ cell(@cap1), cell(@cap2) ],
+        link_valences: { cell(@cap1) => "demonstrated", cell(@cap2) => "growth_area" }
       } }
       assert_response :success
       item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.active.find_by(content: "Fresh") }
       assert_equal Set[[ @cap1.stable_id, 2 ], [ @cap2.stable_id, 2 ]], links_for(item.id)
+      assert_equal({ [ @cap1.stable_id, 2 ] => "demonstrated", [ @cap2.stable_id, 2 ] => "growth_area" },
+        valences_for(item.id))
+    end
+
+    should "reject a new link without a valence" do
+      sign_in @author_user
+      post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
+        assignment_id: @assignment.id, primary_cell: cell(@cap1),
+        evidence_type: "project_outcome", content: "Fresh", desired_links: [ cell(@cap1) ]
+      } }
+      assert_response :see_other
+      assert_equal "Select what the feedback says about each linked behaviour", flash[:alert]
+      assert_nil ActsAsTenant.with_tenant(@tenant) { EvidenceItem.active.find_by(content: "Fresh") }
     end
   end
 
@@ -87,18 +109,49 @@ class Assessments::EvidenceSaveTest < ActionDispatch::IntegrationTest
       sign_in @author_user
       post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
         assignment_id: @assignment.id, evidence_id: id, primary_cell: cell(@cap1),
-        evidence_type: "project_outcome", content: "Original", desired_links: [ cell(@cap1), cell(@cap2) ]
+        evidence_type: "project_outcome", content: "Original", desired_links: [ cell(@cap1), cell(@cap2) ],
+        link_valences: { cell(@cap2) => "demonstrated" }
       } }
       item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(id) }
       assert_nil item.edited_at, "links-only change must not emit update_evidence"
       assert_equal Set[[ @cap1.stable_id, 2 ], [ @cap2.stable_id, 2 ]], links_for(id)
     end
 
+    should "reclassify a kept link's valence without bumping edited_at" do
+      id = record!
+      sign_in @author_user
+      post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
+        assignment_id: @assignment.id, evidence_id: id, primary_cell: cell(@cap1),
+        evidence_type: "project_outcome", content: "Original", desired_links: [ cell(@cap1) ],
+        link_valences: { cell(@cap1) => "growth_area" }
+      } }
+      item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(id) }
+      assert_nil item.edited_at, "a valence reclassification is linkage metadata, not a content edit"
+      assert_equal({ [ @cap1.stable_id, 2 ] => "growth_area" }, valences_for(id))
+    end
+
+    should "leave a kept link untouched when its submitted valence is unchanged" do
+      id = record!
+      sign_in @author_user
+      before = ActsAsTenant.with_tenant(@tenant) do
+        Rails.configuration.event_store.read.of_type([ PersonDevelopment::Events::EvidenceLinkRevalenced ]).count
+      end
+      post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
+        assignment_id: @assignment.id, evidence_id: id, primary_cell: cell(@cap1),
+        evidence_type: "project_outcome", content: "Original", desired_links: [ cell(@cap1) ],
+        link_valences: { cell(@cap1) => "demonstrated" }
+      } }
+      after = ActsAsTenant.with_tenant(@tenant) do
+        Rails.configuration.event_store.read.of_type([ PersonDevelopment::Events::EvidenceLinkRevalenced ]).count
+      end
+      assert_equal before, after, "resubmitting the same valence must not emit a revalence event"
+    end
+
     should "add and remove links per the desired-set delta" do
       id = record!
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.add_evidence_link(@author.id, @framework_id, id,
-          capability_stable_id: @cap2.stable_id, level_ordinal: 2, linked_by_id: @author.id)
+          capability_stable_id: @cap2.stable_id, level_ordinal: 2, linked_by_id: @author.id, valence: "demonstrated")
       end
       sign_in @author_user
       # desired = primary only ⇒ drop the cap2 link.
@@ -117,7 +170,8 @@ class Assessments::EvidenceSaveTest < ActionDispatch::IntegrationTest
       # Manager's modal disables content ⇒ no content/type params; only links.
       post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
         assignment_id: @assignment.id, evidence_id: id, primary_cell: cell(@cap1),
-        desired_links: [ cell(@cap1), cell(@cap2) ]
+        desired_links: [ cell(@cap1), cell(@cap2) ],
+        link_valences: { cell(@cap2) => "demonstrated" }
       } }
       item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(id) }
       assert_nil item.edited_at

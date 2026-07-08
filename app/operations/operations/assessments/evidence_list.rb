@@ -96,7 +96,10 @@ class Operations::Assessments::EvidenceList < Operations::Base
       external_reference: external_reference_payload(item),
       recorded_at: item.recorded_at&.iso8601,
       edited_at: item.edited_at&.iso8601,
-      links: links.map { |link| { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal } }
+      links: links.map { |link|
+        { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal,
+          valence: link.valence }
+      }
     }
   end
 

@@ -34,7 +34,7 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       @evidence_id = SecureRandom.uuid_v7
       handler.record_evidence(@author.id, @framework_id, @evidence_id,
         capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "self",
-        evidence_type: "project_outcome", content: "Original content", author_id: @author.id)
+        evidence_type: "project_outcome", content: "Original content", author_id: @author.id, valence: "demonstrated")
     end
   end
 
@@ -60,7 +60,7 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       ActsAsTenant.with_tenant(@tenant) do
         handler = PersonDevelopment::CommandHandler.new
         handler.add_evidence_link(@author.id, @framework_id, @evidence_id,
-          capability_stable_id: @cap2.stable_id, level_ordinal: 2, linked_by_id: @author.id)
+          capability_stable_id: @cap2.stable_id, level_ordinal: 2, linked_by_id: @author.id, valence: "demonstrated")
         handler.remove_evidence_link(@author.id, @framework_id, @evidence_id,
           capability_stable_id: @cap.stable_id, level_ordinal: 2, removed_by_id: @author.id)
       end
@@ -75,7 +75,7 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(@author.id, @framework_id, SecureRandom.uuid_v7,
           capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer",
-          evidence_type: "peer_feedback", content: "Peer-authored feedback", author_id: @other.id)
+          evidence_type: "peer_feedback", content: "Peer-authored feedback", author_id: @other.id, valence: "demonstrated")
       end
       sign_in @other_user
       get evidence_hub_path

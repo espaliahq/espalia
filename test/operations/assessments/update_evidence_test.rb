@@ -30,7 +30,7 @@ class Operations::Assessments::UpdateEvidenceTest < ActiveSupport::TestCase
       @pd.record_evidence(@person.id, @framework_id, @evidence_id,
         capability_stable_id: @cap.stable_id, level_ordinal: 2,
         source: "self", evidence_type: "project_outcome",
-        title: "Old", content: "Old body", author_id: @person.id)
+        title: "Old", content: "Old body", author_id: @person.id, valence: "demonstrated")
     end
     @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
   end

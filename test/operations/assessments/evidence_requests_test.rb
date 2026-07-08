@@ -88,7 +88,7 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       result = ActsAsTenant.with_tenant(@tenant) do
         Operations::Assessments::RespondToEvidenceRequest.call(
           context: @peer_ctx,
-          params: { request_id: @request_id, evidence_type: "peer_feedback", content: "Strong systems thinking." }
+          params: { request_id: @request_id, evidence_type: "peer_feedback", content: "Strong systems thinking.", valence: "demonstrated" }
         )
       end
 
@@ -106,7 +106,7 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
         ActsAsTenant.with_tenant(@tenant) do
           Operations::Assessments::RespondToEvidenceRequest.call(
             context: @manager_ctx,
-            params: { request_id: @request_id, evidence_type: "peer_feedback", content: "x" }
+            params: { request_id: @request_id, evidence_type: "peer_feedback", content: "x", valence: "demonstrated" }
           )
         end
       end
@@ -119,7 +119,7 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
         ActsAsTenant.with_tenant(@tenant) do
           Operations::Assessments::RespondToEvidenceRequest.call(
             context: @peer_ctx,
-            params: { request_id: @request_id, evidence_type: "peer_feedback", content: "x",
+            params: { request_id: @request_id, evidence_type: "peer_feedback", content: "x", valence: "demonstrated",
                       external_reference: { url: "https://x.test", title: "My link" } }
           )
         end

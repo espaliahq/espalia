@@ -238,12 +238,16 @@ class Assessments::MatrixDataBuilder
 
     links = EvidenceLink.active.where(evidence_id: items_by_id.keys)
     counts = links.group(:evidence_id).count
+    valences = links.group_by(&:evidence_id).transform_values do |item_links|
+      item_links.to_h { |link| [ [ link.capability_stable_id, link.level_ordinal ], link.valence ] }
+    end
 
     links.to_a
       .sort_by { |link| items_by_id[link.evidence_id].recorded_at }
       .each_with_object({}) do |link, h|
         item = items_by_id[link.evidence_id]
         item.active_link_count = counts[link.evidence_id]
+        item.link_valences = valences[link.evidence_id]
         key = [ link.capability_stable_id, link.level_ordinal ]
         (h[key] ||= []) << item
       end

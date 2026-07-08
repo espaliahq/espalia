@@ -215,6 +215,7 @@ class McpServerTest < ActionDispatch::IntegrationTest
             level_ordinal: 2,
             evidence_type: "code_review",
             content: "x",
+            valence: "demonstrated",
             external_reference: "not-an-object"
           }
         }

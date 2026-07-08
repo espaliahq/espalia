@@ -72,7 +72,7 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       pd_handler.record_evidence(@person.id, @framework_id, @evidence_id,
         capability_stable_id: @cap1_stable, level_ordinal: 1, source: "self",
         evidence_type: "project_outcome", title: "Cap1 launch",
-        content: "Done.", author_id: @person.id)
+        content: "Done.", author_id: @person.id, valence: "demonstrated")
 
       @assignment = PersonFrameworkAssignment.for_person(@person.id).first
     end
@@ -103,8 +103,9 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-modal-overlay", visible: true
       assert_selector "#evm-content", visible: true
 
-      # Add cap2 · L1 to the "also applies to" picker, then save (links-only).
-      # Selecting the capability populates its valid levels (change event).
+      # Add cap2 · L1 to the "also applies to" picker, pick the (required)
+      # judgment on the new row, then save (links-only). Selecting the
+      # capability populates its valid levels (change event).
       page.execute_script(<<~JS)
         const m = document.querySelector("#evidence-modal");
         const cap = m.querySelector("[data-evidence-modal-target='linkCapability']");
@@ -112,6 +113,7 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
         cap.dispatchEvent(new Event("change", { bubbles: true }));
         m.querySelector("[data-evidence-modal-target='linkLevel']").value = "1";
         m.querySelector("[data-action*='evidence-modal#addLink']").click();
+        m.querySelector("select[name='evidence[link_valences][#{@cap2_stable}|1]']").value = "growth_area";
         m.querySelector("form").requestSubmit();
       JS
 
@@ -119,8 +121,8 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
 
       ActsAsTenant.with_tenant(@tenant) do
         links = EvidenceLink.active.where(evidence_id: @evidence_id)
-          .pluck(:capability_stable_id, :level_ordinal)
-        assert_equal [ [ @cap1_stable, 1 ], [ @cap2_stable, 1 ] ].sort, links.sort
+          .pluck(:capability_stable_id, :level_ordinal, :valence)
+        assert_equal [ [ @cap1_stable, 1, "demonstrated" ], [ @cap2_stable, 1, "growth_area" ] ].sort, links.sort
       end
     end
 
