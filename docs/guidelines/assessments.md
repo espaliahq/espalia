@@ -443,6 +443,62 @@ Each uses `PersonDevelopment::Scoring` with a different `perspective:` parameter
 
 Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_contributions_at_next_level` map keyed by stable_id. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
 
+## Evidence-link valence — "what does this say about the behaviour?"
+
+Every evidence link carries a **valence** — the linker's judgment of what the
+evidence says about the behaviour at that capability × level — on a 4-point
+forced-choice scale (no neutral midpoint, mirroring the frequency vocabulary):
+
+| Event value (frozen forever) | UI label (changeable) |
+|---|---|
+| `strongly_demonstrated` | Strongly demonstrates |
+| `demonstrated` | Demonstrates |
+| `growth_area` | Growth area |
+| `significant_growth_area` | Significant growth area |
+
+Design rules — all deliberate, don't relitigate piecemeal:
+
+- **Valence lives on the LINK, not the item.** One piece of feedback can be
+  positive evidence for one behaviour and constructive for another.
+  `EvidenceLink.valence` is asserted by whoever creates that link
+  (`linked_by_id`) — including a non-author link editor.
+- **Required on every NEW link; never retro-forced.** The aggregate
+  (`record_evidence` / `add_evidence_link`), the Operations, and the modal's
+  `required` controls all demand it. Links created before valence existed stay
+  nil forever (events are immutable; intent can't be backfilled) and pass
+  through content edits untouched — no backfill-by-attrition. Reclassifying is
+  an explicit affordance (the link row's select in the edit modal / the
+  `assessments_set_evidence_link_valence` tool) emitting
+  `EvidenceLinkRevalenced`: link identity and `linked_at` preserved, no
+  `edited_at` bump, silent no-op when unchanged.
+- **NOT a scoring input.** ADR-10 stands: valence is narrative metadata for
+  the rater and the alignment conversation. Nothing in
+  `PersonDevelopment::Scoring` reads it, and nothing should without an ADR.
+- **Surface vocabulary** lives in `Views::Evidence::Valence` (labels + badge
+  classes). Badges use emerald / amber / rose tints — never the frequency
+  palette (red/yellow/green/blue means *ratings*) — and the text label is
+  always present; colour is reinforcement, never the sole signal. Badges
+  render per-cell on the expansion panel's evidence cards (the same item can
+  read "Demonstrates" in one cell and "Growth area" in another, via the
+  transient `EvidenceItem#link_valences` map) and on the hub response cards'
+  "Applies to" chips.
+- **Modal UX**: the primary cell's judgment is a segmented radio-pill group
+  (deliberately no default — the choice is forced); each "also applies to"
+  row carries its own compact select. In edit mode a pre-valence (nil) link
+  renders an optional "Judgment…" placeholder; a classified link can be
+  re-judged but not cleared. Per-link valences submit as
+  `evidence[link_valences][<cap>|<level>]` alongside the untouched
+  `desired_links[]` tokens; `EvidenceDiffSubmit` derives add-with-valence /
+  revalence deltas from the map.
+- **Feed coverage**: `evidence_linked` entries carry the valence label on the
+  secondary line; reclassifications are their own `evidence_revalenced` kind
+  ("Growth area (was Demonstrates)"), evidence group, anchored to the cell.
+- **MCP parity**: `assessments_record_evidence` /
+  `assessments_add_evidence_link` / `assessments_respond_to_evidence_request`
+  take a required `valence` enum (each `additional_links` entry carries its
+  own); `assessments_set_evidence_link_valence` reclassifies. Read payloads
+  include `valence` per link (nil = pre-valence link).
+
 ## Requesting evidence (cell-scoped)
 
 A manager (or the assessee, or an active rating delegate, or a tenant admin —
@@ -868,7 +924,9 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/Esc; opt-in outside-click dismissal (`dismissOnOutsideClick`, default off); dispatches `modal:open` |
 | `app/javascript/controllers/evidence_modal_controller.js` | Drives the unified evidence modal — frame `load`, link rows, type toggle (shared with the hub) |
 | **Unified evidence modal** (one modal for new/edit/respond, assessment + hub) | |
-| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — context-aware primary block (expectation + examples; role/level line only off the hub), content fields (disabled for a non-author link), "also applies to" picker with per-cell expectations |
+| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — context-aware primary block (expectation + examples; role/level line only off the hub), content fields (disabled for a non-author link), the primary-cell valence radio pills (forced choice on new/respond), "also applies to" picker with per-cell expectations + per-row valence selects |
+| `app/views/evidence/valence.rb` | Shared valence surface vocabulary — UI labels + badge styling for `EvidenceLink::VALENCES` (see *Evidence-link valence*) |
+| `app/operations/operations/assessments/set_evidence_link_valence.rb` | Shared web + MCP operation — reclassify one link's valence (`EvidenceLinkRevalenced`; no-op when unchanged) |
 | `app/views/evidence/modal_shell.rb` | The bare overlay/panel + lazy `#evidence-modal` frame, hosted inside `assessment-sync` (so the submit updates the matrix in place) |
 | `app/controllers/evidence_modal_controller.rb` | `GET /evidence_modal` — renders `ModalForm` for `(mode, evidence?, request?, cell?)`; resolves permissions + prefill + link options server-side |
 | `app/models/evidence/cell_context_resolver.rb` | Shared per-cell context (name, role, level title, expectation, illustrations) — hub + modal |
