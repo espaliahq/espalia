@@ -100,8 +100,15 @@ class Operations::Frameworks::SuggestionGet < Operations::Base
   def person_ref(person_id)
     return nil if person_id.blank?
 
-    person = Person.find_by(id: person_id)
+    person = people_by_id[person_id]
     person && { id: person.id, name: person.name }
+  end
+
+  # Author + reviewer resolved in one query instead of two.
+  def people_by_id
+    @people_by_id ||= Person
+      .where(id: [ suggestion.author_id, suggestion.reviewed_by ].compact.uniq)
+      .index_by(&:id)
   end
 
   def suggestion

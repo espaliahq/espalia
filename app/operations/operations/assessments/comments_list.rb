@@ -35,8 +35,16 @@ class Operations::Assessments::CommentsList < Operations::Base
   #   level_ordinal, body, author{id,name}, posted_at, edited_at|nil,
   #   replies[] }` and each reply the same minus `replies`.
   def perform
-    active = scoped_comments.includes(:author).to_a
-    replies_by_parent = active.select(&:parent_id).group_by(&:parent_id)
+    all_comments = scoped_comments.includes(:author).to_a
+    parent_ids = all_comments.to_h { |c| [ c.id, c.parent_id ] }
+    active = all_comments.reject(&:deleted?)
+
+    # Reply depth is unbounded in the data, so group replies by their ROOT
+    # ancestor (walking the chain through deleted comments too) — a
+    # reply-to-a-reply nests under the thread's top-level comment instead
+    # of being dropped. Mirrors frameworks_suggestion_get.
+    replies_by_root = active.select(&:parent_id)
+      .group_by { |c| root_ancestor_id(c.id, parent_ids) }
 
     top_level = active.select { |c| c.parent_id.nil? }.sort_by(&:posted_at)
 
@@ -45,7 +53,7 @@ class Operations::Assessments::CommentsList < Operations::Base
       level_ordinal: params[:level_ordinal],
       comments: top_level.map do |comment|
         comment_payload(comment).merge(
-          replies: (replies_by_parent[comment.id] || []).sort_by(&:posted_at).map { |r| comment_payload(r) }
+          replies: (replies_by_root[comment.id] || []).sort_by(&:posted_at).map { |r| comment_payload(r) }
         )
       end
     }
@@ -75,8 +83,19 @@ class Operations::Assessments::CommentsList < Operations::Base
   # Active comments for the assessee on this framework, anchored to the
   # capability cell(s). Includes both top-level and replies so the payload
   # can be assembled into threads in memory.
+  # Walks the parent chain to the top-level comment's id. The chain only
+  # points backwards in time (the aggregate requires the parent to exist
+  # before its child), so it terminates.
+  def root_ancestor_id(comment_id, parent_ids)
+    comment_id = parent_ids[comment_id] while parent_ids[comment_id]
+    comment_id
+  end
+
+  # All comments on the cell — INCLUDING soft-deleted ones, which are
+  # filtered from the payload but needed so a reply chain passing through
+  # a deleted comment still resolves to its root.
   def scoped_comments
-    scope = PersonDevelopmentComment.active
+    scope = PersonDevelopmentComment
       .for_person(assignment.person_id)
       .for_framework(assignment.framework_id)
       .where(commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
