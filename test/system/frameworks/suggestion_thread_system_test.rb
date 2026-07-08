@@ -40,11 +40,17 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  # Submits the composer/reply form wrapping the given textarea via
-  # requestSubmit — the pointer-click on small thread buttons is exactly the
-  # dropped-click class testing.md's inline-editor rule exists for.
-  def submit_form_of(textarea)
-    page.execute_script("arguments[0].closest('form').requestSubmit();", textarea)
+  # Sets an assertion-critical textarea value via JS (Selenium send_keys can
+  # drop characters on starved CI) and submits its form via requestSubmit —
+  # the dropped-click class testing.md's inline-editor rule exists for.
+  def compose_and_submit(textarea, text)
+    page.execute_script(<<~JS, textarea, text)
+      const [el, value] = [arguments[0], arguments[1]]
+      el.value = value
+      el.dispatchEvent(new Event("input", { bubbles: true }))
+      el.dispatchEvent(new Event("change", { bubbles: true }))
+      el.closest("form").requestSubmit()
+    JS
   end
 
   def open_suggestion_card
@@ -68,18 +74,19 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_includes current_url, "suggestion_id=#{@suggestion_id}"
 
     composer = find("textarea[name='comment[body]']", match: :first)
-    composer.set("Is 'long-term' the right frame?")
-    submit_form_of(composer)
+    compose_and_submit(composer, "Is 'long-term' the right frame?")
     assert_text "Is 'long-term' the right frame?"
 
     # Reply via the comment kebab — one level of indent on the reply card.
+    # The Reply item is a Stimulus-action control, so dispatch the click via
+    # JS (synthetic pointer clicks drop silently on starved CI).
     open_dropdown(scope: "li[id^='comment-']")
-    within("li[id^='comment-']", match: :first) { click_on "Reply" }
+    reply_item = find("li[id^='comment-'] [role='menu'] button", text: "Reply", visible: :all)
+    page.execute_script("arguments[0].click()", reply_item)
     # The reply form's visibility is the click's success signal (a
     # placeholder isn't page text, so assert on the revealed control).
     reply_box = find("textarea[placeholder='Reply…']", visible: true)
-    reply_box.set("I think it is")
-    submit_form_of(reply_box)
+    compose_and_submit(reply_box, "I think it is")
     assert_text "I think it is"
     assert_selector "li.pl-5", text: /I think it is/
 
@@ -105,8 +112,7 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_text "Discussion"
 
     composer = find("textarea[name='comment[body]']", match: :first)
-    composer.set("From the detail page")
-    submit_form_of(composer)
+    compose_and_submit(composer, "From the detail page")
 
     assert_text "From the detail page"
     assert_current_path framework_suggestion_path(@framework_id, @suggestion_id)
