@@ -73,7 +73,6 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::SuggestionApproved,
       Frameworks::Events::SuggestionRejected,
       Frameworks::Events::SuggestionWithdrawn,
-      Frameworks::Events::SuggestionCommented,
       Frameworks::Events::ScoringThresholdsConfigured,
       Frameworks::Events::CollaboratorAdded,
       Frameworks::Events::CollaboratorRoleChanged,
@@ -134,7 +133,6 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::SuggestionApproved then handle_suggestion_approved(event)
     when Frameworks::Events::SuggestionRejected then handle_suggestion_rejected(event)
     when Frameworks::Events::SuggestionWithdrawn then handle_suggestion_withdrawn(event)
-    when Frameworks::Events::SuggestionCommented then nil # future: comments table
 
     # ── Scoring & collaborators — always live ──
     when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
@@ -283,8 +281,7 @@ class Frameworks::Projections::PublishedState
     Frameworks::Events::SuggestionAmended,
     Frameworks::Events::SuggestionApproved,
     Frameworks::Events::SuggestionRejected,
-    Frameworks::Events::SuggestionWithdrawn,
-    Frameworks::Events::SuggestionCommented
+    Frameworks::Events::SuggestionWithdrawn
   ].freeze
 
   def suggestion_event?(event)

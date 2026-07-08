@@ -8,6 +8,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
       assert_equal(
         %w[
           frameworks/published_state
+          frameworks/suggestion_thread
           person_development/current_assessment
           person_development/evidence_collection
           person_development/evidence_requests

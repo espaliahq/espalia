@@ -22,6 +22,7 @@ module Projections::Registry
   # iteration order is no longer load-bearing for rebuild correctness.
   REPLAYABLE = {
     "frameworks/published_state"             => "Frameworks::Projections::PublishedState",
+    "frameworks/suggestion_thread"           => "Frameworks::Projections::SuggestionThread",
     "assessment_cycles/current_state"        => "AssessmentCycles::Projections::CurrentState",
     "person_development/current_assessment"  => "PersonDevelopment::Projections::CurrentAssessment",
     "person_development/evidence_collection" => "PersonDevelopment::Projections::EvidenceCollection",

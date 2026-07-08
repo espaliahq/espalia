@@ -73,6 +73,12 @@ module ProjectionReplayHelpers
           migration_mappings:       rows(FrameworkState::MigrationMapping)
         }
 
+      when "Frameworks::Projections::SuggestionThread"
+        {
+          # PK is the event-carried comment_id — assert it survives reset! + replay.
+          framework_suggestion_comments: rows(FrameworkState::SuggestionComment, stable_id: true)
+        }
+
       when "PersonDevelopment::Projections::CurrentAssessment"
         {
           # PK derived deterministically from (person_id, framework_id) —
