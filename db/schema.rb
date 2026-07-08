@@ -709,7 +709,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_114339) do
   add_foreign_key "framework_suggested_edits", "people", column: "author_id", on_delete: :restrict
   add_foreign_key "framework_suggested_edits", "people", column: "reviewed_by", on_delete: :nullify
   add_foreign_key "framework_suggested_edits", "tenants"
+  add_foreign_key "framework_suggestion_comments", "framework_suggestion_comments", column: "parent_id", on_delete: :restrict
   add_foreign_key "framework_suggestion_comments", "people", column: "author_id", on_delete: :restrict
+  add_foreign_key "framework_suggestion_comments", "people", column: "deleted_by_id", on_delete: :nullify
+  add_foreign_key "framework_suggestion_comments", "people", column: "edited_by_id", on_delete: :nullify
   add_foreign_key "framework_suggestion_comments", "tenants"
   add_foreign_key "manager_assessment_delegations", "tenants"
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"

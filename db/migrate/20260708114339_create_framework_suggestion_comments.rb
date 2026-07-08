@@ -32,5 +32,13 @@ class CreateFrameworkSuggestionComments < ActiveRecord::Migration[8.1]
               name: "idx_fw_suggestion_comments_parent"
     add_foreign_key :framework_suggestion_comments, :people,
                     column: :author_id, on_delete: :restrict
+    add_foreign_key :framework_suggestion_comments, :people,
+                    column: :edited_by_id, on_delete: :nullify
+    add_foreign_key :framework_suggestion_comments, :people,
+                    column: :deleted_by_id, on_delete: :nullify
+    # Self-referential FK keeps reply chains intact at the DB level — the
+    # model's restrict_with_exception only guards Rails-side deletes.
+    add_foreign_key :framework_suggestion_comments, :framework_suggestion_comments,
+                    column: :parent_id, on_delete: :restrict
   end
 end
