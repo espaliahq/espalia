@@ -24,6 +24,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "suggestion_approved"       => "bg-green-600",
     "suggestion_rejected"       => "bg-gray-400",
     "suggestion_withdrawn"      => "bg-gray-400",
+    "suggestion_commented"      => "bg-sky-500",
     "capability_added"          => "bg-emerald-500",
     "capability_archived"       => "bg-amber-500",
     "capability_updated"        => "bg-indigo-500",
@@ -64,6 +65,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "suggestion_approved"       => "suggestions",
     "suggestion_rejected"       => "suggestions",
     "suggestion_withdrawn"      => "suggestions",
+    "suggestion_commented"      => "suggestions",
     "capability_updated"        => "edits",
     "category_updated"          => "edits",
     "expectation_updated"       => "edits",
@@ -290,6 +292,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "suggestion_approved" then "Approved a #{entity_word} suggestion"
     when "suggestion_rejected" then "Rejected a #{entity_word} suggestion"
     when "suggestion_withdrawn" then "Withdrew a #{entity_word} suggestion"
+    when "suggestion_commented" then "Commented on a #{entity_word} suggestion"
     when "capability_added"    then "Added a capability"
     when "capability_archived" then "Archived a capability"
     when "capability_updated"  then "Updated a capability"
@@ -403,6 +406,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
       creation_preview
     when "suggestion_approved", "suggestion_rejected"
       payload_value(:comment)
+    when "suggestion_commented"
+      payload_value(:body)
     when "expectation_added"
       payload_value(:description)
     when "expectation_updated", "illustration_updated"

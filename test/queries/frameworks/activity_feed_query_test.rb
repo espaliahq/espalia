@@ -129,6 +129,51 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal @cap.capability_id, withdrawn.capability_id
       assert_equal "Ada Author", withdrawn.actor_name, "actor resolved from metadata"
     end
+
+    should "emit a suggestion_commented entry anchored via the suggestion, under the suggestions group" do
+      append(Frameworks::Events::SuggestionCommented,
+        data: { suggestion_id: @suggestion_id, comment_id: SecureRandom.uuid_v7,
+                parent_id: nil, body: "Is this the right frame?", author_id: @reviewer.id },
+        actor_id: @reviewer.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_commented" }
+      assert entry, "expected a suggestion_commented entry"
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal @suggestion_id, entry.suggestion_id
+      assert_equal "Rita Reviewer", entry.actor_name
+      assert_equal "Is this the right frame?", entry.payload[:body]
+      assert_equal "suggestions", Views::Frameworks::Activity::Entry::KIND_GROUP.fetch("suggestion_commented")
+      assert_not_nil Views::Frameworks::Activity::Entry::KIND_DOT["suggestion_commented"]
+    end
+
+    should "overlay comment count + latest excerpt on suggestion-anchored entries" do
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: @suggestion_id, target_entity_type: "capability",
+                target_entity_id: @cap.capability_id, field: "description",
+                suggested_value: "Better text", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      FrameworkState::SuggestionComment.create!(
+        id: SecureRandom.uuid_v7, tenant: @tenant, framework_id: @fwid,
+        suggestion_id: @suggestion_id, author_id: @reviewer.id,
+        body: "First take", status: "active", posted_at: 2.minutes.ago
+      )
+      FrameworkState::SuggestionComment.create!(
+        id: SecureRandom.uuid_v7, tenant: @tenant, framework_id: @fwid,
+        suggestion_id: @suggestion_id, author_id: @actor.id,
+        body: "Latest word", status: "active", posted_at: 1.minute.ago
+      )
+      # Deleted comments never count toward the affordance.
+      FrameworkState::SuggestionComment.create!(
+        id: SecureRandom.uuid_v7, tenant: @tenant, framework_id: @fwid,
+        suggestion_id: @suggestion_id, author_id: @actor.id,
+        body: "Gone", status: "deleted", posted_at: Time.current
+      )
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal 2, entry.comment_count
+      assert_equal "Latest word", entry.latest_comment
+    end
   end
 
   context "suggestion create lifecycle" do
