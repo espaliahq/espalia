@@ -85,6 +85,10 @@ class Frameworks::ActivityController < ApplicationController
       framework: @framework,
       suggestion: suggestion,
       comments: comments,
+      # A failed thread submission redirects back here inside the Turbo
+      # Frame, which renders no layout — surface the alert in the card or
+      # the rejection is silent.
+      alert: flash[:alert],
       author_name: Person.find_by(id: suggestion.author_id)&.name,
       clear_path: framework_activity_path(@framework.framework_id, layout: "panel"),
       approval_authority: approval_authority,

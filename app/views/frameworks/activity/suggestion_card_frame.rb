@@ -33,10 +33,12 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # @param can_comment [Boolean]
   # @param tenant_admin [Boolean]
   def initialize(framework:, suggestion:, comments:, author_name:, clear_path:,
-                 approval_authority:, viewer_person_id:, can_comment:, tenant_admin: false)
+                 approval_authority:, viewer_person_id:, can_comment:, tenant_admin: false,
+                 alert: nil)
     @framework = framework
     @suggestion = suggestion
     @comments = comments
+    @alert = alert
     @author_name = author_name
     @clear_path = clear_path
     @approval_authority = approval_authority
@@ -50,6 +52,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       div(class: "h-full flex flex-col") do
         header
         div(class: "flex-1 overflow-y-auto p-4") do
+          alert_banner if @alert.present?
           proposal_block
           action_row if actionable?
           resolution_block if resolved?
@@ -60,6 +63,17 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   end
 
   private
+
+  # Submission errors redirected back into this frame (no layout, so no
+  # global flash) — e.g. replying to a just-deleted comment.
+  def alert_banner
+    div(
+      class: "mb-3 rounded-md border border-red-200 dark:border-red-900/50 " \
+             "bg-red-50 dark:bg-red-900/20 px-3 py-2 text-[11px] " \
+             "text-red-800 dark:text-red-300",
+      role: "alert"
+    ) { @alert }
+  end
 
   def header
     div(class: "px-4 py-3 border-b border-gray-200 dark:border-gray-700") do
