@@ -14,15 +14,6 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
 
   ENTITY_TYPE_LABELS = Views::Frameworks::Suggestions::IndexView::ENTITY_TYPE_LABELS
 
-  KIND_LABELS = { "edit" => "Edit", "create" => "New", "delete" => "Archive" }.freeze
-
-  STATUS_STYLES = {
-    "pending"   => "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-    "approved"  => "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-    "rejected"  => "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
-    "withdrawn" => "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-  }.freeze
-
   # @param framework [FrameworkState::Framework]
   # @param suggestion [FrameworkState::SuggestedEdit]
   # @param comments [Array<FrameworkState::SuggestionComment>]
@@ -95,7 +86,8 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   end
 
   def kind_label
-    KIND_LABELS[@suggestion.kind] || @suggestion.kind.to_s.humanize
+    Views::Frameworks::Suggestions::IndexView::KIND_BADGE_LABELS
+      .fetch(@suggestion.kind, @suggestion.kind.to_s.humanize)
   end
 
   def entity_label
@@ -103,11 +95,13 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       @suggestion.target_entity_type.to_s.humanize
   end
 
+  # The same Kit::Badge + variant map the suggestion index uses, so the
+  # same suggestion never shows differently-toned status pills per surface.
   def status_pill
-    span(
-      class: "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0 " \
-             "#{STATUS_STYLES[@suggestion.status] || STATUS_STYLES['rejected']}"
-    ) { @suggestion.status.to_s.capitalize }
+    render Components::Kit::Badge.new(
+      @suggestion.status.to_s.capitalize,
+      variant: Views::Frameworks::Suggestions::IndexView::STATUS_VARIANTS.fetch(@suggestion.status, :default)
+    )
   end
 
   def proposal_block
@@ -146,9 +140,11 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     return @suggestion.suggested_value if @suggestion.suggested_value.present?
 
     # Creation proposals carry their content in proposed_attributes — prefer
-    # human-readable keys over ids (mirrors PanelFrame#creation_preview).
+    # human-readable keys over ids, using the same preferred-key order as
+    # the index/panel previews (CONTENT_KEYS) so surfaces can't diverge.
     attrs = @suggestion.proposed_attributes || {}
-    %w[name title description].filter_map { |k| attrs[k].presence }.first ||
+    Views::Frameworks::Suggestions::IndexView::CONTENT_KEYS
+      .filter_map { |k| attrs[k].presence }.first ||
       attrs.values.map(&:to_s).find(&:present?).to_s
   end
 
@@ -172,35 +168,13 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   end
 
   def action_row
-    div(
-      class: "mt-3 flex items-center gap-2",
-      data: {
-        controller: "suggestion-action",
-        suggestion_action_approve_url_value:
-          approve_framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id, inline: 1)
-      }
-    ) do
-      button(
-        type: "button",
-        class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-               "bg-green-600 text-white hover:bg-green-700 transition-colors " \
-               "disabled:opacity-50 disabled:cursor-not-allowed",
-        data: { action: "suggestion-action#approve" }
-      ) { "Approve" }
-      button(
-        type: "button",
-        class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-               "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 " \
-               "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
-        data: {
-          action: "click->modal#open",
-          modal_target_id: "reject-suggestion-modal",
-          reject_suggestion_id: @suggestion.suggestion_id,
-          reject_framework_id: @framework.framework_id,
-          reject_entity_label: entity_label,
-          reject_preview: @suggestion.suggested_value.to_s.strip.presence
-        }
-      ) { "Reject" }
+    div(class: "mt-1.5") do
+      render Views::Frameworks::Activity::SuggestionActions.new(
+        framework_id: @framework.framework_id,
+        suggestion_id: @suggestion.suggestion_id,
+        entity_label: entity_label,
+        reject_preview: @suggestion.suggested_value.to_s.strip.presence
+      )
     end
   end
 

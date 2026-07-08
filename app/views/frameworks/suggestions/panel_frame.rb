@@ -231,11 +231,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   end
 
   def kind_label(suggestion)
-    case suggestion.kind
-    when "create" then "New"
-    when "delete" then "Delete"
-    else "Edit"
-    end
+    Views::Frameworks::Suggestions::IndexView::KIND_BADGE_LABELS.fetch(suggestion.kind, "Edit")
   end
 
   def kind_variant(suggestion)
