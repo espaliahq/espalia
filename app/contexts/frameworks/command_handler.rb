@@ -485,6 +485,48 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Posts a comment on a suggestion's discussion thread, optionally as a
+  # reply to an existing comment on the same suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion under discussion
+  # @param comment_id [String] caller-supplied UUID v7 (caller owns idempotency)
+  # @param body [String] comment body
+  # @param author_id [String] UUID of the commenting person
+  # @param parent_id [String, nil] UUID of the comment being replied to
+  def comment_on_suggestion(framework_id, suggestion_id, comment_id, body:, author_id:, parent_id: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.comment_on_suggestion(framework_id, suggestion_id, comment_id,
+                                      body: body, author_id: author_id, parent_id: parent_id)
+    end
+  end
+
+  # Revises the body of a suggestion-thread comment (author-only).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param comment_id [String] UUID of the comment
+  # @param body [String] the revised body
+  # @param edited_by_id [String] UUID of the editor (must equal the author)
+  def edit_suggestion_comment(framework_id, comment_id, body:, edited_by_id:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.edit_suggestion_comment(framework_id, comment_id,
+                                        body: body, edited_by_id: edited_by_id)
+    end
+  end
+
+  # Soft-deletes a suggestion-thread comment.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param comment_id [String] UUID of the comment
+  # @param deleted_by_id [String] UUID of the deleter
+  # @param reason [String, nil] optional explanation
+  def delete_suggestion_comment(framework_id, comment_id, deleted_by_id:, reason: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.delete_suggestion_comment(framework_id, comment_id,
+                                          deleted_by_id: deleted_by_id, reason: reason)
+    end
+  end
+
   # Approves a pending suggestion, applies the content change, and auto-rejects
   # any competing pending suggestions on the same entity field.
   #

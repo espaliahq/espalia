@@ -28,6 +28,13 @@ class Frameworks::Aggregate
     @bindings = {}
     @collaborators = {}
     @pending_edits = {}
+    # Every suggestion_id ever proposed on this framework — unlike
+    # @pending_edits, entries are never removed on resolution, so the
+    # discussion thread stays open on approved/rejected/withdrawn
+    # suggestions (the PR-conversation convention).
+    @suggestion_ids = Set.new
+    # comment_id => { suggestion_id:, parent_id:, author_id:, status: }
+    @suggestion_comments = {}
     @current_version = 0
     @draft_in_progress = false
     @draft_version = nil
@@ -897,6 +904,101 @@ class Frameworks::Aggregate
     }.compact))
   end
 
+  # ── Suggestion discussion threads ──
+  #
+  # Comments are collaborative-conversation context on a suggestion. They
+  # never gate on the suggestion being pending — the discussion stays open
+  # after approval/rejection/withdrawal (the PR-conversation convention).
+
+  # Posts a comment on a suggestion's discussion thread, optionally as a
+  # reply to an existing comment on the same suggestion.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the suggestion under discussion
+  # @param comment_id [String] caller-supplied UUID v7 (caller owns idempotency)
+  # @param body [String] comment body (required, non-blank)
+  # @param author_id [String] UUID of the Person posting the comment
+  # @param parent_id [String, nil] UUID of the comment being replied to;
+  #   nil for a top-level comment
+  # @raise [RuntimeError] if framework not created, suggestion unknown,
+  #   comment_id already exists, body blank, or the parent is missing,
+  #   deleted, or belongs to a different suggestion
+  def comment_on_suggestion(framework_id, suggestion_id, comment_id, body:, author_id:, parent_id: nil)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} not found" unless @suggestion_ids.include?(suggestion_id)
+    raise "Comment ID already exists" if @suggestion_comments.key?(comment_id)
+    raise "Comment body cannot be blank" if body.to_s.strip.empty?
+
+    if parent_id
+      parent = @suggestion_comments[parent_id]
+      raise "No parent comment with id #{parent_id}" unless parent
+      raise "Cannot reply to a deleted comment" if parent[:status] == "deleted"
+      # A reply may target ANY non-deleted comment on the suggestion,
+      # including another reply — display is flat with one indent level
+      # (mirroring the assessment comment thread). The reply must stay on
+      # its parent's suggestion or the thread tree would orphan it.
+      raise "Reply must stay on the parent's suggestion" unless parent[:suggestion_id] == suggestion_id
+    end
+
+    apply(Frameworks::Events::SuggestionCommented.new(data: {
+      framework_id: framework_id,
+      suggestion_id: suggestion_id,
+      comment_id: comment_id,
+      parent_id: parent_id,
+      body: body,
+      author_id: author_id
+    }.compact))
+  end
+
+  # Revises the body of a suggestion-thread comment. Author-only — the
+  # aggregate enforces it (mirroring amend_suggestion), unlike delete where
+  # the author-or-admin split lives in the policy layer.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param comment_id [String] UUID of the comment
+  # @param body [String] the revised body (required, non-blank)
+  # @param edited_by_id [String] UUID of the editor (must equal the author)
+  # @raise [RuntimeError] if the comment is missing, deleted, the body is
+  #   blank, or the editor isn't the author
+  def edit_suggestion_comment(framework_id, comment_id, body:, edited_by_id:)
+    ensure_created!
+    state = @suggestion_comments[comment_id]
+    raise "No comment with id #{comment_id}" unless state
+    raise "Cannot edit a deleted comment" if state[:status] == "deleted"
+    raise "Comment body cannot be blank" if body.to_s.strip.empty?
+    raise "Only the author can edit a comment" unless state[:author_id] == edited_by_id
+
+    apply(Frameworks::Events::SuggestionCommentEdited.new(data: {
+      framework_id: framework_id,
+      comment_id: comment_id,
+      body: body,
+      edited_by_id: edited_by_id
+    }))
+  end
+
+  # Soft-deletes a suggestion-thread comment. The row survives with status
+  # "deleted" so reply chains stay coherent. Who may delete (author or
+  # tenant admin) is the policy layer's decision.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param comment_id [String] UUID of the comment
+  # @param deleted_by_id [String] UUID of the deleter
+  # @param reason [String, nil] optional explanation
+  # @raise [RuntimeError] if the comment is missing or already deleted
+  def delete_suggestion_comment(framework_id, comment_id, deleted_by_id:, reason: nil)
+    ensure_created!
+    state = @suggestion_comments[comment_id]
+    raise "No comment with id #{comment_id}" unless state
+    raise "Comment already deleted" if state[:status] == "deleted"
+
+    apply(Frameworks::Events::SuggestionCommentDeleted.new(data: {
+      framework_id: framework_id,
+      comment_id: comment_id,
+      deleted_by_id: deleted_by_id,
+      reason: reason
+    }.compact))
+  end
+
   # Approves a pending suggestion, applies the content change, and auto-rejects
   # any competing pending suggestions on the same entity field.
   #
@@ -1378,6 +1480,7 @@ class Frameworks::Aggregate
   end
 
   on Frameworks::Events::EditSuggested do |event|
+    @suggestion_ids << event.data[:suggestion_id]
     @pending_edits[event.data[:suggestion_id]] = {
       kind: :edit,
       suggestion_id: event.data[:suggestion_id],
@@ -1390,6 +1493,7 @@ class Frameworks::Aggregate
   end
 
   on Frameworks::Events::EntityCreationSuggested do |event|
+    @suggestion_ids << event.data[:suggestion_id]
     @pending_edits[event.data[:suggestion_id]] = {
       kind: :create,
       suggestion_id: event.data[:suggestion_id],
@@ -1401,6 +1505,7 @@ class Frameworks::Aggregate
   end
 
   on Frameworks::Events::EntityDeletionSuggested do |event|
+    @suggestion_ids << event.data[:suggestion_id]
     @pending_edits[event.data[:suggestion_id]] = {
       kind: :delete,
       suggestion_id: event.data[:suggestion_id],
@@ -1458,8 +1563,23 @@ class Frameworks::Aggregate
     @collaborators.delete(key)
   end
 
-  on Frameworks::Events::SuggestionCommented do |_event|
-    # Future: store in comments — no state change needed in aggregate
+  on Frameworks::Events::SuggestionCommented do |event|
+    @suggestion_comments[event.data[:comment_id]] = {
+      suggestion_id: event.data[:suggestion_id],
+      parent_id: event.data[:parent_id],
+      author_id: event.data[:author_id],
+      status: "active"
+    }
+  end
+
+  on Frameworks::Events::SuggestionCommentEdited do |_event|
+    # Body isn't tracked in aggregate state — only existence/status/authorship
+    # feed command validation.
+  end
+
+  on Frameworks::Events::SuggestionCommentDeleted do |event|
+    comment = @suggestion_comments[event.data[:comment_id]]
+    comment[:status] = "deleted" if comment
   end
 
   # Builds a composite key for the collaborators hash.
