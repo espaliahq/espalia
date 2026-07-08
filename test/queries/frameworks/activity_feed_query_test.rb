@@ -146,6 +146,35 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_not_nil Views::Frameworks::Activity::Entry::KIND_DOT["suggestion_commented"]
     end
 
+    should "render the read model's current body on comment entries — deleted bodies disappear" do
+      deleted_id = SecureRandom.uuid_v7
+      edited_id = SecureRandom.uuid_v7
+      append(Frameworks::Events::SuggestionCommented,
+        data: { suggestion_id: @suggestion_id, comment_id: deleted_id,
+                parent_id: nil, body: "Sensitive — please remove", author_id: @actor.id },
+        actor_id: @actor.id)
+      append(Frameworks::Events::SuggestionCommented,
+        data: { suggestion_id: @suggestion_id, comment_id: edited_id,
+                parent_id: nil, body: "Original wording", author_id: @actor.id },
+        actor_id: @actor.id)
+      # Read model state: first comment deleted, second edited.
+      FrameworkState::SuggestionComment.create!(
+        id: deleted_id, tenant: @tenant, framework_id: @fwid,
+        suggestion_id: @suggestion_id, author_id: @actor.id,
+        body: "Sensitive — please remove", status: "deleted", posted_at: 2.minutes.ago
+      )
+      FrameworkState::SuggestionComment.create!(
+        id: edited_id, tenant: @tenant, framework_id: @fwid,
+        suggestion_id: @suggestion_id, author_id: @actor.id,
+        body: "Revised wording", status: "active", posted_at: 1.minute.ago
+      )
+
+      comment_entries = entries.select { |e| e.kind == "suggestion_commented" }
+      bodies = comment_entries.to_h { |e| [ e.payload[:comment_id], e.payload[:body] ] }
+      assert_nil bodies[deleted_id], "a deleted comment's body must not linger in the feed"
+      assert_equal "Revised wording", bodies[edited_id], "the feed shows the current, not original, body"
+    end
+
     should "overlay comment count + latest excerpt on suggestion-anchored entries" do
       append(Frameworks::Events::EditSuggested,
         data: { suggestion_id: @suggestion_id, target_entity_type: "capability",
