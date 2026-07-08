@@ -54,7 +54,9 @@ class Frameworks::Projections::SuggestionThread
   def handle_commented(event)
     # Idempotent for replay: keying by the event-supplied comment_id means
     # re-processing leaves the row in the same state rather than raising
-    # RecordNotUnique.
+    # RecordNotUnique. A re-delivered create after the comment's delete has
+    # been applied must NOT resurrect the tombstone — never downgrade an
+    # existing "deleted" status.
     record = FrameworkState::SuggestionComment.find_or_initialize_by(id: event.data[:comment_id])
     record.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
@@ -63,9 +65,9 @@ class Frameworks::Projections::SuggestionThread
       parent_id: event.data[:parent_id],
       author_id: event.data[:author_id],
       body: event.data[:body],
-      status: "active",
       posted_at: event.metadata[:timestamp] || Time.current
     )
+    record.status = "active" if record.new_record?
     record.save!
   end
 

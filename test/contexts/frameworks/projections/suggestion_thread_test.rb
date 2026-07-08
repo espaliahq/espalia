@@ -41,6 +41,26 @@ class Frameworks::Projections::SuggestionThreadTest < ActiveSupport::TestCase
       end
     end
 
+    should "not resurrect a deleted comment when re-delivered after the delete" do
+      comment_id = SecureRandom.uuid_v7
+      create_event_data = {
+        framework_id: @framework_id, suggestion_id: @suggestion_id,
+        comment_id: comment_id, parent_id: nil,
+        body: "Once", author_id: @author.id
+      }
+      emit(Frameworks::Events::SuggestionCommented, **create_event_data)
+      emit(Frameworks::Events::SuggestionCommentDeleted,
+        framework_id: @framework_id, comment_id: comment_id,
+        deleted_by_id: @author.id, reason: nil)
+
+      # At-least-once delivery / partial re-dispatch of the create.
+      emit(Frameworks::Events::SuggestionCommented, **create_event_data)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert FrameworkState::SuggestionComment.find(comment_id).deleted?
+      end
+    end
+
     should "be idempotent when re-processed" do
       comment_id = SecureRandom.uuid_v7
       2.times do
