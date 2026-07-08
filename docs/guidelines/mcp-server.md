@@ -108,6 +108,12 @@ up tool call (`frameworks_capability_get`).
 
 A real framework is ~5–15KB at this depth instead of 50KB+ flat.
 
+The suggestion surface follows the same drill-down: `frameworks_recent_activity`
+surfaces suggestion entries (with `suggestion_id`s), and
+`frameworks_suggestion_get` is the drill-in — one suggestion's proposal,
+resolution, and discussion thread (top-level comments with replies nested one
+level, the `assessments_comments_list` shape).
+
 The same rule shapes the assessment drill-down. `assessments_capability_get`
 returns the capability detail plus a compact per-level **ratings** overlay
 — it deliberately does NOT inline evidence bodies or comment threads (both
