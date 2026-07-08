@@ -131,10 +131,18 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
 
     should "emit a suggestion_commented entry anchored via the suggestion, under the suggestions group" do
+      comment_id = SecureRandom.uuid_v7
       append(Frameworks::Events::SuggestionCommented,
-        data: { suggestion_id: @suggestion_id, comment_id: SecureRandom.uuid_v7,
+        data: { suggestion_id: @suggestion_id, comment_id: comment_id,
                 parent_id: nil, body: "Is this the right frame?", author_id: @reviewer.id },
         actor_id: @reviewer.id)
+      # The synchronous projection always materialises the row in the live
+      # flow; the entry body overlays the read model's current text.
+      FrameworkState::SuggestionComment.create!(
+        id: comment_id, tenant: @tenant, framework_id: @fwid,
+        suggestion_id: @suggestion_id, author_id: @reviewer.id,
+        body: "Is this the right frame?", status: "active", posted_at: Time.current
+      )
 
       entry = entries.find { |e| e.kind == "suggestion_commented" }
       assert entry, "expected a suggestion_commented entry"
