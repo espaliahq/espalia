@@ -163,6 +163,24 @@ class Assessments::EvidenceSaveTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "atomicity" do
+    should "not apply ANY of an edit when one new link lacks a valence" do
+      id = record!
+      sign_in @author_user
+      # Content change + one valence-less new link in a single submit: the
+      # missing judgment must reject the whole diff up front, not land the
+      # content edit (or earlier links) before aborting.
+      post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
+        assignment_id: @assignment.id, evidence_id: id, primary_cell: cell(@cap1),
+        evidence_type: "project_outcome", content: "Sneaky partial", desired_links: [ cell(@cap1), cell(@cap2) ]
+      } }
+      assert_response :see_other
+      item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(id) }
+      assert_equal "Original", item.content, "content update must not land when the link diff is invalid"
+      assert_equal Set[[ @cap1.stable_id, 2 ]], links_for(id), "no link may be added"
+    end
+  end
+
   context "non-author link (manager)" do
     should "add a link without editing content (disabled fields not submitted)" do
       id = record!

@@ -70,15 +70,20 @@ module EvidenceDiffSubmit
     assignment_id = assignment_id_for(request)
     primary = [ request.capability_stable_id, request.level_ordinal ]
     valences = link_valences(p)
+    extras = desired_cells(p) - [ primary ]
+    # Validate every new link's valence BEFORE any write — otherwise a
+    # missing valence on cell N would abort after cells 1..N-1 (and the
+    # response itself) had already landed.
+    ([ primary ] + extras).each { |cell| valence_for!(valences, cell) }
 
     result = Operations::Assessments::RespondToEvidenceRequest.call(context: pundit_user, params: {
-      request_id: request.id, valence: valence_for!(valences, primary), **content_params(p)
+      request_id: request.id, valence: valences[primary], **content_params(p)
     })
     evidence_id = result[:evidence_id]
-    (desired_cells(p) - [ primary ]).each do |cap, level|
+    extras.each do |cap, level|
       Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
         assignment_id: assignment_id, evidence_id: evidence_id, capability_stable_id: cap, level_ordinal: level,
-        valence: valence_for!(valences, [ cap, level ])
+        valence: valences[[ cap, level ]]
       })
     end
     TouchedCells.new(desired_cells(p), evidence_id)
@@ -94,15 +99,21 @@ module EvidenceDiffSubmit
     desired = desired_cells(p).to_set
     valences = link_valences(p)
 
+    # Validate every new link's valence BEFORE any write (incl. the content
+    # update) — a missing valence must reject the whole submit, not leave a
+    # partially-applied diff behind.
+    new_cells = desired - current_cells
+    new_cells.each { |cell| valence_for!(valences, cell) }
+
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
         assignment_id: assignment_id, evidence_id: item.id, **content_params(p)
       })
     end
-    (desired - current_cells).each do |cap, level|
+    new_cells.each do |cap, level|
       Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
         assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
-        valence: valence_for!(valences, [ cap, level ])
+        valence: valences[[ cap, level ]]
       })
     end
     (current_cells - desired).each do |cap, level|
