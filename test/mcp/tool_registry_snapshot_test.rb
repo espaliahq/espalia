@@ -1334,6 +1334,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_suggestion_get",
+        "description" => "Fetch one framework suggestion in full: proposal, resolution status, and its discussion thread (top-level comments with replies nested).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "suggestion_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "frameworks_update_capability_role_binding",
         "description" => "Update a capability-role binding's weight and/or individual tolerance (owner/editor/lead only).",
         "inputSchema" => {
