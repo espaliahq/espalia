@@ -55,19 +55,36 @@ class Operations::Frameworks::SuggestionGet < Operations::Base
   private
 
   # Top-level active comments with their active replies nested one level.
+  # Reply depth is unbounded in the data, so replies are grouped by their
+  # ROOT ancestor (walking the parent chain through deleted comments too) —
+  # a reply-to-a-reply nests under the thread's top-level comment, matching
+  # the web's flat one-indent display. A subtree whose root is itself
+  # deleted is omitted (the audit trail lives on the stream).
   def thread
-    active = FrameworkState::SuggestionComment.active
+    all_comments = FrameworkState::SuggestionComment
       .for_suggestion(suggestion.suggestion_id)
       .includes(:author)
       .chronological
       .to_a
-    replies_by_parent = active.select(&:parent_id).group_by(&:parent_id)
+    parent_ids = all_comments.to_h { |c| [ c.id, c.parent_id ] }
+    active = all_comments.reject(&:deleted?)
+
+    replies_by_root = active.select(&:parent_id)
+      .group_by { |c| root_ancestor_id(c.id, parent_ids) }
 
     active.select { |c| c.parent_id.nil? }.map do |comment|
       comment_payload(comment).merge(
-        replies: (replies_by_parent[comment.id] || []).map { |r| comment_payload(r) }
+        replies: (replies_by_root[comment.id] || []).map { |r| comment_payload(r) }
       )
     end
+  end
+
+  # Walks the parent chain to the top-level comment's id. The chain only
+  # ever points backwards in time (the aggregate requires the parent to
+  # exist before its child), so it terminates.
+  def root_ancestor_id(comment_id, parent_ids)
+    comment_id = parent_ids[comment_id] while parent_ids[comment_id]
+    comment_id
   end
 
   def comment_payload(comment)

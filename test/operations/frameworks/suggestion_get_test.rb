@@ -73,6 +73,24 @@ class Operations::Frameworks::SuggestionGetTest < ActiveSupport::TestCase
       end
     end
 
+    should "nest a reply-to-a-reply under the thread's top-level comment" do
+      ActsAsTenant.with_tenant(@tenant) do
+        deep_id = SecureRandom.uuid_v7
+        Frameworks::CommandHandler.new.comment_on_suggestion(
+          @framework_id, @suggestion_id, deep_id,
+          body: "Going deeper", author_id: @owner_person.id.to_s, parent_id: @reply_id
+        )
+
+        result = suggestion_get(@owner_ctx, {
+          framework_id: @framework_id, suggestion_id: @suggestion_id
+        })
+
+        # Depth is unbounded in data; the payload groups by root ancestor.
+        assert_equal [ @reply_id, deep_id ],
+                     result[:comments].first[:replies].map { |r| r[:id] }
+      end
+    end
+
     should "carry the resolution after an approve" do
       ActsAsTenant.with_tenant(@tenant) do
         Frameworks::CommandHandler.new.approve_suggestion(
