@@ -64,7 +64,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
       f.querySelector("#evm-title").value = "Incident retro";
       f.querySelector("#evm-content").value = "Strong systems thinking during the incident.";
       f.querySelector("#evm-url").value = "https://slack.example/archives/p1";
-      f.querySelector("#evm-valence-strongly_demonstrated").click();
+      f.querySelector("#evm-valence").value = "strongly_demonstrated";
       f.requestSubmit();
     JS
 
@@ -90,8 +90,8 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_selector "#evidence-modal-overlay", visible: true
     assert_selector "#evm-content", visible: true
 
-    # Fill everything EXCEPT the valence — the required radio group keeps
-    # the form invalid, so a submit can't fire.
+    # Fill everything EXCEPT the valence — the required judgment select
+    # keeps the form invalid, so a submit can't fire.
     valid = page.evaluate_script(<<~JS)
       (() => {
         const f = document.querySelector("#evidence-modal form");

@@ -21,7 +21,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations", "levels", "valences"]
+  static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "linkValence", "expectations", "levels", "valences"]
   static values = { url: { type: String, default: "/evidence_modal" } }
 
   // PAGE: point the lazy frame at the render endpoint for this trigger.
@@ -53,19 +53,24 @@ export default class extends BaseController {
   }
 
   // IN-FRAME: add an "also applies to" cell as a row with its expectation.
+  // The judgment is part of the pick — + Add refuses until capability,
+  // level AND judgment are all chosen, so a new link can never be staged
+  // without its valence.
   addLink() {
     if (!this.hasLinkRowsTarget || !this.hasLinkCapabilityTarget || !this.hasLinkLevelTarget) return
     const cap = this.linkCapabilityTarget.value
     const level = this.linkLevelTarget.value
-    if (!cap || !level) return
+    const valence = this.hasLinkValenceTarget ? this.linkValenceTarget.value : ""
+    if (!cap || !level || !valence) return
 
     const token = `${cap}|${level}`
     if (this.#isLinked(cap, level)) return // dup or primary (also disabled in the UI)
     const info = this.#expectations()[token]
     if (!info) return // not a valid cell
 
-    this.linkRowsTarget.appendChild(this.#row(token, level, info))
+    this.linkRowsTarget.appendChild(this.#row(token, level, info, valence))
     this.linkLevelTarget.value = ""
+    this.linkValenceTarget.value = ""
     this.#rebuildLevels() // the just-added level is now disabled; keep the capability selected
   }
 
@@ -111,7 +116,7 @@ export default class extends BaseController {
     }
   }
 
-  #row(token, level, info) {
+  #row(token, level, info, valence) {
     const row = document.createElement("div")
     row.dataset.linkRow = ""
     row.className = "rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm"
@@ -137,7 +142,7 @@ export default class extends BaseController {
       row.appendChild(exp)
     }
 
-    row.appendChild(this.#valenceSelect(token))
+    row.appendChild(this.#valenceSelect(token, valence))
 
     const hidden = document.createElement("input")
     hidden.type = "hidden"
@@ -147,17 +152,19 @@ export default class extends BaseController {
     return row
   }
 
-  // A NEW link must carry a judgment (required blocks submit until chosen);
-  // options come from the embedded JSON so labels stay server-owned.
-  #valenceSelect(token) {
+  // The row's judgment select, pre-set from the picker's choice (adjustable
+  // until submit); options come from the embedded JSON so labels stay
+  // server-owned. Required as a belt-and-braces guard — addLink already
+  // refuses to stage a row without a judgment.
+  #valenceSelect(token, valence) {
     const select = document.createElement("select")
     select.name = `evidence[link_valences][${token}]`
     select.required = true
     select.setAttribute("aria-label", "What does this say about the behaviour?")
     select.className = "mt-1 w-auto rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " +
       "text-gray-900 dark:text-gray-100 text-xs focus-visible:ring-primary focus-visible:border-primary"
-    select.add(new Option("Judgment…", ""))
     this.#valenceOptions().forEach(([label, value]) => select.add(new Option(label, value)))
+    select.value = valence
     return select
   }
 

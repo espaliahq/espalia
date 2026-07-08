@@ -10,19 +10,6 @@ class Views::Evidence::ModalForm < Views::Base
   include Phlex::Rails::Helpers::FormWith
   include Views::Evidence::Valence
 
-  # Checked-state styling per valence pill. Full literal strings — Tailwind's
-  # JIT can't see interpolated class names (framework-explorer Lesson 12).
-  PILL_CHECKED = {
-    "strongly_demonstrated" => "peer-checked:bg-emerald-100 peer-checked:border-emerald-400 peer-checked:text-emerald-900 " \
-                               "dark:peer-checked:bg-emerald-900/40 dark:peer-checked:border-emerald-600 dark:peer-checked:text-emerald-200",
-    "demonstrated" => "peer-checked:bg-emerald-50 peer-checked:border-emerald-300 peer-checked:text-emerald-800 " \
-                      "dark:peer-checked:bg-emerald-900/20 dark:peer-checked:border-emerald-700 dark:peer-checked:text-emerald-300",
-    "growth_area" => "peer-checked:bg-amber-50 peer-checked:border-amber-300 peer-checked:text-amber-900 " \
-                     "dark:peer-checked:bg-amber-900/30 dark:peer-checked:border-amber-700 dark:peer-checked:text-amber-300",
-    "significant_growth_area" => "peer-checked:bg-rose-50 peer-checked:border-rose-300 peer-checked:text-rose-900 " \
-                                 "dark:peer-checked:bg-rose-900/30 dark:peer-checked:border-rose-700 dark:peer-checked:text-rose-300"
-  }.freeze
-
   TYPE_OPTIONS = [
     [ "Peer feedback", "peer_feedback" ], [ "Manager feedback", "manager_feedback" ],
     [ "Customer feedback", "customer_feedback" ], [ "Impact", "impact" ],
@@ -75,7 +62,6 @@ class Views::Evidence::ModalForm < Views::Base
         form_with(url: form_action, method: form_method, class: "space-y-3",
                   data: { turbo_frame: "_top", action: "turbo:submit-end->modal#submitted" }) do
           hidden_fields
-          primary_valence_field
           content_fields
           links_section
           expectation_data
@@ -171,29 +157,6 @@ class Views::Evidence::ModalForm < Views::Base
     input(type: "hidden", name: "evidence[desired_links][]", value: primary_token)
   end
 
-  # The recorder's judgment of what this evidence says about the primary
-  # cell's behaviour. Deliberately no default — the choice is forced on
-  # every NEW link (HTML required + server/aggregate backstops). In edit
-  # mode a pre-valence (nil) link is never force-reclassified: the group
-  # stays optional and unselected until the editor deliberately picks one.
-  def primary_valence_field
-    fieldset do
-      legend(class: LABEL) { "What does this say about the behaviour?" }
-      div(class: "flex flex-wrap gap-1.5") do
-        Views::Evidence::Valence::OPTIONS.each do |text, value|
-          label(class: "cursor-pointer") do
-            input(type: "radio", name: "evidence[link_valences][#{primary_token}]", value: value,
-                  id: "evm-valence-#{value}", class: "peer sr-only",
-                  checked: value == @primary_valence, required: @mode != :edit)
-            span(class: "inline-flex items-center rounded-full border border-gray-300 dark:border-gray-600 " \
-                        "px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 " \
-                        "peer-focus-visible:ring-2 peer-focus-visible:ring-primary #{PILL_CHECKED[value]}") { text }
-          end
-        end
-      end
-    end
-  end
-
   def content_fields
     unless @content_editable
       p(class: "text-xs text-amber-700 dark:text-amber-400") do
@@ -204,7 +167,38 @@ class Views::Evidence::ModalForm < Views::Base
     custom_label_field
     title_field
     content_field
+    primary_valence_field
     external_fields
+  end
+
+  # The recorder's judgment of what this evidence says about the primary
+  # cell's behaviour — directly after the description so the hierarchy
+  # reads "what happened, then what it says". Deliberately no default —
+  # the choice is forced on every NEW link (HTML required + server /
+  # aggregate backstops). In edit mode a pre-valence (nil) link is never
+  # force-reclassified: it stays optional and blank until the editor
+  # deliberately picks one. Stays enabled for non-author link editors —
+  # valence is linkage metadata, not content.
+  def primary_valence_field
+    div do
+      label(for: "evm-valence", class: LABEL) { "What does this say about the behaviour?" }
+      valence_select(name: "evidence[link_valences][#{primary_token}]", current: @primary_valence,
+                     required: @mode != :edit, id: "evm-valence", css: INPUT)
+    end
+  end
+
+  # The one valence dropdown, shared by the primary field, the "also
+  # applies to" picker, and each link row. A blank placeholder renders
+  # only while nothing is chosen (a classified link can be re-judged but
+  # never cleared back to unspecified).
+  def valence_select(name:, current:, required:, css:, id: nil, data: {})
+    select(id: id, name: name, required: required, class: css, data: data,
+           aria: { label: "What does this say about the behaviour?" }) do
+      option(value: "", selected: current.nil?) { "Judgment…" } if current.nil?
+      Views::Evidence::Valence::OPTIONS.each do |text, value|
+        option(value: value, selected: value == current) { text }
+      end
+    end
   end
 
   def type_field
@@ -284,10 +278,16 @@ class Views::Evidence::ModalForm < Views::Base
       end
       # Levels are populated by the controller from the chosen capability's valid
       # cells, with already-linked levels disabled (see #capabilityChanged).
-      div(class: "w-44") do
+      div(class: "w-32") do
         select(class: INPUT, data: { evidence_modal_target: "linkLevel" }, aria: { label: "Level to also link" }) do
           option(value: "") { "Level…" }
         end
+      end
+      # The judgment is chosen AT add time — same dropdown as the primary;
+      # + Add refuses until all three are picked (see evidence-modal#addLink).
+      div(class: "w-40") do
+        valence_select(name: nil, current: nil, required: false, css: INPUT,
+                       data: { evidence_modal_target: "linkValence" })
       end
       button(type: "button", data: { action: "evidence-modal#addLink" }, class: SECONDARY_BTN) { "+ Add" }
     end
@@ -312,13 +312,8 @@ class Views::Evidence::ModalForm < Views::Base
   # placeholder and stays optional — existing links are never
   # force-reclassified by an edit.
   def link_row_valence_select(token, current)
-    select(name: "evidence[link_valences][#{token}]", class: "mt-1 #{INPUT} text-xs w-auto",
-           aria: { label: "What does this say about the behaviour?" }) do
-      option(value: "", selected: current.nil?) { "Judgment…" } if current.nil?
-      Views::Evidence::Valence::OPTIONS.each do |text, value|
-        option(value: value, selected: value == current) { text }
-      end
-    end
+    valence_select(name: "evidence[link_valences][#{token}]", current: current,
+                   required: false, css: "mt-1 #{INPUT} text-xs w-auto")
   end
 
   # Per-cell expectation map (valid cells + their expectation) for the Stimulus
