@@ -407,11 +407,19 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       ev1_id      = SecureRandom.uuid_v7
       ev2_id      = SecureRandom.uuid_v7
 
+      # ev1 carries a valence + a subsequent reclassification; ev2 stays the
+      # historical pre-valence shape — the round trip must reproduce both
+      # (this is what the "no CODE_VERSION bump needed" claim rests on).
       append_and_project(PersonDevelopment::Events::EvidenceRecorded,
         evidence_id: ev1_id, capability_stable_id: cap_sid, level_ordinal: 2,
         source: "self", evidence_type: "project_outcome", custom_type_label: nil,
         title: "Initial", content: "first", external_reference: nil,
-        author_id: @author.id)
+        author_id: @author.id, valence: "demonstrated")
+
+      append_and_project(PersonDevelopment::Events::EvidenceLinkRevalenced,
+        evidence_id: ev1_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        previous_valence: "demonstrated", valence: "growth_area",
+        changed_by_id: @author.id)
 
       append_and_project(PersonDevelopment::Events::EvidenceRecorded,
         evidence_id: ev2_id, capability_stable_id: cap_sid, level_ordinal: 3,
