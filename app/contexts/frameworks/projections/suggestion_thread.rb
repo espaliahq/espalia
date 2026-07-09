@@ -11,6 +11,8 @@
 # produce feed entries: an open thread must not show stale bodies.
 #
 class Frameworks::Projections::SuggestionThread
+  include Frameworks::Projections::BroadcastsFrameworkActivity
+
   PROJECTION_NAME = "frameworks/suggestion_thread"
   CODE_VERSION = 1
 
@@ -100,22 +102,13 @@ class Frameworks::Projections::SuggestionThread
     ActsAsTenant.with_tenant(tenant, &block)
   end
 
-  # Mirrors PublishedState#broadcast_framework_activity — all three comment
-  # events carry framework_id in their payload, so no fallback lookup is
-  # needed.
+  # All three comment events carry framework_id in their payload — no
+  # fallback lookup needed (unlike PublishedState's resolved-suggestion
+  # events). Edits/deletes broadcast too even though only posts produce
+  # feed entries: an open thread must not show stale bodies.
   #
   # @param event [RubyEventStore::Event]
   def broadcast_framework_activity(event)
-    return if Projections::Replayer.replay_mode?
-
-    Turbo::StreamsChannel.broadcast_replace_to(
-      "framework_activity", event.data[:framework_id],
-      target: "framework-activity-sync-signal",
-      html: "<div id=\"framework-activity-sync-signal\" class=\"hidden\" " \
-            "data-context-pane-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
-    )
-  rescue => e
-    # A broadcast failure must never break the projection's write path.
-    Rails.logger.warn("[SuggestionThread] Activity broadcast failed: #{e.message}")
+    broadcast_framework_activity_signal(event.data[:framework_id])
   end
 end

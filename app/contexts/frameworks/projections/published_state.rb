@@ -21,6 +21,8 @@
 # See docs/architecture/framework-aggregate.md for the full classification.
 #
 class Frameworks::Projections::PublishedState
+  include Frameworks::Projections::BroadcastsFrameworkActivity
+
   # Stable identifier used as the natural key in `projection_versions.name`.
   # See `docs/guidelines/event-sourcing.md` for the projection contract.
   PROJECTION_NAME = "frameworks/published_state"
@@ -786,24 +788,9 @@ class Frameworks::Projections::PublishedState
   #
   # @param event [RubyEventStore::Event]
   def broadcast_framework_activity(event)
-    return if Projections::Replayer.replay_mode?
     return unless Frameworks::ActivityFeedQuery::KINDS.key?(event.class)
 
-    framework_id = framework_id_for_broadcast(event)
-    return unless framework_id
-
-    Turbo::StreamsChannel.broadcast_replace_to(
-      "framework_activity", framework_id,
-      target: "framework-activity-sync-signal", html: activity_signal_html
-    )
-  rescue => e
-    # A broadcast failure must never break the projection's write path.
-    Rails.logger.warn("[PublishedState] Activity broadcast failed: #{e.message}")
-  end
-
-  def activity_signal_html
-    "<div id=\"framework-activity-sync-signal\" class=\"hidden\" " \
-      "data-context-pane-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+    broadcast_framework_activity_signal(framework_id_for_broadcast(event))
   end
 
   # Resolved-suggestion events (approve/reject/withdraw/amend) carry no
