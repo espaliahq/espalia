@@ -41,12 +41,17 @@ class Assessments::EvidenceController < ApplicationController
 
     attrs = params.expect(evidence: [
       :capability_stable_id, :level_ordinal, :evidence_type, :custom_type_label,
-      :title, :content, external_reference: [ :system, :url, :external_id ],
+      :title, :content, :valence, external_reference: [ :system, :url, :external_id ],
       additional_links: []
     ])
 
     level_ordinal = Integer(attrs[:level_ordinal], exception: false)
     unless level_ordinal && valid_evidence_cell?(attrs[:capability_stable_id], level_ordinal)
+      head :unprocessable_content
+      return
+    end
+
+    unless EvidenceLink::VALENCES.include?(attrs[:valence])
       head :unprocessable_content
       return
     end
@@ -81,6 +86,7 @@ class Assessments::EvidenceController < ApplicationController
       title: attrs[:title].presence,
       content: attrs[:content].to_s,
       author_id: current_person.id,
+      valence: attrs[:valence],
       external_reference: attrs[:external_reference]&.to_h,
       additional_links: additional_links
     )
@@ -151,11 +157,16 @@ class Assessments::EvidenceController < ApplicationController
     item = EvidenceItem.find(params.expect(:id))
     authorize item, :add_link?, policy_class: EvidencePolicy
 
-    attrs = params.expect(evidence: [ :capability_stable_id, :level_ordinal,
+    attrs = params.expect(evidence: [ :capability_stable_id, :level_ordinal, :valence,
                                       :from_capability_stable_id, :from_level_ordinal, :rationale ])
 
     target_level = Integer(attrs[:level_ordinal], exception: false)
     unless target_level && valid_evidence_cell?(attrs[:capability_stable_id], target_level)
+      head :unprocessable_content
+      return
+    end
+
+    unless EvidenceLink::VALENCES.include?(attrs[:valence])
       head :unprocessable_content
       return
     end
@@ -165,6 +176,7 @@ class Assessments::EvidenceController < ApplicationController
       capability_stable_id: attrs[:capability_stable_id],
       level_ordinal: target_level,
       linked_by_id: current_person.id,
+      valence: attrs[:valence],
       rationale: attrs[:rationale].to_s.strip.presence
     )
 
@@ -387,16 +399,25 @@ class Assessments::EvidenceController < ApplicationController
     scope = EvidenceItem.active.where(id: item_ids).includes(:author)
     scope = scope.where(author_id: current_person.id) unless viewer_sees_all_evidence?
     items = scope.order(:recorded_at).to_a
-    counts = EvidenceLink.active.where(evidence_id: items.map(&:id)).group(:evidence_id).count
-    items.each { |item| item.active_link_count = counts[item.id] }
+    all_links = EvidenceLink.active.where(evidence_id: items.map(&:id))
+      .pluck(:evidence_id, :capability_stable_id, :level_ordinal, :valence)
+    counts = all_links.group_by(&:first).transform_values(&:size)
+    valences = all_links.group_by(&:first).transform_values do |rows|
+      rows.to_h { |_, cap, level, valence| [ [ cap, level ], valence ] }
+    end
+    items.each do |item|
+      item.active_link_count = counts[item.id]
+      item.link_valences = valences[item.id]
+    end
     items
   end
 
-  # Parses the optional `additional_links[]` array of "capStableId|level"
-  # tokens from the create form into the
-  # { capability_stable_id:, level_ordinal: } shape the command handler
-  # expects. Returns `:invalid` if any token is malformed or does not name a
-  # real cell in this assessment's matrix.
+  # Parses the optional `additional_links[]` array of
+  # "capStableId|level|valence" tokens from the create form into the
+  # { capability_stable_id:, level_ordinal:, valence: } shape the command
+  # handler expects. Returns `:invalid` if any token is malformed, does not
+  # name a real cell in this assessment's matrix, or lacks a valid valence
+  # (required on every new link).
   #
   # `viewer_can_relink_others_evidence?` (used when re-rendering the evidence
   # list) and the visibility helpers come from {AssessmentVisibility}.
@@ -404,11 +425,12 @@ class Assessments::EvidenceController < ApplicationController
     return [] if raw.blank?
 
     Array(raw).reject(&:blank?).map do |token|
-      cap, level = token.to_s.split("|", 2)
+      cap, level, valence = token.to_s.split("|", 3)
       level = Integer(level, exception: false)
       return :invalid unless valid_evidence_cell?(cap, level)
+      return :invalid unless EvidenceLink::VALENCES.include?(valence)
 
-      { capability_stable_id: cap, level_ordinal: level }
+      { capability_stable_id: cap, level_ordinal: level, valence: valence }
     end
   end
 

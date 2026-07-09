@@ -47,9 +47,10 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "evidence_id"          => { "type" => "string" },
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" },
+            "valence"              => { "type" => "string", "enum" => EvidenceLink::VALENCES },
             "rationale"            => { "type" => "string" }
           },
-          "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal],
+          "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal valence],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -391,10 +392,22 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "custom_type_label"    => { "type" => "string" },
             "title"                => { "type" => "string" },
             "content"              => { "type" => "string" },
+            "valence"              => { "type" => "string", "enum" => EvidenceLink::VALENCES },
             "external_reference"   => external_reference_schema,
-            "additional_links"     => { "type" => "array" }
+            "additional_links"     => {
+              "type" => "array",
+              "items" => {
+                "type" => "object",
+                "properties" => {
+                  "capability_stable_id" => { "type" => "string" },
+                  "level_ordinal"        => { "type" => "integer" },
+                  "valence"              => { "type" => "string", "enum" => EvidenceLink::VALENCES }
+                },
+                "required" => %w[capability_stable_id level_ordinal valence]
+              }
+            }
           },
-          "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content],
+          "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content valence],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -473,11 +486,12 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "request_id"         => { "type" => "string" },
             "evidence_type"      => { "type" => "string", "enum" => %w[peer_feedback manager_feedback customer_feedback impact project_outcome code_review design_review incident_response presentation mentoring observation other] },
             "content"            => { "type" => "string" },
+            "valence"            => { "type" => "string", "enum" => EvidenceLink::VALENCES },
             "custom_type_label"  => { "type" => "string" },
             "title"              => { "type" => "string" },
             "external_reference" => external_reference_schema
           },
-          "required" => %w[request_id evidence_type content],
+          "required" => %w[request_id evidence_type content valence],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -496,6 +510,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "delegate_person_id" => { "type" => "string" }
           },
           "required" => %w[assignment_id delegate_person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_set_evidence_link_valence",
+        "description" => "Reclassify the valence of a feedback / evidence link (what the evidence says about the behaviour at that capability × level).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"        => { "type" => "string" },
+            "evidence_id"          => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "valence"              => { "type" => "string", "enum" => EvidenceLink::VALENCES }
+          },
+          "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal valence],
           "additionalProperties" => false
         },
         "annotations" => {

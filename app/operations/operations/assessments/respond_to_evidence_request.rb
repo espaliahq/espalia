@@ -13,6 +13,10 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   parameter :request_id,    String, required: true
   parameter :evidence_type, String, required: true, allowed: EvidenceItem::EVIDENCE_TYPES
   parameter :content,       String, required: true
+  # The responder's judgment of what their feedback says about the
+  # requested behaviour. Required; narrative metadata only, never a
+  # scoring input.
+  parameter :valence, String, required: true, allowed: EvidenceLink::VALENCES
   parameter :custom_type_label, String
   parameter :title, String
   parameter :external_reference, Hash, schema: ExternalReference.json_schema
@@ -41,6 +45,7 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
       title: params[:title].presence,
       content: params[:content].to_s,
       author_id: context.person.id,
+      valence: params[:valence],
       external_reference: params[:external_reference]
     )
     handler.respond_to_evidence_request(

@@ -68,11 +68,11 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       pd_handler.record_evidence(@person.id, @framework_id, SecureRandom.uuid_v7,
         capability_stable_id: @cap1_stable, level_ordinal: 1, source: "self",
         evidence_type: "project_outcome", content: "Cap1 evidence",
-        title: "Cap1 launch", author_id: @person.id)
+        title: "Cap1 launch", author_id: @person.id, valence: "demonstrated")
       pd_handler.record_evidence(@person.id, @framework_id, SecureRandom.uuid_v7,
         capability_stable_id: @cap2_stable, level_ordinal: 1, source: "self",
         evidence_type: "code_review", content: "Cap2 evidence",
-        title: "Cap2 review", author_id: @person.id)
+        title: "Cap2 review", author_id: @person.id, valence: "demonstrated")
 
       @assignment = PersonFrameworkAssignment.for_person(@person.id).first
     end
@@ -298,7 +298,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
             capability_stable_id: @cap1_stable, level_ordinal: 1,
             source: "self", evidence_type: "project_outcome",
             content: "Filler #{i}", title: "Filler #{i}",
-            author_id: @person.id
+            author_id: @person.id, valence: "demonstrated"
           )
         end
       end
@@ -361,7 +361,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
             capability_stable_id: @cap1_stable, level_ordinal: 1,
             source: "self", evidence_type: "project_outcome",
             content: "Filler #{i}", title: "Filler #{i}",
-            author_id: @person.id
+            author_id: @person.id, valence: "demonstrated"
           )
         end
       end

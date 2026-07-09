@@ -43,10 +43,12 @@ class EvidenceModalController < ApplicationController
     policy = EvidencePolicy.new(pundit_user, item)
     return head :forbidden unless policy.update? || policy.add_link?
 
+    valences = link_valences_for(item)
     render_modal(
       mode: :edit, assignment: assignment, evidence: item, content_editable: policy.update?,
       primary_cell: { capability_stable_id: item.capability_stable_id, level_ordinal: item.level_ordinal },
-      linked_coords: extra_link_coords(item)
+      primary_valence: valences[[ item.capability_stable_id, item.level_ordinal ]],
+      linked_coords: extra_link_coords(item, valences), link_valences: valences
     )
   end
 
@@ -60,7 +62,9 @@ class EvidenceModalController < ApplicationController
   end
 
   # @param linked_coords [Array<Array(String, Integer)>] extra (cap, level) pairs
-  def render_modal(mode:, assignment:, primary_cell:, content_editable:, evidence: nil, request: nil, linked_coords: [])
+  # @param link_valences [Hash{Array(String, Integer)=>String,nil}] current valence per active link
+  def render_modal(mode:, assignment:, primary_cell:, content_editable:, evidence: nil, request: nil,
+                   linked_coords: [], link_valences: {}, primary_valence: nil)
     options = Evidence::FrameworkCellOptions.new(framework_id: assignment.framework_id, role_id: assignment.role_id)
     expectation_map = options.expectation_map
     context = Evidence::CellContextResolver.context(
@@ -71,12 +75,14 @@ class EvidenceModalController < ApplicationController
     linked_cells = linked_coords.map do |capability_stable_id, level_ordinal|
       info = expectation_map["#{capability_stable_id}|#{level_ordinal}"] || {}
       { capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
-        capability_name: info[:capability_name], expectation: info[:expectation] }
+        capability_name: info[:capability_name], expectation: info[:expectation],
+        valence: link_valences[[ capability_stable_id, level_ordinal ]] }
     end
 
     render Views::Evidence::ModalForm.new(
       mode: mode, evidence: evidence, request: request, assignment_id: assignment.id,
       primary_cell: primary_cell, content_editable: content_editable, context_block: context,
+      primary_valence: primary_valence,
       link_options: options.link_options, level_options: options.level_options,
       linked_cells: linked_cells, expectation_map: expectation_map, return_to: params[:return_to]
     ), layout: false
@@ -87,8 +93,16 @@ class EvidenceModalController < ApplicationController
   end
 
   # Active link cells for an item, excluding its origin cell (the primary).
-  def extra_link_coords(item)
-    EvidenceLink.active.where(evidence_id: item.id).pluck(:capability_stable_id, :level_ordinal)
+  # Derived from the already-loaded valence map — no second links query.
+  def extra_link_coords(item, link_valences)
+    link_valences.keys
       .reject { |cap, level| cap == item.capability_stable_id && level == item.level_ordinal }
+  end
+
+  # Current valence per active link, keyed by (cap, level).
+  def link_valences_for(item)
+    EvidenceLink.active.where(evidence_id: item.id)
+      .pluck(:capability_stable_id, :level_ordinal, :valence)
+      .to_h { |cap, level, valence| [ [ cap, level ], valence ] }
   end
 end

@@ -1055,7 +1055,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         content: "Shipped X",
         author_id: @author_id,
         title: "Migration done",
-        external_reference: { system: "github", url: "https://github.com/x/y/pull/1" })
+        external_reference: { system: "github", url: "https://github.com/x/y/pull/1" }, valence: "demonstrated")
 
       event = @aggregate.unpublished_events.to_a.last
       assert_kind_of PersonDevelopment::Events::EvidenceRecorded, event
@@ -1075,7 +1075,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(RuntimeError) do
         bare.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
-          evidence_type: "project_outcome", content: "x", author_id: @author_id)
+          evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
       end
       assert_match /not yet assigned/, err.message
     end
@@ -1083,12 +1083,12 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     should "raise on duplicate evidence_id" do
       @aggregate.record_evidence(@evidence_id,
         capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
-        evidence_type: "project_outcome", content: "x", author_id: @author_id)
+        evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
 
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
-          evidence_type: "project_outcome", content: "y", author_id: @author_id)
+          evidence_type: "project_outcome", content: "y", author_id: @author_id, valence: "demonstrated")
       end
       assert_match /already exists/, err.message
     end
@@ -1097,7 +1097,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "stranger",
-          evidence_type: "project_outcome", content: "x", author_id: @author_id)
+          evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
       end
       assert_match /Invalid evidence source/, err.message
     end
@@ -1106,7 +1106,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
-          evidence_type: "garbage", content: "x", author_id: @author_id)
+          evidence_type: "garbage", content: "x", author_id: @author_id, valence: "demonstrated")
       end
       assert_match /Invalid evidence type/, err.message
     end
@@ -1115,7 +1115,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
-          evidence_type: "other", content: "x", author_id: @author_id)
+          evidence_type: "other", content: "x", author_id: @author_id, valence: "demonstrated")
       end
       assert_match /Custom type label required/, err.message
     end
@@ -1125,7 +1125,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
           evidence_type: "code_review", content: "x", author_id: @author_id,
-          custom_type_label: "Mislabeled")
+          custom_type_label: "Mislabeled", valence: "demonstrated")
       end
       assert_match /only allowed when evidence_type is 'other'/, err.message
     end
@@ -1134,7 +1134,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
-          evidence_type: "project_outcome", content: "   ", author_id: @author_id)
+          evidence_type: "project_outcome", content: "   ", author_id: @author_id, valence: "demonstrated")
       end
       assert_match /content cannot be blank/, err.message
     end
@@ -1143,7 +1143,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_nothing_raised do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "self",
-          evidence_type: "project_outcome", content: "x", author_id: @author_id)
+          evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
       end
     end
 
@@ -1156,8 +1156,71 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_nothing_raised do
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 3, source: "manager",
-          evidence_type: "code_review", content: "Late evidence", author_id: @author_id)
+          evidence_type: "code_review", content: "Late evidence", author_id: @author_id, valence: "demonstrated")
       end
+    end
+  end
+
+  context "#set_evidence_link_valence" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @evidence_id = SecureRandom.uuid_v7
+      @cap_sid = SecureRandom.uuid_v7
+      @author_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+        evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
+    end
+
+    should "apply EvidenceLinkRevalenced carrying previous and new valence" do
+      @aggregate.set_evidence_link_valence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3,
+        valence: "growth_area", changed_by_id: @author_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceLinkRevalenced, event
+      assert_equal @evidence_id, event.data[:evidence_id]
+      assert_equal @cap_sid, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+      assert_equal "demonstrated", event.data[:previous_valence]
+      assert_equal "growth_area", event.data[:valence]
+      assert_equal @author_id, event.data[:changed_by_id]
+    end
+
+    should "be a no-op when the link already carries that valence" do
+      before = @aggregate.unpublished_events.to_a.size
+      @aggregate.set_evidence_link_valence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3,
+        valence: "demonstrated", changed_by_id: @author_id)
+      assert_equal before, @aggregate.unpublished_events.to_a.size
+    end
+
+    should "raise for a coordinate the item is not linked to" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.set_evidence_link_valence(@evidence_id,
+          capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 3,
+          valence: "growth_area", changed_by_id: @author_id)
+      end
+      assert_match(/not linked to that coordinate/, err.message)
+    end
+
+    should "raise for an invalid valence" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.set_evidence_link_valence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3,
+          valence: "negative", changed_by_id: @author_id)
+      end
+      assert_match(/Invalid evidence valence/, err.message)
+    end
+
+    should "raise for withdrawn evidence" do
+      @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.set_evidence_link_valence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3,
+          valence: "growth_area", changed_by_id: @author_id)
+      end
+      assert_match(/withdrawn/, err.message)
     end
   end
 
@@ -1175,9 +1238,9 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
         evidence_type: "project_outcome", content: "x", author_id: @author_id,
         additional_links: [
-          { capability_stable_id: @cap_sid2, level_ordinal: 4 },
-          { capability_stable_id: @cap_sid, level_ordinal: 2 }
-        ])
+          { capability_stable_id: @cap_sid2, level_ordinal: 4, valence: "growth_area" },
+          { capability_stable_id: @cap_sid, level_ordinal: 2, valence: "demonstrated" }
+        ], valence: "demonstrated")
 
       events = @aggregate.unpublished_events.to_a
       recorded = events.select { |e| e.is_a?(PersonDevelopment::Events::EvidenceRecorded) }
@@ -1193,7 +1256,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         @aggregate.record_evidence(@evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
           evidence_type: "project_outcome", content: "x", author_id: @author_id,
-          additional_links: [ { capability_stable_id: @cap_sid, level_ordinal: 3 } ])
+          additional_links: [ { capability_stable_id: @cap_sid, level_ordinal: 3, valence: "demonstrated" } ], valence: "demonstrated")
       end
       assert_match /already linked to that coordinate/, err.message
     end
@@ -1208,13 +1271,13 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       @author_id = SecureRandom.uuid_v7
       @aggregate.record_evidence(@evidence_id,
         capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
-        evidence_type: "project_outcome", content: "x", author_id: @author_id)
+        evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
     end
 
     should "apply EvidenceLinkAdded with the new coordinate" do
       @aggregate.add_evidence_link(@evidence_id,
         capability_stable_id: @new_cap_sid, level_ordinal: 4,
-        linked_by_id: @author_id, rationale: "Also applies")
+        linked_by_id: @author_id, rationale: "Also applies", valence: "demonstrated")
 
       event = @aggregate.unpublished_events.to_a.last
       assert_kind_of PersonDevelopment::Events::EvidenceLinkAdded, event
@@ -1222,12 +1285,21 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @new_cap_sid, event.data[:capability_stable_id]
       assert_equal 4, event.data[:level_ordinal]
       assert_equal "Also applies", event.data[:rationale]
+      assert_equal "demonstrated", event.data[:valence]
+    end
+
+    should "raise when adding a link without a valid valence" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.add_evidence_link(@evidence_id,
+          capability_stable_id: @new_cap_sid, level_ordinal: 4, linked_by_id: @author_id, valence: "positive")
+      end
+      assert_match(/Invalid evidence valence/, err.message)
     end
 
     should "raise when adding a duplicate link" do
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.add_evidence_link(@evidence_id,
-          capability_stable_id: @cap_sid, level_ordinal: 3, linked_by_id: @author_id)
+          capability_stable_id: @cap_sid, level_ordinal: 3, linked_by_id: @author_id, valence: "demonstrated")
       end
       assert_match /already linked to that coordinate/, err.message
     end
@@ -1236,14 +1308,14 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.add_evidence_link(@evidence_id,
-          capability_stable_id: @new_cap_sid, level_ordinal: 4, linked_by_id: @author_id)
+          capability_stable_id: @new_cap_sid, level_ordinal: 4, linked_by_id: @author_id, valence: "demonstrated")
       end
       assert_match /withdrawn evidence/, err.message
     end
 
     should "apply EvidenceLinkRemoved when the item has more than one link" do
       @aggregate.add_evidence_link(@evidence_id,
-        capability_stable_id: @new_cap_sid, level_ordinal: 4, linked_by_id: @author_id)
+        capability_stable_id: @new_cap_sid, level_ordinal: 4, linked_by_id: @author_id, valence: "demonstrated")
       @aggregate.remove_evidence_link(@evidence_id,
         capability_stable_id: @cap_sid, level_ordinal: 3, removed_by_id: @author_id, reason: "Mislinked")
 
@@ -1304,11 +1376,11 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       # (duplicate) while the old coordinate can be re-added freely.
       assert_raises(PersonDevelopment::Aggregate::CommandError) do
         replayed.add_evidence_link(evidence_id,
-          capability_stable_id: cap_b, level_ordinal: 4, linked_by_id: author_id)
+          capability_stable_id: cap_b, level_ordinal: 4, linked_by_id: author_id, valence: "demonstrated")
       end
       assert_nothing_raised do
         replayed.add_evidence_link(evidence_id,
-          capability_stable_id: cap_a, level_ordinal: 3, linked_by_id: author_id)
+          capability_stable_id: cap_a, level_ordinal: 3, linked_by_id: author_id, valence: "demonstrated")
       end
     end
   end
@@ -1321,7 +1393,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       @author_id = SecureRandom.uuid_v7
       @aggregate.record_evidence(@evidence_id,
         capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
-        evidence_type: "project_outcome", content: "x", author_id: @author_id)
+        evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
     end
 
     should "apply EvidenceWithdrawn with reason" do
@@ -1359,7 +1431,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       @aggregate.record_evidence(@evidence_id,
         capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
         evidence_type: "project_outcome", content: "Original",
-        title: "Old title", author_id: @author_id)
+        title: "Old title", author_id: @author_id, valence: "demonstrated")
     end
 
     should "apply EvidenceUpdated with the new field values" do

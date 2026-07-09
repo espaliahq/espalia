@@ -21,8 +21,19 @@
 # Item-level withdrawal (on {EvidenceItem}) hides ALL of an item's links;
 # `link_status: "removed"` here hides only that one cell.
 #
+# `valence` is the linker's judgment of what the evidence says about the
+# behaviour at this cell — a 4-point ordered scale, required on every new
+# link, nil on links created before valence existed (immutable history;
+# never backfilled). It is narrative metadata for the rater and the
+# alignment conversation — NOT a scoring input (ADR-10 still holds).
+#
 class EvidenceLink < ApplicationRecord
   LINK_STATUSES = %w[active removed].freeze
+
+  # Ordered strongest-positive → strongest-negative. Frozen vocabulary —
+  # these strings live in immutable event payloads; UI labels are free to
+  # change (see Views::Evidence::ValenceBadge), these values are not.
+  VALENCES = %w[strongly_demonstrated demonstrated growth_area significant_growth_area].freeze
 
   acts_as_tenant :tenant
 
@@ -37,6 +48,7 @@ class EvidenceLink < ApplicationRecord
   validates :level_ordinal, presence: true,
             numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validates :link_status, presence: true, inclusion: { in: LINK_STATUSES }
+  validates :valence, inclusion: { in: VALENCES }, allow_nil: true
   validates :linked_at, presence: true
 
   scope :active, -> { where(link_status: "active") }

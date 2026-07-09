@@ -38,7 +38,7 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       handler.record_evidence(@assessee.id, @framework_id, @evidence_id,
         capability_stable_id: @cap_sid, level_ordinal: 2, source: "self",
         evidence_type: "project_outcome", content: "Shipped X.", author_id: @assessee.id,
-        title: "Launch")
+        title: "Launch", valence: "demonstrated")
     end
   end
 
@@ -151,7 +151,7 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
           @assessee.id, @framework_id, @peer_evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 1, source: "peer",
           evidence_type: "peer_feedback", content: "Strong collaborator",
-          author_id: @peer.id
+          author_id: @peer.id, valence: "demonstrated"
         )
       end
       @entries = run_query(viewer: @peer, sees_all: false, context: :manager,
@@ -228,7 +228,7 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
         handler = PersonDevelopment::CommandHandler.new
         handler.add_evidence_link(@assessee.id, @framework_id, @evidence_id,
           capability_stable_id: @other_cap, level_ordinal: 3,
-          linked_by_id: @assessee.id, rationale: "Also applies here")
+          linked_by_id: @assessee.id, rationale: "Also applies here", valence: "demonstrated")
         handler.remove_evidence_link(@assessee.id, @framework_id, @evidence_id,
           capability_stable_id: @cap_sid, level_ordinal: 2,
           removed_by_id: @assessee.id, reason: "Mislinked")
@@ -257,12 +257,52 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "Assessee", unlinked.payload[:actor_name]
     end
 
+    should "carry the link's valence on the evidence_linked payload" do
+      linked = @entries.find { |e| e.kind == "evidence_linked" }
+      assert_equal "demonstrated", linked.payload[:valence]
+    end
+
     should "hide link changes a peer did not perform" do
       entries = run_query(viewer: @peer, sees_all: false, context: :self,
         alignment_started: false)
       kinds = entries.map(&:kind)
       refute_includes kinds, "evidence_linked"
       refute_includes kinds, "evidence_unlinked"
+    end
+  end
+
+  context "evidence link revalence" do
+    setup do
+      @other_cap = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.add_evidence_link(@assessee.id, @framework_id, @evidence_id,
+          capability_stable_id: @other_cap, level_ordinal: 3,
+          linked_by_id: @assessee.id, valence: "demonstrated")
+        handler.set_evidence_link_valence(@assessee.id, @framework_id, @evidence_id,
+          capability_stable_id: @other_cap, level_ordinal: 3,
+          valence: "growth_area", changed_by_id: @assessee.id)
+      end
+      @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
+        alignment_started: false)
+    end
+
+    should "emit an evidence_revalenced entry anchored to the cell, grouped under evidence" do
+      entry = @entries.find { |e| e.kind == "evidence_revalenced" }
+      assert_not_nil entry
+      assert_equal @other_cap, entry.capability_stable_id
+      assert_equal 3, entry.level_ordinal
+      assert_equal "growth_area", entry.payload[:valence]
+      assert_equal "demonstrated", entry.payload[:previous_valence]
+      assert_equal "Launch", entry.payload[:evidence_title]
+      assert_equal "Assessee", entry.payload[:actor_name]
+      assert_equal "evidence", Views::Assessments::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+
+    should "hide a revalence a peer did not perform" do
+      entries = run_query(viewer: @peer, sees_all: false, context: :self,
+        alignment_started: false)
+      refute_includes entries.map(&:kind), "evidence_revalenced"
     end
   end
 

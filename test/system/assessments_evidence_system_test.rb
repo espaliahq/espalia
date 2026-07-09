@@ -66,7 +66,7 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
           capability_stable_id: @cap_stable, level_ordinal: 1,
           source: "self", evidence_type: "project_outcome",
           title: "Original title", content: "Original content.",
-          author_id: @person.id
+          author_id: @person.id, valence: "demonstrated"
         )
       end
     end
@@ -130,7 +130,7 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
           @person.id, @framework_id, other_evidence_id,
           capability_stable_id: @cap_stable, level_ordinal: 1,
           source: "peer", evidence_type: "peer_feedback",
-          content: "Solid collaborator.", author_id: peer.id
+          content: "Solid collaborator.", author_id: peer.id, valence: "demonstrated"
         )
 
         visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
@@ -211,7 +211,7 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
           capability_stable_id: @cap_stable, level_ordinal: 1,
           source: "self", evidence_type: "project_outcome",
           title: "Q1 launch", content: "Shipped Q1.",
-          author_id: @person.id
+          author_id: @person.id, valence: "demonstrated"
         )
       end
 

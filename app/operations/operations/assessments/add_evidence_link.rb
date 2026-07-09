@@ -18,6 +18,10 @@ class Operations::Assessments::AddEvidenceLink < Operations::Base
   parameter :evidence_id,          String, required: true
   parameter :capability_stable_id, String, required: true
   parameter :level_ordinal,        Integer, required: true
+  # The linker's judgment of what the evidence says about the behaviour at
+  # this cell. Required on every new link; narrative metadata only, never
+  # a scoring input.
+  parameter :valence, String, required: true, allowed: EvidenceLink::VALENCES
   parameter :rationale, String
 
   def policy_check
@@ -37,6 +41,7 @@ class Operations::Assessments::AddEvidenceLink < Operations::Base
       capability_stable_id: params[:capability_stable_id],
       level_ordinal: params[:level_ordinal],
       linked_by_id: context.person.id,
+      valence: params[:valence],
       rationale: params[:rationale].presence
     )
 
@@ -85,7 +90,8 @@ class Operations::Assessments::AddEvidenceLink < Operations::Base
 
   def active_links_for(evidence_id)
     EvidenceLink.active.where(evidence_id: evidence_id).order(:linked_at).map do |link|
-      { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal }
+      { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal,
+        valence: link.valence }
     end
   end
 end

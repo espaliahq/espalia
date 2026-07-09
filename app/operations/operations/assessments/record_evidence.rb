@@ -27,12 +27,26 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   parameter :custom_type_label, String   # required when evidence_type == "other"
   parameter :title, String
   parameter :content, String, required: true
+  # The origin link's valence — the recorder's judgment of what the
+  # evidence says about the behaviour at that cell. Required on every new
+  # link; narrative metadata only, never a scoring input.
+  parameter :valence, String, required: true, allowed: EvidenceLink::VALENCES
   parameter :external_reference, Hash, schema: ExternalReference.json_schema
-  # Optional extra cells this evidence also demonstrates. Each entry:
-  # { capability_stable_id:, level_ordinal: }. The first link is the
-  # required capability_stable_id/level_ordinal above; these are applied
-  # atomically as additional links.
-  parameter :additional_links, Array
+  # Optional extra cells this evidence also demonstrates. The first link is
+  # the required capability_stable_id/level_ordinal/valence above; these
+  # are applied atomically as additional links, each with its own valence.
+  parameter :additional_links, Array, schema: {
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        capability_stable_id: { type: "string" },
+        level_ordinal: { type: "integer" },
+        valence: { type: "string", enum: EvidenceLink::VALENCES }
+      },
+      required: %w[capability_stable_id level_ordinal valence]
+    }
+  }
 
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
@@ -45,8 +59,8 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   #   recorded_at, links }` — the durable identifying fields plus the
   #   resolved `source` so the LLM can confirm how the system
   #   categorised the caller's relationship to the assessee, and `links`
-  #   (every active `{ capability_stable_id, level_ordinal }` the item is
-  #   attached to).
+  #   (every active `{ capability_stable_id, level_ordinal, valence }` the
+  #   item is attached to).
   def perform
     validate_evidence_type_label!
     validate_external_reference!
@@ -67,6 +81,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       title: params[:title].presence,
       content: params[:content].to_s,
       author_id: context.person.id,
+      valence: params[:valence],
       external_reference: params[:external_reference],
       additional_links: additional_links
     )
@@ -82,7 +97,8 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       source: item.source,
       recorded_at: item.recorded_at.iso8601,
       links: EvidenceLink.active.where(evidence_id: item.id).order(:linked_at).map do |link|
-        { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal }
+        { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal,
+          valence: link.valence }
       end
     }
   rescue PersonDevelopment::Aggregate::CommandError => e
@@ -96,8 +112,9 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   end
 
   # Coerces + validates the optional additional_links param into the
-  # { capability_stable_id:, level_ordinal: } shape the command handler
-  # expects, validating each level_ordinal against the assignment's role.
+  # { capability_stable_id:, level_ordinal:, valence: } shape the command
+  # handler expects, validating each level_ordinal against the
+  # assignment's role and each valence against the allowed set.
   def normalize_additional_links!
     raw = params[:additional_links]
     return [] if raw.blank?
@@ -106,14 +123,19 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       entry = entry.to_h if entry.respond_to?(:to_h)
       cap = entry["capability_stable_id"] || entry[:capability_stable_id]
       level = entry["level_ordinal"] || entry[:level_ordinal]
+      valence = entry["valence"] || entry[:valence]
       if cap.blank? || level.blank?
         raise Operations::Base::ParameterError,
           "each additional_links entry needs capability_stable_id and level_ordinal"
       end
+      unless EvidenceLink::VALENCES.include?(valence)
+        raise Operations::Base::ParameterError,
+          "each additional_links entry needs a valence (one of: #{EvidenceLink::VALENCES.join(', ')})"
+      end
       level = Integer(level, exception: false)
       validate_level_ordinal!(level)
       validate_capability_in_framework!(cap)
-      { capability_stable_id: cap, level_ordinal: level }
+      { capability_stable_id: cap, level_ordinal: level, valence: valence }
     end
   end
 

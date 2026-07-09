@@ -21,6 +21,10 @@
 #   @option data [Integer] :level_ordinal the level being evidenced
 #   @option data [String] :linked_by_id UUID of the Person adding the link
 #   @option data [String, nil] :rationale optional explanation of the link
+#   @option data [String] :valence the linker's judgment of what the
+#     evidence says about the behaviour at this cell — one of
+#     EvidenceLink::VALENCES. Required on new events; absent on events
+#     published before valence existed (consumers must tolerate nil).
 #
 class PersonDevelopment::Events::EvidenceLinkAdded < RubyEventStore::Event
 end

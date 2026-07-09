@@ -21,7 +21,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations", "levels"]
+  static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations", "levels", "valences"]
   static values = { url: { type: String, default: "/evidence_modal" } }
 
   // PAGE: point the lazy frame at the render endpoint for this trigger.
@@ -53,6 +53,9 @@ export default class extends BaseController {
   }
 
   // IN-FRAME: add an "also applies to" cell as a row with its expectation.
+  // The staged row carries a REQUIRED valence select, so a new link can't
+  // be submitted without one — but staging the row itself stays a plain
+  // capability + level pick.
   addLink() {
     if (!this.hasLinkRowsTarget || !this.hasLinkCapabilityTarget || !this.hasLinkLevelTarget) return
     const cap = this.linkCapabilityTarget.value
@@ -137,12 +140,38 @@ export default class extends BaseController {
       row.appendChild(exp)
     }
 
+    row.appendChild(this.#valenceSelect(token))
+
     const hidden = document.createElement("input")
     hidden.type = "hidden"
     hidden.name = "evidence[desired_links][]"
     hidden.value = token
     row.appendChild(hidden)
     return row
+  }
+
+  // A NEW link's valence is mandatory: the staged row's select is required
+  // with a blank placeholder, so the form can't submit until it's chosen.
+  // Options come from the embedded JSON so labels stay server-owned.
+  #valenceSelect(token) {
+    const select = document.createElement("select")
+    select.name = `evidence[link_valences][${token}]`
+    select.required = true
+    select.setAttribute("aria-label", "Evidence valence")
+    select.className = "mt-1 w-auto rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " +
+      "text-gray-900 dark:text-gray-100 text-xs focus-visible:ring-primary focus-visible:border-primary"
+    select.add(new Option("Valence…", ""))
+    this.#valenceOptions().forEach(([label, value]) => select.add(new Option(label, value)))
+    return select
+  }
+
+  #valenceOptions() {
+    if (!this.hasValencesTarget) return []
+    try {
+      return JSON.parse(this.valencesTarget.textContent)
+    } catch {
+      return []
+    }
   }
 
   #expectations() {

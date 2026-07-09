@@ -8,6 +8,7 @@
 # optional request_id); the server diffs and emits the minimal commands.
 class Views::Evidence::ModalForm < Views::Base
   include Phlex::Rails::Helpers::FormWith
+  include Views::Evidence::Valence
 
   TYPE_OPTIONS = [
     [ "Peer feedback", "peer_feedback" ], [ "Manager feedback", "manager_feedback" ],
@@ -33,7 +34,7 @@ class Views::Evidence::ModalForm < Views::Base
 
   def initialize(mode:, assignment_id:, primary_cell:, content_editable:, context_block:,
                  link_options: [], level_options: [], linked_cells: [], expectation_map: {},
-                 evidence: nil, request: nil, return_to: nil)
+                 evidence: nil, request: nil, return_to: nil, primary_valence: nil)
     @mode = mode.to_sym
     @assignment_id = assignment_id
     @primary_cell = primary_cell
@@ -46,6 +47,7 @@ class Views::Evidence::ModalForm < Views::Base
     @evidence = evidence
     @request = request
     @return_to = return_to
+    @primary_valence = primary_valence
   end
 
   def view_template
@@ -64,6 +66,7 @@ class Views::Evidence::ModalForm < Views::Base
           links_section
           expectation_data
           level_data
+          valence_data
           footer
         end
       end
@@ -164,7 +167,38 @@ class Views::Evidence::ModalForm < Views::Base
     custom_label_field
     title_field
     content_field
+    primary_valence_field
     external_fields
+  end
+
+  # The recorder's judgment of what this evidence says about the primary
+  # cell's behaviour — directly after the description so the hierarchy
+  # reads "what happened, then what it says". Deliberately no default —
+  # the choice is forced on every NEW link (HTML required + server /
+  # aggregate backstops). In edit mode a pre-valence (nil) link is never
+  # force-reclassified: it stays optional and blank until the editor
+  # deliberately picks one. Stays enabled for non-author link editors —
+  # valence is linkage metadata, not content.
+  def primary_valence_field
+    div do
+      label(for: "evm-valence", class: LABEL) { "What does this say about the behaviour?" }
+      valence_select(name: "evidence[link_valences][#{primary_token}]", current: @primary_valence,
+                     required: @mode != :edit, id: "evm-valence", css: INPUT)
+    end
+  end
+
+  # The one valence dropdown, shared by the primary field and each link
+  # row. A blank placeholder renders only while nothing is chosen (a
+  # classified link can be re-classified but never cleared back to
+  # unspecified).
+  def valence_select(name:, current:, required:, css:, id: nil, data: {})
+    select(id: id, name: name, required: required, class: css, data: data,
+           aria: { label: "Evidence valence" }) do
+      option(value: "", selected: current.nil?) { "Valence…" } if current.nil?
+      Views::Evidence::Valence::OPTIONS.each do |text, value|
+        option(value: value, selected: value == current) { text }
+      end
+    end
   end
 
   def type_field
@@ -249,11 +283,14 @@ class Views::Evidence::ModalForm < Views::Base
           option(value: "") { "Level…" }
         end
       end
+      # The staged row carries the (required) valence dropdown — the picker
+      # stays a plain capability + level pick.
       button(type: "button", data: { action: "evidence-modal#addLink" }, class: SECONDARY_BTN) { "+ Add" }
     end
   end
 
   def link_row(cell)
+    token = "#{cell[:capability_stable_id]}|#{cell[:level_ordinal]}"
     div(class: "rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm", data: { link_row: "" }) do
       div(class: "flex items-start justify-between gap-2") do
         span(class: "font-medium text-gray-900 dark:text-white") { "#{cell[:capability_name] || "Capability"} · L#{cell[:level_ordinal]}" }
@@ -261,8 +298,19 @@ class Views::Evidence::ModalForm < Views::Base
                class: "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer") { "×" }
       end
       p(class: "mt-0.5 text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
-      input(type: "hidden", name: "evidence[desired_links][]", value: "#{cell[:capability_stable_id]}|#{cell[:level_ordinal]}")
+      link_row_valence_select(token, cell[:valence])
+      input(type: "hidden", name: "evidence[desired_links][]", value: token)
     end
+  end
+
+  # Per-link valence. A classified link can be re-classified but never
+  # cleared (no blank option); a pre-valence (nil) link keeps a blank
+  # "Valence…" placeholder and stays optional — existing links are never
+  # force-reclassified by an edit. (JS-staged rows render their own
+  # REQUIRED copy of this select — see evidence_modal_controller.js.)
+  def link_row_valence_select(token, current)
+    valence_select(name: "evidence[link_valences][#{token}]", current: current,
+                   required: false, css: "mt-1 #{INPUT} text-xs w-auto")
   end
 
   # Per-cell expectation map (valid cells + their expectation) for the Stimulus
@@ -276,6 +324,12 @@ class Views::Evidence::ModalForm < Views::Base
   def level_data
     json = JSON.generate(@level_options).gsub("</", '<\/')
     script(type: "application/json", data: { evidence_modal_target: "levels" }) { raw(safe(json)) }
+  end
+
+  # [label, value] valence options for rows the Stimulus controller creates.
+  def valence_data
+    json = JSON.generate(Views::Evidence::Valence::OPTIONS).gsub("</", '<\/')
+    script(type: "application/json", data: { evidence_modal_target: "valences" }) { raw(safe(json)) }
   end
 
   def footer

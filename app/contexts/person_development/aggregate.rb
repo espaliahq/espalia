@@ -28,6 +28,7 @@ class PersonDevelopment::Aggregate
   FREQUENCIES = %w[none some occasional consistent].freeze
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
+  EVIDENCE_VALENCES = EvidenceLink::VALENCES
   EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon manual].freeze
   EVIDENCE_REQUEST_NUDGE_GAP = EvidenceRequest::NUDGE_GAP
 
@@ -45,7 +46,7 @@ class PersonDevelopment::Aggregate
     @self_ratings = {}    # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     @aligned_ratings = {} # [stable_id, level_ordinal] => frequency
-    @evidence = {}       # evidence_id => { links: Set[[capability_stable_id, level_ordinal], ...], status: }
+    @evidence = {}       # evidence_id => { links: { [capability_stable_id, level_ordinal] => valence, ... }, status: }
     @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
@@ -649,18 +650,23 @@ class PersonDevelopment::Aggregate
   # @param custom_type_label [String, nil] free text, only when evidence_type == "other"
   # @param title [String, nil] optional one-line summary
   # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
+  # @param valence [String] the origin link's valence — one of
+  #   EVIDENCE_VALENCES. Required: every NEW link carries the linker's
+  #   judgment (historical links stay nil forever; that's write-time law,
+  #   not a data invariant).
   # @param additional_links [Array<Hash>] extra links, each
-  #   { capability_stable_id:, level_ordinal: }, applied as EvidenceLinkAdded
-  #   in the same aggregate transaction. Duplicates (of the first link or
-  #   each other) are rejected.
+  #   { capability_stable_id:, level_ordinal:, valence: }, applied as
+  #   EvidenceLinkAdded in the same aggregate transaction. Duplicates (of
+  #   the first link or each other) are rejected.
   # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
   def record_evidence(evidence_id, capability_stable_id:, level_ordinal:, source:, evidence_type:,
-                      content:, author_id:, custom_type_label: nil, title: nil,
+                      content:, author_id:, valence:, custom_type_label: nil, title: nil,
                       external_reference: nil, additional_links: [])
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
     raise CommandError, "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)
+    raise CommandError, "Invalid evidence valence: #{valence}" unless EVIDENCE_VALENCES.include?(valence)
     raise CommandError, "Custom type label required when evidence_type is 'other'" if
       evidence_type == "other" && custom_type_label.to_s.strip.empty?
     raise CommandError, "Custom type label only allowed when evidence_type is 'other'" if
@@ -677,14 +683,16 @@ class PersonDevelopment::Aggregate
       title: title,
       content: content,
       external_reference: external_reference,
-      author_id: author_id
+      author_id: author_id,
+      valence: valence
     }))
 
     Array(additional_links).each do |link|
       add_evidence_link(evidence_id,
         capability_stable_id: link[:capability_stable_id],
         level_ordinal: link[:level_ordinal],
-        linked_by_id: author_id)
+        linked_by_id: author_id,
+        valence: link[:valence])
     end
   end
 
@@ -695,14 +703,17 @@ class PersonDevelopment::Aggregate
   # @param capability_stable_id [String] target capability
   # @param level_ordinal [Integer] target level
   # @param linked_by_id [String] UUID of the Person adding the link
+  # @param valence [String] the linker's judgment — one of
+  #   EVIDENCE_VALENCES. Required on every new link.
   # @param rationale [String, nil] optional explanation of the link
   # @raise [CommandError] if not assigned, evidence not found, withdrawn,
-  #   or already linked to that coordinate
-  def add_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, linked_by_id:, rationale: nil)
+  #   already linked to that coordinate, or the valence is invalid
+  def add_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
     raise CommandError, "No evidence with id #{evidence_id}" unless state
     raise CommandError, "Cannot link withdrawn evidence" if state[:status] == "withdrawn"
+    raise CommandError, "Invalid evidence valence: #{valence}" unless EVIDENCE_VALENCES.include?(valence)
     if state[:links].include?([ capability_stable_id, level_ordinal ])
       raise CommandError, "Evidence is already linked to that coordinate"
     end
@@ -712,6 +723,7 @@ class PersonDevelopment::Aggregate
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       linked_by_id: linked_by_id,
+      valence: valence,
       rationale: rationale
     }))
   end
@@ -748,6 +760,44 @@ class PersonDevelopment::Aggregate
       level_ordinal: level_ordinal,
       removed_by_id: removed_by_id,
       reason: reason
+    }))
+  end
+
+  # Reclassifies an evidence link's valence — including classifying a
+  # pre-valence (nil) link for the first time. Reclassification is an
+  # explicit affordance, never a save-blocking gate: existing links pass
+  # through content edits untouched unless the editor changes them.
+  #
+  # A no-op (no event) when the link already carries the requested
+  # valence, so a full-state modal resubmit is safe.
+  #
+  # @param evidence_id [String] UUID of the evidence
+  # @param capability_stable_id [String] the link's capability
+  # @param level_ordinal [Integer] the link's level
+  # @param valence [String] one of EVIDENCE_VALENCES
+  # @param changed_by_id [String] UUID of the Person reclassifying
+  # @raise [CommandError] if not assigned, evidence not found, withdrawn,
+  #   not linked to that coordinate, or the valence is invalid
+  def set_evidence_link_valence(evidence_id, capability_stable_id:, level_ordinal:, valence:, changed_by_id:)
+    ensure_assigned!
+    state = @evidence[evidence_id]
+    raise CommandError, "No evidence with id #{evidence_id}" unless state
+    raise CommandError, "Cannot reclassify withdrawn evidence" if state[:status] == "withdrawn"
+    raise CommandError, "Invalid evidence valence: #{valence}" unless EVIDENCE_VALENCES.include?(valence)
+    unless state[:links].include?([ capability_stable_id, level_ordinal ])
+      raise CommandError, "Evidence is not linked to that coordinate"
+    end
+
+    previous = state[:links][[ capability_stable_id, level_ordinal ]]
+    return if previous == valence
+
+    apply(PersonDevelopment::Events::EvidenceLinkRevalenced.new(data: {
+      evidence_id: evidence_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      previous_valence: previous,
+      valence: valence,
+      changed_by_id: changed_by_id
     }))
   end
 
@@ -1234,9 +1284,13 @@ class PersonDevelopment::Aggregate
     @aligned_ratings.delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
   end
 
+  # `links` maps [capability_stable_id, level_ordinal] => valence. Valence
+  # is nil for links from events published before valence existed —
+  # `event.data[:valence]` on those simply returns nil (Lesson 15: keys
+  # here must match what the commands above publish).
   on PersonDevelopment::Events::EvidenceRecorded do |event|
     @evidence[event.data[:evidence_id]] = {
-      links: Set.new([ [ event.data[:capability_stable_id], event.data[:level_ordinal] ] ]),
+      links: { [ event.data[:capability_stable_id], event.data[:level_ordinal] ] => event.data[:valence] },
       status: "active"
     }
   end
@@ -1245,7 +1299,7 @@ class PersonDevelopment::Aggregate
     state = @evidence[event.data[:evidence_id]]
     next unless state
 
-    state[:links] << [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    state[:links][[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] = event.data[:valence]
   end
 
   on PersonDevelopment::Events::EvidenceLinkRemoved do |event|
@@ -1255,16 +1309,23 @@ class PersonDevelopment::Aggregate
     state[:links].delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
   end
 
+  on PersonDevelopment::Events::EvidenceLinkRevalenced do |event|
+    state = @evidence[event.data[:evidence_id]]
+    next unless state
+
+    state[:links][[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] = event.data[:valence]
+  end
+
   # Historical event — no longer emitted (the user-facing "move" action was
   # dropped in favour of add-link + remove-link). Retained so replay of
   # streams that contain it reconstructs the link set correctly: a relink is
-  # "remove the previous link, add the new one".
+  # "remove the previous link, add the new one" (pre-valence, so nil).
   on PersonDevelopment::Events::EvidenceRelinked do |event|
     state = @evidence[event.data[:evidence_id]]
     next unless state
 
     state[:links].delete([ event.data[:previous_capability_stable_id], event.data[:previous_level_ordinal] ])
-    state[:links] << [ event.data[:new_capability_stable_id], event.data[:new_level_ordinal] ]
+    state[:links][[ event.data[:new_capability_stable_id], event.data[:new_level_ordinal] ]] = nil
   end
 
   on PersonDevelopment::Events::EvidenceWithdrawn do |event|

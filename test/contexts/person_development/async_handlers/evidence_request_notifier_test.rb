@@ -75,7 +75,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     evidence_id = SecureRandom.uuid_v7
     @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
       capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, source: "peer",
-      evidence_type: "peer_feedback", content: "Paired on the incident", author_id: @peer.id)
+      evidence_type: "peer_feedback", content: "Paired on the incident", author_id: @peer.id, valence: "demonstrated")
     perform_enqueued_jobs do
       @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
         evidence_id: evidence_id, responded_by_id: @peer.id)
@@ -92,7 +92,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     evidence_id = SecureRandom.uuid_v7
     @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
       capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, source: "peer",
-      evidence_type: "peer_feedback", content: "detail " * 100, author_id: @peer.id)
+      evidence_type: "peer_feedback", content: "detail " * 100, author_id: @peer.id, valence: "demonstrated")
     perform_enqueued_jobs do
       @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
         evidence_id: evidence_id, responded_by_id: @peer.id)

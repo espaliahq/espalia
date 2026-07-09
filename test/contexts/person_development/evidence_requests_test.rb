@@ -70,7 +70,7 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       evidence_id = SecureRandom.uuid_v7
       @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
         capability_stable_id: @cap, level_ordinal: 3, source: "peer",
-        evidence_type: "peer_feedback", content: "Helped ship the migration", author_id: @requestee.id)
+        evidence_type: "peer_feedback", content: "Helped ship the migration", author_id: @requestee.id, valence: "demonstrated")
       @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
         evidence_id: evidence_id, responded_by_id: @requestee.id)
 

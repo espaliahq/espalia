@@ -33,7 +33,8 @@ module EvidenceDiffSubmit
   def evidence_diff_params
     params.expect(evidence: [ :assignment_id, :evidence_id, :request_id, :primary_cell,
                               :evidence_type, :custom_type_label, :title, :content,
-                              { external_reference: [ :system, :url ] }, { desired_links: [] } ]).to_h.symbolize_keys
+                              { external_reference: [ :system, :url ] }, { desired_links: [] },
+                              { link_valences: {} } ]).to_h.symbolize_keys
   end
 
   def evidence_diff_mode(p)
@@ -49,12 +50,16 @@ module EvidenceDiffSubmit
     primary = parse_cell(p[:primary_cell])
     raise Operations::Base::ParameterError, "Missing or malformed primary cell" if primary.nil?
 
+    valences = link_valences(p)
     extras = desired_cells(p) - [ primary ]
 
     result = Operations::Assessments::RecordEvidence.call(context: pundit_user, params: {
       assignment_id: p[:assignment_id],
       capability_stable_id: primary.first, level_ordinal: primary.last,
-      additional_links: extras.map { |cap, level| { capability_stable_id: cap, level_ordinal: level } },
+      valence: valence_for!(valences, primary),
+      additional_links: extras.map do |cap, level|
+        { capability_stable_id: cap, level_ordinal: level, valence: valence_for!(valences, [ cap, level ]) }
+      end,
       **content_params(p)
     })
     TouchedCells.new(desired_cells(p), result[:evidence_id])
@@ -64,14 +69,21 @@ module EvidenceDiffSubmit
     request = EvidenceRequest.find(p[:request_id])
     assignment_id = assignment_id_for(request)
     primary = [ request.capability_stable_id, request.level_ordinal ]
+    valences = link_valences(p)
+    extras = desired_cells(p) - [ primary ]
+    # Validate every new link's valence BEFORE any write — otherwise a
+    # missing valence on cell N would abort after cells 1..N-1 (and the
+    # response itself) had already landed.
+    ([ primary ] + extras).each { |cell| valence_for!(valences, cell) }
 
     result = Operations::Assessments::RespondToEvidenceRequest.call(context: pundit_user, params: {
-      request_id: request.id, **content_params(p)
+      request_id: request.id, valence: valences[primary], **content_params(p)
     })
     evidence_id = result[:evidence_id]
-    (desired_cells(p) - [ primary ]).each do |cap, level|
+    extras.each do |cap, level|
       Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
-        assignment_id: assignment_id, evidence_id: evidence_id, capability_stable_id: cap, level_ordinal: level
+        assignment_id: assignment_id, evidence_id: evidence_id, capability_stable_id: cap, level_ordinal: level,
+        valence: valences[[ cap, level ]]
       })
     end
     TouchedCells.new(desired_cells(p), evidence_id)
@@ -80,31 +92,71 @@ module EvidenceDiffSubmit
   def diff_edit(p)
     item = EvidenceItem.find(p[:evidence_id])
     assignment_id = assignment_id_for(item)
-    current = EvidenceLink.active.where(evidence_id: item.id).pluck(:capability_stable_id, :level_ordinal).to_set
+    current = EvidenceLink.active.where(evidence_id: item.id)
+      .pluck(:capability_stable_id, :level_ordinal, :valence)
+    current_cells = current.map { |cap, level, _| [ cap, level ] }.to_set
+    current_valences = current.to_h { |cap, level, valence| [ [ cap, level ], valence ] }
     desired = desired_cells(p).to_set
+    valences = link_valences(p)
+
+    # Validate every new link's valence BEFORE any write (incl. the content
+    # update) — a missing valence must reject the whole submit, not leave a
+    # partially-applied diff behind.
+    new_cells = desired - current_cells
+    new_cells.each { |cell| valence_for!(valences, cell) }
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
         assignment_id: assignment_id, evidence_id: item.id, **content_params(p)
       })
     end
-    (desired - current).each do |cap, level|
+    new_cells.each do |cap, level|
       Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
-        assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level
+        assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
+        valence: valences[[ cap, level ]]
       })
     end
-    (current - desired).each do |cap, level|
+    (current_cells - desired).each do |cap, level|
       Operations::Assessments::RemoveEvidenceLink.call(context: pundit_user, params: {
         assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level
       })
     end
-    TouchedCells.new((desired | current).to_a, item.id)
+    # Kept links whose submitted judgment differs get reclassified. A blank
+    # submission (pre-valence link left unclassified) is not a change —
+    # existing links are never force-reclassified.
+    (desired & current_cells).each do |cap, level|
+      valence = valences[[ cap, level ]]
+      next if valence.nil? || valence == current_valences[[ cap, level ]]
+
+      Operations::Assessments::SetEvidenceLinkValence.call(context: pundit_user, params: {
+        assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
+        valence: valence
+      })
+    end
+    TouchedCells.new((desired | current_cells).to_a, item.id)
   end
 
   # ── Helpers ──
 
   def desired_cells(p)
     Array(p[:desired_links]).filter_map { |token| parse_cell(token) }.uniq
+  end
+
+  # The submitted per-link judgments, keyed by [cap, level]. Blank values
+  # (a pre-valence link left unclassified) are dropped.
+  def link_valences(p)
+    (p[:link_valences] || {}).each_with_object({}) do |(token, valence), acc|
+      cell = parse_cell(token)
+      acc[cell] = valence if cell && valence.present?
+    end
+  end
+
+  # Every NEW link must carry a judgment — the modal enforces this
+  # client-side (required controls); this is the server backstop, ahead of
+  # the aggregate's own validation.
+  def valence_for!(valences, cell)
+    valences[cell] or raise Operations::Base::ParameterError,
+      "Select what the feedback says about each linked behaviour"
   end
 
   def parse_cell(token)

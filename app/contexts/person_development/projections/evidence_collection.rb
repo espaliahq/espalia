@@ -38,6 +38,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       PersonDevelopment::Events::EvidenceRecorded,
       PersonDevelopment::Events::EvidenceLinkAdded,
       PersonDevelopment::Events::EvidenceLinkRemoved,
+      PersonDevelopment::Events::EvidenceLinkRevalenced,
       PersonDevelopment::Events::EvidenceRelinked,
       PersonDevelopment::Events::EvidenceUpdated,
       PersonDevelopment::Events::EvidenceWithdrawn,
@@ -71,6 +72,7 @@ class PersonDevelopment::Projections::EvidenceCollection
     when PersonDevelopment::Events::EvidenceRecorded then handle_recorded(event)
     when PersonDevelopment::Events::EvidenceLinkAdded then handle_link_added(event)
     when PersonDevelopment::Events::EvidenceLinkRemoved then handle_link_removed(event)
+    when PersonDevelopment::Events::EvidenceLinkRevalenced then handle_link_revalenced(event)
     when PersonDevelopment::Events::EvidenceRelinked then handle_relinked(event)
     when PersonDevelopment::Events::EvidenceUpdated then handle_updated(event)
     when PersonDevelopment::Events::EvidenceWithdrawn then handle_withdrawn(event)
@@ -160,12 +162,23 @@ class PersonDevelopment::Projections::EvidenceCollection
     item.save!
 
     upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
-                linked_by_id: event.data[:author_id])
+                linked_by_id: event.data[:author_id], valence: event.data[:valence])
   end
 
   def handle_link_added(event)
     upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
-                linked_by_id: event.data[:linked_by_id])
+                linked_by_id: event.data[:linked_by_id], valence: event.data[:valence])
+  end
+
+  def handle_link_revalenced(event)
+    link = EvidenceLink.find_by(
+      evidence_id: event.data[:evidence_id],
+      capability_stable_id: event.data[:capability_stable_id],
+      level_ordinal: event.data[:level_ordinal]
+    )
+    return unless link
+
+    link.update!(valence: event.data[:valence])
   end
 
   def handle_link_removed(event)
@@ -203,7 +216,7 @@ class PersonDevelopment::Projections::EvidenceCollection
     )
 
     upsert_link(event, event.data[:new_capability_stable_id], event.data[:new_level_ordinal],
-                linked_by_id: event.data[:relinked_by_id])
+                linked_by_id: event.data[:relinked_by_id], valence: nil)
 
     item.update!(
       capability_stable_id: event.data[:new_capability_stable_id],
@@ -214,8 +227,10 @@ class PersonDevelopment::Projections::EvidenceCollection
   # Upserts an active link row keyed by the natural key
   # (evidence_id, capability_stable_id, level_ordinal). Idempotent for
   # replay; re-activates a previously-removed link if the same coordinate
-  # is added again.
-  def upsert_link(event, capability_stable_id, level_ordinal, linked_by_id:)
+  # is added again. `valence` is nil for events published before valence
+  # existed (`event.data[:valence]` on those returns nil) — the column
+  # stays at its default, so no CODE_VERSION bump / rebuild is needed.
+  def upsert_link(event, capability_stable_id, level_ordinal, linked_by_id:, valence:)
     link = EvidenceLink.find_or_initialize_by(
       evidence_id: event.data[:evidence_id],
       capability_stable_id: capability_stable_id,
@@ -228,6 +243,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       link_status: "active",
       linked_by_id: linked_by_id,
       linked_at: event.metadata[:timestamp] || Time.current,
+      valence: valence,
       removed_at: nil,
       removed_by_id: nil,
       removal_reason: nil

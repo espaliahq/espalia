@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_05_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_08_093000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -175,6 +175,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_130000) do
     t.uuid "removed_by_id"
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
+    t.string "valence"
     t.index ["evidence_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_links_natural_key", unique: true
     t.index ["evidence_id"], name: "index_evidence_links_on_evidence_id"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal", "link_status"], name: "idx_evidence_links_anchor"

@@ -39,9 +39,9 @@ class Operations::Assessments::EvidenceListTest < ActiveSupport::TestCase
       @pd.record_evidence(@person.id, @framework_id, @evidence_id,
         capability_stable_id: @cap.stable_id, level_ordinal: 2,
         source: "self", evidence_type: "project_outcome",
-        title: "Shipped X", content: "Led the migration", author_id: @person.id)
+        title: "Shipped X", content: "Led the migration", author_id: @person.id, valence: "demonstrated")
       @pd.add_evidence_link(@person.id, @framework_id, @evidence_id,
-        capability_stable_id: @other_cap.stable_id, level_ordinal: 3, linked_by_id: @person.id)
+        capability_stable_id: @other_cap.stable_id, level_ordinal: 3, linked_by_id: @person.id, valence: "demonstrated")
     end
     @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
   end
@@ -83,8 +83,8 @@ class Operations::Assessments::EvidenceListTest < ActiveSupport::TestCase
       assert_equal "self", item[:source]
       assert_equal @person.id, item.dig(:author, :id)
       assert_equal "Alice", item.dig(:author, :name)
-      assert_includes item[:links], { capability_stable_id: @cap.stable_id, level_ordinal: 2 }
-      assert_includes item[:links], { capability_stable_id: @other_cap.stable_id, level_ordinal: 3 }
+      assert_includes item[:links], { capability_stable_id: @cap.stable_id, level_ordinal: 2, valence: "demonstrated" }
+      assert_includes item[:links], { capability_stable_id: @other_cap.stable_id, level_ordinal: 3, valence: "demonstrated" }
     end
   end
 
@@ -107,7 +107,7 @@ class Operations::Assessments::EvidenceListTest < ActiveSupport::TestCase
 
       kept = call_op(assignment_id: @assignment.id, capability_stable_id: @cap.stable_id)
       item = kept[:evidence].first
-      assert_equal [ { capability_stable_id: @cap.stable_id, level_ordinal: 2 } ], item[:links]
+      assert_equal [ { capability_stable_id: @cap.stable_id, level_ordinal: 2, valence: "demonstrated" } ], item[:links]
     end
   end
 

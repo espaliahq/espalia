@@ -55,6 +55,12 @@ class Assessments::ActivityFeedQuery
   LINK_ADDED_KIND   = "evidence_linked"
   LINK_REMOVED_KIND = "evidence_unlinked"
 
+  # A link's valence being reclassified (`EvidenceLinkRevalenced`) is its
+  # own entry — the link's identity is preserved, so the feed says
+  # "reclassified", never "unlinked then relinked". Payload carries
+  # `valence` + `previous_valence` for the summary/secondary lines.
+  LINK_REVALENCED_KIND = "evidence_revalenced"
+
   # Per-capability re-keying entry — emitted for every mapping in a
   # `FrameworkVersionMigrated` event that has a survivor `to_stable_id`.
   # Anchored to the SURVIVOR's stable_id so the per-cap focus filter on
@@ -103,9 +109,10 @@ class Assessments::ActivityFeedQuery
   # `actor_name` onto the entry payload so the feed names who linked /
   # unlinked / moved the evidence — nil-safe for historical events.
   EVIDENCE_LINK_ACTOR_KEYS = {
-    PersonDevelopment::Events::EvidenceLinkAdded   => :linked_by_id,
-    PersonDevelopment::Events::EvidenceLinkRemoved => :removed_by_id,
-    PersonDevelopment::Events::EvidenceRelinked    => :relinked_by_id
+    PersonDevelopment::Events::EvidenceLinkAdded      => :linked_by_id,
+    PersonDevelopment::Events::EvidenceLinkRemoved    => :removed_by_id,
+    PersonDevelopment::Events::EvidenceLinkRevalenced => :changed_by_id,
+    PersonDevelopment::Events::EvidenceRelinked       => :relinked_by_id
   }.freeze
 
   # @param assignment [PersonFrameworkAssignment]
@@ -267,6 +274,8 @@ class Assessments::ActivityFeedQuery
         build_link_entry(event, kind: LINK_ADDED_KIND, actor_key: :linked_by_id)
       when PersonDevelopment::Events::EvidenceLinkRemoved
         build_link_entry(event, kind: LINK_REMOVED_KIND, actor_key: :removed_by_id)
+      when PersonDevelopment::Events::EvidenceLinkRevalenced
+        build_link_entry(event, kind: LINK_REVALENCED_KIND, actor_key: :changed_by_id)
       end
     end
   end

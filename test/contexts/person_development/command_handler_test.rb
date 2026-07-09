@@ -539,7 +539,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @handler.record_evidence(@person_id, @framework_id, evidence_id,
         capability_stable_id: cap_sid, level_ordinal: 3, source: "self",
         evidence_type: "project_outcome", content: "Shipped X", author_id: @author_id,
-        title: "Done")
+        title: "Done", valence: "demonstrated")
 
       item = EvidenceItem.find(evidence_id)
       assert_equal "active", item.link_status
@@ -552,7 +552,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
 
       @handler.add_evidence_link(@person_id, @framework_id, evidence_id,
         capability_stable_id: new_cap_sid, level_ordinal: 4,
-        linked_by_id: @author_id, rationale: "Also applies")
+        linked_by_id: @author_id, rationale: "Also applies", valence: "demonstrated")
 
       assert_equal [ [ cap_sid, 3 ], [ new_cap_sid, 4 ] ],
         EvidenceLink.active.where(evidence_id: evidence_id).order(:linked_at)
@@ -587,7 +587,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @handler.record_evidence(@person_id, @framework_id, evidence_id,
         capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, source: "manager",
         evidence_type: "code_review", content: "Reviewed PR", author_id: @author_id,
-        external_reference: { system: "github", url: "https://github.com/o/r/pull/12" })
+        external_reference: { system: "github", url: "https://github.com/o/r/pull/12" }, valence: "demonstrated")
 
       item = EvidenceItem.find(evidence_id)
       assert_equal "github", item.external_reference.system

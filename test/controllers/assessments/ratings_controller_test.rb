@@ -125,7 +125,7 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
           @person.id, @framework.framework_id, SecureRandom.uuid_v7,
           capability_stable_id: @cap.stable_id, level_ordinal: 2,
           source: "self", evidence_type: "project_outcome",
-          title: "Q1 launch", content: "Shipped Q1.", author_id: @person.id
+          title: "Q1 launch", content: "Shipped Q1.", author_id: @person.id, valence: "demonstrated"
         )
         handler.post_comment(
           @person.id, @framework.framework_id, SecureRandom.uuid_v7,

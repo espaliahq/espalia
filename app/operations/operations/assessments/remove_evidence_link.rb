@@ -63,7 +63,8 @@ class Operations::Assessments::RemoveEvidenceLink < Operations::Base
 
   def active_links_for(evidence_id)
     EvidenceLink.active.where(evidence_id: evidence_id).order(:linked_at).map do |link|
-      { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal }
+      { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal,
+        valence: link.valence }
     end
   end
 end

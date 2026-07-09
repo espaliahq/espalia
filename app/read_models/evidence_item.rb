@@ -60,6 +60,12 @@ class EvidenceItem < ApplicationRecord
   # item has only one link. Nil when not loaded — treat as a single link.
   attr_accessor :active_link_count
 
+  # Transient map of `[capability_stable_id, level_ordinal] => valence` for
+  # this item's ACTIVE links, populated alongside `active_link_count`. A map
+  # (not a scalar) because valence is per-link and the same item object is
+  # shared across every cell bucket it appears in. Nil when not loaded.
+  attr_accessor :link_valences
+
   validates :person_id, presence: true
   validates :framework_id, presence: true
   validates :capability_stable_id, presence: true

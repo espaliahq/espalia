@@ -23,6 +23,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_relinked"        => "bg-sky-500",
     "evidence_linked"          => "bg-sky-500",
     "evidence_unlinked"        => "bg-gray-400",
+    "evidence_revalenced"      => "bg-sky-500",
     "evidence_withdrawn"       => "bg-gray-400",
     "alignment_started"        => "bg-amber-500",
     "alignment_completed"      => "bg-green-600",
@@ -50,6 +51,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_relinked"       => "evidence",
     "evidence_linked"         => "evidence",
     "evidence_unlinked"       => "evidence",
+    "evidence_revalenced"     => "evidence",
     "evidence_withdrawn"      => "evidence",
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment",
@@ -168,6 +170,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_relinked"     then evidence_relinked_summary
     when "evidence_linked"       then evidence_link_summary("Linked")
     when "evidence_unlinked"     then evidence_link_summary("Unlinked", preposition: "from")
+    when "evidence_revalenced"   then evidence_link_summary("Reclassified", preposition: "on")
     when "evidence_withdrawn"    then evidence_withdrawn_summary
     when "alignment_started"     then "Manager started alignment"
     when "alignment_completed"   then "Marked alignment complete"
@@ -333,9 +336,12 @@ class Views::Assessments::Activity::Entry < Views::Base
       content = @entry.payload.respond_to?(:content) ? @entry.payload.content.to_s : ""
       content.strip.presence
     when "evidence_relinked", "evidence_linked"
-      payload_value(:rationale).to_s.strip.presence
+      [ valence_label_or_nil, payload_value(:rationale).to_s.strip.presence ].compact
+        .join(" · ").presence
     when "evidence_unlinked"
       payload_value(:reason).to_s.strip.presence
+    when "evidence_revalenced"
+      revalence_secondary
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       reason.to_s.strip.presence
@@ -348,6 +354,22 @@ class Views::Assessments::Activity::Entry < Views::Base
   def frequency_label_or_nil
     label = frequency_label
     label.to_s.strip.empty? ? nil : label
+  end
+
+  # The link's valence label ("Demonstrates" / "Growth area" / …), nil for
+  # pre-valence events.
+  def valence_label_or_nil
+    Views::Evidence::Valence::LABELS[payload_value(:valence)]
+  end
+
+  # "Growth area (was Demonstrates)" — or just the new label when the link
+  # was pre-valence (nil) before this reclassification.
+  def revalence_secondary
+    new_label = valence_label_or_nil
+    return nil unless new_label
+
+    prev_label = Views::Evidence::Valence::LABELS[payload_value(:previous_valence)]
+    prev_label ? "#{new_label} (was #{prev_label})" : new_label
   end
 
   def frequency_label
