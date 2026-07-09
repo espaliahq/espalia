@@ -37,6 +37,54 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
+  context "amending a pending illustration ghost" do
+    # Regression: the ghost's amend form submits from inside the
+    # pending-suggestion Turbo Frame; the endpoint's detail-page redirect
+    # had no matching frame and rendered "Content missing" (and the
+    # projection kept proposed_attributes stale, so even a reload showed
+    # the pre-amend text).
+    should "re-render the ghost with the amended text in place" do
+      sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        person = Person.find_by(email: @user.email) ||
+                 FactoryBot.create(:person, tenant: @tenant, email: @user.email)
+        TenantUser.find_by(user_id: @user.id).update!(person: person)
+        Frameworks::CommandHandler.new.suggest_create(
+          @framework_id, sid, "role_illustration",
+          { "role_id" => @rid, "description" => "Proposes alternatives when blocked" },
+          parent_id: @eid, author_id: person.id.to_s, mode: :suggesting
+        )
+      end
+
+      visit edit_framework_path(@framework_id)
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Proposes alternatives when blocked"
+
+      ghost = find("turbo-frame[id='pending-suggestion-#{sid}']")
+      # Toggle the display/form classes directly (the file's established
+      # primitive) — JS-clicking the pencil races Stimulus connecting the
+      # inline-editor controller on starved CI.
+      page.execute_script(<<~JS, ghost)
+        const g = arguments[0]
+        g.querySelector("[data-inline-editor-target='display']").classList.add("hidden")
+        g.querySelector("[data-inline-editor-target='form']").classList.remove("hidden")
+      JS
+      box = ghost.find("textarea[name='suggestion[suggested_value]']", visible: true)
+      page.execute_script(<<~JS, box, "Proposes alternative solutions when blocked!")
+        const [el, value] = [arguments[0], arguments[1]]
+        el.value = value
+        el.dispatchEvent(new Event("input", { bubbles: true }))
+        el.closest("form").requestSubmit()
+      JS
+
+      # The frame swaps in place with the amended value — before the fix
+      # this rendered Turbo's "Content missing" instead.
+      assert_text "Proposes alternative solutions when blocked!"
+      assert_selector "turbo-frame[id='pending-suggestion-#{sid}']"
+      assert_no_text "Content missing"
+    end
+  end
+
   context "inline illustration editing" do
     should "expand row and show illustration text" do
       visit edit_framework_path(@framework_id)

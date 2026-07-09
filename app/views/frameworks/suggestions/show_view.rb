@@ -317,13 +317,13 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     end
   end
 
-  # Amend is only offered for edit-kind suggestions. Create suggestions
-  # carry their payload in proposed_attributes, which the current amend
-  # form doesn't round-trip into — approving a create amended this way
-  # would silently ignore the edited text. Gate the UI until a create-
-  # aware amend contract exists.
+  # Offered for edit-kind AND create-kind suggestions: the aggregate folds
+  # an amended value into the entity's content field at approval
+  # (CREATE_CONTENT_FIELD) and the projection folds it into
+  # proposed_attributes for display, so a create amended here behaves
+  # exactly like the matrix ghost's pencil (which uses the same endpoint).
   def amend_visible?
-    @can_amend && @suggestion.status == "pending" && @suggestion.kind == "edit"
+    @can_amend && @suggestion.status == "pending" && @suggestion.kind != "delete"
   end
 
   def any_actions_visible?

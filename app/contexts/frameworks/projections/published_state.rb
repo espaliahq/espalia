@@ -33,7 +33,10 @@ class Frameworks::Projections::PublishedState
   # 2 — categories now carry a `status` column populated from
   #     CapabilityCategoryArchived events. Replay re-stamps every category
   #     at "active" (default) and applies any archive events that follow.
-  CODE_VERSION = 2
+  # 3 — SuggestionAmended on a create-kind suggestion now folds the amended
+  #     value into proposed_attributes' content field (the ghost/preview
+  #     display source), matching the aggregate's approval-time folding.
+  CODE_VERSION = 3
 
   # All event classes this projection handles.
   #
@@ -633,10 +636,22 @@ class Frameworks::Projections::PublishedState
 
   def handle_suggestion_amended(event)
     record = FrameworkState::SuggestedEdit.find_by!(suggestion_id: event.data[:suggestion_id])
-    record.update!(
-      suggested_value: event.data[:new_suggested_value],
-      rationale: event.data[:rationale] || record.rationale
-    )
+    record.update!(amended_attrs(record, event))
+  end
+
+
+  # Attribute set for an amendment: the new value + rationale, plus — for a
+  # create-kind suggestion — the amended value folded into
+  # proposed_attributes' primary content field (the ghost/preview display
+  # source), mirroring the aggregate's approval-time folding
+  # (Frameworks::Aggregate::CREATE_CONTENT_FIELD).
+  def amended_attrs(record, event)
+    value = event.data[:new_suggested_value]
+    attrs = { suggested_value: value, rationale: event.data[:rationale] || record.rationale }
+    key = record.kind == "create" &&
+          Frameworks::Aggregate::CREATE_CONTENT_FIELD[record.target_entity_type]
+    attrs[:proposed_attributes] = (record.proposed_attributes || {}).merge(key.to_s => value) if key
+    attrs
   end
 
   def handle_suggestion_approved(event)

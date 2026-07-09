@@ -300,6 +300,50 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "re-render the ghost frame in place for the matrix's inline amend" do
+      # The pending-illustration ghost's pencil submits from inside the
+      # pending-suggestion Turbo Frame; a detail-page redirect has no
+      # matching frame and rendered as "Content missing".
+      create_sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_create(
+          @framework_id, create_sid, "role_illustration",
+          { "role_id" => @rid, "description" => "First draft" },
+          parent_id: @eid, author_id: @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @author_user
+      patch amend_framework_suggestion_path(framework_id: @framework_id, id: create_sid),
+            params: { suggestion: { suggested_value: "Amended ghost wording" }, inline: "1" }
+
+      assert_response :success
+      assert_select "turbo-frame#pending-suggestion-#{create_sid}"
+      assert_includes response.body, "Amended ghost wording"
+    end
+
+    should "surface an inline amend failure inside the ghost frame, not a blank response" do
+      create_sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_create(
+          @framework_id, create_sid, "role_illustration",
+          { "role_id" => @rid, "description" => "First draft" },
+          parent_id: @eid, author_id: @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @author_user
+      # Blank value → ParameterError; the response must still carry the
+      # ghost's frame (a bodyless 4xx blanks it to "Content missing").
+      patch amend_framework_suggestion_path(framework_id: @framework_id, id: create_sid),
+            params: { suggestion: { suggested_value: "  " }, inline: "1" }
+
+      assert_response :unprocessable_content
+      assert_select "turbo-frame#pending-suggestion-#{create_sid}"
+      assert_includes response.body, "Couldn’t save:"
+      assert_includes response.body, "First draft"
+    end
+
     should "deny non-author members" do
       sign_in @member_user
       patch amend_framework_suggestion_path(

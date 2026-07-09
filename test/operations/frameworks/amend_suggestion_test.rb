@@ -55,6 +55,24 @@ class Operations::Frameworks::AmendSuggestionTest < ActiveSupport::TestCase
         assert_equal "Second proposal", suggestion.suggested_value
       end
     end
+
+    should "reject a blank amendment" do
+      # A blank value would diverge display from approval: the projection
+      # shows it (empty ghost) while the aggregate's approval-time fold
+      # skips blanks and applies the ORIGINAL text.
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::AmendSuggestion.call(
+            context: @author_ctx,
+            params: {
+              framework_id: @framework_id, suggestion_id: @suggestion_id,
+              suggested_value: "   "
+            }
+          )
+        end
+        assert_match(/blank/, error.message)
+      end
+    end
   end
 
   context "as a different person" do
