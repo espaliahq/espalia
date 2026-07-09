@@ -14,10 +14,14 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   # @param suggestion [FrameworkState::SuggestedEdit] kind: "create", target: role_illustration
   # @param framework_id [String] UUID of the framework
   # @param is_author [Boolean] true if the current user authored this suggestion
-  def initialize(suggestion:, framework_id:, is_author: false)
+  # @param error [String, nil] a failed inline-amend message, surfaced in the
+  #   frame (a bodyless error response would blank the ghost to
+  #   "Content missing")
+  def initialize(suggestion:, framework_id:, is_author: false, error: nil)
     @suggestion = suggestion
     @framework_id = framework_id
     @is_author = is_author
+    @error = error
     @attrs = (suggestion.proposed_attributes || {}).symbolize_keys
   end
 
@@ -27,6 +31,7 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
         class: "group/ill relative text-xs text-gray-600 dark:text-gray-400",
         data: { controller: "inline-editor" }
       ) do
+        error_line if @error.present?
         display_mode
         edit_mode
       end
@@ -34,6 +39,12 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   end
 
   private
+
+  def error_line
+    p(class: "pl-2 text-[11px] text-red-700 dark:text-red-400", role: "alert") do
+      "Couldn\u2019t save: #{@error}"
+    end
+  end
 
   def display_mode
     decoration = suggestion_text_classes(pending_edit_count: 1)
@@ -84,6 +95,12 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
       }
     ) do
       input(type: "hidden", name: "_method", value: "patch")
+      # This form lives inside the ghost's Turbo Frame — flag the submission
+      # so the amend endpoint re-renders this frame in place instead of its
+      # detail-page redirect, which contains no matching frame and renders
+      # as "Content missing" (Hard-Won Lesson 20: one endpoint, two
+      # surfaces — branch on an explicit marker).
+      input(type: "hidden", name: "inline", value: "1")
       # amend endpoint expects suggestion[suggested_value]
       # For create suggestions the amend updates proposed_attributes — the
       # controller maps suggested_value back to the description field.

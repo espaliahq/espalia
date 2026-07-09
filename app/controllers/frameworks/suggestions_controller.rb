@@ -152,11 +152,31 @@ class Frameworks::SuggestionsController < ApplicationController
       }
     )
 
-    redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
-                notice: "Suggestion updated."
+    if inline_ghost_request?
+      # The matrix ghost's amend form lives inside the pending-suggestion
+      # Turbo Frame — re-render it in place with the amended value. The
+      # detail-page redirect would land on a page with no matching frame
+      # ("Content missing"). Lesson 20: explicit inline marker, not format.
+      render_pending_ghost_frame
+    elsif inline_request?
+      # Some future inline surface that isn't the illustration ghost —
+      # never answer it with an illustration-shaped frame.
+      head :no_content
+    else
+      redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
+                  notice: "Suggestion updated."
+    end
   rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
-                alert: e.message
+    if inline_ghost_request?
+      # A bodyless 4xx would blank the ghost's frame to "Content missing" —
+      # re-render it with the error surfaced instead.
+      render_pending_ghost_frame(error: e.message, status: :unprocessable_content)
+    elsif inline_request?
+      head :unprocessable_content
+    else
+      redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
+                  alert: e.message
+    end
   end
 
   # DELETE /frameworks/:framework_id/suggestions/:id
@@ -188,6 +208,26 @@ class Frameworks::SuggestionsController < ApplicationController
   # surfaces flag themselves with `inline=1`; everything else (incl. the
   # Turbo-driven detail page) redirects. 204 keeps Turbo from navigating or
   # blanking the modal/page on the inline path.
+  # The pending-illustration ghost's amend form — the one inline surface
+  # whose response contract is "re-render my frame". Guarded by shape so a
+  # different suggestion kind carrying inline=1 never gets an
+  # illustration-shaped frame.
+  def inline_ghost_request?
+    inline_request? &&
+      @suggestion.kind == "create" &&
+      @suggestion.target_entity_type == "role_illustration"
+  end
+
+  def render_pending_ghost_frame(error: nil, status: :ok)
+    render Views::Frameworks::Explorer::PendingIllustrationFrame.new(
+      suggestion: @suggestion.reload,
+      framework_id: @framework.framework_id,
+      # amend? is author-only, so the requester is the author.
+      is_author: true,
+      error: error
+    ), layout: false, status: status
+  end
+
   def inline_request?
     params[:inline].present?
   end
