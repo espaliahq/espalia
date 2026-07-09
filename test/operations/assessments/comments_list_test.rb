@@ -65,6 +65,17 @@ class Operations::Assessments::CommentsListTest < ActiveSupport::TestCase
       assert_equal [ @reply_id ], parent[:replies].map { |r| r[:id] }
       assert_equal "Agreed — strong examples", parent[:replies].first[:body]
     end
+
+    should "nest a reply-to-a-reply under the thread's top-level comment" do
+      deep_id = ActsAsTenant.with_tenant(@tenant) do
+        post_comment("Going deeper", level: 2, parent_id: @reply_id)
+      end
+
+      result = call_op(assignment_id: @assignment.id, capability_stable_id: @cap.stable_id, level_ordinal: 2)
+
+      parent = result[:comments].first
+      assert_equal [ @reply_id, deep_id ], parent[:replies].map { |r| r[:id] }
+    end
   end
 
   context "scoping" do

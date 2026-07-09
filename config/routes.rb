@@ -210,6 +210,8 @@ Rails.application.routes.draw do
         post :reject
         patch :amend
       end
+      resources :comments, only: [ :create, :update, :destroy ],
+                           controller: "frameworks/suggestion_comments"
     end
   end
 

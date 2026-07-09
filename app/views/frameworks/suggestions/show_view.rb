@@ -25,12 +25,17 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(framework:, suggestion:, can_approve:, can_amend:, can_withdraw:,
+                 comments: [], viewer_person_id: nil, can_comment: false, tenant_admin: false,
                  user: nil, current_tenant: nil, tenants: [])
     @framework = framework
     @suggestion = suggestion
     @can_approve = can_approve
     @can_amend = can_amend
     @can_withdraw = can_withdraw
+    @comments = comments
+    @viewer_person_id = viewer_person_id
+    @can_comment = can_comment
+    @tenant_admin = tenant_admin
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -50,6 +55,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
         rationale_card if @suggestion.rationale.present?
         review_history_card unless @suggestion.status == "pending"
         actions_card if any_actions_visible?
+        discussion_card
       end
     end
   end
@@ -272,6 +278,27 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
               end
             end
           end
+        end
+      end
+    end
+  end
+
+  # The discussion thread — the same component the context pane's suggestion
+  # card renders, so the two surfaces can't drift. Threads stay open after
+  # resolution.
+  def discussion_card
+    div(class: "mt-6") do
+      render Components::Kit::Card.new(title: "Discussion") do |card|
+        card.body do
+          render Views::Frameworks::Suggestions::Thread.new(
+            comments: @comments,
+            framework_id: @framework.framework_id,
+            suggestion_id: @suggestion.suggestion_id,
+            viewer_person_id: @viewer_person_id,
+            can_comment: @can_comment,
+            tenant_admin: @tenant_admin,
+            return_to: "detail"
+          )
         end
       end
     end

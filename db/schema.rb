@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_08_093000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_08_114339) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -419,6 +419,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_093000) do
     t.index ["tenant_id"], name: "index_framework_suggested_edits_on_tenant_id"
   end
 
+  create_table "framework_suggestion_comments", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "author_id", null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.datetime "deleted_at"
+    t.uuid "deleted_by_id"
+    t.text "deletion_reason"
+    t.datetime "edited_at"
+    t.uuid "edited_by_id"
+    t.uuid "framework_id", null: false
+    t.uuid "parent_id"
+    t.datetime "posted_at", null: false
+    t.string "status", default: "active", null: false
+    t.uuid "suggestion_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["framework_id", "status"], name: "idx_fw_suggestion_comments_framework"
+    t.index ["parent_id"], name: "idx_fw_suggestion_comments_parent", where: "(parent_id IS NOT NULL)"
+    t.index ["suggestion_id", "status"], name: "idx_fw_suggestion_comments_thread"
+    t.index ["tenant_id"], name: "index_framework_suggestion_comments_on_tenant_id"
+  end
+
   create_table "manager_assessment_delegations", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "delegate_person_id", null: false
@@ -687,6 +709,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_093000) do
   add_foreign_key "framework_suggested_edits", "people", column: "author_id", on_delete: :restrict
   add_foreign_key "framework_suggested_edits", "people", column: "reviewed_by", on_delete: :nullify
   add_foreign_key "framework_suggested_edits", "tenants"
+  add_foreign_key "framework_suggestion_comments", "framework_suggestion_comments", column: "parent_id", on_delete: :restrict
+  add_foreign_key "framework_suggestion_comments", "people", column: "author_id", on_delete: :restrict
+  add_foreign_key "framework_suggestion_comments", "people", column: "deleted_by_id", on_delete: :nullify
+  add_foreign_key "framework_suggestion_comments", "people", column: "edited_by_id", on_delete: :nullify
+  add_foreign_key "framework_suggestion_comments", "tenants"
   add_foreign_key "manager_assessment_delegations", "tenants"
   add_foreign_key "mcp_pending_approvals", "oauth_applications", column: "client_application_id"
   add_foreign_key "mcp_pending_approvals", "tenants"

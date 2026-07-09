@@ -251,6 +251,19 @@ The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its conten
 | `category` | Click the category **name** (chevron still collapses) | Re-click name, or "Show all" |
 | `capability` | Expand a row | Collapse the row, or "Show all" |
 | `cell` | Click an expanded-row cell | Re-click same cell (→ capability), collapse row (→ framework), or "Show all" |
+| `suggestion` | Click a feed entry's **discussion affordance** (count + latest excerpt, or "Discuss") | "← Back to activity", or any explicit matrix focus action |
+
+**Suggestion focus swaps the pane's content, not just its filter**: instead of
+the feed, the frame renders the **suggestion card**
+(`Views::Frameworks::Activity::SuggestionCardFrame`) — the proposal (values,
+rationale, author), its resolution state, the §12 inline Approve / Reject
+machinery, and the **discussion thread** with composer. Suggestion management
+happens next to the matrix context rather than on a separate page (the detail
+page remains as the full-page escape hatch and renders the same Thread
+component). `focus=suggestion&suggestion_id=` is URL-synced and deep-linkable
+like every other level. Opening the card deliberately does NOT navigate the
+matrix — a `matrix:focus-changed` dispatch would immediately overwrite the
+focus; the entry's row body remains the way to jump the grid to the entity.
 
 **Panel header is focus-driven**: `FocusedSuggestionsQuery#descriptor` renders the focus title ("All framework suggestions" / "`<Category>` — category" / capability / "`<Capability>` × L`<n>`") and the server-rendered `clear_path` powers the "Show all" link. See §9 for full header/row anatomy.
 
@@ -708,6 +721,47 @@ inside `[data-controller~='dropdown']`, so opening the kebab never expands the
 row. Expectation / illustration edits are not (yet) on the grid kebab — the feed
 covers those.
 
+### 13. Suggestion discussion threads
+
+Every suggestion carries a **discussion thread** — the collaborative
+conversation that informs the approve/reject decision. Threads live where the
+decision is made: the pane's **suggestion card** (§8, `suggestion` focus) and
+the detail page render the same `Views::Frameworks::Suggestions::Thread`.
+
+- **Domain**: `SuggestionCommented` / `SuggestionCommentEdited` /
+  `SuggestionCommentDeleted` on the framework stream →
+  `Frameworks::Projections::SuggestionThread` →
+  `FrameworkState::SuggestionComment` (PK = event-carried comment_id; soft
+  delete keeps reply chains coherent). Threads **stay open after resolution**
+  (the PR-conversation convention) — the aggregate never gates on pending.
+- **Threading = the assessment comment model verbatim**: a reply may target ANY
+  non-deleted comment on the same suggestion (unbounded depth in data);
+  **display is chronological and flat with ONE indent level** — depth beyond
+  one rides the "↳ replying to" chip, never deeper nesting. The DOM-generic
+  `comments-thread` Stimulus controller is reused as-is (same target names,
+  same `comment[...]` param namespace).
+- **Authorization**: posting sits on the suggest bar
+  (`FrameworkPolicy#comment_on_suggestion?`); edits are author-only, deletes
+  author or tenant admin (`FrameworkSuggestionCommentPolicy`, mirroring
+  `PersonDevelopmentCommentPolicy` — both bars also enforced in the
+  aggregate/ops).
+- **Operations-first (web + MCP)**: the web endpoints
+  (`Frameworks::SuggestionCommentsController`) and the MCP tools share
+  `Operations::Frameworks::{CommentOnSuggestion,EditSuggestionComment,
+  DeleteSuggestionComment}` (`:mcp_client`), and `frameworks_suggestion_get`
+  (`:none`) returns the full suggestion + nested thread — the read drill-in
+  from a feed entry's suggestion_id.
+- **Feed**: posts surface as `suggestion_commented` entries (suggestions chip);
+  edits/deletes are thread-only. Every suggestion-anchored entry renders the
+  **discussion affordance** — comment count + latest excerpt (or "Discuss") —
+  fed by `ActivityFeedQuery`'s one-pass `comment_stats` overlay; clicking it
+  opens the suggestion card.
+- **Draft protection (NON-NEGOTIABLE)**: broadcast reloads of the pane are
+  **suppressed while any composer textarea is focused or holds text**
+  (`context_pane_controller#composerDirty`) — the same failure class that
+  forced the reject modal to be root-mounted (Lesson 19) would otherwise eat
+  half-written comments on every framework-wide broadcast.
+
 ### 7. Responsive Behaviour
 
 | Viewport | Role Tree | Matrix | Toggle Button |
@@ -771,9 +825,10 @@ job via `updateSearch`. See §4a.
 ### context_pane_controller.js (edit mode only)
 Lives on the right-hand `<aside>` element. Sole owner of:
 - **Panel frame src** (`#suggestion-panel`). Rebuilds the frame URL whenever focus, role selection, or a fresh suggestion submission occurs. Short-circuits when the computed URL equals the current `src` to prevent duplicate fetches. Forces a reload on `onSuggestionSubmitted` so a just-landed pending row surfaces even if the URL didn't change.
-- **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=` via `history.pushState()`; removes them when focus returns to `framework`.
+- **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=`, `?suggestion_id=` via `history.pushState()`; removes them when focus returns to `framework`.
+- **Suggestion focus** (`openSuggestionCard`, from an entry's discussion affordance). Sets `focus=suggestion&suggestion_id=` so the frame renders the suggestion card instead of the feed. Any explicit matrix focus action (`matrix:focus-changed`) exits it — most-specific-wins, like every other level.
 - **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch. Unconditionally primes the frame `src` on connect because the pane is visible from initial render in edit mode (no lazy-until-open grace period — see Hard-Won Lesson 14).
-- **Live reload**. Observes the hidden `#framework-activity-sync-signal` element (a `signal` target). `PublishedState#broadcast_framework_activity` replaces it on every feed-relevant event via the per-framework `framework_activity` Turbo stream; the observer reloads the feed frame unconditionally (no self-suppression — the feed frame is the only thing that re-fetches, so there's no matrix flicker, and the actor should see their own entry). Mirrors `assessment_sync_controller`.
+- **Live reload**. Observes the hidden `#framework-activity-sync-signal` element (a `signal` target). `PublishedState#broadcast_framework_activity` (and `SuggestionThread`'s equivalent for comment events) replaces it on every feed-relevant event via the per-framework `framework_activity` Turbo stream; the observer reloads the feed frame with no self-suppression (the feed frame is the only thing that re-fetches, so there's no matrix flicker, and the actor should see their own entry) — but **skips the reload while a composer textarea is focused or holds text** so a broadcast can't eat a half-written comment (§13). Mirrors `assessment_sync_controller`.
 
 Listens at window scope for:
 - `tree:changed@window->context-pane#onTreeChanged`
@@ -988,13 +1043,20 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > issues the request; a live broadcast reload resets to the most-recent batch.
 > Role-family / role / **level adds** now surface too (structural group,
 > framework-level anchor; the level entry names its role — "Added L4 to EM ·
-> Engineering Manager"). Still deferred (note when adding): reorders and threaded
-> suggestion comments (`SuggestionCommented` unwired). The
+> Engineering Manager"). **Suggestion discussion threads are wired**:
+> `suggestion_commented` entries surface under the suggestions chip (thread
+> edits/deletes stay thread-only — the feed shows conversation activity, not
+> comment meta-history), and every suggestion-anchored entry carries a
+> discussion affordance (comment count + latest excerpt) that opens the pane's
+> suggestion card. Still deferred (note when adding): reorders. The
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
 > standalone suggestion index, not the pane.
 
-**Every action a user can take on a framework MUST produce an entry in the
-activity feed.** That includes the full suggestion lifecycle (submitted /
+**Every action a user can take on a framework MUST be represented in the
+activity feed.** For most actions that means an entry of its own; mutations
+of an existing comment (edit / delete) instead update or tombstone the
+representation the original post already has — the feed shows conversation
+activity, not comment meta-history, matching the assessment feed. That includes the full suggestion lifecycle (submitted /
 amended / approved / rejected / withdrawn / **commented**), direct editorial
 edits, structural changes (capability/category/role/level/binding add · archive ·
 reorder), the draft lifecycle (**draft opened** — incl. `auto_opened` —, **version
@@ -1099,6 +1161,15 @@ line (§9).
 | `app/views/frameworks/explorer/reject_suggestion_modal.rb` | Shared reject-suggestion modal (optional reason) — explorer root, edit mode (§12) |
 | `app/models/frameworks/suggestion_approval_authority.rb` | Per-viewer approval authority value object — computed once, gates the actionable feed (§12) |
 | `app/operations/operations/frameworks/{approve,reject,amend,withdraw}_suggestion.rb` | Shared web + MCP suggestion-lifecycle operations (§12) |
+| `app/operations/operations/frameworks/{comment_on_suggestion,edit_suggestion_comment,delete_suggestion_comment}.rb` | Shared web + MCP suggestion-thread write operations (§13) |
+| `app/operations/operations/frameworks/suggestion_get.rb` | MCP read drill-in — full suggestion (proposal + resolution + nested thread) |
+| `app/contexts/frameworks/projections/suggestion_thread.rb` | Projects the three comment events into `framework_suggestion_comments`; broadcasts the activity signal (§13) |
+| `app/read_models/framework_state/suggestion_comment.rb` | Thread read model — event-carried PK, soft delete, `for_suggestion`/`active` scopes |
+| `app/policies/framework_suggestion_comment_policy.rb` | Record-level comment authz — author-only edit, author + admin delete |
+| `app/controllers/frameworks/suggestion_comments_controller.rb` | Post / edit / delete thread comments from the pane card + detail page → the shared Operations |
+| `app/views/frameworks/activity/suggestion_card_frame.rb` | The pane's suggestion-focus card — proposal + approve/reject + thread + composer (§8, §13) |
+| `app/views/frameworks/suggestions/thread.rb` | The discussion thread (chronological, one-indent replies) shared by card + detail page |
+| `app/views/frameworks/suggestions/comment_card.rb` | One thread comment — kebab (reply/edit/delete), tombstones, reply chips |
 | `app/javascript/controllers/suggestion_action_controller.js` | Inline approve — POSTs `inline=1`, dispatches `suggestion:resolved` (§12) |
 | `app/javascript/controllers/reject_suggestion_form_controller.js` | Prefills the reject modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12) |
 | `app/views/frameworks/activity/filter_chips.rb` | All / Suggestions / Edits / Structural / Lifecycle / Collaborators (client-side filter) |
@@ -1149,6 +1220,7 @@ line (§9).
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |
+| `test/system/frameworks/suggestion_thread_system_test.rb` | Suggestion card + thread system tests (pane + detail page) |
 | `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests (incl. text-filter scope + counts) |
 | `test/components/frameworks/explorer/search_highlight_test.rb` | `<mark>` highlight concern unit tests |
 | `test/models/frameworks/matrix_data_builder_mode_test.rb` | `mode:` filter unit tests |

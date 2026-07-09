@@ -36,6 +36,11 @@ Rails.configuration.to_prepare do
   )
 
   event_store.subscribe(
+    Frameworks::Projections::SuggestionThread.new,
+    to: Frameworks::Projections::SuggestionThread.handled_events
+  )
+
+  event_store.subscribe(
     PersonDevelopment::Projections::CurrentAssessment.new,
     to: PersonDevelopment::Projections::CurrentAssessment.handled_events
   )

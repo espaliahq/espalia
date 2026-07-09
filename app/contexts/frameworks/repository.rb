@@ -6,6 +6,17 @@
 # Injects tenant_id into event metadata automatically.
 #
 class Frameworks::Repository
+  # Events that never change anything the explorer graph renders — a commit
+  # consisting solely of these skips the graph rebuild + JSONB row rewrite.
+  # Discussion-thread traffic (chat cadence) would otherwise pay a full
+  # aggregate-derived snapshot per one-line comment and serialize against
+  # structural edits on the graph row.
+  GRAPH_IRRELEVANT_EVENTS = [
+    Frameworks::Events::SuggestionCommented,
+    Frameworks::Events::SuggestionCommentEdited,
+    Frameworks::Events::SuggestionCommentDeleted
+  ].freeze
+
   # @param event_store [RailsEventStore::JSONClient] defaults to global config
   def initialize(event_store: Rails.configuration.event_store)
     @event_store = event_store
@@ -30,7 +41,10 @@ class Frameworks::Repository
       # Only rewrite the snapshot when this call actually mutated the
       # aggregate. Read-only uses (load-and-inspect) on an existing
       # framework would otherwise churn the graph row every request.
-      return if aggregate.unpublished_events.none?
+      events = aggregate.unpublished_events.to_a
+      return if events.none?
+      # ...and only when the mutation can affect what the graph renders.
+      return if events.all? { |e| GRAPH_IRRELEVANT_EVENTS.include?(e.class) }
 
       graph = Frameworks::ExplorerGraphBuilder.new(aggregate).build
       Frameworks::ExplorerGraph.store(aggregate.framework_id, graph)

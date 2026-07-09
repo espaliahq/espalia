@@ -29,7 +29,7 @@ class Frameworks::ActivityFeedQuery
   Entry = Struct.new(:id, :kind, :occurred_at, :payload, :actor_name,
                      :category_id, :capability_id, :capability_name,
                      :suggestion_id, :suggestion_status, :suggestion_entity_type,
-                     :superseded,
+                     :superseded, :comment_count, :latest_comment,
                      keyword_init: true)
 
   # Proposal events for one suggestion (the original edit + each amendment).
@@ -54,6 +54,7 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::SuggestionApproved         => "suggestion_approved",
     Frameworks::Events::SuggestionRejected         => "suggestion_rejected",
     Frameworks::Events::SuggestionWithdrawn        => "suggestion_withdrawn",
+    Frameworks::Events::SuggestionCommented        => "suggestion_commented",
     Frameworks::Events::DraftVersionStarted        => "draft_opened",
     Frameworks::Events::FrameworkVersionPublished  => "version_published",
     Frameworks::Events::MigrationMappingDefined    => "migration_mapping_defined",
@@ -91,6 +92,7 @@ class Frameworks::ActivityFeedQuery
   SUGGESTION_KINDS = %w[
     suggestion_edit suggestion_create suggestion_delete
     suggestion_amended suggestion_approved suggestion_rejected suggestion_withdrawn
+    suggestion_commented
   ].freeze
 
   # Binding lifecycle kinds — their entries carry the role + scoring levers
@@ -113,6 +115,7 @@ class Frameworks::ActivityFeedQuery
     "suggestion_create"        => :author_id,
     "suggestion_delete"        => :author_id,
     "suggestion_amended"       => :author_id,
+    "suggestion_commented"     => :author_id,
     "suggestion_approved"      => :reviewer_id,
     "suggestion_rejected"      => :reviewer_id,
     "draft_opened"             => :started_by,
@@ -248,7 +251,9 @@ class Frameworks::ActivityFeedQuery
       capability_name: capability_name_for(capability_id),
       suggestion_id: suggestion_id,
       suggestion_status: meta&.dig(:suggestion_status),
-      suggestion_entity_type: meta&.dig(:suggestion_entity_type)
+      suggestion_entity_type: meta&.dig(:suggestion_entity_type),
+      comment_count: suggestion_id ? comment_stats.dig(suggestion_id, :count) || 0 : 0,
+      latest_comment: suggestion_id ? comment_stats.dig(suggestion_id, :latest_body) : nil
     )
   end
 
@@ -271,6 +276,13 @@ class Frameworks::ActivityFeedQuery
     end
     if kind == "level_added" && role_labels.key?(data[:role_id])
       extra[:level_role_label] = role_labels[data[:role_id]]
+    end
+    if kind == "suggestion_commented"
+      # The event payload's body is frozen history — render the read model's
+      # CURRENT text instead, so an edited comment shows its latest wording
+      # and a deleted comment's body disappears from the feed (the thread
+      # shows a tombstone; the feed entry keeps only the fact of the action).
+      extra[:body] = active_comment_bodies[data[:comment_id]]
     end
     extra[:expectation_level] = structural_expectation_level(kind, data) if EXPECTATION_KINDS.include?(kind)
     extra
@@ -601,6 +613,30 @@ class Frameworks::ActivityFeedQuery
 
   def suggested_edits
     @suggested_edits ||= @framework.suggested_edits.to_a
+  end
+
+  # The framework's ACTIVE thread comments, loaded once (only the columns
+  # the feed needs — a body-bearing full-row load would grow with all-time
+  # comment volume) and shared by the two derived maps below.
+  def thread_comments
+    @thread_comments ||= FrameworkState::SuggestionComment.active
+      .for_framework(@framework.framework_id)
+      .order(:posted_at)
+      .select(:id, :suggestion_id, :body, :posted_at)
+      .to_a
+  end
+
+  # {suggestion_id => { count:, latest_body: }} — powers the discussion
+  # affordance (count + latest excerpt) on every suggestion-anchored entry.
+  def comment_stats
+    @comment_stats ||= thread_comments.group_by(&:suggestion_id)
+      .transform_values { |comments| { count: comments.size, latest_body: comments.last.body } }
+  end
+
+  # {comment_id => current body} for active comments — the read-model
+  # overlay for suggestion_commented entries (nil for deleted comments).
+  def active_comment_bodies
+    @active_comment_bodies ||= thread_comments.to_h { |c| [ c.id, c.body ] }
   end
 
   def suggestion_anchor(suggestion)

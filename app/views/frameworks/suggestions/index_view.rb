@@ -16,6 +16,10 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
     "withdrawn" => :default
   }.freeze
 
+  # Canonical badge wording for suggestion kinds. "Archive" (never "Delete")
+  # per §11 — archiving is the single removal operation.
+  KIND_BADGE_LABELS = { "edit" => "Edit", "create" => "New", "delete" => "Archive" }.freeze
+
   TIER_LABELS = {
     1 => "Tier 1 — Illustrations",
     2 => "Tier 2 — Descriptions",

@@ -901,6 +901,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_comment_on_suggestion",
+        "description" => "Comment on a framework suggestion's discussion thread (optionally as a reply). Threads stay open after the suggestion is resolved.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "suggestion_id" => { "type" => "string" },
+            "body" => { "type" => "string" },
+            "parent_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id body],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_configure_scoring_thresholds",
         "description" => "Replace a framework's scoring-threshold configuration (tenant admin only). Omitted thresholds revert to system defaults — this is a full replacement, not a partial update.",
         "inputSchema" => {
@@ -936,6 +956,44 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "reason" => { "type" => "string" }
           },
           "required" => %w[framework_id from_stable_id mapping_type],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_delete_suggestion_comment",
+        "description" => "Delete a comment on a framework suggestion's thread (soft delete — preserves reply chains; author or tenant admin).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "comment_id" => { "type" => "string" },
+            "reason" => { "type" => "string" }
+          },
+          "required" => %w[framework_id comment_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "frameworks_edit_suggestion_comment",
+        "description" => "Revise your own comment on a framework suggestion's discussion thread (author only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "comment_id" => { "type" => "string" },
+            "body" => { "type" => "string" }
+          },
+          "required" => %w[framework_id comment_id body],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -1273,6 +1331,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => false,
           "destructiveHint" => false,
           "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_suggestion_get",
+        "description" => "Fetch one framework suggestion in full: proposal, resolution status, and its discussion thread (top-level comments with replies nested).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "suggestion_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
         }
       },
       {

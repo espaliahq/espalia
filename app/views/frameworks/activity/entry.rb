@@ -24,6 +24,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "suggestion_approved"       => "bg-green-600",
     "suggestion_rejected"       => "bg-gray-400",
     "suggestion_withdrawn"      => "bg-gray-400",
+    "suggestion_commented"      => "bg-sky-500",
     "capability_added"          => "bg-emerald-500",
     "capability_archived"       => "bg-amber-500",
     "capability_updated"        => "bg-indigo-500",
@@ -64,6 +65,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "suggestion_approved"       => "suggestions",
     "suggestion_rejected"       => "suggestions",
     "suggestion_withdrawn"      => "suggestions",
+    "suggestion_commented"      => "suggestions",
     "capability_updated"        => "edits",
     "category_updated"          => "edits",
     "expectation_updated"       => "edits",
@@ -123,6 +125,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
         secondary_line if secondary_text
         footer
         action_row if actionable?
+        discussion_row if discussable?
       end
     end
   end
@@ -158,47 +161,15 @@ class Views::Frameworks::Activity::Entry < Views::Base
   # defensive fallback for any future actionable kind without an inline form.
   def action_row
     if @entry.suggestion_id.present?
-      div(
-        class: "mt-1.5 flex items-center gap-2",
-        data: {
-          controller: "suggestion-action",
-          suggestion_action_approve_url_value:
-            approve_framework_suggestion_path(@framework_id, @entry.suggestion_id, inline: 1)
-        }
-      ) do
-        approve_button
-        reject_button
-      end
+      render Views::Frameworks::Activity::SuggestionActions.new(
+        framework_id: @framework_id,
+        suggestion_id: @entry.suggestion_id,
+        entity_label: entity_word,
+        reject_preview: reject_preview
+      )
     else
       div(class: "mt-1.5") { review_link }
     end
-  end
-
-  def approve_button
-    button(
-      type: "button",
-      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-             "bg-green-600 text-white hover:bg-green-700 transition-colors " \
-             "disabled:opacity-50 disabled:cursor-not-allowed",
-      data: { action: "suggestion-action#approve" }
-    ) { "Approve" }
-  end
-
-  def reject_button
-    button(
-      type: "button",
-      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-             "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
-      data: {
-        action: "click->modal#open",
-        modal_target_id: "reject-suggestion-modal",
-        reject_suggestion_id: @entry.suggestion_id,
-        reject_framework_id: @framework_id,
-        reject_entity_label: entity_word,
-        reject_preview: reject_preview
-      }
-    ) { "Reject" }
   end
 
   def review_link
@@ -215,6 +186,62 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def reject_preview
     # Amendments carry the proposed value under :new_suggested_value.
     (payload_value(:suggested_value) || payload_value(:new_suggested_value)).to_s.strip.presence
+  end
+
+  # Every suggestion-anchored entry advertises its discussion and is one
+  # click from the pane's suggestion card (focus=suggestion) — count +
+  # latest excerpt when a thread exists, a quiet "Discuss" otherwise. The
+  # affordance is a button, so the row's focusSuggestion navigation bails
+  # on it (see context_pane_controller#focusSuggestion).
+  def discussable?
+    @framework_id.present? && @entry.suggestion_id.present?
+  end
+
+  def discussion_row
+    div(class: "mt-1") do
+      button(
+        type: "button",
+        class: "inline-flex items-center gap-1 max-w-full rounded px-1.5 py-0.5 text-[10px] " \
+               "text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-primary/10 " \
+               "transition-colors",
+        data: {
+          action: "click->context-pane#openSuggestionCard",
+          suggestion_id: @entry.suggestion_id
+        },
+        aria: { label: "Open this suggestion's discussion" }
+      ) do
+        discussion_icon
+        span(class: "truncate") { discussion_label }
+      end
+    end
+  end
+
+  def discussion_label
+    count = @entry.comment_count.to_i
+    return "Discuss" if count.zero?
+
+    excerpt = @entry.latest_comment.to_s.strip.truncate(60)
+    "#{count} · #{excerpt}"
+  end
+
+  # Tiny speech-bubble icon (Heroicons chat-bubble-oval-left outline).
+  def discussion_icon
+    svg(
+      class: "w-3 h-3 shrink-0",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      stroke_width: "2",
+      aria_hidden: "true"
+    ) do |s|
+      s.path(
+        stroke_linecap: "round",
+        stroke_linejoin: "round",
+        d: "M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 " \
+           "4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 " \
+           "5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
+      )
+    end
   end
 
   def dom_safe_id
@@ -290,6 +317,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "suggestion_approved" then "Approved a #{entity_word} suggestion"
     when "suggestion_rejected" then "Rejected a #{entity_word} suggestion"
     when "suggestion_withdrawn" then "Withdrew a #{entity_word} suggestion"
+    when "suggestion_commented" then "Commented on a #{entity_word} suggestion"
     when "capability_added"    then "Added a capability"
     when "capability_archived" then "Archived a capability"
     when "capability_updated"  then "Updated a capability"
@@ -403,6 +431,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
       creation_preview
     when "suggestion_approved", "suggestion_rejected"
       payload_value(:comment)
+    when "suggestion_commented"
+      payload_value(:body)
     when "expectation_added"
       payload_value(:description)
     when "expectation_updated", "illustration_updated"
