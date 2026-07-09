@@ -1052,8 +1052,11 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
 > standalone suggestion index, not the pane.
 
-**Every action a user can take on a framework MUST produce an entry in the
-activity feed.** That includes the full suggestion lifecycle (submitted /
+**Every action a user can take on a framework MUST be represented in the
+activity feed.** For most actions that means an entry of its own; mutations
+of an existing comment (edit / delete) instead update or tombstone the
+representation the original post already has — the feed shows conversation
+activity, not comment meta-history, matching the assessment feed. That includes the full suggestion lifecycle (submitted /
 amended / approved / rejected / withdrawn / **commented**), direct editorial
 edits, structural changes (capability/category/role/level/binding add · archive ·
 reorder), the draft lifecycle (**draft opened** — incl. `auto_opened` —, **version

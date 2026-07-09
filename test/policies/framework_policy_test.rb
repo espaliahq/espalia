@@ -51,6 +51,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       assert_not policy.view_suggestions?
     end
 
+    should "deny comment_on_suggestion without collaborator role" do
+      assert_not policy.comment_on_suggestion?
+    end
+
     should "deny publish without collaborator role" do
       assert_not policy.publish?
     end
@@ -127,6 +131,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
 
     should "allow view_suggestions" do
       assert policy.view_suggestions?
+    end
+
+    should "allow comment_on_suggestion" do
+      assert policy.comment_on_suggestion?
     end
 
     should "allow edit" do
@@ -216,6 +224,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
 
     should "allow view_suggestions" do
       assert policy.view_suggestions?
+    end
+
+    should "allow comment_on_suggestion" do
+      assert policy.comment_on_suggestion?
     end
 
     should "allow edit" do
