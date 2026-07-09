@@ -49,6 +49,40 @@ class Frameworks::RepositoryTest < ActiveSupport::TestCase
       end
     end
 
+    should "skip the snapshot rewrite for comment-only commits" do
+      framework_id = SecureRandom.uuid_v7
+      cap_id = SecureRandom.uuid_v7
+      suggestion_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        author_id = create(:person, tenant: @tenant).id.to_s
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(framework_id, "Engineering Growth")
+        cat_id = SecureRandom.uuid_v7
+        handler.add_capability_category(framework_id, cat_id, "Thinking")
+        handler.add_capability(framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
+        handler.suggest_edit(framework_id, suggestion_id, "capability", cap_id,
+                             "description", "Proposed", author_id, mode: :suggesting)
+        before = FrameworkExplorerGraph.find_by(framework_id: framework_id).updated_at
+
+        sleep 0.01 # ensure timestamp resolution
+        comment_id = SecureRandom.uuid_v7
+        handler.comment_on_suggestion(framework_id, suggestion_id, comment_id,
+                                      body: "Discussing", author_id: author_id)
+        handler.edit_suggestion_comment(framework_id, comment_id,
+                                        body: "Revised", edited_by_id: author_id)
+        handler.delete_suggestion_comment(framework_id, comment_id, deleted_by_id: author_id)
+
+        # Chat traffic changes nothing the graph renders — no row churn.
+        assert_equal before, FrameworkExplorerGraph.find_by(framework_id: framework_id).updated_at
+
+        # A graph-relevant command still rewrites it.
+        sleep 0.01
+        Frameworks::CommandHandler.new.add_role_family(framework_id, SecureRandom.uuid_v7, "Engineering")
+        assert_operator FrameworkExplorerGraph.find_by(framework_id: framework_id).updated_at, :>, before
+      end
+    end
+
     should "never end up with a snapshot but no events (or vice versa)" do
       # Atomicity: we force a failure after the aggregate's command applies
       # in-memory but before the outer transaction commits. Neither the
