@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Builds the option data the evidence modal's "also applies to" picker needs
+# Builds the option data the evidence modal's "Applies to" block needs
 # for one framework + assignee role: the selectable capabilities (grouped by
 # category), the role's levels, and the behavioural expectation for every valid
 # (capability × level) cell.

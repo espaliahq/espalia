@@ -234,7 +234,7 @@ class Views::Assessments::Evidence::Card < Views::Base
 
   # Opens the unified modal in edit mode for a non-author who may manage links
   # but not edit content — the server disables the content fields, leaving the
-  # "also applies to" picker active.
+  # "Applies to" block active.
   def link_menu_item
     modal_menu_button("Link to another capability")
   end
