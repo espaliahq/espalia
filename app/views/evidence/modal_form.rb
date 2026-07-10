@@ -32,6 +32,19 @@ class Views::Evidence::ModalForm < Views::Base
   SECONDARY_BTN = "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 " \
                   "text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
 
+  # @param mode [Symbol, String] :new, :edit, or :respond
+  # @param assignment_id [String]
+  # @param content_editable [Boolean] whether the content fields are enabled
+  # @param seed_cell [Hash, nil] the fixed origin cell (:new / :respond only)
+  # @param context_block [Hash, nil] writing-prompt context (:new / :respond only)
+  # @param scope_line [String, nil] "on ⟨name⟩'s assessment · ⟨role⟩" for hub-opened :edit
+  # @param link_options [Array<Hash>] capability picker options, grouped by category
+  # @param level_options [Array<Hash>] [{ ordinal:, label: }] for the level picker + row titles
+  # @param linked_cells [Array<Hash>] ALL active links as rows, entry point first (:edit only)
+  # @param expectation_map [Hash{String=>Hash}] cell token => { capability_name:, expectation:, illustrations: }
+  # @param evidence [EvidenceItem, nil]
+  # @param request [EvidenceRequest, nil]
+  # @param return_to [String, nil] "hub" or "assessment:<id>" — picks the submit endpoint
   def initialize(mode:, assignment_id:, content_editable:, seed_cell: nil, context_block: nil,
                  scope_line: nil, link_options: [], level_options: [], linked_cells: [],
                  expectation_map: {}, evidence: nil, request: nil, return_to: nil)
