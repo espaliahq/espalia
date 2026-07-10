@@ -250,6 +250,11 @@ class Views::Assessments::Evidence::Card < Views::Base
         modal_target_id: "evidence-modal-overlay",
         evidence_modal_mode_param: "edit",
         evidence_modal_evidence_id_param: @item.id,
+        # The entry point: the cell this card sits in. Its "Applies to" row
+        # sorts first + highlights so the modal opens oriented to where the
+        # user came from.
+        evidence_modal_capability_stable_id_param: @current_capability_stable_id,
+        evidence_modal_level_ordinal_param: @current_level_ordinal,
         evidence_modal_return_to_param: "assessment:#{@assessment_id}"
       }
     ) { label }

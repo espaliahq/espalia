@@ -103,9 +103,14 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-modal-overlay", visible: true
       assert_selector "#evm-content", visible: true
 
-      # Add cap2 · L1 via the "also applies to" picker, set the staged
-      # row's (required) valence, then save (links-only). Selecting the
-      # capability populates its valid levels (change event).
+      # The origin renders as a uniform "Applies to" row; as the item's only
+      # link its remove button is locked.
+      assert_selector "#evidence-modal [data-link-row]", count: 1
+      assert_selector "#evidence-modal [data-link-row] button[aria-label='Remove link'][disabled]"
+
+      # Add cap2 · L1 via the "Applies to" picker, set the staged row's
+      # (required) valence. Selecting the capability populates its valid
+      # levels (change event).
       page.execute_script(<<~JS)
         const m = document.querySelector("#evidence-modal");
         const cap = m.querySelector("[data-evidence-modal-target='linkCapability']");
@@ -114,8 +119,13 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
         m.querySelector("[data-evidence-modal-target='linkLevel']").value = "1";
         m.querySelector("[data-action*='evidence-modal#addLink']").click();
         m.querySelector("select[name='evidence[link_valences][#{@cap2_stable}|1]']").value = "growth_area";
-        m.querySelector("form").requestSubmit();
       JS
+
+      # With a second row staged, the origin row's remove button unlocks.
+      assert_selector "#evidence-modal [data-link-row]", count: 2
+      assert_no_selector "#evidence-modal [data-link-row] button[aria-label='Remove link'][disabled]"
+
+      page.execute_script(%(document.querySelector("#evidence-modal form").requestSubmit();))
 
       assert_text "Also linked to 1 other place"
 
@@ -123,6 +133,59 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
         links = EvidenceLink.active.where(evidence_id: @evidence_id)
           .pluck(:capability_stable_id, :level_ordinal, :valence)
         assert_equal [ [ @cap1_stable, 1, "demonstrated" ], [ @cap2_stable, 1, "growth_area" ] ].sort, links.sort
+      end
+    end
+
+    # The origin cell is not a protected link: with a second link in place, the
+    # unified "Applies to" block lets the editor remove the origin row like any
+    # other. The entry-point row (the cell the modal was opened from) sorts
+    # first, highlighted.
+    should "unlink the origin cell from the Edit modal while another link remains" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.add_evidence_link(@person.id, @framework_id, @evidence_id,
+          capability_stable_id: @cap2_stable, level_ordinal: 1, linked_by_id: @person.id, valence: "growth_area")
+      end
+
+      visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
+      wait_for_stimulus "evidence-modal"
+      assert_selector "#evidence-#{@evidence_id}", visible: true
+      page.execute_script(<<~JS)
+        document.querySelector("#evidence-#{@evidence_id} [data-evidence-modal-mode-param='edit']").click();
+      JS
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_selector "#evidence-modal [data-link-row]", count: 2
+
+      # Opened from cap1 · L1 ⇒ its row sorts first, marked as the entry point.
+      first_row_entry = page.evaluate_script(<<~JS)
+        (() => {
+          const row = document.querySelector("#evidence-modal [data-link-row]");
+          return {
+            hasOrigin: !!row.querySelector("input[value='#{@cap1_stable}|1']"),
+            title: row.getAttribute("title")
+          };
+        })()
+      JS
+      assert first_row_entry["hasOrigin"], "the entry-point (origin) row must sort first"
+      assert_equal "You opened this feedback from here", first_row_entry["title"]
+
+      # Remove the origin row and save — the item survives on the cap2 link.
+      page.execute_script(<<~JS)
+        const m = document.querySelector("#evidence-modal");
+        m.querySelector("[data-link-row] input[value='#{@cap1_stable}|1']")
+          .closest("[data-link-row]")
+          .querySelector("button[data-action*='removeLink']").click();
+        m.querySelector("form").requestSubmit();
+      JS
+
+      # The card disappears from the origin cell it was unlinked from (it
+      # lives on in the cap2 cell, where its link remains).
+      assert_no_selector "#evidence-list-#{@cap1_stable}-1 #evidence-#{@evidence_id}", visible: :all
+
+      ActsAsTenant.with_tenant(@tenant) do
+        links = EvidenceLink.active.where(evidence_id: @evidence_id)
+          .pluck(:capability_stable_id, :level_ordinal)
+        assert_equal [ [ @cap2_stable, 1 ] ], links
+        assert EvidenceItem.active.exists?(id: @evidence_id)
       end
     end
 

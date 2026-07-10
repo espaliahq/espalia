@@ -29,17 +29,24 @@ class Evidence::FrameworkCellOptions
     levels.map { |level| { ordinal: level.ordinal, label: level_label(level) } }
   end
 
-  # @return [Hash{String => Hash}] "stableId|ordinal" => { capability_name:, expectation: }
+  # @return [Hash{String => Hash}] "stableId|ordinal" =>
+  #   { capability_name:, expectation:, illustrations: [String] }
   #   for every valid cell — the source of truth for both validity and the
-  #   linked-cell expectation text shown in the picker.
+  #   per-row expectation + examples shown in the "Applies to" block. The
+  #   illustrations are role-scoped (this assignee's role only), so the
+  #   embedded map stays bounded.
   def expectation_map
     cap_by_id = capabilities.index_by(&:capability_id)
+    illustrations = illustrations_by_expectation
     expectations.each_with_object({}) do |expectation, map|
       cap = cap_by_id[expectation.capability_id]
       next unless cap
 
-      map["#{cap.stable_id}|#{expectation.level_ordinal}"] =
-        { capability_name: cap.name, expectation: expectation.description }
+      map["#{cap.stable_id}|#{expectation.level_ordinal}"] = {
+        capability_name: cap.name,
+        expectation: expectation.description,
+        illustrations: illustrations.fetch(expectation.expectation_id, [])
+      }
     end
   end
 
@@ -73,5 +80,15 @@ class Evidence::FrameworkCellOptions
 
   def expectations
     @expectations ||= FrameworkState::BehaviouralExpectation.where(capability_id: bound_capability_ids).to_a
+  end
+
+  # expectation_id => ordered illustration descriptions, for the assignee's role
+  def illustrations_by_expectation
+    FrameworkState::RoleIllustration
+      .where(role_id: @role_id, expectation_id: expectations.map(&:expectation_id))
+      .order(:ordinal)
+      .pluck(:expectation_id, :description)
+      .group_by(&:first)
+      .transform_values { |rows| rows.map(&:last) }
   end
 end
