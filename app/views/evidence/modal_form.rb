@@ -293,7 +293,7 @@ class Views::Evidence::ModalForm < Views::Base
       end
       p(class: "text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
       valence_select(name: "evidence[link_valences][#{token}]", current: cell[:valence],
-                     required: required_valence, id: valence_id, css: "#{INPUT} text-xs w-auto")
+                     required: required_valence, id: valence_id, css: "#{INPUT} text-xs")
       examples_disclosure(cell[:illustrations], open: entry) if cell[:illustrations].present?
       input(type: "hidden", name: "evidence[desired_links][]", value: token)
     end
