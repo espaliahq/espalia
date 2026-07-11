@@ -33,8 +33,22 @@ class Evidence::FrameworkCellOptionsTest < ActiveSupport::TestCase
 
     names = options.link_options.flat_map { |g| g[:capabilities].map { |c| c[:name] } }
     assert_includes names, "Critical Thinking"
-    assert_equal({ "#{bound.stable_id}|2" => { capability_name: "Critical Thinking", expectation: "Weighs options" } }, options.expectation_map)
+    assert_equal(
+      { "#{bound.stable_id}|2" =>
+          { capability_name: "Critical Thinking", expectation: "Weighs options", illustrations: [ "x" ] } },
+      options.expectation_map
+    )
     assert_equal [ { ordinal: 2, label: "L2 — Mid" } ], options.level_options
+  end
+
+  should "scope expectation-map illustrations to the assignee's role" do
+    bound = create(:framework_capability, category_id: @cat.category_id, name: "Critical Thinking")
+    bind(bound)
+    exp = create(:framework_behavioural_expectation, capability_id: bound.capability_id, level_ordinal: 2, description: "Weighs options")
+    other_role = create(:framework_role, role_family_id: @role.role_family_id, name: "EM", code: "EM", track: "management")
+    create(:framework_role_illustration, expectation_id: exp.expectation_id, role_id: other_role.role_id, ordinal: 1, description: "manager-only")
+
+    assert_equal [], options.expectation_map["#{bound.stable_id}|2"][:illustrations]
   end
 
   should "exclude inactive and unbound capabilities" do

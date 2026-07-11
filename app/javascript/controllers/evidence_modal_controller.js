@@ -6,9 +6,10 @@
 //     turbo-frame `src` from a trigger's action params, so the server renders
 //     the right mode/prefill each open.
 //   - IN-FRAME instance (inside the rendered form): `typeChanged` toggles the
-//     custom-type label; `addLink`/`removeLink` manage the "also applies to"
-//     rows, each showing that cell's behavioural expectation (read from an
-//     embedded JSON map).
+//     custom-type label; `addLink`/`removeLink` manage the "Applies to"
+//     rows, each showing that cell's behavioural expectation and expandable
+//     examples (read from an embedded JSON map). Remove buttons lock when
+//     only one row remains — feedback must apply somewhere.
 //
 // Usage (page trigger):
 //   <button data-action="evidence-modal#load modal#open"
@@ -52,10 +53,10 @@ export default class extends BaseController {
     this.#rebuildLevels()
   }
 
-  // IN-FRAME: add an "also applies to" cell as a row with its expectation.
-  // The staged row carries a REQUIRED valence select, so a new link can't
-  // be submitted without one — but staging the row itself stays a plain
-  // capability + level pick.
+  // IN-FRAME: add an "Applies to" cell as a row with its expectation and
+  // examples. The staged row carries a REQUIRED valence select, so a new
+  // link can't be submitted without one — but staging the row itself stays
+  // a plain capability + level pick.
   addLink() {
     if (!this.hasLinkRowsTarget || !this.hasLinkCapabilityTarget || !this.hasLinkLevelTarget) return
     const cap = this.linkCapabilityTarget.value
@@ -63,18 +64,20 @@ export default class extends BaseController {
     if (!cap || !level) return
 
     const token = `${cap}|${level}`
-    if (this.#isLinked(cap, level)) return // dup or primary (also disabled in the UI)
+    if (this.#isLinked(cap, level)) return // dup (also disabled in the UI)
     const info = this.#expectations()[token]
     if (!info) return // not a valid cell
 
     this.linkRowsTarget.appendChild(this.#row(token, level, info))
     this.linkLevelTarget.value = ""
     this.#rebuildLevels() // the just-added level is now disabled; keep the capability selected
+    this.#updateRemoveButtons()
   }
 
   removeLink(event) {
     event.target.closest("[data-link-row]")?.remove()
     this.#rebuildLevels() // the freed level becomes selectable again
+    this.#updateRemoveButtons()
   }
 
   // private
@@ -117,17 +120,18 @@ export default class extends BaseController {
   #row(token, level, info) {
     const row = document.createElement("div")
     row.dataset.linkRow = ""
-    row.className = "rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm"
+    row.className = "rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm space-y-1"
 
     const head = document.createElement("div")
     head.className = "flex items-start justify-between gap-2"
     const title = document.createElement("span")
     title.className = "font-medium text-gray-900 dark:text-white"
-    title.textContent = `${info.capability_name} · L${level}`
+    title.textContent = `${info.capability_name} · ${this.#levelLabels()[level] || `L${level}`}`
     const remove = document.createElement("button")
     remove.type = "button"
     remove.dataset.action = "evidence-modal#removeLink"
-    remove.className = "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer"
+    remove.className = "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer " +
+      "disabled:opacity-40 disabled:cursor-not-allowed"
     remove.setAttribute("aria-label", "Remove link")
     remove.textContent = "×"
     head.append(title, remove)
@@ -135,12 +139,13 @@ export default class extends BaseController {
 
     if (info.expectation) {
       const exp = document.createElement("p")
-      exp.className = "mt-0.5 text-xs text-gray-600 dark:text-gray-300"
+      exp.className = "text-xs text-gray-600 dark:text-gray-300"
       exp.textContent = `↳ ${info.expectation}`
       row.appendChild(exp)
     }
 
     row.appendChild(this.#valenceSelect(token))
+    if (info.illustrations?.length) row.appendChild(this.#examples(info.illustrations))
 
     const hidden = document.createElement("input")
     hidden.type = "hidden"
@@ -148,6 +153,59 @@ export default class extends BaseController {
     hidden.value = token
     row.appendChild(hidden)
     return row
+  }
+
+  // Collapsible examples list, mirroring the server-rendered rows' <details>.
+  #examples(list) {
+    const details = document.createElement("details")
+    details.className = "group"
+    const summary = document.createElement("summary")
+    summary.className = "cursor-pointer select-none text-xs font-semibold uppercase tracking-wide " +
+      "text-gray-600 dark:text-gray-300 marker:content-none flex items-center gap-1"
+    const chevron = document.createElement("span")
+    chevron.className = "transition-transform group-open:rotate-90"
+    chevron.setAttribute("aria-hidden", "true")
+    chevron.textContent = "▸"
+    const label = document.createElement("span")
+    label.textContent = `Examples (${list.length})`
+    summary.append(chevron, label)
+    details.appendChild(summary)
+
+    const ul = document.createElement("ul")
+    ul.className = "mt-1 space-y-1"
+    list.forEach((text) => {
+      const li = document.createElement("li")
+      li.className = "flex gap-2 text-xs text-gray-700 dark:text-gray-200"
+      const bullet = document.createElement("span")
+      bullet.className = "text-gray-400"
+      bullet.setAttribute("aria-hidden", "true")
+      bullet.textContent = "•"
+      const body = document.createElement("span")
+      body.textContent = text
+      li.append(bullet, body)
+      ul.appendChild(li)
+    })
+    details.appendChild(ul)
+    return details
+  }
+
+  // An item must keep at least one link: when a single row remains, its
+  // remove button (if it has one — the :new/:respond seed row doesn't)
+  // locks. Re-enables as soon as a second row is staged.
+  #updateRemoveButtons() {
+    if (!this.hasLinkRowsTarget) return
+    const rows = this.linkRowsTarget.querySelectorAll("[data-link-row]")
+    const lock = rows.length === 1
+    rows.forEach((row) => {
+      const button = row.querySelector("button[data-action*='removeLink']")
+      if (!button) return
+      button.disabled = lock
+      if (lock) {
+        button.title = "Feedback must apply to at least one behaviour — withdraw it instead"
+      } else {
+        button.removeAttribute("title")
+      }
+    })
   }
 
   // A NEW link's valence is mandatory: the staged row's select is required
@@ -158,7 +216,7 @@ export default class extends BaseController {
     select.name = `evidence[link_valences][${token}]`
     select.required = true
     select.setAttribute("aria-label", "Evidence valence")
-    select.className = "mt-1 w-auto rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " +
+    select.className = "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " +
       "text-gray-900 dark:text-gray-100 text-xs focus-visible:ring-primary focus-visible:border-primary"
     select.add(new Option("Valence…", ""))
     this.#valenceOptions().forEach(([label, value]) => select.add(new Option(label, value)))

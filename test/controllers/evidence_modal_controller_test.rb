@@ -64,6 +64,18 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       # No role/level chrome line when opened within an assessment.
       assert_no_match(/on Author/, response.body)
     end
+
+    should "seed the Applies-to block with a fixed row carrying the required valence" do
+      sign_in @author_user
+      get evidence_modal_path(mode: "new", assignment_id: @assignment.id,
+                              capability_stable_id: @cap.stable_id, level_ordinal: 2, return_to: "assessment:#{@assignment.id}")
+      assert_response :success
+      assert_select "input[name='evidence[primary_cell]'][value=?]", "#{@cap.stable_id}|2"
+      assert_select "[data-link-row] input[name='evidence[desired_links][]'][value=?]", "#{@cap.stable_id}|2"
+      assert_select "select#evm-valence[required]"
+      # The seed row is the record's anchor — not removable.
+      assert_select "button[aria-label='Remove link']", count: 0
+    end
   end
 
   context "GET /evidence_modal mode=edit" do
@@ -73,6 +85,49 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_match "Original", response.body
       assert_select "textarea[name='evidence[content]']:not([disabled])"
+    end
+
+    # Edit mode has no top context card — every active link (the origin
+    # included) is a uniform "Applies to" row carrying its valence, and the
+    # form submits no primary_cell (the server diffs desired vs current).
+    should "render the origin as a uniform Applies-to row, no context card, no primary_cell" do
+      sign_in @author_user
+      get evidence_modal_path(mode: "edit", evidence_id: @evidence_id, return_to: "assessment:#{@assignment.id}")
+      assert_response :success
+      assert_no_match(/What good looks like/, response.body)
+      assert_select "input[name='evidence[primary_cell]']", count: 0
+      assert_select "input[name='evidence[desired_links][]'][value=?]", "#{@cap.stable_id}|2"
+      assert_select "select[name=?] option[selected][value='demonstrated']",
+                    "evidence[link_valences][#{@cap.stable_id}|2]"
+      # The examples disclosure lives on the row now.
+      assert_match "Wrote the migration RFC", response.body
+      # The item's only link can't be removed — withdraw instead.
+      assert_select "button[aria-label='Remove link'][disabled]"
+    end
+
+    should "sort and highlight the entry-point cell first" do
+      other = ActsAsTenant.with_tenant(@tenant) do
+        cap2 = create(:framework_capability, category_id: @cap.category_id, name: "Collaboration")
+        role_id = FrameworkState::CapabilityRoleBinding.find_by(capability_id: @cap.capability_id).role_id
+        create(:framework_capability_role_binding, capability_id: cap2.capability_id, role_id: role_id, weight: 1.0)
+        create(:framework_behavioural_expectation, capability_id: cap2.capability_id, level_ordinal: 2, description: "Pairs well")
+        PersonDevelopment::CommandHandler.new.add_evidence_link(@author.id, @framework_id, @evidence_id,
+          capability_stable_id: cap2.stable_id, level_ordinal: 2, linked_by_id: @author.id, valence: "growth_area")
+        cap2
+      end
+
+      sign_in @author_user
+      get evidence_modal_path(mode: "edit", evidence_id: @evidence_id,
+                              capability_stable_id: other.stable_id, level_ordinal: 2,
+                              return_to: "assessment:#{@assignment.id}")
+      assert_response :success
+      rows = css_select("[data-link-row]")
+      assert_equal 2, rows.size
+      assert_match "Collaboration", rows.first.text
+      assert_includes rows.first["class"], "ring-primary/40"
+      assert_equal "You opened this feedback from here", rows.first["title"]
+      # With two rows, both are removable.
+      assert_select "button[aria-label='Remove link'][disabled]", count: 0
     end
 
     should "disable content for a non-author who may only link (manager)" do

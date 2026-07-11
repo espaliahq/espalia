@@ -32,14 +32,28 @@ class Views::Evidence::ModalForm < Views::Base
   SECONDARY_BTN = "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 " \
                   "text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
 
-  def initialize(mode:, assignment_id:, primary_cell:, content_editable:, context_block:,
-                 link_options: [], level_options: [], linked_cells: [], expectation_map: {},
-                 evidence: nil, request: nil, return_to: nil, primary_valence: nil)
+  # @param mode [Symbol, String] :new, :edit, or :respond
+  # @param assignment_id [String]
+  # @param content_editable [Boolean] whether the content fields are enabled
+  # @param seed_cell [Hash, nil] the fixed origin cell (:new / :respond only)
+  # @param context_block [Hash, nil] writing-prompt context (:new / :respond only)
+  # @param scope_line [String, nil] "on ⟨name⟩'s assessment · ⟨role⟩" for hub-opened :edit
+  # @param link_options [Array<Hash>] capability picker options, grouped by category
+  # @param level_options [Array<Hash>] [{ ordinal:, label: }] for the level picker + row titles
+  # @param linked_cells [Array<Hash>] ALL active links as rows, entry point first (:edit only)
+  # @param expectation_map [Hash{String=>Hash}] cell token => { capability_name:, expectation:, illustrations: }
+  # @param evidence [EvidenceItem, nil]
+  # @param request [EvidenceRequest, nil]
+  # @param return_to [String, nil] "hub" or "assessment:<id>" — picks the submit endpoint
+  def initialize(mode:, assignment_id:, content_editable:, seed_cell: nil, context_block: nil,
+                 scope_line: nil, link_options: [], level_options: [], linked_cells: [],
+                 expectation_map: {}, evidence: nil, request: nil, return_to: nil)
     @mode = mode.to_sym
     @assignment_id = assignment_id
-    @primary_cell = primary_cell
+    @seed_cell = seed_cell
     @content_editable = content_editable
     @context_block = context_block
+    @scope_line = scope_line
     @link_options = link_options
     @level_options = level_options
     @linked_cells = linked_cells
@@ -47,14 +61,14 @@ class Views::Evidence::ModalForm < Views::Base
     @evidence = evidence
     @request = request
     @return_to = return_to
-    @primary_valence = primary_valence
   end
 
   def view_template
     turbo_frame_tag("evidence-modal") do
       div(class: "p-5", data: { controller: "evidence-modal" }) do
         header
-        context_card
+        context_card if @context_block
+        hub_scope_line if @scope_line
         visibility_note
         # _top so the submit isn't captured by the #evidence-modal frame: the
         # hub's redirect must navigate the page, and turbo_stream responses (the
@@ -87,13 +101,15 @@ class Views::Evidence::ModalForm < Views::Base
     { new: "Add feedback / evidence", edit: "Edit feedback / evidence", respond: "Provide feedback / evidence" }.fetch(@mode)
   end
 
-  # Primary-cell context: capability · level, the behavioural expectation, and
-  # (primary only) the role illustrations. Role/level chrome only off the hub.
+  # Writing-prompt context for :new / :respond — the behaviour being written
+  # about (capability · level, the expectation, examples behind a disclosure)
+  # sits above the content fields while composing. :edit renders no top card:
+  # all context lives on the uniform "Applies to" rows.
   def context_card
     cx = @context_block
     div(class: "rounded-md bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 p-3 space-y-2 mb-4") do
       div do
-        p(class: "text-sm font-medium text-gray-900 dark:text-white") { primary_label(cx) }
+        p(class: "text-sm font-medium text-gray-900 dark:text-white") { prompt_label(cx) }
         p(class: "text-xs text-gray-600 dark:text-gray-300") { scope_label(cx) } if cx[:show_role_level]
       end
       if cx[:expectation].present?
@@ -102,16 +118,22 @@ class Views::Evidence::ModalForm < Views::Base
           p(class: "mt-0.5 text-sm text-gray-700 dark:text-gray-200") { cx[:expectation] }
         end
       end
-      illustrations(cx[:illustrations]) if cx[:illustrations].present?
+      examples_disclosure(cx[:illustrations], css: "text-sm") if cx[:illustrations].present?
     end
   end
 
-  def primary_label(cx)
-    [ cx[:name] || "Capability", "Level #{@primary_cell[:level_ordinal]}" ].join(" · ")
+  # Whose assessment (hub-opened :edit only — the hub lists items across
+  # people, and edit mode has no prompt card to say so).
+  def hub_scope_line
+    p(class: "text-xs text-gray-600 dark:text-gray-300 mb-3") { "Feedback #{@scope_line}" }
+  end
+
+  def prompt_label(cx)
+    [ cx[:name] || "Capability", "Level #{@seed_cell[:level_ordinal]}" ].join(" · ")
   end
 
   def scope_label(cx)
-    level = cx[:level_title].present? ? "#{cx[:level_title]} (Level #{@primary_cell[:level_ordinal]})" : "Level #{@primary_cell[:level_ordinal]}"
+    level = cx[:level_title].present? ? "#{cx[:level_title]} (Level #{@seed_cell[:level_ordinal]})" : "Level #{@seed_cell[:level_ordinal]}"
     [ cx[:role], level, ("on #{cx[:assessee_name]}'s assessment" if cx[:assessee_name]) ].compact.join(" · ")
   end
 
@@ -132,12 +154,18 @@ class Views::Evidence::ModalForm < Views::Base
     end
   end
 
-  def illustrations(list)
-    div do
-      span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Examples" }
+  # Collapsible examples list (role illustrations) — shared by the prompt card
+  # and every "Applies to" row. Native <details>, no JS.
+  def examples_disclosure(list, css: "text-xs", open: false)
+    details(class: "group", open: open) do
+      summary(class: "cursor-pointer select-none text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 " \
+                     "marker:content-none flex items-center gap-1") do
+        span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
+        span { "Examples (#{list.size})" }
+      end
       ul(class: "mt-1 space-y-1") do
         list.each do |text|
-          li(class: "flex gap-2 text-sm text-gray-700 dark:text-gray-200") do
+          li(class: "flex gap-2 #{css} text-gray-700 dark:text-gray-200") do
             span(class: "text-gray-400", aria: { hidden: "true" }) { "•" }
             span { text }
           end
@@ -151,10 +179,10 @@ class Views::Evidence::ModalForm < Views::Base
     input(type: "hidden", name: "evidence[evidence_id]", value: @evidence&.id) if @evidence
     input(type: "hidden", name: "evidence[request_id]", value: @request&.id) if @request
     input(type: "hidden", name: "return_to", value: @return_to)
-    # The primary cell, explicit so the server can split it from the extras, and
-    # always part of the desired link set.
-    input(type: "hidden", name: "evidence[primary_cell]", value: primary_token)
-    input(type: "hidden", name: "evidence[desired_links][]", value: primary_token)
+    # The seed cell (:new / :respond only) — the record_evidence origin. Its
+    # desired-link entry rides on the fixed seed row. :edit submits no seed;
+    # the server diffs the desired set against current links.
+    input(type: "hidden", name: "evidence[primary_cell]", value: seed_token) if @seed_cell
   end
 
   def content_fields
@@ -167,30 +195,12 @@ class Views::Evidence::ModalForm < Views::Base
     custom_label_field
     title_field
     content_field
-    primary_valence_field
     external_fields
   end
 
-  # The recorder's judgment of what this evidence says about the primary
-  # cell's behaviour — directly after the description so the hierarchy
-  # reads "what happened, then what it says". Deliberately no default —
-  # the choice is forced on every NEW link (HTML required + server /
-  # aggregate backstops). In edit mode a pre-valence (nil) link is never
-  # force-reclassified: it stays optional and blank until the editor
-  # deliberately picks one. Stays enabled for non-author link editors —
-  # valence is linkage metadata, not content.
-  def primary_valence_field
-    div do
-      label(for: "evm-valence", class: LABEL) { "What does this say about the behaviour?" }
-      valence_select(name: "evidence[link_valences][#{primary_token}]", current: @primary_valence,
-                     required: @mode != :edit, id: "evm-valence", css: INPUT)
-    end
-  end
-
-  # The one valence dropdown, shared by the primary field and each link
-  # row. A blank placeholder renders only while nothing is chosen (a
-  # classified link can be re-classified but never cleared back to
-  # unspecified).
+  # The one valence dropdown, shared by every "Applies to" row. A blank
+  # placeholder renders only while nothing is chosen (a classified link can
+  # be re-classified but never cleared back to unspecified).
   def valence_select(name:, current:, required:, css:, id: nil, data: {})
     select(id: id, name: name, required: required, class: css, data: data,
            aria: { label: "Evidence valence" }) do
@@ -251,20 +261,71 @@ class Views::Evidence::ModalForm < Views::Base
     end
   end
 
-  # "Also applies to" — pick extra cells; each renders as a row with that cell's
-  # behavioural expectation so the user sees which behaviour it must satisfy.
+  # "Applies to" — every behaviour this feedback is linked to, as uniform rows:
+  # capability · level, the expectation, a per-row valence, and expandable
+  # examples. :new / :respond seed the block with the origin cell as a fixed
+  # (non-removable) row carrying the REQUIRED valence; :edit renders ALL
+  # active links — the origin is not special — and any row can be removed
+  # while more than one remains (an item must apply somewhere; the aggregate
+  # enforces the same floor). The entry-point row (the cell the modal was
+  # opened from) sorts first, highlighted, with its examples pre-expanded.
   def links_section
     div(class: "pt-2 border-t border-gray-100 dark:border-gray-800") do
-      span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1") { "Also applies to" }
-      picker_row
-      div(class: "mt-2 space-y-2", data: { evidence_modal_target: "linkRows" }) do
+      span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1") { "Applies to" }
+      div(class: "space-y-2", data: { evidence_modal_target: "linkRows" }) do
+        seed_row if @seed_cell
         @linked_cells.each { |cell| link_row(cell) }
       end
+      picker_row
     end
   end
 
+  # The fixed origin row for :new / :respond — the cell the feedback is being
+  # recorded against. Not removable (it anchors record_evidence / the
+  # request), and its valence is the forced choice on every new item.
+  def seed_row
+    info = @expectation_map[seed_token] || {}
+    cell = { capability_stable_id: @seed_cell[:capability_stable_id], level_ordinal: @seed_cell[:level_ordinal],
+             capability_name: info[:capability_name] || @context_block&.dig(:name),
+             expectation: info[:expectation], illustrations: info[:illustrations] || [] }
+    link_row(cell, removable: false, required_valence: true, valence_id: "evm-valence")
+  end
+
+  def link_row(cell, removable: true, required_valence: false, valence_id: nil)
+    token = "#{cell[:capability_stable_id]}|#{cell[:level_ordinal]}"
+    entry = cell[:entry_point]
+    div(class: "rounded-md border p-2 text-sm space-y-1 " \
+               "#{entry ? "border-primary/40 ring-1 ring-primary/40" : "border-gray-200 dark:border-gray-700"}",
+        title: (entry ? "You opened this feedback from here" : nil),
+        data: { link_row: "" }) do
+      div(class: "flex items-start justify-between gap-2") do
+        span(class: "font-medium text-gray-900 dark:text-white") do
+          "#{cell[:capability_name] || "Capability"} · #{level_label(cell[:level_ordinal])}"
+        end
+        remove_button if removable
+      end
+      p(class: "text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
+      valence_select(name: "evidence[link_valences][#{token}]", current: cell[:valence],
+                     required: required_valence, id: valence_id, css: "#{INPUT} text-xs")
+      examples_disclosure(cell[:illustrations], open: entry) if cell[:illustrations].present?
+      input(type: "hidden", name: "evidence[desired_links][]", value: token)
+    end
+  end
+
+  # Removing the last remaining link is blocked (withdraw the item instead) —
+  # server-rendered disabled when only one link exists; the Stimulus
+  # controller keeps the state current as rows are added/removed.
+  def remove_button
+    last = @seed_cell.nil? && @linked_cells.size == 1
+    button(type: "button", aria: { label: "Remove link" }, data: { action: "evidence-modal#removeLink" },
+           disabled: last,
+           title: (last ? "Feedback must apply to at least one behaviour — withdraw it instead" : nil),
+           class: "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer " \
+                  "disabled:opacity-40 disabled:cursor-not-allowed") { "×" }
+  end
+
   def picker_row
-    div(class: "flex flex-wrap items-end gap-2") do
+    div(class: "mt-2 flex flex-wrap items-end gap-2") do
       div(class: "flex-1 min-w-40") do
         select(class: INPUT, aria: { label: "Capability to also link" },
                data: { evidence_modal_target: "linkCapability", action: "change->evidence-modal#capabilityChanged" }) do
@@ -289,28 +350,10 @@ class Views::Evidence::ModalForm < Views::Base
     end
   end
 
-  def link_row(cell)
-    token = "#{cell[:capability_stable_id]}|#{cell[:level_ordinal]}"
-    div(class: "rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm", data: { link_row: "" }) do
-      div(class: "flex items-start justify-between gap-2") do
-        span(class: "font-medium text-gray-900 dark:text-white") { "#{cell[:capability_name] || "Capability"} · L#{cell[:level_ordinal]}" }
-        button(type: "button", aria: { label: "Remove link" }, data: { action: "evidence-modal#removeLink" },
-               class: "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer") { "×" }
-      end
-      p(class: "mt-0.5 text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
-      link_row_valence_select(token, cell[:valence])
-      input(type: "hidden", name: "evidence[desired_links][]", value: token)
-    end
-  end
-
-  # Per-link valence. A classified link can be re-classified but never
-  # cleared (no blank option); a pre-valence (nil) link keeps a blank
-  # "Valence…" placeholder and stays optional — existing links are never
-  # force-reclassified by an edit. (JS-staged rows render their own
-  # REQUIRED copy of this select — see evidence_modal_controller.js.)
-  def link_row_valence_select(token, current)
-    valence_select(name: "evidence[link_valences][#{token}]", current: current,
-                   required: false, css: "mt-1 #{INPUT} text-xs w-auto")
+  # "L3 — Senior Engineer" when the role has a title for the ordinal.
+  def level_label(ordinal)
+    @level_labels ||= @level_options.to_h { |opt| [ opt[:ordinal], opt[:label] ] }
+    @level_labels[ordinal] || "L#{ordinal}"
   end
 
   # Per-cell expectation map (valid cells + their expectation) for the Stimulus
@@ -348,8 +391,8 @@ class Views::Evidence::ModalForm < Views::Base
     @evidence&.evidence_type.presence || "peer_feedback"
   end
 
-  def primary_token
-    "#{@primary_cell[:capability_stable_id]}|#{@primary_cell[:level_ordinal]}"
+  def seed_token
+    "#{@seed_cell[:capability_stable_id]}|#{@seed_cell[:level_ordinal]}"
   end
 
   # Raw path (not a named helper) so the component renders before the save

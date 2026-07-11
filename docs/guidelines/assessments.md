@@ -483,14 +483,15 @@ Design rules — all deliberate, don't relitigate piecemeal:
   transient `EvidenceItem#link_valences` map) and on the hub response cards'
   "Applies to" chips.
 - **Modal UX**: one shared valence dropdown (`ModalForm#valence_select`;
-  surface term is "valence", never "judgment"). The primary cell's valence
-  sits **directly after "What happened?"** (hierarchy: what happened, then
-  what it says; deliberately no default — required on new/respond). The
-  "also applies to" picker stays a plain capability + level pick; the
-  **staged row** carries the required valence select (blank "Valence…"
-  placeholder blocks submit until chosen — mandatory for every new link
-  without overloading the add). In edit mode a pre-valence (nil) link
-  renders an optional "Valence…" placeholder; a classified link can be
+  surface term is "valence", never "judgment"), rendered per **"Applies to"
+  row** — every linked behaviour carries its own (see *The unified "Applies
+  to" block* below). The block sits after "What happened?" (hierarchy: what
+  happened, then what it says, per behaviour; deliberately no default). On
+  :new/:respond the seeded origin row's valence is **required** (id
+  `evm-valence`); JS-staged rows carry their own required select (blank
+  "Valence…" placeholder blocks submit until chosen — mandatory for every
+  new link without overloading the add). In edit mode a pre-valence (nil)
+  link renders an optional "Valence…" placeholder; a classified link can be
   re-classified but not cleared. Per-link valences submit as
   `evidence[link_valences][<cap>|<level>]` alongside the untouched
   `desired_links[]` tokens; `EvidenceDiffSubmit` validates every new link's
@@ -504,6 +505,47 @@ Design rules — all deliberate, don't relitigate piecemeal:
   take a required `valence` enum (each `additional_links` entry carries its
   own); `assessments_set_evidence_link_valence` reclassifies. Read payloads
   include `valence` per link (nil = pre-valence link).
+
+## The unified "Applies to" block (evidence modal)
+
+The modal used to treat the "primary" linkage (a top context card + its own
+valence field) and the "Also applies to" extras as two separate surfaces —
+disorienting when Edit was opened from a *secondary* cell, because the card
+at the top named a different behaviour than the one clicked. The linkage UI
+is now **one "Applies to" block**: every behaviour the feedback is linked to
+renders as a uniform row — capability · level (with the role's level title),
+the behavioural expectation, that link's valence dropdown, and a collapsible
+**Examples** disclosure (role illustrations) — plus the capability/level
+picker at the block's foot.
+
+Rules — all deliberate:
+
+- **The origin cell is a creation fact, not a protected link.** The
+  `record_evidence` origin (`EvidenceItem.capability_stable_id`/`level_ordinal`)
+  stays immutable event history, but the UI never singles it out: in edit
+  mode ALL active links render as removable rows, the origin included (the
+  aggregate already allowed removing it — the only invariant is "an active
+  item keeps ≥ 1 link"). The edit form submits **no `primary_cell`**;
+  `EvidenceDiffSubmit#diff_edit` diffs desired vs current links. Removing
+  the last remaining row is locked client-side (× disabled, "withdraw it
+  instead") with the aggregate as backstop.
+- **The entry point orients the modal.** The card's Edit trigger passes the
+  cell it sits in (`capability_stable_id` + `level_ordinal` params); that
+  row sorts first, gets a primary ring + tooltip ("You opened this feedback
+  from here"), and its Examples render pre-expanded. Hub-opened edits carry
+  no entry cell — rows keep `linked_at` order.
+- **:new / :respond seed the block** with a fixed (non-removable) origin row
+  carrying the REQUIRED valence — it anchors `record_evidence` / the
+  request's cell, so `evidence[primary_cell]` still submits in these modes.
+  These two modes also keep a **writing-prompt card** above the content
+  fields (capability · level, "What good looks like", examples behind a
+  disclosure) — when composing, the behaviour being written about belongs
+  above the textarea. Edit mode renders no top card; hub-opened edits get a
+  one-line "Feedback on ⟨name⟩'s assessment · ⟨role⟩" scope line instead
+  (the hub lists items across people).
+- **Examples come from the embedded map.** `FrameworkCellOptions#expectation_map`
+  carries role-scoped `illustrations` per valid cell, so server-rendered and
+  JS-staged rows render the same disclosure without extra fetches.
 
 ## Requesting evidence (cell-scoped)
 
@@ -690,7 +732,7 @@ ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
 | `context_pane_controller.js` (shared with framework explorer) | Right-pane suggestion / activity panel state, URL focus sync. |
 | `continue_assessing_controller.js` | Bottom-line CTA — dispatches a window event with the next-unrated capability stable_id + level, picked up by `matrix_controller#focusUnrated`. |
 | `modal_controller.js` | Generic `Kit::Modal` controller — open/close, Esc, body-scroll-lock. **Outside-click dismissal is opt-in** (`dismissOnOutsideClick` value, default off) so a stray background click can't discard a half-filled transactional form — modals close via the × button, Cancel, Esc, or a successful submit. Hosts the Delegates modal (standalone) and the unified evidence modal (embedded — a lazy `#evidence-modal` frame). |
-| `evidence_modal_controller.js` | Drives the **unified evidence modal** (one modal for new/edit/respond, both surfaces). The page instance's `load` sets the lazy `#evidence-modal` frame `src` from a trigger's action params (mode + ids + `return_to`), so the server renders the right form each open; the in-frame instance toggles the custom-type label and manages the "also applies to" link rows (each showing that cell's behavioural expectation, read from an embedded JSON map). Replaced the old `evidence_form` / `evidence_edit_form` / `evidence_link_form` / `evidence_response` controllers. |
+| `evidence_modal_controller.js` | Drives the **unified evidence modal** (one modal for new/edit/respond, both surfaces). The page instance's `load` sets the lazy `#evidence-modal` frame `src` from a trigger's action params (mode + ids + entry cell + `return_to`), so the server renders the right form each open; the in-frame instance toggles the custom-type label and manages the "Applies to" link rows (each showing that cell's behavioural expectation + collapsible examples, read from an embedded JSON map) with the last-row remove lock. Replaced the old `evidence_form` / `evidence_edit_form` / `evidence_link_form` / `evidence_response` controllers. |
 
 There is **no** `sticky_hero_controller.js`. The hero's collapse is pure CSS scroll-driven animation. See *Hero Summary — Collapse on scroll*.
 
@@ -930,13 +972,13 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/Esc; opt-in outside-click dismissal (`dismissOnOutsideClick`, default off); dispatches `modal:open` |
 | `app/javascript/controllers/evidence_modal_controller.js` | Drives the unified evidence modal — frame `load`, link rows, type toggle (shared with the hub) |
 | **Unified evidence modal** (one modal for new/edit/respond, assessment + hub) | |
-| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — context-aware primary block (expectation + examples; role/level line only off the hub), content fields (disabled for a non-author link), the primary-cell valence radio pills (forced choice on new/respond), "also applies to" picker with per-cell expectations + per-row valence selects |
+| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — writing-prompt card (:new/:respond only; role/level line only off the hub), content fields (disabled for a non-author link), and the unified **"Applies to" block**: uniform per-link rows (expectation + required-on-new valence + collapsible examples; entry-point row first + highlighted; last-row remove lock) + the capability/level picker (see *The unified "Applies to" block*) |
 | `app/views/evidence/valence.rb` | Shared valence surface vocabulary — UI labels + badge styling for `EvidenceLink::VALENCES` (see *Evidence-link valence*) |
 | `app/operations/operations/assessments/set_evidence_link_valence.rb` | Shared web + MCP operation — reclassify one link's valence (`EvidenceLinkRevalenced`; no-op when unchanged) |
 | `app/views/evidence/modal_shell.rb` | The bare overlay/panel + lazy `#evidence-modal` frame, hosted inside `assessment-sync` (so the submit updates the matrix in place) |
-| `app/controllers/evidence_modal_controller.rb` | `GET /evidence_modal` — renders `ModalForm` for `(mode, evidence?, request?, cell?)`; resolves permissions + prefill + link options server-side |
+| `app/controllers/evidence_modal_controller.rb` | `GET /evidence_modal` — renders `ModalForm` for `(mode, evidence?, request?, cell?)`; resolves permissions + prefill + link options server-side; edit mode loads ALL active links (origin included, entry-point cell first) |
 | `app/models/evidence/cell_context_resolver.rb` | Shared per-cell context (name, role, level title, expectation, illustrations) — hub + modal |
-| `app/models/evidence/framework_cell_options.rb` | Valid (active + bound + has-expectation) link cells + the per-cell expectation map for the picker |
+| `app/models/evidence/framework_cell_options.rb` | Valid (active + bound + has-expectation) link cells + the per-cell expectation map (incl. role-scoped illustrations) for the "Applies to" rows |
 | `app/controllers/concerns/evidence_diff_submit.rb` | Diff-based save — emits the minimal commands (record / update-if-content-changed / add+remove links / respond); links-only never bumps `edited_at` |
 | `app/controllers/assessments/evidence_controller.rb#save` | Assessment-surface submit → matrix cell Turbo Streams (hub uses `evidence_requests#respond` / `evidence_items#update`) |
 | **CSS** | |

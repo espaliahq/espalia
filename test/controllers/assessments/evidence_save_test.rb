@@ -154,12 +154,31 @@ class Assessments::EvidenceSaveTest < ActionDispatch::IntegrationTest
           capability_stable_id: @cap2.stable_id, level_ordinal: 2, linked_by_id: @author.id, valence: "demonstrated")
       end
       sign_in @author_user
-      # desired = primary only ⇒ drop the cap2 link.
+      # desired = origin only ⇒ drop the cap2 link.
       post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
         assignment_id: @assignment.id, evidence_id: id, primary_cell: cell(@cap1),
         evidence_type: "project_outcome", content: "Original", desired_links: [ cell(@cap1) ]
       } }
       assert_equal Set[[ @cap1.stable_id, 2 ]], links_for(id)
+    end
+
+    # The origin cell is a creation fact, not a protected link: the unified
+    # "Applies to" block lets an editor remove it like any other row, as long
+    # as another link remains. The edit form no longer submits primary_cell.
+    should "remove the origin link when the desired set drops it" do
+      id = record!
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.add_evidence_link(@author.id, @framework_id, id,
+          capability_stable_id: @cap2.stable_id, level_ordinal: 2, linked_by_id: @author.id, valence: "growth_area")
+      end
+      sign_in @author_user
+      post save_path, params: { return_to: "assessment:#{@assignment.id}", evidence: {
+        assignment_id: @assignment.id, evidence_id: id,
+        evidence_type: "project_outcome", content: "Original", desired_links: [ cell(@cap2) ]
+      } }
+      assert_equal Set[[ @cap2.stable_id, 2 ]], links_for(id)
+      assert ActsAsTenant.with_tenant(@tenant) { EvidenceItem.active.exists?(id: id) },
+        "the item survives on its remaining link"
     end
   end
 
