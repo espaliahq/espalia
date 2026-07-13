@@ -596,6 +596,14 @@ class PersonDevelopment::Aggregate
   #   on the same stream — closing the gap between a read-model coverage
   #   check at the edge and this command landing. Nil skips the check
   #   (trusted internal callers, pre-gate history).
+  #   (No framework-version binding on the key list: a mid-flight
+  #   `FrameworkVersionMigrated` could in principle stale the denominator,
+  #   but pinning to the cycle's rolled version would falsely lock out
+  #   post-roll joiners, whose streams legitimately sit at the enrollment's
+  #   define-time version — see PersonEnrolled's `framework_version`. The
+  #   publish-vs-complete race is a deliberate, rare admin action in a
+  #   millisecond window; it stays in the documented known-limitation class
+  #   of `FrameworkVersionMigrated` coverage staleness.)
   # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not
   #   started, already completed, or a required cell lacks an agreed value
   def complete_alignment(cycle_id, completed_by_id:, required_cell_keys: nil)

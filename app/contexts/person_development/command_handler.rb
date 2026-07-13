@@ -345,7 +345,12 @@ class PersonDevelopment::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle being completed
   # @param completed_by_id [String] UUID of the person completing alignment
-  def complete_alignment(person_id, framework_id, cycle_id, completed_by_id:, required_cell_keys: nil)
+  # @param required_cell_keys [Array<Array(String, Integer)>, nil] cells that
+  #   must carry an agreed value, as `[capability_stable_id, level_ordinal]`
+  #   pairs — the completion coverage gate, re-checked atomically in the
+  #   aggregate (see {PersonDevelopment::Aggregate#complete_alignment})
+  def complete_alignment(person_id, framework_id, cycle_id, completed_by_id:,
+                         required_cell_keys: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.complete_alignment(cycle_id, completed_by_id: completed_by_id,
         required_cell_keys: required_cell_keys)
