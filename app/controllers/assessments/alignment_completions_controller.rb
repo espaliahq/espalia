@@ -8,13 +8,16 @@
 #
 # Completion is gated on FULL current-level aligned coverage: every
 # capability with a cell at the assessed level must carry an agreed value
-# before the record can be formalised. Alignment values are recorded by the
-# manager, so the gate can never deadlock — it forbids leaving cells
-# implicit, not disagreement. The gate lives here (not in the aggregate)
-# because the denominator — which capabilities have a cell at the assessed
-# level — is framework structure the PersonDevelopment stream doesn't carry.
+# before the record can be formalised. The manager can always record agreed
+# values, so the gate can never deadlock — it forbids leaving cells
+# implicit, not disagreement. Two layers: the read-model check here gives
+# the friendly redirect + count, then the counted cells are forwarded into
+# the aggregate (`required_cell_keys`), which re-runs the check atomically
+# against the stream — the denominator (which capabilities have a cell at
+# the assessed level) is framework structure the PersonDevelopment stream
+# doesn't carry, so the edge supplies it and the aggregate enforces it.
 # This controller is the sole completion entry point (no MCP tool exists for
-# it), so the web gate covers the whole surface.
+# it); any future Operation/MCP tool must forward the same cell keys.
 #
 class Assessments::AlignmentCompletionsController < ApplicationController
   before_action :require_person
@@ -40,9 +43,14 @@ class Assessments::AlignmentCompletionsController < ApplicationController
       return
     end
 
+    # Forward the counted cells so the aggregate re-runs the coverage check
+    # atomically against the stream — a concurrent clear between the
+    # read-model check above and this command landing can't slip a gap into
+    # the completed record.
     PersonDevelopment::CommandHandler.new.complete_alignment(
       @assignment.person_id, @assignment.framework_id, cycle.cycle_id,
-      completed_by_id: current_person.id
+      completed_by_id: current_person.id,
+      required_cell_keys: coverage[:current_level_cell_keys]
     )
 
     redirect_to assessment_path(@assignment),

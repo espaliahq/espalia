@@ -894,6 +894,40 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_match /already completed/, err.message
     end
 
+    should "raise when a required cell lacks an agreed rating" do
+      cap = SecureRandom.uuid_v7
+      err = assert_raises(RuntimeError) do
+        @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id,
+          required_cell_keys: [ [ cap, 1 ] ])
+      end
+      assert_match /1 current-level cell lacks an agreed rating/, err.message
+    end
+
+    should "complete when every required cell carries an agreed rating" do
+      cap = SecureRandom.uuid_v7
+      @aggregate.align_assessment(cap, level_ordinal: 1,
+        aligned_frequency: "consistent", cycle_id: @cycle_id)
+
+      @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id,
+        required_cell_keys: [ [ cap, 1 ] ])
+
+      assert_kind_of PersonDevelopment::Events::FullAlignmentCompleted,
+        @aggregate.unpublished_events.to_a.last
+    end
+
+    should "re-raise when a required cell's agreed rating was cleared before completion" do
+      cap = SecureRandom.uuid_v7
+      @aggregate.align_assessment(cap, level_ordinal: 1,
+        aligned_frequency: "consistent", cycle_id: @cycle_id)
+      @aggregate.clear_alignment_rating(cap, level_ordinal: 1, cycle_id: @cycle_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id,
+          required_cell_keys: [ [ cap, 1 ] ])
+      end
+      assert_match /lacks an agreed rating/, err.message
+    end
+
     should "freeze align_assessment after completion" do
       @aggregate.complete_alignment(@cycle_id, completed_by_id: @completed_by_id)
 

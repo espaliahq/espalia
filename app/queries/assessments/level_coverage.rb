@@ -39,8 +39,12 @@ class Assessments::LevelCoverage
   #   the self/manager sides; the aligned COUNT is paid solely by the
   #   completion gate.
   # @return [Hash] { self_complete:, manager_complete:, total:, self_rated:,
-  #   manager_rated: } — plus { aligned_complete:, aligned_rated: } when
-  #   include_aligned is true
+  #   manager_rated: } — plus { aligned_complete:, aligned_rated:,
+  #   current_level_cell_keys: } when include_aligned is true.
+  #   `current_level_cell_keys` are `[capability_stable_id, level_ordinal]`
+  #   pairs for every counted cell — the completion gate forwards them into
+  #   the aggregate so the coverage check re-runs atomically against the
+  #   stream (see {PersonDevelopment::Aggregate#complete_alignment}).
   def call(include_aligned: false)
     ordinal = assessed_level_ordinal
     return empty(include_aligned:) if ordinal.nil?
@@ -67,6 +71,7 @@ class Assessments::LevelCoverage
       aligned_rated = ratings.where.not(aligned_frequency: nil).distinct.count(:capability_stable_id)
       result[:aligned_complete] = aligned_rated == total
       result[:aligned_rated] = aligned_rated
+      result[:current_level_cell_keys] = stable_ids.map { |sid| [ sid, ordinal ] }
     end
     result
   end
@@ -76,7 +81,7 @@ class Assessments::LevelCoverage
   def empty(include_aligned: false)
     result = { self_complete: false, manager_complete: false,
                total: 0, self_rated: 0, manager_rated: 0 }
-    result.merge!(aligned_complete: false, aligned_rated: 0) if include_aligned
+    result.merge!(aligned_complete: false, aligned_rated: 0, current_level_cell_keys: []) if include_aligned
     result
   end
 
