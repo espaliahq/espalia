@@ -530,13 +530,22 @@ class Views::Assessments::HeroSummary < Views::Base
   # the same story. Nil scorings drop out so a perspective with no ratings
   # yet doesn't render as "0%".
   #
-  # Once alignment is COMPLETE the secondaries drop entirely: completion
-  # formalises the agreed record, so the hero reads as one outcome rather
-  # than three competing scores. The self/manager inputs stay reachable in
-  # the expansion panel and the activity feed — hidden at a glance,
-  # preserved on drill-in.
+  # Once the agreed record is WHOLE the secondaries drop entirely — the
+  # hero reads as one formal outcome rather than three competing scores.
+  # "Whole" means every current-level cell carries an agreed value
+  # (`coverage_complete?` — the primary frequency in :alignment is the
+  # aligned one), which happens the moment the last cell is agreed, NOT
+  # only after "Mark alignment complete": user testing showed the lingering
+  # Self/Mgr numbers on an all-agreed assessment read as competing scores
+  # and confused promotion conversations. While cells remain unagreed the
+  # secondaries stay — they are the working material of the conversation.
+  # `alignment_locked` still forces the drop for participants completed
+  # before the coverage gate existed (aligned status with historical
+  # coverage gaps). The self/manager inputs stay reachable in the expansion
+  # panel's secondary lines, the level-chip splits, and the activity feed —
+  # hidden at a glance, preserved on drill-in.
   def secondary_perspectives
-    return [] if @context == :alignment && @alignment_locked
+    return [] if @context == :alignment && (@alignment_locked || coverage_complete?)
 
     @secondary_perspectives ||= case @context
     when :manager   then [ [ "Self", @self_scoring ] ]

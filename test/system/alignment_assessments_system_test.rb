@@ -294,12 +294,19 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
       wait_for_stimulus "matrix"
       assert_button "Mark alignment complete", disabled: true
+      # While a cell remains unagreed the hero still shows the Self/Mgr
+      # working numbers.
+      assert_selector "#hero-secondary-percents", visible: :all
 
       # Agreeing the final current-level cell enables the control in place
-      # (Turbo Stream replace — no reload).
+      # (Turbo Stream replace — no reload)…
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistent")
       assert_button "Mark alignment complete", disabled: false
       assert_no_selector "a", text: "1 to align"
+      # …and the hero drops the Self/Mgr secondaries at the same moment —
+      # the agreed record is whole, so only the aligned score shows, even
+      # before "Mark alignment complete" is pressed.
+      assert_no_selector "#hero-secondary-percents", visible: :all
 
       auto_confirm do
         page.execute_script(<<~JS)
