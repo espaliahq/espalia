@@ -33,11 +33,12 @@ class Assessments::LevelCoverageTest < ActiveSupport::TestCase
   teardown { ActsAsTenant.current_tenant = nil }
 
   context "#call" do
-    should "report neither side complete when nothing is rated" do
+    should "report no side complete when nothing is rated" do
       result = coverage
       assert_equal 2, result[:total]
       assert_not result[:self_complete]
       assert_not result[:manager_complete]
+      assert_not result[:aligned_complete]
     end
 
     should "stay incomplete while only some current-level cells are rated" do
@@ -65,6 +66,27 @@ class Assessments::LevelCoverageTest < ActiveSupport::TestCase
       rate(@cap2, self_rated_frequency: "some", manager_rated_frequency: "none")
       assert coverage[:self_complete]
       assert coverage[:manager_complete]
+    end
+
+    should "track the aligned perspective independently of self and manager" do
+      rate(@cap1, self_rated_frequency: "consistent", manager_rated_frequency: "consistent",
+        aligned_frequency: "consistent")
+      rate(@cap2, self_rated_frequency: "some", manager_rated_frequency: "some")
+
+      result = coverage
+      assert_equal 1, result[:aligned_rated]
+      assert_not result[:aligned_complete]
+      assert result[:self_complete]
+    end
+
+    should "be aligned-complete once every current-level cell carries an agreed value" do
+      rate(@cap1, aligned_frequency: "consistent")
+      rate(@cap2, aligned_frequency: "some")
+
+      result = coverage
+      assert result[:aligned_complete]
+      assert_equal 2, result[:aligned_rated]
+      assert_not result[:self_complete], "self side untouched"
     end
 
     should "never be complete when the assessed level has no cells" do

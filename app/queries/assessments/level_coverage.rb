@@ -1,13 +1,16 @@
 # frozen_string_literal: true
 
 # Computes whether a person's CURRENT-LEVEL capabilities are fully rated for
-# each perspective (self / manager) within an assessment cycle.
+# each perspective (self / manager / aligned) within an assessment cycle.
 #
 # This is the durable "Assessment Complete" signal: the
 # {PersonDevelopment::Projections::CurrentAssessment} projection runs it on
 # every rating change and stamps the result onto
 # {AssessmentCycleProgress#self_completed_at} / `#manager_completed_at`, which
-# the /assessments list then reads cheaply.
+# the /assessments list then reads cheaply. The aligned perspective backs the
+# alignment-completion gate: {Assessments::AlignmentCompletionsController}
+# refuses to mark alignment complete while any current-level cell lacks an
+# agreed value, so `aligned` status always means the formal record is whole.
 #
 # The denominator mirrors {Assessments::MatrixDataBuilder} exactly — active,
 # role-bound capabilities that have a behavioural expectation at the assessed
@@ -17,8 +20,8 @@
 #   Assessments::LevelCoverage.new(
 #     person_id: p.id, framework_id: fw_id, cycle_id: cycle_id
 #   ).call
-#   # => { self_complete: true, manager_complete: false, total: 18,
-#   #      self_rated: 18, manager_rated: 12 }
+#   # => { self_complete: true, manager_complete: false, aligned_complete: false,
+#   #      total: 18, self_rated: 18, manager_rated: 12, aligned_rated: 0 }
 #
 class Assessments::LevelCoverage
   # @param person_id [String]
@@ -30,7 +33,8 @@ class Assessments::LevelCoverage
     @cycle_id = cycle_id
   end
 
-  # @return [Hash] { self_complete:, manager_complete:, total:, self_rated:, manager_rated: }
+  # @return [Hash] { self_complete:, manager_complete:, aligned_complete:,
+  #   total:, self_rated:, manager_rated:, aligned_rated: }
   def call
     ordinal = assessed_level_ordinal
     return empty if ordinal.nil?
@@ -44,21 +48,25 @@ class Assessments::LevelCoverage
     )
     self_rated = ratings.where.not(self_rated_frequency: nil).distinct.count(:capability_stable_id)
     manager_rated = ratings.where.not(manager_rated_frequency: nil).distinct.count(:capability_stable_id)
+    aligned_rated = ratings.where.not(aligned_frequency: nil).distinct.count(:capability_stable_id)
     total = stable_ids.size
 
     {
       self_complete: self_rated == total,
       manager_complete: manager_rated == total,
+      aligned_complete: aligned_rated == total,
       total: total,
       self_rated: self_rated,
-      manager_rated: manager_rated
+      manager_rated: manager_rated,
+      aligned_rated: aligned_rated
     }
   end
 
   private
 
   def empty
-    { self_complete: false, manager_complete: false, total: 0, self_rated: 0, manager_rated: 0 }
+    { self_complete: false, manager_complete: false, aligned_complete: false,
+      total: 0, self_rated: 0, manager_rated: 0, aligned_rated: 0 }
   end
 
   def assignment
