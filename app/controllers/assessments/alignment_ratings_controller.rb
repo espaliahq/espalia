@@ -207,7 +207,21 @@ class Assessments::AlignmentRatingsController < ApplicationController
           ),
           layout: false
         )
-      ) if active_category_id || category_id)
+      ) if active_category_id || category_id),
+      # Keep the manager's gated "Mark alignment complete" control current —
+      # it enables the moment the last current-level cell is agreed (and
+      # re-disables on an untoggle). Only the completing manager's DOM has
+      # the target; the assessee never receives the control.
+      (turbo_stream.replace(
+        "alignment-completion-control",
+        render_to_string(
+          Views::Assessments::AlignmentCompletionControl.new(
+            assignment: @assignment,
+            matrix_data: matrix_data
+          ),
+          layout: false
+        )
+      ) if policy(@assignment).complete_alignment?)
     ].compact
   end
 

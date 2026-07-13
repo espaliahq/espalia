@@ -151,23 +151,15 @@ class Views::Assessments::ManagerShowView < Views::Base
     end
   end
 
+  # Gated on full current-level aligned coverage — disabled with a jump
+  # chip while cells remain, live form once whole. Replaced in place by
+  # the alignment-rating Turbo Stream responses so it enables the moment
+  # the last cell is agreed.
   def mark_complete_button
-    confirm_msg = "Marking alignment complete will lock all ratings for this cycle, " \
-      "including the agreed values. Continue?"
-    form(
-      action: assessment_alignment_completion_path(@assignment),
-      method: "post",
-      data: { turbo_confirm: confirm_msg },
-      class: "hidden md:inline-block"
-    ) do
-      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "text-sm font-medium px-3 py-1.5 rounded-md " \
-               "bg-green-600 dark:bg-green-700 text-white " \
-               "hover:bg-green-700 dark:hover:bg-green-600 cursor-pointer"
-      ) { "Mark alignment complete" }
-    end
+    render Views::Assessments::AlignmentCompletionControl.new(
+      assignment: @assignment,
+      matrix_data: @matrix_data
+    )
   end
 
   def reopen_alignment_button
