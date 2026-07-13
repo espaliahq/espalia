@@ -19,7 +19,7 @@
 # @example
 #   Assessments::LevelCoverage.new(
 #     person_id: p.id, framework_id: fw_id, cycle_id: cycle_id
-#   ).call
+#   ).call(include_aligned: true)
 #   # => { self_complete: true, manager_complete: false, aligned_complete: false,
 #   #      total: 18, self_rated: 18, manager_rated: 12, aligned_rated: 0 }
 #
@@ -33,14 +33,20 @@ class Assessments::LevelCoverage
     @cycle_id = cycle_id
   end
 
-  # @return [Hash] { self_complete:, manager_complete:, aligned_complete:,
-  #   total:, self_rated:, manager_rated:, aligned_rated: }
-  def call
+  # @param include_aligned [Boolean] also count the aligned perspective.
+  #   Opt-in because the hottest caller — the CurrentAssessment projection,
+  #   on every rating event (and every event of a replay) — only consumes
+  #   the self/manager sides; the aligned COUNT is paid solely by the
+  #   completion gate.
+  # @return [Hash] { self_complete:, manager_complete:, total:, self_rated:,
+  #   manager_rated: } — plus { aligned_complete:, aligned_rated: } when
+  #   include_aligned is true
+  def call(include_aligned: false)
     ordinal = assessed_level_ordinal
-    return empty if ordinal.nil?
+    return empty(include_aligned:) if ordinal.nil?
 
     stable_ids = current_level_capability_stable_ids(ordinal)
-    return empty if stable_ids.empty?
+    return empty(include_aligned:) if stable_ids.empty?
 
     ratings = AssessmentLevelRating.where(
       person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
@@ -48,25 +54,30 @@ class Assessments::LevelCoverage
     )
     self_rated = ratings.where.not(self_rated_frequency: nil).distinct.count(:capability_stable_id)
     manager_rated = ratings.where.not(manager_rated_frequency: nil).distinct.count(:capability_stable_id)
-    aligned_rated = ratings.where.not(aligned_frequency: nil).distinct.count(:capability_stable_id)
     total = stable_ids.size
 
-    {
+    result = {
       self_complete: self_rated == total,
       manager_complete: manager_rated == total,
-      aligned_complete: aligned_rated == total,
       total: total,
       self_rated: self_rated,
-      manager_rated: manager_rated,
-      aligned_rated: aligned_rated
+      manager_rated: manager_rated
     }
+    if include_aligned
+      aligned_rated = ratings.where.not(aligned_frequency: nil).distinct.count(:capability_stable_id)
+      result[:aligned_complete] = aligned_rated == total
+      result[:aligned_rated] = aligned_rated
+    end
+    result
   end
 
   private
 
-  def empty
-    { self_complete: false, manager_complete: false, aligned_complete: false,
-      total: 0, self_rated: 0, manager_rated: 0, aligned_rated: 0 }
+  def empty(include_aligned: false)
+    result = { self_complete: false, manager_complete: false,
+               total: 0, self_rated: 0, manager_rated: 0 }
+    result.merge!(aligned_complete: false, aligned_rated: 0) if include_aligned
+    result
   end
 
   def assignment

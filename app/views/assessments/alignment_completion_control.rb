@@ -64,34 +64,24 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
       title: "Every current-level capability needs an agreed rating before " \
              "alignment can be marked complete.",
       class: "text-sm font-medium px-3 py-1.5 rounded-md " \
-             "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 " \
+             "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
              "cursor-not-allowed"
     ) { "Mark alignment complete" }
   end
 
   # Amber count chip that jumps the matrix to the first unaligned
-  # current-level cell. Reuses the hero CTA's `continue-assessing`
-  # controller — a window event, since the matrix controller's element
-  # doesn't enclose the header.
+  # current-level cell, via the shared `continue-assessing` window-event
+  # bridge (the matrix controller's element doesn't enclose the header).
   def jump_chip
-    target = unaligned_capabilities.first
-    count = unaligned_capabilities.size
-    a(
-      href: "#cell-#{target}-#{person_level}",
-      class: "inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md " \
-             "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 " \
-             "border border-amber-200 dark:border-amber-800 " \
-             "hover:bg-amber-100 dark:hover:bg-amber-900/40",
-      data: {
-        controller: "continue-assessing",
-        action: "click->continue-assessing#focus",
-        continue_assessing_capability_stable_id_value: target,
-        continue_assessing_level_ordinal_value: person_level
-      }
-    ) do
-      plain "#{count} to align"
-      span { "→" }
-    end
+    render Views::Assessments::ContinueAssessingLink.new(
+      capability_stable_id: unaligned_capabilities.first,
+      level_ordinal: person_level,
+      label: "#{unaligned_capabilities.size} to align",
+      classes: "inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md " \
+               "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 " \
+               "border border-amber-200 dark:border-amber-800 " \
+               "hover:bg-amber-100 dark:hover:bg-amber-900/40"
+    )
   end
 
   # stable_ids of current-level cells without an agreed value. Same

@@ -66,7 +66,7 @@ class Assessments::AlignmentCompletionsController < ApplicationController
       person_id: @assignment.person_id,
       framework_id: @assignment.framework_id,
       cycle_id: cycle.cycle_id
-    ).call
+    ).call(include_aligned: true)
   end
 
   def require_person

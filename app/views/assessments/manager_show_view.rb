@@ -225,9 +225,6 @@ class Views::Assessments::ManagerShowView < Views::Base
         # The manager-side view — the manager's own rating leads
         # (top-left split / first secondary percentage) in alignment.
         viewer_is_manager: true,
-        assignment: @assignment,
-        can_start_alignment: @can_start_alignment,
-        can_complete_alignment: @can_complete_alignment,
         assessee_name: @assessee.name,
         viewer_can_rate: @viewer_can_rate,
         alignment_locked: @matrix_data[:alignment_locked]

@@ -38,9 +38,6 @@ class Views::Assessments::HeroSummary < Views::Base
   # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
   #   party — in alignment the secondary percentages lead with the viewer's
   #   own perspective (Mgr first for the manager, Self first for the assessee)
-  # @param assignment [PersonFrameworkAssignment]
-  # @param can_start_alignment [Boolean]
-  # @param can_complete_alignment [Boolean]
   # @param assessee_name [String, nil]
   # @param viewer_can_rate [Boolean] whether the viewer can act on the
   #   "rate" prompts (assessee, recorded manager, or active delegate).
@@ -55,9 +52,7 @@ class Views::Assessments::HeroSummary < Views::Base
   def initialize(scoring:, categories:, person_level:, merged_levels:,
                  mastery_threshold:, meeting_expectation_threshold:,
                  assessment_id:, context: :self, viewer_is_manager: false,
-                 assignment: nil,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
-                 can_start_alignment: false, can_complete_alignment: false,
                  assessee_name: nil, viewer_can_rate: true, alignment_locked: false)
     @scoring = scoring
     @viewer_is_manager = viewer_is_manager
@@ -71,9 +66,6 @@ class Views::Assessments::HeroSummary < Views::Base
     @meeting_expectation_threshold = meeting_expectation_threshold
     @assessment_id = assessment_id
     @context = context
-    @assignment = assignment
-    @can_start_alignment = can_start_alignment
-    @can_complete_alignment = can_complete_alignment
     @assessee_name = assessee_name
     @viewer_can_rate = viewer_can_rate
     @alignment_locked = alignment_locked
@@ -231,22 +223,14 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def priming_cta(target)
-    stable_id = target[:capability].stable_id
-    a(
-      href: "#cell-#{stable_id}-#{@person_level}",
-      class: "inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-semibold " \
-             "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
-             "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors",
-      data: {
-        controller: "continue-assessing",
-        action: "click->continue-assessing#focus",
-        continue_assessing_capability_stable_id_value: stable_id,
-        continue_assessing_level_ordinal_value: @person_level
-      }
-    ) do
-      plain "Rate next capability"
-      span { "→" }
-    end
+    render Views::Assessments::ContinueAssessingLink.new(
+      capability_stable_id: target[:capability].stable_id,
+      level_ordinal: @person_level,
+      label: "Rate next capability",
+      classes: "inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-semibold " \
+               "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
+               "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+    )
   end
 
   # Small muted "X of Y rated" badge shown in the unlocked header while the
@@ -492,26 +476,14 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def continue_assessing_cta(target)
-    stable_id = target[:capability].stable_id
-    # data-controller="continue-assessing" wires a click handler that
-    # dispatches a window event — the matrix controller lives in a
-    # different turbo-frame and can't be reached by a `click->matrix#`
-    # action from this scope.
-    a(
-      href: "#cell-#{stable_id}-#{@person_level}",
-      class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium " \
-             "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
-             "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors",
-      data: {
-        controller: "continue-assessing",
-        action: "click->continue-assessing#focus",
-        continue_assessing_capability_stable_id_value: stable_id,
-        continue_assessing_level_ordinal_value: @person_level
-      }
-    ) do
-      plain "Continue"
-      span { "→" }
-    end
+    render Views::Assessments::ContinueAssessingLink.new(
+      capability_stable_id: target[:capability].stable_id,
+      level_ordinal: @person_level,
+      label: "Continue",
+      classes: "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium " \
+               "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
+               "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+    )
   end
 
   # ── Verdict helpers ──
