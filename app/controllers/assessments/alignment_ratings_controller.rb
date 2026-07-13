@@ -143,7 +143,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             level_code: level_code,
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
-            focused: true
+            focused: true,
+            alignment_locked: matrix_data[:alignment_locked]
           ),
           layout: false
         )
@@ -174,7 +175,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             assessment_id: @assignment.id,
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
-            assessee_name: assessee_name_if_not_self
+            assessee_name: assessee_name_if_not_self,
+            alignment_locked: matrix_data[:alignment_locked]
           ),
           layout: false
         )
@@ -207,7 +209,25 @@ class Assessments::AlignmentRatingsController < ApplicationController
           ),
           layout: false
         )
-      ) if active_category_id || category_id)
+      ) if active_category_id || category_id),
+      # Keep the manager's gated "Mark alignment complete" control current —
+      # it enables the moment the last current-level cell is agreed (and
+      # re-disables on an untoggle). Only the completing manager's DOM has
+      # the target; the assessee never receives the control. Actor-side
+      # only, like every header element (status pill included): when the
+      # ASSESSEE records the final agreement, the manager's control catches
+      # up on their next interaction/reload — the established acting-user
+      # convention (assessments.md, framework-explorer.md Lesson 21).
+      (turbo_stream.replace(
+        "alignment-completion-control",
+        render_to_string(
+          Views::Assessments::AlignmentCompletionControl.new(
+            assignment: @assignment,
+            matrix_data: matrix_data
+          ),
+          layout: false
+        )
+      ) if policy(@assignment).complete_alignment?)
     ].compact
   end
 

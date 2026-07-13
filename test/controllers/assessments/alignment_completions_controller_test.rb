@@ -40,6 +40,9 @@ class Assessments::AlignmentCompletionsControllerTest < ActionDispatch::Integrat
   end
 
   context "POST /assessments/:assessment_id/alignment_completion" do
+    # The setup seeds no framework capabilities, so the assessed level has no
+    # cells — this also pins the completion gate's zero-cell behaviour: a role
+    # with nothing to align never blocks completion.
     should "let the manager mark alignment complete and flip status to aligned" do
       sign_in @manager_user
       post assessment_alignment_completion_path(@report_assignment)
@@ -73,6 +76,53 @@ class Assessments::AlignmentCompletionsControllerTest < ActionDispatch::Integrat
 
       post assessment_alignment_completion_path(@report_assignment)
       assert_response :forbidden
+    end
+  end
+
+  context "completion gate with current-level capabilities" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        category = create(:framework_capability_category,
+          framework_id: @framework.framework_id, name: "Thinking", ordinal: 1)
+        @cap = create(:framework_capability, category_id: category.category_id,
+          name: "Critical Thinking")
+        create(:framework_capability_role_binding,
+          capability_id: @cap.capability_id, role_id: @role.role_id)
+        create(:framework_behavioural_expectation, capability_id: @cap.capability_id,
+          level_ordinal: 2, description: "Synthesises information")
+      end
+    end
+
+    should "block completion while a current-level cell lacks an agreed rating" do
+      sign_in @manager_user
+      post assessment_alignment_completion_path(@report_assignment)
+
+      assert_redirected_to assessment_path(@report_assignment)
+      assert_match(/1 current-level capability still needs an agreed rating/, flash[:alert])
+      ActsAsTenant.with_tenant(@tenant) do
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @report.id)
+        assert_equal "aligning", progress.status
+        assert_nil progress.aligned_at
+      end
+    end
+
+    should "complete once every current-level cell carries an agreed rating" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.align_assessment(
+          @report.id, @framework.framework_id, @cap.stable_id,
+          level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
+          aligned_by_id: @manager.id
+        )
+      end
+
+      sign_in @manager_user
+      post assessment_alignment_completion_path(@report_assignment)
+
+      assert_redirected_to assessment_path(@report_assignment)
+      ActsAsTenant.with_tenant(@tenant) do
+        progress = AssessmentCycleProgress.find_by(cycle_id: @cycle_id, person_id: @report.id)
+        assert_equal "aligned", progress.status
+      end
     end
   end
 

@@ -587,11 +587,35 @@ class PersonDevelopment::Aggregate
   #
   # @param cycle_id [String] UUID of the cycle being completed
   # @param completed_by_id [String] UUID of the person completing alignment
-  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or already completed
-  def complete_alignment(cycle_id, completed_by_id:)
+  # @param required_cell_keys [Array<Array(String, Integer)>, nil] cells that
+  #   MUST carry an agreed value for completion to proceed, as
+  #   `[capability_stable_id, level_ordinal]` pairs. The caller supplies the
+  #   denominator (framework structure isn't on this stream), but checking it
+  #   HERE makes the coverage gate atomic: the check runs against the
+  #   aggregate's replayed state, serialized with any concurrent align/clear
+  #   on the same stream — closing the gap between a read-model coverage
+  #   check at the edge and this command landing. Nil skips the check
+  #   (trusted internal callers, pre-gate history).
+  #   (No framework-version binding on the key list: a mid-flight
+  #   `FrameworkVersionMigrated` could in principle stale the denominator,
+  #   but pinning to the cycle's rolled version would falsely lock out
+  #   post-roll joiners, whose streams legitimately sit at the enrollment's
+  #   define-time version — see PersonEnrolled's `framework_version`. The
+  #   publish-vs-complete race is a deliberate, rare admin action in a
+  #   millisecond window; it stays in the documented known-limitation class
+  #   of `FrameworkVersionMigrated` coverage staleness.)
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not
+  #   started, already completed, or a required cell lacks an agreed value
+  def complete_alignment(cycle_id, completed_by_id:, required_cell_keys: nil)
     ensure_in_cycle!(cycle_id)
     raise "Alignment has not been started for this cycle" unless @alignment_started
     raise "Alignment already completed for this cycle" if @alignment_completed
+
+    missing = Array(required_cell_keys).reject { |key| @aligned_ratings.key?(key) }
+    if missing.any?
+      raise "#{missing.size} current-level #{missing.size == 1 ? 'cell lacks' : 'cells lack'} " \
+            "an agreed rating"
+    end
 
     apply(PersonDevelopment::Events::FullAlignmentCompleted.new(data: {
       cycle_id: cycle_id,

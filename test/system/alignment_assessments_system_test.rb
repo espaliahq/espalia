@@ -107,7 +107,9 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Aligning"
 
       assert_no_button "Start alignment"
-      assert_button "Mark alignment complete"
+      # The single current-level cell is in disagreement (no agreed value
+      # yet), so the completion control renders gated.
+      assert_button "Mark alignment complete", disabled: true
     end
 
     should "auto-align cells where self and manager already agree, leaving disagreements for the conversation" do
@@ -270,15 +272,34 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
   context "manager marks alignment complete" do
     setup { seed_alignment_started! }
 
-    should "show 'Mark alignment complete' whenever alignment is in progress" do
+    should "gate 'Mark alignment complete' behind full current-level alignment with a jump chip" do
       visit assessment_path(@report_assignment)
       assert_text "Aligning"
-      assert_button "Mark alignment complete"
+      # The one current-level cell has no agreed value yet — disabled
+      # button plus the count chip pointing at the unaligned cell.
+      assert_button "Mark alignment complete", disabled: true
+      assert_selector "a", text: "1 to align"
     end
 
-    should "complete alignment, flip the badge to Aligned, and freeze alignment cells" do
+    should "hide the completion control on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@report_assignment)
       assert_text "Aligning"
+      assert_no_button "Mark alignment complete", disabled: :all
+      assert_no_selector "a", text: "1 to align"
+    end
+
+    should "enable completion once the last cell is agreed, then complete and freeze" do
+      visit assessment_path(@report_assignment, capability: @cap_stable)
+      assert_text "Aligning"
+      wait_for_stimulus "matrix"
+      assert_button "Mark alignment complete", disabled: true
+
+      # Agreeing the final current-level cell enables the control in place
+      # (Turbo Stream replace — no reload).
+      click_rating_frequency("#rating-#{@cap_stable}-2", "Consistent")
+      assert_button "Mark alignment complete", disabled: false
+      assert_no_selector "a", text: "1 to align"
 
       auto_confirm do
         page.execute_script(<<~JS)
@@ -297,6 +318,36 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       within("#cell-#{@cap_stable}-2") do
         assert_no_selector "button"
       end
+    end
+  end
+
+  context "post-aligned presentation" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Seed a residual off-current-level split: self rates L1, the manager
+        # doesn't, and the cell is never reconciled during alignment. (Must
+        # land before alignment starts — individual ratings freeze then.)
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "some", cycle_id: @cycle_id
+        )
+      end
+      seed_alignment_completed!
+    end
+
+    should "present the agreed record only — no hero secondaries, residual splits muted" do
+      visit assessment_path(@report_assignment)
+      assert_text "Aligned"
+
+      # The Self/Mgr secondary percentages are withheld once aligned — the
+      # hero reads as one formal outcome. (They render while aligning; see
+      # the viewer-first ordering tests above.)
+      assert_no_selector "#hero-secondary-percents"
+
+      # The agreed current-level cell resolves to a solid fill…
+      within("#cell-#{@cap_stable}-2") { assert_no_selector "[data-split='true']" }
+      # …while the never-reconciled L1 split stays visible but muted history.
+      assert_selector "#cell-#{@cap_stable}-1.opacity-60 [data-split='true']"
     end
   end
 
