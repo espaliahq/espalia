@@ -115,7 +115,8 @@ class Views::Assessments::CapabilityCard < Views::Base
         person_level: @person_level,
         context: @context,
         viewer_is_manager: @viewer_is_manager,
-        focused_ordinal: @focused_ordinal
+        focused_ordinal: @focused_ordinal,
+        alignment_locked: @alignment_locked
       )
       # Expansion always renders — every card auto-focuses the person's
       # current level (or the URL-specified level when present).

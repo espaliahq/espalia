@@ -143,7 +143,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             level_code: level_code,
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
-            focused: true
+            focused: true,
+            alignment_locked: matrix_data[:alignment_locked]
           ),
           layout: false
         )
@@ -174,7 +175,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             assessment_id: @assignment.id,
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
-            assessee_name: assessee_name_if_not_self
+            assessee_name: assessee_name_if_not_self,
+            alignment_locked: matrix_data[:alignment_locked]
           ),
           layout: false
         )

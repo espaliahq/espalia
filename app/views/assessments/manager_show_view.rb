@@ -229,7 +229,8 @@ class Views::Assessments::ManagerShowView < Views::Base
         can_start_alignment: @can_start_alignment,
         can_complete_alignment: @can_complete_alignment,
         assessee_name: @assessee.name,
-        viewer_can_rate: @viewer_can_rate
+        viewer_can_rate: @viewer_can_rate,
+        alignment_locked: @matrix_data[:alignment_locked]
       )
     end
   end

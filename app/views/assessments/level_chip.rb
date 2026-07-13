@@ -44,8 +44,15 @@ class Views::Assessments::LevelChip < Views::Base
   #   which perspective takes the top-left slice of a split (see
   #   {#paint_viewer_pair}); only consulted in :alignment context.
   # @param focused [Boolean] whether this chip is the currently focused level
+  # @param alignment_locked [Boolean] the participant is fully `aligned` —
+  #   a residual split (an off-current-level cell never reconciled during
+  #   the conversation) then renders muted: it is history, not a live
+  #   "contested — reconcile this" call to action nobody can act on.
+  #   Current-level cells can't split post-lock (the completion gate
+  #   requires them all agreed). Only consulted in :alignment context.
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:,
-                 level_code:, context: :self, viewer_is_manager: false, focused: false)
+                 level_code:, context: :self, viewer_is_manager: false, focused: false,
+                 alignment_locked: false)
     @cell_data = cell_data
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
@@ -54,6 +61,7 @@ class Views::Assessments::LevelChip < Views::Base
     @context = context
     @viewer_is_manager = viewer_is_manager
     @focused = focused
+    @alignment_locked = alignment_locked
   end
 
   def view_template
@@ -90,11 +98,22 @@ class Views::Assessments::LevelChip < Views::Base
            "h-12 flex-1 min-w-[60px] rounded-lg cursor-pointer " \
            "transition-all border-2 " \
            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 "
+    base += "#{muted_split_classes} " if muted_split?
     if @focused
       base + "#{chip_bg} #{chip_text} #{focus_border} shadow-sm"
     else
       base + "#{chip_bg} #{chip_text} #{idle_border} hover:shadow-sm"
     end
+  end
+
+  # A split surviving into the `aligned` state is history, not an open
+  # question — dim it so the formal (solid, agreed) record dominates.
+  def muted_split?
+    @context == :alignment && @alignment_locked && split?
+  end
+
+  def muted_split_classes
+    "opacity-60"
   end
 
   # Explicit text colour so the level code reads against the chip fill
@@ -144,9 +163,12 @@ class Views::Assessments::LevelChip < Views::Base
   # nil is just one perspective rated so far.
   def split_note
     _state, top, bottom = fill_state
-    return "the unrated perspective is assumed consistent" if top == ASSUMED || bottom == ASSUMED
-
-    top && bottom ? "perspectives differ" : "only one perspective rated"
+    note = if top == ASSUMED || bottom == ASSUMED
+      "the unrated perspective is assumed consistent"
+    else
+      top && bottom ? "perspectives differ" : "only one perspective rated"
+    end
+    muted_split? ? "#{note} (not reconciled during alignment)" : note
   end
 
   def rated_description

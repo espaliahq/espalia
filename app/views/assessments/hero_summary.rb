@@ -46,13 +46,19 @@ class Views::Assessments::HeroSummary < Views::Base
   #   "rate" prompts (assessee, recorded manager, or active delegate).
   #   False for view-only manager-chain ancestors — the priming hero then
   #   renders passive copy and every rate-CTA is withheld.
+  # @param alignment_locked [Boolean] the participant is fully `aligned` —
+  #   the hero then presents the agreed record only, withholding the
+  #   Self/Mgr secondary percentages and divergent verdict labels. The
+  #   inputs remain visible on drill-in (the expansion panel's secondary
+  #   lines) and in the activity feed; the glanceable surface reads as one
+  #   formal outcome. Only consulted in :alignment context.
   def initialize(scoring:, categories:, person_level:, merged_levels:,
                  mastery_threshold:, meeting_expectation_threshold:,
                  assessment_id:, context: :self, viewer_is_manager: false,
                  assignment: nil,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
                  can_start_alignment: false, can_complete_alignment: false,
-                 assessee_name: nil, viewer_can_rate: true)
+                 assessee_name: nil, viewer_can_rate: true, alignment_locked: false)
     @scoring = scoring
     @viewer_is_manager = viewer_is_manager
     @self_scoring = self_scoring
@@ -70,6 +76,7 @@ class Views::Assessments::HeroSummary < Views::Base
     @can_complete_alignment = can_complete_alignment
     @assessee_name = assessee_name
     @viewer_can_rate = viewer_can_rate
+    @alignment_locked = alignment_locked
   end
 
   def view_template
@@ -550,7 +557,15 @@ class Views::Assessments::HeroSummary < Views::Base
   # leads), matching the split-chip corner rule so the two surfaces tell
   # the same story. Nil scorings drop out so a perspective with no ratings
   # yet doesn't render as "0%".
+  #
+  # Once alignment is COMPLETE the secondaries drop entirely: completion
+  # formalises the agreed record, so the hero reads as one outcome rather
+  # than three competing scores. The self/manager inputs stay reachable in
+  # the expansion panel and the activity feed — hidden at a glance,
+  # preserved on drill-in.
   def secondary_perspectives
+    return [] if @context == :alignment && @alignment_locked
+
     @secondary_perspectives ||= case @context
     when :manager   then [ [ "Self", @self_scoring ] ]
     when :alignment then alignment_secondaries

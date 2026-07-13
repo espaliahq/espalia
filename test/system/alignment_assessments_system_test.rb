@@ -321,6 +321,36 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "post-aligned presentation" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Seed a residual off-current-level split: self rates L1, the manager
+        # doesn't, and the cell is never reconciled during alignment. (Must
+        # land before alignment starts — individual ratings freeze then.)
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "some", cycle_id: @cycle_id
+        )
+      end
+      seed_alignment_completed!
+    end
+
+    should "present the agreed record only — no hero secondaries, residual splits muted" do
+      visit assessment_path(@report_assignment)
+      assert_text "Aligned"
+
+      # The Self/Mgr secondary percentages are withheld once aligned — the
+      # hero reads as one formal outcome. (They render while aligning; see
+      # the viewer-first ordering tests above.)
+      assert_no_selector "#hero-secondary-percents"
+
+      # The agreed current-level cell resolves to a solid fill…
+      within("#cell-#{@cap_stable}-2") { assert_no_selector "[data-split='true']" }
+      # …while the never-reconciled L1 split stays visible but muted history.
+      assert_selector "#cell-#{@cap_stable}-1.opacity-60 [data-split='true']"
+    end
+  end
+
   context "manager re-opens a completed alignment" do
     setup { seed_alignment_completed! }
 
