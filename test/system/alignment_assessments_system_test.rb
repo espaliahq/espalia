@@ -289,17 +289,48 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_selector "a", text: "1 to align"
     end
 
+    should "restore the hero secondaries when an agreement is cleared" do
+      handler = PersonDevelopment::CommandHandler.new
+      ActsAsTenant.with_tenant(@tenant) do
+        handler.align_assessment(@report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
+          aligned_by_id: @manager.id)
+      end
+
+      # Record whole → the hero presents the single agreed outcome.
+      visit assessment_path(@report_assignment)
+      assert_text "Aligning"
+      assert_no_selector "#hero-secondary-percents"
+
+      # Clearing the agreement re-opens the question — the Self/Mgr working
+      # numbers come back with the gated control.
+      ActsAsTenant.with_tenant(@tenant) do
+        handler.clear_alignment_rating(@report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, cycle_id: @cycle_id, cleared_by_id: @manager.id)
+      end
+      visit assessment_path(@report_assignment)
+      assert_selector "#hero-secondary-percents", visible: :all
+      assert_button "Mark alignment complete", disabled: true
+    end
+
     should "enable completion once the last cell is agreed, then complete and freeze" do
       visit assessment_path(@report_assignment, capability: @cap_stable)
       assert_text "Aligning"
       wait_for_stimulus "matrix"
       assert_button "Mark alignment complete", disabled: true
+      # While a cell remains unagreed the hero still shows the Self/Mgr
+      # working numbers.
+      assert_selector "#hero-secondary-percents", visible: :all
 
       # Agreeing the final current-level cell enables the control in place
-      # (Turbo Stream replace — no reload).
+      # (Turbo Stream replace — no reload)…
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistent")
       assert_button "Mark alignment complete", disabled: false
       assert_no_selector "a", text: "1 to align"
+      # …and the hero drops the Self/Mgr secondaries at the same moment —
+      # the agreed record is whole, so only the aligned score shows, even
+      # before "Mark alignment complete" is pressed.
+      assert_no_selector "#hero-secondary-percents", visible: :all
 
       auto_confirm do
         page.execute_script(<<~JS)
