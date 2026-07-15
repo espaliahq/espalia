@@ -70,11 +70,11 @@ namespace :frameworks do
             rid = SecureRandom.uuid_v7
             handler.add_role(framework_id, rid, rfid, role_data["name"], role_data["code"], role_data["track"])
             role_code_to_id[role_data["code"]] = rid
-            if role_name_to_id.key?(role_data["name"])
-              puts "    WARNING: Duplicate role name '#{role_data['name']}' — " \
-                   "name-based capability scopes will bind to the LAST role with this name"
-            end
-            role_name_to_id[role_data["name"]] = rid
+            # A duplicated name is unresolvable for name-based scopes — mark it
+            # rather than letting last-write-wins bind scopes to an arbitrary
+            # role. resolve_role_names raises if a scope references it.
+            role_name_to_id[role_data["name"]] =
+              role_name_to_id.key?(role_data["name"]) ? :ambiguous : rid
             all_role_ids << rid
             management_role_ids << rid if role_data["track"] == "management"
             finance_role_ids << rid if finance_role_codes.include?(role_data["code"])
@@ -225,19 +225,26 @@ def resolve_scope(scope, role_code_to_id, role_name_to_id, all_role_ids, managem
   end
 end
 
-# Resolves role names to UUIDs, warning on any name the YAML never defined —
+# Resolves role names to UUIDs. Warns on any name the YAML never defined —
 # a silently-dropped name would seed a capability with zero bindings,
 # invisible in the role-filtered matrix (mirrors the illustration path's
-# unknown-role_code warning).
+# unknown-role_code warning) — and raises when a scope references a name
+# held by more than one role (binding to an arbitrary one would silently
+# corrupt the seeded framework).
 #
 # @param names [Array<String>] role names from a scope value
-# @param role_name_to_id [Hash] mapping of role names to UUIDs
+# @param role_name_to_id [Hash] mapping of role names to UUIDs (or :ambiguous)
 # @return [Array<String>] resolved role UUIDs
 def resolve_role_names(names, role_name_to_id)
   names.filter_map do |name|
-    role_name_to_id[name].tap do |rid|
-      puts "    WARNING: Unknown role name '#{name}' in capability scope — skipping" unless rid
+    rid = role_name_to_id[name]
+    if rid == :ambiguous
+      raise ArgumentError,
+            "Capability scope references role name '#{name}', which is held by " \
+            "more than one role — scope it by a unique name or restructure the YAML"
     end
+    puts "    WARNING: Unknown role name '#{name}' in capability scope — skipping" unless rid
+    rid
   end
 end
 
