@@ -11,6 +11,17 @@ class Frameworks::CommandHandler
     @repository = repository
   end
 
+  # Runs many commands against one framework as a single unit of work —
+  # one aggregate load, one event-store append, one graph snapshot (see
+  # {Frameworks::Repository#batch}). For bulk writers (seeds, imports);
+  # interactive surfaces should keep dispatching single commands.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @yield block dispatching handler commands for that framework
+  def batch(framework_id, &block)
+    @repository.batch(framework_id, &block)
+  end
+
   # Creates a new framework.
   #
   # When `created_by` is provided, the creator is automatically assigned
