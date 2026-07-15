@@ -184,6 +184,109 @@ class Frameworks::RepositoryTest < ActiveSupport::TestCase
       end
     end
 
+    should "let a second handler instance join the batch on the same thread" do
+      framework_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+
+        graph_writes = 0
+        original_store = Frameworks::ExplorerGraph.method(:store)
+        Frameworks::ExplorerGraph.stub(:store, lambda { |id, graph|
+          graph_writes += 1
+          original_store.call(id, graph)
+        }) do
+          handler.batch(framework_id) do
+            handler.create_framework(framework_id, "Engineering Growth")
+            # A fresh handler (fresh repository instance) — the house pattern
+            # in every Operations class — must join the same unit of work,
+            # not load/append against the un-stored stream.
+            Frameworks::CommandHandler.new.add_role_family(
+              framework_id, SecureRandom.uuid_v7, "Engineering"
+            )
+          end
+        end
+
+        assert_equal 1, graph_writes
+        stream = EventStreamNaming.framework_stream(framework_id)
+        assert_equal 3, Rails.configuration.event_store.read.stream(stream).count
+        assert_equal 1, FrameworkState::RoleFamily.where(framework_id: framework_id).count
+      end
+    end
+
+    should "abort instead of committing a rescued, partially-applied command" do
+      framework_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        repository = Frameworks::Repository.new
+
+        assert_raises(Frameworks::Repository::BatchAbortedError) do
+          handler.batch(framework_id) do
+            handler.create_framework(framework_id, "Engineering Growth")
+            begin
+              # A command that applies an event and THEN fails, rescued by the
+              # bulk loop ("log the bad row, keep going") — single-command
+              # dispatch would discard the event; the batch must not commit it.
+              repository.with_framework(framework_id) do |framework|
+                framework.add_role_family(framework_id, SecureRandom.uuid_v7, "Orphaned")
+                raise "boom"
+              end
+            rescue RuntimeError
+              nil
+            end
+          end
+        end
+
+        stream = EventStreamNaming.framework_stream(framework_id)
+        assert_equal 0, Rails.configuration.event_store.read.stream(stream).count
+        assert_nil FrameworkExplorerGraph.find_by(framework_id: framework_id)
+      end
+    end
+
+    should "refuse writes to a different framework inside a batch" do
+      framework_id = SecureRandom.uuid_v7
+      other_framework_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+
+        handler.batch(framework_id) do
+          handler.create_framework(framework_id, "Engineering Growth")
+          # Its transaction would silently join the batch's and roll back
+          # with it — refuse rather than couple the two streams' fates.
+          assert_raises(ArgumentError) do
+            Frameworks::CommandHandler.new.create_framework(other_framework_id, "Other")
+          end
+        end
+
+        stream = EventStreamNaming.framework_stream(framework_id)
+        assert_operator Rails.configuration.event_store.read.stream(stream).count, :>, 0
+        other_stream = EventStreamNaming.framework_stream(other_framework_id)
+        assert_equal 0, Rails.configuration.event_store.read.stream(other_stream).count
+      end
+    end
+
+    should "return the block's value from with_framework on both paths" do
+      framework_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        repository = Frameworks::Repository.new
+
+        result = repository.with_framework(framework_id) do |framework|
+          framework.create(framework_id, "Engineering Growth")
+          :single
+        end
+        assert_equal :single, result
+
+        batched = nil
+        repository.batch(framework_id) do
+          batched = repository.with_framework(framework_id) { |_framework| :batched }
+        end
+        assert_equal :batched, batched
+      end
+    end
+
     should "refuse nested batches" do
       framework_id = SecureRandom.uuid_v7
 
