@@ -284,6 +284,12 @@ class Frameworks::RepositoryTest < ActiveSupport::TestCase
             end
           end
         end
+
+        # The rescued cross-tenant attempt must not poison the batch: the
+        # original tenant's work commits, with no smuggled role family.
+        stream = EventStreamNaming.framework_stream(framework_id)
+        assert_equal 2, Rails.configuration.event_store.read.stream(stream).count
+        assert_empty Frameworks::ExplorerGraph.load(framework_id).role_families
       end
     end
 
