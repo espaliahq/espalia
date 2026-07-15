@@ -70,16 +70,21 @@ namespace :frameworks do
             rid = SecureRandom.uuid_v7
             handler.add_role(framework_id, rid, rfid, role_data["name"], role_data["code"], role_data["track"])
             role_code_to_id[role_data["code"]] = rid
+            if role_name_to_id.key?(role_data["name"])
+              puts "    WARNING: Duplicate role name '#{role_data['name']}' — " \
+                   "name-based capability scopes will bind to the LAST role with this name"
+            end
             role_name_to_id[role_data["name"]] = rid
             all_role_ids << rid
             management_role_ids << rid if role_data["track"] == "management"
             finance_role_ids << rid if finance_role_codes.include?(role_data["code"])
 
+            entry_ordinal = role_data["levels"]&.map { |l| l["ordinal"] }&.min
             role_data["levels"]&.each do |level_data|
               lid = SecureRandom.uuid_v7
               handler.add_level(framework_id, lid, rid,
                 level_data["ordinal"], level_data["title"], level_data["code"],
-                is_entry: level_data["ordinal"] == role_data["levels"].map { |l| l["ordinal"] }.min)
+                is_entry: level_data["ordinal"] == entry_ordinal)
               level_code_to_id[level_data["code"]] = lid
             end
           end
@@ -212,11 +217,27 @@ def resolve_scope(scope, role_code_to_id, role_name_to_id, all_role_ids, managem
     # Specific role name — resolved from the YAML-built map, NOT the read
     # model: inside the seed batch the projections haven't run yet, so
     # FrameworkState::Role rows don't exist.
-    [ role_name_to_id[scope] ].compact
+    resolve_role_names([ scope ], role_name_to_id)
   when Array
-    scope.flat_map { |s| role_name_to_id[s] }.compact
+    resolve_role_names(scope, role_name_to_id)
   else
     all_role_ids # default to all if no scope
+  end
+end
+
+# Resolves role names to UUIDs, warning on any name the YAML never defined —
+# a silently-dropped name would seed a capability with zero bindings,
+# invisible in the role-filtered matrix (mirrors the illustration path's
+# unknown-role_code warning).
+#
+# @param names [Array<String>] role names from a scope value
+# @param role_name_to_id [Hash] mapping of role names to UUIDs
+# @return [Array<String>] resolved role UUIDs
+def resolve_role_names(names, role_name_to_id)
+  names.filter_map do |name|
+    role_name_to_id[name].tap do |rid|
+      puts "    WARNING: Unknown role name '#{name}' in capability scope — skipping" unless rid
+    end
   end
 end
 
