@@ -3,7 +3,7 @@
 # every independent step runs even when an earlier one fails, failures are
 # reported by name, and the hook still exits non-zero on any failure.
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 PHASE="$(basename "$0" .sh)"
 source "$(dirname "$0")/lifecycle-steps.sh"
