@@ -282,23 +282,41 @@ Assessment cannot reach `FullAlignmentCompleted` until all reassessments resolve
 
 ---
 
-## Repository (with snapshots)
+## Repository
 
 ```ruby
 # app/contexts/frameworks/repository.rb
-module Frameworks
-  class Repository
-    def initialize(event_store: Rails.configuration.event_store)
-      @repo = AggregateRoot::SnapshotRepository.new(
-        event_store,
-        interval: 50  # snapshot every 50 events
-      )
-    end
+class Frameworks::Repository
+  def initialize(event_store: Rails.configuration.event_store)
+    @repository = AggregateRoot::Repository.new(event_store)
+  end
 
-    def with_framework(framework_id, &block)
-      stream = EventStreamNaming.framework_stream(framework_id)
-      @repo.with_aggregate(Aggregate.new, stream, &block)
-    end
+  # One command: full replay -> yield -> append events + rewrite the
+  # ExplorerGraph snapshot, all in one transaction.
+  def with_framework(framework_id, &block)
+    # ...
+  end
+
+  # Bulk unit of work (seeds, imports): ONE replay, many commands, ONE
+  # event append + ONE graph write. with_framework calls inside the block
+  # reuse the in-memory aggregate. Sync projections fire only at the final
+  # store, so code inside the block must not read projection-maintained
+  # read models for state it created within the batch.
+  def batch(framework_id, &block)
+    # ...
   end
 end
 ```
+
+Every mutating `with_framework` call rewrites the `Frameworks::ExplorerGraph`
+JSONB snapshot in the same transaction as the event append (snapshot-on-write —
+see [framework-edit-mode-benchmarks.md](framework-edit-mode-benchmarks.md)).
+Comment-only commits skip the graph rewrite (`GRAPH_IRRELEVANT_EVENTS`).
+
+**Aggregate snapshots are NOT implemented yet.** Loading replays the full
+stream every command (~93% of that cost is reading + deserializing events from
+Postgres). `AggregateRoot::SnapshotRepository` (available in aggregate_root
+3.0, and verified Marshal-compatible with `Frameworks::Aggregate`) is the
+candidate when interactive command latency on long-history frameworks warrants
+it — at ~1,600 events a single load costs ~100–150 ms. Bulk writers avoid the
+O(N²) replay cost with `#batch` instead.

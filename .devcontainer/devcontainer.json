@@ -49,6 +49,10 @@
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root",
   // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "rm -f .overmind.sock && bin/setup --skip-server && .devcontainer/apply-claude-json-seed.sh && npm install -g @anthropic-ai/claude-code",
-  "postStartCommand": "cd /workspaces/${localWorkspaceFolderBasename}/ && bin/rails db:prepare && rm -f .overmind.sock && .devcontainer/start-chrome-cdp-proxy.sh"
+  // Both lifecycle hooks run failure-tolerant step scripts: every independent
+  // step runs even when an earlier one fails (a bin/setup or db:prepare
+  // failure previously skipped the claude CLI install / chrome CDP proxy),
+  // and the script still exits non-zero so the failure stays visible.
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "postStartCommand": ".devcontainer/post-start.sh"
 }

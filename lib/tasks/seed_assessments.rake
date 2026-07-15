@@ -165,6 +165,7 @@ namespace :assessments do
             level_offset: 0, source: "self", author: report_person,
             type: "project_outcome",
             title: "Auth migration RFC: weighed three approaches",
+            valence: "demonstrated",
             content: "Wrote a 4-page RFC breaking down the SAML vs OIDC vs hybrid migration paths. " \
                      "Built a decision matrix on rollout risk, vendor lock-in, and ops cost, " \
                      "walked the team through the trade-offs, and landed on phased OIDC with " \
@@ -179,6 +180,7 @@ namespace :assessments do
             level_offset: 0, source: "manager", author: manager_person,
             type: "code_review",
             title: "PR review: identified hidden coupling and proposed alternatives",
+            valence: "demonstrated",
             content: "On the payments refactor PR, broke down why the proposed callback chain " \
                      "would create implicit ordering dependencies. Laid out two alternative " \
                      "service-object splits with the trade-offs and explained which one fit " \
@@ -193,6 +195,7 @@ namespace :assessments do
             level_offset: 0, source: "manager", author: manager_person,
             type: "customer_feedback",
             title: "Migration UX recommendation backed by partner research",
+            valence: "strongly_demonstrated",
             content: "At the venue partner sync, combined qualitative interviews from three " \
                      "design partners with weekly retention metrics to recommend the simplified " \
                      "migration UX. Two partners said it was the clearest case they'd seen this " \
@@ -207,6 +210,7 @@ namespace :assessments do
             level_offset: -1, source: "self", author: report_person,
             type: "other", custom_type_label: "Sprint planning input",
             title: "Pulled CS pain points before sprint sizing",
+            valence: "demonstrated",
             content: "Before sizing the next sprint, reached out to Customer Success for the " \
                      "top three pain points from the past quarter. Folded the feedback into " \
                      "the priority ordering — bumped the import-failure log feature ahead of " \
@@ -221,6 +225,7 @@ namespace :assessments do
             level_offset: 0, source: "self", author: report_person,
             type: "incident_response",
             title: "Saturday outage: rolled back inside SLO and ran the postmortem",
+            valence: "strongly_demonstrated",
             content: "Took primary on-call for the storage-tier outage. Diagnosed the failure " \
                      "mode within 12 minutes, drove the rollback decision, kept stakeholders " \
                      "updated in #incidents every five minutes, and shipped the rollback inside " \
@@ -236,6 +241,7 @@ namespace :assessments do
             level_offset: 0, source: "manager", author: manager_person,
             type: "presentation",
             title: "Withdrawn: misattributed work item",
+            valence: "demonstrated",
             content: "Initial entry credited the Q4 reliability cleanup to Alex but the work " \
                      "was actually led by another teammate. Withdrawing rather than relinking " \
                      "to keep the audit clean.",
@@ -276,6 +282,7 @@ namespace :assessments do
             title: seed[:title],
             content: seed[:content],
             author_id: seed[:author].id,
+            valence: seed.fetch(:valence),
             external_reference: seed[:external_reference]
           )
 
@@ -456,6 +463,7 @@ namespace :assessments do
             message: "Would you be up for sharing how the new on-call rotation has felt from your side?",
             respond_with: {
               evidence_type: "peer_feedback",
+              valence: "demonstrated",
               content: "The rotation's been a big improvement — clearer handoffs and the runbook " \
                        "links in the channel topic meant I never had to go digging. Felt well supported."
             }
@@ -491,7 +499,8 @@ namespace :assessments do
             source: "peer",
             evidence_type: resp[:evidence_type],
             content: resp[:content],
-            author_id: seed[:requestee].id
+            author_id: seed[:requestee].id,
+            valence: resp.fetch(:valence)
           )
           handler.respond_to_evidence_request(
             seed[:assessee].id, framework.framework_id, request_id,
