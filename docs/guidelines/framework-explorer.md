@@ -125,7 +125,7 @@ Controller
     → Stimulus controllers (manage interactivity)
 ```
 
-The matrix reads from the `Frameworks::ExplorerGraph` snapshot — a persistent JSON hash tree written atomically with every framework event by `Repository#with_framework` (bulk writers using `Repository#batch` — seeds, imports — defer to ONE write at the end of the unit of work, still in the same transaction as the batch's events). The explorer no longer eager-loads the `FrameworkState::*` AR tree; that substrate remains for assessments, reporting, HRIS, and the full suggestions index. See `docs/architecture/framework-edit-mode-benchmarks.md` for why (read latency is ~6 ms p50 at Small, ~19 ms at Medium — versus hundreds of ms for AR eager-load or aggregate replay).
+The matrix reads from the `Frameworks::ExplorerGraph` snapshot — a persistent JSON hash tree written atomically after each graph-relevant `Repository#with_framework` command, in the same transaction as its events (comment-only commits skip the rewrite; bulk writers using `Repository#batch` — seeds, imports — defer to ONE write at the end of the unit of work). The explorer no longer eager-loads the `FrameworkState::*` AR tree; that substrate remains for assessments, reporting, HRIS, and the full suggestions index. See `docs/architecture/framework-edit-mode-benchmarks.md` for why (read latency is ~6 ms p50 at Small, ~19 ms at Medium — versus hundreds of ms for AR eager-load or aggregate replay).
 
 `MatrixDataBuilder` is the single source of truth for what the matrix displays. Operates entirely in-memory on the duck-typed graph — no additional queries. Framework size stays in the 100–200 capability / 50–100 role range.
 

@@ -76,9 +76,10 @@ to make the decision (see below).
 **Reject option A as a standalone strategy.** The clean in-memory-replay path
 is too slow for realistic framework sizes. The shipped approach is a
 **dedicated ExplorerGraph view model**: one persistent Marshal-serialized
-graph per framework, written atomically with each framework event (once per
-unit of work under `Frameworks::Repository#batch` — the bulk-write path used
-by seeds/imports), consumed
+graph per framework, written atomically once per repository unit of work —
+after a single `#with_framework` command, or at the end of a
+`Frameworks::Repository#batch` (the bulk-write path used by seeds/imports) —
+consumed
 by both view and edit modes of the explorer. See
 [../guidelines/framework-explorer.md](../guidelines/framework-explorer.md) and
 the `Frameworks::ExplorerGraph` namespace.
