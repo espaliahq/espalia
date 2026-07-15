@@ -267,6 +267,26 @@ class Frameworks::RepositoryTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse tenant-context changes inside a batch" do
+      framework_id = SecureRandom.uuid_v7
+      other_tenant = create(:tenant)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+
+        handler.batch(framework_id) do
+          handler.create_framework(framework_id, "Engineering Growth")
+          ActsAsTenant.with_tenant(other_tenant) do
+            assert_raises(ArgumentError) do
+              Frameworks::CommandHandler.new.add_role_family(
+                framework_id, SecureRandom.uuid_v7, "Smuggled"
+              )
+            end
+          end
+        end
+      end
+    end
+
     should "return the block's value from with_framework on both paths" do
       framework_id = SecureRandom.uuid_v7
 
