@@ -430,6 +430,19 @@ Two rules for any complex param:
   classify as invalid-params, never internal-error, so MCP error monitors only
   fire on genuine server bugs.
 
+### 14. The CLI parity test must pass `--strict-mcp-config`
+
+`--mcp-config <file>` alone does not isolate the spawned CLI: it MERGES the
+test server with the developer's user-scope (`~/.claude.json`) and
+project-scope (`.mcp.json`) MCP servers. In the devcontainer — where the
+host's `~/.claude` is bind-mounted — a dev's own unauthenticated server entry
+(e.g. a "growthOS" OAuth remote) then appears in the same session as the test
+server, and the model sometimes answers "that server needs authorization"
+instead of calling the test tool. Flaked exactly this way in a local
+precommit run. `--strict-mcp-config` restricts the session to the servers in
+`--mcp-config`, making the test hermetic regardless of the developer's own
+MCP configuration.
+
 ## Approval declaration cheat sheet
 
 When declaring `approval` on a new Operation, consult this table:
