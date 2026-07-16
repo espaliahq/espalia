@@ -162,7 +162,7 @@ jobs:
           bundler-cache: true
 
       - name: Set up Node + install claude CLI
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: lts/*
       - run: npm install -g @anthropic-ai/claude-code
