@@ -118,6 +118,31 @@ class PersonDevelopmentCommentTest < ActiveSupport::TestCase
       end
     end
 
+    should "aggregate active evidence-link counts per cell" do
+      ActsAsTenant.with_tenant(@tenant) do
+        evidence_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        2.times do
+          create(:person_development_comment, tenant: @tenant,
+            commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+            evidence_id: evidence_id, capability_stable_id: cap_id, level_ordinal: 4)
+        end
+        create(:person_development_comment, tenant: @tenant,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          evidence_id: evidence_id, capability_stable_id: cap_id, level_ordinal: 5)
+        # Deleted comments and other items don't count.
+        create(:person_development_comment, tenant: @tenant, status: "deleted",
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          evidence_id: evidence_id, capability_stable_id: cap_id, level_ordinal: 4)
+        create(:person_development_comment, tenant: @tenant,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          evidence_id: SecureRandom.uuid_v7, capability_stable_id: cap_id, level_ordinal: 4)
+
+        counts = PersonDevelopmentComment.evidence_link_counts(evidence_id)
+        assert_equal({ [ cap_id, 4 ] => 2, [ cap_id, 5 ] => 1 }, counts)
+      end
+    end
+
     should "distinguish top-level from replies" do
       ActsAsTenant.with_tenant(@tenant) do
         top = create(:person_development_comment, tenant: @tenant)

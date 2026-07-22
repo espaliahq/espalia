@@ -104,12 +104,7 @@ class EvidenceModalController < ApplicationController
   def link_comment_counts(evidence, linked_coords)
     return {} if evidence.nil? || linked_coords.empty?
 
-    PersonDevelopmentComment
-      .active
-      .where(commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
-             evidence_id: evidence.id)
-      .group(:capability_stable_id, :level_ordinal)
-      .count
+    PersonDevelopmentComment.evidence_link_counts(evidence.id)
   end
 
   # Whose assessment this is — only needed off the hub (which lists items

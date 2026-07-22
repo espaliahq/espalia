@@ -79,6 +79,20 @@ class PersonDevelopmentComment < ApplicationRecord
   # ("commented on Priya's feedback"). Nil when not loaded.
   attr_accessor :evidence_author_name
 
+  # Active discussion-comment counts per linked cell of one evidence
+  # item — `{ [capability_stable_id, level_ordinal] => count }`. Feeds
+  # the surfaces that disclose an existing thread before a link is
+  # removed (e.g. the evidence modal's "Applies to" rows).
+  #
+  # @param evidence_id [String]
+  # @return [Hash{Array(String, Integer) => Integer}]
+  def self.evidence_link_counts(evidence_id)
+    active
+      .where(commentable_type: EVIDENCE_LINK, evidence_id: evidence_id)
+      .group(:capability_stable_id, :level_ordinal)
+      .count
+  end
+
   # Whether this comment has been soft-deleted.
   #
   # @return [Boolean]
