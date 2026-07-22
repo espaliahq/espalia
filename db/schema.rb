@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_08_114339) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_22_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -586,6 +586,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_114339) do
     t.text "deletion_reason"
     t.datetime "edited_at"
     t.uuid "edited_by_id"
+    t.uuid "evidence_id"
     t.uuid "framework_id", null: false
     t.integer "level_ordinal"
     t.uuid "parent_id"
@@ -595,6 +596,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_114339) do
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.index ["author_id"], name: "index_person_development_comments_on_author_id"
+    t.index ["evidence_id", "capability_stable_id", "level_ordinal"], name: "idx_pdc_evidence_link_anchor", where: "(evidence_id IS NOT NULL)"
     t.index ["parent_id"], name: "idx_pdc_parent", where: "(parent_id IS NOT NULL)"
     t.index ["person_id", "framework_id", "commentable_type", "capability_stable_id", "level_ordinal"], name: "idx_pdc_cell_anchor"
     t.index ["tenant_id", "person_id", "status"], name: "idx_pdc_tenant_person_status"

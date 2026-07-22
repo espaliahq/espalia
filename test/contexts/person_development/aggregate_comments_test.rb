@@ -14,6 +14,18 @@ class PersonDevelopment::AggregateCommentsTest < ActiveSupport::TestCase
     @capability_stable_id = SecureRandom.uuid_v7
   end
 
+  # Shared by the "#post_comment on an evidence linkage" context (a def
+  # inside a shoulda context block is not visible to its should blocks).
+  def post_link_comment(comment_id: SecureRandom.uuid_v7, level_ordinal: 3,
+                        capability_stable_id: @capability_stable_id,
+                        evidence_id: @evidence_id, parent_id: nil, body: "Discuss.")
+    @aggregate.post_comment(comment_id,
+      commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+      body: body, author_id: @author_id,
+      capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
+      evidence_id: evidence_id, parent_id: parent_id)
+  end
+
   context "#post_comment" do
     should "apply CommentPosted with cell coordinates" do
       comment_id = SecureRandom.uuid_v7
@@ -156,6 +168,95 @@ class PersonDevelopment::AggregateCommentsTest < ActiveSupport::TestCase
           parent_id: parent_id)
       end
       assert_match(/parent's cell/, err.message)
+    end
+  end
+
+  context "#post_comment on an evidence linkage" do
+    setup do
+      @evidence_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @capability_stable_id, level_ordinal: 3,
+        source: "manager", evidence_type: "observation",
+        content: "Handled the incident well.", author_id: @author_id,
+        valence: "demonstrated",
+        additional_links: [ { capability_stable_id: @capability_stable_id, level_ordinal: 4, valence: "growth_area" } ])
+    end
+
+    should "apply CommentPosted carrying the evidence linkage anchor" do
+      comment_id = SecureRandom.uuid_v7
+      post_link_comment(comment_id: comment_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::CommentPosted, event
+      assert_equal PersonDevelopmentComment::EVIDENCE_LINK, event.data[:commentable_type]
+      assert_equal @evidence_id, event.data[:evidence_id]
+      assert_equal @capability_stable_id, event.data[:capability_stable_id]
+      assert_equal 3, event.data[:level_ordinal]
+    end
+
+    should "require evidence_id" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        post_link_comment(evidence_id: nil)
+      end
+      assert_match(/evidence_id required/, err.message)
+    end
+
+    should "reject unknown evidence" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        post_link_comment(evidence_id: SecureRandom.uuid_v7)
+      end
+      assert_match(/Unknown evidence/, err.message)
+    end
+
+    should "reject a cell the evidence was never linked to" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        post_link_comment(level_ordinal: 7)
+      end
+      assert_match(/never linked/, err.message)
+    end
+
+    should "allow posting after the link is removed (thread stays open)" do
+      @aggregate.remove_evidence_link(@evidence_id,
+        capability_stable_id: @capability_stable_id, level_ordinal: 4,
+        removed_by_id: @author_id)
+
+      post_link_comment(level_ordinal: 4, body: "Removed per the discussion above.")
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal 4, event.data[:level_ordinal]
+    end
+
+    should "reject posting on withdrawn evidence" do
+      @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        post_link_comment
+      end
+      assert_match(/withdrawn/, err.message)
+    end
+
+    should "reject a reply that names a different evidence item" do
+      other_evidence_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(other_evidence_id,
+        capability_stable_id: @capability_stable_id, level_ordinal: 3,
+        source: "self", evidence_type: "observation",
+        content: "Other item.", author_id: @author_id, valence: "demonstrated")
+
+      parent_id = SecureRandom.uuid_v7
+      post_link_comment(comment_id: parent_id)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        post_link_comment(evidence_id: other_evidence_id, parent_id: parent_id)
+      end
+      assert_match(/parent's evidence linkage/, err.message)
+    end
+
+    should "allow replies on the same linkage" do
+      parent_id = SecureRandom.uuid_v7
+      post_link_comment(comment_id: parent_id)
+      post_link_comment(parent_id: parent_id, body: "Reply.")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal parent_id, event.data[:parent_id]
     end
   end
 

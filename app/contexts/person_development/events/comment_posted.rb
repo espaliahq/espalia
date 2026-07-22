@@ -11,20 +11,26 @@
 # evidence events may reference a comment to elevate it as evidence
 # of a behaviour.
 #
-# V1 commentable type is `"assessment_cell"`, anchored by
-# `(capability_stable_id, level_ordinal)` — the same coordinate system
-# as ratings and evidence. Future commentable types (e.g. growth_plan,
-# focus_area) will set their own identifier shape.
+# Commentable types: `"assessment_cell"` (discussion about the behaviour
+# at a cell) and `"evidence_link"` (discussion about one evidence item's
+# bearing on a cell — additionally anchored by `evidence_id`; the anchor
+# is the linkage's natural key, so the thread survives link removal and
+# re-add). Both use the `(capability_stable_id, level_ordinal)` coordinate
+# system shared with ratings and evidence. Future commentable types
+# (e.g. growth_plan, focus_area) will set their own identifier shape.
 #
 # @!attribute [r] data
 #   @return [Hash] event data
 #   @option data [String] :comment_id UUID v7 of the comment
 #   @option data [String, nil] :parent_id UUID of parent comment, nil for top-level
-#   @option data [String] :commentable_type "assessment_cell" (V1)
+#   @option data [String] :commentable_type "assessment_cell" | "evidence_link"
 #   @option data [String, nil] :capability_stable_id stable UUID of the capability
-#     (required when commentable_type == "assessment_cell")
+#     (required for both current commentable types)
 #   @option data [Integer, nil] :level_ordinal the level coordinate
-#     (required when commentable_type == "assessment_cell")
+#     (required for both current commentable types)
+#   @option data [String, nil] :evidence_id UUID of the {EvidenceItem}
+#     (required when commentable_type == "evidence_link"; absent on
+#     events published before the type existed)
 #   @option data [String] :body comment body (required, non-blank)
 #   @option data [String] :author_id UUID of the Person posting the comment
 #

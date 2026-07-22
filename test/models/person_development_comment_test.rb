@@ -46,6 +46,28 @@ class PersonDevelopmentCommentTest < ActiveSupport::TestCase
       end
     end
 
+    should "require evidence_id for evidence_link" do
+      ActsAsTenant.with_tenant(@tenant) do
+        c = build(:person_development_comment, tenant: @tenant,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK, evidence_id: nil)
+        assert_not c.valid?
+        assert c.errors[:evidence_id].any?
+
+        c.evidence_id = SecureRandom.uuid_v7
+        assert c.valid?, c.errors.full_messages.to_sentence
+      end
+    end
+
+    should "require cell coordinates for evidence_link" do
+      ActsAsTenant.with_tenant(@tenant) do
+        c = build(:person_development_comment, tenant: @tenant,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          evidence_id: SecureRandom.uuid_v7, capability_stable_id: nil)
+        assert_not c.valid?
+        assert c.errors[:capability_stable_id].any?
+      end
+    end
+
     should "require status in STATUSES" do
       ActsAsTenant.with_tenant(@tenant) do
         c = build(:person_development_comment, tenant: @tenant, status: "garbage")
@@ -76,6 +98,22 @@ class PersonDevelopmentCommentTest < ActiveSupport::TestCase
         create(:person_development_comment, tenant: @tenant) # noise
 
         result = PersonDevelopmentComment.for_person(person_id).on_cell(cap_id, 4)
+        assert_equal [ match.id ], result.pluck(:id)
+      end
+    end
+
+    should "scope by evidence linkage" do
+      ActsAsTenant.with_tenant(@tenant) do
+        evidence_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        match = create(:person_development_comment, tenant: @tenant,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          evidence_id: evidence_id, capability_stable_id: cap_id, level_ordinal: 4)
+        # Same cell, but a plain cell comment — must not leak into the linkage thread.
+        create(:person_development_comment, tenant: @tenant,
+          capability_stable_id: cap_id, level_ordinal: 4)
+
+        result = PersonDevelopmentComment.on_evidence_link(evidence_id, cap_id, 4)
         assert_equal [ match.id ], result.pluck(:id)
       end
     end
