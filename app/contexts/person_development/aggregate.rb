@@ -1293,6 +1293,11 @@ class PersonDevelopment::Aggregate
         comment[:capability_stable_id] = to if comment[:capability_stable_id] == from
       end
       @evidence.each_value do |evidence|
+        # Active links too — remove/revalence/duplicate checks must
+        # accept the survivor id the re-keyed read model now presents.
+        evidence[:links] = evidence[:links].to_h { |(cap, ordinal), valence|
+          [ [ cap == from ? to : cap, ordinal ], valence ]
+        }
         evidence[:ever_linked] = evidence[:ever_linked].map { |cap, ordinal|
           [ cap == from ? to : cap, ordinal ]
         }.to_set
