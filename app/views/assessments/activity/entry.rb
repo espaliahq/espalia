@@ -218,6 +218,12 @@ class Views::Assessments::Activity::Entry < Views::Base
   # voice it is, since informal conversation makes voice primary in a way
   # ratings don't.
   def comment_posted_summary
+    comment_summary(subject: capability_label)
+  end
+
+  # Shared by both comment kinds: "<Author> commented on <subject>", or
+  # the reply variant when the comment answers another.
+  def comment_summary(subject:)
     author_name = if @entry.payload.respond_to?(:author)
       @entry.payload.author&.name
     end
@@ -226,34 +232,22 @@ class Views::Assessments::Activity::Entry < Views::Base
     parent = @entry.payload.respond_to?(:parent) ? @entry.payload.parent : nil
     if parent
       parent_name = parent.author&.name.to_s.strip.presence || "another comment"
-      "#{name} replied to #{parent_name} on #{capability_label}"
+      "#{name} replied to #{parent_name} on #{subject}"
     else
-      "#{name} commented on #{capability_label}"
+      "#{name} commented on #{subject}"
     end
   end
 
-  # "<Author> commented on <evidence author>'s feedback · <Capability · Lx>"
-  # (reply variant mirrors comment_posted_summary). Names whose feedback
-  # is under discussion so the entry reads distinctly from a plain cell
-  # comment; falls back to bare "feedback" when the item's author no
-  # longer resolves.
+  # "<Author> commented on <evidence author>'s feedback · <Capability · Lx>".
+  # Names whose feedback is under discussion so the entry reads distinctly
+  # from a plain cell comment; falls back to bare "feedback" when the
+  # item's author no longer resolves.
   def evidence_link_commented_summary
-    author_name = if @entry.payload.respond_to?(:author)
-      @entry.payload.author&.name
-    end
-    name = author_name.to_s.strip.presence || "Someone"
-
     owner = @entry.payload.respond_to?(:evidence_author_name) &&
       @entry.payload.evidence_author_name.to_s.strip.presence
     feedback_label = owner ? "#{owner}'s feedback" : "feedback"
 
-    parent = @entry.payload.respond_to?(:parent) ? @entry.payload.parent : nil
-    if parent
-      parent_name = parent.author&.name.to_s.strip.presence || "another comment"
-      "#{name} replied to #{parent_name} on #{feedback_label} · #{capability_label}"
-    else
-      "#{name} commented on #{feedback_label} · #{capability_label}"
-    end
+    comment_summary(subject: "#{feedback_label} · #{capability_label}")
   end
 
   # "Relinked evidence from <prev cap · L<prev>> to <new cap · L<new>>"

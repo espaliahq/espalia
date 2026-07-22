@@ -43,6 +43,9 @@ class Assessments::MatrixDataBuilder
   def initialize(framework:, role:, level:, person_id:, cycle_id:, categories:,
                  context:, participant_status: nil,
                  viewer_person_id: nil, viewer_sees_all_evidence: false)
+    # Repopulated by load_evidence; eager default so build_cells never
+    # depends on load ordering.
+    @link_comment_cell_counts = {}
     @framework = framework
     @role = role
     @level = level
@@ -189,7 +192,7 @@ class Assessments::MatrixDataBuilder
       evidence = @evidence_index[[ capability.stable_id, ordinal ]] || []
       comments = @comments_index[[ capability.stable_id, ordinal ]] || []
       visible_comment_count = comments.count { |c| !c.deleted? } +
-        (@link_comment_cell_counts || {})[[ capability.stable_id, ordinal ]].to_i
+        @link_comment_cell_counts[[ capability.stable_id, ordinal ]].to_i
 
       cells[ordinal] = {
         expectation: expectation,
