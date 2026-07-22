@@ -1,1 +1,1 @@
-@docs/guidelines/authorization.md
+@AGENTS.md

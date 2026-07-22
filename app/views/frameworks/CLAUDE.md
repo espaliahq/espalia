@@ -1,1 +1,1 @@
-@docs/guidelines/framework-explorer.md
+@AGENTS.md

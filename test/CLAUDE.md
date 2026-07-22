@@ -1,1 +1,1 @@
-@docs/guidelines/testing.md
+@AGENTS.md

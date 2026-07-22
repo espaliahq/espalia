@@ -7,7 +7,7 @@ touching anything under `app/operations/`, `app/services/mcp/`,
 `app/controllers/mcp/`, `app/models/mcp/`, `app/jobs/mcp/`, or
 `app/views/mcp/`.
 
-> **Top-level rule (from root CLAUDE.md):** every new user-facing
+> **Top-level rule (from root AGENTS.md):** every new user-facing
 > read or write surface must explicitly consider MCP coverage. The
 > default is to build it as an `Operations::*` class so the web and
 > MCP server share one implementation; opting out requires an

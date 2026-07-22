@@ -1,1 +1,1 @@
-@docs/guidelines/rails-models.md
+@AGENTS.md
