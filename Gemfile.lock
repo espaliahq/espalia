@@ -295,7 +295,7 @@ GEM
     overmind (2.5.1-aarch64-linux)
     overmind (2.5.1-arm-linux)
     overmind (2.5.1-arm64-darwin)
-    pagy (43.5.6)
+    pagy (43.6.1)
       json
       uri
       yaml
@@ -572,7 +572,7 @@ DEPENDENCIES
   omniauth-google-oauth2 (~> 1.2)
   omniauth-rails_csrf_protection (~> 2.0)
   overmind
-  pagy (~> 43.5)
+  pagy (~> 43.6)
   pg
   phlex (~> 2.4.1)
   phlex-rails (~> 2.4.0)
