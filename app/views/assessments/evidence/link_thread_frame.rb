@@ -142,12 +142,15 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
     @comments_by_id ||= @comments.index_by(&:id)
   end
 
+  # A withdrawn item's thread is read-only in full — no edits or deletes
+  # either (the aggregate enforces the same; see
+  # `ensure_comment_thread_mutable!`).
   def can_edit?(comment)
-    !comment.deleted? && comment.author_id == @viewer_person_id
+    !withdrawn? && !comment.deleted? && comment.author_id == @viewer_person_id
   end
 
   def can_delete?(comment)
-    return false if comment.deleted?
+    return false if withdrawn? || comment.deleted?
 
     comment.author_id == @viewer_person_id || @tenant_admin
   end

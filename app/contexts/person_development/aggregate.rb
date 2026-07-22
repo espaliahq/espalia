@@ -1108,6 +1108,7 @@ class PersonDevelopment::Aggregate
     state = @comments[comment_id]
     raise CommandError, "No comment with id #{comment_id}" unless state
     raise CommandError, "Cannot edit a deleted comment" if state[:status] == "deleted"
+    ensure_comment_thread_mutable!(state)
     raise CommandError, "Comment body cannot be blank" if body.to_s.strip.empty?
     raise CommandError, "Only the author can edit a comment" unless state[:author_id] == edited_by_id
 
@@ -1129,6 +1130,7 @@ class PersonDevelopment::Aggregate
     state = @comments[comment_id]
     raise CommandError, "No comment with id #{comment_id}" unless state
     raise CommandError, "Comment already deleted" if state[:status] == "deleted"
+    ensure_comment_thread_mutable!(state)
 
     apply(PersonDevelopment::Events::CommentDeleted.new(data: {
       comment_id: comment_id,
@@ -1141,6 +1143,19 @@ class PersonDevelopment::Aggregate
 
   def ensure_assigned!
     raise "Person not yet assigned to a framework" unless @assigned
+  end
+
+  # Withdrawal retracts the evidence artifact itself, so its linkage
+  # threads are read-only in full: no new posts (checked in
+  # post_comment) AND no edits or deletes of what was already said.
+  # Cell comments (no evidence_id) are never affected.
+  def ensure_comment_thread_mutable!(comment_state)
+    evidence_id = comment_state[:evidence_id]
+    return unless evidence_id
+
+    evidence = @evidence[evidence_id]
+    raise CommandError, "Cannot modify comments on withdrawn evidence" if
+      evidence && evidence[:status] == "withdrawn"
   end
 
   # Fetch an evidence request that must exist and still be pending.
@@ -1260,6 +1275,29 @@ class PersonDevelopment::Aggregate
     @last_migrated_to_version = event.data[:new_version]
     # The current cycle is now assessed against the migrated-to version.
     @assessed_framework_version = event.data[:new_version]
+
+    # Follow the same/evolved mappings for the anchors the comment
+    # commands validate against — mirroring how the CommentThread
+    # projection re-keys the read model. Without this, a post or reply on
+    # an evidence-link thread whose capability was evolved would arrive
+    # with the survivor stable_id and fail the ever-linked / parent-cell
+    # checks against the pre-migration id still held here.
+    event.data[:mappings].each do |mapping|
+      next unless %w[same evolved].include?(mapping[:mapping_type])
+      next if mapping[:to_stable_id].nil?
+
+      from = mapping[:from_stable_id]
+      to = mapping[:to_stable_id]
+
+      @comments.each_value do |comment|
+        comment[:capability_stable_id] = to if comment[:capability_stable_id] == from
+      end
+      @evidence.each_value do |evidence|
+        evidence[:ever_linked] = evidence[:ever_linked].map { |cap, ordinal|
+          [ cap == from ? to : cap, ordinal ]
+        }.to_set
+      end
+    end
   end
 
   on PersonDevelopment::Events::JoinedAssessmentCycle do |event|

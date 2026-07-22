@@ -234,6 +234,45 @@ class PersonDevelopment::AggregateCommentsTest < ActiveSupport::TestCase
       assert_match(/withdrawn/, err.message)
     end
 
+    should "reject editing and deleting once the evidence is withdrawn (thread fully read-only)" do
+      comment_id = SecureRandom.uuid_v7
+      post_link_comment(comment_id: comment_id)
+      @aggregate.withdraw_evidence(@evidence_id, withdrawn_by_id: @author_id)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.edit_comment(comment_id, body: "Too late.", edited_by_id: @author_id)
+      end
+      assert_match(/withdrawn/, err.message)
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.delete_comment(comment_id, deleted_by_id: @author_id)
+      end
+      assert_match(/withdrawn/, err.message)
+    end
+
+    should "accept posts and replies on the survivor stable_id after an evolved migration" do
+      parent_id = SecureRandom.uuid_v7
+      post_link_comment(comment_id: parent_id)
+
+      survivor_stable_id = SecureRandom.uuid_v7
+      @aggregate.migrate_framework_version(@framework_id, 1, 2, [
+        { from_stable_id: @capability_stable_id, to_stable_id: survivor_stable_id,
+          mapping_type: "evolved", requires_reassessment: false }
+      ])
+
+      # New top-level post arrives with the survivor id (the read model
+      # was re-keyed by the CommentThread projection) — ever_linked must
+      # have followed the mapping.
+      post_link_comment(capability_stable_id: survivor_stable_id, body: "Post-migration.")
+
+      # And a reply to the pre-migration parent uses the survivor id too.
+      post_link_comment(capability_stable_id: survivor_stable_id,
+        parent_id: parent_id, body: "Reply post-migration.")
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal parent_id, event.data[:parent_id]
+      assert_equal survivor_stable_id, event.data[:capability_stable_id]
+    end
+
     should "reject a reply that names a different evidence item" do
       other_evidence_id = SecureRandom.uuid_v7
       @aggregate.record_evidence(other_evidence_id,

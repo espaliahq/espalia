@@ -106,9 +106,15 @@ class Assessments::EvidenceLinkThreadsControllerTest < ActionDispatch::Integrati
       assert_match "Discuss this feedback", response.body
     end
 
-    should "render read-only when the item is withdrawn" do
+    should "render read-only when the item is withdrawn — no composer, no comment actions" do
       ActsAsTenant.with_tenant(@tenant) do
-        PersonDevelopment::CommandHandler.new.withdraw_evidence(
+        pd = PersonDevelopment::CommandHandler.new
+        pd.post_comment(@assessee.id, @assignment.framework_id, SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          evidence_id: @evidence_id,
+          body: "Said before withdrawal.", author_id: @assessee.id)
+        pd.withdraw_evidence(
           @assessee.id, @assignment.framework_id, @evidence_id,
           withdrawn_by_id: @manager.id
         )
@@ -118,7 +124,11 @@ class Assessments::EvidenceLinkThreadsControllerTest < ActionDispatch::Integrati
       get thread_path
       assert_response :success
       assert_match "read-only", response.body
+      assert_match "Said before withdrawal.", response.body
       assert_no_match(/Discuss this feedback/, response.body)
+      # The viewer authored the comment, but a withdrawn thread offers no
+      # edit/delete kebab either — read-only in full.
+      assert_no_match(/Comment actions/, response.body)
     end
 
     should "show the valence change as a lifecycle row" do
