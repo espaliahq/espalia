@@ -243,14 +243,41 @@ class Assessments::MatrixDataBuilder
       item_links.to_h { |link| [ [ link.capability_stable_id, link.level_ordinal ], link.valence ] }
     end
 
+    comment_stats = load_link_comment_stats(items_by_id.keys)
+
     links
       .sort_by { |link| items_by_id[link.evidence_id].recorded_at }
       .each_with_object({}) do |link, h|
         item = items_by_id[link.evidence_id]
         item.active_link_count = counts[link.evidence_id]
         item.link_valences = valences[link.evidence_id]
+        item.link_comment_stats = comment_stats[link.evidence_id] || {}
         key = [ link.capability_stable_id, link.level_ordinal ]
         (h[key] ||= []) << item
+      end
+  end
+
+  # Aggregates each evidence item's linkage-discussion threads into
+  # per-cell stats — `evidence_id => { [stable_id, ordinal] => { count:,
+  # latest_body:, latest_author_name: } }` — for the collapsed
+  # count-plus-excerpt affordance on the evidence card. One query; the
+  # full thread (with lifecycle rows) loads lazily on expand.
+  #
+  # @return [Hash{String => Hash}]
+  def load_link_comment_stats(evidence_ids)
+    PersonDevelopmentComment
+      .active
+      .where(commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+             evidence_id: evidence_ids)
+      .includes(:author)
+      .chronological
+      .each_with_object({}) do |comment, h|
+        per_item = (h[comment.evidence_id] ||= {})
+        stat = (per_item[[ comment.capability_stable_id, comment.level_ordinal ]] ||=
+          { count: 0, latest_body: nil, latest_author_name: nil })
+        stat[:count] += 1
+        stat[:latest_body] = comment.body
+        stat[:latest_author_name] = comment.author&.name
       end
   end
 

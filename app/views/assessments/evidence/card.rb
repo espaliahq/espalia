@@ -67,6 +67,7 @@ class Views::Assessments::Evidence::Card < Views::Base
         content_line
         also_linked_line if other_link_count.positive?
         footer_line
+        discussion_disclosure
       end
       actions_menu if @can_withdraw || @can_manage_links || @can_update
     end
@@ -93,6 +94,83 @@ class Views::Assessments::Evidence::Card < Views::Base
     div(class: "mt-1 text-[10px] text-gray-500 dark:text-gray-400 italic") do
       n = other_link_count
       plain "Also linked to #{n} other #{n == 1 ? 'place' : 'places'}"
+    end
+  end
+
+  # Collapsed count-plus-excerpt affordance for this LINKAGE's discussion
+  # thread (per cell, not per item — the same item carries an independent
+  # thread in each cell it's linked to). A native <details> keeps the
+  # toggle JS-free; the turbo frame inside is `loading: "lazy"`, so the
+  # thread (comments + stream-read lifecycle rows) is only fetched when
+  # the disclosure opens and the frame becomes visible.
+  def discussion_disclosure
+    details(class: "mt-1") do
+      summary(
+        class: "cursor-pointer list-none [&::-webkit-details-marker]:hidden " \
+               "inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 py-0.5 " \
+               "text-[10px] text-gray-600 dark:text-gray-300 " \
+               "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
+               "dark:hover:text-gray-200 transition-colors"
+      ) do
+        discussion_glyph
+        if discussion_count.positive?
+          span(class: "font-medium shrink-0") do
+            "#{discussion_count} #{'comment'.pluralize(discussion_count)}"
+          end
+          if discussion_stats[:latest_body].present?
+            span(class: "truncate italic") { "· “#{discussion_stats[:latest_body]}”" }
+          end
+        else
+          span { "Discuss" }
+        end
+      end
+      turbo_frame_tag(thread_frame_id, src: thread_frame_src, loading: "lazy") do
+        div(class: "py-1 text-[10px] italic text-gray-600 dark:text-gray-300") do
+          "Loading discussion…"
+        end
+      end
+    end
+  end
+
+  def discussion_stats
+    @discussion_stats ||=
+      @item.link_comment_stats&.[]([ @current_capability_stable_id, @current_level_ordinal.to_i ]) || {}
+  end
+
+  def discussion_count
+    discussion_stats[:count].to_i
+  end
+
+  def thread_frame_id
+    Views::Assessments::Evidence::LinkThreadFrame.frame_id(
+      @item.id, @current_capability_stable_id, @current_level_ordinal
+    )
+  end
+
+  def thread_frame_src
+    assessment_evidence_link_thread_path(
+      @assessment_id, @item.id,
+      capability_stable_id: @current_capability_stable_id,
+      level_ordinal: @current_level_ordinal
+    )
+  end
+
+  def discussion_glyph
+    svg(
+      class: "w-3 h-3 shrink-0",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      stroke_width: "2",
+      aria_hidden: "true"
+    ) do |s|
+      s.path(
+        stroke_linecap: "round",
+        stroke_linejoin: "round",
+        d: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 " \
+           "9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12 " \
+           "3 7.582 7.03 4 12 4s9 3.582 9 8z"
+      )
     end
   end
 

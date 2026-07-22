@@ -2,10 +2,14 @@
 
 # Posts, edits, and soft-deletes comments on a person's assessment.
 #
-# V1 supports only `commentable_type: "assessment_cell"` (anchored to
-# a capability_stable_id × level_ordinal coordinate). Future
-# commentable types (growth plans, focus areas, check-ins) will reuse
-# this controller with a different `commentable_type` and shape.
+# Serves both commentable types: `"assessment_cell"` (the default) and
+# `"evidence_link"` (selected by the presence of `comment[evidence_id]`
+# on create; on update/destroy the comment row itself carries the type).
+# Evidence-link requests originate inside the linkage's thread frame, so
+# their responses redirect to the frame's show URL — Turbo re-renders
+# the thread in place — instead of the full assessment page. Future
+# commentable types (growth plans, focus areas, check-ins) will add
+# their own shape here.
 #
 class Assessments::CommentsController < ApplicationController
   before_action :require_person
@@ -16,39 +20,50 @@ class Assessments::CommentsController < ApplicationController
     authorize @assignment, :create?, policy_class: PersonDevelopmentCommentPolicy
 
     attrs = params.expect(comment: [
-      :capability_stable_id, :level_ordinal, :body, :parent_id
+      :capability_stable_id, :level_ordinal, :body, :parent_id, :evidence_id
     ])
+    evidence_id = attrs[:evidence_id].presence
 
     level_ordinal = Integer(attrs[:level_ordinal], exception: false)
-    unless level_ordinal &&
-        FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
+    # For evidence_link comments the coordinate's validity is the
+    # aggregate's ever-linked check — the level need not exist on the
+    # viewer's role (a manager may have linked at any ordinal).
+    unless level_ordinal && (evidence_id ||
+        FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal))
       head :unprocessable_content
       return
     end
 
     if attrs[:body].to_s.strip.empty?
-      redirect_back fallback_location: assessment_path(@assignment),
-        alert: "Comment cannot be blank."
+      comment_error(evidence_id, attrs[:capability_stable_id], level_ordinal,
+        "Comment cannot be blank.")
       return
     end
 
     comment_id = SecureRandom.uuid_v7
     PersonDevelopment::CommandHandler.new.post_comment(
       @assignment.person_id, @assignment.framework_id, comment_id,
-      commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+      commentable_type: evidence_id ? PersonDevelopmentComment::EVIDENCE_LINK
+                                    : PersonDevelopmentComment::ASSESSMENT_CELL,
       capability_stable_id: attrs[:capability_stable_id],
       level_ordinal: level_ordinal,
+      evidence_id: evidence_id,
       body: attrs[:body].to_s,
       author_id: current_person.id,
       parent_id: attrs[:parent_id].presence
     )
 
-    redirect_to assessment_path(@assignment,
-                  redirect_params(attrs[:capability_stable_id], level_ordinal: level_ordinal)),
-      status: :see_other, notice: "Comment posted."
+    if evidence_id
+      redirect_to link_thread_path(evidence_id, attrs[:capability_stable_id], level_ordinal),
+        status: :see_other
+    else
+      redirect_to assessment_path(@assignment,
+                    redirect_params(attrs[:capability_stable_id], level_ordinal: level_ordinal)),
+        status: :see_other, notice: "Comment posted."
+    end
   rescue PersonDevelopment::Aggregate::CommandError => e
-    redirect_back fallback_location: assessment_path(@assignment),
-      alert: "Could not post comment: #{e.message}"
+    comment_error(evidence_id, attrs&.[](:capability_stable_id), level_ordinal,
+      "Could not post comment: #{e.message}")
   end
 
   # PATCH /assessments/:assessment_id/comments/:id
@@ -70,9 +85,13 @@ class Assessments::CommentsController < ApplicationController
       edited_by_id: current_person.id
     )
 
-    redirect_to assessment_path(@assignment,
-                  redirect_params(comment.capability_stable_id, level_ordinal: comment.level_ordinal)),
-      status: :see_other, notice: "Comment updated."
+    if comment.evidence_id
+      redirect_to comment_thread_path(comment), status: :see_other
+    else
+      redirect_to assessment_path(@assignment,
+                    redirect_params(comment.capability_stable_id, level_ordinal: comment.level_ordinal)),
+        status: :see_other, notice: "Comment updated."
+    end
   rescue ActiveRecord::RecordNotFound
     head :not_found
   rescue PersonDevelopment::Aggregate::CommandError => e
@@ -92,9 +111,13 @@ class Assessments::CommentsController < ApplicationController
       reason: reason
     )
 
-    redirect_to assessment_path(@assignment,
-                  redirect_params(comment.capability_stable_id, level_ordinal: comment.level_ordinal)),
-      status: :see_other, notice: "Comment deleted."
+    if comment.evidence_id
+      redirect_to comment_thread_path(comment), status: :see_other
+    else
+      redirect_to assessment_path(@assignment,
+                    redirect_params(comment.capability_stable_id, level_ordinal: comment.level_ordinal)),
+        status: :see_other, notice: "Comment deleted."
+    end
   rescue ActiveRecord::RecordNotFound
     head :not_found
   rescue PersonDevelopment::Aggregate::CommandError => e
@@ -118,6 +141,33 @@ class Assessments::CommentsController < ApplicationController
     @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
   rescue ActiveRecord::RecordNotFound
     head :not_found
+  end
+
+  # The linkage-thread frame's show URL — evidence-link responses land
+  # here so the frame that hosted the form re-renders in place.
+  def link_thread_path(evidence_id, capability_stable_id, level_ordinal, error: nil)
+    assessment_evidence_link_thread_path(
+      @assignment, evidence_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      error: error
+    )
+  end
+
+  def comment_thread_path(comment)
+    link_thread_path(comment.evidence_id, comment.capability_stable_id, comment.level_ordinal)
+  end
+
+  # Error surfacing differs by surface: the assessment page renders
+  # flash alerts, but a flash is invisible inside the thread frame — the
+  # frame's `error` param renders the message inline instead.
+  def comment_error(evidence_id, capability_stable_id, level_ordinal, message)
+    if evidence_id
+      redirect_to link_thread_path(evidence_id, capability_stable_id, level_ordinal,
+        error: message), status: :see_other
+    else
+      redirect_back fallback_location: assessment_path(@assignment), alert: message
+    end
   end
 
   def redirect_params(capability_stable_id, level_ordinal: nil)
