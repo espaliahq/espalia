@@ -117,7 +117,7 @@ app/
 ├── models/                          # State-based ActiveRecord
 │   ├── tenant.rb                    # acts_as_tenant root
 │   ├── person.rb                    # acts_as_tenant :tenant
-│   ├── user.rb                      # Devise + acts_as_tenant :tenant
+│   ├── user.rb                      # Devise — global identity, NOT tenant-scoped
 │   └── application_record.rb
 │
 ├── contexts/                        # Domain bounded contexts (RES)
