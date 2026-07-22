@@ -29,7 +29,7 @@ class CreateFrameworkStates < ActiveRecord::Migration[8.1]
     create_table :framework_explorer_graphs, id: false do |t|
       t.uuid :framework_id, null: false, primary_key: true
       # Every framework read model is row-level tenant-scoped via
-      # acts_as_tenant (see CLAUDE.md). Defence-in-depth — framework_id is
+      # acts_as_tenant (see AGENTS.md). Defence-in-depth — framework_id is
       # a UUID and already unique globally, but the convention is that
       # every tenant-owned projection row carries tenant_id + FK so a
       # mis-set ActsAsTenant scope can't leak cross-tenant data.
