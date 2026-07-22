@@ -259,7 +259,7 @@ Follow standard Rails conventions - avoid unnecessary abstractions:
 - **Validations**: Data integrity via ActiveRecord validations and custom validators
 - **Avoid service objects**: Prefer model methods and concerns. Only use service objects for truly complex cross-model orchestration
 - **Background jobs**: Use SolidQueue for async work (not service wrappers)
-- **Concerns and modules**: Use for shared functionality and code organization
+- **Concerns and modules**: Use for shared functionality and code organisation
 
 ### Ruby Style
 
