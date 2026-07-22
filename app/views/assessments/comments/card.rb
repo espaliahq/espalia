@@ -109,7 +109,10 @@ class Views::Assessments::Comments::Card < Views::Base
                  "underline decoration-dotted decoration-gray-300 dark:decoration-gray-600 " \
                  "underline-offset-2 hover:decoration-solid hover:text-gray-600 " \
                  "dark:hover:text-gray-300",
-          title: "Link to this comment · posted #{@comment.posted_at.utc.iso8601}"
+          title: "Link to this comment · posted #{@comment.posted_at.utc.iso8601}",
+          # The card can render inside the evidence-linkage thread frame;
+          # the permalink is a full-page navigation and must escape it.
+          data: { turbo_frame: "_top" }
         ) do
           permalink_icon
           plain "#{time_ago_in_words(@comment.posted_at)} ago"
@@ -177,6 +180,12 @@ class Views::Assessments::Comments::Card < Views::Base
             value: @comment.capability_stable_id)
       input(type: "hidden", name: "comment[level_ordinal]",
             value: @comment.level_ordinal)
+      # Replies inherit the parent's anchor — for an evidence-linkage
+      # comment that includes the evidence_id, so the reply lands on the
+      # same linkage thread.
+      if @comment.evidence_id.present?
+        input(type: "hidden", name: "comment[evidence_id]", value: @comment.evidence_id)
+      end
       input(type: "hidden", name: "comment[parent_id]", value: @comment.id)
       textarea(
         name: "comment[body]",

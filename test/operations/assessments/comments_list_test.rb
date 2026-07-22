@@ -91,6 +91,36 @@ class Operations::Assessments::CommentsListTest < ActiveSupport::TestCase
     end
   end
 
+  context "evidence-link scoping" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @evidence_id = SecureRandom.uuid_v7
+        @pd.record_evidence(@person.id, @framework_id, @evidence_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "self", evidence_type: "observation",
+          content: "Shipped it.", author_id: @person.id, valence: "demonstrated")
+        @link_comment_id = SecureRandom.uuid_v7
+        @pd.post_comment(@person.id, @framework_id, @link_comment_id,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          evidence_id: @evidence_id,
+          body: "About this linkage", author_id: @person.id)
+      end
+    end
+
+    should "return only the linkage's thread when evidence_id is given" do
+      result = call_op(assignment_id: @assignment.id, capability_stable_id: @cap.stable_id,
+        level_ordinal: 2, evidence_id: @evidence_id)
+      assert_equal [ @link_comment_id ], result[:comments].map { |c| c[:id] }
+      assert_equal @evidence_id, result[:comments].first[:evidence_id]
+    end
+
+    should "keep linkage comments out of the cell's own thread" do
+      result = call_op(assignment_id: @assignment.id, capability_stable_id: @cap.stable_id, level_ordinal: 2)
+      assert_equal [ @parent_id ], result[:comments].map { |c| c[:id] }
+    end
+  end
+
   context "active-only" do
     should "omit soft-deleted comments" do
       ActsAsTenant.with_tenant(@tenant) do

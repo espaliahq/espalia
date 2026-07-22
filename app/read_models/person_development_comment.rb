@@ -2,12 +2,21 @@
 
 # Projection read model for comments on a person's development stream.
 #
-# A first-class citizen of the person development domain — initial V1
-# anchors comments to (capability_stable_id, level_ordinal) coordinates
-# on the assessment matrix. Future commentable types (growth plans,
-# focus areas, check-ins) will reuse this table by setting
-# `commentable_type` to the new type and leaving the cell-coordinate
-# columns nullable.
+# A first-class citizen of the person development domain. Two commentable
+# types exist today, both anchored to (capability_stable_id, level_ordinal)
+# cell coordinates:
+#
+# - "assessment_cell" — discussion about the behaviour/rating at a cell.
+# - "evidence_link" — discussion about one evidence item's bearing on a
+#   cell (its relevance and valence). Additionally anchored by
+#   `evidence_id`; the thread key is the linkage's NATURAL key
+#   (evidence_id, capability_stable_id, level_ordinal), NOT the
+#   {EvidenceLink} row — so the thread survives link removal, re-add, and
+#   valence reclassification.
+#
+# Future commentable types (growth plans, focus areas, check-ins) reuse
+# this table by setting `commentable_type` and leaving inapplicable
+# anchor columns nullable.
 #
 # Comments are addressable by id (UUID v7), so other domain objects —
 # notably {EvidenceItem} — can later link to a comment as evidence
@@ -18,7 +27,8 @@
 #
 class PersonDevelopmentComment < ApplicationRecord
   ASSESSMENT_CELL = "assessment_cell"
-  COMMENTABLE_TYPES = [ ASSESSMENT_CELL ].freeze
+  EVIDENCE_LINK = "evidence_link"
+  COMMENTABLE_TYPES = [ ASSESSMENT_CELL, EVIDENCE_LINK ].freeze
   STATUSES = %w[active deleted].freeze
 
   acts_as_tenant :tenant
@@ -39,10 +49,12 @@ class PersonDevelopmentComment < ApplicationRecord
   validates :status, presence: true, inclusion: { in: STATUSES }
   validates :posted_at, presence: true
   validates :capability_stable_id, presence: true,
-            if: -> { commentable_type == ASSESSMENT_CELL }
+            if: -> { [ ASSESSMENT_CELL, EVIDENCE_LINK ].include?(commentable_type) }
   validates :level_ordinal, presence: true,
             numericality: { only_integer: true, greater_than_or_equal_to: 1 },
-            if: -> { commentable_type == ASSESSMENT_CELL }
+            if: -> { [ ASSESSMENT_CELL, EVIDENCE_LINK ].include?(commentable_type) }
+  validates :evidence_id, presence: true,
+            if: -> { commentable_type == EVIDENCE_LINK }
 
   scope :active, -> { where(status: "active") }
   scope :deleted, -> { where(status: "deleted") }
@@ -53,8 +65,33 @@ class PersonDevelopmentComment < ApplicationRecord
           capability_stable_id: capability_stable_id,
           level_ordinal: level_ordinal)
   end
+  scope :on_evidence_link, ->(evidence_id, capability_stable_id, level_ordinal) do
+    where(commentable_type: EVIDENCE_LINK,
+          evidence_id: evidence_id,
+          capability_stable_id: capability_stable_id,
+          level_ordinal: level_ordinal)
+  end
   scope :top_level, -> { where(parent_id: nil) }
   scope :chronological, -> { order(:posted_at) }
+
+  # Transient: the name of the discussed evidence item's author, hydrated
+  # by {Assessments::ActivityFeedQuery} for evidence_link feed entries
+  # ("commented on Priya's feedback"). Nil when not loaded.
+  attr_accessor :evidence_author_name
+
+  # Active discussion-comment counts per linked cell of one evidence
+  # item — `{ [capability_stable_id, level_ordinal] => count }`. Feeds
+  # the surfaces that disclose an existing thread before a link is
+  # removed (e.g. the evidence modal's "Applies to" rows).
+  #
+  # @param evidence_id [String]
+  # @return [Hash{Array(String, Integer) => Integer}]
+  def self.evidence_link_counts(evidence_id)
+    active
+      .where(commentable_type: EVIDENCE_LINK, evidence_id: evidence_id)
+      .group(:capability_stable_id, :level_ordinal)
+      .count
+  end
 
   # Whether this comment has been soft-deleted.
   #

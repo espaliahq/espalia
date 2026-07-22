@@ -18,13 +18,16 @@
 class Operations::Assessments::CommentsList < Operations::Base
   description "List active comment threads on an assessment for one capability (optionally one level). " \
               "Accepts either capability_id (version-specific) or stable_id (cross-version) in the " \
-              "capability_stable_id argument. Top-level comments carry their replies nested."
+              "capability_stable_id argument. Top-level comments carry their replies nested. " \
+              "Pass evidence_id to list the discussion thread on that evidence item's linkage " \
+              "at the cell instead of the cell's own comments."
   category :read
   approval :none
 
   parameter :assignment_id,        String, required: true
   parameter :capability_stable_id, String, required: true
   parameter :level_ordinal,        Integer
+  parameter :evidence_id, String # scope to this evidence item's linkage thread
 
   def policy_check
     authorize assignment, :index?, policy_class: PersonDevelopmentCommentPolicy
@@ -95,12 +98,18 @@ class Operations::Assessments::CommentsList < Operations::Base
   # filtered from the payload but needed so a reply chain passing through
   # a deleted comment still resolves to its root.
   def scoped_comments
+    evidence_id = params[:evidence_id].presence
     scope = PersonDevelopmentComment
       .for_person(assignment.person_id)
       .for_framework(assignment.framework_id)
-      .where(commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
-             capability_stable_id: capability.stable_id)
+      .where(capability_stable_id: capability.stable_id)
       .chronological
+    scope = if evidence_id
+      scope.where(commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+                  evidence_id: evidence_id)
+    else
+      scope.where(commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL)
+    end
     scope = scope.where(level_ordinal: params[:level_ordinal]) if params[:level_ordinal]
     scope
   end
@@ -110,6 +119,7 @@ class Operations::Assessments::CommentsList < Operations::Base
       id: comment.id,
       capability_stable_id: comment.capability_stable_id,
       level_ordinal: comment.level_ordinal,
+      evidence_id: comment.evidence_id,
       body: comment.body,
       author: { id: comment.author_id, name: comment.author&.name },
       posted_at: comment.posted_at&.iso8601,

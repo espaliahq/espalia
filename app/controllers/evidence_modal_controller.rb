@@ -75,12 +75,14 @@ class EvidenceModalController < ApplicationController
     options = Evidence::FrameworkCellOptions.new(framework_id: assignment.framework_id, role_id: assignment.role_id)
     expectation_map = options.expectation_map
 
+    comment_counts = link_comment_counts(evidence, linked_coords)
     linked_cells = linked_coords.map do |capability_stable_id, level_ordinal|
       info = expectation_map["#{capability_stable_id}|#{level_ordinal}"] || {}
       { capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
         capability_name: info[:capability_name], expectation: info[:expectation],
         illustrations: info[:illustrations] || [],
         valence: link_valences[[ capability_stable_id, level_ordinal ]],
+        comment_count: comment_counts[[ capability_stable_id, level_ordinal ]].to_i,
         entry_point: entry_cell == [ capability_stable_id, level_ordinal ] }
     end
 
@@ -92,6 +94,17 @@ class EvidenceModalController < ApplicationController
       link_options: options.link_options, level_options: options.level_options,
       linked_cells: linked_cells, expectation_map: expectation_map, return_to: params[:return_to]
     ), layout: false
+  end
+
+  # Active discussion-comment counts per linked cell (:edit only) — the
+  # "Applies to" row discloses an existing thread before the user stages
+  # the link's removal.
+  #
+  # @return [Hash{Array(String, Integer) => Integer}]
+  def link_comment_counts(evidence, linked_coords)
+    return {} if evidence.nil? || linked_coords.empty?
+
+    PersonDevelopmentComment.evidence_link_counts(evidence.id)
   end
 
   # Whose assessment this is — only needed off the hub (which lists items

@@ -1256,6 +1256,32 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       end
       assert_match(/withdrawn/, err.message)
     end
+
+    should "accept the survivor stable_id after an evolved migration" do
+      survivor = SecureRandom.uuid_v7
+      @aggregate.migrate_framework_version(@framework_id, 1, 2, [
+        { from_stable_id: @cap_sid, to_stable_id: survivor,
+          mapping_type: "evolved", requires_reassessment: false }
+      ])
+
+      # The read model re-keys links to the survivor id, so commands
+      # arrive with it — the aggregate's link map must have followed.
+      @aggregate.set_evidence_link_valence(@evidence_id,
+        capability_stable_id: survivor, level_ordinal: 3,
+        valence: "growth_area", changed_by_id: @author_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceLinkRevalenced, event
+      assert_equal survivor, event.data[:capability_stable_id]
+
+      # And the old id no longer resolves — no duplicate logical linkage.
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.set_evidence_link_valence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3,
+          valence: "growth_area", changed_by_id: @author_id)
+      end
+      assert_match(/not linked to that coordinate/, err.message)
+    end
   end
 
   context "record_evidence with additional_links" do

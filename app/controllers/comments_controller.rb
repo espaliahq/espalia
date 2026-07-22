@@ -19,7 +19,11 @@ class CommentsController < ApplicationController
     authorize comment, :show?, policy_class: PersonDevelopmentCommentPolicy
 
     case comment.commentable_type
-    when PersonDevelopmentComment::ASSESSMENT_CELL
+    when PersonDevelopmentComment::ASSESSMENT_CELL,
+         PersonDevelopmentComment::EVIDENCE_LINK
+      # Both types anchor to a cell — an evidence-link comment resolves
+      # to the assessment page with its cell focused, where the evidence
+      # card (and its discussion disclosure) lives.
       redirect_to_assessment(comment)
     else
       head :not_found

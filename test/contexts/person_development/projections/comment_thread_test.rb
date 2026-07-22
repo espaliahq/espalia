@@ -45,6 +45,47 @@ class PersonDevelopment::Projections::CommentThreadTest < ActiveSupport::TestCas
     end
   end
 
+  context "CommentPosted on an evidence linkage" do
+    should "create a row carrying the evidence_id anchor" do
+      comment_id = SecureRandom.uuid_v7
+      cap_sid = SecureRandom.uuid_v7
+      evidence_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::CommentPosted,
+        comment_id: comment_id,
+        parent_id: nil,
+        commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+        capability_stable_id: cap_sid,
+        level_ordinal: 3,
+        evidence_id: evidence_id,
+        body: "About this linkage.",
+        author_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        c = PersonDevelopmentComment.find(comment_id)
+        assert_equal PersonDevelopmentComment::EVIDENCE_LINK, c.commentable_type
+        assert_equal evidence_id, c.evidence_id
+        assert_equal cap_sid, c.capability_stable_id
+        assert_equal 3, c.level_ordinal
+        assert_equal 1, PersonDevelopmentComment.on_evidence_link(evidence_id, cap_sid, 3).count
+      end
+    end
+
+    should "tolerate historical events without the evidence_id key" do
+      comment_id = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::CommentPosted,
+        comment_id: comment_id, parent_id: nil,
+        commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+        capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2,
+        body: "Pre-feature event.", author_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil PersonDevelopmentComment.find(comment_id).evidence_id
+      end
+    end
+  end
+
   context "CommentEdited" do
     should "update body and mark edited_at/by" do
       comment_id = SecureRandom.uuid_v7

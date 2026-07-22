@@ -66,6 +66,13 @@ class EvidenceItem < ApplicationRecord
   # shared across every cell bucket it appears in. Nil when not loaded.
   attr_accessor :link_valences
 
+  # Transient map of `[capability_stable_id, level_ordinal] =>
+  # { count:, latest_body:, latest_author_name: }` for this item's
+  # evidence-linkage discussion threads, populated alongside
+  # `link_valences`. Per-cell, like valence — each linkage carries its
+  # own independent thread. Nil when not loaded.
+  attr_accessor :link_comment_stats
+
   validates :person_id, presence: true
   validates :framework_id, presence: true
   validates :capability_stable_id, presence: true

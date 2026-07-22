@@ -508,6 +508,53 @@ Design rules — all deliberate, don't relitigate piecemeal:
   own); `assessments_set_evidence_link_valence` reclassifies. Read payloads
   include `valence` per link (nil = pre-valence link).
 
+## Evidence-linkage discussion threads
+
+Every evidence **linkage** — one (evidence_id × capability_stable_id ×
+level_ordinal) cell an item is linked to — carries its own discussion
+thread, so the manager and assessee can debate *that linkage and its
+valence* rather than the item in general. Design rules, all deliberate:
+
+- **Anchored to the linkage's natural key, not the `EvidenceLink` row.**
+  The thread survives valence reclassification (the discussion usually
+  *causes* it), link removal, and re-add (same key ⇒ the history
+  reattaches). Data model: `commentable_type: "evidence_link"` on
+  `PersonDevelopmentComment` + an `evidence_id` column — same events,
+  projection (`CommentThread`), threading model, and `comments-thread`
+  Stimulus contract as cell comments; comment rows reuse
+  `Views::Assessments::Comments::Card` verbatim.
+- **Surface**: a collapsed count-plus-excerpt disclosure on each evidence
+  card (per cell — the same item carries an independent thread in every
+  cell it's linked to). A native `<details>` hosts a `loading: "lazy"`
+  turbo frame, so the thread is fetched only when opened.
+- **Lifecycle rows interleave with comments.** The thread renders the
+  linkage's story — *linked as «valence»*, *valence changed*, *removed*,
+  *withdrawn* — as muted system rows (hollow dot, italic, no kebab/reply)
+  read from the PD stream by `Assessments::EvidenceLinkThreadQuery`
+  (stream reads stay off the matrix render path; only the lazy frame
+  pays them).
+- **Removal keeps the thread open**: the removal is often the
+  discussion's outcome, so the composer stays under a "no longer linked"
+  notice (the aggregate accepts any linkage that *ever* existed).
+  **Withdrawal makes it read-only** (the artifact itself is retracted;
+  aggregate-enforced). Both removal surfaces (card kebab unlink confirm,
+  modal "Applies to" row) disclose an active thread's comment count and
+  that it is preserved.
+- **Participants = the assessment-side comment set** (assessee + manager
+  chain + active delegate + tenant admin — `PersonDevelopmentCommentPolicy`
+  verbatim). The **evidence author (a peer) is deliberately excluded**;
+  the hub deliberately shows no thread counts so it doesn't tease a
+  conversation the author can't open. No pre-alignment gate beyond what
+  cell comments already accept.
+- **Feed**: posts surface as `evidence_link_commented` entries (comments
+  chip, cell-anchored, naming whose feedback is discussed); linkage
+  comments also count toward the level chip's comment glyph. Live via
+  `CommentThread`'s existing broadcast.
+- **Writes** go through the same comments endpoints
+  (`Assessments::CommentsController`; `comment[evidence_id]` selects the
+  type) with frame-scoped redirects; MCP parity via an `evidence_id`
+  param on `assessments_post_comment` / `assessments_comments_list`.
+
 ## The unified "Applies to" block (evidence modal)
 
 The modal used to treat the "primary" linkage (a top context card + its own
@@ -980,6 +1027,9 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | **Unified evidence modal** (one modal for new/edit/respond, assessment + hub) | |
 | `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — writing-prompt card (:new/:respond only; role/level line only off the hub), content fields (disabled for a non-author link), and the unified **"Applies to" block**: uniform per-link rows (expectation + required-on-new valence + collapsible examples; entry-point row first + highlighted; last-row remove lock) + the capability/level picker (see *The unified "Applies to" block*) |
 | `app/views/evidence/valence.rb` | Shared valence surface vocabulary — UI labels + badge styling for `EvidenceLink::VALENCES` (see *Evidence-link valence*) |
+| `app/views/assessments/evidence/link_thread_frame.rb` | One linkage's discussion thread (lazy frame in the evidence card's disclosure) — lifecycle rows + comment cards + composer + removed/withdrawn notices (see *Evidence-linkage discussion threads*) |
+| `app/queries/assessments/evidence_link_thread_query.rb` | Assembles a linkage thread — comments + stream-read lifecycle entries (linked / revalenced / removed / withdrawn) |
+| `app/controllers/assessments/evidence_link_threads_controller.rb` | `GET /assessments/:id/evidence/:evidence_id/link_thread` — serves the thread frame (comment-policy gated) |
 | `app/operations/operations/assessments/set_evidence_link_valence.rb` | Shared web + MCP operation — reclassify one link's valence (`EvidenceLinkRevalenced`; no-op when unchanged) |
 | `app/views/evidence/modal_shell.rb` | The bare overlay/panel + lazy `#evidence-modal` frame, hosted inside `assessment-sync` (so the submit updates the matrix in place) |
 | `app/controllers/evidence_modal_controller.rb` | `GET /evidence_modal` — renders `ModalForm` for `(mode, evidence?, request?, cell?)`; resolves permissions + prefill + link options server-side; edit mode loads ALL active links (origin included, entry-point cell first) |

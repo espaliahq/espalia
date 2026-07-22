@@ -161,6 +161,11 @@ Rails.application.routes.draw do
     end
     resource :activity, only: [ :show ], controller: "assessments/activity"
     resources :comments, only: [ :create, :update, :destroy ], controller: "assessments/comments"
+    # One evidence linkage's discussion thread (lazy frame in the evidence
+    # card). Cell coords ride as query params — the anchor is the linkage's
+    # natural key, not an EvidenceLink row.
+    get "evidence/:evidence_id/link_thread",
+        to: "assessments/evidence_link_threads#show", as: :evidence_link_thread
   end
 
   # Individually-addressable comments. Currently resolves

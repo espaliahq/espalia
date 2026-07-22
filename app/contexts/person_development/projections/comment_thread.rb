@@ -65,6 +65,7 @@ class PersonDevelopment::Projections::CommentThread
       commentable_type: event.data[:commentable_type],
       capability_stable_id: event.data[:capability_stable_id],
       level_ordinal: event.data[:level_ordinal],
+      evidence_id: event.data[:evidence_id],
       parent_id: event.data[:parent_id],
       body: event.data[:body],
       author_id: event.data[:author_id],

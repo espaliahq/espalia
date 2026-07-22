@@ -689,17 +689,19 @@ class PersonDevelopment::CommandHandler
   # @param commentable_type [String] "assessment_cell" (V1)
   # @param body [String] comment body
   # @param author_id [String] UUID of the Person posting
-  # @param capability_stable_id [String, nil] required for assessment_cell
-  # @param level_ordinal [Integer, nil] required for assessment_cell
+  # @param capability_stable_id [String, nil] required for both commentable types
+  # @param level_ordinal [Integer, nil] required for both commentable types
+  # @param evidence_id [String, nil] required for evidence_link comments
   # @param parent_id [String, nil] parent comment for threaded replies
   def post_comment(person_id, framework_id, comment_id,
                    commentable_type:, body:, author_id:,
-                   capability_stable_id: nil, level_ordinal: nil, parent_id: nil)
+                   capability_stable_id: nil, level_ordinal: nil,
+                   evidence_id: nil, parent_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.post_comment(comment_id,
         commentable_type: commentable_type, body: body, author_id: author_id,
         capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
-        parent_id: parent_id)
+        evidence_id: evidence_id, parent_id: parent_id)
     end
   end
 
