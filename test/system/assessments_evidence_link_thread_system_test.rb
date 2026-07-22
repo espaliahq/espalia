@@ -73,6 +73,12 @@ class AssessmentsEvidenceLinkThreadSystemTest < ApplicationSystemTestCase
 
   def open_disclosure
     visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+    # The matrix frame eagerly re-fetches after initial render; opening
+    # the disclosure before that fetch lands means the replacement swaps
+    # in a fresh (closed) card and the thread frame never loads — seen as
+    # a mobile-only CI flake (slower render widens the race). Wait for
+    # the frame's first load per testing.md's lazy-frame rule.
+    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
     assert_selector "#evidence-#{@evidence_id}", visible: true
     # Native <details>; the summary is not Stimulus-driven, but the
     # synthetic click can still drop on starved CI — open via JS toggle.
