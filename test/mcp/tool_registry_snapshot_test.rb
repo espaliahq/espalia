@@ -119,13 +119,16 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "assessments_comments_list",
         "description" => "List active comment threads on an assessment for one capability (optionally one level). " \
                          "Accepts either capability_id (version-specific) or stable_id (cross-version) in the " \
-                         "capability_stable_id argument. Top-level comments carry their replies nested.",
+                         "capability_stable_id argument. Top-level comments carry their replies nested. " \
+                         "Pass evidence_id to list the discussion thread on that evidence item's linkage " \
+                         "at the cell instead of the cell's own comments.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "assignment_id"        => { "type" => "string" },
             "capability_stable_id" => { "type" => "string" },
-            "level_ordinal"        => { "type" => "integer" }
+            "level_ordinal"        => { "type" => "integer" },
+            "evidence_id"          => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id],
           "additionalProperties" => false
@@ -297,7 +300,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_post_comment",
-        "description" => "Post a comment on a capability × level of an assessment (optionally as a reply).",
+        "description" => "Post a comment on a capability × level of an assessment (optionally as a reply). " \
+                         "Pass evidence_id to comment on that evidence item's linkage at the cell instead — " \
+                         "the discussion of the feedback's relevance and valence there.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -305,7 +310,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" },
             "body"                 => { "type" => "string" },
-            "parent_id"            => { "type" => "string" }
+            "parent_id"            => { "type" => "string" },
+            "evidence_id"          => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal body],
           "additionalProperties" => false

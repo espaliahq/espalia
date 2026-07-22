@@ -73,6 +73,34 @@ class Operations::Assessments::PostCommentTest < ActiveSupport::TestCase
     assert_match "framework", err.message
   end
 
+  context "with evidence_id (evidence-link thread)" do
+    setup do
+      @evidence_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        @pd.record_evidence(@person.id, @framework_id, @evidence_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "self", evidence_type: "observation",
+          content: "Shipped it.", author_id: @person.id, valence: "demonstrated")
+      end
+    end
+
+    should "post an evidence_link comment on the linkage" do
+      result = call_op(base_params(evidence_id: @evidence_id, body: "About this linkage"))
+      assert_equal @evidence_id, result[:evidence_id]
+
+      stored = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.find(result[:comment_id]) }
+      assert_equal PersonDevelopmentComment::EVIDENCE_LINK, stored.commentable_type
+      assert_equal @evidence_id, stored.evidence_id
+    end
+
+    should "reject a cell the evidence was never linked to as invalid params" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(base_params(evidence_id: @evidence_id, level_ordinal: 5))
+      end
+      assert_match "never linked", err.message
+    end
+  end
+
   should "deny a peer who cannot view the assessment" do
     other_user = create(:user)
     ActsAsTenant.with_tenant(@tenant) do
