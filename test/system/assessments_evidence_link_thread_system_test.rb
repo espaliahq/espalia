@@ -76,9 +76,14 @@ class AssessmentsEvidenceLinkThreadSystemTest < ApplicationSystemTestCase
     assert_selector "#evidence-#{@evidence_id}", visible: true
     # Native <details>; the summary is not Stimulus-driven, but the
     # synthetic click can still drop on starved CI — open via JS toggle.
-    page.execute_script(
-      "document.querySelector('#evidence-#{@evidence_id} details').open = true;"
-    )
+    # Scroll it into view too: the lazy frame only fetches once it
+    # intersects the viewport, and on the mobile viewport the card can
+    # sit below the fold (a real user scrolls to tap the summary).
+    page.execute_script(<<~JS)
+      const details = document.querySelector('#evidence-#{@evidence_id} details');
+      details.open = true;
+      details.scrollIntoView({ block: 'center' });
+    JS
     assert_selector "#{thread_frame_selector}[complete]", visible: :all
   end
 
@@ -94,7 +99,10 @@ class AssessmentsEvidenceLinkThreadSystemTest < ApplicationSystemTestCase
 
       page.execute_script(<<~JS)
         const frame = document.querySelector("#{thread_frame_selector}");
-        frame.querySelector("textarea[name='comment[body]']").value = "Is this a growth signal?";
+        const textarea = frame.querySelector("textarea[name='comment[body]']");
+        textarea.value = "Is this a growth signal?";
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        textarea.dispatchEvent(new Event("change", { bubbles: true }));
         frame.querySelector("form").requestSubmit();
       JS
 
