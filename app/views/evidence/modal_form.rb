@@ -305,6 +305,14 @@ class Views::Evidence::ModalForm < Views::Base
         remove_button if removable
       end
       p(class: "text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
+      if cell[:comment_count].to_i.positive?
+        # Disclose an active discussion before the user stages this link's
+        # removal — the thread is preserved in history either way.
+        p(class: "text-xs italic text-gray-600 dark:text-gray-300") do
+          "#{cell[:comment_count]} #{'comment'.pluralize(cell[:comment_count])} in discussion — " \
+            "kept in history if this link is removed"
+        end
+      end
       valence_select(name: "evidence[link_valences][#{token}]", current: cell[:valence],
                      required: required_valence, id: valence_id, css: "#{INPUT} text-xs")
       examples_disclosure(cell[:illustrations], open: entry) if cell[:illustrations].present?

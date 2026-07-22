@@ -352,7 +352,7 @@ class Views::Assessments::Evidence::Card < Views::Base
         class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
                "hover:bg-gray-100 dark:hover:bg-gray-700",
         role: "menuitem",
-        form: { data: { turbo_confirm: "Unlink this feedback from this capability?" } }
+        form: { data: { turbo_confirm: unlink_confirm_message } }
       ) { "Unlink from this capability" }
     else
       span(
@@ -362,6 +362,17 @@ class Views::Assessments::Evidence::Card < Views::Base
         title: "This is the only place this feedback is linked — withdraw it instead."
       ) { "Unlink from this capability" }
     end
+  end
+
+  # An unlink with an active discussion shouldn't surprise anyone — the
+  # confirm discloses the thread and that it survives (the thread anchors
+  # to the linkage's natural key, so it is preserved, not deleted).
+  def unlink_confirm_message
+    base = "Unlink this feedback from this capability?"
+    return base if discussion_count.zero?
+
+    "#{base} Its discussion (#{discussion_count} " \
+      "#{'comment'.pluralize(discussion_count)}) will be kept in history."
   end
 
   def withdraw_menu_item

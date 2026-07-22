@@ -29,6 +29,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_completed"      => "bg-green-600",
     "alignment_reopened"       => "bg-amber-500",
     "comment_posted"           => "bg-sky-500",
+    "evidence_link_commented"  => "bg-sky-500",
     "delegation_granted"       => "bg-indigo-500",
     "delegation_revoked"       => "bg-gray-400",
     "reporting_manager_recorded" => "bg-sky-500"
@@ -57,6 +58,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_completed"     => "alignment",
     "alignment_reopened"      => "alignment",
     "comment_posted"          => "comments",
+    "evidence_link_commented" => "comments",
     # No filter chip — these surface under "All" only.
     "delegation_granted"        => "authority",
     "delegation_revoked"        => "authority",
@@ -176,6 +178,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "alignment_completed"   then "Marked alignment complete"
     when "alignment_reopened"    then "Re-opened alignment"
     when "comment_posted"        then comment_posted_summary
+    when "evidence_link_commented" then evidence_link_commented_summary
     when "delegation_granted"    then "#{actor_name || 'Manager'} delegated rating to #{delegate_name}"
     when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"
     when "reporting_manager_recorded" then "Reporting manager changed to #{manager_name}"
@@ -226,6 +229,30 @@ class Views::Assessments::Activity::Entry < Views::Base
       "#{name} replied to #{parent_name} on #{capability_label}"
     else
       "#{name} commented on #{capability_label}"
+    end
+  end
+
+  # "<Author> commented on <evidence author>'s feedback · <Capability · Lx>"
+  # (reply variant mirrors comment_posted_summary). Names whose feedback
+  # is under discussion so the entry reads distinctly from a plain cell
+  # comment; falls back to bare "feedback" when the item's author no
+  # longer resolves.
+  def evidence_link_commented_summary
+    author_name = if @entry.payload.respond_to?(:author)
+      @entry.payload.author&.name
+    end
+    name = author_name.to_s.strip.presence || "Someone"
+
+    owner = @entry.payload.respond_to?(:evidence_author_name) &&
+      @entry.payload.evidence_author_name.to_s.strip.presence
+    feedback_label = owner ? "#{owner}'s feedback" : "feedback"
+
+    parent = @entry.payload.respond_to?(:parent) ? @entry.payload.parent : nil
+    if parent
+      parent_name = parent.author&.name.to_s.strip.presence || "another comment"
+      "#{name} replied to #{parent_name} on #{feedback_label} · #{capability_label}"
+    else
+      "#{name} commented on #{feedback_label} · #{capability_label}"
     end
   end
 
@@ -345,7 +372,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       reason.to_s.strip.presence
-    when "comment_posted"
+    when "comment_posted", "evidence_link_commented"
       body = @entry.payload.respond_to?(:body) ? @entry.payload.body : nil
       body.to_s.strip.presence
     end

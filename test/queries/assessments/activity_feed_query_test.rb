@@ -387,6 +387,38 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
 
   private
 
+  context "evidence-linkage discussion comments" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.post_comment(
+          @assessee.id, @framework_id, SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::EVIDENCE_LINK,
+          capability_stable_id: @cap_sid, level_ordinal: 2,
+          evidence_id: @evidence_id,
+          body: "Is this a growth signal?", author_id: @manager.id
+        )
+      end
+      @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
+        alignment_started: false)
+      @entry = @entries.find { |e| e.kind == "evidence_link_commented" }
+    end
+
+    should "emit an evidence_link_commented entry anchored to the cell" do
+      assert_not_nil @entry
+      assert_equal @cap_sid, @entry.capability_stable_id
+      assert_equal 2, @entry.level_ordinal
+    end
+
+    should "hydrate the discussed evidence author's name onto the payload" do
+      assert_equal "Assessee", @entry.payload.evidence_author_name
+    end
+
+    should "land under the comments filter chip" do
+      assert_equal "comments",
+        Views::Assessments::Activity::Entry::KIND_GROUP["evidence_link_commented"]
+    end
+  end
+
   def run_query(viewer:, sees_all:, context:, alignment_started:)
     ActsAsTenant.with_tenant(@tenant) do
       Assessments::ActivityFeedQuery.new(

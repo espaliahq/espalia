@@ -74,6 +74,11 @@ class PersonDevelopmentComment < ApplicationRecord
   scope :top_level, -> { where(parent_id: nil) }
   scope :chronological, -> { order(:posted_at) }
 
+  # Transient: the name of the discussed evidence item's author, hydrated
+  # by {Assessments::ActivityFeedQuery} for evidence_link feed entries
+  # ("commented on Priya's feedback"). Nil when not loaded.
+  attr_accessor :evidence_author_name
+
   # Whether this comment has been soft-deleted.
   #
   # @return [Boolean]

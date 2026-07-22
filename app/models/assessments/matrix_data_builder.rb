@@ -188,7 +188,8 @@ class Assessments::MatrixDataBuilder
 
       evidence = @evidence_index[[ capability.stable_id, ordinal ]] || []
       comments = @comments_index[[ capability.stable_id, ordinal ]] || []
-      visible_comment_count = comments.count { |c| !c.deleted? }
+      visible_comment_count = comments.count { |c| !c.deleted? } +
+        (@link_comment_cell_counts || {})[[ capability.stable_id, ordinal ]].to_i
 
       cells[ordinal] = {
         expectation: expectation,
@@ -244,6 +245,11 @@ class Assessments::MatrixDataBuilder
     end
 
     comment_stats = load_link_comment_stats(items_by_id.keys)
+    # Cell-level totals so the level chip's comment glyph reflects
+    # linkage discussions too (scoped to the evidence the viewer sees).
+    @link_comment_cell_counts = comment_stats.values.each_with_object(Hash.new(0)) do |per_cell, totals|
+      per_cell.each { |cell_key, stat| totals[cell_key] += stat[:count] }
+    end
 
     links
       .sort_by { |link| items_by_id[link.evidence_id].recorded_at }

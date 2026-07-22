@@ -362,26 +362,47 @@ class Assessments::ActivityFeedQuery
   # entry — the card itself shows an `(edited)` marker, and a feed
   # entry per edit would be excessive for an informal conversation lane.
   def comment_entries
-    PersonDevelopmentComment
+    comments = PersonDevelopmentComment
       .active
       .for_person(@assignment.person_id)
       .for_framework(@assignment.framework_id)
-      .where(commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL)
+      .where(commentable_type: [ PersonDevelopmentComment::ASSESSMENT_CELL,
+                                 PersonDevelopmentComment::EVIDENCE_LINK ])
       .includes(:author, parent: :author)
-      .map do |comment|
-        stable_id = comment.capability_stable_id
-        Entry.new(
-          id: "comment_posted:#{comment.id}",
-          kind: "comment_posted",
-          occurred_at: comment.posted_at,
-          payload: comment,
-          capability_stable_id: stable_id,
-          level_ordinal: comment.level_ordinal,
-          cycle_id: nil,
-          capability_name: capability_name_for(stable_id),
-          category_id: category_id_for(stable_id)
-        )
-      end
+      .to_a
+
+    hydrate_evidence_author_names(comments)
+
+    comments.map do |comment|
+      stable_id = comment.capability_stable_id
+      link_comment = comment.commentable_type == PersonDevelopmentComment::EVIDENCE_LINK
+      kind = link_comment ? "evidence_link_commented" : "comment_posted"
+      Entry.new(
+        id: "#{kind}:#{comment.id}",
+        kind: kind,
+        occurred_at: comment.posted_at,
+        payload: comment,
+        capability_stable_id: stable_id,
+        level_ordinal: comment.level_ordinal,
+        cycle_id: nil,
+        capability_name: capability_name_for(stable_id),
+        category_id: category_id_for(stable_id)
+      )
+    end
+  end
+
+  # Evidence-link comment summaries name whose feedback is under
+  # discussion ("commented on Priya's feedback · …"). One batched lookup
+  # stashed on the comment rows' transient attribute.
+  def hydrate_evidence_author_names(comments)
+    evidence_ids = comments.filter_map(&:evidence_id).uniq
+    return if evidence_ids.empty?
+
+    names = EvidenceItem.where(id: evidence_ids).includes(:author)
+      .index_by(&:id).transform_values { |item| item.author&.name }
+    comments.each do |comment|
+      comment.evidence_author_name = names[comment.evidence_id] if comment.evidence_id
+    end
   end
 
   def alignment_entries
