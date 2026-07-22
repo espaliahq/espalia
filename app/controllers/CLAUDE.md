@@ -1,1 +1,1 @@
-@docs/guidelines/rails-controllers.md
+@AGENTS.md

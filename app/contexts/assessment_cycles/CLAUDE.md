@@ -1,1 +1,1 @@
-@docs/guidelines/event-sourcing.md
+@AGENTS.md

@@ -1,1 +1,1 @@
-@docs/guidelines/assessments.md
+@AGENTS.md

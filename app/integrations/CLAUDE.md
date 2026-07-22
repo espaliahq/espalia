@@ -1,1 +1,1 @@
-@docs/guidelines/hris-integration.md
+@AGENTS.md

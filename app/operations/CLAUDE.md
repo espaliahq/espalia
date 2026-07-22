@@ -1,1 +1,1 @@
-@docs/guidelines/mcp-server.md
+@AGENTS.md
