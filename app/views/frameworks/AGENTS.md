@@ -1,1 +1,1 @@
-@docs/guidelines/framework-explorer.md
+@../../../docs/guidelines/framework-explorer.md

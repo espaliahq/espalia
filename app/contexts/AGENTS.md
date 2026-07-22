@@ -1,1 +1,1 @@
-@docs/guidelines/event-sourcing.md
+@../../docs/guidelines/event-sourcing.md

@@ -1,1 +1,1 @@
-@docs/guidelines/assessments.md
+@../../../docs/guidelines/assessments.md

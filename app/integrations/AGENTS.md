@@ -1,1 +1,1 @@
-@docs/guidelines/hris-integration.md
+@../../docs/guidelines/hris-integration.md

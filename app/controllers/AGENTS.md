@@ -1,1 +1,1 @@
-@docs/guidelines/rails-controllers.md
+@../../docs/guidelines/rails-controllers.md

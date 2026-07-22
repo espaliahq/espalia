@@ -1,1 +1,1 @@
-@docs/guidelines/testing.md
+@../docs/guidelines/testing.md

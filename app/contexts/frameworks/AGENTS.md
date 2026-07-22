@@ -1,2 +1,2 @@
-@docs/guidelines/event-sourcing.md
-@docs/architecture/framework-aggregate.md
+@../../../docs/guidelines/event-sourcing.md
+@../../../docs/architecture/framework-aggregate.md

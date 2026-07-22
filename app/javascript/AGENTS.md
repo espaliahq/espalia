@@ -1,1 +1,1 @@
-@docs/guidelines/javascript-stimulus.md
+@../../docs/guidelines/javascript-stimulus.md

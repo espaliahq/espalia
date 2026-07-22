@@ -1,1 +1,1 @@
-@docs/guidelines/authorization.md
+@../../docs/guidelines/authorization.md

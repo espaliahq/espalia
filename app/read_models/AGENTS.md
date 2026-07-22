@@ -1,5 +1,5 @@
-@docs/guidelines/event-sourcing.md
-@docs/guidelines/rails-models.md
+@../../docs/guidelines/event-sourcing.md
+@../../docs/guidelines/rails-models.md
 
 **Read-model ownership rule:** every table in this directory has exactly one
 projection writer. If two contexts need overlapping data, model it as two

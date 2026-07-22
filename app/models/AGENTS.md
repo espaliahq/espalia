@@ -1,1 +1,1 @@
-@docs/guidelines/rails-models.md
+@../../docs/guidelines/rails-models.md
