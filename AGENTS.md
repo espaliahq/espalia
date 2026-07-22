@@ -112,7 +112,7 @@ end
 
 ## Project Structure
 
-```
+```text
 app/
 ├── models/                          # State-based ActiveRecord
 │   ├── tenant.rb                    # acts_as_tenant root
@@ -282,7 +282,7 @@ end
 
 ## Key Directories
 
-```
+```text
 app/
   components/kit/          # Phlex Kit components (Button, Card, Alert, etc.)
   controllers/             # Rails controllers (skinny)
