@@ -38,8 +38,12 @@ class Views::Notifications::Bell < Views::Base
   end
 
   def panel
+    # right-0 anchors to the bell, which is not at the viewport edge — on a
+    # narrow screen a 20rem panel would spill off-screen left, so below `sm`
+    # it goes fixed and spans the viewport (minus gutters) instead.
     div(
       class: "absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-md shadow-lg " \
+             "max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:mt-0 max-sm:w-auto max-sm:max-w-none " \
              "bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50 hidden overflow-hidden",
       data: { dropdown_target: "menu" },
       role: "menu",

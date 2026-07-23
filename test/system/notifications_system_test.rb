@@ -103,4 +103,18 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     visit root_path
     assert_selector "turbo-frame#notification-bell span", text: "1"
   end
+
+  should "keep the dropdown panel fully on-screen on a mobile viewport" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    notify!(title: "Mobile panel")
+    visit root_path
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    rect = page.evaluate_script(
+      "document.querySelector(\"turbo-frame#notification-bell [data-dropdown-target='menu']\")" \
+      ".getBoundingClientRect().toJSON()"
+    )
+    assert_operator rect["left"], :>=, 0, "panel clipped off the left viewport edge"
+    assert_operator rect["right"], :<=, 375, "panel clipped off the right viewport edge"
+  end
 end
