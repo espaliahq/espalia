@@ -690,6 +690,37 @@ feedback can be read in situ; the controller renders it only when
 `AssessmentPolicy#show?` admits the viewer, so a peer who provided feedback on
 a colleague's assessment gets no dead link.
 
+## Comment notifications
+
+Every posted assessment comment — cell thread or evidence-linkage thread —
+notifies the conversation's other parties via
+[`PersonDevelopment::AsyncHandlers::CommentNotifier`](../../app/contexts/person_development/async_handlers/comment_notifier.rb)
+(async RES handler on `CommentPosted`; NOT a projection — replaying would
+re-send). Three rules, deduped, the author always excluded, one notification
+per recipient per comment (a recipient matching several rules gets the most
+specific — reply beats the generic kinds):
+
+| Rule | Recipient | `NotificationType` |
+|---|---|---|
+| Reply | The parent comment's author | `comment_reply` |
+| Comment by anyone ≠ assessee | The assessee | `assessment_commented` |
+| Comment by the assessee | The **recorded reporting manager** (live `Person.manager_id` fallback) **+ active rating delegates** | `team_assessment_commented` (Slack off by default — opt-in, so managers of large teams don't drown) |
+
+Edits and deletes stay silent (the thread shows them). Skip-level ancestors
+and tenant admins can read threads but get no pings — observers, not parties.
+Recipients are by construction inside the comment-visibility set; the peer
+evidence author is excluded from linkage threads upstream, so no leak is
+possible. Bodies use `quoted_excerpt` with a context line ("«evidence
+author»'s feedback · «Capability» · L«n»"); the deep link carries the
+existing `?capability=` + `?level_ordinal=` focus params, and one URL serves
+both parties (the show route renders per-viewer context).
+
+**Delivery is in-app-first everywhere**: external channels (Slack) fire only
+if the recipient hasn't read the in-app copy within
+`ApplicationNotifier::ESCALATION_DELAY` (1 minute) — the smart-escalation
+rules in [`ApplicationNotifier`](../../app/notifiers/application_notifier.rb),
+shared by every notification type.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 **Every action a user can take on the assessment screen MUST produce a
@@ -1006,6 +1037,9 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/controllers/assessments/alignment_completions_controller.rb` | Manager-only POST — fires `FullAlignmentCompleted`, freezes all ratings |
 | `app/controllers/assessments/alignment_reopenings_controller.rb` | Manager-only POST — dispatches `Operations::Assessments::ReopenAlignment`, returns the cycle to `aligning` (agreed values preserved) |
 | `app/operations/operations/assessments/reopen_alignment.rb` | Shared web + MCP operation — re-open a completed alignment (manager-only, cycle still open) |
+| **Notifications** | |
+| `app/contexts/person_development/async_handlers/comment_notifier.rb` | Async handler: `CommentPosted` → reply / assessee / manager-side notifications (see *Comment notifications*) |
+| `app/notifiers/{comment_reply,assessment_commented,team_assessment_commented}_notifier.rb` | Presentation per notification type — title, excerpted body + context line, cell deep link |
 | **Data** | |
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions + `current_level_complete`. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../architecture/adrs.md) |
 | `app/queries/assessments/level_coverage.rb` | Current-level self/manager/aligned completion for a (person, framework, cycle). Mirrors the builder's denominator; consumed by the `CurrentAssessment` projection to stamp `assessment_cycle_progress.{self,manager}_completed_at` for the dual-party list status, and by the alignment-completion gate (aligned side) |

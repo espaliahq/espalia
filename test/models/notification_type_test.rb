@@ -10,6 +10,19 @@ class NotificationTypeTest < ActiveSupport::TestCase
       assert NotificationType.exists?("evidence_requested")
       assert_not NotificationType.exists?(:nonexistent_type)
     end
+
+    should "register the comment notification types" do
+      keys = NotificationType.all.map(&:key)
+      assert_includes keys, :comment_reply
+      assert_includes keys, :assessment_commented
+      assert_includes keys, :team_assessment_commented
+
+      # Direct-conversation types escalate to Slack by default; the manager-side
+      # digest of report activity is opt-in so large teams don't drown.
+      assert NotificationType.enabled?({}, :comment_reply, :slack)
+      assert NotificationType.enabled?({}, :assessment_commented, :slack)
+      assert_not NotificationType.enabled?({}, :team_assessment_commented, :slack)
+    end
   end
 
   context ".enabled?" do
