@@ -104,6 +104,19 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     assert_selector "turbo-frame#notification-bell span", text: "1"
   end
 
+  should "link notification preferences from the mobile bell panel" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    notify!(title: "Mobile preferences")
+    visit root_path
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    click_with_retry(expect_text: "Feedback requested from you") do
+      find("turbo-frame#notification-bell a[aria-label='Notification preferences']").click
+    end
+
+    assert_current_path settings_notifications_path
+  end
+
   should "keep the dropdown panel fully on-screen on a mobile viewport" do
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     notify!(title: "Mobile panel")
