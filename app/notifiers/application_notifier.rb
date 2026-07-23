@@ -23,7 +23,9 @@ class ApplicationNotifier < Noticed::Event
   # How long an external channel waits for the recipient to read the in-app
   # notification before delivering, to avoid duplicate pings ("smart
   # notification"). Applied only when the recipient surfaces this type in-app.
-  ESCALATION_DELAY = 5.minutes
+  # Kept short (1 minute) so a conversational notification still lands over
+  # Slack near-real-time when the recipient isn't in the app.
+  ESCALATION_DELAY = 1.minute
 
   # Longest quoted free-text excerpt (a response body, a decline reason) a
   # notification body will carry — see `quoted_excerpt`.
