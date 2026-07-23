@@ -72,6 +72,20 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  should "link notification preferences from the bell panel's gear" do
+    notify!(title: "Prefs entry point")
+    visit root_path
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    # Icon-only control — locate by aria-label; sync on text unique to the
+    # preferences page (the panel header also says "Notifications").
+    click_with_retry(expect_text: "Feedback requested from you") do
+      find("turbo-frame#notification-bell a[aria-label='Notification preferences']").click
+    end
+
+    assert_current_path settings_notifications_path
+  end
+
   should "navigate to the full inbox via 'View all' (frame breaks out to _top)" do
     notify!(title: "Full list")
     visit root_path
