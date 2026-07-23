@@ -719,7 +719,13 @@ both parties (the show route renders per-viewer context).
 if the recipient hasn't read the in-app copy within
 `ApplicationNotifier::ESCALATION_DELAY` (1 minute) — the smart-escalation
 rules in [`ApplicationNotifier`](../../app/notifiers/application_notifier.rb),
-shared by every notification type.
+shared by every notification type. The **first Slack DM a user ever
+receives** carries a one-time footer disclosing this model and linking
+`/settings/notifications` (a persisted fact —
+`User#external_notifications_disclosed_at`, marked only after a successful
+post — see [`SlackDeliveryMethod`](../../app/notifiers/slack_delivery_method.rb));
+the notification bell's dropdown links the same page persistently via a gear
+icon.
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 
