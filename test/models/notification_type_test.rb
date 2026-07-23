@@ -17,11 +17,11 @@ class NotificationTypeTest < ActiveSupport::TestCase
       assert_includes keys, :assessment_commented
       assert_includes keys, :team_assessment_commented
 
-      # Direct-conversation types escalate to Slack by default; the manager-side
-      # digest of report activity is opt-in so large teams don't drown.
+      # All three escalate to Slack by default — conversational notifications
+      # should reach absent recipients; a drowning manager can opt out per type.
       assert NotificationType.enabled?({}, :comment_reply, :slack)
       assert NotificationType.enabled?({}, :assessment_commented, :slack)
-      assert_not NotificationType.enabled?({}, :team_assessment_commented, :slack)
+      assert NotificationType.enabled?({}, :team_assessment_commented, :slack)
     end
   end
 

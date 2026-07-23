@@ -704,7 +704,7 @@ specific — reply beats the generic kinds):
 |---|---|---|
 | Reply | The parent comment's author | `comment_reply` |
 | Comment by anyone ≠ assessee | The assessee | `assessment_commented` |
-| Comment by the assessee | The **recorded reporting manager** (live `Person.manager_id` fallback) **+ active rating delegates** | `team_assessment_commented` (Slack off by default — opt-in, so managers of large teams don't drown) |
+| Comment by the assessee | The **recorded reporting manager** (live `Person.manager_id` fallback) **+ active rating delegates** | `team_assessment_commented` |
 
 Edits and deletes stay silent (the thread shows them). Skip-level ancestors
 and tenant admins can read threads but get no pings — observers, not parties.

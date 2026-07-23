@@ -69,7 +69,7 @@ class NotificationType
       key: :team_assessment_commented,
       label: "A report commented on their assessment",
       description: "Someone whose assessment you manage posts a comment on it.",
-      defaults: { in_app: true, slack: false, email: false }
+      defaults: { in_app: true, slack: true, email: false }
     )
   }.freeze
 
