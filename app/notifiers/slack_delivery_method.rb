@@ -18,8 +18,11 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     slack_user_id = resolve_slack_user_id(tenant)
     return if slack_user_id.blank?
 
+    disclose = disclose_preferences?
     Slack::Client.new(bot_token: tenant.slack_bot_token)
-      .post_dm(slack_user_id: slack_user_id, text: message_text, blocks: message_blocks)
+      .post_dm(slack_user_id: slack_user_id, text: message_text,
+               blocks: message_blocks(disclose_preferences: disclose))
+    mark_preferences_disclosed if disclose
   rescue Slack::Errors::Error => e
     Rails.logger.warn("[slack] delivery skipped (tenant=#{tenant&.id}): #{e.class}: #{e.message}")
   end
@@ -51,8 +54,9 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
   end
 
   # Block Kit payload: the headline + body, then a button to the in-app surface
-  # when an absolute URL can be built.
-  def message_blocks
+  # when an absolute URL can be built, and — on the recipient's first-ever
+  # external DM — the one-time preferences disclosure footer.
+  def message_blocks(disclose_preferences: false)
     blocks = [ { type: "section", text: { type: "mrkdwn", text: "*#{mrkdwn_escape(notification.inbox_title)}*" } } ]
     body = notification.inbox_body
     blocks << { type: "section", text: { type: "mrkdwn", text: mrkdwn_escape(body) } } if body.present?
@@ -64,7 +68,42 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
         elements: [ { type: "button", text: { type: "plain_text", text: "Open in GrowthOS" }, url: url } ]
       }
     end
+    blocks << preferences_footer if disclose_preferences
     blocks
+  end
+
+  # Whether this DM should carry the one-time preferences disclosure: the
+  # recipient has never had one. Persisted on the User (a fact, not inferred
+  # from notification timestamps — those tie under load and in frozen-time
+  # tests) and marked only AFTER a successful post, so a failed or skipped
+  # delivery keeps the disclosure for the recipient's next DM. A concurrent
+  # double-disclosure in that window is possible and harmless.
+  #
+  # @return [Boolean]
+  def disclose_preferences?
+    recipient.respond_to?(:external_notifications_disclosed_at) &&
+      recipient.external_notifications_disclosed_at.nil?
+  end
+
+  def mark_preferences_disclosed
+    recipient.update_column(:external_notifications_disclosed_at, Time.current)
+  end
+
+  # One-time orientation footer for a first DM: disclose the in-app-first
+  # delivery model and where to tune what reaches Slack. Our own copy — not
+  # user text — so the deliberate mrkdwn link is not escaped.
+  def preferences_footer
+    url = absolute_url("/settings/notifications")
+    prefs = url ? "<#{url}|notification preferences>" : "notification preferences (Settings → Notifications)"
+    {
+      type: "context",
+      elements: [ {
+        type: "mrkdwn",
+        text: "👋 First time hearing from GrowthOS? Notifications arrive in the app first — " \
+              "Slack only chimes in when you haven't seen them there. " \
+              "Choose what reaches you, and where, in your #{prefs}."
+      } ]
+    }
   end
 
   # Notification titles and bodies carry user-written free text (a request
