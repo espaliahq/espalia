@@ -61,7 +61,9 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
       assert_selector "#framework-activity-load-more button", text: "Load older"
     end
 
-    # JS-dispatch the click (hover-revealed control; pointer clicks flake on CI).
+    # Wait for the controller to attach before dispatching, then JS-dispatch
+    # the click (hover-revealed control; pointer clicks flake on CI).
+    wait_for_stimulus "activity-more", scope: "#framework-activity-load-more"
     page.execute_script(
       "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
     )
@@ -91,6 +93,9 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
       assert_no_selector "#framework-activity-list > li", visible: true
     end
 
+    # Wait for the controller to attach before dispatching, then JS-dispatch
+    # the click (hover-revealed control; pointer clicks flake on CI).
+    wait_for_stimulus "activity-more", scope: "#framework-activity-load-more"
     page.execute_script(
       "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
     )

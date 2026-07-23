@@ -12,10 +12,10 @@
 //     </button>
 //   </div>
 
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 import { get } from "@rails/request.js"
 
-export default class extends Controller {
+export default class extends BaseController {
   static values = { url: String }
   static targets = ["button"]
 
