@@ -131,6 +131,21 @@ class PersonDevelopment::AsyncHandlers::CommentNotifierTest < ActiveSupport::Tes
     end
   end
 
+  should "not re-notify recipients when the CommentPosted event is redelivered" do
+    perform_enqueued_jobs { post!(author: @assessee) }
+    assert_equal 1, @manager_user.notifications.reload.size
+
+    # RES async handlers run at-least-once — simulate a redelivery of the same
+    # event after a completed fan-out.
+    comment = PersonDevelopmentComment.last!
+    perform_enqueued_jobs do
+      PersonDevelopment::AsyncHandlers::CommentNotifier.new.send(:notify_recipients, comment)
+    end
+
+    assert_equal 1, @manager_user.notifications.reload.size
+    assert_equal 1, Noticed::Event.where(type: "TeamAssessmentCommentedNotifier").count
+  end
+
   should "provision a user for a manager who has never logged in" do
     newcomer = create(:person, tenant: @tenant, name: "Newcomer", email: "new-manager@example.com")
     @assessee.update!(manager: newcomer)

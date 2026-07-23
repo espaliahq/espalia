@@ -71,8 +71,10 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
   def deliver(notifier_class, comment, person_id, context, url)
     user = user_for(person_id)
     return if user.nil?
+    return if already_delivered?(notifier_class, user, comment)
 
     notifier_class.with(
+      record: comment,
       tenant_id: comment.tenant_id,
       author_name: comment.author&.name,
       body: comment.body,
@@ -80,6 +82,25 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
       url: url,
       comment_id: comment.id
     ).deliver(user)
+  end
+
+  # RES async handlers run at-least-once — a retried job after a partial
+  # fan-out must not re-notify recipients already delivered to (nor re-arm
+  # their delayed Slack escalation). The Noticed event's polymorphic `record`
+  # (the comment) keys the persisted dedup check per (recipient, type,
+  # comment).
+  #
+  # @return [Boolean]
+  def already_delivered?(notifier_class, user, comment)
+    Noticed::Notification
+      .where(recipient: user)
+      .joins(:event)
+      .where(noticed_events: {
+        type: notifier_class.name,
+        record_type: "PersonDevelopmentComment",
+        record_id: comment.id
+      })
+      .exists?
   end
 
   # @return [String, nil] the author of the comment this one replies to
