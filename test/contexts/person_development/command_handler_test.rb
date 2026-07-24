@@ -546,6 +546,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal cap_sid, item.capability_stable_id
       assert_equal 3, item.level_ordinal
       assert_equal "self", item.source
+      assert_equal "self", item.feedback_direction
       # The first link is materialised on EvidenceRecorded.
       assert_equal [ [ cap_sid, 3 ] ],
         EvidenceLink.active.where(evidence_id: evidence_id).pluck(:capability_stable_id, :level_ordinal)
@@ -580,6 +581,20 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_includes kinds, PersonDevelopment::Events::EvidenceLinkAdded
       assert_includes kinds, PersonDevelopment::Events::EvidenceLinkRemoved
       assert_includes kinds, PersonDevelopment::Events::EvidenceWithdrawn
+    end
+
+    should "persist upward feedback from a report to their manager" do
+      manager = create(:person, tenant: @tenant, name: "Manager")
+      report = create(:person, tenant: @tenant, manager: manager, name: "Report")
+      evidence_id = SecureRandom.uuid_v7
+      @handler.assign_to_framework(manager.id, @framework_id, @role_id, @level_id)
+
+      @handler.record_evidence(manager.id, @framework_id, evidence_id,
+        capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, source: "peer",
+        evidence_type: "peer_feedback", content: "Helpful leadership", author_id: report.id,
+        valence: "demonstrated")
+
+      assert_equal "report_to_manager", EvidenceItem.find(evidence_id).feedback_direction
     end
 
     should "round-trip an external_reference through the projection" do

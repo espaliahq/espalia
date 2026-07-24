@@ -1100,6 +1100,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal "project_outcome", event.data[:evidence_type]
       assert_equal "Shipped X", event.data[:content]
       assert_equal @author_id, event.data[:author_id]
+      assert_equal "self", event.data[:feedback_direction]
       assert_equal "Migration done", event.data[:title]
       assert_equal "github", event.data[:external_reference][:system]
       assert_nil event.data[:cycle_id]
@@ -1154,6 +1155,17 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       end
       assert_match /Invalid evidence source/, err.message
     end
+
+    should "raise on invalid feedback direction" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "peer",
+          evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+          feedback_direction: "sideways", valence: "demonstrated")
+      end
+      assert_match /Invalid feedback direction/, err.message
+    end
+
 
     should "raise on invalid evidence_type" do
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do

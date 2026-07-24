@@ -143,9 +143,10 @@ class PersonDevelopment::Projections::EvidenceCollection
     # re-processing the same EvidenceRecorded event leaves the row in the
     # same state rather than raising RecordNotUnique.
     #
-    # cycle_id was introduced with the event payload that can populate it.
-    # Historical events lack the key and therefore replay to the column's
-    # existing nil value, so this additive attribution needs no version bump.
+    # cycle_id and feedback_direction were introduced with the event payloads
+    # that can populate them. Historical events lack the keys and therefore
+    # replay to the columns' existing nil values, so these additive
+    # attributions need no version bump.
     item = EvidenceItem.find_or_initialize_by(id: event.data[:evidence_id])
     item.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
@@ -155,6 +156,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       capability_stable_id: event.data[:capability_stable_id],
       level_ordinal: event.data[:level_ordinal],
       source: event.data[:source],
+      feedback_direction: event.data[:feedback_direction],
       evidence_type: event.data[:evidence_type],
       custom_type_label: event.data[:custom_type_label],
       title: event.data[:title],

@@ -514,6 +514,7 @@ class PersonDevelopment::CommandHandler
         capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
         source: source, evidence_type: evidence_type, content: content,
         author_id: author_id, valence: valence, custom_type_label: custom_type_label,
+        feedback_direction: feedback_direction_for(source:, author_id:, person_id:),
         title: title, external_reference: external_reference,
         additional_links: additional_links
       }
@@ -738,5 +739,15 @@ class PersonDevelopment::CommandHandler
       aggregate.delete_comment(comment_id,
         deleted_by_id: deleted_by_id, reason: reason)
     end
+  end
+
+  private
+
+  def feedback_direction_for(source:, author_id:, person_id:)
+    EvidenceItem.feedback_direction_for(
+      source: source,
+      author: Person.find_by(id: author_id),
+      recipient: Person.find_by(id: person_id)
+    )
   end
 end
