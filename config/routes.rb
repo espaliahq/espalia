@@ -243,6 +243,20 @@ Rails.application.routes.draw do
     end
   end
 
+  # Calibration sessions — facilitator-run rating-calibration forums.
+  # See docs/architecture/calibration-sessions.md.
+  resources :calibration_sessions, only: [ :index, :new, :create, :show ] do
+    member do
+      post :start, to: "calibration_sessions/starts#create"
+      post :close, to: "calibration_sessions/closes#create"
+    end
+    # :id on both nested resources is the person_id being added/removed.
+    resources :participants, only: [ :create, :destroy ],
+                             controller: "calibration_sessions/participants"
+    resources :calibrants, only: [ :create, :destroy ],
+                           controller: "calibration_sessions/calibrants"
+  end
+
   # Home dashboard — composable, role-aware card grid (replaces the old
   # root redirect). Cards lazy-load their content via the card route.
   root "home#show"

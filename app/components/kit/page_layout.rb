@@ -76,6 +76,7 @@ class Components::Kit::PageLayout < Components::Base
       assessment_link = assessment_nav_link
       links << assessment_link if assessment_link
       links << { label: "Feedback / Evidence", href: "/evidence" } if show_evidence_link?
+      links << { label: "Calibration", href: "/calibration_sessions" } if show_calibration_link?
       links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
       links << { label: "Admin", href: "/tenant" } if show_admin_link?
       links
@@ -97,6 +98,20 @@ class Components::Kit::PageLayout < Components::Base
   # @return [Boolean]
   def show_cycles_link?
     viewer_is_admin?
+  end
+
+  # Whether the current viewer can run calibration sessions — admins, or a
+  # manager of managers (someone in their subtree has reports of their own).
+  # Mirrors CalibrationSessionPolicy#index?.
+  #
+  # @return [Boolean]
+  def show_calibration_link?
+    return true if viewer_is_admin?
+
+    person = resolve_tenant_user&.person
+    return false unless person
+
+    Person.where(manager_id: person.all_reports.select(:id)).exists?
   end
 
   # Whether the current viewer can reach the tenant administration
