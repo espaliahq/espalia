@@ -606,6 +606,174 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_add_calibrant",
+        "description" => "Add a person from the facilitator's org to a draft calibration session's population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_add_participant",
+        "description" => "Add a participating rater to a draft calibration session (auto-removes them from the calibrant population if present).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_close",
+        "description" => "Close a calibration session (terminal — a closed session becomes the follow-through record).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_define",
+        "description" => "Define a calibration session (draft) for an assessment cycle. You become the facilitator; seed the participating raters and the calibrant population (typically the participants' reports).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cycle_id" => { "type" => "string" },
+            "name"     => { "type" => "string" },
+            "participant_ids" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "person_ids of the participating raters"
+            },
+            "calibrant_person_ids" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "person_ids of the people being calibrated — never a participant or the facilitator"
+            }
+          },
+          "required" => %w[cycle_id name participant_ids],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_get",
+        "description" => "Get one calibration session — lifecycle state plus participant and calibrant rosters.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "calibration_sessions_list",
+        "description" => "List calibration sessions you facilitate (admins see all), optionally filtered to one assessment cycle.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cycle_id" => { "type" => "string" }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "calibration_sessions_remove_calibrant",
+        "description" => "Remove a person from a draft calibration session's population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_remove_participant",
+        "description" => "Remove a participating rater from a draft calibration session (their reports stay in the population).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_start",
+        "description" => "Start a calibration session — freezes the participants and the calibrant population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_add_capability",
         "description" => "Add a capability to a category, binding it to one or more roles (owner/editor/lead only).",
         "inputSchema" => {
