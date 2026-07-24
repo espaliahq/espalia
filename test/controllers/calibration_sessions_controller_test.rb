@@ -65,6 +65,23 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "lifecycle endpoints as facilitator" do
+    should "start then close the session" do
+      session_record = define_session
+      sign_in @facilitator_user
+
+      post start_calibration_session_path(session_record)
+      assert_redirected_to calibration_session_path(session_record)
+      assert_equal "started", session_record.reload.status
+
+      post close_calibration_session_path(session_record)
+      assert_redirected_to calibration_session_path(session_record)
+      session_record.reload
+      assert_equal "closed", session_record.status
+      assert_equal "facilitator", session_record.close_reason
+    end
+  end
+
   context "as a participant EM (v1 facilitator-only)" do
     should "deny the session page" do
       session_record = define_session
