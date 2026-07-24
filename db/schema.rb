@@ -136,6 +136,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_231401) do
     t.text "content", null: false
     t.datetime "created_at", null: false
     t.string "custom_type_label"
+    t.uuid "cycle_id"
     t.datetime "edited_at"
     t.uuid "edited_by_id"
     t.string "evidence_type", null: false
@@ -155,6 +156,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_231401) do
     t.index ["author_id"], name: "index_evidence_items_on_author_id"
     t.index ["edited_by_id"], name: "idx_evidence_items_edited_by_id", where: "(edited_by_id IS NOT NULL)"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_items_anchor"
+    t.index ["tenant_id", "cycle_id", "person_id"], name: "idx_evidence_items_tenant_cycle_person"
     t.index ["tenant_id", "person_id", "link_status"], name: "idx_evidence_items_tenant_person_status"
     t.index ["tenant_id"], name: "index_evidence_items_on_tenant_id"
     t.index ["withdrawn_by_id"], name: "idx_evidence_items_withdrawn_by_id", where: "(withdrawn_by_id IS NOT NULL)"
@@ -186,6 +188,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_231401) do
     t.datetime "cancelled_at"
     t.uuid "capability_stable_id", null: false
     t.datetime "created_at", null: false
+    t.uuid "cycle_id"
     t.text "decline_reason"
     t.datetime "declined_at"
     t.datetime "due_at"
@@ -210,6 +213,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_231401) do
     t.index ["requestee_person_id"], name: "index_evidence_requests_on_requestee_person_id"
     t.index ["status", "requested_at"], name: "index_evidence_requests_on_status_and_requested_at"
     t.index ["status"], name: "index_evidence_requests_on_status"
+    t.index ["tenant_id", "cycle_id", "person_id"], name: "idx_evidence_requests_tenant_cycle_person"
     t.index ["tenant_id"], name: "index_evidence_requests_on_tenant_id"
   end
 

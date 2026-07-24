@@ -19,6 +19,11 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
     @framework_id = SecureRandom.uuid_v7
     @cap = SecureRandom.uuid_v7
     @handler.assign_to_framework(@assessee.id, @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+    @cycle_id = SecureRandom.uuid_v7
+    cycles_handler = AssessmentCycles::CommandHandler.new
+    cycles_handler.define_cycle(@cycle_id, @framework_id, "Q1", "regular", 1,
+      defined_by: @assessee.id)
+    cycles_handler.enroll(@cycle_id, @assessee.id, enrolled_by: @assessee.id)
   end
 
   teardown { ActsAsTenant.current_tenant = nil }
@@ -41,6 +46,7 @@ class PersonDevelopment::EvidenceRequestsTest < ActiveSupport::TestCase
       assert_equal @cap, req.capability_stable_id
       assert_equal 3, req.level_ordinal
       assert_equal "Please help", req.message
+      assert_equal @cycle_id, req.cycle_id
     end
 
     should "reject requesting evidence from yourself" do

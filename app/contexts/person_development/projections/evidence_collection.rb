@@ -147,6 +147,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       tenant_id: event.metadata[:tenant_id],
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
+      cycle_id: event.data[:cycle_id],
       capability_stable_id: event.data[:capability_stable_id],
       level_ordinal: event.data[:level_ordinal],
       source: event.data[:source],

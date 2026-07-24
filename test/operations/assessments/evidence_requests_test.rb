@@ -30,6 +30,11 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       create(:framework_behavioural_expectation, capability_id: @cap.capability_id, level_ordinal: 2, description: "Synthesises")
 
       PersonDevelopment::CommandHandler.new.assign_to_framework(@report.id, framework_id, role.role_id, level.level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      cycles_handler = AssessmentCycles::CommandHandler.new
+      cycles_handler.define_cycle(@cycle_id, framework_id, "Q1", "regular", 1,
+        defined_by: @manager.id)
+      cycles_handler.enroll(@cycle_id, @report.id, enrolled_by: @manager.id)
       @framework_id = framework_id
       @assignment = PersonFrameworkAssignment.for_person(@report.id).first
     end
@@ -57,6 +62,7 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
         assert_equal "pending", req.status
         assert_equal @peer.id, req.requestee_person_id
         assert_equal @report.id, req.requested_by_id
+        assert_equal @cycle_id, req.cycle_id
       end
     end
 
@@ -98,6 +104,27 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
         assert_equal "peer", item.source
         assert_equal @peer.id, item.author_id
         assert_equal @report.id, item.person_id
+        assert_equal @cycle_id, item.cycle_id
+      end
+    end
+
+    should "attribute a late response to the request cycle after the assessee leaves it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.leave_cycle(
+          @report.id, @framework_id, @cycle_id, "cycle_closed"
+        )
+      end
+
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::RespondToEvidenceRequest.call(
+          context: @peer_ctx,
+          params: { request_id: @request_id, evidence_type: "peer_feedback",
+                    content: "Delivered after close.", valence: "demonstrated" }
+        )
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal @cycle_id, EvidenceItem.find(result[:evidence_id]).cycle_id
       end
     end
 

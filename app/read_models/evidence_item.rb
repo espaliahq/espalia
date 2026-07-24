@@ -47,6 +47,9 @@ class EvidenceItem < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
+  belongs_to :cycle, class_name: "AssessmentCycle",
+             primary_key: :cycle_id, foreign_key: :cycle_id,
+             inverse_of: false, optional: true
   belongs_to :author, class_name: "Person", foreign_key: :author_id, inverse_of: false, optional: false
   belongs_to :withdrawn_by, class_name: "Person", foreign_key: :withdrawn_by_id, inverse_of: false, optional: true
   belongs_to :edited_by, class_name: "Person", foreign_key: :edited_by_id, inverse_of: false, optional: true
@@ -91,6 +94,7 @@ class EvidenceItem < ApplicationRecord
   scope :withdrawn, -> { where(link_status: "withdrawn") }
   scope :for_person, ->(person_id) { where(person_id: person_id) }
   scope :for_framework, ->(framework_id) { where(framework_id: framework_id) }
+  scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
   scope :for_capability, ->(stable_id) { where(capability_stable_id: stable_id) }
   scope :at_level, ->(ordinal) { where(level_ordinal: ordinal) }
 

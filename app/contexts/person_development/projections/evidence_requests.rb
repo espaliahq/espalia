@@ -55,6 +55,7 @@ class PersonDevelopment::Projections::EvidenceRequests
       tenant_id: event.metadata[:tenant_id],
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
+      cycle_id: event.data[:cycle_id],
       requested_by_id: event.data[:requested_by_id],
       requestee_person_id: event.data[:requestee_person_id],
       capability_stable_id: event.data[:capability_stable_id],

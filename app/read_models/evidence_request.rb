@@ -38,6 +38,9 @@ class EvidenceRequest < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
+  belongs_to :cycle, class_name: "AssessmentCycle",
+             primary_key: :cycle_id, foreign_key: :cycle_id,
+             inverse_of: false, optional: true
   belongs_to :requestee, class_name: "Person", foreign_key: :requestee_person_id, inverse_of: false, optional: false
   belongs_to :requester, class_name: "Person", foreign_key: :requested_by_id, inverse_of: false, optional: false
   belongs_to :assessee, class_name: "Person", foreign_key: :person_id, inverse_of: false, optional: false
@@ -53,6 +56,7 @@ class EvidenceRequest < ApplicationRecord
   scope :incoming_for, ->(person_id) { where(requestee_person_id: person_id) }
   scope :outgoing_for, ->(person_id) { where(requested_by_id: person_id) }
   scope :for_assessment, ->(person_id, framework_id) { where(person_id: person_id, framework_id: framework_id) }
+  scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
   scope :recent_first, -> { order(requested_at: :desc) }
 
   # @return [Boolean] whether the request can still be acted on

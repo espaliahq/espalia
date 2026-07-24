@@ -6,6 +6,8 @@
 # and stores resulting events.
 #
 class PersonDevelopment::CommandHandler
+  CURRENT_CYCLE = Object.new.freeze
+
   # @param repository [PersonDevelopment::Repository]
   def initialize(repository: PersonDevelopment::Repository.new)
     @repository = repository
@@ -501,17 +503,22 @@ class PersonDevelopment::CommandHandler
   #   EvidenceLink::VALENCES (required on every new link)
   # @param additional_links [Array<Hash>] extra { capability_stable_id:,
   #   level_ordinal:, valence: } links applied atomically alongside the first link
+  # @param cycle_id [String, nil, Object] explicit cycle attribution, or the
+  #   current aggregate cycle when omitted
   def record_evidence(person_id, framework_id, evidence_id,
                       capability_stable_id:, level_ordinal:, source:, evidence_type:,
                       content:, author_id:, valence:, custom_type_label: nil, title: nil,
-                      external_reference: nil, additional_links: [])
+                      external_reference: nil, additional_links: [], cycle_id: CURRENT_CYCLE)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.record_evidence(evidence_id,
+      attributes = {
         capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
         source: source, evidence_type: evidence_type, content: content,
         author_id: author_id, valence: valence, custom_type_label: custom_type_label,
         title: title, external_reference: external_reference,
-        additional_links: additional_links)
+        additional_links: additional_links
+      }
+      attributes[:cycle_id] = cycle_id unless cycle_id.equal?(CURRENT_CYCLE)
+      aggregate.record_evidence(evidence_id, **attributes)
     end
   end
 

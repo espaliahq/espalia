@@ -46,7 +46,8 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
       content: params[:content].to_s,
       author_id: context.person.id,
       valence: params[:valence],
-      external_reference: params[:external_reference]
+      external_reference: params[:external_reference],
+      cycle_id: evidence_request.cycle_id
     )
     handler.respond_to_evidence_request(
       evidence_request.person_id, evidence_request.framework_id, evidence_request.id,

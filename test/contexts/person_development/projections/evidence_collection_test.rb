@@ -21,6 +21,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
     should "create an EvidenceItem row" do
       evidence_id = SecureRandom.uuid_v7
       cap_sid = SecureRandom.uuid_v7
+      cycle_id = SecureRandom.uuid_v7
 
       emit(PersonDevelopment::Events::EvidenceRecorded,
         evidence_id: evidence_id,
@@ -32,12 +33,14 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         title: "Reviewed PR",
         content: "Strong testing approach",
         external_reference: { system: "github", url: "https://github.com/o/r/pull/1" },
-        author_id: @author.id)
+        author_id: @author.id,
+        cycle_id: cycle_id)
 
       ActsAsTenant.with_tenant(@tenant) do
         item = EvidenceItem.find(evidence_id)
         assert_equal @person_id, item.person_id
         assert_equal @framework_id, item.framework_id
+        assert_equal cycle_id, item.cycle_id
         assert_equal cap_sid, item.capability_stable_id
         assert_equal 3, item.level_ordinal
         assert_equal "manager", item.source
@@ -78,6 +81,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
 
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal "growth_area", EvidenceLink.find_by(evidence_id: with_valence).valence
+        assert_nil EvidenceItem.find(pre_valence).cycle_id
         assert_nil EvidenceLink.find_by(evidence_id: pre_valence).valence
       end
     end
