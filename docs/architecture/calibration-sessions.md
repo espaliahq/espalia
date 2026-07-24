@@ -1,7 +1,14 @@
 # Calibration Sessions — Design
 
-> **Status: design proposal — not yet implemented.** V1 scope agreed 2026-07-24
+> **Status: partially implemented.** V1 scope agreed 2026-07-24
 > (facilitator-only access, value-free revisit requests, own event stream).
+> Built so far: the CalibrationSession aggregate + projection + cycle-close
+> sync, `Operations::CalibrationSessions::*` (web + MCP),
+> `CalibrationSessionPolicy`, the population seeding query, and the setup
+> surface (`/calibration_sessions` — list, define, draft curation,
+> readiness, start/close). Still to build: the overview (tendency strip +
+> divergence board), the capability drill-in with the evidence surfaces,
+> and the outcome writes (expectation flags, revisit requests, notes).
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
@@ -547,10 +554,13 @@ expectations — 2 were rewritten").
 ## Cross-cutting
 
 - **MCP** (Operations-first, house rule): reads (`calibration_sessions_list`,
-  `calibration_session_get`, the divergence overview) as `:none` ops scoped
-  by the same facilitator policy — "where are my EMs most inconsistent?" is a
-  genuinely good agent query. Session define/start/close likely `:in_app`;
-  flags, revisit requests, notes `:mcp_client`.
+  `calibration_sessions_get`, later the divergence overview) as `:none` ops
+  scoped by the same facilitator policy — "where are my EMs most
+  inconsistent?" is a genuinely good agent query. Define + population
+  curation are `:mcp_client` (draft-phase, freely reversible); **start and
+  close are `:in_app`** (start locks the room's denominators, close is
+  terminal — the cheat sheet's lock/irreversible rows). Flags, revisit
+  requests, notes `:mcp_client`.
 - **Activity feed coverage**: session outcomes surface in the feeds that
   already exist — expectation flags in the *framework* feed (via the
   suggestion machinery), revisit requests in the *assessment* feed (via the

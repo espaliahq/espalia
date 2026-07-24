@@ -192,8 +192,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
 
   def calibrant_row(person_id)
     li(class: "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800") do
-      div(class: "flex items-center gap-2 min-w-0") do
-        span(class: "text-sm text-gray-900 dark:text-white truncate") { person_name(person_id) }
+      div(class: "flex flex-wrap items-center gap-2") do
+        span(class: "text-sm text-gray-900 dark:text-white") { person_name(person_id) }
         readiness_badges(person_id)
       end
       if @can_curate
