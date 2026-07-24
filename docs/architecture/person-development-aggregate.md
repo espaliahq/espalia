@@ -312,7 +312,7 @@ All evidence for a person. Updated synchronously.
 # evidence_requests table:
 #   id, tenant_id, person_id, framework_id, requested_by_id, requestee_person_id,
 #   capability_stable_id, level_ordinal, cycle_id, message, due_at,
-#   status (pending|responded|declined|cancelled), response_evidence_id,
+#   status (pending|responded|declined|cancelled), evidence_id,
 #   responded_at, declined_at, decline_reason, cancelled_at,
 #   reminder_history, last_reminded_at, created_at, updated_at
 #
