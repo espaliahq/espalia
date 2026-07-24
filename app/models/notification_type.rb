@@ -52,6 +52,24 @@ class NotificationType
       label: "Reminder about a feedback request",
       description: "A feedback request you haven't answered is going stale or coming due.",
       defaults: { in_app: true, slack: true, email: false }
+    ),
+    comment_reply: Definition.new(
+      key: :comment_reply,
+      label: "Reply to your comment",
+      description: "Someone replies to a comment you posted on an assessment discussion.",
+      defaults: { in_app: true, slack: true, email: false }
+    ),
+    assessment_commented: Definition.new(
+      key: :assessment_commented,
+      label: "New comment on your assessment",
+      description: "Your manager or another participant comments on your assessment.",
+      defaults: { in_app: true, slack: true, email: false }
+    ),
+    team_assessment_commented: Definition.new(
+      key: :team_assessment_commented,
+      label: "A report commented on their assessment",
+      description: "Someone whose assessment you manage posts a comment on it.",
+      defaults: { in_app: true, slack: true, email: false }
     )
   }.freeze
 

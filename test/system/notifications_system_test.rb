@@ -72,6 +72,20 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  should "link notification preferences from the bell panel's gear" do
+    notify!(title: "Prefs entry point")
+    visit root_path
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    # Icon-only control — locate by aria-label; sync on text unique to the
+    # preferences page (the panel header also says "Notifications").
+    click_with_retry(expect_text: "Feedback requested from you") do
+      find("turbo-frame#notification-bell a[aria-label='Notification preferences']").click
+    end
+
+    assert_current_path settings_notifications_path
+  end
+
   should "navigate to the full inbox via 'View all' (frame breaks out to _top)" do
     notify!(title: "Full list")
     visit root_path
@@ -88,5 +102,32 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     notify!(title: "Mobile")
     visit root_path
     assert_selector "turbo-frame#notification-bell span", text: "1"
+  end
+
+  should "link notification preferences from the mobile bell panel" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    notify!(title: "Mobile preferences")
+    visit root_path
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    click_with_retry(expect_text: "Feedback requested from you") do
+      find("turbo-frame#notification-bell a[aria-label='Notification preferences']").click
+    end
+
+    assert_current_path settings_notifications_path
+  end
+
+  should "keep the dropdown panel fully on-screen on a mobile viewport" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    notify!(title: "Mobile panel")
+    visit root_path
+
+    open_dropdown(scope: "turbo-frame#notification-bell")
+    rect = page.evaluate_script(
+      "document.querySelector(\"turbo-frame#notification-bell [data-dropdown-target='menu']\")" \
+      ".getBoundingClientRect().toJSON()"
+    )
+    assert_operator rect["left"], :>=, 0, "panel clipped off the left viewport edge"
+    assert_operator rect["right"], :<=, 375, "panel clipped off the right viewport edge"
   end
 end

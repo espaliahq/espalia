@@ -45,5 +45,14 @@ class Projections::RegistryTest < ActiveSupport::TestCase
       ]
       assert_empty(Projections::Registry.classes & forbidden)
     end
+
+    should "not include async notification handlers" do
+      # Replaying these would re-send every historical notification.
+      forbidden = [
+        PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier,
+        PersonDevelopment::AsyncHandlers::CommentNotifier
+      ]
+      assert_empty(Projections::Registry.classes & forbidden)
+    end
   end
 end

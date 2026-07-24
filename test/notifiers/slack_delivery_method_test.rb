@@ -86,6 +86,38 @@ class SlackDeliveryMethodTest < ActiveSupport::TestCase
     assert_includes title_block.dig(:text, :text), "A &lt;script&gt; title"
   end
 
+  should "disclose notification preferences on the recipient's first-ever DM only" do
+    fake = deliver_with_fake_slack
+    footer = fake.posted.first[:blocks].find { |b| b[:type] == "context" }
+    assert_not_nil footer, "expected the one-time preferences footer on the first DM"
+    assert_includes footer[:elements].first[:text], "First time hearing from GrowthOS?"
+    assert_includes footer[:elements].first[:text], "notification preferences"
+    assert_not_nil @user.reload.external_notifications_disclosed_at
+
+    # A later notification's DM carries no footer — the disclosure is one-time.
+    fake = deliver_with_fake_slack
+    assert_nil fake.posted.first[:blocks].find { |b| b[:type] == "context" }
+  end
+
+  should "keep the disclosure for a later DM when delivery is skipped" do
+    # First attempt never posts (recipient not resolvable in the workspace) —
+    # the disclosure must not be burned.
+    @membership.update_column(:slack_user_id, nil)
+    fake = FakeSlackClient.new
+    def fake.lookup_user_id_by_email(_email) = nil
+    Slack::Client.stub(:new, fake) do
+      perform_enqueued_jobs do
+        InboxTestNotifier.with(title: "Hi", tenant_id: @tenant.id).deliver(@user)
+      end
+    end
+    assert_empty fake.posted
+    assert_nil @user.reload.external_notifications_disclosed_at
+
+    # The next successful DM carries the footer.
+    fake = deliver_with_fake_slack
+    assert_not_nil fake.posted.first[:blocks].find { |b| b[:type] == "context" }
+  end
+
   should "skip delivery when the tenant has no Slack connection" do
     @tenant.disconnect_slack!
     fake = deliver_with_fake_slack

@@ -121,4 +121,9 @@ Rails.configuration.to_prepare do
     PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier,
     to: PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier.handled_events
   )
+
+  event_store.subscribe(
+    PersonDevelopment::AsyncHandlers::CommentNotifier,
+    to: PersonDevelopment::AsyncHandlers::CommentNotifier.handled_events
+  )
 end

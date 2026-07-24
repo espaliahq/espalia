@@ -10,6 +10,19 @@ class NotificationTypeTest < ActiveSupport::TestCase
       assert NotificationType.exists?("evidence_requested")
       assert_not NotificationType.exists?(:nonexistent_type)
     end
+
+    should "register the comment notification types" do
+      keys = NotificationType.all.map(&:key)
+      assert_includes keys, :comment_reply
+      assert_includes keys, :assessment_commented
+      assert_includes keys, :team_assessment_commented
+
+      # All three escalate to Slack by default — conversational notifications
+      # should reach absent recipients; a drowning manager can opt out per type.
+      assert NotificationType.enabled?({}, :comment_reply, :slack)
+      assert NotificationType.enabled?({}, :assessment_commented, :slack)
+      assert NotificationType.enabled?({}, :team_assessment_commented, :slack)
+    end
   end
 
   context ".enabled?" do
