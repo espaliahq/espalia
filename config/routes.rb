@@ -234,7 +234,6 @@ Rails.application.routes.draw do
       get :attainment, to: "assessment_cycles/attainments#show"
       # Feedback provision and evidence-request coverage for the cycle.
       get :evidence, to: "assessment_cycles/evidence_reports#show"
-
     end
     resources :enrollments, only: [ :create, :destroy ],
                             controller: "assessment_cycles/enrollments" do
