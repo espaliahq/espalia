@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_23_231401) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_24_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -104,6 +104,42 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_231401) do
     t.index ["person_id", "framework_id"], name: "index_assessment_level_ratings_on_person_id_and_framework_id"
     t.index ["seeded_from_cycle_id"], name: "idx_assessment_ratings_seeded_from_cycle_id", where: "(seeded_from_cycle_id IS NOT NULL)"
     t.index ["tenant_id"], name: "index_assessment_level_ratings_on_tenant_id"
+  end
+
+  create_table "calibration_session_members", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "added_by"
+    t.datetime "created_at", null: false
+    t.string "member_type", null: false
+    t.uuid "person_id", null: false
+    t.uuid "session_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id"], name: "index_calibration_session_members_on_person_id"
+    t.index ["session_id", "member_type"], name: "idx_on_session_id_member_type_9b43d58e4d"
+    t.index ["session_id", "person_id"], name: "index_calibration_session_members_on_session_id_and_person_id", unique: true
+    t.index ["tenant_id"], name: "index_calibration_session_members_on_tenant_id"
+  end
+
+  create_table "calibration_sessions", id: :uuid, default: nil, force: :cascade do |t|
+    t.string "close_reason"
+    t.datetime "closed_at"
+    t.uuid "closed_by_id"
+    t.datetime "created_at", null: false
+    t.uuid "cycle_id", null: false
+    t.uuid "defined_by"
+    t.uuid "facilitator_id", null: false
+    t.uuid "framework_id", null: false
+    t.integer "framework_version"
+    t.string "name", null: false
+    t.datetime "started_at"
+    t.uuid "started_by_id"
+    t.string "status", default: "draft", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["facilitator_id"], name: "index_calibration_sessions_on_facilitator_id"
+    t.index ["status"], name: "index_calibration_sessions_on_status"
+    t.index ["tenant_id", "cycle_id"], name: "index_calibration_sessions_on_tenant_id_and_cycle_id"
+    t.index ["tenant_id"], name: "index_calibration_sessions_on_tenant_id"
   end
 
   create_table "event_store_events", force: :cascade do |t|
@@ -689,6 +725,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_231401) do
   add_foreign_key "assessment_cycle_progress", "tenants"
   add_foreign_key "assessment_cycles", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"
+  add_foreign_key "calibration_session_members", "tenants"
+  add_foreign_key "calibration_sessions", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
   add_foreign_key "evidence_items", "people", column: "author_id", on_delete: :restrict
   add_foreign_key "evidence_items", "people", column: "edited_by_id", on_delete: :nullify

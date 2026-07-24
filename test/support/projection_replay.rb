@@ -94,6 +94,13 @@ module ProjectionReplayHelpers
           enrollments:              rows(AssessmentCycleEnrollment)
         }
 
+      when "AssessmentCycles::Projections::CalibrationSessions"
+        {
+          # PK is the event-carried session_id — assert it survives reset! + replay.
+          sessions: rows(CalibrationSession, stable_id: true),
+          members:  rows(CalibrationSessionMember)
+        }
+
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"
       end

@@ -70,6 +70,11 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::Projections::CurrentState.handled_events
   )
 
+  event_store.subscribe(
+    AssessmentCycles::Projections::CalibrationSessions.new,
+    to: AssessmentCycles::Projections::CalibrationSessions.handled_events
+  )
+
   # ── Synchronous cross-stream sync handlers ──
   # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
   # so it MUST NOT be registered as a projection — running it twice
@@ -112,6 +117,16 @@ Rails.configuration.to_prepare do
   event_store.subscribe(
     AssessmentCycles::SyncHandlers::ParticipantRoleSync.new,
     to: AssessmentCycles::SyncHandlers::ParticipantRoleSync.handled_events
+  )
+
+  # CalibrationSessionCloseSync closes a cycle's not-yet-closed calibration
+  # sessions when the cycle closes. Dispatches CalibrationSession commands —
+  # same projection-rebuild hazard, MUST NOT be registered as a projection.
+  # Subscribed AFTER CalibrationSessions (the projection) so it reads
+  # fresh session rows.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::CalibrationSessionCloseSync.new,
+    to: AssessmentCycles::SyncHandlers::CalibrationSessionCloseSync.handled_events
   )
 
   # ── Async handlers (via SolidQueue) ──
