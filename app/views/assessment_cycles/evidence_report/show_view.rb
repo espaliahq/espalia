@@ -35,6 +35,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
         header
         if metrics[:participant_count].positive?
           summary_grid
+          directionality_card
           reporting_note
           breakdown_card
         else
@@ -47,6 +48,8 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   private
 
   def metrics = @report[:metrics]
+
+  def directionality = metrics[:feedback_directionality]
 
   def groups = @report.dig(:groups, @group_by.to_sym) || []
 
@@ -136,6 +139,84 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
       participant_coverage_card
       requests_card
       fulfillment_card
+    end
+  end
+
+  def directionality_card
+    render Components::Kit::Card.new(title: "Feedback direction", heading_level: :h2) do |card|
+      card.body do
+        p(class: "text-sm text-gray-600 dark:text-gray-300") do
+          "How interpersonal feedback moved through this reporting scope."
+        end
+
+        if directionality[:interpersonal_total].positive?
+          div(class: "mt-5 grid gap-4 md:grid-cols-2") do
+            direction_row(
+              "Manager → report",
+              directionality[:manager_to_report],
+              directionality[:manager_to_report_pct]
+            )
+            direction_row(
+              "Peer → peer",
+              directionality[:peer_to_peer],
+              directionality[:peer_to_peer_pct]
+            )
+            direction_row(
+              "Report → manager",
+              directionality[:report_to_manager],
+              directionality[:report_to_manager_pct]
+            )
+            if directionality[:legacy_peer_or_upward].positive?
+              direction_row(
+                "Peer → peer or report → manager (historical)",
+                directionality[:legacy_peer_or_upward],
+                directionality[:legacy_peer_or_upward_pct]
+              )
+            end
+          end
+        else
+          p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
+            "No interpersonal feedback was provided in this scope."
+          end
+        end
+
+        div(class: "mt-5 flex items-baseline justify-between gap-3 border-t border-gray-200 pt-4 dark:border-gray-700") do
+          span(class: "text-sm text-gray-600 dark:text-gray-300") { "Self-provided feedback" }
+          span(class: "font-semibold text-gray-900 dark:text-white") do
+            directionality[:self_provided].to_s
+          end
+        end
+
+        if directionality[:legacy_peer_or_upward].positive?
+          p(class: "mt-3 text-xs text-gray-500 dark:text-gray-400") do
+            "Historical peer-source feedback cannot be split reliably, so it remains in a combined peer-or-upward bucket."
+          end
+        end
+      end
+    end
+  end
+
+  def direction_row(label, count, percent)
+    div(class: "min-w-0 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50") do
+      div(class: "flex items-start justify-between gap-3 text-sm") do
+        span(class: "font-medium text-gray-800 dark:text-gray-100") { label }
+        span(class: "shrink-0 tabular-nums text-gray-600 dark:text-gray-300") { "#{count} (#{percent}%)" }
+      end
+      div(
+        class: "mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700",
+        role: "progressbar",
+        aria: {
+          label: "#{label}: #{count} feedback items, #{percent}% of interpersonal feedback",
+          valuenow: percent,
+          valuemin: 0,
+          valuemax: 100
+        }
+      ) do
+        div(
+          class: "h-2 rounded-full bg-blue-600",
+          style: "width: #{percent}%"
+        )
+      end
     end
   end
 
