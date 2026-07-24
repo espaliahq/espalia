@@ -61,6 +61,32 @@ class EventStreamNamingTest < ActiveSupport::TestCase
     end
   end
 
+  context ".calibration_session_stream" do
+    should "return tenant-namespaced stream name" do
+      session_id = SecureRandom.uuid_v7
+      stream = EventStreamNaming.calibration_session_stream(session_id, tenant: @tenant)
+
+      assert_equal "tenant-#{@tenant.id}/CalibrationSession-#{session_id}", stream
+    end
+
+    should "use ActsAsTenant.current_tenant when no tenant given" do
+      session_id = SecureRandom.uuid_v7
+
+      ActsAsTenant.with_tenant(@tenant) do
+        stream = EventStreamNaming.calibration_session_stream(session_id)
+        assert_equal "tenant-#{@tenant.id}/CalibrationSession-#{session_id}", stream
+      end
+    end
+
+    should "raise ArgumentError when no tenant context available" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ArgumentError) do
+          EventStreamNaming.calibration_session_stream(SecureRandom.uuid_v7)
+        end
+      end
+    end
+  end
+
   context ".extract_tenant_id" do
     should "extract tenant ID from framework stream name" do
       tenant_id = SecureRandom.uuid_v7

@@ -48,6 +48,16 @@ module EventStreamNaming
     "#{tenant_prefix(tenant)}/AssessmentCycle-#{cycle_id}"
   end
 
+  # Returns the stream name for a CalibrationSession aggregate.
+  #
+  # @param session_id [String] the calibration session's UUID
+  # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
+  # @return [String] the tenant-namespaced stream name
+  # @raise [ArgumentError] if no tenant context is available
+  def self.calibration_session_stream(session_id, tenant: ActsAsTenant.current_tenant)
+    "#{tenant_prefix(tenant)}/CalibrationSession-#{session_id}"
+  end
+
   # Extracts the tenant ID from a stream name.
   #
   # @param stream_name [String] a tenant-namespaced stream name

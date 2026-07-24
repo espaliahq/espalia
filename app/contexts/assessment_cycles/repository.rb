@@ -28,4 +28,20 @@ class AssessmentCycles::Repository
       @repository.with_aggregate(AssessmentCycles::Aggregate.new, stream, &block)
     end
   end
+
+  # Loads a calibration session aggregate, yields it, and stores any
+  # new events. Sessions live in this bounded context but own their
+  # stream — see docs/architecture/calibration-sessions.md.
+  #
+  # @param session_id [String] UUID of the calibration session
+  # @yield [AssessmentCycles::CalibrationSessionAggregate] the loaded aggregate
+  def with_calibration_session(session_id, &block)
+    stream = EventStreamNaming.calibration_session_stream(session_id)
+    tenant = ActsAsTenant.current_tenant
+    raise ArgumentError, "No tenant context available" unless tenant
+
+    @event_store.with_metadata(tenant_id: tenant.id) do
+      @repository.with_aggregate(AssessmentCycles::CalibrationSessionAggregate.new, stream, &block)
+    end
+  end
 end
