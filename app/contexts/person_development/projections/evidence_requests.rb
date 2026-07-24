@@ -11,7 +11,10 @@ class PersonDevelopment::Projections::EvidenceRequests
   PROJECTION_NAME = "person_development/evidence_requests"
 
   # Bump when reset!/handler logic would produce different state for past events.
-  CODE_VERSION = 1
+  #
+  # 2 — cycle attribution. Copies `cycle_id` from historical
+  #     `EvidenceRequested` payloads into `evidence_requests`.
+  CODE_VERSION = 2
 
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events

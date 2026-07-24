@@ -30,7 +30,10 @@ class PersonDevelopment::Projections::EvidenceCollection
   #     `FrameworkVersionMigrated` maintain link rows. The
   #     `evidence_items` content row (incl. its origin coordinate columns)
   #     is unchanged from v2.
-  CODE_VERSION = 3
+  # 4 — cycle attribution. Copies `cycle_id` from historical
+  #     `EvidenceRecorded` payloads into `evidence_items`, allowing
+  #     assessment-cycle coverage reports to include past cycle evidence.
+  CODE_VERSION = 4
 
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events
