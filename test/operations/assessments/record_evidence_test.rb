@@ -82,6 +82,7 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
         assert_equal "project_outcome", item.evidence_type
         assert_equal @report.id, item.person_id
         assert_equal @report.id, item.author_id
+        assert_equal @cycle_id, item.cycle_id
       end
       assert_equal @report.id, result[:person_id]
       assert_equal "self", result[:source]

@@ -142,11 +142,16 @@ class PersonDevelopment::Projections::EvidenceCollection
     # Idempotent for replay: keying by the event-supplied evidence_id means
     # re-processing the same EvidenceRecorded event leaves the row in the
     # same state rather than raising RecordNotUnique.
+    #
+    # cycle_id was introduced with the event payload that can populate it.
+    # Historical events lack the key and therefore replay to the column's
+    # existing nil value, so this additive attribution needs no version bump.
     item = EvidenceItem.find_or_initialize_by(id: event.data[:evidence_id])
     item.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
+      cycle_id: event.data[:cycle_id],
       capability_stable_id: event.data[:capability_stable_id],
       level_ordinal: event.data[:level_ordinal],
       source: event.data[:source],

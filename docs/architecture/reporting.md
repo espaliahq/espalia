@@ -137,6 +137,49 @@ viewing-as a member sees only what that member would — no full-cycle leak.
 `AssessmentCycleProgress` (owned by `CurrentAssessment`) if compute-on-read proves
 slow — `CODE_VERSION` bump + rebuild; participant-list pagination; department/team
 grouping once HRIS provides it; score-distribution drill-down with careful auth.
+## 4.9 Assessment-Cycle Feedback & Evidence Coverage
+
+Aggregate workflow report for feedback requested and provided during an
+assessment cycle. **Compute-on-read** (no reporting projection):
+`Reporting::EvidenceCoverage` joins cycle enrollments to the existing
+`EvidenceRequest` and `EvidenceItem` read models and deduplicates by evidence
+item ID, never by capability link.
+
+- **Feedback provided**: unique active evidence items attributed to the cycle.
+  `provided_by_request` is the subset recorded after and attached to a fulfilled
+  cycle request; `provided_unsolicited` is the remainder. Withdrawn items are
+  excluded from provided totals and reported separately.
+- **Requests**: sent, fulfilled, pending, declined, and cancelled. Fulfilment
+  rate is fulfilled / non-cancelled; request counts and evidence counts remain
+  separate units.
+- **Participant coverage**: active cycle participants with at least one active
+  cycle feedback item / active participants.
+- **Grouping**: assessed person by live manager, enrollment-snapshot role, or
+  enrollment-snapshot level. Contributor identities and feedback content never
+  enter the result.
+
+**Immutable attribution.** New `EvidenceRequested` and `EvidenceRecorded`
+events carry nullable `cycle_id`; their projections copy it to
+`evidence_requests` / `evidence_items`. Direct feedback uses the aggregate's
+current cycle. A response inherits the request cycle even after close. Adding,
+removing, migrating, or revaluing `EvidenceLink` rows never changes an item's
+cycle, so prior-cycle evidence relinked now is not new provision. If old evidence
+fulfils a new request, the request is fulfilled but no new feedback is counted.
+
+Historical rows remain null — there is no projection version bump or backfill.
+The query infers a legacy timestamp only when exactly one enrollment window in
+the framework contains it. A legacy post-close response inherits an
+unambiguous request window; ambiguous history stays unattributed.
+
+**Surfaces**:
+- Web — `GET /assessment_cycles/:id/evidence`, with whole-cycle / My-org scope
+  and manager / role / level tabs.
+- MCP — `Operations::Reporting::EvidenceCoverage`
+  (`reporting_evidence_coverage`, summary by default, `mode: "full"` for groups).
+
+**Authorization**: `AssessmentCyclePolicy#evidence_report?`, the same audience
+and subtree rules as cohort and attainment reporting.
+
 
 ## Home dashboard
 

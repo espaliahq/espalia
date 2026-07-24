@@ -1102,6 +1102,25 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @author_id, event.data[:author_id]
       assert_equal "Migration done", event.data[:title]
       assert_equal "github", event.data[:external_reference][:system]
+      assert_nil event.data[:cycle_id]
+    end
+
+    should "attribute evidence to the current cycle unless an explicit cycle is supplied" do
+      current_cycle_id = SecureRandom.uuid_v7
+      original_cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(current_cycle_id, 1)
+
+      @aggregate.record_evidence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "self",
+        evidence_type: "project_outcome", content: "current", author_id: @author_id,
+        valence: "demonstrated")
+      assert_equal current_cycle_id, @aggregate.unpublished_events.to_a.last.data[:cycle_id]
+
+      @aggregate.record_evidence(SecureRandom.uuid_v7,
+        capability_stable_id: @cap_sid, level_ordinal: 3, source: "peer",
+        evidence_type: "peer_feedback", content: "late response", author_id: @author_id,
+        valence: "demonstrated", cycle_id: original_cycle_id)
+      assert_equal original_cycle_id, @aggregate.unpublished_events.to_a.last.data[:cycle_id]
     end
 
     should "raise if not assigned to a framework" do

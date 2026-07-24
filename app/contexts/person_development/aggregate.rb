@@ -671,6 +671,8 @@ class PersonDevelopment::Aggregate
   # @param evidence_type [String] one of EVIDENCE_TYPES
   # @param content [String] the body of the evidence (required)
   # @param author_id [String] UUID of the Person recording the evidence
+  # @param cycle_id [String, nil] cycle the evidence was provided for;
+  #   defaults to the aggregate's current cycle
   # @param custom_type_label [String, nil] free text, only when evidence_type == "other"
   # @param title [String, nil] optional one-line summary
   # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
@@ -685,7 +687,7 @@ class PersonDevelopment::Aggregate
   # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
   def record_evidence(evidence_id, capability_stable_id:, level_ordinal:, source:, evidence_type:,
                       content:, author_id:, valence:, custom_type_label: nil, title: nil,
-                      external_reference: nil, additional_links: [])
+                      external_reference: nil, additional_links: [], cycle_id: @current_cycle_id)
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
@@ -708,7 +710,8 @@ class PersonDevelopment::Aggregate
       content: content,
       external_reference: external_reference,
       author_id: author_id,
-      valence: valence
+      valence: valence,
+      cycle_id: cycle_id
     }))
 
     Array(additional_links).each do |link|
@@ -918,7 +921,8 @@ class PersonDevelopment::Aggregate
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
       message: message,
-      due_at: due_at
+      due_at: due_at,
+      cycle_id: @current_cycle_id
     }))
   end
 

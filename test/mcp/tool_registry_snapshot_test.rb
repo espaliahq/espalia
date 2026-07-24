@@ -1504,6 +1504,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "reporting_evidence_coverage",
+        "description" => "Aggregate feedback and evidence-request coverage for an assessment cycle " \
+          "across the caller's org subtree (admins see the whole cycle): feedback " \
+          "provided by request or unsolicited, withdrawn feedback, request statuses, " \
+          "fulfilment rate, participant coverage, and optional manager/role/level groups.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cycle_id" => { "type" => "string" },
+            "mode" => { "type" => "string", "enum" => [ "summary", "full" ] },
+            "scope" => { "type" => "string", "enum" => [ "mine", "all" ] }
+          },
+          "required" => [ "cycle_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "system_whoami",
         "description" => "Identify the user, tenant, and person the MCP token resolves to.",
         "inputSchema" => {

@@ -67,11 +67,12 @@ class Views::AssessmentCycles::ShowView < Views::Base
   end
 
   def header
-    div(class: "mt-4 mb-8 flex items-start justify-between gap-4") do
+    div(class: "mt-4 mb-8 flex flex-col items-start gap-4 sm:flex-row sm:justify-between") do
       div do
         render Views::AssessmentCycles::CycleNameFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
-      div(class: "flex items-center gap-3") do
+      div(class: "flex flex-wrap items-center gap-2 sm:justify-end") do
+        evidence_report_link if @can_view_cohort
         attainment_link if @can_view_cohort
         cohort_link if @can_view_cohort
         render Components::Kit::Badge.new(
@@ -89,7 +90,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
   def cohort_link
     a(
       href: cohort_assessment_cycle_path(@cycle),
-      class: "inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
+      class: "inline-flex min-h-11 items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
              "text-gray-800 shadow-xs hover:bg-gray-200 transition-colors " \
              "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
     ) { "Cohort progress →" }
@@ -100,10 +101,20 @@ class Views::AssessmentCycles::ShowView < Views::Base
   def attainment_link
     a(
       href: attainment_assessment_cycle_path(@cycle),
-      class: "inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
+      class: "inline-flex min-h-11 items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
              "text-gray-800 shadow-xs hover:bg-gray-200 transition-colors " \
              "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
     ) { "Capability attainment →" }
+  end
+
+  # Link to aggregate feedback provision and request coverage.
+  def evidence_report_link
+    a(
+      href: evidence_assessment_cycle_path(@cycle),
+      class: "inline-flex min-h-11 items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
+             "text-gray-800 shadow-xs transition-colors hover:bg-gray-200 " \
+             "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+    ) { "Feedback & evidence →" }
   end
 
   def close_button

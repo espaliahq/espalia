@@ -73,6 +73,32 @@ Assessment cycle:
     cycle_type: regular | performance_review | promotion_review
   AssessmentCycleCompleted { cycle_id }
 
+Evidence and feedback:
+  EvidenceRecorded { evidence_id, capability_stable_id, level_ordinal, source,
+                     evidence_type, custom_type_label?, title?, content,
+                     external_reference?, author_id, cycle_id?, valence }
+    ← cycle_id is assigned when the feedback is first provided and is immutable.
+      Relinking an existing item in a later cycle does not change its attribution
+      or count it as newly provided feedback. Evidence recorded outside a cycle,
+      and historical events published before attribution existed, may have no ID.
+  EvidenceRequested { request_id, requested_by_id, requestee_person_id,
+                      capability_stable_id, level_ordinal, cycle_id?, message?, due_at? }
+    ← cycle_id is assigned when the request is sent. A response keeps the request's
+      cycle even when it arrives after the participant leaves or the cycle closes.
+  EvidenceRequestResponded { request_id, evidence_id, responded_by_id }
+  EvidenceRequestDeclined { request_id, declined_by_id, reason? }
+  EvidenceRequestCancelled { request_id, cancelled_by_id }
+  EvidenceRequestReminderSent { request_id, kind, nudged_by_id? }
+    kind: no_response | due_soon | manual
+  EvidenceLinkAdded { evidence_id, capability_stable_id, level_ordinal, valence,
+                      linked_by_id }
+  EvidenceLinkRemoved { evidence_id, capability_stable_id, level_ordinal, removed_by_id }
+  EvidenceLinkRevalenced { evidence_id, capability_stable_id, level_ordinal,
+                           valence, changed_by_id }
+  EvidenceUpdated { evidence_id, title?, content, evidence_type, custom_type_label?,
+                    external_reference?, edited_by_id }
+  EvidenceWithdrawn { evidence_id, reason, withdrawn_by_id }
+
 Self-assessment:
   SelfRated { capability_stable_id, level_ordinal, frequency, comment, source, seeded_from_cycle_id }
     frequency: "some" (0.25×) | "occasional" (0.5×) | "consistent" (1.0×)
@@ -278,10 +304,20 @@ All evidence for a person. Updated synchronously.
 #   id, tenant_id, person_id, framework_id, capability_stable_id, level_ordinal,
 #   source, evidence_type, custom_type_label, title, content,
 #   external_reference (jsonb: system, url?, external_id?, metadata?),
-#   author_id, link_status (active|withdrawn),
+#   author_id, cycle_id, link_status (active|withdrawn),
 #   withdrawn_at, withdrawn_by_id, withdrawal_reason,
 #   edited_at, edited_by_id,
 #   recorded_at, created_at, updated_at
+#
+# evidence_requests table:
+#   id, tenant_id, person_id, framework_id, requested_by_id, requestee_person_id,
+#   capability_stable_id, level_ordinal, cycle_id, message, due_at,
+#   status (pending|responded|declined|cancelled), evidence_id,
+#   responded_at, declined_at, decline_reason, cancelled_at,
+#   reminder_history, last_reminded_at, created_at, updated_at
+#
+# cycle_id is nullable for records created outside a cycle and legacy projections.
+# Cycle attribution is not changed by later evidence-link events.
 ```
 
 ### Assessment Authority

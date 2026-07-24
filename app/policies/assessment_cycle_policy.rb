@@ -40,6 +40,12 @@ class AssessmentCyclePolicy < ApplicationPolicy
     cohort?
   end
 
+  # Whether the viewer may see aggregate feedback / evidence coverage for this
+  # cycle. Same audience and org scope as cohort and attainment reporting.
+  def evidence_report?
+    cohort?
+  end
+
   # Whether the viewer sees attainment aggregates without the small-cohort
   # suppression floor.
   #

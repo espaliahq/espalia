@@ -16,6 +16,8 @@
 #   @option data [String] :requestee_person_id Person being asked for evidence
 #   @option data [String] :capability_stable_id stable UUID of the capability
 #   @option data [Integer] :level_ordinal the level the evidence is about
+#   @option data [String, nil] :cycle_id assessment cycle the request belongs
+#     to; absent on historical events and requests made outside a cycle
 #   @option data [String, nil] :message optional note to the requestee
 #   @option data [String, nil] :due_at optional ISO8601 due date
 #
