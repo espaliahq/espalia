@@ -62,13 +62,15 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   def header
     div do
       a(href: assessment_cycles_path,
-        class: "text-sm text-gray-500 hover:underline dark:text-gray-400") { "← Cycles" }
+        class: "inline-flex min-h-11 items-center text-sm text-gray-600 hover:underline dark:text-gray-300") { "← Cycles" }
       div(class: "mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
         h1(class: "text-2xl font-semibold text-gray-900 dark:text-white") { "#{cycle.name} — cohort progress" }
         span(class: "text-sm text-gray-600 dark:text-gray-300") { "#{@result.total} enrolled" }
         deadline_badge
         a(href: attainment_assessment_cycle_path(cycle),
-          class: "text-sm text-primary hover:underline") { "Capability attainment →" }
+          class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline") { "Capability attainment →" }
+        a(href: evidence_assessment_cycle_path(cycle),
+          class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline") { "Feedback & evidence →" }
       end
       p(class: "mt-2 text-xs text-gray-600 dark:text-gray-300") do
         "Ratings stay private to each person and their manager until alignment. This view shows progress only."

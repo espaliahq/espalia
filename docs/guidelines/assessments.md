@@ -678,6 +678,34 @@ evidence content, or the decline reason — excerpted at
 helper) so the Slack DM reads the feedback without a round trip to the hub;
 the deep link still lands on the hub card for the full text.
 
+### Assessment-cycle feedback reporting
+
+The cycle's **Feedback & evidence** report counts feedback provision separately
+from request workflow:
+
+- `feedback_provided` is every unique active `EvidenceItem` attributed to the
+  cycle, including unsolicited feedback. Multiple `EvidenceLink` rows never
+  multiply the count.
+- `provided_by_request` is the subset recorded in response to a cycle request;
+  `provided_unsolicited = feedback_provided - provided_by_request`.
+- Withdrawn items are excluded from active provision and reported separately.
+- A relink, migration, or valence change never changes the item's original
+  cycle. Prior-cycle evidence reused in this cycle is not newly provided.
+- If existing evidence fulfils a new request, the request is fulfilled but the
+  item is not counted as new feedback.
+
+`EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
+feedback and requests use the PersonDevelopment aggregate's current cycle; a
+response explicitly inherits its request's cycle so a late response remains
+with the original cycle after close. The projections copy this value without a
+`CODE_VERSION` bump. Historical null rows are inferred at report time only when
+one enrollment window matches; ambiguous records stay unattributed.
+
+The report is aggregate-only: no contributor identity, content, evidence title,
+or individual request row. Managers see their `Person#all_reports` subtree;
+admins/HR see the whole cycle and can switch to My org. Web and MCP share
+`Operations::Reporting::EvidenceCoverage`.
+
 **Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"

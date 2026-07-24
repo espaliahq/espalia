@@ -470,6 +470,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/base.rb` | DSL + `#call` pipeline + `authorize` helper |
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
+| `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |
 | `app/services/mcp/request_handler.rb` | JSON-RPC dispatch (initialize, tools/*, resources/*) |

@@ -66,7 +66,7 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   def header
     div do
       a(href: assessment_cycle_path(cycle),
-        class: "text-sm text-gray-500 hover:underline dark:text-gray-400") { "← #{cycle.name}" }
+        class: "inline-flex min-h-11 items-center text-sm text-gray-600 hover:underline dark:text-gray-300") { "← #{cycle.name}" }
       div(class: "mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
         h1(class: "text-2xl font-semibold text-gray-900 dark:text-white") { "#{cycle.name} — capability attainment" }
         span(class: "text-sm text-gray-600 dark:text-gray-300") do
@@ -78,12 +78,26 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
           "#{PERSPECTIVES.fetch(@perspective).downcase} rating perspective. " \
           "Unassessed capabilities count as below — read the % together with its assessed coverage."
       end
+      report_navigation
       suppression_note
       div(class: "mt-3 flex flex-wrap items-center gap-3") do
         perspective_tabs
         by_tabs
         scope_toggle
       end
+    end
+  end
+
+  def report_navigation
+    nav(class: "mt-1 flex flex-wrap gap-x-4 gap-y-1", aria: { label: "Assessment cycle reports" }) do
+      a(
+        href: cohort_assessment_cycle_path(cycle),
+        class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline"
+      ) { "Cohort progress" }
+      a(
+        href: evidence_assessment_cycle_path(cycle),
+        class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline"
+      ) { "Feedback & evidence" }
     end
   end
 
