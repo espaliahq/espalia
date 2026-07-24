@@ -50,6 +50,9 @@ class PersonDevelopment::Projections::EvidenceRequests
   end
 
   def handle_requested(event)
+    # cycle_id was introduced with the event payload that can populate it.
+    # Historical events lack the key and therefore replay to the column's
+    # existing nil value, so this additive attribution needs no version bump.
     request = EvidenceRequest.find_or_initialize_by(id: event.data[:request_id])
     request.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
