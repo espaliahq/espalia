@@ -1182,6 +1182,22 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       end
     end
 
+    should "preserve every feedback direction compatible with its source" do
+      [
+        [ "self", "self" ],
+        [ "manager", "manager_to_report" ],
+        [ "peer", "peer_to_peer" ],
+        [ "peer", "report_to_manager" ]
+      ].each do |source, direction|
+        @aggregate.record_evidence(SecureRandom.uuid_v7,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: source,
+          evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+          feedback_direction: direction, valence: "demonstrated")
+
+        assert_equal direction, @aggregate.unpublished_events.to_a.last.data[:feedback_direction]
+      end
+    end
+
     should "raise on invalid evidence_type" do
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,
