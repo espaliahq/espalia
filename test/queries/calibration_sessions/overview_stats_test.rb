@@ -144,8 +144,28 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
         assert_equal 1.0, capability[:spread]
         assert_in_delta 0.0, capability[:residual_spread], 0.01,
           "uniform offset should be fully absorbed by the tendency correction"
+        assert_equal 0.0, capability[:divergence_score]
         assert_not capability[:flagged]
       end
+    end
+
+    should "not flag agreement between raters with opposite tendencies" do
+      # Both raters give cap_a identical means, but their overall
+      # tendencies differ (via cap_b). The correction manufactures a
+      # residual on cap_a — flagging it as "raters disagree" would be
+      # nonsense, so the divergence score bounds it by the raw spread.
+      rate(@r1, @cap_a, manager: "occasional")
+      rate(@r2, @cap_a, manager: "occasional")
+      rate(@r1, @cap_b, manager: "consistent")
+      rate(@r2, @cap_b, manager: "none")
+
+      agreement = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 0.0, agreement[:spread]
+      assert agreement[:residual_spread] > 1.0, "correction creates an artificial residual"
+      assert_equal 0.0, agreement[:divergence_score]
+      assert_not agreement[:flagged]
+      assert_equal @cap_b.stable_id, stats[:capabilities].first[:stable_id],
+        "real disagreement ranks above corrected-away agreement"
     end
 
     should "exclude single-rater capabilities and count them" do

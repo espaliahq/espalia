@@ -177,15 +177,23 @@ class CalibrationSessionsController < ApplicationController
 
   # Enrollment + manager-rating readiness for the population on the
   # session's cycle. Per-person flags drive badges; counts drive the bar.
+  # partially_rated_ids distinguishes "some cells rated" (In progress)
+  # from "nothing rated" (Unrated) — manager_completed_at only stamps at
+  # FULL current-level coverage.
   def readiness_for(calibrant_ids)
-    return { enrolled_ids: [], manager_complete_ids: [] } if calibrant_ids.empty?
+    return { enrolled_ids: [], manager_complete_ids: [], partially_rated_ids: [] } if calibrant_ids.empty?
 
     {
       enrolled_ids: AssessmentCycleEnrollment.active
         .where(cycle_id: @session.cycle_id, person_id: calibrant_ids).pluck(:person_id),
       manager_complete_ids: AssessmentCycleProgress
         .where(cycle_id: @session.cycle_id, person_id: calibrant_ids)
-        .where.not(manager_completed_at: nil).pluck(:person_id)
+        .where.not(manager_completed_at: nil).pluck(:person_id),
+      partially_rated_ids: AssessmentLevelRating
+        .for_cycle(@session.cycle_id)
+        .where(person_id: calibrant_ids)
+        .where.not(manager_rated_frequency: nil)
+        .distinct.pluck(:person_id)
     }
   end
 

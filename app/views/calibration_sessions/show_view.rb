@@ -214,7 +214,11 @@ class Views::CalibrationSessions::ShowView < Views::Base
       render Components::Kit::Badge.new("Not enrolled", variant: :warning)
       return
     end
-    unless @readiness[:manager_complete_ids].include?(person_id)
+    return if @readiness[:manager_complete_ids].include?(person_id)
+
+    if @readiness[:partially_rated_ids]&.include?(person_id)
+      render Components::Kit::Badge.new("In progress", variant: :default)
+    else
       render Components::Kit::Badge.new("Unrated", variant: :default)
     end
   end
@@ -324,7 +328,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
                 plain capability[:name]
                 span(class: "ml-2 text-xs #{capability[:flagged] ? 'text-amber-700 dark:text-amber-300' : 'text-gray-600 dark:text-gray-300'}") do
                   if capability[:flagged]
-                    plain "⚠ raters disagree (residual #{sprintf('%.1f', capability[:residual_spread])})"
+                    plain "⚠ raters disagree (#{sprintf('%.1f', capability[:divergence_score])} bands unexplained by tendency)"
                   else
                     plain "spread #{sprintf('%.1f', capability[:spread])} — may be real team variance"
                   end

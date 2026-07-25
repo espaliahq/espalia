@@ -20,9 +20,15 @@
 # The two failure modes stay separable:
 # - **spread** — raw between-rater disagreement on a capability.
 # - **residual_spread** — the disagreement remaining after subtracting
-#   each rater's overall tendency offset. A capability still divergent
-#   after the correction is an "unclear expectation" candidate; one
-#   whose spread collapses was mostly rater tendency.
+#   each rater's overall tendency offset.
+# - **divergence_score** = min(spread, residual_spread) — the ranking and
+#   flagging signal. Both bounds are required: pure tendency shows raw
+#   spread with ~0 residual, while raters who AGREE on a capability
+#   despite opposite overall tendencies show a large residual with ~0 raw
+#   spread — the correction manufactures divergence there, and flagging a
+#   capability the room agrees on as "raters disagree" would read as
+#   nonsense. Only disagreement that is real AND unexplained by tendency
+#   marks an unclear-expectation candidate.
 class CalibrationSessions::OverviewStats
   FREQUENCY_VALUES = {
     "none" => 0.0, "some" => 1.0, "occasional" => 2.0, "consistent" => 3.0
@@ -32,7 +38,7 @@ class CalibrationSessions::OverviewStats
   # never badged — small samples always look extreme.
   SMALL_N = 3
 
-  # Residual spread (in rating bands) at or above which a capability is
+  # Divergence score (in rating bands) at or above which a capability is
   # flagged as a likely unclear expectation.
   DIVERGENCE_FLAG_THRESHOLD = 1.0
 
@@ -193,6 +199,7 @@ class CalibrationSessions::OverviewStats
       residuals = rater_means.map { |rater_id, v| v[:mean] - (rater_offsets[rater_id] || 0.0) }
       spread = (means.max - means.min).round(2)
       residual_spread = (residuals.max - residuals.min).round(2)
+      divergence_score = [ spread, residual_spread ].min
 
       {
         stable_id: stable_id,
@@ -201,11 +208,12 @@ class CalibrationSessions::OverviewStats
         rater_means: rater_means,
         spread: spread,
         residual_spread: residual_spread,
-        flagged: residual_spread >= DIVERGENCE_FLAG_THRESHOLD && cells.size >= FLAG_MIN_CELLS
+        divergence_score: divergence_score,
+        flagged: divergence_score >= DIVERGENCE_FLAG_THRESHOLD && cells.size >= FLAG_MIN_CELLS
       }
     end
 
-    rows.sort_by { |row| -row[:residual_spread] }
+    rows.sort_by { |row| [ -row[:divergence_score], -row[:spread] ] }
   end
 
   def capability_names
