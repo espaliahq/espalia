@@ -255,6 +255,9 @@ Rails.application.routes.draw do
                              controller: "calibration_sessions/participants"
     resources :calibrants, only: [ :create, :destroy ],
                            controller: "calibration_sessions/calibrants"
+    # Capability drill-in — :id is the capability's cross-version stable_id.
+    resources :capabilities, only: [ :show ],
+                             controller: "calibration_sessions/capabilities"
   end
 
   # Home dashboard — composable, role-aware card grid (replaces the old

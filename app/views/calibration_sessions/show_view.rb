@@ -302,6 +302,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
         raters: @stats[:raters], org_mean: @stats[:org_mean], people: @people
       )
       render Views::CalibrationSessions::DivergenceBoard.new(
+        session: @session,
         capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
         insufficient_count: @stats[:insufficient_capability_count]
       )

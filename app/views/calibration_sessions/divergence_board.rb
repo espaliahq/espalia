@@ -20,11 +20,13 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
     bg-cyan-600 dark:bg-cyan-400
   ].each_slice(2).map { |light, dark| "#{light} #{dark}" }.freeze
 
+  # @param session [CalibrationSession] for drill-in links
   # @param capabilities [Array<Hash>] OverviewStats capability rows (sorted)
   # @param raters [Array<Hash>] OverviewStats rater rows (for the legend/ordering)
   # @param people [Hash{String => Person}]
   # @param insufficient_count [Integer]
-  def initialize(capabilities:, raters:, people:, insufficient_count: 0)
+  def initialize(session:, capabilities:, raters:, people:, insufficient_count: 0)
+    @session = session
     @capabilities = capabilities
     @raters = raters
     @people = people
@@ -83,7 +85,10 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
               capability[:category_name]
             end
           end
-          span(class: "text-sm font-medium text-gray-900 dark:text-white") { capability[:name] }
+          a(
+            href: calibration_session_capability_path(@session, capability[:stable_id]),
+            class: "text-sm font-medium text-gray-900 dark:text-white hover:text-primary hover:underline"
+          ) { capability[:name] }
         end
         div(class: "flex items-center gap-2 text-xs") do
           span(class: "text-gray-600 dark:text-gray-300") do
