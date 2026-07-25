@@ -26,6 +26,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  def rate(person, capability, frequency)
+    create(:assessment_level_rating, tenant: @tenant,
+           cycle_id: @cycle.cycle_id, person_id: person.id,
+           framework_id: @cycle.framework_id,
+           capability_stable_id: capability.stable_id, level_ordinal: 3,
+           manager_rated_frequency: frequency)
+  end
+
   test "facilitator defines, curates, and starts a calibration session" do
     sign_in_as(@facilitator_user)
 
@@ -64,6 +72,68 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Live"
     assert_text "participants and population are frozen"
     assert_no_selector "button[aria-label='Remove Ivy IC from the population']"
+    assert_no_text "Add person from your org"
+  end
+
+  test "facilitator sees tendency strip and divergence board on a live session" do
+    ActsAsTenant.with_tenant(@tenant) do
+      category = create(:framework_capability_category, tenant: @tenant,
+                        framework_id: @cycle.framework_id, name: "Thinking")
+      @cap_a = create(:framework_capability, tenant: @tenant,
+                      category_id: category.category_id, name: "Strategic Thinking")
+      cap_b = create(:framework_capability, tenant: @tenant,
+                     category_id: category.category_id, name: "Delivery")
+
+      report_3 = create(:person, tenant: @tenant, name: "Nia IC", manager: @em_1)
+      report_4 = create(:person, tenant: @tenant, name: "Pax IC", manager: @em_2)
+      population = [ @report_1, @report_2, report_3, report_4 ]
+      # report_1/2 already hold assignments from setup (DeterministicId PK).
+      [ report_3, report_4 ].each do |person|
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: person.id, framework_id: @cycle.framework_id)
+      end
+      population.each do |person|
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: person.id, level_ordinal: 3)
+      end
+      # Mia rates high, Raj rates low on Strategic Thinking; both agree on Delivery.
+      rate(@report_1, @cap_a, "consistent")
+      rate(report_3, @cap_a, "consistent")
+      rate(@report_2, @cap_a, "none")
+      rate(report_4, @cap_a, "none")
+      rate(@report_1, cap_b, "occasional")
+      rate(@report_2, cap_b, "occasional")
+
+      ctx = AuthorizationContext.new(
+        user: @facilitator_user,
+        tenant_user: TenantUser.find_by(user: @facilitator_user),
+        person: @facilitator
+      )
+      result = Operations::CalibrationSessions::Define.call(
+        context: ctx,
+        params: {
+          cycle_id: @cycle.cycle_id, name: "Live calibration",
+          participant_ids: [ @em_1.id, @em_2.id ],
+          calibrant_person_ids: population.map(&:id)
+        }
+      )
+      Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
+      @live_session_id = result[:session_id]
+    end
+
+    sign_in_as(@facilitator_user)
+    visit calibration_session_path(@live_session_id)
+
+    assert_text "Live calibration"
+    # Headings render through CSS `uppercase` — assert the rendered case.
+    assert_text "RATER TENDENCY"
+    assert_text "Org mean"
+    assert_text "Mia Manager"
+    assert_text "CAPABILITY DIVERGENCE"
+    assert_text "Strategic Thinking"
+    assert_text "spread 3.0"
+    assert_text "raters disagree"
+    # No curation affordances on a live session
     assert_no_text "Add person from your org"
   end
 

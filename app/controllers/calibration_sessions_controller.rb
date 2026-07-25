@@ -94,6 +94,7 @@ class CalibrationSessionsController < ApplicationController
       groups: population_groups(seed_groups, calibrant_ids),
       suggestions: suggested_additions(seed_groups, calibrant_ids, participant_ids),
       readiness: readiness_for(calibrant_ids),
+      stats: participant_ids.any? ? CalibrationSessions::OverviewStats.new(session: @session).call : nil,
       add_calibrant_candidates: @session.draft? ? add_calibrant_candidates(calibrant_ids, participant_ids) : [],
       add_participant_candidates: @session.draft? ? add_participant_candidates(participant_ids) : [],
       can_curate: @session.draft? && policy(@session).curate?,

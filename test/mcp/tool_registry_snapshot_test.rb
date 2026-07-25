@@ -721,6 +721,23 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_overview",
+        "description" => "Calibration overview for a session — per-rater tendency (mean vs org, distribution, self-gap, evidence backing) and capabilities ranked by tendency-corrected rater disagreement.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
         "name" => "calibration_sessions_remove_calibrant",
         "description" => "Remove a person from a draft calibration session's population.",
         "inputSchema" => {

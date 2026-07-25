@@ -18,12 +18,14 @@ class Views::CalibrationSessions::ShowView < Views::Base
   # @param readiness [Hash] { enrolled_ids:, manager_complete_ids: }
   # @param add_calibrant_candidates [Array<Person>]
   # @param add_participant_candidates [Array<Person>]
+  # @param stats [Hash, nil] OverviewStats result (nil when no participants)
   def initialize(session:, cycle:, people:, participant_ids:, calibrant_ids:,
-                 groups:, suggestions:, readiness:,
+                 groups:, suggestions:, readiness:, stats:,
                  add_calibrant_candidates:, add_participant_candidates:,
                  can_curate:, can_start:, can_close:,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
+    @stats = stats
     @cycle = cycle
     @people = people
     @participant_ids = participant_ids
@@ -48,6 +50,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
       div(class: "max-w-4xl mx-auto px-4 py-8") do
         header_row
         readiness_bar
+        overview_section unless @session.draft?
+        agenda_card if @session.draft?
         div(class: "mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6") do
           div(class: "lg:col-span-1") { participants_card }
           div(class: "lg:col-span-2") { population_card }
@@ -284,11 +288,60 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
+  # The overview: tendency strip + divergence board (started/closed only —
+  # in draft the same data powers the compact suggested agenda instead).
+  def overview_section
+    return unless @stats
+
+    div(class: "mt-6 space-y-6") do
+      render Views::CalibrationSessions::TendencyStrip.new(
+        raters: @stats[:raters], org_mean: @stats[:org_mean], people: @people
+      )
+      render Views::CalibrationSessions::DivergenceBoard.new(
+        capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
+        insufficient_count: @stats[:insufficient_capability_count]
+      )
+    end
+  end
+
+  # Draft-phase prep: the auto-agenda — top capabilities by
+  # tendency-corrected disagreement, each with a plain-language reason.
+  def agenda_card
+    return unless @stats && @stats[:capabilities].any?
+
+    div(class: "mt-6") do
+      render Components::Kit::Card.new do |card|
+        card.body do
+          h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+            "Suggested agenda"
+          end
+          p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+            plain "Where the session's time is best spent, from the ratings so far."
+          end
+          ol(class: "mt-3 space-y-1.5 list-decimal list-inside") do
+            @stats[:capabilities].first(5).each do |capability|
+              li(class: "text-sm text-gray-900 dark:text-white") do
+                plain capability[:name]
+                span(class: "ml-2 text-xs #{capability[:flagged] ? 'text-amber-700 dark:text-amber-300' : 'text-gray-600 dark:text-gray-300'}") do
+                  if capability[:flagged]
+                    plain "⚠ raters disagree (residual #{sprintf('%.1f', capability[:residual_spread])})"
+                  else
+                    plain "spread #{sprintf('%.1f', capability[:spread])} — may be real team variance"
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
   def live_note
     div(class: "mt-6 rounded-md border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-600 dark:text-gray-300") do
       if @session.started?
         plain "Session is live — participants and population are frozen. " \
-              "The overview and capability drill-in surfaces are coming next."
+              "The capability drill-in surface is coming next."
       else
         plain "Session closed"
         plain " (#{@session.close_reason == 'cycle_closed' ? 'cycle closed' : 'by facilitator'})"

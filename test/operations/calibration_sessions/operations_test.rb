@@ -251,5 +251,23 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
         )
       end
     end
+
+    should "return the overview with rater names" do
+      result = Operations::CalibrationSessions::Overview.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+
+      assert_equal @session_id, result[:session_id]
+      assert_equal [ "Mia Manager", "Raj Rater" ], result[:raters].map { |r| r[:name] }.sort
+      assert result.key?(:capabilities)
+    end
+
+    should "deny the overview to a participant" do
+      assert_raises(Pundit::NotAuthorizedError) do
+        Operations::CalibrationSessions::Overview.call(
+          context: context_for(@em_1), params: { session_id: @session_id }
+        )
+      end
+    end
   end
 end
