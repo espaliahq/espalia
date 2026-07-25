@@ -28,7 +28,11 @@ class PersonDevelopment::Aggregate
   FREQUENCIES = %w[none some occasional consistent].freeze
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
-  EVIDENCE_FEEDBACK_DIRECTIONS = EvidenceItem::FEEDBACK_DIRECTIONS
+  EVIDENCE_DIRECTIONS_BY_SOURCE = {
+    "self" => %w[self],
+    "manager" => %w[manager_to_report],
+    "peer" => %w[peer_to_peer report_to_manager]
+  }.freeze
   EVIDENCE_VALENCES = EvidenceLink::VALENCES
   EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon manual].freeze
   EVIDENCE_REQUEST_NUDGE_GAP = EvidenceRequest::NUDGE_GAP
@@ -696,7 +700,7 @@ class PersonDevelopment::Aggregate
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
-    unless EVIDENCE_FEEDBACK_DIRECTIONS.include?(feedback_direction)
+    unless EVIDENCE_DIRECTIONS_BY_SOURCE.fetch(source).include?(feedback_direction)
       raise CommandError, "Invalid feedback direction: #{feedback_direction}"
     end
     raise CommandError, "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)

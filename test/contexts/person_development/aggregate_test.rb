@@ -1166,6 +1166,21 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_match /Invalid feedback direction/, err.message
     end
 
+    should "raise on a feedback direction incompatible with its source" do
+      {
+        "self" => "report_to_manager",
+        "manager" => "peer_to_peer",
+        "peer" => "manager_to_report"
+      }.each do |source, direction|
+        err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+          @aggregate.record_evidence(@evidence_id,
+            capability_stable_id: @cap_sid, level_ordinal: 1, source: source,
+            evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+            feedback_direction: direction, valence: "demonstrated")
+        end
+        assert_match /Invalid feedback direction/, err.message
+      end
+    end
 
     should "raise on invalid evidence_type" do
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
