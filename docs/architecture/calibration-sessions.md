@@ -12,9 +12,15 @@
 > `divergence_score = min(spread, residual_spread)` — see the implementation
 > note under *The unit of calibration*. Known display nit: raters with
 > identical means on a capability render exactly-overlapping dots (tooltips
-> and the aria summary still carry both). Still to build: the capability
-> drill-in with the evidence surfaces, and the outcome writes (expectation
-> flags, revisit requests, notes).
+> and the aria summary still carry both). The capability drill-in is built
+> in its v1 form: expectation text per level, the rater × level dot grid
+> (frequency colour; solid backed / outlined unbacked; unrated gaps;
+> out-of-session raters muted), the person card (rating pills + linked
+> evidence with valences and relation-first authorship), and the
+> reveal-on-interrogation choreography (`calibration_reveal_controller`,
+> sessionStorage-sticky, Show-names override). Still to build: the evidence
+> wall + compare tray, and the outcome writes (expectation flags, revisit
+> requests, notes) with their framework/PD feed wiring.
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
