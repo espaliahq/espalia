@@ -177,6 +177,14 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
 - **CDP/Selenium `.text` reflects CSS `text-transform`.** An eyebrow styled
   `uppercase` reports `UPPERCASE` text — `wait_for`/assertions must match the
   rendered case (or key off an untransformed element like a link label).
+- **A bare `rails server` serves stale Tailwind CSS for brand-new views.**
+  Tailwind v4 JIT only includes utilities already used somewhere at build time,
+  so a view added after the last build renders with any *new-to-the-bundle*
+  classes silently missing — invisible tracks/dots/bars that look like a layout
+  bug (bit the calibration overview AND drill-in passes). System tests don't
+  catch it (they build fresh CSS). Start the server with `bin/dev` (runs the
+  watcher), or run `bin/rails tailwindcss:build` after adding/editing views
+  before judging screenshots.
 - **Seeded tenant state persists across sessions.** The `me&u` seed tenant
   accumulates assessment state (cycles, ratings, evidence, alignment) as you
   drive flows. A verification run that assumes a clean slate (an unrated
