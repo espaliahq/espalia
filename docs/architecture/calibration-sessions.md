@@ -4,11 +4,17 @@
 > (facilitator-only access, value-free revisit requests, own event stream).
 > Built so far: the CalibrationSession aggregate + projection + cycle-close
 > sync, `Operations::CalibrationSessions::*` (web + MCP),
-> `CalibrationSessionPolicy`, the population seeding query, and the setup
+> `CalibrationSessionPolicy`, the population seeding query, the setup
 > surface (`/calibration_sessions` — list, define, draft curation,
-> readiness, start/close). Still to build: the overview (tendency strip +
-> divergence board), the capability drill-in with the evidence surfaces,
-> and the outcome writes (expectation flags, revisit requests, notes).
+> readiness, start/close), and the overview — tendency strip + divergence
+> board (`CalibrationSessions::OverviewStats`, `calibration_sessions_overview`
+> MCP tool) plus the draft-phase suggested agenda. The divergence signal is
+> `divergence_score = min(spread, residual_spread)` — see the implementation
+> note under *The unit of calibration*. Known display nit: raters with
+> identical means on a capability render exactly-overlapping dots (tooltips
+> and the aria summary still carry both). Still to build: the capability
+> drill-in with the evidence surfaces, and the outcome writes (expectation
+> flags, revisit requests, notes).
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
