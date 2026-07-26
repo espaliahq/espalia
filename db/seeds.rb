@@ -282,6 +282,14 @@ if meandu && Rails.application.credentials.dig(:hris, :hibob, :meandu)
     puts "  Unmapped titles: #{result[:unmapped_titles].to_a.sort.join(', ')}" if result[:unmapped_titles].any?
     puts "  Missing levels: #{result[:missing_levels].to_a.inspect}" if result[:missing_levels].any?
     puts "  Missing ordinals: #{result[:missing_ordinals].size} people" if result[:missing_ordinals].any?
+
+    # Population-wide demo ratings/evidence so the calibration surfaces
+    # (tendency strip, divergence board, drill-in) have realistic data.
+    # Runs AFTER the HRIS sync — the population only exists once people
+    # are assigned and auto-enrolled. Development-only; the task hard-aborts
+    # anywhere else. Deterministic + idempotent, so re-seeding converges.
+    puts "Seeding population-wide calibration activity..."
+    Rake::Task["assessments:seed_calibration_activity"].invoke
   end
 else
   puts "Skipping HiBob HRIS config (no credentials in Rails credentials file)"
