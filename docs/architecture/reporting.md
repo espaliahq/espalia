@@ -154,6 +154,10 @@ item ID, never by capability link.
   separate units.
 - **Participant coverage**: active cycle participants with at least one active
   cycle feedback item / active participants.
+- **Feedback directionality**: active attributed items split into manager →
+  report, peer → peer, and report → manager. Self-provided feedback is separate;
+  historical peer-source items without a persisted direction use a visible
+  peer-or-upward combined bucket.
 - **Grouping**: assessed person by live manager, enrollment-snapshot role, or
   enrollment-snapshot level. Contributor identities and feedback content never
   enter the result.
@@ -171,7 +175,22 @@ The query infers a legacy timestamp only when exactly one enrollment window in
 the framework contains it. A legacy post-close response inherits an
 unambiguous request window; ambiguous history stays unattributed.
 
+**Immutable direction.** New `EvidenceRecorded` events carry nullable
+`feedback_direction`, classified from provider to recipient when the feedback
+is recorded. Manager-source feedback (including manager-capacity delegates) is
+manager → report. Peer-source feedback from someone in the recipient's report
+tree is report → manager; other peer-source feedback is peer → peer. The
+projection persists that fact, so later org-chart changes never rewrite it.
+
+Events published before direction capture replay to `NULL`: historical
+`source: manager` maps to manager → report, historical `source: self` remains
+self-provided, and historical `source: peer` maps to
+`legacy_peer_or_upward`. That combined bucket is emitted only while such items
+exist. This additive nullable field does not change how identical events replay,
+so `EvidenceCollection::CODE_VERSION` remains 3 and no rebuild is required.
+
 **Surfaces**:
+
 - Web — `GET /assessment_cycles/:id/evidence`, with whole-cycle / My-org scope
   and manager / role / level tabs.
 - MCP — `Operations::Reporting::EvidenceCoverage`

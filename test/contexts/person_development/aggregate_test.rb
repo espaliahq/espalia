@@ -1100,6 +1100,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal "project_outcome", event.data[:evidence_type]
       assert_equal "Shipped X", event.data[:content]
       assert_equal @author_id, event.data[:author_id]
+      assert_equal "self", event.data[:feedback_direction]
       assert_equal "Migration done", event.data[:title]
       assert_equal "github", event.data[:external_reference][:system]
       assert_nil event.data[:cycle_id]
@@ -1153,6 +1154,48 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
           evidence_type: "project_outcome", content: "x", author_id: @author_id, valence: "demonstrated")
       end
       assert_match /Invalid evidence source/, err.message
+    end
+
+    should "raise on invalid feedback direction" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "peer",
+          evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+          feedback_direction: "sideways", valence: "demonstrated")
+      end
+      assert_match /Invalid feedback direction/, err.message
+    end
+
+    should "raise on a feedback direction incompatible with its source" do
+      {
+        "self" => "report_to_manager",
+        "manager" => "peer_to_peer",
+        "peer" => "manager_to_report"
+      }.each do |source, direction|
+        err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+          @aggregate.record_evidence(@evidence_id,
+            capability_stable_id: @cap_sid, level_ordinal: 1, source: source,
+            evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+            feedback_direction: direction, valence: "demonstrated")
+        end
+        assert_match /Invalid feedback direction/, err.message
+      end
+    end
+
+    should "preserve every feedback direction compatible with its source" do
+      [
+        [ "self", "self" ],
+        [ "manager", "manager_to_report" ],
+        [ "peer", "peer_to_peer" ],
+        [ "peer", "report_to_manager" ]
+      ].each do |source, direction|
+        @aggregate.record_evidence(SecureRandom.uuid_v7,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: source,
+          evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+          feedback_direction: direction, valence: "demonstrated")
+
+        assert_equal direction, @aggregate.unpublished_events.to_a.last.data[:feedback_direction]
+      end
     end
 
     should "raise on invalid evidence_type" do

@@ -7,8 +7,9 @@
 class Operations::Reporting::EvidenceCoverage < Operations::Base
   description "Aggregate feedback and evidence-request coverage for an assessment cycle " \
               "across the caller's org subtree (admins see the whole cycle): feedback " \
-              "provided by request or unsolicited, withdrawn feedback, request statuses, " \
-              "fulfilment rate, participant coverage, and optional manager/role/level groups."
+              "provided by request or unsolicited, immutable manager/report/peer directionality, " \
+              "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
+              "and optional manager/role/level groups."
   category :read
   approval :none
 
@@ -82,12 +83,28 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
       provided_by_request: metrics.provided_by_request,
       provided_unsolicited: metrics.provided_unsolicited,
       feedback_withdrawn: metrics.feedback_withdrawn,
+      feedback_directionality: directionality_payload(metrics.directionality),
       requests_sent: metrics.requests_sent,
       requests_fulfilled: metrics.requests_fulfilled,
       requests_pending: metrics.requests_pending,
       requests_declined: metrics.requests_declined,
       requests_cancelled: metrics.requests_cancelled,
       request_fulfillment_pct: metrics.request_fulfillment_pct
+    }
+  end
+
+  def directionality_payload(directionality)
+    {
+      interpersonal_total: directionality.interpersonal_total,
+      manager_to_report: directionality.manager_to_report,
+      manager_to_report_pct: directionality.percentage_for(:manager_to_report),
+      peer_to_peer: directionality.peer_to_peer,
+      peer_to_peer_pct: directionality.percentage_for(:peer_to_peer),
+      report_to_manager: directionality.report_to_manager,
+      report_to_manager_pct: directionality.percentage_for(:report_to_manager),
+      legacy_peer_or_upward: directionality.legacy_peer_or_upward,
+      legacy_peer_or_upward_pct: directionality.percentage_for(:legacy_peer_or_upward),
+      self_provided: directionality.self_provided
     }
   end
 end

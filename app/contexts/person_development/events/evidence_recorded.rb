@@ -26,6 +26,8 @@
 #   @option data [Hash, nil] :external_reference optional pointer to an
 #     external system. Shape: { system:, url:, external_id:, metadata: }
 #   @option data [String] :author_id UUID of the Person recording the evidence
+#   @option data [String, nil] :feedback_direction immutable provider-to-recipient
+#     relationship; absent on events published before direction capture
 #   @option data [String, nil] :cycle_id assessment cycle this evidence was
 #     provided for; absent on historical events and evidence recorded outside
 #     a cycle

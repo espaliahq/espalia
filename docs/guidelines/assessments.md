@@ -693,6 +693,9 @@ from request workflow:
   cycle. Prior-cycle evidence reused in this cycle is not newly provided.
 - If existing evidence fulfils a new request, the request is fulfilled but the
   item is not counted as new feedback.
+- Active feedback is also grouped by immutable provider-to-recipient direction:
+  manager → report, peer → peer, or report → manager. Self feedback is separate
+  and requested versus unsolicited remains an orthogonal split.
 
 `EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
 feedback and requests use the PersonDevelopment aggregate's current cycle; a
@@ -700,6 +703,14 @@ response explicitly inherits its request's cycle so a late response remains
 with the original cycle after close. The projections copy this value without a
 `CODE_VERSION` bump. Historical null rows are inferred at report time only when
 one enrollment window matches; ambiguous records stay unattributed.
+
+New `EvidenceRecorded` events also carry nullable `feedback_direction`, captured
+from the provider and recipient's relationship at write time. Historical
+`source: manager` and `source: self` rows retain exact manager → report and self
+classification. Historical `source: peer` rows cannot be split reliably, so the
+report labels them `Peer → peer or report → manager (historical)` and omits that
+row once its count reaches zero. Replays leave the new column null for old
+events, so this additive field also needs no projection `CODE_VERSION` bump.
 
 The report is aggregate-only: no contributor identity, content, evidence title,
 or individual request row. Managers see their `Person#all_reports` subtree;

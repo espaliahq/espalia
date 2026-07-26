@@ -23,6 +23,19 @@ class EvidenceItemTest < ActiveSupport::TestCase
       end
     end
 
+    should "accept a known feedback direction or nil for historical evidence" do
+      ActsAsTenant.with_tenant(@tenant) do
+        current = build(:evidence_item, tenant: @tenant, feedback_direction: "report_to_manager")
+        historical = build(:evidence_item, tenant: @tenant, feedback_direction: nil)
+        invalid = build(:evidence_item, tenant: @tenant, feedback_direction: "sideways")
+
+        assert current.valid?, current.errors.full_messages.to_sentence
+        assert historical.valid?, historical.errors.full_messages.to_sentence
+        assert_not invalid.valid?
+        assert invalid.errors[:feedback_direction].any?
+      end
+    end
+
     should "require evidence_type from EVIDENCE_TYPES" do
       ActsAsTenant.with_tenant(@tenant) do
         item = build(:evidence_item, tenant: @tenant, evidence_type: "garbage")
@@ -78,6 +91,30 @@ class EvidenceItemTest < ActiveSupport::TestCase
       end
     end
   end
+  context ".feedback_direction_for" do
+    should "classify self, manager, upward, and lateral feedback at recording time" do
+      ActsAsTenant.with_tenant(@tenant) do
+        manager = create(:person, tenant: @tenant, name: "Manager")
+        report = create(:person, tenant: @tenant, manager: manager, name: "Report")
+        peer = create(:person, tenant: @tenant, name: "Peer")
+
+        assert_equal "self",
+          EvidenceItem.feedback_direction_for(source: "self", author: report, recipient: report)
+        assert_equal "manager_to_report",
+          EvidenceItem.feedback_direction_for(source: "manager", author: manager, recipient: report)
+        assert_equal "report_to_manager",
+          EvidenceItem.feedback_direction_for(source: "peer", author: report, recipient: manager)
+        assert_equal "peer_to_peer",
+          EvidenceItem.feedback_direction_for(source: "peer", author: peer, recipient: report)
+      end
+    end
+
+    should "fall back to lateral feedback when historical people cannot be resolved" do
+      assert_equal "peer_to_peer",
+        EvidenceItem.feedback_direction_for(source: "peer", author: nil, recipient: nil)
+    end
+  end
+
 
   context "scopes" do
     should "filter active vs withdrawn" do

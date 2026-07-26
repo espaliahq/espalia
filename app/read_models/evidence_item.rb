@@ -28,6 +28,12 @@
 #
 class EvidenceItem < ApplicationRecord
   SOURCES = %w[self manager peer].freeze
+  FEEDBACK_DIRECTIONS = %w[
+    manager_to_report
+    peer_to_peer
+    report_to_manager
+    self
+  ].freeze
   EVIDENCE_TYPES = %w[
     peer_feedback
     manager_feedback
@@ -82,6 +88,7 @@ class EvidenceItem < ApplicationRecord
   validates :level_ordinal, presence: true,
             numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validates :source, presence: true, inclusion: { in: SOURCES }
+  validates :feedback_direction, inclusion: { in: FEEDBACK_DIRECTIONS }, allow_nil: true
   validates :evidence_type, presence: true, inclusion: { in: EVIDENCE_TYPES }
   validates :custom_type_label, presence: true, if: -> { evidence_type == "other" }
   validates :custom_type_label, absence: true, unless: -> { evidence_type == "other" }
@@ -97,6 +104,23 @@ class EvidenceItem < ApplicationRecord
   scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
   scope :for_capability, ->(stable_id) { where(capability_stable_id: stable_id) }
   scope :at_level, ->(ordinal) { where(level_ordinal: ordinal) }
+
+  # Classifies feedback from the provider to the recipient at recording time.
+  # A manager source includes active rating delegates acting in manager
+  # capacity. For peer-sourced feedback, the live relationship distinguishes
+  # upward feedback from lateral feedback before the fact is persisted.
+  #
+  # @param source [String] derived evidence source
+  # @param author [Person, nil] feedback provider
+  # @param recipient [Person, nil] person receiving feedback
+  # @return [String] one of FEEDBACK_DIRECTIONS
+  def self.feedback_direction_for(source:, author:, recipient:)
+    return "self" if source == "self"
+    return "manager_to_report" if source == "manager"
+    return "report_to_manager" if author&.managed_by?(recipient)
+
+    "peer_to_peer"
+  end
 
   # Whether this evidence has been withdrawn.
   #
