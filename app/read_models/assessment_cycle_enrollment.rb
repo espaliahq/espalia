@@ -11,6 +11,13 @@
 # via {AssessmentCycleParticipation} for callers that need a unified view.
 #
 class AssessmentCycleEnrollment < ApplicationRecord
+  # The unenroll route addresses this row by primary key
+  # (DELETE /assessment_cycles/:cycle/enrollments/:id), so the PK must be a
+  # pure function of event-sourced data — a projection rebuild reissuing
+  # random ids would 404 any captured URL (see event-sourcing.md).
+  include DeterministicId
+  deterministic_id_from :cycle_id, :person_id
+
   # enrolled  — live membership in an (open) cycle
   # concluded — the cycle closed with the person still enrolled; their
   #             participation stands as part of the cycle's historical

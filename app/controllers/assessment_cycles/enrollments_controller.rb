@@ -94,6 +94,11 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
       )
     end
     redirect_to assessment_cycle_path(@cycle), status: :see_other, notice: "Person unenrolled."
+  rescue ActiveRecord::RecordNotFound
+    # A stale page can post an enrollment id that a projection rebuild has
+    # reissued or a concurrent unenroll removed — fail soft, not 500.
+    redirect_to assessment_cycle_path(@cycle), status: :see_other,
+                alert: "That participant is no longer enrolled."
   rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
     redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: e.message
   end
