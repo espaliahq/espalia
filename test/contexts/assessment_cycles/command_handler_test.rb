@@ -95,6 +95,20 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
       person_events = Rails.configuration.event_store.read.stream(person_stream).to_a
       assert(person_events.any? { |e| e.is_a?(PersonDevelopment::Events::LeftAssessmentCycle) })
     end
+
+    should "reject the reserved cycle_closed reason before any event is applied" do
+      @handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1)
+      @handler.enroll(@cycle_id, @person_id)
+
+      err = assert_raises(RuntimeError) do
+        @handler.unenroll(@cycle_id, @person_id, "cycle_closed")
+      end
+      assert_match /reserved reason/, err.message
+
+      participant = AssessmentCycle.find_by(cycle_id: @cycle_id)
+        .enrollments.find_by(person_id: @person_id)
+      assert_equal "enrolled", participant.status, "the rejected unenroll must leave the enrollment intact"
+    end
   end
 
   context "edit commands" do

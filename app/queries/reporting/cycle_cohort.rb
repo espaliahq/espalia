@@ -175,6 +175,10 @@ class Reporting::CycleCohort
   end
 
   def at_risk?(status, last_activity)
+    # A closed cycle has nothing actionable left — ratings are frozen, so
+    # "at risk" (a chase-list signal) would be a permanent false alarm:
+    # planned_end_at is always in the past and idleness only grows.
+    return false if @cycle.closed?
     return false if status == "aligned"
     return true if @cycle.planned_end_at && @cycle.planned_end_at.to_time < @now
     return true if last_activity && last_activity < @now - AT_RISK_IDLE_DAYS.days

@@ -319,7 +319,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(RuntimeError) do
         @aggregate.leave_cycle(@cycle_id, "manual")
       end
-      assert_match /Not currently in a cycle/, err.message
+      assert_match /Not currently in an assessment cycle/, err.message
     end
 
     should "raise if cycle_id does not match" do
@@ -368,7 +368,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(RuntimeError) do
         @aggregate.conclude_cycle(@cycle_id)
       end
-      assert_match /Not currently in a cycle/, err.message
+      assert_match /Not currently in an assessment cycle/, err.message
     end
 
     should "raise if cycle_id does not match" do
