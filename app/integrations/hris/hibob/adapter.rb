@@ -225,25 +225,32 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       .to_a.group_by(&:person_id)
     return if open_enrollments.empty? && assignments.empty?
 
-    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
-      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
-        cycles_handler = AssessmentCycles::CommandHandler.new
-        pd_handler = PersonDevelopment::CommandHandler.new
+    with_hris_event_context do
+      cycles_handler = AssessmentCycles::CommandHandler.new
+      pd_handler = PersonDevelopment::CommandHandler.new
 
-        (open_enrollments.keys | assignments.keys).each do |person_id|
-          Array(open_enrollments[person_id]).each do |enrollment|
-            cycles_handler.unenroll(enrollment.cycle_id, person_id, OFFBOARD_REASON)
-          end
-          Array(assignments[person_id]).each do |assignment|
-            pd_handler.unassign_from_framework(
-              person_id, assignment.framework_id, reason: OFFBOARD_REASON
-            )
-          end
-          result[:offboarded] += 1
-        rescue => e
-          result[:errors] << { person_id: person_id, error: e.message }
+      (open_enrollments.keys | assignments.keys).each do |person_id|
+        Array(open_enrollments[person_id]).each do |enrollment|
+          cycles_handler.unenroll(enrollment.cycle_id, person_id, OFFBOARD_REASON)
         end
+        Array(assignments[person_id]).each do |assignment|
+          pd_handler.unassign_from_framework(
+            person_id, assignment.framework_id, reason: OFFBOARD_REASON
+          )
+        end
+        result[:offboarded] += 1
+      rescue => e
+        result[:errors] << { person_id: person_id, error: e.message }
       end
+    end
+  end
+
+  # Wraps event-dispatching sync passes (3b + 5) in the shared provenance
+  # context: acting_via :hris + the sync's correlation_id on every event's
+  # metadata, plus the tenant id the projections and replayer rely on.
+  def with_hris_event_context(&block)
+    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
+      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
     end
   end
 
@@ -288,28 +295,26 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     title_to_mapping = build_title_to_mapping
     roles_by_code = framework_roles_by_code
 
-    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
-      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
-        command_handler = PersonDevelopment::CommandHandler.new
+    with_hris_event_context do
+      command_handler = PersonDevelopment::CommandHandler.new
 
-        Person.where(id: touched_person_ids).find_each do |person|
-          # HiBob returns inactive employees too (show_inactive: true) —
-          # they are offboarded by Pass 3b, never (re-)assigned here.
-          if person.status == "inactive"
-            result[:skipped_inactive] += 1
-            next
-          end
-
-          dispatch_framework_assignment(
-            person: person,
-            framework: framework,
-            title_to_mapping: title_to_mapping,
-            roles_by_code: roles_by_code,
-            command_handler: command_handler,
-            result: result
-          )
-          record_reporting_manager(person: person, framework: framework, command_handler: command_handler)
+      Person.where(id: touched_person_ids).find_each do |person|
+        # HiBob returns inactive employees too (show_inactive: true) —
+        # they are offboarded by Pass 3b, never (re-)assigned here.
+        if person.status == "inactive"
+          result[:skipped_inactive] += 1
+          next
         end
+
+        dispatch_framework_assignment(
+          person: person,
+          framework: framework,
+          title_to_mapping: title_to_mapping,
+          roles_by_code: roles_by_code,
+          command_handler: command_handler,
+          result: result
+        )
+        record_reporting_manager(person: person, framework: framework, command_handler: command_handler)
       end
     end
   end
