@@ -889,8 +889,11 @@ access all keep concluded rows — the enrollment `active` scope is
 only that the cycle ended around them, never how far they got (that stays on
 the progress row). `withdrawn` exclusively means a person-scoped removal
 (opted out, left the company, enrolled by mistake). Historical PD streams
-contain `LeftAssessmentCycle(reason: "cycle_closed")` from before the two
-concepts were separated; a `CurrentState` rebuild re-derives those enrollment
+retain `LeftAssessmentCycle(reason: "cycle_closed")` from before the two
+concepts were separated (immutable; the aggregate now rejects that reason for
+new commands). The enrollment read model heals independently: a `CurrentState`
+rebuild replays the historical **`CycleClosed`** events (its own stream's
+input — PD events are not) and re-derives those close-withdrawn enrollment
 rows as concluded.
 
 **Re-opening a completed alignment.** A completion made by accident is
