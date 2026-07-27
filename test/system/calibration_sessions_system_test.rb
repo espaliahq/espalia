@@ -42,8 +42,23 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     fill_in "Session name", with: "Engineering calibration"
     select "H1 2026 Review", from: "Assessment cycle"
-    check "Mia Manager"
-    check "Raj Rater"
+
+    # Pick raters via the shared person picker: one from the quick-add
+    # suggestions, one through the typeahead search. Stimulus-action
+    # buttons are JS-dispatched per the flake guards.
+    wait_for_stimulus "person-picker"
+    page.execute_script(
+      %{document.querySelector("[data-person-picker-target='suggestions'] [data-person-picker-person-id-param='#{@em_1.id}']").click()}
+    )
+    assert_selector "[data-person-picker-target='selected'] span[data-person-id='#{@em_1.id}']", text: "Mia Manager"
+
+    fill_in "Participants (raters)", with: "Raj"
+    assert_selector "turbo-frame#participant-candidates button", text: "Raj Rater"
+    page.execute_script(
+      %{document.querySelector("turbo-frame#participant-candidates [data-person-picker-person-id-param='#{@em_2.id}']").click()}
+    )
+    assert_selector "[data-person-picker-target='selected'] span[data-person-id='#{@em_2.id}']", text: "Raj Rater"
+
     click_button "Create draft session"
 
     # Draft page: seeded population grouped by rater, readiness surfaced

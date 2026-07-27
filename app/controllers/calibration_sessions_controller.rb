@@ -40,11 +40,27 @@ class CalibrationSessionsController < ApplicationController
 
     render Views::CalibrationSessions::NewView.new(
       open_cycles: AssessmentCycle.open_cycles.order(opened_at: :desc).to_a,
-      participant_candidates: participant_candidates,
+      participant_suggestions: candidates_query.suggestions,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
     )
+  end
+
+  # GET /calibration_sessions/participant_candidates
+  #
+  # Typeahead results for the participant picker. Managers only, scoped
+  # like the assessment-cycle reports: tenant-wide for admins, the
+  # viewer's own subtree for a manager (enforced in the query, not the
+  # client).
+  def participant_candidates
+    authorize CalibrationSession, :index?
+
+    render Views::Shared::PersonPickerCandidatesFrame.new(
+      frame_id: "participant-candidates",
+      entries: candidates_query.search(params[:q]),
+      query: params[:q].presence
+    ), layout: false
   end
 
   # POST /calibration_sessions
@@ -96,7 +112,6 @@ class CalibrationSessionsController < ApplicationController
       readiness: readiness_for(calibrant_ids),
       stats: participant_ids.any? ? CalibrationSessions::OverviewStats.new(session: @session).call : nil,
       add_calibrant_candidates: @session.draft? ? add_calibrant_candidates(calibrant_ids, participant_ids) : [],
-      add_participant_candidates: @session.draft? ? add_participant_candidates(participant_ids) : [],
       can_curate: @session.draft? && policy(@session).curate?,
       can_start: @session.draft? && policy(@session).start?,
       can_close: !@session.closed? && policy(@session).close?,
@@ -124,19 +139,11 @@ class CalibrationSessionsController < ApplicationController
     CalibrationSession.where(facilitator_id: current_person&.id)
   end
 
-  # Managers the caller may pick as participants: managers within their
-  # subtree (themselves included when they directly manage people), or
-  # every manager in the tenant for admins.
-  def participant_candidates
-    manager_ids = Person.where.not(manager_id: nil).distinct.pluck(:manager_id)
-    scope =
-      if admin_viewer?
-        Person.where(id: manager_ids)
-      else
-        in_scope = current_person.all_reports.pluck(:id) + [ current_person.id ]
-        Person.where(id: manager_ids & in_scope)
-      end
-    scope.order(:name).to_a
+  # Shared scope for the participant picker's search + suggestions.
+  def candidates_query
+    CalibrationSessions::ParticipantCandidates.new(
+      viewer: current_person, admin: admin_viewer?
+    )
   end
 
   # The seed mapping for the CURRENT participants — used to group the
@@ -209,10 +216,6 @@ class CalibrationSessionsController < ApplicationController
         facilitator.all_reports.where.not(id: excluded)
       end
     scope.order(:name).limit(200).to_a
-  end
-
-  def add_participant_candidates(participant_ids)
-    participant_candidates.reject { |p| participant_ids.include?(p.id) }
   end
 
   def current_user_tenants

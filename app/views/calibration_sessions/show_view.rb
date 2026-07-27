@@ -17,11 +17,10 @@ class Views::CalibrationSessions::ShowView < Views::Base
   # @param suggestions [Array<Person>] seed people not yet in the population
   # @param readiness [Hash] { enrolled_ids:, manager_complete_ids: }
   # @param add_calibrant_candidates [Array<Person>]
-  # @param add_participant_candidates [Array<Person>]
   # @param stats [Hash, nil] OverviewStats result (nil when no participants)
   def initialize(session:, cycle:, people:, participant_ids:, calibrant_ids:,
                  groups:, suggestions:, readiness:, stats:,
-                 add_calibrant_candidates:, add_participant_candidates:,
+                 add_calibrant_candidates:,
                  can_curate:, can_start:, can_close:,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
@@ -34,7 +33,6 @@ class Views::CalibrationSessions::ShowView < Views::Base
     @suggestions = suggestions
     @readiness = readiness
     @add_calibrant_candidates = add_calibrant_candidates
-    @add_participant_candidates = add_participant_candidates
     @can_curate = can_curate
     @can_start = can_start
     @can_close = can_close
@@ -142,7 +140,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
         ul(class: "mt-3 space-y-1") do
           @participant_ids.each { |person_id| participant_row(person_id) }
         end
-        add_participant_form if @can_curate && @add_participant_candidates.any?
+        add_participant_form if @can_curate
       end
     end
   end
@@ -254,18 +252,20 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
+  # The shared person picker (same managers-in-scope search as the define
+  # form); submits the selected set in one POST.
   def add_participant_form
-    form(action: calibration_session_participants_path(@session), method: "post", class: "mt-4 flex items-end gap-2") do
+    form(action: calibration_session_participants_path(@session), method: "post", class: "mt-4 space-y-2") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      div(class: "flex-1") do
-        label(for: "add-participant", class: "block text-xs font-medium text-gray-600 dark:text-gray-300") do
-          "Add participant"
-        end
-        select(id: "add-participant", name: "person_id", class: select_classes) do
-          @add_participant_candidates.each { |person| option(value: person.id) { person.name } }
-        end
-      end
-      button(type: "submit", class: secondary_button_classes) { "Add" }
+      render Views::Shared::PersonPicker.new(
+        field_name: "person_ids[]",
+        candidates_url: participant_candidates_calibration_sessions_path,
+        frame_id: "participant-candidates",
+        label: "Add participants",
+        placeholder: "Search managers by name or email…",
+        empty_text: "No one queued to add."
+      )
+      button(type: "submit", class: secondary_button_classes) { "Add selected" }
     end
   end
 

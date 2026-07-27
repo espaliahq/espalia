@@ -246,6 +246,10 @@ Rails.application.routes.draw do
   # Calibration sessions — facilitator-run rating-calibration forums.
   # See docs/architecture/calibration-sessions.md.
   resources :calibration_sessions, only: [ :index, :new, :create, :show ] do
+    collection do
+      # Typeahead for the participant picker (managers, viewer-scoped).
+      get :participant_candidates
+    end
     member do
       post :start, to: "calibration_sessions/starts#create"
       post :close, to: "calibration_sessions/closes#create"

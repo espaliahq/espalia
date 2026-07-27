@@ -615,7 +615,12 @@ the response lands pre-linked to it.
   org-neighbour suggestions** (manager, peers, direct reports — `Assessments::RequestCandidates`),
   a **multi-select** chip list, **one shared reason**, and an optional due date.
 - **Search + suggestions** are server-rendered: the search input (debounced ~250ms by
-  [request_evidence_controller.js](../../app/javascript/controllers/request_evidence_controller.js))
+  [request_evidence_controller.js](../../app/javascript/controllers/request_evidence_controller.js)
+  — now a thin subclass of the shared
+  [person_picker_controller.js](../../app/javascript/controllers/person_picker_controller.js),
+  the reusable typeahead+chips control this picker was extracted into; the
+  calibration participant picker reuses it via
+  [Views::Shared::PersonPicker](../../app/views/shared/person_picker.rb))
   repoints the `#request-candidates` frame
   ([RequestCandidatesFrame](../../app/views/evidence/request_candidates_frame.rb));
   selection is client-side (chips + `requestee_ids[]` hidden inputs). People with a

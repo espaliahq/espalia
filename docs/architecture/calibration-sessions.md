@@ -6,7 +6,10 @@
 > sync, `Operations::CalibrationSessions::*` (web + MCP),
 > `CalibrationSessionPolicy`, the population seeding query, the setup
 > surface (`/calibration_sessions` — list, define, draft curation,
-> readiness, start/close), and the overview — tendency strip + divergence
+> readiness, start/close; participants are picked via the shared
+> `Views::Shared::PersonPicker` typeahead — managers only, admin =
+> org-wide / manager = own subtree, extracted from the evidence-request
+> recipient picker), and the overview — tendency strip + divergence
 > board (`CalibrationSessions::OverviewStats`, `calibration_sessions_overview`
 > MCP tool) plus the draft-phase suggested agenda. The divergence signal is
 > `divergence_score = min(spread, residual_spread)` — see the implementation

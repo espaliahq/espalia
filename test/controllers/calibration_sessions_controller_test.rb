@@ -65,6 +65,52 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "participant candidates (picker typeahead)" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        other_head = create(:person, tenant: @tenant, name: "Kim Elsewhere")
+        @other_em = create(:person, tenant: @tenant, name: "Miriam Otherteam", manager: other_head)
+        create(:person, tenant: @tenant, name: "Ref IC", manager: @other_em)
+      end
+    end
+
+    should "scope a manager's search to their own subtree" do
+      sign_in @facilitator_user
+      get participant_candidates_calibration_sessions_path(q: "mi")
+
+      assert_response :success
+      assert_includes response.body, "Mia Manager"
+      assert_not_includes response.body, "Miriam Otherteam"
+    end
+
+    should "deny a member without reports" do
+      sign_in @member_user
+      get participant_candidates_calibration_sessions_path(q: "mi")
+
+      assert_redirected_to root_path
+    end
+  end
+
+  context "adding participants from the picker" do
+    should "add every selected person in one POST" do
+      session_record = define_session
+      new_em = ActsAsTenant.with_tenant(@tenant) do
+        em = create(:person, tenant: @tenant, name: "Noor Newlead", manager: @facilitator)
+        create(:person, tenant: @tenant, name: "Nate IC", manager: em)
+        em
+      end
+
+      sign_in @facilitator_user
+      post calibration_session_participants_path(session_record),
+           params: { person_ids: [ new_em.id ] }
+
+      assert_redirected_to calibration_session_path(session_record)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_includes session_record.participants.pluck(:person_id), new_em.id
+      end
+    end
+  end
+
   context "lifecycle endpoints as facilitator" do
     should "start then close the session" do
       session_record = define_session
