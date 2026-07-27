@@ -105,6 +105,45 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
     end
   end
 
+  # Deliberate access model for closed cycles: a concluded participation
+  # keeps the manager's report visibility (the cycle's history stays
+  # reviewable), while a withdrawal revokes it.
+  context "as a manager whose report's cycle has closed" do
+    setup do
+      @user = create(:user)
+      @tenant_user = create(:tenant_user, user: @user, tenant: @tenant, role: :member)
+      ActsAsTenant.with_tenant(@tenant) do
+        @closed_cycle = create(:assessment_cycle, :closed, tenant: @tenant,
+          framework_id: SecureRandom.uuid_v7)
+        @manager = create(:person, tenant: @tenant)
+        @tenant_user.update!(person: @manager)
+        @report = create(:person, tenant: @tenant, manager: @manager)
+      end
+      @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @manager)
+    end
+
+    should "keep cohort, attainment, and evidence-report access for a concluded report" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_cycle_enrollment, :concluded,
+          tenant: @tenant, cycle: @closed_cycle, person_id: @report.id)
+
+        policy = AssessmentCyclePolicy.new(@context, @closed_cycle)
+        assert policy.cohort?
+        assert policy.attainment?
+        assert policy.evidence_report?
+      end
+    end
+
+    should "deny cohort access when the report only ever withdrew" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_cycle_enrollment, :withdrawn,
+          tenant: @tenant, cycle: @closed_cycle, person_id: @report.id)
+
+        refute AssessmentCyclePolicy.new(@context, @closed_cycle).cohort?
+      end
+    end
+  end
+
   context "as a manager with no reports in the cycle" do
     setup do
       @user = create(:user)
