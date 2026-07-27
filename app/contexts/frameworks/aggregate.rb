@@ -883,6 +883,74 @@ class Frameworks::Aggregate
     }.compact))
   end
 
+  # Entity types a clarification can anchor on. The expectation IS the
+  # capability × level cell; the capability anchor covers a cell with no
+  # expectation ("nothing defined here" being the complaint), carrying the
+  # level_ordinal explicitly.
+  CLARIFIABLE_ENTITY_TYPES = %w[behavioural_expectation capability].freeze
+
+  # Requests clarification of a behavioural expectation (or an empty
+  # capability × level cell) — a NON-PROPOSAL suggestion: it anchors a
+  # lifecycled discussion without proposing a value, and is resolved with a
+  # note (resolve_clarification) or withdrawn, never approved/rejected.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] "behavioural_expectation" or "capability"
+  # @param target_entity_id [String] UUID of the anchored entity
+  # @param author_id [String] UUID of the requester
+  # @param level_ordinal [Integer, nil] the level the question concerns
+  #   (required context for a capability anchor; implied by an expectation)
+  # @param rationale [String] the question itself — what is unclear
+  # @raise [RuntimeError] if framework not created, suggestion exists, entity
+  #   type not clarifiable, entity missing, or rationale blank
+  def request_clarification(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                            author_id:, level_ordinal: nil, rationale:)
+    ensure_created!
+    raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
+    unless CLARIFIABLE_ENTITY_TYPES.include?(target_entity_type)
+      raise "Clarifications anchor on an expectation or capability, not #{target_entity_type}"
+    end
+    raise_unless_entity_exists!(target_entity_type, target_entity_id)
+    raise "Clarification rationale cannot be blank" if rationale.to_s.strip.empty?
+
+    apply(Frameworks::Events::ClarificationRequested.new(data: {
+      framework_id: framework_id,
+      suggestion_id: suggestion_id,
+      target_entity_type: target_entity_type,
+      target_entity_id: target_entity_id,
+      level_ordinal: level_ordinal,
+      author_id: author_id,
+      rationale: rationale
+    }.compact))
+  end
+
+  # Resolves a pending clarification with a note — the discussion's outcome
+  # ("reworded L4 — see suggestion …", "wording is fine; here's the reading").
+  # Authority (expectation tier) is the policy layer's decision, mirroring
+  # approve/reject.
+  #
+  # @param suggestion_id [String] UUID of the clarification
+  # @param resolver_id [String] UUID of the resolving person
+  # @param note [String] what settled the question (required)
+  # @param resulting_suggestion_id [String, nil] a concrete suggestion the
+  #   discussion spawned, when there is one
+  # @raise [RuntimeError] if not found, not a clarification, or note blank
+  def resolve_clarification(suggestion_id, resolver_id, note:, resulting_suggestion_id: nil)
+    ensure_created!
+    suggestion = @pending_edits[suggestion_id]
+    raise "Suggestion #{suggestion_id} not found" unless suggestion
+    raise "Only clarifications are resolved with a note" unless suggestion[:kind] == :clarification
+    raise "Resolution note cannot be blank" if note.to_s.strip.empty?
+
+    apply(Frameworks::Events::ClarificationResolved.new(data: {
+      suggestion_id: suggestion_id,
+      resolver_id: resolver_id,
+      note: note,
+      resulting_suggestion_id: resulting_suggestion_id
+    }.compact))
+  end
+
   # Amends the author's own pending suggestion.
   #
   # @param suggestion_id [String] UUID of the suggestion
@@ -894,6 +962,7 @@ class Frameworks::Aggregate
     ensure_created!
     suggestion = @pending_edits[suggestion_id]
     raise "Suggestion #{suggestion_id} not found" unless suggestion
+    raise "Clarifications carry no proposal to amend — discuss via comments" if suggestion[:kind] == :clarification
     raise "Only the author can amend their suggestion" unless suggestion[:author_id] == author_id
 
     apply(Frameworks::Events::SuggestionAmended.new(data: {
@@ -1011,6 +1080,7 @@ class Frameworks::Aggregate
     ensure_created!
     suggestion = @pending_edits[suggestion_id]
     raise "Suggestion #{suggestion_id} not found" unless suggestion
+    raise "Clarifications are resolved with a note, not approved" if suggestion[:kind] == :clarification
 
     apply(Frameworks::Events::SuggestionApproved.new(data: {
       suggestion_id: suggestion_id,
@@ -1039,7 +1109,9 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if suggestion not found
   def reject_suggestion(suggestion_id, reviewer_id, comment: nil)
     ensure_created!
-    raise "Suggestion #{suggestion_id} not found" unless @pending_edits.key?(suggestion_id)
+    suggestion = @pending_edits[suggestion_id]
+    raise "Suggestion #{suggestion_id} not found" unless suggestion
+    raise "Clarifications are resolved with a note, not rejected" if suggestion[:kind] == :clarification
 
     apply(Frameworks::Events::SuggestionRejected.new(data: {
       suggestion_id: suggestion_id,
@@ -1515,6 +1587,22 @@ class Frameworks::Aggregate
     }
   end
 
+  on Frameworks::Events::ClarificationRequested do |event|
+    @suggestion_ids << event.data[:suggestion_id]
+    @pending_edits[event.data[:suggestion_id]] = {
+      kind: :clarification,
+      suggestion_id: event.data[:suggestion_id],
+      target_entity_type: event.data[:target_entity_type],
+      target_entity_id: event.data[:target_entity_id],
+      level_ordinal: event.data[:level_ordinal],
+      author_id: event.data[:author_id]
+    }
+  end
+
+  on Frameworks::Events::ClarificationResolved do |event|
+    @pending_edits.delete(event.data[:suggestion_id])
+  end
+
   on Frameworks::Events::SuggestionAmended do |event|
     suggestion = @pending_edits[event.data[:suggestion_id]]
     suggestion[:suggested_value] = event.data[:new_suggested_value] if suggestion
@@ -1925,7 +2013,10 @@ class Frameworks::Aggregate
         competing[:target_entity_id] == approved[:target_entity_id] &&
         competing[:field] == approved[:field]
     when :delete
-      competing[:kind] != :create &&
+      # Clarifications are excluded: they are discussions, not value
+      # proposals — archiving the entity doesn't answer the question, and
+      # their lifecycle vocabulary is resolve/withdraw, never rejected.
+      %i[edit delete].include?(competing[:kind]) &&
         competing[:target_entity_type] == approved[:target_entity_type] &&
         competing[:target_entity_id] == approved[:target_entity_id]
     else

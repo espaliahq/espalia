@@ -78,6 +78,8 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::SuggestionApproved,
       Frameworks::Events::SuggestionRejected,
       Frameworks::Events::SuggestionWithdrawn,
+      Frameworks::Events::ClarificationRequested,
+      Frameworks::Events::ClarificationResolved,
       Frameworks::Events::ScoringThresholdsConfigured,
       Frameworks::Events::CollaboratorAdded,
       Frameworks::Events::CollaboratorRoleChanged,
@@ -138,6 +140,8 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::SuggestionApproved then handle_suggestion_approved(event)
     when Frameworks::Events::SuggestionRejected then handle_suggestion_rejected(event)
     when Frameworks::Events::SuggestionWithdrawn then handle_suggestion_withdrawn(event)
+    when Frameworks::Events::ClarificationRequested then handle_clarification_requested(event)
+    when Frameworks::Events::ClarificationResolved then handle_clarification_resolved(event)
 
     # ── Scoring & collaborators — always live ──
     when Frameworks::Events::ScoringThresholdsConfigured then handle_scoring_thresholds_configured(event)
@@ -286,7 +290,9 @@ class Frameworks::Projections::PublishedState
     Frameworks::Events::SuggestionAmended,
     Frameworks::Events::SuggestionApproved,
     Frameworks::Events::SuggestionRejected,
-    Frameworks::Events::SuggestionWithdrawn
+    Frameworks::Events::SuggestionWithdrawn,
+    Frameworks::Events::ClarificationRequested,
+    Frameworks::Events::ClarificationResolved
   ].freeze
 
   def suggestion_event?(event)
@@ -677,6 +683,41 @@ class Frameworks::Projections::PublishedState
   def handle_suggestion_withdrawn(event)
     record = FrameworkState::SuggestedEdit.find_by!(suggestion_id: event.data[:suggestion_id])
     record.update!(status: "withdrawn")
+  end
+
+  # A clarification is a non-proposal suggestion row: kind "clarification",
+  # nil suggested_value/field, the question in `rationale`. The level a
+  # capability-anchored clarification concerns rides in proposed_attributes
+  # (an expectation anchor implies its level). current_value snapshots the
+  # text under question for the card/feed.
+  def handle_clarification_requested(event) # rubocop:disable Metrics/MethodLength
+    entity_type = event.data[:target_entity_type]
+    entity_id = event.data[:target_entity_id]
+    proposed = {}
+    proposed["level_ordinal"] = event.data[:level_ordinal] if event.data[:level_ordinal]
+    FrameworkState::SuggestedEdit.create!(
+      framework_id: event.data[:framework_id],
+      suggestion_id: event.data[:suggestion_id],
+      kind: "clarification",
+      target_entity_type: entity_type,
+      target_entity_id: entity_id,
+      current_value: snapshot_entity_summary(entity_type, entity_id),
+      proposed_attributes: proposed,
+      author_id: event.data[:author_id],
+      rationale: event.data[:rationale],
+      status: "pending"
+    )
+  end
+
+  def handle_clarification_resolved(event)
+    record = FrameworkState::SuggestedEdit.find_by!(suggestion_id: event.data[:suggestion_id])
+    record.update!(
+      status: "resolved",
+      reviewed_by: event.data[:resolver_id],
+      reviewed_at: event.metadata[:timestamp],
+      reviewer_comment: event.data[:note],
+      resulting_suggestion_id: event.data[:resulting_suggestion_id]
+    )
   end
 
   # Returns the current value of a field on an entity for snapshot purposes.

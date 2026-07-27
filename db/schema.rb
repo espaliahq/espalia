@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_24_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_27_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -442,6 +442,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_000000) do
     t.uuid "parent_id"
     t.jsonb "proposed_attributes", default: {}, null: false
     t.text "rationale"
+    t.uuid "resulting_suggestion_id"
     t.datetime "reviewed_at"
     t.uuid "reviewed_by"
     t.text "reviewer_comment"
