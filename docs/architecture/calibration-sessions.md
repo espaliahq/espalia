@@ -21,9 +21,16 @@
 > out-of-session raters muted), the person card (rating pills + linked
 > evidence with valences and relation-first authorship), and the
 > reveal-on-interrogation choreography (`calibration_reveal_controller`,
-> sessionStorage-sticky, Show-names override). Still to build: the evidence
-> wall + compare tray, and the outcome writes (expectation flags, revisit
-> requests, notes) with their framework/PD feed wiring.
+> sessionStorage-sticky, Show-names override). Development environments get
+> population-wide demo activity via `assessments:seed_calibration_activity`
+> (deterministic rater personas / ambiguous capabilities / evidence, wired
+> into `db/seeds.rb` after the HRIS sync) so every surface is demo-able.
+> Still to build: the evidence wall + compare tray, and the outcome writes —
+> whose design is now fully resolved: expectation flags raise a framework
+> **clarification** (a new non-proposal suggestion kind with resolve-with-note
+> lifecycle and an edit-mode comment-glyph matrix decoration — see Outcomes →
+> *The clarification kind*), revisit requests mirror onto the PD stream,
+> notes live on the session stream.
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
@@ -129,7 +136,7 @@ draft ──▶ started ──▶ closed
 | `CalibrantAdded` / `CalibrantRemoved` | draft | manual population curation |
 | `SessionStarted` | draft→live | freezes participants + population (snapshots on the event) |
 | `AgendaItemDiscussed` | live | walk-through progress |
-| `ExpectationFlagged` | live | capability × level + reason; triggers the framework suggestion (see Outcomes) |
+| `ExpectationFlagged` | live | capability × level + reason; carries the `suggestion_id` of the framework clarification it raised (see Outcomes → *The clarification kind*) |
 | `RatingRevisitRequested` | live | person × capability × level + discussion note; mirrored to the PD stream (see Outcomes) |
 | `EvidenceRequestRaised` | live | records that a cell-scoped evidence request was fired from the session (the request itself rides the existing machinery) |
 | `NoteRecorded` | live | free-text minute, anchored to capability or person |
@@ -518,14 +525,13 @@ A session that produces only conversation evaporates. Four outcome types, all
 session-stream events dispatched through Operations, three of which route
 into existing machinery:
 
-1. **⚑ Flag expectation as unclear** → creates a framework suggestion /
-   comment on that capability × level via the existing suggestion + thread
-   machinery, attributed to the session ("flagged during Engineering
-   calibration — 4 EMs interpreted L4 differently"). Independent flags from
-   multiple sessions stack exactly like multi-author suggestions already do —
-   and "flagged independently by Engineering *and* Product" is itself strong
-   evidence the text is the problem. Goal #1 becomes a pipeline into the
-   framework's improvement loop, not an exported report.
+1. **⚑ Flag expectation as unclear** → raises a framework **clarification**
+   — a new non-proposal suggestion kind (see *The clarification kind* below,
+   the resolved design). Independent flags from multiple sessions stack
+   exactly like multi-author suggestions already do — and "flagged
+   independently by Engineering *and* Product" is itself strong evidence the
+   text is the problem. Goal #1 becomes a pipeline into the framework's
+   improvement loop, not an exported report.
 2. **Ask a rater to revisit a rating** → a **value-free** nudge (discussion
    note attached, never a suggested target rating), mirrored onto the
    person's PD stream by a sync handler (the `PersonEnrollmentSync` shape) so
@@ -546,10 +552,83 @@ into existing machinery:
    rendered as a feed on the session page.
 
 **The closed session page is the follow-through artifact**: agenda covered,
-flags raised (with live links to the resulting framework suggestions and
+flags raised (with live links to the resulting framework clarifications and
 their status), revisits requested vs. acted on, evidence requests fulfilled.
 It is the opening slide of the next session ("last time we flagged 3
 expectations — 2 were rewritten").
+
+### The clarification kind — widening the suggestion model (resolved design)
+
+The ⚑ flag exposed a fusion inside the suggestion system: a suggestion is
+**an anchored, lifecycled discussion** AND **a concrete proposal applied on
+approval** — every existing kind (edit / create / delete) happens to be a
+proposal, so the fusion was invisible. Calibration needs the first half
+without the second: a discussion anchored on capability × level that may
+resolve into a rewording, better illustrations, or "the text is fine, here's
+the reading" — but proposes nothing itself. The resolution is to **widen the
+suggestion model with a non-proposal kind, `clarification`**, rather than
+bend proposal semantics (a placeholder proposal whose approval is a no-op)
+or replicate the discussion machinery. The user-level framing: *"this is a
+suggestion thread, just not of a specific outcome."*
+
+Mechanics — everything not listed here is inherited untouched:
+
+- **One new framework-stream event** (`ClarificationRequested`), projected by
+  `PublishedState` into the SAME `framework_suggested_edits` table with
+  `kind: "clarification"` and a **nil `suggested_value`** — the presence
+  validation becomes conditional on kind (it was always a proposal-kind
+  rule). Additive event, no `CODE_VERSION` bump.
+- **Thread machinery: zero changes.** Comment events, the `SuggestionThread`
+  projection, `framework_suggestion_comments`, the Thread/CommentCard views,
+  the `comments-thread` Stimulus contract, and both comment policies all key
+  off `suggestion_id` and are indifferent to whether the anchor proposes
+  anything.
+- **Feed + pane: the existing rails.** Clarifications surface as suggestion
+  entries with the discussion affordance and open the same suggestion card.
+  They sit OUTSIDE `ActivityFeedQuery::PROPOSAL_KINDS` (the codebase already
+  distinguishes proposal-only logic) and render no inline diff (nothing is
+  proposed).
+- **Resolution verbs differ — that is the whole delta.** No approve/reject:
+  a clarification is **resolved with a note** ("reworded L4 — see suggestion
+  …", "added two illustrations", "wording is fine; here's the reading"),
+  optionally carrying a `resulting_suggestion_id` linking the concrete change
+  it spawned. `withdraw` stays for author retraction. The §12 actionable-feed
+  pattern parameterizes: inline action "Resolve" (modal for the note), gated
+  by the same expectation-tier authority
+  (`SuggestionApprovalAuthority#can_approve?("behavioural_expectation")` —
+  whoever could change the text can declare the question settled).
+- **Anchoring**: the expectation entity when one exists at the cell (that IS
+  capability × level, and focus filtering/navigation already resolve its
+  coordinates); for a cell with no expectation ("nothing defined here" being
+  the complaint), anchor the capability and carry `level_ordinal` in
+  `proposed_attributes`.
+- **Matrix decoration: a comment glyph, edit mode only (decided).** The
+  affected cell carries a small **speech-bubble glyph** — the same content
+  language the assessment level chips use for comments — signalling at a
+  glance that a relevant discussion exists; zooming in (cell focus / the
+  pane) reaches the clarification card. Deliberately NOT the amber wiggle:
+  the wiggle means "differs from published", and a clarification proposes no
+  change. Glyphs are shape, not colour, so they never compete with the
+  pending-edit vocabulary. View mode stays clean (published state only, per
+  the explorer's mode rules). Fed from the same single-pass
+  `build_suggestions_map` aggregation, with clarifications excluded from the
+  diff/`latest_by_field` payloads. Capability-anchored (no-expectation)
+  clarifications put the glyph on the capability row instead.
+- **Calibration wiring**: `Operations::CalibrationSessions::FlagExpectation`
+  authorizes as the **session facilitator** (who may hold no framework
+  collaborator role — deliberate: the flag is raised on the session's
+  authority), dispatches the frameworks `request_clarification` command with
+  an auto-composed rationale carrying the session context ("flagged during
+  Engineering calibration — raters diverged 2.0 bands beyond tendency"),
+  then records `CalibrationExpectationFlagged` on the session stream with
+  the resulting `suggestion_id`. Two streams, not atomic — framework write
+  first; the failure modes are benign. The follow-through page reads flag
+  status via that stored id.
+- **Naming note for when this is built**: this redefines "suggestion" as
+  *anchored discussion with a lifecycle*, of which proposals are the applying
+  subset. State that explicitly in framework-explorer.md (§12/§13) in the
+  same change, so future features (e.g. assessment-side open questions)
+  inherit the framing instead of rediscovering it.
 
 ## Overlapping sessions — semantics
 
@@ -575,7 +654,10 @@ expectations — 2 were rewritten").
   curation are `:mcp_client` (draft-phase, freely reversible); **start and
   close are `:in_app`** (start locks the room's denominators, close is
   terminal — the cheat sheet's lock/irreversible rows). Flags, revisit
-  requests, notes `:mcp_client`.
+  requests, notes `:mcp_client`. The clarification kind adds framework-side
+  tools too: `frameworks_request_clarification` and
+  `frameworks_resolve_clarification` (both `:mcp_client`, matching the other
+  suggestion-lifecycle ops).
 - **Activity feed coverage**: session outcomes surface in the feeds that
   already exist — expectation flags in the *framework* feed (via the
   suggestion machinery), revisit requests in the *assessment* feed (via the
