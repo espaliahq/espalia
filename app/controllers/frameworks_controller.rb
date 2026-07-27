@@ -219,7 +219,16 @@ class FrameworksController < ApplicationController
     # on iteration order.
     scope.find_each do |edit|
       key = [ edit.target_entity_type, edit.target_entity_id ]
-      entry = suggestions[key] ||= { count: 0, latest_by_field: {} }
+      entry = suggestions[key] ||= { count: 0, clarification_count: 0, latest_by_field: {} }
+
+      # Clarifications are discussions, not pending changes — they feed the
+      # comment glyph, never the wiggle/diff/"N pending" pending-change
+      # vocabulary, so they stay out of :count and :latest_by_field.
+      if edit.kind == "clarification"
+        entry[:clarification_count] += 1
+        next
+      end
+
       entry[:count] += 1
 
       next unless edit.kind == "edit" && edit.field.present?

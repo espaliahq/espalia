@@ -250,7 +250,10 @@ class Frameworks::MatrixDataBuilder
         cells: cells,
         pending_suggestion_count: pending_count("capability", capability.capability_id),
         pending_edit: pending_latest_edit("capability", capability.capability_id, "name"),
-        description_pending_edit: pending_latest_edit("capability", capability.capability_id, "description")
+        description_pending_edit: pending_latest_edit("capability", capability.capability_id, "description"),
+        # Capability-anchored clarifications (a cell with no expectation) glyph
+        # the capability row — there is no cell to hang them on.
+        clarification_count: clarification_count("capability", capability.capability_id)
       }
     end
   end
@@ -312,6 +315,7 @@ class Frameworks::MatrixDataBuilder
         bound_selected_role_ids: bound_selected_role_ids,
         pending_suggestion_count: pending_count("behavioural_expectation", expectation.expectation_id),
         pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id, "description"),
+        clarification_count: clarification_count("behavioural_expectation", expectation.expectation_id),
         illustration_pending_edits: illustration_pending_edits(illustrations),
         illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
         pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
@@ -398,6 +402,14 @@ class Frameworks::MatrixDataBuilder
   def pending_count(entity_type, entity_id)
     entry = @pending_suggestions[[ entity_type, entity_id ]]
     entry ? entry[:count] : 0
+  end
+
+  # Open clarification discussions on an entity — the edit-mode comment
+  # glyph's count. Deliberately separate from pending_count: a clarification
+  # proposes nothing, so it must never trigger the pending-change vocabulary.
+  def clarification_count(entity_type, entity_id)
+    entry = @pending_suggestions[[ entity_type, entity_id ]]
+    entry ? entry[:clarification_count].to_i : 0
   end
 
   # Latest pending edit on a specific text field of an entity (used to render

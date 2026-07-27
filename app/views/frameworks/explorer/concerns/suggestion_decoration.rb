@@ -95,4 +95,42 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
 
     true
   end
+
+  # Small muted speech-bubble marking an open clarification discussion on the
+  # entity (edit mode only — the suggestions map is empty in view mode, so
+  # callers never see a positive count there). This is the CONTENT language
+  # (glyphs — same vocabulary as the assessment level chips), deliberately NOT
+  # the pending-change wiggle: a clarification proposes no change; it says
+  # "there's a relevant discussion — zoom in" (cell focus / the activity pane
+  # reaches the clarification card).
+  #
+  # @param count [Integer] open clarifications on the entity
+  # @return [void] renders nothing when count is zero
+  def render_clarification_glyph(count)
+    return unless count.to_i.positive?
+
+    title = "#{count} open #{'clarification'.pluralize(count)} — see the activity pane"
+    span(
+      class: "inline-flex items-center gap-0.5 ml-1 align-middle rounded-full " \
+             "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-gray-600 dark:text-gray-300 shrink-0",
+      title: title,
+      aria: { label: title },
+      data: { glyph: "clarification" }
+    ) do
+      svg(
+        xmlns: "http://www.w3.org/2000/svg",
+        class: "w-2.5 h-2.5",
+        fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
+        aria: { hidden: "true" }
+      ) do |s|
+        s.path(
+          stroke_linecap: "round",
+          stroke_linejoin: "round",
+          d: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 " \
+             "8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+        )
+      end
+      span(class: "text-[9px] font-medium leading-none") { count.to_s } if count.to_i > 1
+    end
+  end
 end

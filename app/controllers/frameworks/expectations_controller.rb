@@ -108,7 +108,9 @@ class Frameworks::ExpectationsController < ApplicationController
   end
 
   def pending_edits_on_expectation
-    pending_edits_scope.count
+    # Proposals only — a pending clarification is a discussion, not a pending
+    # change, and must not trip the wiggle on the re-rendered frame.
+    pending_edits_scope.proposals.count
   end
 
   def latest_pending_edit

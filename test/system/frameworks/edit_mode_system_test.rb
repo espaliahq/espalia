@@ -1185,4 +1185,55 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_no_selector "button[aria-label='Move illustration up']"
     end
   end
+
+  context "clarifications" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @author = FactoryBot.create(:person, tenant: @tenant, name: "Quinn Questioner")
+        @clarification_id = SecureRandom.uuid_v7
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, @clarification_id, "behavioural_expectation", @eid,
+          author_id: @author.id.to_s,
+          rationale: "Raters read 'clarifying questions' three different ways"
+        )
+      end
+    end
+
+    should "show the comment glyph on the cell in edit mode, never the wiggle or view mode" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # The glyph is the content language for "a discussion exists"…
+      assert_selector "[data-glyph='clarification']", visible: :all
+      # …and deliberately NOT the pending-change wiggle: the expectation text
+      # renders undecorated (a clarification proposes nothing).
+      assert_no_selector "td .decoration-amber-400", text: "Asks clarifying questions"
+
+      visit framework_path(@framework_id)
+      assert_no_text "Edit mode", exact: true
+      assert_no_selector "[data-glyph='clarification']", visible: :all
+    end
+
+    should "resolve a clarification from the feed via the modal" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Asked for clarification"
+      assert_text "Raters read 'clarifying questions' three different ways"
+
+      click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
+      within "#resolve-clarification-modal" do
+        fill_in "Resolution", with: "Reworded the L1 expectation"
+        page.execute_script("arguments[0].requestSubmit();", find("form", match: :first))
+      end
+
+      # Feed reloads off the activity broadcast with the resolution entry.
+      assert_text "Resolved a clarification"
+      ActsAsTenant.with_tenant(@tenant) do
+        row = FrameworkState::SuggestedEdit.find_by!(suggestion_id: @clarification_id)
+        assert_equal "resolved", row.status
+        assert_equal "Reworded the L1 expectation", row.reviewer_comment
+      end
+    end
+  end
 end
