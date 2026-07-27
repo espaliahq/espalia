@@ -29,6 +29,8 @@ class Assessments::MatrixDataBuilder
   # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded
   # @param participant_status [String, nil] current cycle participant lifecycle
   #   status (`enrolled` | `started` | `aligning` | `aligned` | `withdrawn`).
+  #   Sourced from the current OPEN cycle's participation, so the terminal
+  #   `concluded` status (closed cycles only) never reaches this builder.
   #   Used by views to decide read-only vs interactive rendering.
   # @param context [Symbol] viewer context (`:self` | `:manager` | `:alignment`).
   #   When `:self`, manager and aligned ratings are scrubbed from the result so

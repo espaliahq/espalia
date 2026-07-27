@@ -419,7 +419,8 @@ class PersonDevelopment::CommandHandler
     # from a partial conversation, but those aren't a valid carry-forward
     # baseline. The progress row's `aligned_at` is set only by
     # FullAlignmentCompleted and survives subsequent cycle closure
-    # (the progress row is retained on LeftAssessmentCycle).
+    # (the progress row is retained on both LeftAssessmentCycle and
+    # AssessmentCycleConcluded).
     prior_completed = AssessmentCycleProgress
       .where(cycle_id: prior_cycle_id, person_id: person_id)
       .where.not(aligned_at: nil)
