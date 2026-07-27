@@ -108,10 +108,10 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       end
     end
 
-    should "attribute a late response to the request cycle after the assessee leaves it" do
+    should "attribute a late response to the request cycle after it concludes for the assessee" do
       ActsAsTenant.with_tenant(@tenant) do
-        PersonDevelopment::CommandHandler.new.leave_cycle(
-          @report.id, @framework_id, @cycle_id, "cycle_closed"
+        PersonDevelopment::CommandHandler.new.conclude_cycle(
+          @report.id, @framework_id, @cycle_id
         )
       end
 
