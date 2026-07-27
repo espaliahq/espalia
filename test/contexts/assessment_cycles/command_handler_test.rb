@@ -66,7 +66,7 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal @cycle_id, concluded.data[:cycle_id]
     end
 
-    should "withdraw participants when the cycle closes" do
+    should "conclude participants when the cycle closes" do
       @handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1)
       @handler.enroll(@cycle_id, @person_id)
       @handler.close_cycle(@cycle_id)
@@ -74,8 +74,9 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
       cycle = AssessmentCycle.find_by(cycle_id: @cycle_id)
       assert_equal "closed", cycle.status
       participant = cycle.enrollments.find_by(person_id: @person_id)
-      assert_equal "withdrawn", participant.status
-      assert_equal "cycle_closed", participant.withdrawal_reason
+      assert_equal "concluded", participant.status
+      assert_not_nil participant.concluded_at
+      assert_nil participant.withdrawal_reason
     end
   end
 

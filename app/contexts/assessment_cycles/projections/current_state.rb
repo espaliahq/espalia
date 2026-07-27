@@ -6,7 +6,7 @@
 # `assessment_cycles` and `assessment_cycle_enrollments` read models.
 # Runs in the same transaction as the event publish.
 #
-# Owns enrollment lifecycle (enrolled / withdrawn). Per-cycle journey
+# Owns enrollment lifecycle (enrolled / concluded / withdrawn). Per-cycle journey
 # progress (started_at, alignment timestamps) lives on the sibling
 # `assessment_cycle_progress` table, owned by
 # {PersonDevelopment::Projections::CurrentAssessment}.
@@ -30,7 +30,14 @@ class AssessmentCycles::Projections::CurrentState
   # identical to their defaults — and ParticipantRoleLevelChanged is brand new
   # with no past events. Per the bump rules, a rebuild reproducing identical
   # state does not warrant a version bump.
-  CODE_VERSION = 2
+  #
+  # 3 — `CycleClosed` now marks still-enrolled participants "concluded"
+  #     (+ `concluded_at`) instead of "withdrawn" with reason
+  #     "cycle_closed". A rebuild retroactively heals historical rows:
+  #     close-vs-unenroll is distinguishable in the stream (CycleClosed vs
+  #     PersonUnenrolled), so participants of previously-closed cycles come
+  #     back as concluded members of their cohort.
+  CODE_VERSION = 3
 
   # All event classes this projection handles.
   #
@@ -153,6 +160,7 @@ class AssessmentCycles::Projections::CurrentState
       enrolled_at: event.metadata[:timestamp] || Time.current,
       withdrawn_at: nil,
       withdrawal_reason: nil,
+      concluded_at: nil,
       role_id: event.data[:role_id],
       level_id: event.data[:level_id],
       level_ordinal: level_ordinal_for(event.data[:level_id])
@@ -198,13 +206,12 @@ class AssessmentCycles::Projections::CurrentState
     closed_at = event.metadata[:timestamp] || Time.current
     cycle.update!(status: "closed", closed_at: closed_at)
 
-    # Mark any still-enrolled participants as withdrawn with cycle_closed reason
+    # Still-enrolled participants CONCLUDE — the cycle ended around them;
+    # they remain part of its historical cohort. Only PersonUnenrolled
+    # produces "withdrawn" (a person-scoped removal). Rows withdrawn before
+    # the close keep their withdrawal record untouched.
     cycle.enrollments.where.not(status: "withdrawn").find_each do |enrollment|
-      enrollment.update!(
-        status: "withdrawn",
-        withdrawn_at: closed_at,
-        withdrawal_reason: "cycle_closed"
-      )
+      enrollment.update!(status: "concluded", concluded_at: closed_at)
     end
   end
 
