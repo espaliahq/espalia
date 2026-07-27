@@ -4,6 +4,7 @@ require "application_system_test_case"
 
 class AssessmentCyclesSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE  = [ 375, 812 ].freeze
 
   setup do
     @tenant = FactoryBot.create(:tenant)
@@ -198,6 +199,46 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_no_selector "#cycle-name-#{@cycle_id} [data-controller='inline-editor']"
       assert_no_selector "#cycle-type-#{@cycle_id} [data-controller='inline-editor']"
       assert_no_selector "#cycle-planned-end-#{@cycle_id} [data-controller='inline-editor']"
+    end
+  end
+
+  context "closed cycle roster" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @second_person = FactoryBot.create(
+          :person, tenant: @tenant, name: "Departed Person", email: "departed@example.com"
+        )
+        PersonDevelopment::CommandHandler.new.assign_to_framework(
+          @second_person.id, @framework_id, @role.role_id, @level.level_id
+        )
+        @cycle_id = SecureRandom.uuid_v7
+        handler = AssessmentCycles::CommandHandler.new
+        handler.define_cycle(@cycle_id, @framework_id, "H2 2026 Review", "regular", 1)
+        handler.enroll(@cycle_id, @assigned_person.id)
+        handler.enroll(@cycle_id, @second_person.id)
+        handler.unenroll(@cycle_id, @second_person.id, "left team")
+        handler.close_cycle(@cycle_id)
+        @cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
+      end
+    end
+
+    should "show concluded and withdrawn participants distinctly on desktop" do
+      sign_in @admin_user
+      visit assessment_cycle_path(@cycle)
+      assert_text "Participants"
+
+      within("tr", text: "Assigned Person") { assert_text "Concluded" }
+      within("tr", text: "Departed Person") { assert_text "Withdrawn" }
+    end
+
+    should "show concluded and withdrawn participants distinctly on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in @admin_user
+      visit assessment_cycle_path(@cycle)
+      assert_text "Participants"
+
+      within("tr", text: "Assigned Person") { assert_text "Concluded" }
+      within("tr", text: "Departed Person") { assert_text "Withdrawn" }
     end
   end
 
