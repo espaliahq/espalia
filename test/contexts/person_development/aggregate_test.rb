@@ -304,7 +304,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "allow rejoining after leaving" do
-      @aggregate.leave_cycle(@cycle_id, "cycle_closed")
+      @aggregate.leave_cycle(@cycle_id, "manual")
       new_cycle = SecureRandom.uuid_v7
       @aggregate.join_cycle(new_cycle, 2)
 
@@ -327,6 +327,13 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
         @aggregate.leave_cycle(SecureRandom.uuid_v7, "manual")
       end
       assert_match /does not match/, err.message
+    end
+
+    should "reject the legacy cycle_closed reason" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.leave_cycle(@cycle_id, "cycle_closed")
+      end
+      assert_match /Use conclude_cycle/, err.message
     end
   end
 
@@ -717,9 +724,9 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "not let stale aligned state from a prior cycle leak into a new cycle's clear guard" do
-      # Complete cycle A's alignment via the projection-facing event.
+      # Complete cycle A's alignment, then conclude the cycle.
       @aggregate.complete_alignment(@cycle_id, completed_by_id: SecureRandom.uuid_v7)
-      @aggregate.leave_cycle(@cycle_id, "cycle_closed")
+      @aggregate.conclude_cycle(@cycle_id)
 
       # Join cycle B and start its alignment. The aggregate's
       # @aligned_ratings must NOT still carry the cycle-A entry, or a

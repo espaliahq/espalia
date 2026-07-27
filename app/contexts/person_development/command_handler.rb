@@ -147,10 +147,11 @@ class PersonDevelopment::CommandHandler
     end
   end
 
-  # Removes the person from their current assessment cycle.
+  # Removes the person from their current assessment cycle (person-scoped
+  # removal — cycle closure goes through {#conclude_cycle} instead).
   #
   # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}
-  # in response to a PersonUnenrolled or CycleClosed event — never by controllers.
+  # in response to a PersonUnenrolled event — never by controllers.
   #
   # @param person_id [String] UUID of the person
   # @param framework_id [String] UUID of the framework

@@ -278,13 +278,19 @@ class PersonDevelopment::Aggregate
     }))
   end
 
-  # Leaves the given assessment cycle.
+  # Leaves the given assessment cycle — a person-scoped removal (opted out,
+  # left the company, enrolled by mistake). A cycle closing around the
+  # person is NOT a leave; that path is {#conclude_cycle}, and the legacy
+  # "cycle_closed" reason is rejected so a stale caller can't misclassify a
+  # normal closure as a withdrawal.
   #
   # @param cycle_id [String] UUID of the cycle being left (must match current)
-  # @param reason [String] why the person is leaving
-  # @raise [RuntimeError] if not in a cycle or cycle_id doesn't match
+  # @param reason [String] why the person is leaving (e.g. "withdrew")
+  # @raise [RuntimeError] if not in a cycle, cycle_id doesn't match, or the
+  #   reason is "cycle_closed"
   def leave_cycle(cycle_id, reason)
     ensure_assigned!
+    raise "Use conclude_cycle for cycle closure" if reason.to_s == "cycle_closed"
     raise "Not currently in a cycle" if @current_cycle_id.nil?
     raise "Cycle ID does not match current cycle" unless @current_cycle_id == cycle_id
 
