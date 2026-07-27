@@ -110,6 +110,26 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "Person unenrolled"
       assert_text "Withdrawn"
 
+      # Re-enroll (a withdrawn person is eligible again), then close with
+      # them still enrolled — closure concludes the participation, it does
+      # not withdraw it.
+      page.execute_script(<<~JS)
+        const select = Array.from(document.querySelectorAll("select"))
+          .find(s => Array.from(s.options).some(o => o.textContent.trim() === "Assigned Person"));
+        if (select) {
+          const opt = Array.from(select.options).find(o => o.textContent.trim() === "Assigned Person");
+          if (opt) {
+            select.value = opt.value;
+            select.dispatchEvent(new Event("input", { bubbles: true }));
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }
+        const btn = Array.from(document.querySelectorAll("button"))
+          .find(b => b.textContent.trim() === "Enroll");
+        btn?.closest("form")?.requestSubmit(btn);
+      JS
+      assert_text "Person enrolled"
+
       # Close the cycle — same requestSubmit pattern.
       auto_confirm do
         page.execute_script(<<~JS)
@@ -120,6 +140,8 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       end
       assert_text "Cycle closed"
       assert_text "Closed"
+      assert_text "Concluded"
+      assert_no_text "Withdrawn"
     end
   end
 
