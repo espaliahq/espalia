@@ -758,6 +758,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_record_note",
+        "description" => "Record a free-text minute on a live calibration session, optionally anchored to a capability or person.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"           => { "type" => "string" },
+            "body"                 => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "person_id"            => { "type" => "string" }
+          },
+          "required" => %w[session_id body],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_remove_calibrant",
         "description" => "Remove a person from a draft calibration session's population.",
         "inputSchema" => {

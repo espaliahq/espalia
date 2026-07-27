@@ -22,8 +22,11 @@ class Views::CalibrationSessions::ShowView < Views::Base
                  groups:, suggestions:, readiness:, stats:,
                  add_calibrant_candidates:,
                  can_curate:, can_start:, can_close:,
+                 session_log: nil, can_note: false,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
+    @session_log = session_log
+    @can_note = can_note
     @stats = stats
     @cycle = cycle
     @people = people
@@ -50,6 +53,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
         readiness_bar
         overview_section unless @session.draft?
         agenda_card if @session.draft?
+        session_log_section if @session_log
         div(class: "mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6") do
           div(class: "lg:col-span-1") { participants_card }
           div(class: "lg:col-span-2") { population_card }
@@ -60,6 +64,12 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   private
+
+  def session_log_section
+    render Views::CalibrationSessions::SessionLog.new(
+      session: @session, log: @session_log, people: @people, can_note: @can_note
+    )
+  end
 
   def header_row
     div(class: "flex flex-wrap items-center gap-3") do

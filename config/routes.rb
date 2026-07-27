@@ -269,6 +269,9 @@ Rails.application.routes.draw do
     # Ask a rater to revisit a rating (live session) → PD-stream mirror.
     resources :rating_revisits, only: [ :create ],
                                 controller: "calibration_sessions/rating_revisits"
+    # Free-text session minutes (live session) → the session log.
+    resources :notes, only: [ :create ],
+                      controller: "calibration_sessions/notes"
   end
 
   # Home dashboard — composable, role-aware card grid (replaces the old

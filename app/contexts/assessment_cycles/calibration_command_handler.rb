@@ -132,6 +132,20 @@ class AssessmentCycles::CalibrationCommandHandler
     end
   end
 
+  # Records a free-text session minute (live sessions only).
+  #
+  # @param session_id [String]
+  # @param body [String]
+  # @param capability_stable_id [String, nil]
+  # @param person_id [String, nil]
+  # @param recorded_by_id [String, nil]
+  def record_note(session_id, body:, capability_stable_id: nil, person_id: nil, recorded_by_id: nil)
+    @repository.with_calibration_session(session_id) do |session|
+      session.record_note(body: body, capability_stable_id: capability_stable_id,
+                          person_id: person_id, recorded_by_id: recorded_by_id)
+    end
+  end
+
   # Closes a session. No-op when already closed (the cycle-close sync
   # path relies on this).
   #

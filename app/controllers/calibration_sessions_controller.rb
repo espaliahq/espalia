@@ -100,11 +100,15 @@ class CalibrationSessionsController < ApplicationController
     participant_ids = members.select { |m| m.member_type == "participant" }.map(&:person_id)
     calibrant_ids = members.select { |m| m.member_type == "calibrant" }.map(&:person_id)
     seed_groups = seed_groups_for(participant_ids)
+    session_log = session_log_data
+
+    people_ids = (participant_ids + calibrant_ids + [ @session.facilitator_id ] +
+                  log_person_ids(session_log)).uniq
 
     render Views::CalibrationSessions::ShowView.new(
       session: @session,
       cycle: AssessmentCycle.find_by(cycle_id: @session.cycle_id),
-      people: Person.where(id: (participant_ids + calibrant_ids + [ @session.facilitator_id ]).uniq).index_by(&:id),
+      people: Person.where(id: people_ids).index_by(&:id),
       participant_ids: participant_ids,
       calibrant_ids: calibrant_ids,
       groups: population_groups(seed_groups, calibrant_ids),
@@ -115,6 +119,8 @@ class CalibrationSessionsController < ApplicationController
       can_curate: @session.draft? && policy(@session).curate?,
       can_start: @session.draft? && policy(@session).start?,
       can_close: !@session.closed? && policy(@session).close?,
+      session_log: session_log,
+      can_note: @session.started? && policy(@session).flag_expectation?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -127,6 +133,71 @@ class CalibrationSessionsController < ApplicationController
     @session = CalibrationSession.find(params.expect(:id))
   rescue ActiveRecord::RecordNotFound
     redirect_to calibration_sessions_path
+  end
+
+  # The session-log data for the follow-through section: outcome events off
+  # the session stream, joined at read time to the framework clarification
+  # each flag raised and to the ratings read model for revisit resolution
+  # (a manager rating recorded after the ask = acted on). nil while draft —
+  # a draft session has no outcomes.
+  def session_log_data
+    return nil if @session.draft?
+
+    outcomes = CalibrationSessions::SessionOutcomes.new(session: @session)
+    flags = outcomes.flags
+    revisits = outcomes.revisit_requests
+    notes = outcomes.notes
+
+    {
+      flags: flags,
+      revisits: revisits,
+      notes: notes,
+      suggestions: FrameworkState::SuggestedEdit
+        .where(suggestion_id: flags.filter_map { |f| f[:suggestion_id] }).index_by(&:suggestion_id),
+      capability_names: session_log_capability_names(flags, revisits, notes),
+      acted: acted_revisit_cells(revisits)
+    }
+  end
+
+  def session_log_capability_names(*outcome_lists)
+    stable_ids = outcome_lists.flatten.filter_map { |o| o[:capability_stable_id] }.uniq
+    return {} if stable_ids.empty?
+
+    FrameworkState::Capability
+      .joins(:category)
+      .where(framework_capability_categories: { framework_id: @session.framework_id },
+             stable_id: stable_ids)
+      .pluck(:stable_id, :name).to_h
+  end
+
+  # Set of [person_id, capability_stable_id, level_ordinal] whose manager
+  # rating changed after the revisit was requested — rating-change-based
+  # resolution, so requests from any number of sessions settle at once.
+  def acted_revisit_cells(revisits)
+    return Set.new if revisits.empty?
+
+    ratings = AssessmentLevelRating.where(
+      framework_id: @session.framework_id,
+      person_id: revisits.map { |r| r[:person_id] }.uniq,
+      capability_stable_id: revisits.map { |r| r[:capability_stable_id] }.uniq
+    ).pluck(:person_id, :capability_stable_id, :level_ordinal, :last_manager_rated_at)
+      .to_h { |pid, sid, lo, at| [ [ pid, sid, lo ], at ] }
+
+    revisits.each_with_object(Set.new) do |revisit, acted|
+      key = [ revisit[:person_id], revisit[:capability_stable_id], revisit[:level_ordinal] ]
+      rated_at = ratings[key]
+      acted << key if rated_at && revisit[:requested_at] && rated_at > revisit[:requested_at]
+    end
+  end
+
+  # Every person a session-log row names, so the people map covers them.
+  def log_person_ids(session_log)
+    return [] unless session_log
+
+    (session_log[:flags] + session_log[:revisits] + session_log[:notes]).flat_map do |row|
+      [ row[:flagged_by_id], row[:requested_by_id], row[:recorded_by_id],
+        row[:rater_id], row[:person_id] ]
+    end.compact.uniq
   end
 
   def admin_viewer?

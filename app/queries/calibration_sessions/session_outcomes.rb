@@ -54,6 +54,25 @@ class CalibrationSessions::SessionOutcomes
       end
   end
 
+  # Free-text minutes recorded by this session, chronological.
+  #
+  # @return [Array<Hash>] `{ body:, capability_stable_id:, person_id:,
+  #   recorded_by_id:, recorded_at: }`
+  def notes
+    @notes ||= stream_events
+      .select { |e| e.is_a?(AssessmentCycles::Events::CalibrationNoteRecorded) }
+      .map do |event|
+        data = event.data
+        {
+          body: data[:body],
+          capability_stable_id: data[:capability_stable_id],
+          person_id: data[:person_id],
+          recorded_by_id: data[:recorded_by_id],
+          recorded_at: event.metadata[:timestamp]
+        }
+      end
+  end
+
   private
 
   def stream_events

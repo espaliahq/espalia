@@ -411,4 +411,43 @@ class AssessmentCycles::CalibrationSessionAggregateTest < ActiveSupport::TestCas
       assert_match(/already requested/, err.message)
     end
   end
+
+  context "#record_note" do
+    setup do
+      define_session
+      @aggregate.start(started_by_id: @facilitator_id)
+    end
+
+    should "emit CalibrationNoteRecorded with optional anchors" do
+      @aggregate.record_note(body: "Add Priya to the org-wide session",
+                             person_id: @report_1, recorded_by_id: @facilitator_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CalibrationNoteRecorded, event
+      assert_equal "Add Priya to the org-wide session", event.data[:body]
+      assert_equal @report_1, event.data[:person_id]
+      assert_equal @facilitator_id, event.data[:recorded_by_id]
+    end
+
+    should "reject a blank body" do
+      err = assert_raises(RuntimeError) { @aggregate.record_note(body: " ") }
+      assert_match(/blank/, err.message)
+    end
+
+    should "reject a person anchor outside the population" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.record_note(body: "n", person_id: SecureRandom.uuid_v7)
+      end
+      assert_match(/not in this session's population/, err.message)
+    end
+
+    should "reject notes on a draft session" do
+      draft = AssessmentCycles::CalibrationSessionAggregate.new
+      draft.define(SecureRandom.uuid_v7, @cycle_id, @framework_id, "Draft", 1,
+                   facilitator_id: @facilitator_id,
+                   participant_ids: [ @em_1 ], calibrant_person_ids: [ @report_1 ])
+      err = assert_raises(RuntimeError) { draft.record_note(body: "too early") }
+      assert_match(/hasn't started/, err.message)
+    end
+  end
 end

@@ -286,6 +286,20 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         .to_a.select { |e| e.is_a?(PersonDevelopment::Events::RatingRevisitRequested) }
       assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
+
+    # ── The session page is the follow-through artifact ──
+    visit calibration_session_path(@flag_session_id)
+    assert_text "SESSION LOG"
+    assert_text "⚑ Strategic Thinking · L3"
+    assert_text "Discussion open"
+    assert_text "Mia Manager · Ivy IC · Strategic Thinking L3"
+    assert_text "Open"
+    assert_text "Compare against the two peers we just discussed"
+
+    fill_in "session-note", with: "Add the two reference ICs to the org-wide session"
+    click_button_with_js_fallback "Record note", expect_text: "Note recorded."
+    assert_text "Add the two reference ICs to the org-wide session"
+    assert_text "NOTES"
   end
 
   test "member without reports sees no Calibration nav link" do

@@ -254,6 +254,32 @@ class AssessmentCycles::CalibrationSessionAggregate
     }.compact))
   end
 
+  # Records a free-text session minute, optionally anchored to a
+  # capability or a calibrant. Live sessions only — the note narrates the
+  # room.
+  #
+  # @param body [String] the note (required)
+  # @param capability_stable_id [String, nil] optional capability anchor
+  # @param person_id [String, nil] optional person anchor (must be a calibrant)
+  # @param recorded_by_id [String, nil] person_id of the actor
+  # @raise [RuntimeError] unless live, body present, and any person anchor
+  #   is in the population
+  def record_note(body:, capability_stable_id: nil, person_id: nil, recorded_by_id: nil)
+    ensure_started!
+    raise "Note cannot be blank" if body.to_s.strip.empty?
+    if person_id && !@calibrant_ids.include?(person_id)
+      raise "Note anchor is not in this session's population"
+    end
+
+    apply(AssessmentCycles::Events::CalibrationNoteRecorded.new(data: {
+      session_id: @session_id,
+      body: body,
+      capability_stable_id: capability_stable_id,
+      person_id: person_id,
+      recorded_by_id: recorded_by_id
+    }.compact))
+  end
+
   # Closes the session (terminal). No-op when already closed so the
   # cycle-close sync handler is retry-safe.
   #
@@ -326,6 +352,11 @@ class AssessmentCycles::CalibrationSessionAggregate
   on AssessmentCycles::Events::CalibrationRatingRevisitRequested do |event|
     @revisited_cells << [ event.data[:person_id], event.data[:capability_stable_id],
                           event.data[:level_ordinal] ]
+  end
+
+  on AssessmentCycles::Events::CalibrationNoteRecorded do |_event|
+    # Notes carry no invariant state — SessionOutcomes reads them from the
+    # stream for the session log.
   end
 
   on AssessmentCycles::Events::CalibrationSessionClosed do |_event|
