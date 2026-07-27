@@ -90,6 +90,12 @@ class Assessments::ActivityFeedQuery
 
   MANAGER_KINDS = %w[manager_rated manager_rating_revised manager_rating_cleared].freeze
 
+  # A calibration session's value-free ask that the rater revisit a manager
+  # rating (PD mirror of the session-stream event). Cell-anchored; gated by
+  # the same privacy rule as manager ratings — it reveals manager-side
+  # process the assessee shouldn't see pre-alignment.
+  REVISIT_KIND = "rating_revisit_requested"
+
   # Maps each attributable rating entry kind to the payload key carrying its
   # actor's Person id. Drives both name preloading (`actor_names`) and the
   # per-entry `actor_name` merge. Self-ratings are omitted — the actor is
@@ -137,7 +143,7 @@ class Assessments::ActivityFeedQuery
   def call
     entries = rating_entries + relink_entries + link_entries + evidence_entries +
               alignment_entries + reopen_entries + comment_entries + migration_entries +
-              authority_entries
+              authority_entries + revisit_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -545,6 +551,39 @@ class Assessments::ActivityFeedQuery
         cycle_id: nil,
         capability_name: nil,
         category_id: nil
+      )
+    end
+  end
+
+  # Calibration revisit requests, cell-anchored so per-cap focus surfaces
+  # them beside the rating they concern. Same visibility gate as manager
+  # ratings (they ARE about the manager rating). Names for the facilitator
+  # and the asked rater are resolved here so the view stays a dumb renderer.
+  def revisit_entries
+    return [] unless @viewer_sees_all
+    return [] if @context == :self && !@alignment_started
+
+    events = stream_events.select { |e| e.is_a?(PersonDevelopment::Events::RatingRevisitRequested) }
+    ids = events.flat_map { |e| [ e.data[:requested_by_id], e.data[:rater_id] ] }.compact.uniq
+    names = ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
+
+    events.map do |event|
+      data = event.data.with_indifferent_access
+      stable_id = data[:capability_stable_id]
+      Entry.new(
+        id: event.event_id,
+        kind: REVISIT_KIND,
+        occurred_at: event_timestamp(event),
+        payload: data.merge(
+          requested_by_name: names[data[:requested_by_id]],
+          rater_name: names[data[:rater_id]],
+          capability_name: capability_name_for(stable_id)
+        ),
+        capability_stable_id: stable_id,
+        level_ordinal: data[:level_ordinal],
+        cycle_id: nil,
+        capability_name: capability_name_for(stable_id),
+        category_id: category_id_for(stable_id)
       )
     end
   end

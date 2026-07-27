@@ -102,6 +102,30 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Mirrors a calibration session's rating-revisit request onto the person's
+  # stream (invoked only by CalibrationRevisitSync).
+  #
+  # @param person_id [String] UUID of the calibrated person
+  # @param framework_id [String] UUID of the framework
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @param calibration_session_id [String]
+  # @param rater_id [String] the rater being asked
+  # @param note [String] the room's discussion note
+  # @param session_name [String, nil]
+  # @param requested_by_id [String, nil]
+  def request_rating_revisit(person_id, framework_id, capability_stable_id:, level_ordinal:,
+                             calibration_session_id:, rater_id:, note:,
+                             session_name: nil, requested_by_id: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.request_rating_revisit(
+        capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
+        calibration_session_id: calibration_session_id, rater_id: rater_id,
+        note: note, session_name: session_name, requested_by_id: requested_by_id
+      )
+    end
+  end
+
   # Revokes a manager-rating delegation (non-destructive).
   #
   # @param person_id [String] UUID of the person being assessed

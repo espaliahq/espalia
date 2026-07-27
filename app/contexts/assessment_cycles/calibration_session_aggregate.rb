@@ -37,6 +37,7 @@ class AssessmentCycles::CalibrationSessionAggregate
     @participant_ids = Set.new
     @calibrant_ids = Set.new
     @flagged_cells = Set.new
+    @revisited_cells = Set.new
     @status = :new
   end
 
@@ -216,6 +217,43 @@ class AssessmentCycles::CalibrationSessionAggregate
     }.compact))
   end
 
+  # Asks a rater to revisit one of their manager ratings — a VALUE-FREE
+  # nudge carrying the room's discussion note, never a target rating.
+  # Mirrored onto the person's PD stream by a sync handler.
+  #
+  # The person must be in the (frozen) calibrant population, and the rater
+  # must be a participant — you can't revisit-request a rater who isn't in
+  # the room to hear the discussion. One request per (person, cell) per
+  # session; the note is required (a nudge without the conversation's
+  # context is noise).
+  #
+  # @param person_id [String] the calibrated person
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @param rater_id [String] the participant who owns the rating
+  # @param note [String] the room's discussion note (required)
+  # @param requested_by_id [String, nil] person_id of the actor
+  # @raise [RuntimeError] on any invariant breach
+  def request_rating_revisit(person_id:, capability_stable_id:, level_ordinal:,
+                             rater_id:, note:, requested_by_id: nil)
+    ensure_started!
+    raise "Person is not in this session's population" unless @calibrant_ids.include?(person_id)
+    raise "Rater is not a participant in this session" unless @participant_ids.include?(rater_id)
+    raise "Revisit note cannot be blank" if note.to_s.strip.empty?
+    cell = [ person_id, capability_stable_id, level_ordinal ]
+    raise "Revisit already requested for this rating in this session" if @revisited_cells.include?(cell)
+
+    apply(AssessmentCycles::Events::CalibrationRatingRevisitRequested.new(data: {
+      session_id: @session_id,
+      person_id: person_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      rater_id: rater_id,
+      note: note,
+      requested_by_id: requested_by_id
+    }.compact))
+  end
+
   # Closes the session (terminal). No-op when already closed so the
   # cycle-close sync handler is retry-safe.
   #
@@ -283,6 +321,11 @@ class AssessmentCycles::CalibrationSessionAggregate
 
   on AssessmentCycles::Events::CalibrationExpectationFlagged do |event|
     @flagged_cells << [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+  end
+
+  on AssessmentCycles::Events::CalibrationRatingRevisitRequested do |event|
+    @revisited_cells << [ event.data[:person_id], event.data[:capability_stable_id],
+                          event.data[:level_ordinal] ]
   end
 
   on AssessmentCycles::Events::CalibrationSessionClosed do |_event|

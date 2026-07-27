@@ -54,8 +54,19 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       dot: dot,
       ordinal: ordinal,
       rater_id: row&.dig(:rater_id),
-      evidence: evidence_for(person_id, ordinal)
+      evidence: evidence_for(person_id, ordinal),
+      revisit_requested: revisit_requested?(person_id, ordinal)
     }
+  end
+
+  # Whether THIS session already asked the rater to revisit this cell —
+  # the card then shows the marker instead of a second ask.
+  def revisit_requested?(person_id, ordinal)
+    CalibrationSessions::SessionOutcomes.new(session: @session).revisit_requests.any? do |r|
+      r[:person_id] == person_id &&
+        r[:capability_stable_id] == params[:id] &&
+        r[:level_ordinal] == ordinal
+    end
   end
 
   def evidence_for(person_id, ordinal)

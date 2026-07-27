@@ -129,6 +129,14 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::SyncHandlers::CalibrationSessionCloseSync.handled_events
   )
 
+  # CalibrationRevisitSync mirrors a session's rating-revisit request onto the
+  # person's PD stream. Dispatches PersonDevelopment commands — same
+  # projection-rebuild hazard, MUST NOT be registered as a projection.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::CalibrationRevisitSync.new,
+    to: AssessmentCycles::SyncHandlers::CalibrationRevisitSync.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Side-effect handlers (notifications). NOT projections — never register
   # these in Projections::Registry (replaying would re-send notifications).

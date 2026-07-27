@@ -110,6 +110,28 @@ class AssessmentCycles::CalibrationCommandHandler
     end
   end
 
+  # Asks a rater to revisit one of their manager ratings (value-free —
+  # the note is the payload, never a target rating). Mirrored to the
+  # person's PD stream by CalibrationRevisitSync.
+  #
+  # @param session_id [String]
+  # @param person_id [String] the calibrated person
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @param rater_id [String] the participant who owns the rating
+  # @param note [String]
+  # @param requested_by_id [String, nil]
+  def request_rating_revisit(session_id, person_id:, capability_stable_id:, level_ordinal:,
+                             rater_id:, note:, requested_by_id: nil)
+    @repository.with_calibration_session(session_id) do |session|
+      session.request_rating_revisit(
+        person_id: person_id, capability_stable_id: capability_stable_id,
+        level_ordinal: level_ordinal, rater_id: rater_id, note: note,
+        requested_by_id: requested_by_id
+      )
+    end
+  end
+
   # Closes a session. No-op when already closed (the cycle-close sync
   # path relies on this).
   #

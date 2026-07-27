@@ -185,8 +185,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       fw_id = SecureRandom.uuid_v7
       cap_stable = SecureRandom.uuid_v7
       cap_id = SecureRandom.uuid_v7
+      role_id = SecureRandom.uuid_v7
+      level_id = SecureRandom.uuid_v7
       handler = Frameworks::CommandHandler.new
       handler.create_framework(fw_id, "Eng Framework")
+      rfid = SecureRandom.uuid_v7
+      handler.add_role_family(fw_id, rfid, "Engineering")
+      handler.add_role(fw_id, role_id, rfid, "Software Engineer", "E", "ic")
+      handler.add_level(fw_id, level_id, role_id, 3, "Engineer III", "E3")
       cat_id = SecureRandom.uuid_v7
       handler.add_capability_category(fw_id, cat_id, "Thinking")
       handler.add_capability(fw_id, cap_id, cap_stable, cat_id, "Strategic Thinking")
@@ -194,8 +200,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
                                           cap_id, 3, "Shapes team direction")
       handler.publish_version(fw_id, "test")
 
+      # A real PD assignment (not a factory row) — the revisit mirror lands on
+      # this stream and its aggregate requires the person to be assigned.
+      # Assigned BEFORE the cycle row exists so AutoEnrollNewAssignments
+      # doesn't try to enroll into a factory cycle with no event stream.
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        PersonDevelopment::CommandHandler.new.assign_to_framework(@report_1.id, fw_id, role_id, level_id)
+      end
       cycle = create(:assessment_cycle, tenant: @tenant, name: "H2 2026 Review", framework_id: fw_id)
-      create(:person_framework_assignment, tenant: @tenant, person_id: @report_1.id, framework_id: fw_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
              person_id: @report_1.id, level_ordinal: 3)
 
@@ -212,6 +224,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
       @flag_session_id = result[:session_id]
       @flag_cap_stable = cap_stable
+      @flag_framework_id = fw_id
     end
 
     sign_in_as(@facilitator_user)
@@ -241,6 +254,37 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       assert_includes clarification.rationale, "Scope or altitude?"
       flags = CalibrationSessions::SessionOutcomes.new(session: CalibrationSession.find(@flag_session_id)).flags
       assert_equal clarification.suggestion_id, flags.first[:suggestion_id]
+    end
+
+    # ── Ask the rater to revisit, from the person card ──
+    click_with_retry(expect_text: "Close") do
+      find("a[data-person-id='#{@report_1.id}']").click
+    end
+    assert_text "Ivy IC"
+
+    assert_selector "summary", text: "Ask Mia Manager to revisit this rating"
+    page.execute_script(<<~JS)
+      document.querySelectorAll("details > summary").forEach((s) => {
+        if (s.textContent.includes("revisit this rating")) s.parentElement.open = true
+      })
+    JS
+    fill_in "revisit-note", with: "Compare against the two peers we just discussed"
+    click_button_with_js_fallback "Request revisit", expect_text: "Revisit requested"
+
+    # One ask per cell per session — the marker replaces the form.
+    assert_text "Revisit requested — it will appear in Mia Manager's assessment activity."
+    assert_no_selector "summary", text: "Ask Mia Manager to revisit this rating"
+
+    ActsAsTenant.with_tenant(@tenant) do
+      revisits = CalibrationSessions::SessionOutcomes
+        .new(session: CalibrationSession.find(@flag_session_id)).revisit_requests
+      assert_equal [ @report_1.id ], revisits.map { |r| r[:person_id] }
+      assert_equal "Compare against the two peers we just discussed", revisits.first[:note]
+
+      mirrored = Rails.configuration.event_store.read
+        .stream(EventStreamNaming.person_development_stream(@report_1.id, @flag_framework_id))
+        .to_a.select { |e| e.is_a?(PersonDevelopment::Events::RatingRevisitRequested) }
+      assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
   end
 

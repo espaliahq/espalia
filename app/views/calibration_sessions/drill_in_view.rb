@@ -288,7 +288,57 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           end
 
           evidence_section
+          revisit_section
         end
+      end
+    end
+  end
+
+  # Value-free revisit ask, on the card because discussing the dot is what
+  # earns the outcome. Only for in-session raters (reference points are
+  # exempt), only while live; one ask per cell per session.
+  def revisit_section
+    return unless @person_card[:rater_id]
+
+    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+      if @person_card[:revisit_requested]
+        p(class: "text-xs font-medium text-amber-700 dark:text-amber-300") do
+          plain "Revisit requested — it will appear in #{rater_name(@person_card[:rater_id])}'s assessment activity."
+        end
+      elsif @can_flag
+        revisit_form
+      end
+    end
+  end
+
+  def revisit_form
+    details do
+      summary(
+        class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
+               "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
+      ) { "Ask #{rater_name(@person_card[:rater_id])} to revisit this rating" }
+      form(
+        action: calibration_session_rating_revisits_path(@session),
+        method: "post",
+        class: "mt-2 max-w-lg space-y-2"
+      ) do
+        input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+        input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
+        input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
+        input(type: "hidden", name: "level_ordinal", value: @person_card[:ordinal])
+        textarea(
+          id: "revisit-note", name: "note", rows: "2", required: true,
+          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          placeholder: "The room's note — what the discussion surfaced (never a target rating)",
+          aria: { label: "Discussion note for the revisit request" }
+        )
+        button(
+          type: "submit",
+          class: "inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm " \
+                 "font-semibold text-white hover:bg-amber-700 transition-colors"
+        ) { "Request revisit" }
       end
     end
   end

@@ -363,4 +363,52 @@ class AssessmentCycles::CalibrationSessionAggregateTest < ActiveSupport::TestCas
       assert_match(/closed/, err.message)
     end
   end
+
+  def request_revisit(person_id: @report_1, rater_id: @em_1, ordinal: 3, note: "Compare with Sam's L3s")
+    @aggregate.request_rating_revisit(
+      person_id: person_id, capability_stable_id: @cap_stable, level_ordinal: ordinal,
+      rater_id: rater_id, note: note, requested_by_id: @facilitator_id
+    )
+  end
+
+  context "#request_rating_revisit" do
+    setup do
+      @cap_stable = SecureRandom.uuid_v7
+      define_session
+      @aggregate.start(started_by_id: @facilitator_id)
+    end
+
+    should "emit CalibrationRatingRevisitRequested with the note (never a target rating)" do
+      request_revisit
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CalibrationRatingRevisitRequested, event
+      assert_equal @report_1, event.data[:person_id]
+      assert_equal @em_1, event.data[:rater_id]
+      assert_equal "Compare with Sam's L3s", event.data[:note]
+      assert_equal @facilitator_id, event.data[:requested_by_id]
+      assert_not event.data.key?(:suggested_frequency), "value-free by design"
+    end
+
+    should "reject a person outside the frozen population" do
+      err = assert_raises(RuntimeError) { request_revisit(person_id: SecureRandom.uuid_v7) }
+      assert_match(/not in this session's population/, err.message)
+    end
+
+    should "reject a rater who is not a participant" do
+      err = assert_raises(RuntimeError) { request_revisit(rater_id: SecureRandom.uuid_v7) }
+      assert_match(/not a participant/, err.message)
+    end
+
+    should "reject a blank note" do
+      err = assert_raises(RuntimeError) { request_revisit(note: "  ") }
+      assert_match(/note cannot be blank/, err.message)
+    end
+
+    should "reject a duplicate ask for the same person and cell" do
+      request_revisit
+      err = assert_raises(RuntimeError) { request_revisit }
+      assert_match(/already requested/, err.message)
+    end
+  end
 end

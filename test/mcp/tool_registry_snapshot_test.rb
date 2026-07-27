@@ -794,6 +794,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_request_rating_revisit",
+        "description" => "Ask a rater to revisit a manager rating from a live calibration session — value-free, with the room's note.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"           => { "type" => "string" },
+            "person_id"            => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "note"                 => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id capability_stable_id level_ordinal note],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_start",
         "description" => "Start a calibration session — freezes the participants and the calibrant population.",
         "inputSchema" => {

@@ -33,6 +33,27 @@ class CalibrationSessions::SessionOutcomes
       end
   end
 
+  # Rating-revisit requests raised by this session, chronological.
+  #
+  # @return [Array<Hash>] `{ person_id:, capability_stable_id:, level_ordinal:,
+  #   rater_id:, note:, requested_by_id:, requested_at: }`
+  def revisit_requests
+    @revisit_requests ||= stream_events
+      .select { |e| e.is_a?(AssessmentCycles::Events::CalibrationRatingRevisitRequested) }
+      .map do |event|
+        data = event.data
+        {
+          person_id: data[:person_id],
+          capability_stable_id: data[:capability_stable_id],
+          level_ordinal: data[:level_ordinal],
+          rater_id: data[:rater_id],
+          note: data[:note],
+          requested_by_id: data[:requested_by_id],
+          requested_at: event.metadata[:timestamp]
+        }
+      end
+  end
+
   private
 
   def stream_events
