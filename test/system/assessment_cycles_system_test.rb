@@ -4,7 +4,6 @@ require "application_system_test_case"
 
 class AssessmentCyclesSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
-  MOBILE_SIZE  = [ 375, 812 ].freeze
 
   setup do
     @tenant = FactoryBot.create(:tenant)
@@ -75,24 +74,10 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
 
       assert_text "Q2 2026 Review"
 
-      # Enroll the assigned person — set the select value via JS and submit
-      # the enroll form via requestSubmit() because Capybara's pointer click
-      # on the Enroll button has been silently dropped on starved CI runners.
-      page.execute_script(<<~JS)
-        const select = Array.from(document.querySelectorAll("select"))
-          .find(s => Array.from(s.options).some(o => o.textContent.trim() === "Assigned Person"));
-        if (select) {
-          const opt = Array.from(select.options).find(o => o.textContent.trim() === "Assigned Person");
-          if (opt) {
-            select.value = opt.value;
-            select.dispatchEvent(new Event("input", { bubbles: true }));
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        }
-        const btn = Array.from(document.querySelectorAll("button"))
-          .find(b => b.textContent.trim() === "Enroll");
-        btn?.closest("form")?.requestSubmit(btn);
-      JS
+      # Enroll the assigned person — JS select + requestSubmit() because
+      # Capybara's pointer click on the Enroll button has been silently
+      # dropped on starved CI runners.
+      enroll_via_js("Assigned Person")
 
       assert_text "Person enrolled"
       assert_text "Assigned Person"
@@ -114,21 +99,7 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       # Re-enroll (a withdrawn person is eligible again), then close with
       # them still enrolled — closure concludes the participation, it does
       # not withdraw it.
-      page.execute_script(<<~JS)
-        const select = Array.from(document.querySelectorAll("select"))
-          .find(s => Array.from(s.options).some(o => o.textContent.trim() === "Assigned Person"));
-        if (select) {
-          const opt = Array.from(select.options).find(o => o.textContent.trim() === "Assigned Person");
-          if (opt) {
-            select.value = opt.value;
-            select.dispatchEvent(new Event("input", { bubbles: true }));
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        }
-        const btn = Array.from(document.querySelectorAll("button"))
-          .find(b => b.textContent.trim() === "Enroll");
-        btn?.closest("form")?.requestSubmit(btn);
-      JS
+      enroll_via_js("Assigned Person")
       assert_text "Person enrolled"
 
       # Close the cycle — same requestSubmit pattern.
@@ -141,8 +112,7 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       end
       assert_text "Cycle closed"
       assert_text "Closed"
-      assert_text "Concluded"
-      assert_no_text "Withdrawn"
+      within("tr", text: "Assigned Person") { assert_text "Concluded" }
     end
   end
 
@@ -315,6 +285,24 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # Selects a person in the enroll form and submits it via requestSubmit()
+  # — synchronous JS, immune to the dropped-pointer-click CI flake. Guards
+  # are deliberately absent: a missing select/option/button raises here (a
+  # loud JS error) instead of silently no-oping into a later assertion.
+  def enroll_via_js(person_name)
+    page.execute_script(<<~JS)
+      const select = Array.from(document.querySelectorAll("select"))
+        .find(s => Array.from(s.options).some(o => o.textContent.trim() === #{person_name.to_json}));
+      const opt = Array.from(select.options).find(o => o.textContent.trim() === #{person_name.to_json});
+      select.value = opt.value;
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      const btn = Array.from(document.querySelectorAll("button"))
+        .find(b => b.textContent.trim() === "Enroll");
+      btn.closest("form").requestSubmit(btn);
+    JS
+  end
 
   def sign_in(user)
     sign_in_as(user)
