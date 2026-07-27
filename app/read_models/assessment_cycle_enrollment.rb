@@ -51,6 +51,5 @@ class AssessmentCycleEnrollment < ApplicationRecord
   # ongoing cycle" additionally join on the cycle's open status (concluded
   # rows only ever exist on closed cycles).
   scope :active,     -> { where.not(status: "withdrawn") }
-  scope :concluded,  -> { where(status: "concluded") }
   scope :withdrawn,  -> { where(status: "withdrawn") }
 end

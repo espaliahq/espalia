@@ -210,9 +210,9 @@ class AssessmentCycles::Projections::CurrentState
     # they remain part of its historical cohort. Only PersonUnenrolled
     # produces "withdrawn" (a person-scoped removal). Rows withdrawn before
     # the close keep their withdrawal record untouched.
-    cycle.enrollments.where.not(status: "withdrawn").find_each do |enrollment|
-      enrollment.update!(status: "concluded", concluded_at: closed_at)
-    end
+    cycle.enrollments.where.not(status: "withdrawn").update_all(
+      status: "concluded", concluded_at: closed_at, updated_at: Time.current
+    )
   end
 
   # Resolves a level's ordinal from its id, denormalised onto the enrollment

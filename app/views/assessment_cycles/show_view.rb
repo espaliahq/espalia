@@ -12,7 +12,11 @@ class Views::AssessmentCycles::ShowView < Views::Base
     "self_complete" => :info,
     "manager_complete" => :info,
     "aligned" => :success,
-    "concluded" => :success,
+    # Neutral by design: "concluded" says only that the cycle ended around
+    # the participant — an unrated enrollment concludes too, so green would
+    # over-claim. The outcome signal lives in the Aligned column / cohort
+    # report.
+    "concluded" => :default,
     "withdrawn" => :warning
   }.freeze
 
