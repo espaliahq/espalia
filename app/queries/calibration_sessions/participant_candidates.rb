@@ -35,12 +35,14 @@ class CalibrationSessions::ParticipantCandidates
   end
 
   # Quick-add suggestions: the viewer's direct reports who are themselves
-  # managers — the department-head-with-their-EMs shape that most sessions
-  # take. Empty for admins (org-wide, search-first).
+  # managers — the department-head-with-their-EMs shape most sessions
+  # take. Applies whenever the viewer has a linked Person (an admin who
+  # also manages people gets their own team too); an admin without one
+  # is search-first.
   #
   # @return [Array<Hash>] `{ person:, subtitle: }`
   def suggestions
-    return [] if @admin || @viewer.nil?
+    return [] if @viewer.nil?
 
     decorate(
       manager_scope.where(manager_id: @viewer.id).order(:name).limit(SUGGESTION_LIMIT)

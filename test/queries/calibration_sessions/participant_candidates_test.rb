@@ -63,8 +63,13 @@ class CalibrationSessions::ParticipantCandidatesTest < ActiveSupport::TestCase
       assert_includes names, "Miriam Otherteam"
     end
 
-    should "offer no quick-add suggestions (search-first)" do
+    should "offer no quick-add suggestions without a linked person (search-first)" do
       assert_empty query(viewer: nil, admin: true).suggestions
+    end
+
+    should "still suggest an admin's own direct-report managers" do
+      names = query(viewer: @dept_head, admin: true).suggestions.map { |e| e[:person].name }
+      assert_equal [ "Mia Manager", "Raj Rater" ], names
     end
   end
 end
