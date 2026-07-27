@@ -13,6 +13,11 @@
 #   # => { created: 5, updated: 12, deactivated: 1, assigned: 4, ... }
 #
 class Hris::Hibob::Adapter < Hris::BaseAdapter
+  # The withdrawal/unassignment reason recorded on offboarding events
+  # (Pass 3b). Never "cycle_closed" — that vocabulary is reserved for cycle
+  # conclusion.
+  OFFBOARD_REASON = "left_company"
+
   # @return [String]
   def provider_name
     "hibob"
@@ -186,10 +191,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       result[:deactivated] += 1
     end
   end
-
-  # The withdrawal/unassignment reason recorded on offboarding events. Never
-  # "cycle_closed" — that vocabulary is reserved for cycle conclusion.
-  OFFBOARD_REASON = "left_company"
 
   # Pass 3b: enforces the invariant "an inactive person holds no live
   # participation" — withdraws them from any OPEN cycle (a person-scoped
