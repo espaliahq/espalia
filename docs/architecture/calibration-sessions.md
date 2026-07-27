@@ -25,12 +25,22 @@
 > population-wide demo activity via `assessments:seed_calibration_activity`
 > (deterministic rater personas / ambiguous capabilities / evidence, wired
 > into `db/seeds.rb` after the HRIS sync) so every surface is demo-able.
-> Still to build: the evidence wall + compare tray, and the outcome writes —
-> whose design is now fully resolved: expectation flags raise a framework
-> **clarification** (a new non-proposal suggestion kind with resolve-with-note
-> lifecycle and an edit-mode comment-glyph matrix decoration — see Outcomes →
-> *The clarification kind*), revisit requests mirror onto the PD stream,
-> notes live on the session stream.
+> **The outcome writes are built**: ⚑ expectation flags raise a framework
+> **clarification** (the non-proposal suggestion kind — resolve-with-note
+> lifecycle, edit-mode comment-glyph decoration; now documented as
+> framework-explorer.md §12a) via `Operations::CalibrationSessions::
+> FlagExpectation`, with the drill-in's per-level flag disclosure and
+> already-flagged markers (framework-wide, so overlapping sessions see each
+> other's flags); **revisit requests** (`RequestRatingRevisit`, person-card
+> ask, value-free note, rater resolved server-side) mirror onto the PD
+> stream via `CalibrationRevisitSync` and surface in the rater's assessment
+> feed (`rating_revisit_requested`, ratings chip, manager-rating privacy
+> gate), with rating-change-based resolution computed at read time;
+> **session notes** (`RecordNote`, live-only, optional anchors) and the
+> **session log** (`SessionOutcomes` stream read + `SessionLog` view — flags
+> with live clarification status, revisits with acted/open state, minutes +
+> composer) make the session page the follow-through artifact.
+> Still to build: the evidence wall + compare tray.
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
@@ -624,11 +634,10 @@ Mechanics — everything not listed here is inherited untouched:
   the resulting `suggestion_id`. Two streams, not atomic — framework write
   first; the failure modes are benign. The follow-through page reads flag
   status via that stored id.
-- **Naming note for when this is built**: this redefines "suggestion" as
-  *anchored discussion with a lifecycle*, of which proposals are the applying
-  subset. State that explicitly in framework-explorer.md (§12/§13) in the
-  same change, so future features (e.g. assessment-side open questions)
-  inherit the framing instead of rediscovering it.
+- **Naming note — done**: the "suggestion = anchored discussion with a
+  lifecycle, proposals are the applying subset" framing is now stated in
+  framework-explorer.md **§12a**, which is the canonical reference for the
+  clarification kind's mechanics.
 
 ## Overlapping sessions — semantics
 
