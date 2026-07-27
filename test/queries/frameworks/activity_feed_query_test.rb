@@ -213,6 +213,63 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "clarification lifecycle" do
+    setup do
+      @sid = SecureRandom.uuid_v7
+      @clarification = create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: @sid,
+        target_entity_type: "behavioural_expectation", target_entity_id: @exp.expectation_id,
+        kind: "clarification", field: nil, suggested_value: nil,
+        rationale: "What does this mean?", author_id: @actor.id)
+    end
+
+    should "emit a clarification_requested entry anchored to the capability with the level" do
+      append(Frameworks::Events::ClarificationRequested,
+        data: { suggestion_id: @sid, target_entity_type: "behavioural_expectation",
+                target_entity_id: @exp.expectation_id, author_id: @actor.id,
+                rationale: "What does this mean?" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "clarification_requested" }
+      assert entry, "expected a clarification_requested entry"
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal @cat.category_id, entry.category_id
+      assert_equal "Ada Author", entry.actor_name
+      assert_equal @exp.level_ordinal, entry.payload[:expectation_level]
+      assert_equal "pending", entry.suggestion_status
+      assert_not entry.superseded, "clarifications are never superseded (no amendments)"
+      assert_equal "suggestions",
+        Views::Frameworks::Activity::Entry::KIND_GROUP.fetch("clarification_requested")
+    end
+
+    should "carry the level for a capability-anchored clarification via proposed_attributes" do
+      @clarification.update!(target_entity_type: "capability", target_entity_id: @cap.capability_id,
+                             proposed_attributes: { "level_ordinal" => 5 })
+      append(Frameworks::Events::ClarificationRequested,
+        data: { suggestion_id: @sid, target_entity_type: "capability",
+                target_entity_id: @cap.capability_id, level_ordinal: 5,
+                author_id: @actor.id, rationale: "Nothing defined at L5" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "clarification_requested" }
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal 5, entry.payload[:expectation_level]
+    end
+
+    should "emit a clarification_resolved entry crediting the resolver" do
+      @clarification.update!(status: "resolved")
+      append(Frameworks::Events::ClarificationResolved,
+        data: { suggestion_id: @sid, resolver_id: @reviewer.id, note: "Reworded L2" })
+
+      entry = entries.find { |e| e.kind == "clarification_resolved" }
+      assert entry, "expected a clarification_resolved entry"
+      assert_equal "Rita Reviewer", entry.actor_name
+      assert_equal @cap.capability_id, entry.capability_id
+      assert_equal "suggestions",
+        Views::Frameworks::Activity::Entry::KIND_GROUP.fetch("clarification_resolved")
+    end
+  end
+
   context "suggestion create lifecycle" do
     setup do
       @create_sid = SecureRandom.uuid_v7

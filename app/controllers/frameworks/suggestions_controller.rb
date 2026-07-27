@@ -10,7 +10,7 @@
 #
 class Frameworks::SuggestionsController < ApplicationController
   before_action :set_framework
-  before_action :set_suggestion, only: [ :show, :approve, :reject, :amend, :destroy ]
+  before_action :set_suggestion, only: [ :show, :approve, :reject, :resolve, :amend, :destroy ]
 
   # GET /frameworks/:framework_id/suggestions
   def index
@@ -33,6 +33,7 @@ class Frameworks::SuggestionsController < ApplicationController
       can_approve: policy(@suggestion).approve?,
       can_amend: policy(@suggestion).amend?,
       can_withdraw: policy(@suggestion).withdraw?,
+      can_resolve: policy(@suggestion).resolve?,
       comments: FrameworkState::SuggestionComment
         .for_suggestion(@suggestion.suggestion_id).includes(:author).chronological.to_a,
       viewer_person_id: current_person&.id,
@@ -132,6 +133,29 @@ class Frameworks::SuggestionsController < ApplicationController
     )
 
     respond_to_resolution(notice: "Suggestion rejected.")
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    respond_to_failure(e)
+  end
+
+  # POST /frameworks/:framework_id/suggestions/:id/resolve
+  #
+  # Resolves a clarification with a note — the non-proposal kind's terminal
+  # verb (approve/reject never apply to it). Same inline-vs-redirect split as
+  # approve/reject.
+  def resolve
+    authorize @suggestion, :resolve?
+
+    Operations::Frameworks::ResolveClarification.call(
+      context: pundit_user,
+      params: {
+        framework_id: @framework.framework_id,
+        suggestion_id: @suggestion.suggestion_id,
+        note: params[:note].to_s,
+        resulting_suggestion_id: params[:resulting_suggestion_id].presence
+      }
+    )
+
+    respond_to_resolution(notice: "Clarification resolved.")
   rescue Operations::Base::ParameterError, RuntimeError => e
     respond_to_failure(e)
   end

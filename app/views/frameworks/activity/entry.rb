@@ -25,6 +25,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "suggestion_rejected"       => "bg-gray-400",
     "suggestion_withdrawn"      => "bg-gray-400",
     "suggestion_commented"      => "bg-sky-500",
+    "clarification_requested"   => "bg-amber-500",
+    "clarification_resolved"    => "bg-green-600",
     "capability_added"          => "bg-emerald-500",
     "capability_archived"       => "bg-amber-500",
     "capability_updated"        => "bg-indigo-500",
@@ -66,6 +68,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "suggestion_rejected"       => "suggestions",
     "suggestion_withdrawn"      => "suggestions",
     "suggestion_commented"      => "suggestions",
+    "clarification_requested"   => "suggestions",
+    "clarification_resolved"    => "suggestions",
     "capability_updated"        => "edits",
     "category_updated"          => "edits",
     "expectation_updated"       => "edits",
@@ -125,6 +129,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
         secondary_line if secondary_text
         footer
         action_row if actionable?
+        resolve_row if resolvable?
         discussion_row if discussable?
       end
     end
@@ -159,6 +164,24 @@ class Views::Frameworks::Activity::Entry < Views::Base
   # endpoint + reject modal, so a deletion proposal is as visible and one-click
   # to action as an edit — no muted "Review" link to miss. The else branch is a
   # defensive fallback for any future actionable kind without an inline form.
+  # A pending clarification's entry carries "Resolve…" for viewers with
+  # expectation-tier authority — the non-proposal analogue of Approve/Reject.
+  # There is no superseded flag to honour (clarifications aren't amended).
+  def resolvable?
+    @framework_id.present? &&
+      @entry.kind == "clarification_requested" &&
+      @entry.suggestion_status == "pending" &&
+      @approval_authority.can_approve?("behavioural_expectation")
+  end
+
+  def resolve_row
+    render Views::Frameworks::Activity::ClarificationActions.new(
+      framework_id: @framework_id,
+      suggestion_id: @entry.suggestion_id,
+      question_preview: payload_value(:rationale).to_s.strip.presence
+    )
+  end
+
   def action_row
     if @entry.suggestion_id.present?
       render Views::Frameworks::Activity::SuggestionActions.new(
@@ -316,8 +339,10 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "suggestion_amended"  then "Amended a #{entity_word} suggestion"
     when "suggestion_approved" then "Approved a #{entity_word} suggestion"
     when "suggestion_rejected" then "Rejected a #{entity_word} suggestion"
-    when "suggestion_withdrawn" then "Withdrew a #{entity_word} suggestion"
-    when "suggestion_commented" then "Commented on a #{entity_word} suggestion"
+    when "suggestion_withdrawn" then withdrawn_summary
+    when "suggestion_commented" then commented_summary
+    when "clarification_requested" then "Asked for clarification"
+    when "clarification_resolved"  then "Resolved a clarification"
     when "capability_added"    then "Added a capability"
     when "capability_archived" then "Archived a capability"
     when "capability_updated"  then "Updated a capability"
@@ -354,6 +379,20 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def draft_opened_summary
     base = "Opened draft v#{payload_value(:target_version)}"
     payload_value(:auto_opened) ? "#{base} (auto)" : base
+  end
+
+  # Withdraw/comment entries read differently when their anchor is a
+  # clarification — "a clarification", not "an expectation suggestion".
+  def withdrawn_summary
+    clarification_anchored? ? "Withdrew a clarification" : "Withdrew a #{entity_word} suggestion"
+  end
+
+  def commented_summary
+    clarification_anchored? ? "Commented on a clarification" : "Commented on a #{entity_word} suggestion"
+  end
+
+  def clarification_anchored?
+    payload_value(:suggestion_kind) == "clarification"
   end
 
   # "Added L4 to EM · Engineering Manager" — the level's ordinal plus the role
@@ -433,6 +472,10 @@ class Views::Frameworks::Activity::Entry < Views::Base
       payload_value(:comment)
     when "suggestion_commented"
       payload_value(:body)
+    when "clarification_requested"
+      payload_value(:rationale)
+    when "clarification_resolved"
+      payload_value(:note)
     when "expectation_added"
       payload_value(:description)
     when "expectation_updated", "illustration_updated"

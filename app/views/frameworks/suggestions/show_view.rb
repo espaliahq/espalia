@@ -11,7 +11,8 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     "pending" => :warning,
     "approved" => :success,
     "rejected" => :default,
-    "withdrawn" => :default
+    "withdrawn" => :default,
+    "resolved" => :success
   }.freeze
 
   ENTITY_TYPE_LABELS = Views::Frameworks::Suggestions::IndexView::ENTITY_TYPE_LABELS
@@ -25,6 +26,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(framework:, suggestion:, can_approve:, can_amend:, can_withdraw:,
+                 can_resolve: false,
                  comments: [], viewer_person_id: nil, can_comment: false, tenant_admin: false,
                  user: nil, current_tenant: nil, tenants: [])
     @framework = framework
@@ -32,6 +34,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     @can_approve = can_approve
     @can_amend = can_amend
     @can_withdraw = can_withdraw
+    @can_resolve = can_resolve
     @comments = comments
     @viewer_person_id = viewer_person_id
     @can_comment = can_comment
@@ -94,6 +97,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     case @suggestion.kind
     when "create" then "Suggested creation"
     when "delete" then "Suggested archive"
+    when "clarification" then "Clarification requested"
     else "Suggested edit"
     end
   end
@@ -102,8 +106,34 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     case @suggestion.kind
     when "create" then create_diff_card
     when "delete" then delete_diff_card
+    when "clarification" then clarification_card
     else edit_diff_card
     end
+  end
+
+  # A clarification proposes nothing — show the text under question (plain,
+  # never struck) with its level; the question itself renders in the
+  # rationale card below.
+  def clarification_card
+    render Components::Kit::Card.new(title: "Text under question") do |card|
+      card.body do
+        if clarification_level.present?
+          p(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1") do
+            "#{entity_label} · L#{clarification_level}"
+          end
+        end
+        p(class: "rounded-md border border-gray-200 dark:border-gray-700 " \
+                 "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-gray-900 dark:text-gray-100 " \
+                 "whitespace-pre-wrap") do
+          @suggestion.current_value.presence || "(no expectation defined at this level yet)"
+        end
+      end
+    end
+  end
+
+  # @return [Integer, String, nil]
+  def clarification_level
+    (@suggestion.proposed_attributes || {})["level_ordinal"]
   end
 
   def edit_diff_card
@@ -238,7 +268,8 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
 
   def rationale_card
     div(class: "mt-6") do
-      render Components::Kit::Card.new(title: "Rationale") do |card|
+      title = @suggestion.kind == "clarification" ? "The question" : "Rationale"
+      render Components::Kit::Card.new(title: title) do |card|
         card.body do
           p(class: "text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap") do
             @suggestion.rationale
@@ -271,9 +302,22 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
             end
             if @suggestion.reviewer_comment.present?
               div(class: "sm:col-span-2") do
-                dt(class: "text-gray-600 dark:text-gray-300") { "Comment" }
+                dt(class: "text-gray-600 dark:text-gray-300") do
+                  @suggestion.status == "resolved" ? "Resolution" : "Comment"
+                end
                 dd(class: "mt-0.5 text-gray-900 dark:text-white whitespace-pre-wrap") do
                   @suggestion.reviewer_comment
+                end
+              end
+            end
+            if @suggestion.resulting_suggestion_id.present?
+              div(class: "sm:col-span-2") do
+                dt(class: "text-gray-600 dark:text-gray-300") { "Resulting change" }
+                dd(class: "mt-0.5") do
+                  a(
+                    href: framework_suggestion_path(@framework.framework_id, @suggestion.resulting_suggestion_id),
+                    class: "text-primary hover:underline text-sm"
+                  ) { "View the resulting suggestion →" }
                 end
               end
             end
@@ -332,7 +376,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
 
   def primary_actions_visible?
     pending = @suggestion.status == "pending"
-    (pending && @can_approve) || @can_withdraw
+    (pending && @can_approve) || (pending && @can_resolve) || @can_withdraw
   end
 
   def primary_actions_row
@@ -340,6 +384,37 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
       approve_form if @can_approve && @suggestion.status == "pending"
       reject_form  if @can_approve && @suggestion.status == "pending"
       withdraw_form if @can_withdraw
+    end
+    resolve_section if @can_resolve && @suggestion.status == "pending"
+  end
+
+  # A clarification's terminal action — resolve with a required note (and no
+  # approve/reject: nothing is proposed).
+  def resolve_section
+    form(
+      action: resolve_framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
+      method: "post",
+      class: "space-y-3"
+    ) do
+      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      div do
+        label(
+          for: "clarification_note",
+          class: "block text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1"
+        ) { "Resolution" }
+        textarea(
+          id: "clarification_note", name: "note", rows: "2", required: true,
+          placeholder: "What settled the question?",
+          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+        )
+      end
+      button(
+        type: "submit",
+        class: "inline-flex items-center rounded-md bg-primary px-3 py-2 " \
+               "text-sm font-semibold text-white shadow-xs hover:bg-primary/80 transition-colors"
+      ) { "Resolve clarification" }
     end
   end
 

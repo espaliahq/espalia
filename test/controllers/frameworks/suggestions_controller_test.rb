@@ -281,6 +281,71 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "POST /frameworks/:framework_id/suggestions/:id/resolve" do
+    setup do
+      @clarification_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, @clarification_id, "behavioural_expectation", @eid,
+          author_id: @author_person.id.to_s, rationale: "What does 'asks questions' mean at L1?"
+        )
+      end
+    end
+
+    should "resolve a pending clarification as admin with a note" do
+      sign_in @admin_user
+      post resolve_framework_suggestion_path(
+        framework_id: @framework_id, id: @clarification_id
+      ), params: { note: "Wording stands — added an illustration instead" }
+
+      assert_redirected_to framework_suggestions_path(framework_id: @framework_id)
+      ActsAsTenant.with_tenant(@tenant) do
+        suggestion = FrameworkState::SuggestedEdit.find_by(suggestion_id: @clarification_id)
+        assert_equal "resolved", suggestion.status
+        assert_equal "Wording stands — added an illustration instead", suggestion.reviewer_comment
+      end
+    end
+
+    should "answer 204 for an inline resolve from the feed" do
+      sign_in @admin_user
+      post resolve_framework_suggestion_path(
+        framework_id: @framework_id, id: @clarification_id, inline: 1
+      ), params: { note: "Reworded" }
+
+      assert_response :no_content
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "resolved",
+                     FrameworkState::SuggestedEdit.find_by(suggestion_id: @clarification_id).status
+      end
+    end
+
+    should "deny a collaborator without expectation-tier authority" do
+      sign_in @member_user
+      post resolve_framework_suggestion_path(
+        framework_id: @framework_id, id: @clarification_id
+      ), params: { note: "n" }
+
+      assert_response :redirect
+      follow_redirect!
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "pending",
+                     FrameworkState::SuggestedEdit.find_by(suggestion_id: @clarification_id).status
+      end
+    end
+
+    should "refuse approve on a clarification (policy-level)" do
+      sign_in @admin_user
+      post approve_framework_suggestion_path(
+        framework_id: @framework_id, id: @clarification_id
+      )
+
+      assert_response :redirect
+      follow_redirect!
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+  end
+
   context "PATCH /frameworks/:framework_id/suggestions/:id/amend" do
     should "amend the author's own pending suggestion" do
       sign_in @author_user

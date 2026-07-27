@@ -213,6 +213,7 @@ Rails.application.routes.draw do
       member do
         post :approve
         post :reject
+        post :resolve
         patch :amend
       end
       resources :comments, only: [ :create, :update, :destroy ],
