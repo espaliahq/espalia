@@ -3,8 +3,9 @@
 # HiBob HRIS adapter. Syncs employee data from HiBob into Person records.
 #
 # Instantiated per-tenant with that tenant's credentials. Performs a five-pass
-# sync: upsert employees, resolve managers, deactivate removed, auto-link users,
-# and assign to framework roles/levels.
+# sync: upsert employees, resolve managers, deactivate removed + offboard
+# inactive (withdraw from open cycles, unassign), auto-link users, and assign
+# to framework roles/levels.
 #
 # @example
 #   adapter = Hris::Hibob::Adapter.new(tenant)
@@ -12,6 +13,11 @@
 #   # => { created: 5, updated: 12, deactivated: 1, assigned: 4, ... }
 #
 class Hris::Hibob::Adapter < Hris::BaseAdapter
+  # The withdrawal/unassignment reason recorded on offboarding events
+  # (Pass 3b). Never "cycle_closed" — that vocabulary is reserved for cycle
+  # conclusion.
+  OFFBOARD_REASON = "left_company"
+
   # @return [String]
   def provider_name
     "hibob"
@@ -22,11 +28,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # Five-pass approach:
   # 1. Fetch all employees, upsert Person records (without manager_id)
   # 2. Resolve manager_id via external_id → Person lookup
-  # 3. Deactivate HRIS-sourced people no longer in the API response
+  # 3. Deactivate HRIS-sourced people no longer in the API response, then
+  #    offboard every inactive person still participating (Pass 3b —
+  #    withdraw from open cycles, remove framework assignments)
   # 4. Auto-link TenantUsers to Person records by email
-  # 5. Assign (or reassign) people to framework roles/levels via role_mappings
+  # 5. Assign (or reassign) active people to framework roles/levels via
+  #    role_mappings (inactive people are skipped — Pass 3b owns them)
   #
-  # @return [Hash] summary with :created, :updated, :deactivated, :assigned,
+  # @return [Hash] summary with :created, :updated, :deactivated, :offboarded,
+  #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
   #   :skipped_no_title
@@ -73,6 +83,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       # Pass 3: Deactivate people no longer in HRIS
       deactivate_removed(employees, result)
 
+      # Pass 3b: Offboard every inactive person still participating —
+      # withdraw from open cycles, remove framework assignments
+      offboard_inactive(result)
+
       # Pass 4: Auto-link TenantUsers to Person records by email
       auto_link_tenant_users
 
@@ -114,6 +128,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       created: 0,
       updated: 0,
       deactivated: 0,
+      offboarded: 0,
+      skipped_inactive: 0,
       assigned: 0,
       role_changed: 0,
       level_changed: 0,
@@ -176,6 +192,68 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
   end
 
+  # Pass 3b: enforces the invariant "an inactive person holds no live
+  # participation" — withdraws them from any OPEN cycle (a person-scoped
+  # removal, never a conclusion) and removes their framework assignments so
+  # they stop appearing in eligible-people lists and manager views.
+  #
+  # Deliberately state-driven rather than transition-driven: it sweeps every
+  # inactive person with lingering participation, however they became
+  # inactive (absent from the response — Pass 3; present with
+  # `isActive: false` — Pass 1; or a manual admin edit), so each sync also
+  # self-heals stragglers left by earlier code and the sweep is idempotent.
+  #
+  # Withdrawal must precede unassignment — the PersonDevelopment aggregate
+  # refuses to unassign while the person is enrolled in a cycle.
+  #
+  # A returnee (seasonal / boomerang) reversing this is the normal new-hire
+  # path: Pass 1 flips them back to active, Pass 5 re-assigns (their
+  # assignment row is gone, so the `existing.nil?` branch fires), and
+  # AutoEnrollNewAssignments enrolls them into any open cycle with a fresh
+  # progress slate (plus prior-aligned-cycle rating seeds, if any).
+  #
+  # @param result [Hash] running tally
+  def offboard_inactive(result)
+    inactive_ids = Person.inactive.select(:id)
+
+    open_enrollments = AssessmentCycleEnrollment.active
+      .where(person_id: inactive_ids)
+      .joins(:cycle).where(assessment_cycles: { status: "open" })
+      .to_a.group_by(&:person_id)
+    assignments = PersonFrameworkAssignment
+      .where(person_id: inactive_ids)
+      .to_a.group_by(&:person_id)
+    return if open_enrollments.empty? && assignments.empty?
+
+    with_hris_event_context do
+      cycles_handler = AssessmentCycles::CommandHandler.new
+      pd_handler = PersonDevelopment::CommandHandler.new
+
+      (open_enrollments.keys | assignments.keys).each do |person_id|
+        Array(open_enrollments[person_id]).each do |enrollment|
+          cycles_handler.unenroll(enrollment.cycle_id, person_id, OFFBOARD_REASON)
+        end
+        Array(assignments[person_id]).each do |assignment|
+          pd_handler.unassign_from_framework(
+            person_id, assignment.framework_id, reason: OFFBOARD_REASON
+          )
+        end
+        result[:offboarded] += 1
+      rescue => e
+        result[:errors] << { person_id: person_id, error: e.message }
+      end
+    end
+  end
+
+  # Wraps event-dispatching sync passes (3b + 5) in the shared provenance
+  # context: acting_via :hris + the sync's correlation_id on every event's
+  # metadata, plus the tenant id the projections and replayer rely on.
+  def with_hris_event_context(&block)
+    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
+      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
+    end
+  end
+
   # Links TenantUser records to Person records by matching email.
   #
   # Runs after upsert so newly created Person records are available for matching.
@@ -217,21 +295,26 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     title_to_mapping = build_title_to_mapping
     roles_by_code = framework_roles_by_code
 
-    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
-      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
-        command_handler = PersonDevelopment::CommandHandler.new
+    with_hris_event_context do
+      command_handler = PersonDevelopment::CommandHandler.new
 
-        Person.where(id: touched_person_ids).find_each do |person|
-          dispatch_framework_assignment(
-            person: person,
-            framework: framework,
-            title_to_mapping: title_to_mapping,
-            roles_by_code: roles_by_code,
-            command_handler: command_handler,
-            result: result
-          )
-          record_reporting_manager(person: person, framework: framework, command_handler: command_handler)
+      Person.where(id: touched_person_ids).find_each do |person|
+        # HiBob returns inactive employees too (show_inactive: true) —
+        # they are offboarded by Pass 3b, never (re-)assigned here.
+        if person.status == "inactive"
+          result[:skipped_inactive] += 1
+          next
         end
+
+        dispatch_framework_assignment(
+          person: person,
+          framework: framework,
+          title_to_mapping: title_to_mapping,
+          roles_by_code: roles_by_code,
+          command_handler: command_handler,
+          result: result
+        )
+        record_reporting_manager(person: person, framework: framework, command_handler: command_handler)
       end
     end
   end

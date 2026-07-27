@@ -217,9 +217,10 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
       # Alice: "Software Engineer", level ordinal 5 (from fixture humanReadable)
       # Bob: "Engineering Manager", level ordinal 6
-      # Charlie: "Junior Designer" (no mapping)
+      # Charlie: isActive false — skipped before title mapping (Pass 3b owns him)
       assert_equal 2, result[:assigned]
-      assert_includes result[:unmapped_titles], "Junior Designer"
+      assert_equal 1, result[:skipped_inactive]
+      assert_empty result[:unmapped_titles]
 
       ActsAsTenant.with_tenant(@tenant) do
         alice = Person.find_by(external_id: "bob-001")
@@ -323,8 +324,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
     end
 
-    should "track unmapped titles" do
-      adapter = build_adapter(@fixture["employees"])
+    should "track unmapped titles for active people" do
+      # Charlie carries the unmapped title but is inactive in the fixture —
+      # activate him so his title reaches the mapping step.
+      employees = @fixture["employees"].map do |e|
+        e["id"] == "bob-003" ? e.merge("isActive" => true) : e
+      end
+      adapter = build_adapter(employees)
       result = adapter.sync_people
 
       assert_includes result[:unmapped_titles], "Junior Designer"
@@ -400,6 +406,103 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
       assert_equal 0, result[:assigned]
       assert_equal 3, result[:created]
+    end
+  end
+
+  context "#sync_people offboarding + reactivation (Pass 3b)" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @framework = create(:framework_state)
+        @e_role = create(:framework_role, code: "E", name: "Software Engineer")
+        @e_level_5 = create(:framework_level, role_id: @e_role.role_id, ordinal: 5, code: "E5", title: "Senior SWE")
+
+        @cycle_id = SecureRandom.uuid_v7
+        AssessmentCycles::CommandHandler.new.define_cycle(
+          @cycle_id, @framework.framework_id, "Q1", "regular", 1
+        )
+      end
+      @alice = @fixture["employees"].find { |e| e["id"] == "bob-001" }
+
+      # Initial sync: alice is created, assigned via her mapped title, and
+      # auto-enrolled into the open cycle by AutoEnrollNewAssignments.
+      build_adapter([ @alice ]).sync_people
+      ActsAsTenant.with_tenant(@tenant) do
+        @alice_person = Person.find_by!(external_id: "bob-001")
+        assert PersonFrameworkAssignment.find_by(person_id: @alice_person.id)
+        assert_equal "enrolled",
+          AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @alice_person.id).status
+      end
+    end
+
+    should "offboard a person who disappears from the HRIS response" do
+      result = build_adapter([]).sync_people
+
+      assert_equal 1, result[:deactivated]
+      assert_equal 1, result[:offboarded]
+      assert_empty result[:errors]
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "inactive", @alice_person.reload.status
+
+        enrollment = AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @alice_person.id)
+        assert_equal "withdrawn", enrollment.status
+        assert_equal "left_company", enrollment.withdrawal_reason
+
+        assert_nil PersonFrameworkAssignment.find_by(person_id: @alice_person.id)
+        refute_includes AssessmentCycle.find_by!(cycle_id: @cycle_id).eligible_people, @alice_person
+      end
+    end
+
+    should "offboard a person present in the response with isActive false" do
+      result = build_adapter([ @alice.merge("isActive" => false) ]).sync_people
+
+      assert_equal 1, result[:offboarded]
+      assert_equal 1, result[:skipped_inactive]
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "inactive", @alice_person.reload.status
+        enrollment = AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @alice_person.id)
+        assert_equal "withdrawn", enrollment.status
+        assert_nil PersonFrameworkAssignment.find_by(person_id: @alice_person.id)
+      end
+    end
+
+    should "be idempotent — a second sync after offboarding does nothing" do
+      build_adapter([]).sync_people
+      result = build_adapter([]).sync_people
+
+      assert_equal 0, result[:deactivated]
+      assert_equal 0, result[:offboarded]
+      assert_empty result[:errors]
+    end
+
+    should "reactivate a returnee like a new hire — re-assigned and re-enrolled" do
+      build_adapter([]).sync_people
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "inactive", @alice_person.reload.status
+      end
+
+      result = build_adapter([ @alice ]).sync_people
+
+      assert_equal 1, result[:assigned]
+      assert_equal 0, result[:offboarded]
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "active", @alice_person.reload.status
+
+        assignment = PersonFrameworkAssignment.find_by(person_id: @alice_person.id)
+        assert_not_nil assignment, "returnee must be re-assigned via the new-hire path"
+        assert_equal @e_role.role_id, assignment.role_id
+
+        enrollment = AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @alice_person.id)
+        assert_equal "enrolled", enrollment.status, "returnee must be auto-enrolled into the open cycle"
+        assert_nil enrollment.withdrawn_at
+
+        stream = EventStreamNaming.person_development_stream(@alice_person.id, @framework.framework_id)
+        events = Rails.configuration.event_store.read.stream(stream).to_a
+        assert_equal 2, events.count { |e| e.is_a?(PersonDevelopment::Events::PersonAssignedToFramework) },
+          "the return is a second assignment on the same self-contained stream"
+      end
     end
   end
 
