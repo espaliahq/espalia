@@ -263,6 +263,9 @@ Rails.application.routes.draw do
     # Capability drill-in — :id is the capability's cross-version stable_id.
     resources :capabilities, only: [ :show ],
                              controller: "calibration_sessions/capabilities"
+    # ⚑ Flag an expectation as unclear (live session) → framework clarification.
+    resources :expectation_flags, only: [ :create ],
+                                  controller: "calibration_sessions/expectation_flags"
   end
 
   # Home dashboard — composable, role-aware card grid (replaces the old

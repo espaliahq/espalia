@@ -29,12 +29,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # @param stats [Hash] DrillInStats result
   # @param people [Hash{String => Person}] rater people by id
   # @param person_card [Hash, nil] `{ dot:, ordinal:, rater_id:, evidence: }`
-  def initialize(session:, stats:, people:, person_card:,
+  # @param can_flag [Boolean] whether the viewer can ⚑ flag an expectation
+  #   as unclear (facilitator/admin AND the session is live)
+  def initialize(session:, stats:, people:, person_card:, can_flag: false,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
     @stats = stats
     @people = people
     @person_card = person_card
+    @can_flag = can_flag
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -96,13 +99,60 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             @stats[:ordinals].each do |ordinal|
               div(class: "flex gap-3") do
                 dt(class: "shrink-0 w-8 text-sm font-semibold text-gray-900 dark:text-white") { "L#{ordinal}" }
-                dd(class: "text-sm text-gray-600 dark:text-gray-300") do
+                dd(class: "flex-1 text-sm text-gray-600 dark:text-gray-300") do
                   plain @stats[:expectations][ordinal] || "No expectation defined at this level."
+                  flag_affordance(ordinal)
                 end
               end
             end
           end
         end
+      end
+    end
+  end
+
+  # Per-level ⚑ outcome: an already-open clarification (from ANY session —
+  # overlapping sessions see each other's flags) renders as a marker; a live
+  # session's facilitator gets the flag disclosure with an optional reason.
+  # One flag per cell per session — the marker replaces the affordance.
+  def flag_affordance(ordinal)
+    open_count = @stats[:clarifications][ordinal].to_i
+    if open_count.positive?
+      div(class: "mt-1 text-xs font-medium text-amber-700 dark:text-amber-300") do
+        plain "⚑ Flagged — #{open_count} open #{'clarification'.pluralize(open_count)} on the framework"
+      end
+    elsif @can_flag
+      flag_form(ordinal)
+    end
+  end
+
+  def flag_form(ordinal)
+    details(class: "mt-1") do
+      summary(
+        class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
+               "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
+      ) { "⚑ Flag expectation as unclear" }
+      form(
+        action: calibration_session_expectation_flags_path(@session),
+        method: "post",
+        class: "mt-2 max-w-lg space-y-2"
+      ) do
+        input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+        input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
+        input(type: "hidden", name: "level_ordinal", value: ordinal)
+        textarea(
+          id: "flag-reason-#{ordinal}", name: "reason", rows: "2",
+          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          placeholder: "What is the room reading differently? (optional)",
+          aria: { label: "What is unclear about this expectation" }
+        )
+        button(
+          type: "submit",
+          class: "inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm " \
+                 "font-semibold text-white hover:bg-amber-700 transition-colors"
+        ) { "Raise clarification" }
       end
     end
   end

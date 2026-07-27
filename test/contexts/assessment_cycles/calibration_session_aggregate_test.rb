@@ -301,4 +301,66 @@ class AssessmentCycles::CalibrationSessionAggregateTest < ActiveSupport::TestCas
       assert_match(/closed/, err.message)
     end
   end
+
+  def flag_cell(ordinal: 4, suggestion_id: @suggestion_id)
+    @aggregate.flag_expectation(
+      capability_stable_id: @cap_stable, level_ordinal: ordinal,
+      suggestion_id: suggestion_id, flagged_by_id: @facilitator_id,
+      reason: "Read three different ways"
+    )
+  end
+
+  context "#flag_expectation" do
+    setup do
+      @cap_stable = SecureRandom.uuid_v7
+      @suggestion_id = SecureRandom.uuid_v7
+    end
+
+    should "emit CalibrationExpectationFlagged with the clarification's suggestion_id" do
+      define_session
+      @aggregate.start(started_by_id: @facilitator_id)
+      flag_cell
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CalibrationExpectationFlagged, event
+      assert_equal @session_id, event.data[:session_id]
+      assert_equal @cap_stable, event.data[:capability_stable_id]
+      assert_equal 4, event.data[:level_ordinal]
+      assert_equal @suggestion_id, event.data[:suggestion_id]
+      assert_equal @facilitator_id, event.data[:flagged_by_id]
+      assert_equal "Read three different ways", event.data[:reason]
+    end
+
+    should "reject flagging the same cell twice in one session" do
+      define_session
+      @aggregate.start(started_by_id: @facilitator_id)
+      flag_cell
+      err = assert_raises(RuntimeError) { flag_cell(suggestion_id: SecureRandom.uuid_v7) }
+      assert_match(/already flagged/, err.message)
+    end
+
+    should "allow the same capability at a different level" do
+      define_session
+      @aggregate.start(started_by_id: @facilitator_id)
+      flag_cell(ordinal: 3)
+      flag_cell(ordinal: 4, suggestion_id: SecureRandom.uuid_v7)
+      flagged = @aggregate.unpublished_events.to_a
+        .select { |e| e.is_a?(AssessmentCycles::Events::CalibrationExpectationFlagged) }
+      assert_equal 2, flagged.size
+    end
+
+    should "reject flagging from a draft session" do
+      define_session
+      err = assert_raises(RuntimeError) { flag_cell }
+      assert_match(/hasn't started/, err.message)
+    end
+
+    should "reject flagging from a closed session" do
+      define_session
+      @aggregate.start(started_by_id: @facilitator_id)
+      @aggregate.close(closed_by_id: @facilitator_id)
+      err = assert_raises(RuntimeError) { flag_cell }
+      assert_match(/closed/, err.message)
+    end
+  end
 end

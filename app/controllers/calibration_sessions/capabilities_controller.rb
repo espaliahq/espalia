@@ -25,6 +25,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       stats: stats,
       people: Person.where(id: stats[:rows].map { |r| r[:rater_id] }.compact).index_by(&:id),
       person_card: person_card(stats),
+      can_flag: @session.started? && policy(@session).flag_expectation?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants

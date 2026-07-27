@@ -32,6 +32,7 @@ class CalibrationSessions::DrillInStats
       },
       ordinals: ordinals,
       expectations: expectations,
+      clarifications: clarification_counts,
       rows: rows
     }
   end
@@ -86,6 +87,32 @@ class CalibrationSessions::DrillInStats
     @expectations ||= FrameworkState::BehaviouralExpectation
       .where(capability_id: capability.capability_id, level_ordinal: ordinals)
       .pluck(:level_ordinal, :description).to_h
+  end
+
+  # ordinal => count of OPEN framework clarifications anchored on this
+  # capability's cells — deliberately framework-wide, not session-scoped, so
+  # a later session sees "already flagged by Engineering" instead of blindly
+  # re-flagging (overlapping sessions roll up, never re-litigate).
+  #
+  # @return [Hash{Integer => Integer}]
+  def clarification_counts
+    @clarification_counts ||= begin
+      counts = Hash.new(0)
+      exp_levels = FrameworkState::BehaviouralExpectation
+        .where(capability_id: capability.capability_id)
+        .pluck(:expectation_id, :level_ordinal).to_h
+      scope = FrameworkState::SuggestedEdit.pending.clarifications
+        .where(framework_id: @session.framework_id)
+
+      scope.where(target_entity_type: "behavioural_expectation", target_entity_id: exp_levels.keys)
+        .pluck(:target_entity_id).each { |eid| counts[exp_levels[eid]] += 1 }
+      scope.where(target_entity_type: "capability", target_entity_id: capability.capability_id)
+        .pluck(:proposed_attributes).each do |attrs|
+          ordinal = attrs&.dig("level_ordinal")
+          counts[ordinal.to_i] += 1 if ordinal
+        end
+      counts
+    end
   end
 
   # (person_id) => { frequency:, self_frequency: } for this capability at

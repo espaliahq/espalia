@@ -687,6 +687,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_flag_expectation",
+        "description" => "Flag a capability × level expectation as unclear from a live calibration session — raises a framework clarification.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"           => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "reason"               => { "type" => "string" }
+          },
+          "required" => %w[session_id capability_stable_id level_ordinal],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_get",
         "description" => "Get one calibration session — lifecycle state plus participant and calibrant rosters.",
         "inputSchema" => {

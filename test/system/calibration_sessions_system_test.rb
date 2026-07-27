@@ -178,6 +178,72 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='true']"
   end
 
+  test "facilitator flags an unclear expectation from the drill-in" do
+    ActsAsTenant.with_tenant(@tenant) do
+      # The flag raises a framework clarification, so this framework needs a
+      # real event stream — built through commands, not read-model factories.
+      fw_id = SecureRandom.uuid_v7
+      cap_stable = SecureRandom.uuid_v7
+      cap_id = SecureRandom.uuid_v7
+      handler = Frameworks::CommandHandler.new
+      handler.create_framework(fw_id, "Eng Framework")
+      cat_id = SecureRandom.uuid_v7
+      handler.add_capability_category(fw_id, cat_id, "Thinking")
+      handler.add_capability(fw_id, cap_id, cap_stable, cat_id, "Strategic Thinking")
+      handler.set_behavioural_expectation(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                          cap_id, 3, "Shapes team direction")
+      handler.publish_version(fw_id, "test")
+
+      cycle = create(:assessment_cycle, tenant: @tenant, name: "H2 2026 Review", framework_id: fw_id)
+      create(:person_framework_assignment, tenant: @tenant, person_id: @report_1.id, framework_id: fw_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
+             person_id: @report_1.id, level_ordinal: 3)
+
+      ctx = AuthorizationContext.new(
+        user: @facilitator_user,
+        tenant_user: TenantUser.find_by(user: @facilitator_user),
+        person: @facilitator
+      )
+      result = Operations::CalibrationSessions::Define.call(
+        context: ctx,
+        params: { cycle_id: cycle.cycle_id, name: "Flag calibration",
+                  participant_ids: [ @em_1.id ], calibrant_person_ids: [ @report_1.id ] }
+      )
+      Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
+      @flag_session_id = result[:session_id]
+      @flag_cap_stable = cap_stable
+    end
+
+    sign_in_as(@facilitator_user)
+    visit calibration_session_capability_path(@flag_session_id, @flag_cap_stable)
+    assert_text "WHAT GOOD LOOKS LIKE"
+    assert_text "Shapes team direction"
+
+    # Open the per-level disclosure (native <details> — set .open directly;
+    # a synthetic summary click can be dropped on starved CI) and raise the
+    # clarification.
+    assert_selector "summary", text: "⚑ Flag expectation as unclear"
+    page.execute_script(<<~JS)
+      document.querySelectorAll("details > summary").forEach((s) => {
+        if (s.textContent.includes("Flag expectation")) s.parentElement.open = true
+      })
+    JS
+    fill_in "flag-reason-3", with: "Scope or altitude?"
+    click_button_with_js_fallback "Raise clarification", expect_text: "clarification discussion is now open"
+
+    # One flag per cell per session: the marker replaces the affordance.
+    assert_text "⚑ Flagged — 1 open clarification on the framework"
+    assert_no_selector "summary", text: "⚑ Flag expectation as unclear"
+
+    ActsAsTenant.with_tenant(@tenant) do
+      clarification = FrameworkState::SuggestedEdit.clarifications.pending.sole
+      assert_includes clarification.rationale, "Flagged during Flag calibration"
+      assert_includes clarification.rationale, "Scope or altitude?"
+      flags = CalibrationSessions::SessionOutcomes.new(session: CalibrationSession.find(@flag_session_id)).flags
+      assert_equal clarification.suggestion_id, flags.first[:suggestion_id]
+    end
+  end
+
   test "member without reports sees no Calibration nav link" do
     sign_in_as(@member_user)
 

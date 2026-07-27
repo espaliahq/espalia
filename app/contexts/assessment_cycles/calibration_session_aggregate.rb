@@ -36,6 +36,7 @@ class AssessmentCycles::CalibrationSessionAggregate
     @facilitator_id = nil
     @participant_ids = Set.new
     @calibrant_ids = Set.new
+    @flagged_cells = Set.new
     @status = :new
   end
 
@@ -182,6 +183,39 @@ class AssessmentCycles::CalibrationSessionAggregate
     }))
   end
 
+  # Records that the room flagged a capability × level expectation as
+  # unclear. The framework-side clarification is raised FIRST by the caller
+  # (two streams, not atomic — framework write leads; see
+  # docs/architecture/calibration-sessions.md → "The clarification kind");
+  # this event carries its suggestion_id as session provenance.
+  #
+  # One flag per cell per session — the room flags a cell once and the
+  # discussion accumulates on the framework side (independent flags from
+  # OTHER sessions stack there as separate clarifications by design).
+  #
+  # @param capability_stable_id [String] cross-version capability id
+  # @param level_ordinal [Integer]
+  # @param suggestion_id [String] the framework clarification's UUID
+  # @param flagged_by_id [String, nil] person_id of the actor
+  # @param reason [String, nil] the room's note on what is unclear
+  # @raise [RuntimeError] unless the session is live, or the cell was
+  #   already flagged in this session
+  def flag_expectation(capability_stable_id:, level_ordinal:, suggestion_id:,
+                       flagged_by_id: nil, reason: nil)
+    ensure_started!
+    cell = [ capability_stable_id, level_ordinal ]
+    raise "Cell already flagged in this session" if @flagged_cells.include?(cell)
+
+    apply(AssessmentCycles::Events::CalibrationExpectationFlagged.new(data: {
+      session_id: @session_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      suggestion_id: suggestion_id,
+      flagged_by_id: flagged_by_id,
+      reason: reason
+    }.compact))
+  end
+
   # Closes the session (terminal). No-op when already closed so the
   # cycle-close sync handler is retry-safe.
   #
@@ -205,6 +239,14 @@ class AssessmentCycles::CalibrationSessionAggregate
   def ensure_draft!
     raise "Session not defined" if @status == :new
     raise "Session already started — participants and population are frozen" if @status == :started
+    raise "Session is closed" if @status == :closed
+  end
+
+  # Outcomes are live-session acts: a draft session has no room to speak
+  # for, and a closed one is history.
+  def ensure_started!
+    raise "Session not defined" if @status == :new
+    raise "Session hasn't started" if @status == :draft
     raise "Session is closed" if @status == :closed
   end
 
@@ -237,6 +279,10 @@ class AssessmentCycles::CalibrationSessionAggregate
 
   on AssessmentCycles::Events::CalibrationSessionStarted do |_event|
     @status = :started
+  end
+
+  on AssessmentCycles::Events::CalibrationExpectationFlagged do |event|
+    @flagged_cells << [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
   end
 
   on AssessmentCycles::Events::CalibrationSessionClosed do |_event|

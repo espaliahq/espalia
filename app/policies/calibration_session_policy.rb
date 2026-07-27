@@ -43,6 +43,13 @@ class CalibrationSessionPolicy < ApplicationPolicy
     facilitator? || tenant_admin?
   end
 
+  # Live-session outcomes (flagging an expectation as unclear). The flag is
+  # raised on the SESSION's authority — deliberately independent of framework
+  # collaborator roles; the facilitator holds the room.
+  def flag_expectation?
+    facilitator? || tenant_admin?
+  end
+
   private
 
   def can_facilitate?
