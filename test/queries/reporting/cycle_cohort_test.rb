@@ -110,6 +110,25 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
     end
   end
 
+  context "closed cycle" do
+    should "keep concluded participants in the cohort, excluding only the withdrawn" do
+      closed_cycle = create(:assessment_cycle,
+        tenant: @tenant, framework_id: SecureRandom.uuid_v7, status: "closed")
+      concluded = create(:person, tenant: @tenant, name: "Finished")
+      create(:assessment_cycle_enrollment, :concluded,
+        tenant: @tenant, cycle: closed_cycle, person_id: concluded.id,
+        role_id: @role.role_id, level_ordinal: 2)
+      withdrawn = create(:person, tenant: @tenant, name: "Removed")
+      create(:assessment_cycle_enrollment, :withdrawn,
+        tenant: @tenant, cycle: closed_cycle, person_id: withdrawn.id,
+        role_id: @role.role_id, level_ordinal: 2)
+
+      result = Reporting::CycleCohort.new(cycle: closed_cycle).call
+      assert_equal 1, result.total
+      assert_equal [ concluded.id ], result.participants.map(&:person_id)
+    end
+  end
+
   context "at-risk by deadline" do
     should "flag a non-aligned participant past the planned end date even if recently active" do
       # Its own framework_id — the tenant allows only one open cycle per
