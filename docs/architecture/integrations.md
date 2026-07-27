@@ -37,11 +37,14 @@ No global singleton. The adapter reads both fields per tenant and constructs a f
 
 `Hris::Hibob::Adapter#sync_people`:
 
-1. **Upsert** — fetch all employees with pagination, map via `ResponseMapper`, upsert `Person` records. Matches by `external_id` first, then falls back to email (adopts manually-created people). Collects `touched_person_ids`.
+1. **Upsert** — fetch all employees with pagination, map via `ResponseMapper`, upsert `Person` records. Matches by `external_id` first, then falls back to email (adopts manually-created people). Collects `touched_person_ids`. An employee present with `isActive: false` is upserted with `status: "inactive"`.
 2. **Manager resolution** — second pass, builds `external_id → Person` map, sets `manager_id` from `reportsTo.id`.
 3. **Deactivation** — HRIS-sourced people not in the current response are marked `status: "inactive"`. Does not touch people from other HRIS sources.
+   **3b. Offboarding** — enforces "inactive ⇒ no live participation": every inactive person (however they became inactive — Pass 1's `isActive: false`, Pass 3's absence, or a manual admin edit) still enrolled in an **open** cycle is withdrawn (`PersonUnenrolled` reason `left_company` — a person-scoped removal, never a cycle conclusion), then unassigned from their framework(s) (`PersonUnassignedFromFramework`). State-driven and idempotent, so each sync self-heals stragglers. Per-person errors are collected in `result[:errors]` without aborting the sync.
 4. **Auto-link TenantUsers** — `TenantUser.where(person_id: nil)` is scanned; each is linked to a `Person` matching the user's email. This bridges Devise auth → Person domain entity.
-5. **Framework assignment + reporting-manager recording** — dispatches one of four assignment commands per touched person (see below), then records the reporting manager onto the person's stream.
+5. **Framework assignment + reporting-manager recording** — dispatches one of four assignment commands per **active** touched person (see below), then records the reporting manager onto the person's stream. Inactive people are skipped (`result[:skipped_inactive]`) — Pass 3b owns them.
+
+**Reactivation (seasonal / boomerang returnees)** is the normal new-hire path, not a special case: when the person reappears in the response, Pass 1 flips them back to `active`, Pass 5 re-assigns (their assignment row was removed at offboarding, so the initial-assignment branch fires a second `PersonAssignedToFramework` on the same PersonDevelopment stream), and `AutoEnrollNewAssignments` enrolls them into any open cycle with a fresh progress slate (plus prior-aligned-cycle rating seeds, if any).
 
 The entire Pass 5 loop is wrapped in `Rails.configuration.event_store.with_metadata(tenant_id: tenant.id)` so the `CurrentAssessment` projection can resolve tenant context when writing read models.
 
@@ -113,6 +116,8 @@ For each touched person, the adapter picks exactly one path:
   created: Integer,       # new Person rows in Pass 1
   updated: Integer,       # existing Person rows touched in Pass 1
   deactivated: Integer,   # people no longer in HRIS response (Pass 3)
+  offboarded: Integer,    # inactive people withdrawn from open cycles + unassigned (Pass 3b)
+  skipped_inactive: Integer, # inactive people excluded from framework assignment (Pass 5)
   assigned: Integer,      # initial framework assignments (Pass 5)
   role_changed: Integer,  # transferred to new role (Pass 5)
   level_changed: Integer, # promoted in same role (Pass 5)
