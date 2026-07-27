@@ -115,6 +115,55 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
       @suggestion = build_suggestion(target_entity_type: "behavioural_expectation")
       assert policy.approve?
     end
+
+    should "resolve a clarification" do
+      @suggestion = build_suggestion(target_entity_type: "behavioural_expectation", kind: "clarification")
+      assert policy.resolve?
+    end
+
+    should "not resolve a proposal-kind suggestion" do
+      @suggestion = build_suggestion(target_entity_type: "behavioural_expectation")
+      assert_not policy.resolve?
+    end
+  end
+
+  context "resolve? per collaborator role" do
+    setup do
+      @user = create(:user)
+      @person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @user.email)
+        @tenant_user = create(:tenant_user, tenant: @tenant, user: @user, person: p, role: :member)
+        p
+      end
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
+      # A capability-anchored clarification still needs expectation-tier (3)
+      # authority to resolve — whoever could change the text settles the question.
+      @suggestion = build_suggestion(target_entity_type: "capability", kind: "clarification")
+    end
+
+    should "permit an editor (expectation tier)" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_collaborator, tenant: @tenant, framework_id: @framework.framework_id,
+               person_id: @person.id, role: "editor")
+      end
+      assert policy.resolve?
+    end
+
+    should "deny a role_lead (below expectation tier)" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_collaborator, tenant: @tenant, framework_id: @framework.framework_id,
+               person_id: @person.id, role: "role_lead")
+      end
+      assert_not policy.resolve?
+    end
+
+    should "deny a plain collaborator" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_collaborator, tenant: @tenant, framework_id: @framework.framework_id,
+               person_id: @person.id, role: "collaborator")
+      end
+      assert_not policy.resolve?
+    end
   end
 
   context "as a framework collaborator with capability_lead role" do
@@ -254,14 +303,15 @@ class FrameworkSuggestionPolicyTest < ActiveSupport::TestCase
     FrameworkSuggestionPolicy.new(@ctx, @suggestion)
   end
 
-  def build_suggestion(target_entity_type:, author_id: SecureRandom.uuid_v7, status: "pending")
+  def build_suggestion(target_entity_type:, author_id: SecureRandom.uuid_v7, status: "pending", kind: "edit")
     ActsAsTenant.with_tenant(@tenant) do
       build(:framework_suggested_edit,
             tenant: @tenant,
             framework_id: @framework.framework_id,
             target_entity_type: target_entity_type,
             author_id: author_id,
-            status: status)
+            status: status,
+            kind: kind)
     end
   end
 end

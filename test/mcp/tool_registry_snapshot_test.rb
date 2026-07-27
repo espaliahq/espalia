@@ -1415,6 +1415,46 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_request_clarification",
+        "description" => "Ask for clarification of a capability × level expectation — opens a discussion, proposes nothing.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"  => { "type" => "string" },
+            "capability_id" => { "type" => "string" },
+            "level_ordinal" => { "type" => "integer" },
+            "rationale"     => { "type" => "string" }
+          },
+          "required" => %w[framework_id capability_id level_ordinal rationale],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_resolve_clarification",
+        "description" => "Resolve a pending clarification with a note (expectation-tier authority required).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"            => { "type" => "string" },
+            "suggestion_id"           => { "type" => "string" },
+            "note"                    => { "type" => "string" },
+            "resulting_suggestion_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id note],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_set_behavioural_expectation",
         "description" => "Author a behavioural expectation for an empty cell — applied directly with approval rights in editing mode, else proposed as a suggestion.",
         "inputSchema" => {

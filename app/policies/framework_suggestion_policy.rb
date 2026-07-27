@@ -50,6 +50,18 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   # @return [Boolean]
   def reject? = approve?
 
+  # Clarifications are resolved with a note, never approved/rejected. Gated
+  # on expectation-tier (tier 3) authority regardless of anchor — whoever
+  # could change the text can declare the question settled.
+  #
+  # @return [Boolean]
+  def resolve?
+    return false unless record.respond_to?(:clarification?) && record.clarification?
+    return true if tenant_admin?
+    return false unless person.present?
+    can_approve_tier?(3)
+  end
+
   # @return [Boolean]
   def amend? = pending? && author?
 
