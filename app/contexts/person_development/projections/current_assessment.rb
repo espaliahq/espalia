@@ -66,6 +66,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::PersonUnassignedFromFramework,
       PersonDevelopment::Events::JoinedAssessmentCycle,
       PersonDevelopment::Events::LeftAssessmentCycle,
+      PersonDevelopment::Events::AssessmentCycleConcluded,
       PersonDevelopment::Events::SelfRated,
       PersonDevelopment::Events::SelfRatingRevised,
       PersonDevelopment::Events::SelfRatingCleared,
@@ -111,6 +112,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::PersonUnassignedFromFramework then handle_unassigned(event)
     when PersonDevelopment::Events::JoinedAssessmentCycle then handle_joined_cycle(event)
     when PersonDevelopment::Events::LeftAssessmentCycle then handle_left_cycle(event)
+    when PersonDevelopment::Events::AssessmentCycleConcluded then handle_cycle_concluded(event)
     when PersonDevelopment::Events::SelfRated then handle_self_rated(event)
     when PersonDevelopment::Events::SelfRatingRevised then handle_self_rating_revised(event)
     when PersonDevelopment::Events::SelfRatingCleared then handle_self_rating_cleared(event)
@@ -274,6 +276,13 @@ class PersonDevelopment::Projections::CurrentAssessment
     # how far the person got. Active-participant queries already filter
     # via the enrollment row's status flipping to "withdrawn"; the orphaned
     # progress row doesn't leak into active views.
+  end
+
+  def handle_cycle_concluded(_event)
+    # Intentional no-op, mirroring handle_left_cycle: the progress row IS
+    # the historical record of the concluded participation (aligned_at on
+    # it drives next-cycle rating seeding). The enrollment row's status
+    # flip to "concluded" is owned by AssessmentCycles::Projections::CurrentState.
   end
 
   def handle_self_rated(event)

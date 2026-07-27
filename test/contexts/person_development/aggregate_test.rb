@@ -330,6 +330,48 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#conclude_cycle" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(@cycle_id, 1)
+    end
+
+    should "apply AssessmentCycleConcluded event" do
+      @aggregate.conclude_cycle(@cycle_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::AssessmentCycleConcluded, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+    end
+
+    should "allow joining a new cycle after conclusion" do
+      @aggregate.conclude_cycle(@cycle_id)
+      new_cycle = SecureRandom.uuid_v7
+      @aggregate.join_cycle(new_cycle, 2)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::JoinedAssessmentCycle, event
+      assert_equal new_cycle, event.data[:cycle_id]
+    end
+
+    should "raise if not in a cycle" do
+      @aggregate.conclude_cycle(@cycle_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.conclude_cycle(@cycle_id)
+      end
+      assert_match /Not currently in a cycle/, err.message
+    end
+
+    should "raise if cycle_id does not match" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.conclude_cycle(SecureRandom.uuid_v7)
+      end
+      assert_match /does not match/, err.message
+    end
+  end
+
   # ── Self-Rating ──
 
   context "#rate_self" do

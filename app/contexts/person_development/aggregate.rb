@@ -12,9 +12,9 @@
 # full per-cycle story.
 #
 # Cycle membership is driven from the {AssessmentCycles::Aggregate} via a
-# cross-stream sync handler. `join_cycle` / `leave_cycle` are called ONLY by
-# that sync handler in response to PersonEnrolled / PersonUnenrolled events —
-# never by controllers.
+# cross-stream sync handler. `join_cycle` / `leave_cycle` / `conclude_cycle`
+# are called ONLY by that sync handler in response to PersonEnrolled /
+# PersonUnenrolled / CycleClosed events — never by controllers.
 #
 class PersonDevelopment::Aggregate
   include AggregateRoot
@@ -291,6 +291,24 @@ class PersonDevelopment::Aggregate
     apply(PersonDevelopment::Events::LeftAssessmentCycle.new(data: {
       cycle_id: cycle_id,
       reason: reason
+    }))
+  end
+
+  # Concludes the given assessment cycle for this person.
+  #
+  # Distinct from {#leave_cycle}: the person is not being removed — the
+  # cycle is ending around them. Their participation stands as part of the
+  # cycle's cohort; an unrated enrollment still concludes.
+  #
+  # @param cycle_id [String] UUID of the cycle concluding (must match current)
+  # @raise [RuntimeError] if not in a cycle or cycle_id doesn't match
+  def conclude_cycle(cycle_id)
+    ensure_assigned!
+    raise "Not currently in a cycle" if @current_cycle_id.nil?
+    raise "Cycle ID does not match current cycle" unless @current_cycle_id == cycle_id
+
+    apply(PersonDevelopment::Events::AssessmentCycleConcluded.new(data: {
+      cycle_id: cycle_id
     }))
   end
 
@@ -1344,6 +1362,12 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::LeftAssessmentCycle do |_event|
+    @current_cycle_id = nil
+    @alignment_started = false
+    @alignment_completed = false
+  end
+
+  on PersonDevelopment::Events::AssessmentCycleConcluded do |_event|
     @current_cycle_id = nil
     @alignment_started = false
     @alignment_completed = false

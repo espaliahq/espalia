@@ -201,9 +201,10 @@ class AssessmentCycles::Aggregate
     }))
   end
 
-  # Closes the cycle. All currently-enrolled persons are implicitly removed
-  # from the cycle via {LeftAssessmentCycle} events on their PersonDev streams
-  # (handled by the cross-stream sync handler).
+  # Closes the cycle. Every currently-enrolled person's participation
+  # concludes — {PersonDevelopment::Events::AssessmentCycleConcluded} on
+  # their PersonDev streams (via the cross-stream sync handler), never a
+  # removal: they remain part of the cycle's historical cohort.
   #
   # @param closed_by [String, nil] optional person_id / tenant_user_id
   # @raise [RuntimeError] if cycle not open

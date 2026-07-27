@@ -162,6 +162,21 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Concludes the person's current assessment cycle (the cycle closed with
+  # them still enrolled — a normal ending, not a removal).
+  #
+  # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}
+  # in response to a CycleClosed event — never by controllers.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle that concluded (must match current)
+  def conclude_cycle(person_id, framework_id, cycle_id)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.conclude_cycle(cycle_id)
+    end
+  end
+
   # Records a self-rating for a capability at a specific level.
   #
   # @param person_id [String] UUID of the person

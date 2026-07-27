@@ -54,16 +54,16 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal "enrolled", cycle.enrollments.first.status
     end
 
-    should "propagate close event as leave_cycle on each person stream" do
+    should "propagate close event as conclude_cycle on each person stream" do
       @handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1)
       @handler.enroll(@cycle_id, @person_id)
       @handler.close_cycle(@cycle_id)
 
       person_stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
       person_events = Rails.configuration.event_store.read.stream(person_stream).to_a
-      left = person_events.find { |e| e.is_a?(PersonDevelopment::Events::LeftAssessmentCycle) }
-      assert_not_nil left
-      assert_equal "cycle_closed", left.data[:reason]
+      concluded = person_events.find { |e| e.is_a?(PersonDevelopment::Events::AssessmentCycleConcluded) }
+      assert_not_nil concluded
+      assert_equal @cycle_id, concluded.data[:cycle_id]
     end
 
     should "withdraw participants when the cycle closes" do
