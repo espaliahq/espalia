@@ -12,9 +12,9 @@
 # full per-cycle story.
 #
 # Cycle membership is driven from the {AssessmentCycles::Aggregate} via a
-# cross-stream sync handler. `join_cycle` / `leave_cycle` are called ONLY by
-# that sync handler in response to PersonEnrolled / PersonUnenrolled events —
-# never by controllers.
+# cross-stream sync handler. `join_cycle` / `leave_cycle` / `conclude_cycle`
+# are called ONLY by that sync handler in response to PersonEnrolled /
+# PersonUnenrolled / CycleClosed events — never by controllers.
 #
 class PersonDevelopment::Aggregate
   include AggregateRoot
@@ -278,19 +278,42 @@ class PersonDevelopment::Aggregate
     }))
   end
 
-  # Leaves the given assessment cycle.
+  # Leaves the given assessment cycle — a person-scoped removal (opted out,
+  # left the company, enrolled by mistake). A cycle closing around the
+  # person is NOT a leave; that path is {#conclude_cycle}, and the legacy
+  # "cycle_closed" reason is rejected so a stale caller can't misclassify a
+  # normal closure as a withdrawal.
   #
   # @param cycle_id [String] UUID of the cycle being left (must match current)
-  # @param reason [String] why the person is leaving
-  # @raise [RuntimeError] if not in a cycle or cycle_id doesn't match
+  # @param reason [String] why the person is leaving (e.g. "withdrew")
+  # @raise [RuntimeError] if not in a cycle, cycle_id doesn't match, or the
+  #   reason is "cycle_closed"
   def leave_cycle(cycle_id, reason)
-    ensure_assigned!
-    raise "Not currently in a cycle" if @current_cycle_id.nil?
-    raise "Cycle ID does not match current cycle" unless @current_cycle_id == cycle_id
+    # Internal backstop only — AssessmentCycles::Aggregate#unenroll already
+    # rejects the reserved reason at the user-facing boundary, so this can
+    # only fire for a stale in-code caller still wiring closure to leave.
+    raise "Use conclude_cycle for cycle closure" if reason.to_s == "cycle_closed"
+    ensure_in_cycle!(cycle_id)
 
     apply(PersonDevelopment::Events::LeftAssessmentCycle.new(data: {
       cycle_id: cycle_id,
       reason: reason
+    }))
+  end
+
+  # Concludes the given assessment cycle for this person.
+  #
+  # Distinct from {#leave_cycle}: the person is not being removed — the
+  # cycle is ending around them. Their participation stands as part of the
+  # cycle's cohort; an unrated enrollment still concludes.
+  #
+  # @param cycle_id [String] UUID of the cycle concluding (must match current)
+  # @raise [RuntimeError] if not in a cycle or cycle_id doesn't match
+  def conclude_cycle(cycle_id)
+    ensure_in_cycle!(cycle_id)
+
+    apply(PersonDevelopment::Events::AssessmentCycleConcluded.new(data: {
+      cycle_id: cycle_id
     }))
   end
 
@@ -1173,6 +1196,14 @@ class PersonDevelopment::Aggregate
     raise "Person not yet assigned to a framework" unless @assigned
   end
 
+  # Shared state reset for the two cycle-exit events — one place to extend
+  # when cycle-exit clearing grows, so leave and conclude can't diverge.
+  def reset_cycle_exit_state
+    @current_cycle_id = nil
+    @alignment_started = false
+    @alignment_completed = false
+  end
+
   # Withdrawal retracts the evidence artifact itself, so its linkage
   # threads are read-only in full: no new posts (checked in
   # post_comment) AND no edits or deletes of what was already said.
@@ -1344,9 +1375,11 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::LeftAssessmentCycle do |_event|
-    @current_cycle_id = nil
-    @alignment_started = false
-    @alignment_completed = false
+    reset_cycle_exit_state
+  end
+
+  on PersonDevelopment::Events::AssessmentCycleConcluded do |_event|
+    reset_cycle_exit_state
   end
 
   on PersonDevelopment::Events::AlignmentStarted do |_event|

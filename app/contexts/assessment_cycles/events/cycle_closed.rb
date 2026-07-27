@@ -3,8 +3,9 @@
 # Event emitted when an assessment cycle is closed.
 #
 # Carries the full list of enrolled_person_ids so the cross-stream sync
-# handler can dispatch leave_cycle to every person's PersonDev stream
-# without a read-model lookup.
+# handler can dispatch conclude_cycle to every person's PersonDev stream
+# (their participation concludes — it is not a removal) without a
+# read-model lookup.
 #
 # @!attribute [r] data
 #   @return [Hash] event data

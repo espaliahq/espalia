@@ -304,7 +304,7 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "allow rejoining after leaving" do
-      @aggregate.leave_cycle(@cycle_id, "cycle_closed")
+      @aggregate.leave_cycle(@cycle_id, "manual")
       new_cycle = SecureRandom.uuid_v7
       @aggregate.join_cycle(new_cycle, 2)
 
@@ -319,12 +319,61 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       err = assert_raises(RuntimeError) do
         @aggregate.leave_cycle(@cycle_id, "manual")
       end
-      assert_match /Not currently in a cycle/, err.message
+      assert_match /Not currently in an assessment cycle/, err.message
     end
 
     should "raise if cycle_id does not match" do
       err = assert_raises(RuntimeError) do
         @aggregate.leave_cycle(SecureRandom.uuid_v7, "manual")
+      end
+      assert_match /does not match/, err.message
+    end
+
+    should "reject the legacy cycle_closed reason" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.leave_cycle(@cycle_id, "cycle_closed")
+      end
+      assert_match /Use conclude_cycle/, err.message
+    end
+  end
+
+  context "#conclude_cycle" do
+    setup do
+      @aggregate.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
+      @cycle_id = SecureRandom.uuid_v7
+      @aggregate.join_cycle(@cycle_id, 1)
+    end
+
+    should "apply AssessmentCycleConcluded event" do
+      @aggregate.conclude_cycle(@cycle_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::AssessmentCycleConcluded, event
+      assert_equal @cycle_id, event.data[:cycle_id]
+    end
+
+    should "allow joining a new cycle after conclusion" do
+      @aggregate.conclude_cycle(@cycle_id)
+      new_cycle = SecureRandom.uuid_v7
+      @aggregate.join_cycle(new_cycle, 2)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::JoinedAssessmentCycle, event
+      assert_equal new_cycle, event.data[:cycle_id]
+    end
+
+    should "raise if not in a cycle" do
+      @aggregate.conclude_cycle(@cycle_id)
+
+      err = assert_raises(RuntimeError) do
+        @aggregate.conclude_cycle(@cycle_id)
+      end
+      assert_match /Not currently in an assessment cycle/, err.message
+    end
+
+    should "raise if cycle_id does not match" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.conclude_cycle(SecureRandom.uuid_v7)
       end
       assert_match /does not match/, err.message
     end
@@ -675,9 +724,9 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
     end
 
     should "not let stale aligned state from a prior cycle leak into a new cycle's clear guard" do
-      # Complete cycle A's alignment via the projection-facing event.
+      # Complete cycle A's alignment, then conclude the cycle.
       @aggregate.complete_alignment(@cycle_id, completed_by_id: SecureRandom.uuid_v7)
-      @aggregate.leave_cycle(@cycle_id, "cycle_closed")
+      @aggregate.conclude_cycle(@cycle_id)
 
       # Join cycle B and start its alignment. The aggregate's
       # @aligned_ratings must NOT still carry the cycle-A entry, or a

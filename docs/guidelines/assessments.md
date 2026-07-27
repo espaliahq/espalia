@@ -866,8 +866,10 @@ There is **no** `sticky_hero_controller.js`. The hero's collapse is pure CSS scr
 Each enrolled `AssessmentCycleParticipation` walks a lifecycle the views render explicitly:
 
 ```text
-enrolled → started → aligning → aligned → withdrawn
-                        ↑___________|   (manager re-opens, cycle still open)
+enrolled → started → aligning → aligned ─┐
+                        ↑___________|    ├→ concluded  (cycle closes)
+   (manager re-opens, cycle still open)  │
+              any pre-close state ───────┴→ withdrawn  (person unenrolled)
 ```
 
 | Status | Trigger | What's editable |
@@ -876,7 +878,23 @@ enrolled → started → aligning → aligned → withdrawn
 | `started` | First `SelfRated` / `ManagerRated` event with `source: "human"` | Self + manager ratings (incl. delegate) |
 | `aligning` | Manager fires `AlignmentStarted` | Aligned values only — self + manager FROZEN |
 | `aligned` | Manager fires `FullAlignmentCompleted` | Nothing — all ratings frozen |
-| `withdrawn` | Person unenrolled or cycle closed | Nothing |
+| `concluded` | Cycle closed (`AssessmentCycleConcluded` on the PD stream) | Nothing |
+| `withdrawn` | Person unenrolled (`LeftAssessmentCycle` on the PD stream) | Nothing |
+
+**Concluded vs withdrawn (deliberate distinction).** A cycle closing is a
+*conclusion*, not a removal: the participant stays part of the cycle's
+historical cohort (cohort reports, participant counts, and manager cohort
+access all keep concluded rows — the enrollment `active` scope is
+`not withdrawn`). An unrated enrollment still concludes — "concluded" says
+only that the cycle ended around them, never how far they got (that stays on
+the progress row). `withdrawn` exclusively means a person-scoped removal
+(opted out, left the company, enrolled by mistake). Historical PD streams
+retain `LeftAssessmentCycle(reason: "cycle_closed")` from before the two
+concepts were separated (immutable; the aggregate now rejects that reason for
+new commands). The enrollment read model heals independently: a `CurrentState`
+rebuild replays the historical **`CycleClosed`** events (its own stream's
+input — PD events are not) and re-derives those close-withdrawn enrollment
+rows as concluded.
 
 **Re-opening a completed alignment.** A completion made by accident is
 recoverable: the assessee's direct manager (never a delegate or the assessee)

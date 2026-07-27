@@ -20,7 +20,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
   end
 
   context "full assessment cycle via cycle handler + rating handler" do
-    should "support define+enroll, rate, revise, leave" do
+    should "support define+enroll, rate, revise, conclude" do
       # Assign person to framework
       @handler.assign_to_framework(@person_id, @framework_id, @role_id, @level_id)
 
@@ -53,7 +53,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       rating.reload
       assert_equal "occasional", rating.self_rated_frequency
 
-      # Leave the cycle (emulating cycle close)
+      # Close the cycle — the participation concludes (not a leave/removal)
       @cycle_handler.close_cycle(cycle_id)
 
       # Verify the PersonDev stream contains the expected events
@@ -64,7 +64,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_kind_of PersonDevelopment::Events::JoinedAssessmentCycle, events[1]
       assert_kind_of PersonDevelopment::Events::SelfRated, events[2]
       assert_kind_of PersonDevelopment::Events::SelfRatingRevised, events[3]
-      assert_kind_of PersonDevelopment::Events::LeftAssessmentCycle, events[4]
+      assert_kind_of PersonDevelopment::Events::AssessmentCycleConcluded, events[4]
     end
   end
 

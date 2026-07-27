@@ -3,11 +3,12 @@
 # Cross-stream synchronous handler: propagates AssessmentCycle enrollment
 # events to PersonDevelopment streams.
 #
-# When a person is enrolled into (or unenrolled from) a cycle, this handler
-# dispatches a PersonDevelopment command which emits a corresponding
-# `JoinedAssessmentCycle` / `LeftAssessmentCycle` event on the person's
-# PersonDev stream. This keeps the PersonDev stream self-contained — replaying
-# it tells the full story of when the person was in which cycle.
+# When a person is enrolled into (or unenrolled from) a cycle, or the cycle
+# closes around them, this handler dispatches a PersonDevelopment command
+# which emits a corresponding `JoinedAssessmentCycle` / `LeftAssessmentCycle`
+# / `AssessmentCycleConcluded` event on the person's PersonDev stream. This
+# keeps the PersonDev stream self-contained — replaying it tells the full
+# story of when the person was in which cycle and how each stint ended.
 #
 # IMPORTANT INVARIANTS
 # ====================
@@ -67,7 +68,7 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
   # Seeds the new cycle's ratings from the most recent prior cycle for
   # this (person, framework) that ever reached `aligned`. We look at
   # `aligned_at IS NOT NULL` because the progress row is preserved on
-  # LeftAssessmentCycle (and on cycle closure) — the timestamp is the
+  # LeftAssessmentCycle and AssessmentCycleConcluded — the timestamp is the
   # durable signal that alignment was completed at some point.
   # No-op if there is no prior aligned cycle.
   def seed_from_prior_cycle(person_id, framework_id, current_cycle_id, enrolled_by)
@@ -102,13 +103,17 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
     )
   end
 
+  # Cycle closure is a conclusion, not a removal: every still-enrolled
+  # participant's PersonDev stream records AssessmentCycleConcluded (their
+  # participation stands as part of the cycle's cohort), never a
+  # LeftAssessmentCycle — that event is reserved for person-scoped
+  # unenrollment.
   def handle_cycle_closed(event)
     Array(event.data[:enrolled_person_ids]).each do |person_id|
-      command_handler.leave_cycle(
+      command_handler.conclude_cycle(
         person_id,
         event.data[:framework_id],
-        event.data[:cycle_id],
-        "cycle_closed"
+        event.data[:cycle_id]
       )
     end
   end

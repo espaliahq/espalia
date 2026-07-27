@@ -25,6 +25,11 @@ FactoryBot.define do
     status { "enrolled" }
     enrolled_at { Time.current }
 
+    trait :concluded do
+      status { "concluded" }
+      concluded_at { Time.current }
+    end
+
     trait :withdrawn do
       status { "withdrawn" }
       withdrawn_at { Time.current }

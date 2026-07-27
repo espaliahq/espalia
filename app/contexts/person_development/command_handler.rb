@@ -147,10 +147,11 @@ class PersonDevelopment::CommandHandler
     end
   end
 
-  # Removes the person from their current assessment cycle.
+  # Removes the person from their current assessment cycle (person-scoped
+  # removal — cycle closure goes through {#conclude_cycle} instead).
   #
   # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}
-  # in response to a PersonUnenrolled or CycleClosed event — never by controllers.
+  # in response to a PersonUnenrolled event — never by controllers.
   #
   # @param person_id [String] UUID of the person
   # @param framework_id [String] UUID of the framework
@@ -159,6 +160,21 @@ class PersonDevelopment::CommandHandler
   def leave_cycle(person_id, framework_id, cycle_id, reason)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.leave_cycle(cycle_id, reason)
+    end
+  end
+
+  # Concludes the person's current assessment cycle (the cycle closed with
+  # them still enrolled — a normal ending, not a removal).
+  #
+  # Called ONLY by {AssessmentCycles::SyncHandlers::PersonEnrollmentSync}
+  # in response to a CycleClosed event — never by controllers.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @param cycle_id [String] UUID of the cycle that concluded (must match current)
+  def conclude_cycle(person_id, framework_id, cycle_id)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.conclude_cycle(cycle_id)
     end
   end
 
@@ -403,7 +419,8 @@ class PersonDevelopment::CommandHandler
     # from a partial conversation, but those aren't a valid carry-forward
     # baseline. The progress row's `aligned_at` is set only by
     # FullAlignmentCompleted and survives subsequent cycle closure
-    # (the progress row is retained on LeftAssessmentCycle).
+    # (the progress row is retained on both LeftAssessmentCycle and
+    # AssessmentCycleConcluded).
     prior_completed = AssessmentCycleProgress
       .where(cycle_id: prior_cycle_id, person_id: person_id)
       .where.not(aligned_at: nil)

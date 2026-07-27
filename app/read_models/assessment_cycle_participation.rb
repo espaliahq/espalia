@@ -24,7 +24,7 @@
 class AssessmentCycleParticipation
   # All possible derived statuses, drawn from the union of enrollment and progress
   # state machines. Returned by {#status}.
-  STATUSES = %w[enrolled started self_complete manager_complete aligning aligned withdrawn].freeze
+  STATUSES = %w[enrolled started self_complete manager_complete aligning aligned concluded withdrawn].freeze
   INDIVIDUAL_RATING_STATUSES = %w[enrolled started].freeze
 
   # Pundit policy lookup: reuse the AssessmentCyclePolicy
@@ -116,11 +116,14 @@ class AssessmentCycleParticipation
   end
 
   # @return [String] derived status combining enrollment + progress.
-  #   Returns "withdrawn" when the enrollment is withdrawn regardless of
-  #   progress state. Otherwise returns the progress status if present, or
+  #   Returns "withdrawn" when the enrollment is withdrawn and "concluded"
+  #   when the cycle closed around the participant — both are terminal, so
+  #   they win over progress state (how far they got stays readable on
+  #   {#progress}). Otherwise returns the progress status if present, or
   #   "enrolled" if no progress row exists yet.
   def status
     return "withdrawn" if enrollment.status == "withdrawn"
+    return "concluded" if enrollment.status == "concluded"
     return progress.status if progress&.status.present? && progress.status != "in_progress"
     return "started" if progress&.started_at.present?
 

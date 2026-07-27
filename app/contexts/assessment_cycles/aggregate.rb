@@ -160,12 +160,21 @@ class AssessmentCycles::Aggregate
 
   # Removes a person from the cycle.
   #
+  # The reason is free text from the unenrolling admin, EXCEPT the reserved
+  # "cycle_closed" — that would masquerade a person-scoped removal as a cycle
+  # conclusion downstream, so it is rejected here at the entry boundary
+  # (before any event is applied) with a message fit for the admin's flash.
+  #
   # @param person_id [String] UUID of the person to unenroll
   # @param reason [String] why the person is being removed
   # @param unenrolled_by [String, nil] optional person_id / tenant_user_id
-  # @raise [RuntimeError] if cycle not open or person not enrolled
+  # @raise [RuntimeError] if cycle not open, person not enrolled, or the
+  #   reason is the reserved "cycle_closed"
   def unenroll(person_id, reason, unenrolled_by: nil)
     ensure_open!
+    if reason.to_s.strip == "cycle_closed"
+      raise "\"cycle_closed\" is a reserved reason — describe why this person is being removed instead"
+    end
     raise "Person not enrolled" unless @enrolled_person_ids.include?(person_id)
 
     apply(AssessmentCycles::Events::PersonUnenrolled.new(data: {
@@ -201,9 +210,10 @@ class AssessmentCycles::Aggregate
     }))
   end
 
-  # Closes the cycle. All currently-enrolled persons are implicitly removed
-  # from the cycle via {LeftAssessmentCycle} events on their PersonDev streams
-  # (handled by the cross-stream sync handler).
+  # Closes the cycle. Every currently-enrolled person's participation
+  # concludes — {PersonDevelopment::Events::AssessmentCycleConcluded} on
+  # their PersonDev streams (via the cross-stream sync handler), never a
+  # removal: they remain part of the cycle's historical cohort.
   #
   # @param closed_by [String, nil] optional person_id / tenant_user_id
   # @raise [RuntimeError] if cycle not open

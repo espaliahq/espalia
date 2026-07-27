@@ -110,6 +110,41 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
     end
   end
 
+  context "closed cycle" do
+    should "keep concluded participants in the cohort, excluding only the withdrawn" do
+      closed_cycle = create(:assessment_cycle,
+        tenant: @tenant, framework_id: SecureRandom.uuid_v7, status: "closed")
+      concluded = create(:person, tenant: @tenant, name: "Finished")
+      create(:assessment_cycle_enrollment, :concluded,
+        tenant: @tenant, cycle: closed_cycle, person_id: concluded.id,
+        role_id: @role.role_id, level_ordinal: 2)
+      withdrawn = create(:person, tenant: @tenant, name: "Removed")
+      create(:assessment_cycle_enrollment, :withdrawn,
+        tenant: @tenant, cycle: closed_cycle, person_id: withdrawn.id,
+        role_id: @role.role_id, level_ordinal: 2)
+
+      result = Reporting::CycleCohort.new(cycle: closed_cycle).call
+      assert_equal 1, result.total
+      assert_equal [ concluded.id ], result.participants.map(&:person_id)
+    end
+
+    should "never flag closed-cycle participants as at risk" do
+      closed_cycle = create(:assessment_cycle,
+        tenant: @tenant, framework_id: SecureRandom.uuid_v7, status: "closed",
+        planned_end_at: 3.months.ago.to_date)
+      person = create(:person, tenant: @tenant, name: "Unfinished")
+      create(:assessment_cycle_enrollment, :concluded,
+        tenant: @tenant, cycle: closed_cycle, person_id: person.id,
+        role_id: @role.role_id, level_ordinal: 2, enrolled_at: 4.months.ago)
+      create(:assessment_cycle_progress,
+        tenant: @tenant, cycle: closed_cycle, person_id: person.id,
+        status: "started", started_at: 4.months.ago)
+
+      result = Reporting::CycleCohort.new(cycle: closed_cycle).call
+      assert_equal 0, result.at_risk_count
+    end
+  end
+
   context "at-risk by deadline" do
     should "flag a non-aligned participant past the planned end date even if recently active" do
       # Its own framework_id — the tenant allows only one open cycle per

@@ -70,6 +70,16 @@ class AssessmentCycleParticipationTest < ActiveSupport::TestCase
       participation = AssessmentCycleParticipation.new(enrollment: enrollment, progress: progress)
       assert_equal "withdrawn", participation.status
     end
+
+    should "returns 'concluded' when the cycle closed around the participant" do
+      enrollment = create(:assessment_cycle_enrollment, :concluded,
+        tenant: @tenant, cycle: @cycle, person_id: @person_id)
+      progress = create(:assessment_cycle_progress, :aligned,
+        tenant: @tenant, cycle: @cycle, person_id: @person_id)
+
+      participation = AssessmentCycleParticipation.new(enrollment: enrollment, progress: progress)
+      assert_equal "concluded", participation.status
+    end
   end
 
   context "#individual_ratings_editable?" do
@@ -93,6 +103,11 @@ class AssessmentCycleParticipationTest < ActiveSupport::TestCase
 
     should "false when withdrawn" do
       enrollment = create(:assessment_cycle_enrollment, :withdrawn, tenant: @tenant, cycle: @cycle, person_id: @person_id)
+      assert_not AssessmentCycleParticipation.new(enrollment: enrollment).individual_ratings_editable?
+    end
+
+    should "false when concluded" do
+      enrollment = create(:assessment_cycle_enrollment, :concluded, tenant: @tenant, cycle: @cycle, person_id: @person_id)
       assert_not AssessmentCycleParticipation.new(enrollment: enrollment).individual_ratings_editable?
     end
   end
