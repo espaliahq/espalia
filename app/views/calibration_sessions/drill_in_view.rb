@@ -16,13 +16,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
-  BORDER_BY_FREQUENCY = {
-    "none" => "border-2 border-red-500 dark:border-red-400",
-    "some" => "border-2 border-yellow-500 dark:border-yellow-400",
-    "occasional" => "border-2 border-green-500 dark:border-green-400",
-    "consistent" => "border-2 border-blue-500 dark:border-blue-400"
-  }.freeze
-
   RELATION_LABELS = { "self" => "Self", "manager" => "Manager", "peer" => "Peer feedback" }.freeze
 
   # @param session [CalibrationSession]
@@ -234,7 +227,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     if dot[:backed]
       CONFIG.fetch(dot[:frequency])[:chip_bg]
     else
-      BORDER_BY_FREQUENCY.fetch(dot[:frequency])
+      # Outline from the shared palette so an unbacked dot's hue can never
+      # drift from the chips/pills for the same frequency.
+      "border-2 #{CONFIG.fetch(dot[:frequency])[:border]}"
     end
   end
 

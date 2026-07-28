@@ -24,6 +24,8 @@
 # - `chip_bg`  — solid fill for the level chip
 # - `pill_bg`  — softer fill for the inline pill (sits next to body text)
 # - `dot`      — small marker for the divergent-secondary line
+# - `border`   — outline hue for unbacked calibration dots (same intensity
+#                as `dot`, so an outlined dot reads as the same rating)
 #
 module Views::Assessments::FrequencyPalette
   CONFIG = {
@@ -33,7 +35,8 @@ module Views::Assessments::FrequencyPalette
       chip_bg:  "bg-red-500 dark:bg-red-400",
       chip_txt: "text-red-950",
       pill_bg:  "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
-      dot:      "bg-red-500 dark:bg-red-400"
+      dot:      "bg-red-500 dark:bg-red-400",
+      border:   "border-red-500 dark:border-red-400"
     },
     "some" => {
       label:    "Some",
@@ -41,7 +44,8 @@ module Views::Assessments::FrequencyPalette
       chip_bg:  "bg-yellow-500 dark:bg-yellow-400",
       chip_txt: "text-yellow-950",
       pill_bg:  "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300",
-      dot:      "bg-yellow-500 dark:bg-yellow-400"
+      dot:      "bg-yellow-500 dark:bg-yellow-400",
+      border:   "border-yellow-500 dark:border-yellow-400"
     },
     "occasional" => {
       label:    "Most",
@@ -49,7 +53,8 @@ module Views::Assessments::FrequencyPalette
       chip_bg:  "bg-green-500 dark:bg-green-400",
       chip_txt: "text-green-950",
       pill_bg:  "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300",
-      dot:      "bg-green-500 dark:bg-green-400"
+      dot:      "bg-green-500 dark:bg-green-400",
+      border:   "border-green-500 dark:border-green-400"
     },
     "consistent" => {
       label:    "Consistently",
@@ -57,7 +62,8 @@ module Views::Assessments::FrequencyPalette
       chip_bg:  "bg-blue-500 dark:bg-blue-400",
       chip_txt: "text-blue-950",
       pill_bg:  "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300",
-      dot:      "bg-blue-500 dark:bg-blue-400"
+      dot:      "bg-blue-500 dark:bg-blue-400",
+      border:   "border-blue-500 dark:border-blue-400"
     }
   }.freeze
 

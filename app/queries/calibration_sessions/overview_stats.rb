@@ -30,9 +30,13 @@
 #   nonsense. Only disagreement that is real AND unexplained by tendency
 #   marks an unclear-expectation candidate.
 class CalibrationSessions::OverviewStats
-  FREQUENCY_VALUES = {
-    "none" => 0.0, "some" => 1.0, "occasional" => 2.0, "consistent" => 3.0
-  }.freeze
+  # Equal-interval band values (0–3) derived from the canonical frequency
+  # vocabulary, so a rename/addition can't silently skew the calibration
+  # stats. Deliberately NOT PersonDevelopment::Scoring's weights
+  # (0/0.25/0.5/1.0) — calibration compares raters on an ordinal scale,
+  # not scoring contribution.
+  FREQUENCY_VALUES = AssessmentLevelRating::FREQUENCIES
+    .each_with_index.to_h { |frequency, index| [ frequency, index.to_f ] }.freeze
 
   # Raters with fewer rated cells than this are shown with their n but
   # never badged — small samples always look extreme.
@@ -109,25 +113,27 @@ class CalibrationSessions::OverviewStats
   # One entry per manager-rated at-level cell:
   # { person_id:, rater_id:, capability_stable_id:, frequency:, value:, self_value: }
   def rated_cells
-    @rated_cells ||= begin
-      rows = AssessmentLevelRating
-        .for_cycle(@session.cycle_id)
-        .where(person_id: rater_for.keys)
-        .where.not(manager_rated_frequency: nil)
-      rows.filter_map do |row|
-        ordinal = assessed_ordinals[row.person_id]
-        next unless ordinal && row.level_ordinal == ordinal
+    @rated_cells ||= AssessmentLevelRating
+      .for_cycle(@session.cycle_id)
+      .where(person_id: rater_for.keys)
+      .where(level_ordinal: assessed_ordinals.values.uniq)
+      .where.not(manager_rated_frequency: nil)
+      .pluck(:person_id, :level_ordinal, :capability_stable_id,
+             :manager_rated_frequency, :self_rated_frequency)
+      .filter_map do |person_id, level_ordinal, stable_id, manager_frequency, self_frequency|
+        # The level filter above is population-wide; keep only each person's
+        # OWN assessed level.
+        next unless assessed_ordinals[person_id] == level_ordinal
 
         {
-          person_id: row.person_id,
-          rater_id: rater_for.fetch(row.person_id),
-          capability_stable_id: row.capability_stable_id,
-          frequency: row.manager_rated_frequency,
-          value: FREQUENCY_VALUES.fetch(row.manager_rated_frequency),
-          self_value: row.self_rated_frequency && FREQUENCY_VALUES.fetch(row.self_rated_frequency)
+          person_id: person_id,
+          rater_id: rater_for.fetch(person_id),
+          capability_stable_id: stable_id,
+          frequency: manager_frequency,
+          value: FREQUENCY_VALUES.fetch(manager_frequency),
+          self_value: self_frequency && FREQUENCY_VALUES.fetch(self_frequency)
         }
       end
-    end
   end
 
   # ── tendency strip ──
