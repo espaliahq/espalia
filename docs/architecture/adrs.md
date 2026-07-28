@@ -212,3 +212,15 @@ The aggregate tracks pending-mapping debt via `@archives_needing_mapping` (popul
 - **Deferred (not built):** the as-at-completion renderer itself, and **role-aware rendering for horizontal moves** (rendering a closed cycle against its snapshot *role*'s matrix + un-orphaning ratings). Rare in alpha.
 
 Shipped in PRs #139, #140, #141, #142.
+
+## ADR-20: Cross-cycle seeding carries all prior ratings forward (per-cell precedence)
+
+**Decision:** When a person enrols in a new cycle, seed from their **most recent prior participation** in the framework — aligned or not — with per-cell precedence: an agreed cell carries the aligned value into both sides; a never-agreed cell carries each perspective's own last value forward; a side that never rated stays empty (seeding records what existed, never fabricates agreement). Idempotency is per side, so a human-touched side is never overwritten while the other side can still seed.
+
+**Why:** The original rule seeded only from a cycle that completed alignment. Its premise ("a partially-aligned cycle isn't a valid carry-forward baseline") justified refusing an imperfect baseline, but the alternative isn't a better baseline — it's blank, which throws away every rating both parties made and punishes a report for their manager's incomplete alignment. The Q3 2026 cohort surfaced this as apparent seeding "inconsistency": ~60% of participants started empty solely because their Q2 alignment was never formally completed. Most-recent-participation (rather than last-aligned) is lossless because seeding chains — an unaligned cycle already contains the previous aligned baseline plus whatever moved since.
+
+**Consequences:**
+- Carried (seeded, unconfirmed) values render distinctly per side — dashed-outline pill / lighter chip tint, per-side `self_rating_source` / `manager_rating_source` on the read model (`CurrentAssessment` CODE_VERSION 6, rebuild backfills) — and selecting the shown value **confirms** instead of untoggle-clearing (the popover Clear posts an explicit marker).
+- Unilateral manager ratings now carry across a manager handover as the new manager's starting position; `source: "seeded"` + `seeded_from_cycle_id` keep the provenance honest (UI disclosure of the source cycle is a future affordance).
+- Anchoring is accepted, consistent with the product's diff-your-growth philosophy; engagement stays legible because seeded events never trip `started`.
+- Bulk enrollment moved to a background job — seeding volume made inline enrollment a request-timeout class.

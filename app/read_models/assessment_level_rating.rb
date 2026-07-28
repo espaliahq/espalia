@@ -54,4 +54,20 @@ class AssessmentLevelRating < ApplicationRecord
   scope :aligned, -> { where.not(aligned_frequency: nil) }
   scope :seeded, -> { where(source: "seeded") }
   scope :human_entered, -> { where(source: "human") }
+
+  # Whether the self side still shows a carried-forward (seeded) value the
+  # person hasn't confirmed or changed. Per-side — the row-level `source`
+  # flips to "human" on any human touch and can't answer this.
+  #
+  # @return [Boolean]
+  def self_rating_carried?
+    self_rating_source == "seeded"
+  end
+
+  # Whether the manager side still shows a carried-forward (seeded) value.
+  #
+  # @return [Boolean]
+  def manager_rating_carried?
+    manager_rating_source == "seeded"
+  end
 end

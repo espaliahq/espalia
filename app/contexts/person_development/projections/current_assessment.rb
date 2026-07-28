@@ -53,7 +53,18 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     deterministic id (one-time PK churn; thereafter stable across all
   #     rebuilds). Requires a rebuild
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
-  CODE_VERSION = 5
+  #
+  # 6 — per-side rating provenance: rating handlers now stamp
+  #     `self_rating_source` / `manager_rating_source` ("seeded" | "human";
+  #     a clear stamps "human" with a nil frequency — the human owns the
+  #     emptiness, which stops seed re-runs resurrecting deliberate
+  #     clears; nil means the side never held anything) so the UI can
+  #     render carried-forward ratings distinctly per perspective — the
+  #     row-level `source` flips to "human" on ANY human touch and can't
+  #     tell which side is still carried. Derivable from historical
+  #     events → rebuild backfills
+  #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  CODE_VERSION = 6
 
   # All event classes this projection handles.
   #
@@ -290,6 +301,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
+    rating.self_rating_source = seeded_event?(event) ? "seeded" : "human"
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
@@ -303,6 +315,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.self_rated_comment = event.data[:comment]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
+    rating.self_rating_source = "human"
     rating.save!
     touch_progress_started(event)
     refresh_completion(event)
@@ -313,6 +326,11 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.self_rated_frequency = nil
     rating.self_rated_comment = nil
+    # "human", not nil: a clear is a human decision that this side is
+    # EMPTY. nil means "never held anything" — the distinction is what
+    # lets a seed re-run complete untouched sides without resurrecting
+    # a value the person deliberately cleared.
+    rating.self_rating_source = "human"
     rating.save!
     refresh_completion(event)
     broadcast_assessment_sync(event)
@@ -324,6 +342,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_comment = event.data[:comment]
     rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
+    rating.manager_rating_source = seeded_event?(event) ? "seeded" : "human"
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
@@ -338,6 +357,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
+    rating.manager_rating_source = "human"
     rating.save!
     touch_progress_started(event)
     refresh_completion(event)
@@ -349,6 +369,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_frequency = nil
     rating.manager_rated_comment = nil
     rating.manager_rated_by_id = nil
+    # "human", not nil — see handle_self_rating_cleared.
+    rating.manager_rating_source = "human"
     rating.save!
     refresh_completion(event)
     broadcast_assessment_sync(event)

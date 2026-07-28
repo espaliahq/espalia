@@ -390,14 +390,17 @@ class PersonDevelopment::CommandHandler
     end
   end
 
-  # Seeds the current cycle's ratings from a prior cycle's aligned values.
+  # Seeds the current cycle's ratings from the prior cycle — carry-forward
+  # with per-cell precedence.
   #
-  # For each (capability, level) where the prior cycle reached an aligned
-  # frequency, emits both a SelfRated and ManagerRated event with
-  # `source: "seeded"` and `seeded_from_cycle_id: <prior>`. The new cycle
-  # starts with both perspectives pre-populated so the conversation
-  # opens with "this is where we agreed you were last cycle — confirm
-  # or update."
+  # A cell the parties agreed on (aligned_frequency present) seeds BOTH
+  # sides with the aligned value; a never-agreed cell seeds each
+  # perspective from its own last value (self → seeded self, manager →
+  # seeded manager) — the sides can start asymmetrically if one never
+  # rated. All seeds are SelfRated / ManagerRated events with
+  # `source: "seeded"` and `seeded_from_cycle_id: <prior>`, so the new
+  # cycle opens with "this is where things stood last cycle — confirm or
+  # update", whether or not that cycle's alignment completed.
   #
   # Skip-and-flag for framework version drift: only seeds capabilities
   # whose `stable_id` exists in the new cycle's framework_id (the active
@@ -413,26 +416,23 @@ class PersonDevelopment::CommandHandler
   # @return [Hash] :seeded count, :skipped array of {capability_stable_id, reason}
   def seed_ratings_from_prior_cycle(person_id, framework_id, current_cycle_id, prior_cycle_id,
                                      seeded_by_id:)
-    # Refuse to seed unless the prior cycle actually reached the `aligned`
-    # lifecycle state — i.e. the manager fired FullAlignmentCompleted on it.
-    # A cycle that is still merely `aligning` may have a few aligned cells
-    # from a partial conversation, but those aren't a valid carry-forward
-    # baseline. The progress row's `aligned_at` is set only by
-    # FullAlignmentCompleted and survives subsequent cycle closure
-    # (the progress row is retained on both LeftAssessmentCycle and
-    # AssessmentCycleConcluded).
-    prior_completed = AssessmentCycleProgress
-      .where(cycle_id: prior_cycle_id, person_id: person_id)
-      .where.not(aligned_at: nil)
-      .exists?
-
-    return { seeded: 0, skipped: [], seeded_by_id: seeded_by_id } unless prior_completed
-
-    prior_aligned = AssessmentLevelRating
+    # Carry-forward policy (see assessments.md → Cross-cycle seeding):
+    # every prior rating seeds the new cycle, aligned or not. Per-cell
+    # precedence — a cell the parties AGREED on carries the aligned value
+    # into BOTH sides (shared truth, as before); a cell that was never
+    # agreed carries each perspective's own last value forward, so the
+    # disagreement resumes where it stopped instead of starting blank.
+    # The old aligned-cycle-only gate punished a report for their
+    # manager's incomplete alignment; the alternative to an imperfect
+    # baseline is not a better baseline, it is blank.
+    prior_rows = AssessmentLevelRating
       .for_person(person_id)
       .for_framework(framework_id)
       .for_cycle(prior_cycle_id)
-      .aligned
+      .where(
+        "aligned_frequency IS NOT NULL OR self_rated_frequency IS NOT NULL " \
+        "OR manager_rated_frequency IS NOT NULL"
+      )
 
     valid_stable_ids = FrameworkState::Capability
       .joins(:category)
@@ -440,15 +440,25 @@ class PersonDevelopment::CommandHandler
       .pluck(:stable_id)
       .to_set
 
-    # Idempotency: any (cap, level) pair we've already seeded into the new
-    # cycle — by an earlier run, or by a manual rate during enrolment — is
-    # left alone. Re-running the seed is a no-op for those pairs.
-    already_seeded_pairs = AssessmentLevelRating
+    # Idempotency is PER SIDE, keyed on OWNERSHIP, not value presence: a
+    # side is off-limits when it holds a value (seeded or human) OR when
+    # its provenance is "human" with no value — an explicit clear (the
+    # projection stamps clears as human-owned). Only a side that has
+    # never held anything can be seeded on a re-run, so re-running the
+    # whole seed is a no-op and never resurrects a deliberate clear.
+    current_rows = AssessmentLevelRating
       .for_person(person_id)
       .for_framework(framework_id)
       .for_cycle(current_cycle_id)
-      .pluck(:capability_stable_id, :level_ordinal)
-      .to_set
+      .pluck(:capability_stable_id, :level_ordinal,
+             :self_rated_frequency, :manager_rated_frequency,
+             :self_rating_source, :manager_rating_source)
+    self_present = current_rows.filter_map do |c, l, s, _, s_src, _|
+      [ c, l ] if s.present? || s_src.present?
+    end.to_set
+    manager_present = current_rows.filter_map do |c, l, _, m, _, m_src|
+      [ c, l ] if m.present? || m_src.present?
+    end.to_set
 
     seeded = 0
     skipped = []
@@ -457,9 +467,14 @@ class PersonDevelopment::CommandHandler
     # single with_person_development block. Avoids per-event aggregate
     # replays.
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      prior_aligned.each do |rating|
+      prior_rows.each do |rating|
         stable_id = rating.capability_stable_id
-        next if already_seeded_pairs.include?([ stable_id, rating.level_ordinal ])
+        pair = [ stable_id, rating.level_ordinal ]
+        self_value    = rating.aligned_frequency.presence || rating.self_rated_frequency.presence
+        manager_value = rating.aligned_frequency.presence || rating.manager_rated_frequency.presence
+        seed_self    = self_value.present? && !self_present.include?(pair)
+        seed_manager = manager_value.present? && !manager_present.include?(pair)
+        next unless seed_self || seed_manager
 
         unless valid_stable_ids.include?(stable_id)
           aggregate.record_seed_skip(stable_id,
@@ -477,20 +492,24 @@ class PersonDevelopment::CommandHandler
           next
         end
 
-        aggregate.rate_self(stable_id,
-          level_ordinal: rating.level_ordinal,
-          frequency: rating.aligned_frequency,
-          cycle_id: current_cycle_id,
-          comment: "Seeded from prior cycle",
-          source: "seeded",
-          seeded_from_cycle_id: prior_cycle_id)
-        aggregate.rate_as_manager(stable_id,
-          level_ordinal: rating.level_ordinal,
-          frequency: rating.aligned_frequency,
-          cycle_id: current_cycle_id,
-          comment: "Seeded from prior cycle",
-          source: "seeded",
-          seeded_from_cycle_id: prior_cycle_id)
+        if seed_self
+          aggregate.rate_self(stable_id,
+            level_ordinal: rating.level_ordinal,
+            frequency: self_value,
+            cycle_id: current_cycle_id,
+            comment: "Seeded from prior cycle",
+            source: "seeded",
+            seeded_from_cycle_id: prior_cycle_id)
+        end
+        if seed_manager
+          aggregate.rate_as_manager(stable_id,
+            level_ordinal: rating.level_ordinal,
+            frequency: manager_value,
+            cycle_id: current_cycle_id,
+            comment: "Seeded from prior cycle",
+            source: "seeded",
+            seeded_from_cycle_id: prior_cycle_id)
+        end
         seeded += 1
       end
     end

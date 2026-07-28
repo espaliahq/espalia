@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
 # Records a self-rating for one capability × level on the named
-# assignment. Mirrors the web RatingsController behaviour: setting the
-# same frequency twice clears the rating (untoggle), an existing-but-
-# different value is a revise, and a fresh value is a new rate.
+# assignment. Mirrors the web RatingsController behaviour: on a
+# carried-forward (seeded) value, re-sending the same frequency CONFIRMS
+# it as a human rating; on a human value it clears (untoggle); an
+# existing-but-different value is a revise, a fresh value is a new rate,
+# and `clear: true` clears explicitly (or no-ops when already empty).
 #
 # Write — :mcp_client approval. Users can rate themselves without any
 # extra in-app handoff because no permissions or other users are
@@ -26,6 +28,10 @@ class Operations::Assessments::RateSelf < Operations::Base
                                 allowed: %w[none some occasional consistent]
   parameter :comment,   String
   parameter :rationale, String
+  # Explicit clear (no-op if already empty). Without it, re-sending the
+  # current frequency confirms a carried value or untoggle-clears a human
+  # one — so a client that MEANS clear should say so.
+  parameter :clear, :boolean
 
   def policy_check
     authorize assignment, :create_self_rating?
@@ -54,9 +60,29 @@ class Operations::Assessments::RateSelf < Operations::Base
 
   def dispatch(cycle_id)
     handler = PersonDevelopment::CommandHandler.new
-    existing_freq = existing_rating(cycle_id)&.self_rated_frequency
+    existing = existing_rating(cycle_id)
+    existing_freq = existing&.self_rated_frequency
 
-    if existing_freq == params[:frequency]
+    if params[:clear].present?
+      # Explicit clear-or-noop — mirrors the web's rating[clear] marker.
+      return if existing_freq.blank?
+
+      handler.clear_self_rating(
+        assignment.person_id, assignment.framework_id, params[:capability_stable_id],
+        level_ordinal: params[:level_ordinal], cycle_id: cycle_id
+      )
+    elsif existing_freq == params[:frequency] && existing&.self_rating_carried?
+      # Confirming a carried-forward (seeded) value — same gesture as the
+      # web: re-emit as human so the provenance flips.
+      handler.revise_self_rating(
+        assignment.person_id, assignment.framework_id, params[:capability_stable_id],
+        level_ordinal: params[:level_ordinal], frequency: params[:frequency],
+        rationale: "Confirmed carried-forward rating", cycle_id: cycle_id,
+        # Confirm without a comment keeps the existing one (typically the
+        # seeded-provenance note) rather than wiping it.
+        comment: params[:comment].presence || existing.self_rated_comment
+      )
+    elsif existing_freq == params[:frequency]
       handler.clear_self_rating(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], cycle_id: cycle_id

@@ -133,16 +133,30 @@ class Views::Assessments::LevelChip < Views::Base
   end
 
   def focus_border
-    "border-gray-900 dark:border-white"
+    # A focused chip keeps the high-contrast focus edge, but carried fills
+    # render it DASHED — the displayed (person-level) chip is focused on
+    # every card, so without this the carried signal would never reach the
+    # chips it matters most on.
+    solid_carried? ? "border-dashed border-gray-900 dark:border-white" : "border-gray-900 dark:border-white"
   end
 
   # Unrated idle chips need a quiet but discernible edge so the strip
   # doesn't read as one flat band of colour. Rated chips already carry
   # a solid fill so a transparent border there reads as edge enough.
   def idle_border
+    # Carried solid fills wear a dashed border in their hue — the "carried"
+    # signal shared with the pill's dashed outline, and the thing that keeps
+    # a carried-consistent chip apart from the assumed-consistent below-level
+    # fill (same blue-300 in light mode).
+    return carried_border if solid_carried?
     return "border-transparent" if rated? || split?
 
     "border-gray-200 dark:border-gray-700"
+  end
+
+  def carried_border
+    config = Views::Assessments::FrequencyPalette.config_for(fill_state[1])
+    config ? config[:chip_carried_border] : "border-transparent"
   end
 
   # Screen-reader label spelling out which capability + level the chip
@@ -152,6 +166,7 @@ class Views::Assessments::LevelChip < Views::Base
     level_note = @context == :self ? "your level" : "current level"
     base = at_person_level? ? "Focus #{@level_code} (#{level_note})" : "Focus #{@level_code}"
     parts = [ "#{base}, rated #{rated_description}" ]
+    parts << "carried forward from the previous cycle" if solid_carried?
     parts << split_note if split?
     parts << activity_title if has_activity?
     parts.join(", ")
@@ -196,7 +211,7 @@ class Views::Assessments::LevelChip < Views::Base
   def chip_bg
     case fill_state.first
     when :solid
-      palette_bg(fill_state[1])
+      solid_carried? ? palette_carried_bg(fill_state[1]) : palette_bg(fill_state[1])
     when :split
       palette_bg(fill_state[2])
     else
@@ -204,11 +219,39 @@ class Views::Assessments::LevelChip < Views::Base
     end
   end
 
+  # Whether a SOLID fill shows carried-forward (seeded, unconfirmed)
+  # value(s) — rendered at the lighter carried tint, mirroring the
+  # assumed-consistent precedent. Split slices deliberately keep the full
+  # tint (two lightened triangles blur the seam); carried state there is
+  # visible on the expansion panel's pills instead. An aligned value is
+  # conversation output and never carried.
+  def solid_carried?
+    # Only a genuinely SOLID fill can be carried-styled — split chips keep
+    # the full tint and un-dashed borders by design (per-side carried state
+    # is visible on the expansion pills instead).
+    return false unless fill_state.first == :solid
+
+    data = @cell_data || {}
+    return false if data[:aligned_frequency].present?
+
+    carried = []
+    carried << data[:current_frequency_carried] if data[:current_frequency].present?
+    carried << data[:manager_frequency_carried] if data[:manager_frequency].present?
+    carried.any? && carried.all?
+  end
+
   def palette_bg(frequency)
     return ASSUMED_CONSISTENT_BG if frequency == ASSUMED
 
     config = Views::Assessments::FrequencyPalette.config_for(frequency)
     config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
+  end
+
+  def palette_carried_bg(frequency)
+    return ASSUMED_CONSISTENT_BG if frequency == ASSUMED
+
+    config = Views::Assessments::FrequencyPalette.config_for(frequency)
+    config ? config[:chip_carried] : "bg-gray-100 dark:bg-gray-700"
   end
 
   # The top-left triangle, painted over the base (bottom-right) fill via a
