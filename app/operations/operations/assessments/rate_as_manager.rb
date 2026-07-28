@@ -2,8 +2,9 @@
 
 # Records a manager rating for one capability × level on a direct
 # report's assignment. Same input shape and toggle semantics as
-# {Operations::Assessments::RateSelf}: same frequency clears, different
-# revises, fresh value rates. The policy
+# {Operations::Assessments::RateSelf}: same frequency confirms a
+# carried (seeded) value or clears a human one, different revises,
+# fresh value rates, `clear: "true"` clears explicitly. The policy
 # (AssessmentPolicy#create_manager_rating?) refuses the call unless the
 # caller is the assessee's manager.
 #
@@ -23,6 +24,8 @@ class Operations::Assessments::RateAsManager < Operations::Base
                                 allowed: %w[none some occasional consistent]
   parameter :comment,   String
   parameter :rationale, String
+  # Explicit clear (no-op if already empty) — see RateSelf.
+  parameter :clear, :boolean
 
   def policy_check
     authorize assignment, :create_manager_rating?
@@ -49,10 +52,28 @@ class Operations::Assessments::RateAsManager < Operations::Base
 
   def dispatch(cycle_id)
     handler = PersonDevelopment::CommandHandler.new
-    existing_freq = existing_rating(cycle_id)&.manager_rated_frequency
+    existing = existing_rating(cycle_id)
+    existing_freq = existing&.manager_rated_frequency
     rated_by_id = context.person&.id
 
-    if existing_freq == params[:frequency]
+    if params[:clear].present?
+      # Explicit clear-or-noop — mirrors the web's rating[clear] marker.
+      return if existing_freq.blank?
+
+      handler.clear_manager_rating(
+        assignment.person_id, assignment.framework_id, params[:capability_stable_id],
+        level_ordinal: params[:level_ordinal], cycle_id: cycle_id, rated_by_id: rated_by_id
+      )
+    elsif existing_freq == params[:frequency] && existing&.manager_rating_carried?
+      # Confirming a carried-forward (seeded) value — same gesture as the
+      # web: re-emit as human so the provenance flips.
+      handler.revise_manager_rating(
+        assignment.person_id, assignment.framework_id, params[:capability_stable_id],
+        level_ordinal: params[:level_ordinal], frequency: params[:frequency],
+        rationale: "Confirmed carried-forward rating", cycle_id: cycle_id,
+        comment: params[:comment], rated_by_id: rated_by_id
+      )
+    elsif existing_freq == params[:frequency]
       handler.clear_manager_rating(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], cycle_id: cycle_id, rated_by_id: rated_by_id

@@ -333,7 +333,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
-            "rationale"            => { "type" => "string" }
+            "rationale"            => { "type" => "string" },
+            "clear"                => { "type" => "boolean" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -355,7 +356,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
-            "rationale"            => { "type" => "string" }
+            "rationale"            => { "type" => "string" },
+            "clear"                => { "type" => "boolean" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false

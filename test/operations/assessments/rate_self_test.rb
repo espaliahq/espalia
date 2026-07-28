@@ -48,17 +48,27 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
     @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
   end
 
-  def call_op(frequency:, comment: nil)
+  def call_op(frequency:, comment: nil, clear: nil)
     ActsAsTenant.with_tenant(@tenant) do
-      Operations::Assessments::RateSelf.call(
-        context: @context,
-        params: {
-          assignment_id: @assignment.id,
-          capability_stable_id: @cap.stable_id,
-          level_ordinal: 2,
-          frequency: frequency,
-          comment: comment
-        }
+      params = {
+        assignment_id: @assignment.id,
+        capability_stable_id: @cap.stable_id,
+        level_ordinal: 2,
+        frequency: frequency,
+        comment: comment
+      }
+      params[:clear] = clear unless clear.nil?
+      Operations::Assessments::RateSelf.call(context: @context, params: params)
+    end
+  end
+
+  def seed_carried_rating(frequency)
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.rate_self(
+        @person.id, @framework_id, @cap.stable_id,
+        level_ordinal: 2, frequency: frequency, cycle_id: @cycle_id,
+        comment: "Seeded from prior cycle", source: "seeded",
+        seeded_from_cycle_id: SecureRandom.uuid_v7
       )
     end
   end
@@ -97,6 +107,35 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       result = call_op(frequency: "consistent")
 
       assert_nil reload_rating&.self_rated_frequency
+      assert_nil result[:frequency]
+    end
+  end
+
+  context "carried-forward (seeded) rating" do
+    should "confirm on same-frequency instead of clearing — web parity" do
+      seed_carried_rating("occasional")
+
+      result = call_op(frequency: "occasional")
+
+      rating = reload_rating
+      assert_equal "occasional", rating.self_rated_frequency,
+        "confirming a carried value must keep it, not clear it"
+      assert_equal "human", rating.self_rating_source
+      assert_equal "occasional", result[:frequency]
+    end
+
+    should "clear explicitly via clear: true" do
+      seed_carried_rating("occasional")
+
+      result = call_op(frequency: "occasional", clear: true)
+
+      assert_nil reload_rating&.self_rated_frequency
+      assert_nil result[:frequency]
+    end
+
+    should "no-op a clear when the rating is already empty" do
+      result = call_op(frequency: "occasional", clear: true)
+
       assert_nil result[:frequency]
     end
   end
