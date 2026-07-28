@@ -16,14 +16,26 @@ class CalibrationSessions::PersonCard
     @session = session
     @stats = stats
     @capability_stable_id = capability_stable_id
+    @cards = {}
   end
 
+  # Memoized per person (misses included) so callers can ask freely — the
+  # tray resolves a pin and then renders it, and the opened person is
+  # often also pinned. Each card costs a handful of queries.
+  #
   # @param person_id [String, nil]
   # @return [Hash, nil] `{ dot:, ordinal:, rater_id:, evidence:, revisit_requested: }`
   #   — nil when the person isn't on this capability's grid
   def for(person_id)
     return nil if person_id.blank?
+    return @cards[person_id] if @cards.key?(person_id)
 
+    @cards[person_id] = build(person_id)
+  end
+
+  private
+
+  def build(person_id)
     located = locate(person_id)
     return nil unless located
 
@@ -36,8 +48,6 @@ class CalibrationSessions::PersonCard
       revisit_requested: revisit_requested?(person_id, ordinal)
     }
   end
-
-  private
 
   # @return [Array(Hash, Integer, String), nil] [dot, ordinal, rater_id]
   def locate(person_id)

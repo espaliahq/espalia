@@ -69,7 +69,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   def resolve_compare_cards(stats)
     requested = Array.wrap(params[:compare]).grep(String).select(&:present?).uniq
     (requested & grid_person_ids(stats))
-      .filter_map { |person_id| [ person_id, @cards.for(person_id) ] if @cards.for(person_id) }
+      .filter_map { |person_id| @cards.for(person_id)&.then { |card| [ person_id, card ] } }
       .first(MAX_COMPARE_PINS).to_h
   end
 
