@@ -7,7 +7,7 @@
 class Operations::Reporting::EvidenceCoverage < Operations::Base
   description "Aggregate feedback and evidence-request coverage for an assessment cycle " \
               "across the caller's org subtree (admins see the whole cycle): feedback " \
-              "provided by request or unsolicited, immutable manager/report/peer directionality, " \
+              "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
               "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
               "and optional manager/role/level groups."
   category :read

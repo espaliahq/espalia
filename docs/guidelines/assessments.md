@@ -689,9 +689,10 @@ The cycle's **Feedback & evidence** report counts feedback provision separately
 from request workflow:
 
 - `feedback_provided` is every unique active `EvidenceItem` attributed to the
-  cycle, including unsolicited feedback. Multiple `EvidenceLink` rows never
+  cycle, including proactive feedback. Multiple `EvidenceLink` rows never
   multiply the count.
 - `provided_by_request` is the subset recorded in response to a cycle request;
+  proactive feedback is the remainder, exposed by the compatibility field
   `provided_unsolicited = feedback_provided - provided_by_request`.
 - Withdrawn items are excluded from active provision and reported separately.
 - A relink, migration, or valence change never changes the item's original
@@ -700,7 +701,7 @@ from request workflow:
   item is not counted as new feedback.
 - Active feedback is also grouped by immutable provider-to-recipient direction:
   manager → report, peer → peer, or report → manager. Self feedback is separate
-  and requested versus unsolicited remains an orthogonal split.
+  and requested versus proactive remains an orthogonal split.
 
 `EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
 feedback and requests use the PersonDevelopment aggregate's current cycle; a

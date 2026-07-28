@@ -74,7 +74,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
 
     assert_text "feedback & evidence"
     assert_text "Feedback provided"
-    assert_text "Unsolicited"
+    assert_text "Proactive"
     assert_text "Request fulfilment"
     assert_text "Feedback direction"
     assert_text "Manager → report"

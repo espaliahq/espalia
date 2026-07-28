@@ -147,8 +147,9 @@ item ID, never by capability link.
 
 - **Feedback provided**: unique active evidence items attributed to the cycle.
   `provided_by_request` is the subset recorded after and attached to a fulfilled
-  cycle request; `provided_unsolicited` is the remainder. Withdrawn items are
-  excluded from provided totals and reported separately.
+  cycle request; proactive feedback is the remainder (serialized under the
+  compatibility key `provided_unsolicited`). Withdrawn items are excluded from
+  provided totals and reported separately.
 - **Requests**: sent, fulfilled, pending, declined, and cancelled. Fulfilment
   rate is fulfilled / non-cancelled; request counts and evidence counts remain
   separate units.
