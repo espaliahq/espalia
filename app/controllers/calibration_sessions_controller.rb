@@ -262,11 +262,30 @@ class CalibrationSessionsController < ApplicationController
 
   # Enrollment + manager-rating readiness for the population on the
   # session's cycle. Per-person flags drive badges; counts drive the bar.
-  # partially_rated_ids distinguishes "some cells rated" (In progress)
-  # from "nothing rated" (Unrated) — manager_completed_at only stamps at
-  # FULL current-level coverage.
+  # partially_rated_ids distinguishes "the manager has touched some cells"
+  # (In progress) from untouched — manager_completed_at only stamps at
+  # FULL current-level VETTED coverage (carried/seeded values don't
+  # count; see Assessments::LevelCoverage). carried_only_ids marks
+  # managers whose values exist but are entirely carried forward —
+  # rendered "To confirm", matching the /assessments list vocabulary.
   def readiness_for(calibrant_ids)
-    return { enrolled_ids: [], manager_complete_ids: [], partially_rated_ids: [] } if calibrant_ids.empty?
+    if calibrant_ids.empty?
+      return { enrolled_ids: [], manager_complete_ids: [], partially_rated_ids: [], carried_only_ids: [] }
+    end
+
+    human_touched = AssessmentLevelRating
+      .for_cycle(@session.cycle_id)
+      .where(person_id: calibrant_ids)
+      .where(
+        "manager_rating_source = 'human' " \
+        "OR (manager_rated_frequency IS NOT NULL AND manager_rating_source IS NULL)"
+      )
+      .distinct.pluck(:person_id)
+    any_rated = AssessmentLevelRating
+      .for_cycle(@session.cycle_id)
+      .where(person_id: calibrant_ids)
+      .where.not(manager_rated_frequency: nil)
+      .distinct.pluck(:person_id)
 
     {
       enrolled_ids: AssessmentCycleEnrollment.active
@@ -274,11 +293,8 @@ class CalibrationSessionsController < ApplicationController
       manager_complete_ids: AssessmentCycleProgress
         .where(cycle_id: @session.cycle_id, person_id: calibrant_ids)
         .where.not(manager_completed_at: nil).pluck(:person_id),
-      partially_rated_ids: AssessmentLevelRating
-        .for_cycle(@session.cycle_id)
-        .where(person_id: calibrant_ids)
-        .where.not(manager_rated_frequency: nil)
-        .distinct.pluck(:person_id)
+      partially_rated_ids: human_touched,
+      carried_only_ids: any_rated - human_touched
     }
   end
 
