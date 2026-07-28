@@ -155,6 +155,41 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "treat a duplicate explicit clear as a no-op, never a re-rate" do
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "occasional" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      # Two explicit clears in a row (double click / second tab): the first
+      # clears; the second must no-op instead of falling through to
+      # rate_self with the frequency riding on the Clear form.
+      2.times do
+        post assessment_ratings_path(@assignment), params: {
+          rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2,
+                    frequency: "occasional", clear: "1" }
+        }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+        assert_response :success
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2)
+        assert_nil rating.self_rated_frequency
+      end
+    end
+
+    should "not 500 when frequency is absent and no rating row exists" do
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2 }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      # nil frequency == nil existing rating: must classify as a client-level
+      # rating error (422 turbo error partial), not a NoMethodError 500.
+      assert_response :unprocessable_content
+    end
+
     should "keep evidence and comment glyphs on the rated chip after rating" do
       # Regression: the rating re-render rebuilt the chip without passing
       # viewer_person_id / viewer_sees_all_evidence to the builder, so the

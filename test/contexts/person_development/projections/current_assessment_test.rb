@@ -262,14 +262,17 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         assert rating.manager_rating_carried?, "manager side must stay carried after a self-only confirm"
       end
 
-      # Clearing resets the side's provenance entirely.
+      # Clearing keeps the side HUMAN-owned (value nil): the person chose
+      # emptiness, so a seed re-run must not resurrect the carried value.
       emit(PersonDevelopment::Events::ManagerRatingCleared,
         capability_stable_id: cap_sid, level_ordinal: 3, cycle_id: @cycle_id)
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person_id,
           capability_stable_id: cap_sid, level_ordinal: 3)
-        assert_nil rating.manager_rating_source
+        assert_equal "human", rating.manager_rating_source
+        assert_nil rating.manager_rated_frequency
+        assert_not rating.manager_rating_carried?
       end
     end
 

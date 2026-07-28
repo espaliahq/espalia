@@ -66,27 +66,40 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
   end
 
   # Seeds the new cycle's ratings from the person's MOST RECENT prior
-  # participation in this framework — aligned or not (per-cell precedence
-  # happens in the command handler). Most-recent-participation is lossless
-  # by construction: seeding chains, so an unaligned Q2 already contains
-  # Q1's aligned baseline plus whatever moved since — skipping back to the
-  # last *aligned* cycle would discard newer information. Withdrawn and
-  # concluded enrollments both count: however the stint ended, its ratings
-  # are the person's latest known state. No-op when this is their first
-  # cycle.
+  # participation in this framework THAT HOLDS ANY RATINGS — aligned or
+  # not (per-cell precedence happens in the command handler).
+  # Most-recent-with-ratings is lossless by construction: seeding chains,
+  # so an unaligned Q2 already contains Q1's aligned baseline plus
+  # whatever moved since — skipping back to the last *aligned* cycle
+  # would discard newer information. The has-ratings filter matters for
+  # HISTORY: cycles enrolled under the old aligned-only gate can be
+  # entirely blank, and picking such a participation would strand the
+  # rated cycle behind it forever (each new empty cycle becoming the
+  # next one's "most recent"). Withdrawn and concluded enrollments both
+  # count: however the stint ended, its ratings are the person's latest
+  # known state. No-op when no prior cycle carries ratings.
   def seed_from_prior_cycle(person_id, framework_id, current_cycle_id, enrolled_by)
     # Use the association join (not a raw SQL join) so ActsAsTenant adds
     # the assessment_cycles tenant filter — otherwise the lookup could
     # resolve against another tenant's cycle row.
-    prior_cycle_id = AssessmentCycleEnrollment
+    candidate_cycle_ids = AssessmentCycleEnrollment
       .where(person_id: person_id)
       .where.not(cycle_id: current_cycle_id)
       .joins(:cycle)
       .where(assessment_cycles: { framework_id: framework_id })
       .order("assessment_cycles.opened_at DESC")
-      .limit(1)
       .pluck(:cycle_id)
-      .first
+
+    prior_cycle_id = candidate_cycle_ids.find do |cycle_id|
+      AssessmentLevelRating
+        .for_person(person_id)
+        .for_cycle(cycle_id)
+        .where(
+          "aligned_frequency IS NOT NULL OR self_rated_frequency IS NOT NULL " \
+          "OR manager_rated_frequency IS NOT NULL"
+        )
+        .exists?
+    end
 
     return unless prior_cycle_id
 

@@ -43,15 +43,20 @@ class Assessments::RatingsController < ApplicationController
       level_ordinal: level_ordinal
     )
 
-    if rating_params[:clear].present? && existing&.self_rated_frequency.present?
+    if rating_params[:clear].present?
       # Explicit clear from the popover's "Clear rating" — unambiguous,
       # regardless of carried state (the implicit same-frequency untoggle
       # below can't be, since on a carried value that gesture confirms).
-      handler.clear_self_rating(
-        current_person.id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
-      )
-    elsif existing&.self_rated_frequency == frequency && existing.self_rating_carried?
+      # Clear-or-noop, never anything else: a duplicate clear (double
+      # click, second tab) must not fall through and re-record the
+      # frequency riding on the form.
+      if existing&.self_rated_frequency.present?
+        handler.clear_self_rating(
+          current_person.id, @assignment.framework_id, capability_stable_id,
+          level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
+        )
+      end
+    elsif existing&.self_rated_frequency == frequency && existing&.self_rating_carried?
       # Confirming a carried-forward (seeded) value: clicking the shown
       # frequency means "yes, still true" — re-emit as a human rating so
       # the provenance flips and the carried treatment solidifies. The

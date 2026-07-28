@@ -440,17 +440,25 @@ class PersonDevelopment::CommandHandler
       .pluck(:stable_id)
       .to_set
 
-    # Idempotency is PER SIDE: a side already carrying a value in the new
-    # cycle — from an earlier seed run, or a human rating during enrolment —
-    # is left alone; the other side can still be seeded. Re-running the
-    # whole seed is a no-op.
+    # Idempotency is PER SIDE, keyed on OWNERSHIP, not value presence: a
+    # side is off-limits when it holds a value (seeded or human) OR when
+    # its provenance is "human" with no value — an explicit clear (the
+    # projection stamps clears as human-owned). Only a side that has
+    # never held anything can be seeded on a re-run, so re-running the
+    # whole seed is a no-op and never resurrects a deliberate clear.
     current_rows = AssessmentLevelRating
       .for_person(person_id)
       .for_framework(framework_id)
       .for_cycle(current_cycle_id)
-      .pluck(:capability_stable_id, :level_ordinal, :self_rated_frequency, :manager_rated_frequency)
-    self_present    = current_rows.filter_map { |c, l, s, _| [ c, l ] if s.present? }.to_set
-    manager_present = current_rows.filter_map { |c, l, _, m| [ c, l ] if m.present? }.to_set
+      .pluck(:capability_stable_id, :level_ordinal,
+             :self_rated_frequency, :manager_rated_frequency,
+             :self_rating_source, :manager_rating_source)
+    self_present = current_rows.filter_map do |c, l, s, _, s_src, _|
+      [ c, l ] if s.present? || s_src.present?
+    end.to_set
+    manager_present = current_rows.filter_map do |c, l, _, m, _, m_src|
+      [ c, l ] if m.present? || m_src.present?
+    end.to_set
 
     seeded = 0
     skipped = []
