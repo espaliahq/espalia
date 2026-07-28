@@ -141,9 +141,10 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
     assert_equal "manager", cards.for(@report.id)[:evidence].first[:relation]
   end
 
-  should "omit withdrawn evidence and evidence linked at another level" do
-    withdrawn = link_evidence(author: @em, content: "Withdrawn.")
-    withdrawn.update!(link_status: "withdrawn")
+  should "omit withdrawn items, removed links, and evidence linked at another level" do
+    link_evidence(author: @em, content: "Withdrawn item.").update!(link_status: "withdrawn")
+    unlinked = link_evidence(author: @em, content: "Removed link.")
+    EvidenceLink.where(evidence_id: unlinked.id).update_all(link_status: "removed")
     link_evidence(author: @em, content: "Different level.", ordinal: 4)
     link_evidence(author: @em, content: "At this level.")
 
@@ -169,8 +170,12 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
     second = nil
     assert_no_queries { second = subject.for(@report.id) }
     assert_same first, second
-    # Misses are memoized too — a stale pin is asked about twice.
-    assert_no_queries { subject.for(nil) }
+
+    # Misses are memoized too — a stale pin is asked about twice. Use a real
+    # id, not nil, so the memo is exercised rather than the blank short-circuit.
+    stale = create(:person, tenant: @tenant).id
+    assert_nil subject.for(stale)
+    assert_no_queries { assert_nil subject.for(stale) }
   end
 
   def assert_no_queries(&block)
