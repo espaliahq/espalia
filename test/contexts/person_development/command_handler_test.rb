@@ -443,36 +443,51 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal seed_event_count, reseeded, "re-running the seed must not append duplicate seeded SelfRated events"
     end
 
-    should "refuse to seed from a prior cycle that did not complete alignment" do
-      # Use a separate framework so we don't collide with the open new_cycle_id
-      # on the existing framework (one open cycle per framework constraint).
-      other_framework_id = SecureRandom.uuid_v7
-      partial_cycle_id = SecureRandom.uuid_v7
+    should "carry forward unaligned ratings per perspective from the most recent prior cycle" do
+      # A second capability rated ONE-sided in the new (Q2) cycle: the seed
+      # into Q3 must carry only the side that existed.
+      cap2_stable_id = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do
-        cycle = create(:assessment_cycle, tenant: @tenant, cycle_id: partial_cycle_id,
-          framework_id: other_framework_id, framework_version: 1)
-        # Aligning but never fully aligned — seed must refuse. Enrollment row
-        # marks them as still in the cycle; progress row carries the
-        # alignment_started_at without aligned_at.
-        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
-          person_id: @person_id, status: "enrolled")
-        create(:assessment_cycle_progress, tenant: @tenant, cycle: cycle,
-          person_id: @person_id, status: "aligning",
-          alignment_started_at: Time.current, alignment_started_by_id: @manager.id)
-        AssessmentLevelRating.create!(tenant: @tenant, cycle_id: partial_cycle_id,
-          person_id: @person_id, framework_id: other_framework_id,
-          capability_stable_id: @cap_stable_id, level_ordinal: 2,
-          aligned_frequency: "consistent", source: "human", migration_status: "not_flagged")
+        cat = FrameworkState::CapabilityCategory.find_by!(framework_id: @framework_id)
+        create(:framework_capability, category_id: cat.category_id,
+          name: "Communication", stable_id: cap2_stable_id)
       end
 
-      target_cycle_id = SecureRandom.uuid_v7
+      # In Q2 (never aligned): revise self on cap1 away from the seeded value,
+      # and self-rate cap2 with no manager counterpart.
+      @handler.revise_self_rating(@person_id, @framework_id, @cap_stable_id,
+        level_ordinal: 2, frequency: "some", rationale: "changed my mind", cycle_id: @new_cycle_id)
+      @handler.rate_self(@person_id, @framework_id, cap2_stable_id,
+        level_ordinal: 2, frequency: "occasional", cycle_id: @new_cycle_id)
 
+      @cycle_handler.close_cycle(@new_cycle_id, closed_by: @manager.id)
+      q3_cycle_id = SecureRandom.uuid_v7
+      @cycle_handler.define_cycle(q3_cycle_id, @framework_id, "Q3 2026", "regular", 1,
+        defined_by: @manager.id)
+      @cycle_handler.enroll(q3_cycle_id, @person_id, enrolled_by: @manager.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        cap1 = AssessmentLevelRating.find_by!(cycle_id: q3_cycle_id, person_id: @person_id,
+          capability_stable_id: @cap_stable_id, level_ordinal: 2)
+        # Never agreed in Q2 → each side carries its own last value: the
+        # revised self ("some"), the still-seeded manager ("consistent").
+        assert_equal "some", cap1.self_rated_frequency
+        assert_equal "consistent", cap1.manager_rated_frequency
+        # Seeded from the most recent PARTICIPATION (unaligned Q2), not the
+        # last aligned cycle (Q1) — the chain already carries Q1's baseline.
+        assert_equal @new_cycle_id, cap1.seeded_from_cycle_id
+
+        cap2 = AssessmentLevelRating.find_by!(cycle_id: q3_cycle_id, person_id: @person_id,
+          capability_stable_id: cap2_stable_id, level_ordinal: 2)
+        assert_equal "occasional", cap2.self_rated_frequency
+        assert_nil cap2.manager_rated_frequency, "a side never rated must not be fabricated"
+      end
+
+      # Per-side idempotency: a re-run seeds nothing further.
       result = @handler.seed_ratings_from_prior_cycle(
-        @person_id, other_framework_id, target_cycle_id, partial_cycle_id,
-        seeded_by_id: @manager.id
+        @person_id, @framework_id, q3_cycle_id, @new_cycle_id, seeded_by_id: @manager.id
       )
       assert_equal 0, result[:seeded]
-      assert_equal [], result[:skipped]
     end
 
     should "emit a RatingSeedSkipped event for any prior aligned capability missing from the new framework" do
