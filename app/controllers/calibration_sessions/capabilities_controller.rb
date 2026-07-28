@@ -20,11 +20,15 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       return
     end
 
+    cards = CalibrationSessions::PersonCard.new(
+      session: @session, stats: stats, capability_stable_id: params.expect(:id)
+    )
+
     render Views::CalibrationSessions::DrillInView.new(
       session: @session,
       stats: stats,
       people: Person.where(id: stats[:rows].map { |r| r[:rater_id] }.compact).index_by(&:id),
-      person_card: person_card(stats),
+      person_card: cards.for(params[:person].presence),
       can_flag: @session.started? && policy(@session).flag_expectation?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -35,74 +39,6 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   end
 
   private
-
-  # Card data for the opened dot: the member's at-level ratings plus the
-  # active feedback / evidence linked to this capability at their level.
-  def person_card(stats)
-    person_id = params[:person].presence
-    return nil unless person_id
-
-    dot = stats[:rows].flat_map { |row| row[:people].values.flatten }
-      .find { |d| d[:person_id] == person_id }
-    return nil unless dot
-
-    row = stats[:rows].find { |r| r[:people].values.flatten.any? { |d| d[:person_id] == person_id } }
-    ordinal = stats[:rows].flat_map { |r| r[:people].to_a }
-      .find { |_, dots| dots.any? { |d| d[:person_id] == person_id } }&.first
-
-    {
-      dot: dot,
-      ordinal: ordinal,
-      rater_id: row&.dig(:rater_id),
-      evidence: evidence_for(person_id, ordinal),
-      revisit_requested: revisit_requested?(person_id, ordinal)
-    }
-  end
-
-  # Whether THIS session already asked the rater to revisit this cell —
-  # the card then shows the marker instead of a second ask.
-  def revisit_requested?(person_id, ordinal)
-    CalibrationSessions::SessionOutcomes.new(session: @session).revisit_requests.any? do |r|
-      r[:person_id] == person_id &&
-        r[:capability_stable_id] == params[:id] &&
-        r[:level_ordinal] == ordinal
-    end
-  end
-
-  def evidence_for(person_id, ordinal)
-    links = EvidenceLink.where(
-      link_status: "active", framework_id: @session.framework_id,
-      capability_stable_id: params[:id], person_id: person_id, level_ordinal: ordinal
-    ).pluck(:evidence_id, :valence).to_h
-
-    # Resolved once per card, not per evidence item — it depends only on the
-    # person, and a card can carry many items.
-    manager_id = manager_id_for(person_id)
-
-    EvidenceItem.active.where(id: links.keys).order(recorded_at: :desc).map do |item|
-      {
-        content: item.content,
-        valence: links[item.id],
-        author_id: item.author_id,
-        relation: author_relation(item.author_id, person_id, manager_id),
-        recorded_at: item.recorded_at
-      }
-    end
-  end
-
-  # Relation-first authorship for the projected room — names stay off the
-  # card by default (the facilitator can open the full assessment when
-  # authorship genuinely matters). See the design doc's evidence rules.
-  def author_relation(author_id, person_id, manager_id)
-    return "self" if author_id == person_id
-
-    author_id == manager_id ? "manager" : "peer"
-  end
-
-  def manager_id_for(person_id)
-    RecordedReportingManager.manager_id_for(person_id, @session.framework_id) ||
-      Person.find_by(id: person_id)&.manager_id
-  end
 
   def current_user_tenants
     ActsAsTenant.without_tenant { current_user.tenants.to_a }
