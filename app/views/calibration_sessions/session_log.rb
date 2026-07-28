@@ -175,7 +175,8 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   def footer_line(name, timestamp)
     bits = [ name, (timestamp && view_context.time_ago_in_words(timestamp) + " ago") ].compact
-    div(class: "mt-1 text-[11px] text-gray-500 dark:text-gray-400") { bits.join(" · ") }
+    # AA-safe muted pairing — attribution is readable content, not decoration.
+    div(class: "mt-1 text-[11px] text-gray-600 dark:text-gray-300") { bits.join(" · ") }
   end
 
   def capability_name(stable_id)

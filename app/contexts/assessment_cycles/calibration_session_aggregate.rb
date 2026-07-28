@@ -28,7 +28,6 @@ class AssessmentCycles::CalibrationSessionAggregate
   include AggregateRoot
 
   CLOSE_REASONS = %w[facilitator cycle_closed].freeze
-  CALIBRANT_REMOVAL_REASONS = %w[manual became_participant].freeze
 
   def initialize
     @session_id = nil

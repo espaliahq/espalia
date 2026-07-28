@@ -15,7 +15,6 @@
 #
 class CalibrationSession < ApplicationRecord
   STATUSES = %w[draft started closed].freeze
-  CLOSE_REASONS = %w[facilitator cycle_closed].freeze
 
   acts_as_tenant :tenant
 

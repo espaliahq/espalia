@@ -23,19 +23,28 @@
 // `-person-id-param` / `-name-param` data params.
 
 import BaseController from "controllers/base_controller"
+import { useDebounce } from "stimulus-use"
 
 export default class extends BaseController {
   static targets = ["search", "results", "selected", "ids", "empty", "suggestions"]
+  static debounces = ["runSearch"]
   static values = {
     candidatesUrl: String,
     fieldName: String,
     frameId: { type: String, default: "person-picker-candidates" }
   }
 
-  // Debounce keystrokes, then repoint the results frame at the query.
+  connect() {
+    super.connect()
+    // Shared debounce primitive (house rule) — also cancels a pending search
+    // on disconnect, so a Turbo navigation inside the wait window can't fire
+    // against a detached frame.
+    useDebounce(this, { wait: 250 })
+  }
+
+  // Repoint the results frame at the query (debounced — see static debounces).
   search() {
-    clearTimeout(this._searchTimer)
-    this._searchTimer = setTimeout(() => this.runSearch(), 250)
+    this.runSearch()
   }
 
   runSearch() {
