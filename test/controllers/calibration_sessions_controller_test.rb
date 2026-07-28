@@ -63,6 +63,23 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Ivy IC"
       assert_includes response.body, "Not enrolled"
     end
+
+    should "badge an entirely-carried manager side as To confirm, not In progress" do
+      session_record = define_session
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: @report.id)
+        create(:assessment_level_rating,
+          tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @report.id,
+          framework_id: @cycle.framework_id, capability_stable_id: SecureRandom.uuid_v7,
+          level_ordinal: 2, manager_rated_frequency: "consistent",
+          manager_rating_source: "seeded", source: "seeded")
+      end
+
+      get calibration_session_path(session_record)
+      assert_response :success
+      assert_includes response.body, "To confirm"
+      assert_not_includes response.body, "In progress"
+    end
   end
 
   context "participant candidates (picker typeahead)" do

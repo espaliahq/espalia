@@ -56,8 +56,19 @@ class Assessments::LevelCoverage
       person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
       level_ordinal: ordinal, capability_stable_id: stable_ids
     )
-    self_rated = ratings.where.not(self_rated_frequency: nil).distinct.count(:capability_stable_id)
-    manager_rated = ratings.where.not(manager_rated_frequency: nil).distinct.count(:capability_stable_id)
+    # Completion means VETTED THIS CYCLE: carried-forward (seeded) values
+    # hold real data but nobody has confirmed them, so they don't count
+    # toward the self/manager "Complete" signals. A confirm/revise flips a
+    # side's provenance to "human" and it starts counting; nil provenance
+    # (legacy rows, factories) is treated as human — only "seeded" is
+    # excluded. The ALIGNED side below stays value-based: agreed values are
+    # never seeded.
+    self_rated = ratings.where.not(self_rated_frequency: nil)
+      .where(self_rating_source: [ nil, "human" ])
+      .distinct.count(:capability_stable_id)
+    manager_rated = ratings.where.not(manager_rated_frequency: nil)
+      .where(manager_rating_source: [ nil, "human" ])
+      .distinct.count(:capability_stable_id)
     total = stable_ids.size
 
     result = {

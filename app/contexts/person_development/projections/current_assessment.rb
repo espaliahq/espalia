@@ -64,7 +64,15 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     tell which side is still carried. Derivable from historical
   #     events → rebuild backfills
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
-  CODE_VERSION = 6
+  #
+  # 7 — completion means VETTED: `refresh_completion` (via
+  #     Assessments::LevelCoverage) no longer counts carried-forward
+  #     (seeded, unconfirmed) sides toward `self_completed_at` /
+  #     `manager_completed_at` — the list's Complete chips and the
+  #     Ready-to-align cue were reading fully-carried assessments as done.
+  #     A rebuild retro-clears completion stamps that were earned by
+  #     seeds alone (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  CODE_VERSION = 7
 
   # All event classes this projection handles.
   #
@@ -315,7 +323,10 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
-    refresh_completion(event)
+    # Completion counts only vetted (human) cells, so a seeded event can
+    # never change it — skip the ~8-query coverage pass (paid ~100× per
+    # person at bulk enrollment, and again on every replay).
+    refresh_completion(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -356,7 +367,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
-    refresh_completion(event)
+    # See handle_self_rated — seeded events can't change vetted completion.
+    refresh_completion(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 

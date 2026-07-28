@@ -226,6 +226,15 @@ class Views::CalibrationSessions::ShowView < Views::Base
 
     if @readiness[:partially_rated_ids]&.include?(person_id)
       render Components::Kit::Badge.new("In progress", variant: :default)
+    elsif @readiness[:carried_only_ids]&.include?(person_id)
+      # Values exist but are entirely carried forward — same dashed
+      # "To confirm" vocabulary as the /assessments list chips.
+      span(
+        class: "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " \
+               "border border-dashed border-amber-500 dark:border-amber-400 " \
+               "text-amber-800 dark:text-amber-300",
+        title: "Manager ratings are carried from the previous cycle — not yet confirmed"
+      ) { "To confirm" }
     else
       render Components::Kit::Badge.new("Unrated", variant: :default)
     end

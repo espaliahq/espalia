@@ -157,18 +157,25 @@ class Reporting::CycleCohort
       .where(cycle_id: @cycle.cycle_id, person_id: person_ids)
       .pluck(:person_id, :capability_stable_id, :level_ordinal,
              :self_rated_frequency, :manager_rated_frequency,
-             :last_self_rated_at, :last_manager_rated_at)
+             :last_self_rated_at, :last_manager_rated_at,
+             :self_rating_source, :manager_rating_source)
 
     acc = Hash.new { |hash, key| hash[key] = { self: Set.new, manager: Set.new, last_at: nil } }
-    rows.each do |person_id, stable_id, ordinal, self_freq, manager_freq, self_at, manager_at|
+    rows.each do |person_id, stable_id, ordinal, self_freq, manager_freq, self_at, manager_at, self_src, manager_src|
       bucket = acc[person_id]
+      # last_at deliberately counts seeded timestamps too: they coincide
+      # with enrollment, which already counts as activity for at-risk.
       [ self_at, manager_at ].compact.each do |timestamp|
         bucket[:last_at] = [ bucket[:last_at], timestamp ].compact.max
       end
       next unless ordinal == assessed_ordinal[person_id]
 
-      bucket[:self] << stable_id if self_freq.present?
-      bucket[:manager] << stable_id if manager_freq.present?
+      # Funnel counts VETTED sides only — a carried (seeded) value isn't
+      # done, it's To confirm. Matches Assessments::LevelCoverage and the
+      # /assessments chips, so the cohort report and the individual list
+      # never disagree on what "done" means.
+      bucket[:self] << stable_id if self_freq.present? && self_src != "seeded"
+      bucket[:manager] << stable_id if manager_freq.present? && manager_src != "seeded"
     end
 
     acc.transform_values { |b| { self: b[:self].size, manager: b[:manager].size, last_at: b[:last_at] } }

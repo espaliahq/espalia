@@ -9,6 +9,7 @@ class Views::Assessments::IndexView < Views::Base
   SIDE_STATES = {
     complete: [ :success, "Complete" ],
     in_progress: [ :warning, "In progress" ],
+    to_confirm: [ :to_confirm, "To confirm" ],
     not_started: [ :default, "Not started" ]
   }.freeze
 
@@ -235,9 +236,9 @@ class Views::Assessments::IndexView < Views::Base
     end
 
     div(class: "flex flex-col items-end gap-1") do
-      side_chip("Self", side_state(status[:self_complete], status[:self_any]))
+      side_chip("Self", side_state(status[:self_complete], status[:self_human], status[:self_any]))
       if show_manager
-        side_chip("Manager", side_state(status[:manager_complete], status[:manager_any]))
+        side_chip("Manager", side_state(status[:manager_complete], status[:manager_human], status[:manager_any]))
         if status[:self_complete] && status[:manager_complete]
           span(class: "text-xs text-gray-500 dark:text-gray-400") { "Ready to align" }
         end
@@ -245,20 +246,38 @@ class Views::Assessments::IndexView < Views::Base
     end
   end
 
-  # @return [Symbol] :complete | :in_progress | :not_started
-  def side_state(complete, any_rated)
+  # Complete = every current-level cell vetted (human-owned) this cycle.
+  # In progress = at least one human touch (rate / revise / confirm / clear).
+  # To confirm = values exist but ALL are carried forward, untouched.
+  # Not started = nothing at all.
+  #
+  # @return [Symbol] :complete | :in_progress | :to_confirm | :not_started
+  def side_state(complete, human_touched, any_rated)
     return :complete if complete
-    return :in_progress if any_rated
+    return :in_progress if human_touched
+    return :to_confirm if any_rated
 
     :not_started
   end
 
-  # One labelled side chip (e.g. "Self  In progress").
+  # One labelled side chip (e.g. "Self  In progress"). The :to_confirm state
+  # bypasses Kit::Badge for the dashed-outline treatment — dashed is the
+  # carried-forward signal everywhere (pills, level chips), so the list chip
+  # rhymes with what the assessment page shows.
   def side_chip(label, state)
     variant, text = SIDE_STATES.fetch(state)
     div(class: "flex items-center gap-1.5") do
       span(class: "text-xs text-gray-500 dark:text-gray-400") { label }
-      render Components::Kit::Badge.new(text, variant: variant)
+      if variant == :to_confirm
+        span(
+          class: "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " \
+                 "border border-dashed border-amber-500 dark:border-amber-400 " \
+                 "text-amber-800 dark:text-amber-300",
+          title: "Carried from the previous cycle — open the assessment to confirm or change"
+        ) { text }
+      else
+        render Components::Kit::Badge.new(text, variant: variant)
+      end
     end
   end
 

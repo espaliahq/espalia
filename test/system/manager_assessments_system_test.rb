@@ -313,6 +313,39 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Ready to align"
       assert_no_text "Not started"
     end
+
+    should "show To confirm for a side whose ratings are entirely carried forward" do
+      # Replace the manager side with a carried (seeded) rating: values exist,
+      # but nothing has been vetted this cycle.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id,
+          comment: "Seeded from prior cycle", source: "seeded",
+          seeded_from_cycle_id: SecureRandom.uuid_v7
+        )
+      end
+
+      visit assessments_path
+      assert_text "Team Assessments"
+      assert_text "To confirm"
+      # A fully-carried side must not read as Complete or trigger the align cue.
+      assert_no_text "Ready to align"
+
+      # Confirming the carried value (human revise) vets it → Complete.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.revise_manager_rating(
+          @report.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent",
+          rationale: "Confirmed carried-forward rating",
+          cycle_id: @cycle_id, rated_by_id: @manager.id
+        )
+      end
+
+      visit assessments_path
+      assert_text "Ready to align"
+      assert_no_text "To confirm"
+    end
   end
 
   context "status pill" do

@@ -500,17 +500,22 @@ class Assessments::MatrixDataBuilder
     end
   end
 
-  # Whether every capability with a cell at the person's current level has been
-  # rated in the viewer's perspective — the "Assessment Complete" signal. Same
-  # numerator/denominator as the hero's coverage gate, at full coverage. A role
-  # with no current-level cells is never "complete" (nothing to finish).
+  # Whether every capability with a cell at the person's current level has a
+  # VETTED (human-owned) rating in the viewer's perspective — the "Assessment
+  # Complete" signal. Same denominator as the hero's coverage gate, but a
+  # DELIBERATELY stricter numerator: the hero counts carried values (score is
+  # about data), while Complete excludes them until confirmed (the pill is
+  # about this cycle's work). A role with no current-level cells is never
+  # "complete" (nothing to finish).
   def current_level_complete?(categories)
     cells = categories
       .flat_map { |c| c[:capabilities] }
       .filter_map { |cap| cap[:cells][@level.ordinal] }
     return false if cells.empty?
 
-    cells.all? { |cell| primary_cell_frequency(cell).present? }
+    # Complete means VETTED: a carried-forward value doesn't count until
+    # confirmed or changed (mirrors Assessments::LevelCoverage).
+    cells.all? { |cell| primary_cell_frequency(cell).present? && !primary_cell_carried?(cell) }
   end
 
   # The frequency that counts as "rated" for the active context.
@@ -519,6 +524,16 @@ class Assessments::MatrixDataBuilder
     when :self      then cell[:current_frequency]
     when :manager   then cell[:manager_frequency]
     when :alignment then cell[:aligned_frequency]
+    end
+  end
+
+  # Whether the active context's value is carried-forward (seeded,
+  # unconfirmed). Aligned values are never seeded.
+  def primary_cell_carried?(cell)
+    case @context
+    when :self    then cell[:current_frequency_carried] || false
+    when :manager then cell[:manager_frequency_carried] || false
+    else false
     end
   end
 end
