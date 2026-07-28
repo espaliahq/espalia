@@ -73,6 +73,22 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
       assert_match(@outsider.id, err.message)
     end
 
+    should "accept an out-of-subtree calibrant a participant rates via delegation" do
+      # The server's own seed includes delegation-sourced people from outside
+      # the live subtree — the scope check must accept what the seed produces.
+      seconded = create(:person, tenant: @tenant, name: "Sam Seconded")
+      create(:person_framework_assignment, tenant: @tenant,
+             person_id: seconded.id, framework_id: @cycle.framework_id)
+      create(:manager_assessment_delegation, tenant: @tenant,
+             person_id: seconded.id, framework_id: @cycle.framework_id,
+             delegate_person_id: @em_1.id)
+
+      result = define!(calibrant_person_ids: [ @report_1.id, seconded.id ])
+
+      session = CalibrationSession.find(result[:session_id])
+      assert_includes session.calibrants.pluck(:person_id), seconded.id
+    end
+
     should "reject a calibrant who is also a participant" do
       err = assert_raises(Operations::Base::ParameterError) do
         define!(calibrant_person_ids: [ @report_1.id, @em_1.id ])

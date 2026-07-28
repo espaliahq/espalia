@@ -61,7 +61,12 @@ class Operations::CalibrationSessions::Define < Operations::Base
 
     ensure_people_exist!(:participant_ids, participant_ids)
     ensure_people_exist!(:calibrant_person_ids, calibrant_ids)
-    ensure_within_facilitator_scope!(participant_ids + calibrant_ids, context.person)
+    # Calibrants attributed to the participants (delegation-sourced /
+    # recorded-manager rows) may legitimately sit outside the live subtree —
+    # the server-computed seed must always pass its own validation.
+    ensure_within_facilitator_scope!(participant_ids + calibrant_ids, context.person,
+                                     framework_id: cycle.framework_id,
+                                     participant_ids: participant_ids)
 
     overlap = calibrant_ids & (participant_ids + [ context.person.id ])
     return if overlap.empty?

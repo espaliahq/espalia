@@ -45,18 +45,32 @@ module Operations::CalibrationSessions::ScopeChecks
     raise Operations::Base::ParameterError, "#{name} contains unknown people: #{missing.join(', ')}"
   end
 
-  # Confines person ids to the facilitator's org subtree. Skipped for
-  # tenant/global admin actors (tenant-wide scope).
+  # Confines person ids to the facilitator's org subtree — plus, when the
+  # session's participants are given, anyone those participants' ratings
+  # attribution claims (PopulationSeeds: recorded reporting manager rows +
+  # active rating delegations). A seconded report a participant rates via
+  # delegation, or a recorded-manager row diverging from the live chart,
+  # legitimately sits outside the live subtree yet IS the population
+  # contract — the seed the server itself computes must always validate.
+  # Skipped for tenant/global admin actors (tenant-wide scope).
   #
   # @param ids [Array<String>]
   # @param facilitator [Person]
+  # @param framework_id [String, nil] enables the attribution exemption
+  # @param participant_ids [Array<String>] the session's raters
   # @raise [Operations::Base::ParameterError] naming out-of-scope ids
-  def ensure_within_facilitator_scope!(ids, facilitator)
+  def ensure_within_facilitator_scope!(ids, facilitator, framework_id: nil, participant_ids: [])
     return if ids.empty?
     return if admin_actor?
 
     in_scope = facilitator.all_reports.where(id: ids.uniq).pluck(:id)
     out_of_scope = ids.uniq - in_scope
+    if out_of_scope.any? && framework_id.present? && participant_ids.any?
+      out_of_scope -= CalibrationSessions::PopulationSeeds.new(
+        framework_id: framework_id, participant_ids: participant_ids,
+        facilitator_id: facilitator.id
+      ).person_ids
+    end
     return if out_of_scope.empty?
 
     raise Operations::Base::ParameterError,

@@ -20,7 +20,9 @@ class Operations::CalibrationSessions::AddCalibrant < Operations::Base
   def perform
     ensure_uuid!(:person_id, params[:person_id])
     ensure_people_exist!(:person_id, [ params[:person_id] ])
-    ensure_within_facilitator_scope!([ params[:person_id] ], session_facilitator)
+    ensure_within_facilitator_scope!([ params[:person_id] ], session_facilitator,
+                                     framework_id: session.framework_id,
+                                     participant_ids: session.participants.pluck(:person_id))
 
     command_handler.add_calibrant(session.id, params[:person_id], added_by: context.person&.id)
 
