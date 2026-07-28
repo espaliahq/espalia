@@ -59,6 +59,18 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifierTest < ActiveSuppor
       assert_empty @rater_user.notifications.reload
     end
 
+    should "not double-deliver when the at-least-once job retries" do
+      perform_enqueued_jobs { request_revisit! }
+      assert_equal 1, @rater_user.notifications.reload.size
+
+      event = Rails.configuration.event_store.read
+        .stream(EventStreamNaming.person_development_stream(@assessee.id, @framework_id))
+        .to_a.find { |e| e.is_a?(PersonDevelopment::Events::RatingRevisitRequested) }
+      PersonDevelopment::AsyncHandlers::RatingRevisitNotifier.new.perform(event)
+
+      assert_equal 1, @rater_user.notifications.reload.size
+    end
+
     should "stay silent when the rating already changed by the time the job runs" do
       # Enqueue without performing, act on the rating, then drain the queue —
       # the same "resolved before the job ran" ordering a busy queue produces.

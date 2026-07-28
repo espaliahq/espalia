@@ -36,6 +36,7 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifier < ApplicationJob
     framework_id = event.metadata[:framework_id]
     return if person_id.nil? || framework_id.nil?
     return if data[:rater_id] == data[:requested_by_id]
+    return if already_delivered?(event)
     return if already_acted?(event, person_id, framework_id)
 
     user = user_for(data[:rater_id])
@@ -47,8 +48,22 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifier < ApplicationJob
       assessee_name: person_name(person_id),
       context: context_line(data, framework_id),
       note: data[:note],
-      url: deep_link(person_id, framework_id, data)
+      url: deep_link(person_id, framework_id, data),
+      revisit_event_id: event.event_id
     ).deliver(user)
+  end
+
+  # RES async handlers run at-least-once — a retried job must not re-ping.
+  # The originating event id rides the Noticed params; params are stored
+  # through ActiveJob serialization, so match on the jsonb text (the id is
+  # a UUID — collision-safe) rather than assuming the serialized key shape.
+  #
+  # @return [Boolean]
+  def already_delivered?(event)
+    Noticed::Event
+      .where(type: "RatingRevisitRequestedNotifier")
+      .where("params::text LIKE ?", "%#{event.event_id}%")
+      .exists?
   end
 
   # Whether the manager rating for the cell already changed after the ask —
