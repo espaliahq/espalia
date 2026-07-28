@@ -56,13 +56,12 @@ class CalibrationSessionPolicy < ApplicationPolicy
     tenant_admin? || manages_managers?
   end
 
-  # Whether anyone in the caller's org subtree has reports of their own —
-  # i.e. the caller is a manager of managers. all_reports is transitive,
-  # so any person managed by a subtree member implies subtree depth ≥ 2.
+  # Whether the caller is a manager of managers — the shared
+  # {Person#manages_managers?} predicate (also read by the nav link).
   def manages_managers?
     return false unless person
 
-    Person.where(manager_id: person.all_reports.select(:id)).exists?
+    person.manages_managers?
   end
 
   def facilitator?

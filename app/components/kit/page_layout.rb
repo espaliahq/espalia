@@ -106,12 +106,19 @@ class Components::Kit::PageLayout < Components::Base
   #
   # @return [Boolean]
   def show_calibration_link?
-    return true if viewer_is_admin?
+    # Memoized — the layout composes nav_links for both the navbar and the
+    # sidebar, and the subtree probe is a recursive-CTE query.
+    return @show_calibration_link if defined?(@show_calibration_link)
 
-    person = resolve_tenant_user&.person
-    return false unless person
-
-    Person.where(manager_id: person.all_reports.select(:id)).exists?
+    @show_calibration_link =
+      if viewer_is_admin?
+        true
+      else
+        # The shared Person#manages_managers? predicate —
+        # CalibrationSessionPolicy#index? reads the same one, so the nav link
+        # and the controller authorize can't drift.
+        resolve_tenant_user&.person&.manages_managers? || false
+      end
   end
 
   # Whether the current viewer can reach the tenant administration

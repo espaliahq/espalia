@@ -49,6 +49,18 @@ class Frameworks::SuggestionApprovalAuthority
     @tiers.fetch(FrameworkSuggestionPolicy.review_tier(entity_type), false)
   end
 
+  # Whether the viewer may resolve a clarification — expectation-tier (3)
+  # authority regardless of anchor, mirroring
+  # {FrameworkSuggestionPolicy#resolve?}: whoever could change the text can
+  # declare the question settled. The single view-side gate for the
+  # "Resolve…" affordance (feed entry + pane card), so it can't drift from
+  # the controller's policy check.
+  #
+  # @return [Boolean]
+  def can_resolve_clarifications?
+    @tenant_admin || @tiers.fetch(3, false)
+  end
+
   # @return [Boolean] whether the viewer can approve anything at all (cheap gate)
   def any?
     @tenant_admin || @tiers.value?(true)

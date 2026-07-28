@@ -77,9 +77,10 @@ module Operations::CalibrationSessions::ScopeChecks
           "not in the facilitator's org: #{out_of_scope.join(', ')}"
   end
 
-  # @return [Boolean] whether the acting user is a tenant or global admin
+  # @return [Boolean] whether the acting user is a tenant or global admin —
+  #   the AuthorizationContext predicate, so this can't drift from Pundit.
   def admin_actor?
-    context.user&.global_admin? || context.tenant_user&.admin? || false
+    context.tenant_admin?
   end
 
   # @return [CalibrationSession]

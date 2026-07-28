@@ -182,7 +182,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   def resolvable?
     @suggestion.clarification? &&
       @suggestion.status == "pending" &&
-      @approval_authority.can_approve?("behavioural_expectation")
+      @approval_authority.can_resolve_clarifications?
   end
 
   def resolved?

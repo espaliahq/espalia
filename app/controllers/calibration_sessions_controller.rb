@@ -205,8 +205,10 @@ class CalibrationSessionsController < ApplicationController
     end.compact.uniq
   end
 
+  # The AuthorizationContext predicate, so the visibility scoping here can't
+  # drift from what CalibrationSessionPolicy grants.
   def admin_viewer?
-    current_user&.global_admin? || current_tenant_user&.admin? || false
+    pundit_user.tenant_admin?
   end
 
   def visible_sessions

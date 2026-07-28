@@ -171,7 +171,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     @framework_id.present? &&
       @entry.kind == "clarification_requested" &&
       @entry.suggestion_status == "pending" &&
-      @approval_authority.can_approve?("behavioural_expectation")
+      @approval_authority.can_resolve_clarifications?
   end
 
   def resolve_row
