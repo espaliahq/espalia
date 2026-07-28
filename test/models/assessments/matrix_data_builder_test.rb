@@ -283,6 +283,20 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       assert_not build_completion(:manager)[:current_level_complete]
     end
 
+    should "be false while a current-level cell is only carried forward (unvetted)" do
+      # Values exist on every current-level cell, but this one is carried —
+      # Complete means vetted this cycle, so the pill must stay In Progress.
+      rate_capability2(self_rated_frequency: "some", self_rating_source: "seeded")
+      assert_not build_completion(:self)[:current_level_complete]
+
+      # Confirming it (human provenance) completes the level.
+      AssessmentLevelRating.find_by!(
+        cycle_id: @cycle_id, person_id: @person_id,
+        capability_stable_id: @capability2.stable_id, level_ordinal: 2
+      ).update!(self_rating_source: "human")
+      assert build_completion(:self)[:current_level_complete]
+    end
+
     should "be false when the current level has no cells" do
       empty_level = create(:framework_level,
         role_id: @role.role_id, ordinal: 4, title: "Engineer 4", code: "E4")

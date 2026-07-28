@@ -323,7 +323,10 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
-    refresh_completion(event)
+    # Completion counts only vetted (human) cells, so a seeded event can
+    # never change it — skip the ~8-query coverage pass (paid ~100× per
+    # person at bulk enrollment, and again on every replay).
+    refresh_completion(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 
@@ -364,7 +367,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
-    refresh_completion(event)
+    # See handle_self_rated — seeded events can't change vetted completion.
+    refresh_completion(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
 

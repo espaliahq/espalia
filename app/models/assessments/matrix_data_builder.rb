@@ -500,10 +500,13 @@ class Assessments::MatrixDataBuilder
     end
   end
 
-  # Whether every capability with a cell at the person's current level has been
-  # rated in the viewer's perspective — the "Assessment Complete" signal. Same
-  # numerator/denominator as the hero's coverage gate, at full coverage. A role
-  # with no current-level cells is never "complete" (nothing to finish).
+  # Whether every capability with a cell at the person's current level has a
+  # VETTED (human-owned) rating in the viewer's perspective — the "Assessment
+  # Complete" signal. Same denominator as the hero's coverage gate, but a
+  # DELIBERATELY stricter numerator: the hero counts carried values (score is
+  # about data), while Complete excludes them until confirmed (the pill is
+  # about this cycle's work). A role with no current-level cells is never
+  # "complete" (nothing to finish).
   def current_level_complete?(categories)
     cells = categories
       .flat_map { |c| c[:capabilities] }
