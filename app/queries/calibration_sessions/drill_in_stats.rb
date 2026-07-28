@@ -55,16 +55,16 @@ class CalibrationSessions::DrillInStats
   end
 
   # population person_id => participant person_id (nil when their rater
-  # isn't in the session).
+  # isn't in the session). Reads the canonical PopulationSeeds#attribution
+  # so the grid rows, the tendency strip, and the revisit-request rater
+  # resolution always name the same rater for a person.
   def rater_for
     @rater_for ||= begin
       attributed = CalibrationSessions::PopulationSeeds.new(
         framework_id: @session.framework_id,
         participant_ids: participant_ids,
         facilitator_id: @session.facilitator_id
-      ).call.flat_map do |participant_id, people|
-        (people.map(&:id) & calibrant_ids).map { |person_id| [ person_id, participant_id ] }
-      end.to_h
+      ).attribution
       calibrant_ids.index_with { |person_id| attributed[person_id] }
     end
   end

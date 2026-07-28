@@ -88,4 +88,34 @@ class CalibrationSessions::PopulationSeedsTest < ActiveSupport::TestCase
       assert_equal [ @report_1.id, @report_2.id ].sort, seeds.person_ids.sort
     end
   end
+
+  context "#attribution (dual-claimed person)" do
+    setup do
+      # report_1's recorded reporting manager is em_1 AND em_2 holds an
+      # active rating delegation for them — both participants claim them.
+      create(:recorded_reporting_manager, tenant: @tenant,
+             person_id: @report_1.id, framework_id: @framework_id, manager_id: @em_1.id)
+      create(:manager_assessment_delegation, tenant: @tenant,
+             person_id: @report_1.id, framework_id: @framework_id,
+             delegate_person_id: @em_2.id)
+    end
+
+    should "attribute to exactly one participant — first in participant order wins" do
+      assert_equal @em_1.id, seeds.attribution[@report_1.id]
+      assert_equal @em_2.id,
+        seeds(participant_ids: [ @em_2.id, @em_1.id ]).attribution[@report_1.id],
+        "the tiebreak is participant order, deterministically"
+    end
+
+    should "list the person under only one group in #call" do
+      result = seeds.call
+      assert_equal [ @report_1.id ], result[@em_1.id].map(&:id)
+      assert_not_includes result[@em_2.id].map(&:id), @report_1.id,
+        "a dual-claimed person must not render twice on the population card"
+    end
+
+    should "count the person once in #person_ids" do
+      assert_equal 1, seeds.person_ids.count(@report_1.id)
+    end
+  end
 end

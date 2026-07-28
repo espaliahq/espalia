@@ -26,11 +26,34 @@ class CalibrationSessions::PopulationSeeds
 
   # @return [Hash{String => Array<Person>}] participant_id => their seeded
   #   calibrants, name-ordered. Every participant key is present (possibly
-  #   with an empty array).
+  #   with an empty array). Derived from {#attribution}, so each person
+  #   appears under exactly ONE participant.
   def call
-    @participant_ids.index_with do |participant_id|
-      ids = report_ids_for(participant_id) - excluded_ids
-      people.values_at(*ids).compact.sort_by(&:name)
+    @call ||= begin
+      grouped = attribution.keys.group_by { |person_id| attribution[person_id] }
+      @participant_ids.index_with do |participant_id|
+        people.values_at(*(grouped[participant_id] || [])).compact.sort_by(&:name)
+      end
+    end
+  end
+
+  # The CANONICAL person → participant attribution: each seeded person maps
+  # to exactly one participant rater. When two participants both claim a
+  # person (their recorded reporting manager AND an active rating delegate
+  # sitting in the same room), the FIRST participant in participant_ids
+  # order wins — an arbitrary but deterministic tiebreak. Every surface
+  # (population groups, tendency strip, drill-in rows, revisit-request rater
+  # resolution) must read THIS map so they can never disagree about who
+  # owns a person's ratings.
+  #
+  # @return [Hash{String => String}] person_id => participant_id
+  def attribution
+    @attribution ||= {}.tap do |map|
+      @participant_ids.each do |participant_id|
+        (report_ids_for(participant_id) - excluded_ids).each do |person_id|
+          map[person_id] ||= participant_id
+        end
+      end
     end
   end
 
@@ -38,7 +61,7 @@ class CalibrationSessions::PopulationSeeds
   #
   # @return [Array<String>] person_ids
   def person_ids
-    call.values.flatten.map(&:id).uniq
+    attribution.keys
   end
 
   private

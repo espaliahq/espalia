@@ -88,13 +88,15 @@ class CalibrationSessions::OverviewStats
   # population person_id => participant (rater) person_id, for members
   # attributed to a rater in the room.
   def rater_for
+    # The canonical single attribution (PopulationSeeds#attribution) so the
+    # strip, the drill-in, and the revisit op can never credit the same
+    # person to different raters. Attributed calibrants only — reference
+    # people without an in-session rater are excluded from tendency stats.
     @rater_for ||= CalibrationSessions::PopulationSeeds.new(
       framework_id: @session.framework_id,
       participant_ids: participant_ids,
       facilitator_id: @session.facilitator_id
-    ).call.each_with_object({}) do |(participant_id, people), map|
-      (people.map(&:id) & calibrant_ids).each { |person_id| map[person_id] = participant_id }
-    end
+    ).attribution.slice(*calibrant_ids)
   end
 
   # person_id => assessed level ordinal (cycle enrollment snapshot).
