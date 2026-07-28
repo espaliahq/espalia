@@ -786,7 +786,10 @@ chip, cell-anchored, the room's note as the secondary line), gated by the
 same manager-rating privacy rule as `MANAGER_KINDS` — value-free by design,
 and resolved implicitly when the manager rating for that cell changes
 (no resolution entry; see
-[calibration-sessions.md](../architecture/calibration-sessions.md)). When
+[calibration-sessions.md](../architecture/calibration-sessions.md)). The
+rater is also **notified** (`rating_revisit_requested` Noticed type via the
+async `RatingRevisitNotifier` — in-app-first + Slack escalation, dropped if
+the rating already changed by delivery time, never a self-ping). When
 you add a new assessment action, you add its feed entry in the same change:
 
 1. **Source the entry.** Entries come from either the RES stream

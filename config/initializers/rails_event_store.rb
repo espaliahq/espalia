@@ -149,4 +149,9 @@ Rails.configuration.to_prepare do
     PersonDevelopment::AsyncHandlers::CommentNotifier,
     to: PersonDevelopment::AsyncHandlers::CommentNotifier.handled_events
   )
+
+  event_store.subscribe(
+    PersonDevelopment::AsyncHandlers::RatingRevisitNotifier,
+    to: PersonDevelopment::AsyncHandlers::RatingRevisitNotifier.handled_events
+  )
 end

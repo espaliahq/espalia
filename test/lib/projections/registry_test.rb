@@ -53,7 +53,8 @@ class Projections::RegistryTest < ActiveSupport::TestCase
       # Replaying these would re-send every historical notification.
       forbidden = [
         PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier,
-        PersonDevelopment::AsyncHandlers::CommentNotifier
+        PersonDevelopment::AsyncHandlers::CommentNotifier,
+        PersonDevelopment::AsyncHandlers::RatingRevisitNotifier
       ]
       assert_empty(Projections::Registry.classes & forbidden)
     end

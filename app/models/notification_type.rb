@@ -70,6 +70,12 @@ class NotificationType
       label: "A report commented on their assessment",
       description: "Someone whose assessment you manage posts a comment on it.",
       defaults: { in_app: true, slack: true, email: false }
+    ),
+    rating_revisit_requested: Definition.new(
+      key: :rating_revisit_requested,
+      label: "Calibration asked you to revisit a rating",
+      description: "A calibration session asks you to take a second look at one of your ratings.",
+      defaults: { in_app: true, slack: true, email: false }
     )
   }.freeze
 

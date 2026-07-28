@@ -33,9 +33,12 @@
 > already-flagged markers (framework-wide, so overlapping sessions see each
 > other's flags); **revisit requests** (`RequestRatingRevisit`, person-card
 > ask, value-free note, rater resolved server-side) mirror onto the PD
-> stream via `CalibrationRevisitSync` and surface in the rater's assessment
+> stream via `CalibrationRevisitSync`, surface in the rater's assessment
 > feed (`rating_revisit_requested`, ratings chip, manager-rating privacy
-> gate), with rating-change-based resolution computed at read time;
+> gate), and **notify the rater** (async `RatingRevisitNotifier` →
+> `rating_revisit_requested` Noticed type, in-app-first + Slack escalation,
+> dropped when already acted on), with rating-change-based resolution
+> computed at read time;
 > **session notes** (`RecordNote`, live-only, optional anchors) and the
 > **session log** (`SessionOutcomes` stream read + `SessionLog` view — flags
 > with live clarification status, revisits with acted/open state, minutes +
