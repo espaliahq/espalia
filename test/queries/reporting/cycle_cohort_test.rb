@@ -85,6 +85,30 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
   end
 
   context "completion semantics" do
+    should "not count carried (seeded) sides in the funnel — vetted only" do
+      person = create(:person, tenant: @tenant, name: "Carried")
+      enroll(person)
+      @caps.each do |cap|
+        rate(person, cap,
+          self_rated_frequency: "consistent", self_rating_source: "seeded",
+          manager_rated_frequency: "consistent", manager_rating_source: "seeded")
+      end
+
+      assert_equal 0, result.funnel.self_done,
+        "a fully-carried self side is To confirm, not done"
+      assert_equal 0, result.funnel.manager_done
+    end
+
+    should "count a side once its carried values are confirmed" do
+      person = create(:person, tenant: @tenant, name: "Confirmed")
+      enroll(person)
+      @caps.each do |cap|
+        rate(person, cap, self_rated_frequency: "consistent", self_rating_source: "human")
+      end
+
+      assert_equal 1, result.funnel.self_done
+    end
+
     should "not count self-done when rated at a level other than the assessed level" do
       person = create(:person, tenant: @tenant, name: "Off-level")
       enroll(person, ordinal: 2)
