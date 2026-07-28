@@ -20,7 +20,8 @@ class CalibrationSessions::DrillInStats
   end
 
   # @return [Hash, nil] nil when the capability isn't in the session's
-  #   framework; otherwise `{ capability:, ordinals:, expectations:, rows: }`
+  #   framework; otherwise
+  #   `{ capability:, ordinals:, expectations:, clarifications:, rows: }`
   def call
     return nil unless capability
 

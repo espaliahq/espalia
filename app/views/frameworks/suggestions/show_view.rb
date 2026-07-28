@@ -22,6 +22,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   # @param can_approve [Boolean]
   # @param can_amend [Boolean]
   # @param can_withdraw [Boolean]
+  # @param can_resolve [Boolean] clarification kinds only — resolve-with-note
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
@@ -131,9 +132,16 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     end
   end
 
+  # The level the clarification concerns: a capability anchor carries it in
+  # proposed_attributes; an expectation anchor implies it — resolve from the
+  # expectation so the card can always name the cell.
+  #
   # @return [Integer, String, nil]
   def clarification_level
-    (@suggestion.proposed_attributes || {})["level_ordinal"]
+    (@suggestion.proposed_attributes || {})["level_ordinal"] ||
+      (@suggestion.target_entity_type == "behavioural_expectation" &&
+        FrameworkState::BehaviouralExpectation
+          .find_by(expectation_id: @suggestion.target_entity_id)&.level_ordinal)
   end
 
   def edit_diff_card

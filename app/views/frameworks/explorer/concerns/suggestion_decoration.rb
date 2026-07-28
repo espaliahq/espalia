@@ -114,6 +114,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
       class: "inline-flex items-center gap-0.5 ml-1 align-middle rounded-full " \
              "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-gray-600 dark:text-gray-300 shrink-0",
       title: title,
+      role: "img",
       aria: { label: title },
       data: { glyph: "clarification" }
     ) do

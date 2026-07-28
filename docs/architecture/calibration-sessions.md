@@ -73,8 +73,11 @@ level)** — the canonical rated unit — not "how a manager rates" in the
 abstract. Two consequences:
 
 - **Raw frequencies across people at different levels are apples-to-oranges.**
-  The overview uses the signed contribution delta (`Scoring#raw_contribution`,
-  level-normalized by construction); the drill-in groups by level so
+  The overview compares raters on their **at-level** ratings only (each
+  person's cell at their own assessed level, on the equal-interval 0–3
+  frequency scale — `OverviewStats::FREQUENCY_VALUES`, deliberately NOT
+  `Scoring`'s contribution weights: calibration compares raters on an
+  ordinal scale, not scoring contribution); the drill-in groups by level so
   same-level people are compared directly against the level's expectation
   text.
 - **Two failure modes must stay visually separable**, because their remedies

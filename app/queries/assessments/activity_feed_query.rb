@@ -564,7 +564,12 @@ class Assessments::ActivityFeedQuery
     return [] if @context == :self && !@alignment_started
 
     events = stream_events.select { |e| e.is_a?(PersonDevelopment::Events::RatingRevisitRequested) }
-    ids = events.flat_map { |e| [ e.data[:requested_by_id], e.data[:rater_id] ] }.compact.uniq
+    # Key-defensive like the other actor lookups — read-back payload keys
+    # can be strings depending on the mapper.
+    ids = events.flat_map do |e|
+      [ e.data[:requested_by_id] || e.data["requested_by_id"],
+        e.data[:rater_id] || e.data["rater_id"] ]
+    end.compact.uniq
     names = ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
 
     events.map do |event|
