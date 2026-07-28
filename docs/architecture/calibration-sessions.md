@@ -693,6 +693,7 @@ Mechanics — everything not listed here is inherited untouched:
 | Cross-cycle calibration trend views ("is Raj converging?") | ≥2 cycles of session data exist |
 | Automated bias scoring beyond the tendency strip | Never, ideally — the strip states facts; the room supplies judgment |
 | Enforced session sequencing | No known need |
+| Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
 
 ## Open questions
