@@ -26,33 +26,54 @@ class AssessmentCycles::BulkEnrollmentJob < ApplicationJob
     AuditMetadata.with(acting_via: :system, actor_id: enrolled_by, correlation_id: job_id) do
       ActsAsTenant.with_tenant(cycle.tenant) do
         enrolled = 0
-        skipped = 0
+        skipped = []
         command_handler = AssessmentCycles::CommandHandler.new
 
         cycle.eligible_people.find_each do |person|
           role_id, level_id = assignment_role_level(cycle, person.id)
           ActiveRecord::Base.transaction do
-            command_handler.enroll(
-              cycle.cycle_id, person.id, enrolled_by: enrolled_by,
-              role_id: role_id, level_id: level_id
-            )
+            # wrap_event_store is the bridge that stamps the thread-local
+            # AuditMetadata onto RES event metadata — AuditMetadata.with
+            # alone only sets the thread-local (see the reminder sweep job).
+            AuditMetadata.wrap_event_store do
+              command_handler.enroll(
+                cycle.cycle_id, person.id, enrolled_by: enrolled_by,
+                role_id: role_id, level_id: level_id
+              )
+            end
           end
           enrolled += 1
         rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
-          skipped += 1
+          skipped << person
           Rails.logger.warn(
             "[BulkEnrollment] cycle=#{cycle.cycle_id} person=#{person.id} skipped: #{e.message}"
           )
         end
 
         Rails.logger.info(
-          "[BulkEnrollment] cycle=#{cycle.cycle_id} enrolled=#{enrolled} skipped=#{skipped}"
+          "[BulkEnrollment] cycle=#{cycle.cycle_id} enrolled=#{enrolled} skipped=#{skipped.size}"
         )
+        notify_outcome(cycle, enrolled_by, enrolled, skipped)
       end
     end
   end
 
   private
+
+  # The enqueue-time flash only promises the eligible count; the outcome —
+  # especially partial outcomes — must reach the admin, not just the logs.
+  def notify_outcome(cycle, enrolled_by, enrolled, skipped)
+    user = Person.find_by(id: enrolled_by)&.ensure_user!
+    return if user.nil?
+
+    BulkEnrollmentCompletedNotifier.with(
+      tenant_id: cycle.tenant_id,
+      cycle_row_id: cycle.id,
+      cycle_name: cycle.name,
+      enrolled: enrolled,
+      skipped_names: skipped.map(&:name)
+    ).deliver(user)
+  end
 
   # The assessed role/level snapshot for the enrollment event — same lookup
   # the single-enroll controller action performs.

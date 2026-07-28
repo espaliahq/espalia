@@ -127,6 +127,26 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         end
       end
 
+      should "stamp system provenance on the enrollment events and notify the outcome" do
+        sign_in @admin_user
+        perform_enqueued_jobs only: AssessmentCycles::BulkEnrollmentJob do
+          post bulk_assessment_cycle_enrollments_path(@cycle)
+        end
+
+        stream = ActsAsTenant.with_tenant(@tenant) do
+          EventStreamNaming.assessment_cycle_stream(@cycle_id)
+        end
+        enrolled_event = Rails.configuration.event_store.read.stream(stream).to_a
+          .find { |e| e.is_a?(AssessmentCycles::Events::PersonEnrolled) }
+        assert_equal "system", enrolled_event.metadata[:acting_via],
+          "bulk-enrollment events must carry provenance (AuditMetadata.wrap_event_store)"
+        assert enrolled_event.metadata[:correlation_id].present?
+
+        notification = @admin_user.notifications.reload.last
+        assert_not_nil notification, "the enrolling admin must be told the outcome"
+        assert_match(/Enrolled 2 people/, notification.inbox_body)
+      end
+
       should "skip already-enrolled people without erroring" do
         ActsAsTenant.with_tenant(@tenant) do
           AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @assigned_person.id)
