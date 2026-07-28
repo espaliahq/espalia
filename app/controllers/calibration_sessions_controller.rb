@@ -176,7 +176,12 @@ class CalibrationSessionsController < ApplicationController
   def acted_revisit_cells(revisits)
     return Set.new if revisits.empty?
 
+    # Scoped to the SESSION's cycle: rating rows are one-per-cycle for the
+    # same cell, and only a rating change in this cycle answers this ask —
+    # a prior cycle's stale row or a later cycle's seeded carry-forward
+    # (which also stamps last_manager_rated_at) must not decide it.
     ratings = AssessmentLevelRating.where(
+      cycle_id: @session.cycle_id,
       framework_id: @session.framework_id,
       person_id: revisits.map { |r| r[:person_id] }.uniq,
       capability_stable_id: revisits.map { |r| r[:capability_stable_id] }.uniq

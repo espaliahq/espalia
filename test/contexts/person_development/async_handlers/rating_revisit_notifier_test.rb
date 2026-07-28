@@ -29,10 +29,11 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifierTest < ActiveSuppor
 
   teardown { ActsAsTenant.current_tenant = nil }
 
-  def request_revisit!(requested_by: @facilitator, note: "Compare against the two peers we discussed")
+  def request_revisit!(requested_by: @facilitator, note: "Compare against the two peers we discussed",
+                       calibration_session_id: SecureRandom.uuid_v7)
     @handler.request_rating_revisit(@assessee.id, @framework_id,
       capability_stable_id: @cap_stable, level_ordinal: 3,
-      calibration_session_id: SecureRandom.uuid_v7,
+      calibration_session_id: calibration_session_id,
       rater_id: @rater.id, note: note,
       session_name: "Engineering calibration", requested_by_id: requested_by.id)
   end
@@ -73,6 +74,29 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifierTest < ActiveSuppor
       perform_enqueued_jobs
 
       assert_empty @rater_user.notifications.reload
+    end
+
+    should "still notify when only ANOTHER cycle's rating row changed (cycle-scoped resolution)" do
+      # The asking session's cycle has no rating change; a later cycle's
+      # seeded carry-forward stamps a fresh last_manager_rated_at on its own
+      # row — that must not suppress the ping.
+      session_cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id)
+      other_cycle = create(:assessment_cycle, :closed, tenant: @tenant, framework_id: @framework_id)
+      session = create(:calibration_session, tenant: @tenant,
+                       cycle_id: session_cycle.cycle_id, framework_id: @framework_id,
+                       facilitator_id: @facilitator.id, status: "started")
+
+      request_revisit!(calibration_session_id: session.id)
+      travel 1.minute do
+        create(:assessment_level_rating, tenant: @tenant,
+               cycle_id: other_cycle.cycle_id,
+               person_id: @assessee.id, framework_id: @framework_id,
+               capability_stable_id: @cap_stable, level_ordinal: 3,
+               manager_rated_frequency: "occasional", last_manager_rated_at: Time.current)
+      end
+      perform_enqueued_jobs
+
+      assert_equal 1, @rater_user.notifications.reload.size
     end
   end
 end

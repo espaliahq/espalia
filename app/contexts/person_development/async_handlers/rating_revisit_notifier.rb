@@ -53,18 +53,24 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifier < ApplicationJob
 
   # Whether the manager rating for the cell already changed after the ask —
   # the request is then settled and a ping would chase a done deed.
+  # Scoped to the asking session's cycle (rating rows are one-per-cycle):
+  # a later cycle's seeded carry-forward stamps last_manager_rated_at too
+  # and must not suppress the ping, nor may a stale prior-cycle row force it.
   #
   # @return [Boolean]
   def already_acted?(event, person_id, framework_id)
     requested_at = event.metadata[:timestamp]
     return false if requested_at.nil?
 
-    rated_at = AssessmentLevelRating.where(
+    scope = AssessmentLevelRating.where(
       person_id: person_id, framework_id: framework_id,
       capability_stable_id: event.data[:capability_stable_id],
       level_ordinal: event.data[:level_ordinal]
-    ).pick(:last_manager_rated_at)
+    )
+    cycle_id = CalibrationSession.where(id: event.data[:calibration_session_id]).pick(:cycle_id)
+    scope = scope.where(cycle_id: cycle_id) if cycle_id
 
+    rated_at = scope.maximum(:last_manager_rated_at)
     rated_at.present? && rated_at > requested_at
   end
 
