@@ -438,7 +438,7 @@ Priya N. · L4 · rated by Raj          Mgr: ◼ Some   Self: ◼ Consistently  
                            requested from T. Okafor · linked by Priya · Jun 3
    ⚠ evidence valence and rating point in different directions
 ─────────────────────────────────────────────────────────────────────────────
- 2 items · 1 unsolicited, 1 requested        [Request evidence…]  [Pin to compare]
+ 2 items · 1 proactive, 1 requested          [Request evidence…]  [Pin to compare]
 ```
 
 Card contents and rules:
@@ -446,7 +446,7 @@ Card contents and rules:
 - **Valence badge first** (`Views::Evidence::Valence` vocabulary — emerald /
   amber / rose, never the frequency palette: red/yellow/green/blue means
   *ratings*), then the excerpt, then provenance — author *relation* +
-  linked-by + date + solicited/unsolicited.
+  linked-by + date + requested/proactive.
 - **Valence↔rating coherence flag.** When the strongest linked valence
   contradicts the rating — *Strongly demonstrates* under a *Some*, or
   *significant growth area* under a *Consistently* — the card carries a quiet

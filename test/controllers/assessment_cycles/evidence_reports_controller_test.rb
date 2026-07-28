@@ -59,7 +59,7 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
       assert_response :success
       assert_includes response.body, "feedback &amp; evidence"
       assert_includes response.body, "Feedback provided"
-      assert_includes response.body, "Unsolicited"
+      assert_includes response.body, "Proactive"
       assert_includes response.body, "Manager"
       assert_not_includes response.body, "Other Manager"
       assert_not_includes response.body, "Private feedback content"

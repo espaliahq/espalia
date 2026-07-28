@@ -68,7 +68,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
         end
       end
       p(class: "mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300") do
-        "Feedback provided during this cycle, whether requested or unsolicited, alongside the request response funnel."
+        "Feedback provided during this cycle, whether requested or proactive, alongside the request response funnel."
       end
       report_navigation
       div(class: "mt-3 flex flex-wrap items-center gap-3") do
@@ -226,7 +226,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
         metric_value(metrics[:feedback_provided])
         dl(class: "mt-4 space-y-2 text-sm") do
           metric_row("By request", metrics[:provided_by_request])
-          metric_row("Unsolicited", metrics[:provided_unsolicited])
+          metric_row("Proactive", metrics[:provided_unsolicited])
           metric_row("Withdrawn", metrics[:feedback_withdrawn])
         end
       end
@@ -332,7 +332,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
         table_heading("People")
         table_heading("Provided")
         table_heading("By request")
-        table_heading("Unsolicited")
+        table_heading("Proactive")
         table_heading("Requests")
         table_heading("Awaiting")
         table_heading("Coverage")

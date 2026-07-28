@@ -23,9 +23,9 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
 
   context "current cycle metrics" do
     setup do
-      unsolicited = feedback(person: @first)
+      proactive = feedback(person: @first)
       EvidenceLink.create!(
-        tenant: @tenant, evidence_item: unsolicited, person_id: @first.id,
+        tenant: @tenant, evidence_item: proactive, person_id: @first.id,
         framework_id: @framework_id, capability_stable_id: SecureRandom.uuid_v7,
         level_ordinal: 4, linked_by_id: @peer.id, linked_at: Time.current)
 
@@ -40,7 +40,7 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       request(person: @second, status: "declined")
     end
 
-    should "count unique active feedback and split requested from unsolicited" do
+    should "count unique active feedback and split requested and proactive feedback" do
       metrics = result.metrics
       assert_equal 3, metrics.feedback_provided
       assert_equal 1, metrics.provided_by_request
@@ -144,7 +144,7 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
   end
 
   context "historical attribution" do
-    should "infer unsolicited feedback from one unambiguous enrollment window" do
+    should "infer proactive feedback from one unambiguous enrollment window" do
       feedback(person: @first, cycle_id: nil, recorded_at: 2.days.ago)
 
       assert_equal 1, result.metrics.feedback_provided
