@@ -30,9 +30,13 @@ class Views::Assessments::FrequencyPill < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param category_id [String, nil] active category for tab preservation on rating
   # @param interactive [Boolean] false for frozen / locked states
+  # @param carried [Boolean] true when the shown value is a carried-forward
+  #   (seeded) rating the viewer hasn't confirmed — renders as a dashed
+  #   outline in the frequency's hue instead of the solid soft fill, and
+  #   re-selecting the shown value confirms rather than clears
   def initialize(capability_stable_id:, level_ordinal:, current_frequency:,
                  assessment_id:, context: :self, category_id: nil,
-                 interactive: true)
+                 interactive: true, carried: false)
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
     @current_frequency = current_frequency
@@ -40,6 +44,7 @@ class Views::Assessments::FrequencyPill < Views::Base
     @context = context
     @category_id = category_id
     @interactive = interactive
+    @carried = carried
   end
 
   def view_template
@@ -71,7 +76,7 @@ class Views::Assessments::FrequencyPill < Views::Base
   def static_pill
     span(
       class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium #{pill_bg_classes}",
-      title: phrase
+      title: @carried ? "#{phrase} — carried forward from your previous cycle" : phrase
     ) { phrase }
   end
 
@@ -82,11 +87,20 @@ class Views::Assessments::FrequencyPill < Views::Base
              "#{pill_bg_classes} cursor-pointer " \
              "hover:brightness-95 dark:hover:brightness-110 transition " \
              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-      data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { label: "Rated #{phrase.downcase} — change", haspopup: "menu", expanded: "false" }
+      title: @carried ? "Carried forward from your previous cycle — confirm or change" : nil,
+      data: { dropdown_target: "trigger", action: "dropdown#toggle", carried: @carried ? "true" : nil },
+      aria: { label: trigger_aria_label, haspopup: "menu", expanded: "false" }
     ) do
       span { phrase }
       span(class: "text-[10px] leading-none", aria_hidden: "true") { "▾" }
+    end
+  end
+
+  def trigger_aria_label
+    if @carried
+      "Rated #{phrase.downcase}, carried forward from your previous cycle — confirm or change"
+    else
+      "Rated #{phrase.downcase} — change"
     end
   end
 
@@ -97,11 +111,21 @@ class Views::Assessments::FrequencyPill < Views::Base
       role: "menu",
       data: { dropdown_target: "menu" }
     ) do
+      carried_note if @carried
       Views::Assessments::FrequencyPalette::ORDERED_KEYS.each do |key|
         option_button(key)
       end
       divider if @current_frequency.present?
       clear_button if @current_frequency.present?
+    end
+  end
+
+  # Header line inside the popover when the value is carried forward —
+  # tells the viewer where it came from and that re-picking it confirms.
+  def carried_note
+    div(class: "px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300 " \
+               "border-b border-gray-100 dark:border-gray-800") do
+      plain "Carried from your last cycle — pick the same value to confirm it."
     end
   end
 
@@ -133,15 +157,16 @@ class Views::Assessments::FrequencyPill < Views::Base
   end
 
   def clear_button
-    # Posting the same frequency back to the controller is treated as
-    # an untoggle → clear. Avoids needing a separate /clear endpoint.
+    # Explicit `rating[clear]` marker: the implicit same-frequency
+    # untoggle can't be trusted here any more — on a carried rating the
+    # same-frequency POST means CONFIRM, so Clear must say what it means.
     form(
       action: form_action,
       method: "post",
       data: { turbo_stream: "true" },
       class: "contents"
     ) do
-      hidden_inputs(frequency: @current_frequency)
+      hidden_inputs(frequency: @current_frequency, clear: true)
 
       button(
         type: "submit",
@@ -157,11 +182,12 @@ class Views::Assessments::FrequencyPill < Views::Base
     div(class: "my-1 border-t border-gray-100 dark:border-gray-800")
   end
 
-  def hidden_inputs(frequency:)
+  def hidden_inputs(frequency:, clear: false)
     input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
     input(type: "hidden", name: "rating[capability_stable_id]", value: @capability_stable_id)
     input(type: "hidden", name: "rating[level_ordinal]", value: @level_ordinal)
     input(type: "hidden", name: "rating[frequency]", value: frequency)
+    input(type: "hidden", name: "rating[clear]", value: "1") if clear
     input(type: "hidden", name: "rating[category_id]", value: @category_id) if @category_id
   end
 
@@ -169,7 +195,7 @@ class Views::Assessments::FrequencyPill < Views::Base
     config = Views::Assessments::FrequencyPalette.config_for(@current_frequency)
     return "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" unless config
 
-    config[:pill_bg]
+    @carried ? config[:pill_carried] : config[:pill_bg]
   end
 
   def phrase

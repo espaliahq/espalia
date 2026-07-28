@@ -152,6 +152,7 @@ class Views::Assessments::LevelChip < Views::Base
     level_note = @context == :self ? "your level" : "current level"
     base = at_person_level? ? "Focus #{@level_code} (#{level_note})" : "Focus #{@level_code}"
     parts = [ "#{base}, rated #{rated_description}" ]
+    parts << "carried forward from the previous cycle" if !split? && solid_carried?
     parts << split_note if split?
     parts << activity_title if has_activity?
     parts.join(", ")
@@ -196,7 +197,7 @@ class Views::Assessments::LevelChip < Views::Base
   def chip_bg
     case fill_state.first
     when :solid
-      palette_bg(fill_state[1])
+      solid_carried? ? palette_carried_bg(fill_state[1]) : palette_bg(fill_state[1])
     when :split
       palette_bg(fill_state[2])
     else
@@ -204,11 +205,34 @@ class Views::Assessments::LevelChip < Views::Base
     end
   end
 
+  # Whether a SOLID fill shows carried-forward (seeded, unconfirmed)
+  # value(s) — rendered at the lighter carried tint, mirroring the
+  # assumed-consistent precedent. Split slices deliberately keep the full
+  # tint (two lightened triangles blur the seam); carried state there is
+  # visible on the expansion panel's pills instead. An aligned value is
+  # conversation output and never carried.
+  def solid_carried?
+    data = @cell_data || {}
+    return false if data[:aligned_frequency].present?
+
+    carried = []
+    carried << data[:current_frequency_carried] if data[:current_frequency].present?
+    carried << data[:manager_frequency_carried] if data[:manager_frequency].present?
+    carried.any? && carried.all?
+  end
+
   def palette_bg(frequency)
     return ASSUMED_CONSISTENT_BG if frequency == ASSUMED
 
     config = Views::Assessments::FrequencyPalette.config_for(frequency)
     config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
+  end
+
+  def palette_carried_bg(frequency)
+    return ASSUMED_CONSISTENT_BG if frequency == ASSUMED
+
+    config = Views::Assessments::FrequencyPalette.config_for(frequency)
+    config ? config[:chip_carried] : "bg-gray-100 dark:bg-gray-700"
   end
 
   # The top-left triangle, painted over the base (bottom-right) fill via a

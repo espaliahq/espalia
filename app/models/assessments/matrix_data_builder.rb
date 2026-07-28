@@ -201,6 +201,10 @@ class Assessments::MatrixDataBuilder
         current_frequency: rating&.self_rated_frequency,
         manager_frequency: hide_others? ? nil : rating&.manager_rated_frequency,
         aligned_frequency: hide_others? ? nil : rating&.aligned_frequency,
+        # Carried-forward (seeded, unconfirmed) provenance per side — drives
+        # the lighter pill/chip treatment. Same privacy gate as the values.
+        current_frequency_carried: rating&.self_rating_carried? || false,
+        manager_frequency_carried: (!hide_others? && rating&.manager_rating_carried?) || false,
         illustrations: illustrations,
         illustration_count: illustrations.size,
         evidence: evidence,

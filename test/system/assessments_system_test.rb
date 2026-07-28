@@ -1184,6 +1184,63 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "carried-forward ratings" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap1_stable,
+          level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id,
+          comment: "Seeded from prior cycle", source: "seeded",
+          seeded_from_cycle_id: SecureRandom.uuid_v7
+        )
+      end
+    end
+
+    should "render the carried pill distinctly and confirm on same-value pick" do
+      visit assessment_path(@assignment, capability: @cap1_stable)
+
+      # Carried treatment: the pill trigger carries the data-carried marker;
+      # the popover explains the provenance.
+      assert_selector "#rating-#{@cap1_stable}-2 [data-carried='true']"
+      open_pill_popover("#rating-#{@cap1_stable}-2")
+      assert_text "Carried from your last cycle"
+
+      # Picking the SAME value confirms: the rating survives and the pill
+      # solidifies (data-carried marker gone).
+      click_rating_frequency("#rating-#{@cap1_stable}-2", "Most of the time")
+      assert_no_selector "#rating-#{@cap1_stable}-2 [data-carried='true']"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap1_stable, level_ordinal: 2)
+        assert_equal "occasional", rating.self_rated_frequency
+        assert_equal "human", rating.self_rating_source
+      end
+    end
+
+    should "clear a carried rating via the explicit Clear rating action" do
+      visit assessment_path(@assignment, capability: @cap1_stable)
+
+      # The popover's Clear posts an explicit clear marker — on a carried
+      # value a same-frequency POST would otherwise mean confirm.
+      open_pill_popover("#rating-#{@cap1_stable}-2")
+      page.execute_script(<<~JS, "#rating-#{@cap1_stable}-2")
+        const wrapper = document.querySelector(arguments[0]);
+        const items = Array.from(wrapper.querySelectorAll('[role="menuitem"]'));
+        const clear = items.find(b => b.textContent.includes("Clear rating"));
+        clear.closest("form").requestSubmit(clear);
+      JS
+      assert_selector "#rating-#{@cap1_stable}-2 button[aria-haspopup='menu']", text: "Not rated"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap1_stable, level_ordinal: 2)
+        assert_nil rating.self_rated_frequency
+        assert_nil rating.self_rating_source
+      end
+    end
+  end
+
   context "manager-rating privacy" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

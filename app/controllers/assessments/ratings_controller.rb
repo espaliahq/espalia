@@ -17,7 +17,7 @@ class Assessments::RatingsController < ApplicationController
   def create
     authorize @assignment, :create_self_rating?
 
-    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id ])
+    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
     unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
@@ -43,7 +43,15 @@ class Assessments::RatingsController < ApplicationController
       level_ordinal: level_ordinal
     )
 
-    if existing&.self_rated_frequency == frequency && existing.self_rating_carried?
+    if rating_params[:clear].present? && existing&.self_rated_frequency.present?
+      # Explicit clear from the popover's "Clear rating" — unambiguous,
+      # regardless of carried state (the implicit same-frequency untoggle
+      # below can't be, since on a carried value that gesture confirms).
+      handler.clear_self_rating(
+        current_person.id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
+      )
+    elsif existing&.self_rated_frequency == frequency && existing.self_rating_carried?
       # Confirming a carried-forward (seeded) value: clicking the shown
       # frequency means "yes, still true" — re-emit as a human rating so
       # the provenance flips and the carried treatment solidifies. The
@@ -173,7 +181,8 @@ class Assessments::RatingsController < ApplicationController
       turbo_stream.replace(
         "rating-#{capability_stable_id}-#{level_ordinal}",
         rating_wrapper_html(capability_stable_id, level_ordinal, cell_data&.dig(:current_frequency),
-                            :self, active_category_id || category_id)
+                            :self, active_category_id || category_id,
+                            carried: cell_data&.dig(:current_frequency_carried) || false)
       ),
       turbo_stream.replace(
         "secondaries-#{capability_stable_id}-#{level_ordinal}",
