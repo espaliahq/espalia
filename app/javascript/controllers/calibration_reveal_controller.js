@@ -9,9 +9,14 @@
 // Example usage:
 // <div data-controller="calibration-reveal"
 //      data-calibration-reveal-session-id-value="<uuid>"
-//      data-calibration-reveal-reveal-person-value="<uuid or ''>">
+//      data-calibration-reveal-reveal-person-value="<uuid or ''>"
+//      data-calibration-reveal-reveal-persons-value='["<uuid>", …]'>
 //   <a data-calibration-reveal-target="dot"
 //      data-person-id="..." data-person-name="..." data-base-label="...">…</a>
+//   <li data-calibration-reveal-target="wallItem" data-person-id="...">
+//     <div data-reveal-role="summary">…shape only…</div>
+//     <div data-reveal-role="detail" class="hidden">…name + text…</div>
+//   </li>
 //   <button data-calibration-reveal-target="toggle"
 //           data-action="calibration-reveal#toggleNamed">Show names</button>
 // </div>
@@ -19,17 +24,20 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["dot", "toggle"]
+  static targets = ["dot", "toggle", "wallItem"]
   static values = {
     sessionId: String,
-    revealPerson: { type: String, default: "" }
+    revealPerson: { type: String, default: "" },
+    // Compare pins — pinning implies discussing implies revealed.
+    revealPersons: { type: Array, default: [] }
   }
 
   connect() {
     super.connect()
     this.state = this.loadState()
-    if (this.revealPersonValue) {
-      this.state.ids = Array.from(new Set([...this.state.ids, this.revealPersonValue]))
+    const arriving = [this.revealPersonValue, ...this.revealPersonsValue].filter(Boolean)
+    if (arriving.length) {
+      this.state.ids = Array.from(new Set([...this.state.ids, ...arriving]))
       this.saveState()
     }
     this.apply()
@@ -56,6 +64,16 @@ export default class extends BaseController {
         dot.setAttribute("aria-label", `Population member — ${dot.dataset.baseLabel}. Open to discuss.`)
         dot.dataset.revealed = "false"
       }
+    })
+    // Wall items: the text + name (detail) follow the reveal automatically —
+    // free text identifies people, so it cannot precede the name.
+    this.wallItemTargets.forEach((item) => {
+      const isRevealed = this.state.named || revealed.has(item.dataset.personId)
+      const summary = item.querySelector("[data-reveal-role='summary']")
+      const detail = item.querySelector("[data-reveal-role='detail']")
+      if (summary) summary.classList.toggle("hidden", isRevealed)
+      if (detail) detail.classList.toggle("hidden", !isRevealed)
+      item.dataset.revealed = String(isRevealed)
     })
     if (this.hasToggleTarget) {
       this.toggleTarget.textContent = this.state.named ? "Hide names" : "Show names"

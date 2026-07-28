@@ -29,10 +29,13 @@ class CalibrationSessions::RatingRevisitsController < ApplicationController
 
   private
 
-  # Back to the drill-in with the person card still open (the reveal sticks).
+  # Back to the drill-in with the person card still open (the reveal
+  # sticks) and any compare pins intact.
   def drill_in_path(session_record)
     calibration_session_capability_path(
-      session_record, params[:capability_stable_id], person: params[:person_id]
+      session_record, params[:capability_stable_id],
+      { person: params[:person_id],
+        compare: Array.wrap(params[:compare]).select(&:present?).presence }.compact
     )
   end
 end

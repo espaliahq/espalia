@@ -75,6 +75,54 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       get calibration_session_capability_path(@session, SecureRandom.uuid_v7)
       assert_redirected_to calibration_session_path(@session)
     end
+
+    should "render the evidence wall with reveal-gated items and filters" do
+      get calibration_session_capability_path(@session, @cap.stable_id, view: "wall")
+
+      assert_response :success
+      assert_includes response.body, "1 item"
+      # The detail half (name + text) is server-rendered but hidden until the
+      # reveal choreography shows it.
+      assert_includes response.body, "Led the pricing re-architecture"
+      assert_includes response.body, 'data-reveal-role="detail"'
+      assert_includes response.body, 'data-reveal-role="summary"'
+      assert_includes response.body, "wall-filter-wall_level"
+    end
+
+    should "apply wall filters and echo them in the tab links" do
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_level: 4)
+
+      assert_response :success
+      assert_includes response.body, "0 items"
+      assert_not_includes response.body, "Led the pricing re-architecture"
+    end
+
+    should "render the compare tray for pinned people, dropping foreign pins" do
+      get calibration_session_capability_path(
+        @session, @cap.stable_id, view: "compare",
+        compare: [ @report.id, SecureRandom.uuid_v7, @em.id ]
+      )
+
+      assert_response :success
+      assert_includes response.body, "Compare (1)"
+      assert_includes response.body, "Ivy IC"
+      assert_includes response.body, "Unpin"
+      # Pinned people count as revealed for the choreography controller.
+      assert_includes response.body, @report.id
+    end
+
+    should "carry compare pins through an outcome POST redirect" do
+      post calibration_session_rating_revisits_path(@session), params: {
+        person_id: @report.id, capability_stable_id: @cap.stable_id,
+        level_ordinal: 3, note: "Compare the pricing work with Omar's.",
+        compare: [ @report.id ]
+      }
+
+      assert_response :redirect
+      assert_includes response.redirect_url, "compare%5B%5D=#{@report.id}"
+      assert_includes response.redirect_url, "person=#{@report.id}"
+    end
   end
 
   context "as a participant EM (v1 facilitator-only)" do

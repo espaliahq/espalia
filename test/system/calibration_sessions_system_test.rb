@@ -34,6 +34,21 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
            manager_rated_frequency: frequency)
   end
 
+  # Evidence linked to a person's at-level cell — what the wall reads.
+  def back_evidence(person, author, capability, content, valence)
+    item = create(:evidence_item, tenant: @tenant, with_link: false,
+                  person_id: person.id, author: author,
+                  framework_id: @cycle.framework_id,
+                  capability_stable_id: capability.stable_id, level_ordinal: 3,
+                  content: content)
+    EvidenceLink.create!(
+      tenant_id: @tenant.id, evidence_id: item.id, person_id: person.id,
+      framework_id: @cycle.framework_id, capability_stable_id: capability.stable_id,
+      level_ordinal: 3, link_status: "active", linked_by_id: author.id,
+      linked_at: item.recorded_at, valence: valence
+    )
+  end
+
   test "facilitator defines, curates, and starts a calibration session" do
     sign_in_as(@facilitator_user)
 
@@ -119,6 +134,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       rate(@report_1, cap_b, "occasional")
       rate(@report_2, cap_b, "occasional")
 
+      # Near-identical evidence under divergent ratings — the wall's money shot.
+      back_evidence(@report_1, @em_1, @cap_a, "Ran the pricing spike end to end.", "demonstrated")
+      back_evidence(@report_2, @em_2, @cap_a, "Ran the billing spike end to end.", "growth_area")
+
       ctx = AuthorizationContext.new(
         user: @facilitator_user,
         tenant_user: TenantUser.find_by(user: @facilitator_user),
@@ -172,7 +191,54 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_selector "a[data-person-id='#{@report_1.id}'][data-revealed='true']"
     assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='false']"
 
+    # ── Evidence wall: the shape shows, the text waits for the reveal ──
+    click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "2 items")
+    wait_for_stimulus "calibration-reveal"
+    # Ivy was revealed by opening her dot; Omar was never opened, so his item
+    # shows only its calibration shape.
+    assert_selector "li[data-calibration-reveal-target='wallItem'][data-revealed='true']", count: 1
+    assert_text "Ran the pricing spike end to end."
+    assert_no_text "Ran the billing spike end to end."
+    assert_text "Open this person's dot to reveal the text."
+
+    # Filtering narrows the wall.
+    page.execute_script(<<~JS)
+      const select = document.querySelector("#wall-filter-wall_valence")
+      select.value = "growth_area"
+      select.form.requestSubmit()
+    JS
+    assert_text "1 item"
+    assert_no_text "Ran the pricing spike end to end."
+
+    # ── Compare tray: pinning holds two cards side by side ──
+    click_link_with_js_fallback("Person: Ivy IC", expect_text: "Manager: Consistently")
+    click_link_with_js_fallback("Pin to compare", expect_text: "Compare (1)")
+    assert_selector "[data-compare-card='#{@report_1.id}']"
+    assert_text "Ran the pricing spike end to end."
+
+    # Pin the second person from their card — the tray now juxtaposes both.
+    click_with_retry(expect_text: "Omar IC") do
+      find("a[data-person-id='#{@report_2.id}']").click
+    end
+    click_link_with_js_fallback("Pin to compare", expect_text: "Compare (2)")
+    assert_selector "[data-compare-card='#{@report_2.id}']"
+    assert_text "Ran the billing spike end to end."
+
+    # Pinned ⇒ discussed ⇒ revealed: Omar's wall item now shows its text.
+    click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "2 items")
+    wait_for_stimulus "calibration-reveal"
+    assert_selector "li[data-calibration-reveal-target='wallItem'][data-revealed='true']", count: 2
+    assert_text "Ran the billing spike end to end."
+
+    # Unpinning drops the card but not the reveal (sticky for the session).
+    click_link_with_js_fallback("Compare (2)", expect_text: "Ran the billing spike end to end.")
+    click_with_retry(expect_text: "Compare (1)") do
+      find("[data-compare-card='#{@report_2.id}'] a", text: "Unpin").click
+    end
+    assert_no_selector "[data-compare-card='#{@report_2.id}']"
+
     # Session-level "Show names" override (JS-dispatched — Stimulus toggle)
+    wait_for_stimulus "calibration-reveal"
     page.execute_script("document.querySelector(\"[data-calibration-reveal-target='toggle']\").click()")
     assert_selector "button[data-calibration-reveal-target='toggle']", text: "Hide names"
     assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='true']"

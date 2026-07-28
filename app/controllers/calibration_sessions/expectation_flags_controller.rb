@@ -29,7 +29,13 @@ class CalibrationSessions::ExpectationFlagsController < ApplicationController
 
   private
 
+  # Restores the drill-in's working state (opened person, compare pins) the
+  # form passed through — an outcome must not reset the room's screen.
   def drill_in_path(session_record)
-    calibration_session_capability_path(session_record, params[:capability_stable_id])
+    calibration_session_capability_path(
+      session_record, params[:capability_stable_id],
+      { person: params[:person].presence,
+        compare: Array.wrap(params[:compare]).select(&:present?).presence }.compact
+    )
   end
 end
