@@ -68,7 +68,8 @@ class Operations::Assessments::CapabilityGet < Operations::Base
     end
   end
 
-  EMPTY_RATING = { self: nil, manager: nil, aligned: nil }.freeze
+  EMPTY_RATING = { self: nil, manager: nil, aligned: nil,
+                   self_carried: false, manager_carried: false }.freeze
 
   def ratings_by_level(cycle)
     return Hash.new(EMPTY_RATING) unless cycle
@@ -82,7 +83,12 @@ class Operations::Assessments::CapabilityGet < Operations::Base
       h[row.level_ordinal] = {
         self: row.self_rated_frequency,
         manager: row.manager_rated_frequency,
-        aligned: row.aligned_frequency
+        aligned: row.aligned_frequency,
+        # Carried-forward (seeded, unconfirmed) provenance per side — an
+        # MCP client should present these as "carried from the previous
+        # cycle", matching the web's dashed-pill treatment.
+        self_carried: row.self_rating_carried?,
+        manager_carried: row.manager_rating_carried?
       }
     end
     index.default = EMPTY_RATING

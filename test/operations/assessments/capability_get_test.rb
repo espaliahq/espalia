@@ -82,7 +82,8 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
       end
       result = call_assessment_op
       l3 = result[:expectations].find { |e| e[:level_ordinal] == 3 }
-      assert_equal({ self: nil, manager: nil, aligned: nil }, l3[:ratings])
+      assert_equal({ self: nil, manager: nil, aligned: nil,
+                     self_carried: false, manager_carried: false }, l3[:ratings])
     end
   end
 
