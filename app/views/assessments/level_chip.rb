@@ -140,9 +140,19 @@ class Views::Assessments::LevelChip < Views::Base
   # doesn't read as one flat band of colour. Rated chips already carry
   # a solid fill so a transparent border there reads as edge enough.
   def idle_border
+    # Carried solid fills wear a dashed border in their hue — the "carried"
+    # signal shared with the pill's dashed outline, and the thing that keeps
+    # a carried-consistent chip apart from the assumed-consistent below-level
+    # fill (same blue-300 in light mode).
+    return carried_border if solid_carried?
     return "border-transparent" if rated? || split?
 
     "border-gray-200 dark:border-gray-700"
+  end
+
+  def carried_border
+    config = Views::Assessments::FrequencyPalette.config_for(fill_state[1])
+    config ? config[:chip_carried_border] : "border-transparent"
   end
 
   # Screen-reader label spelling out which capability + level the chip

@@ -1236,7 +1236,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
           capability_stable_id: @cap1_stable, level_ordinal: 2)
         assert_nil rating.self_rated_frequency
-        assert_nil rating.self_rating_source
+        # The clear leaves the side human-OWNED (empty by choice) so a seed
+        # re-run can't resurrect the carried value.
+        assert_equal "human", rating.self_rating_source
       end
     end
   end

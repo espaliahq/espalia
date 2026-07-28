@@ -76,8 +76,16 @@ class Views::Assessments::FrequencyPill < Views::Base
   def static_pill
     span(
       class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium #{pill_bg_classes}",
-      title: @carried ? "#{phrase} — carried forward from your previous cycle" : phrase
+      title: @carried ? "#{phrase} — carried forward from #{carried_origin}" : phrase
     ) { phrase }
+  end
+
+  # Whose history the carried value came from — second person only when the
+  # viewer IS the rated party (:self). In :manager context the value is the
+  # manager's prior rating of their REPORT's cycle; "your previous cycle"
+  # would misattribute it (the YOU vs CURRENT badge precedent).
+  def carried_origin
+    @context == :self ? "your previous cycle" : "the previous cycle"
   end
 
   def pill_trigger
@@ -87,7 +95,7 @@ class Views::Assessments::FrequencyPill < Views::Base
              "#{pill_bg_classes} cursor-pointer " \
              "hover:brightness-95 dark:hover:brightness-110 transition " \
              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-      title: @carried ? "Carried forward from your previous cycle — confirm or change" : nil,
+      title: @carried ? "Carried forward from #{carried_origin} — confirm or change" : nil,
       data: { dropdown_target: "trigger", action: "dropdown#toggle", carried: @carried ? "true" : nil },
       aria: { label: trigger_aria_label, haspopup: "menu", expanded: "false" }
     ) do
@@ -98,7 +106,7 @@ class Views::Assessments::FrequencyPill < Views::Base
 
   def trigger_aria_label
     if @carried
-      "Rated #{phrase.downcase}, carried forward from your previous cycle — confirm or change"
+      "Rated #{phrase.downcase}, carried forward from #{carried_origin} — confirm or change"
     else
       "Rated #{phrase.downcase} — change"
     end
@@ -123,9 +131,10 @@ class Views::Assessments::FrequencyPill < Views::Base
   # Header line inside the popover when the value is carried forward —
   # tells the viewer where it came from and that re-picking it confirms.
   def carried_note
+    origin = @context == :self ? "your last cycle" : "the last cycle"
     div(class: "px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300 " \
                "border-b border-gray-100 dark:border-gray-800") do
-      plain "Carried from your last cycle — pick the same value to confirm it."
+      plain "Carried from #{origin} — pick the same value to confirm it."
     end
   end
 
