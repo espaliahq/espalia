@@ -1215,7 +1215,23 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-glyph='clarification']", visible: :all
     end
 
+    should "surface the glyph and reach the resolve modal on a narrow viewport" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # The glyph rides the matrix cell at every breakpoint (the matrix is
+      # full-width on narrow; the pane keeps its fixed column).
+      assert_selector "[data-glyph='clarification']", visible: :all
+      assert_text "Asked for clarification"
+
+      click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
+      assert_selector "#resolve-clarification-modal", visible: true
+    end
+
     should "resolve a clarification from the feed via the modal" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
       assert_text "Asked for clarification"
