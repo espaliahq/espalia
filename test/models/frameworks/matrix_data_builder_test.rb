@@ -317,6 +317,27 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_nil category[:pending_edit], "a description edit must not surface as the name pending_edit"
       end
 
+      should "thread clarification counts to the cell and capability without touching pending counts" do
+        eid = @expectations[0].expectation_id
+        pending_map = {
+          [ "behavioural_expectation", eid ] =>
+            { count: 0, clarification_count: 2, latest_by_field: {} },
+          [ "capability", @capability.capability_id ] =>
+            { count: 0, clarification_count: 1, latest_by_field: {} }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+
+        cap = find_capability(result, "Strategic Thinking")
+        cell = cap[:cells][1]
+        assert_equal 2, cell[:clarification_count]
+        assert_equal 0, cell[:pending_suggestion_count],
+          "clarifications must not count as pending changes (no wiggle, no pill)"
+        assert_equal 1, cap[:clarification_count]
+        assert_equal 0, cap[:pending_suggestion_count]
+        assert_equal 0, cap[:cells][2][:clarification_count]
+      end
+
       should "flag a category holding active capabilities as not archivable" do
         result = build_matrix(selected_role_ids: [ @ic_role.role_id ])
         assert_equal false, result[:categories].first[:archivable]

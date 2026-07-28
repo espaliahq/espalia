@@ -335,12 +335,13 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # exact query (see docs/guidelines/testing.md → inline-editor form submits).
       set_search_query "Strategic"
       assert_text "Strategic Thinking"
-      # The filter triggers a Turbo Frame fetch; wait for the new frame to
-      # finish loading and for Stimulus to re-attach to the swapped DOM
-      # before expanding. Without this, expand_matrix_row can click an
-      # old row whose toggle handler is mid-replacement, leaving the
-      # expanded-row content (and its inline-editor li) hidden when the
-      # assertion below fires.
+      # The filter triggers a debounced Turbo Frame fetch; wait for content
+      # that only the FILTERED render carries (the results banner) before
+      # the frame-complete check — `[complete]` alone can match the
+      # previous load if the debounce hasn't fired yet, letting
+      # expand_matrix_row click an old row whose replacement then collapses
+      # the expanded content mid-assertion.
+      assert_text "capabilities matching"
       assert_selector "turbo-frame#framework-matrix[complete]", visible: :all
       wait_for_stimulus "matrix"
 
@@ -349,8 +350,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_selector "li[data-controller='inline-editor']"
 
-      # Clear the filter — must remain in edit mode.
+      # Clear the filter — must remain in edit mode. Sync on the banner
+      # DISAPPEARING (only true of the cleared render) for the same
+      # debounce race as above.
       set_search_query ""
+      assert_no_text "capabilities matching"
       assert_text "Strategic Thinking"
       assert_selector "turbo-frame#framework-matrix[complete]", visible: :all
       wait_for_stimulus "matrix"
@@ -1179,6 +1183,75 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Beta second illustration"
       assert_no_selector "button[aria-label='Move illustration up']"
+    end
+  end
+
+  context "clarifications" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @author = FactoryBot.create(:person, tenant: @tenant, name: "Quinn Questioner")
+        @clarification_id = SecureRandom.uuid_v7
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, @clarification_id, "behavioural_expectation", @eid,
+          author_id: @author.id.to_s,
+          rationale: "Raters read 'clarifying questions' three different ways"
+        )
+      end
+    end
+
+    should "show the comment glyph on the cell in edit mode, never the wiggle or view mode" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # The glyph is the content language for "a discussion exists"…
+      assert_selector "[data-glyph='clarification']", visible: :all
+      # …and deliberately NOT the pending-change wiggle: the expectation text
+      # renders undecorated (a clarification proposes nothing).
+      assert_no_selector "td .decoration-amber-400", text: "Asks clarifying questions"
+
+      visit framework_path(@framework_id)
+      assert_no_text "Edit mode", exact: true
+      assert_no_selector "[data-glyph='clarification']", visible: :all
+    end
+
+    should "surface the glyph and reach the resolve modal on a narrow viewport" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # The glyph rides the matrix cell at every breakpoint (the matrix is
+      # full-width on narrow; the pane keeps its fixed column).
+      assert_selector "[data-glyph='clarification']", visible: :all
+      assert_text "Asked for clarification"
+
+      click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
+      assert_selector "#resolve-clarification-modal", visible: true
+    end
+
+    should "resolve a clarification from the feed via the modal" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Asked for clarification"
+      assert_text "Raters read 'clarifying questions' three different ways"
+
+      click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
+      within "#resolve-clarification-modal" do
+        # The exact note is asserted on the read model — JS assignment so
+        # send_keys can't drop characters on starved CI.
+        js_set_field "#resolve_note", "Reworded the L1 expectation"
+        page.execute_script("arguments[0].requestSubmit();", find("form", match: :first))
+      end
+
+      # Feed reloads off the activity broadcast with the resolution entry.
+      assert_text "Resolved a clarification"
+      ActsAsTenant.with_tenant(@tenant) do
+        row = FrameworkState::SuggestedEdit.find_by!(suggestion_id: @clarification_id)
+        assert_equal "resolved", row.status
+        assert_equal "Reworded the L1 expectation", row.reviewer_comment
+      end
     end
   end
 end

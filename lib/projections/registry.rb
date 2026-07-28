@@ -24,6 +24,7 @@ module Projections::Registry
     "frameworks/published_state"             => "Frameworks::Projections::PublishedState",
     "frameworks/suggestion_thread"           => "Frameworks::Projections::SuggestionThread",
     "assessment_cycles/current_state"        => "AssessmentCycles::Projections::CurrentState",
+    "assessment_cycles/calibration_sessions" => "AssessmentCycles::Projections::CalibrationSessions",
     "person_development/current_assessment"  => "PersonDevelopment::Projections::CurrentAssessment",
     "person_development/evidence_collection" => "PersonDevelopment::Projections::EvidenceCollection",
     "person_development/evidence_requests"   => "PersonDevelopment::Projections::EvidenceRequests",

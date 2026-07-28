@@ -76,6 +76,12 @@ class NotificationType
       label: "Bulk cycle enrollment finished",
       description: "The background enrollment you started has completed, with its enrolled/skipped outcome.",
       defaults: { in_app: true, slack: false, email: false }
+    ),
+    rating_revisit_requested: Definition.new(
+      key: :rating_revisit_requested,
+      label: "Calibration asked you to revisit a rating",
+      description: "A calibration session asks you to take a second look at one of your ratings.",
+      defaults: { in_app: true, slack: true, email: false }
     )
   }.freeze
 

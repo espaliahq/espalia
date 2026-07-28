@@ -40,8 +40,12 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   # @return [Boolean]
   def create? = tenant_admin? || framework_collaborator_can_suggest?
 
+  # Proposal kinds only — a clarification is resolved (see #resolve?), never
+  # approved/rejected; the aggregate enforces the same split.
+  #
   # @return [Boolean]
   def approve?
+    return false if clarification?
     return true if tenant_admin?
     return false unless person.present?
     can_approve_tier?(review_tier)
@@ -50,8 +54,23 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   # @return [Boolean]
   def reject? = approve?
 
+  # Clarifications are resolved with a note, never approved/rejected. Gated
+  # on expectation-tier (tier 3) authority regardless of anchor — whoever
+  # could change the text can declare the question settled.
+  #
   # @return [Boolean]
-  def amend? = pending? && author?
+  def resolve?
+    return false unless clarification?
+    return true if tenant_admin?
+    return false unless person.present?
+    can_approve_tier?(3)
+  end
+
+  # Clarifications carry no proposal to amend — the discussion happens in the
+  # thread.
+  #
+  # @return [Boolean]
+  def amend? = pending? && author? && !clarification?
 
   # @return [Boolean]
   def withdraw? = pending? && author?
@@ -75,6 +94,11 @@ class FrameworkSuggestionPolicy < ApplicationPolicy
   # @return [Boolean]
   def pending?
     record.status == "pending"
+  end
+
+  # @return [Boolean]
+  def clarification?
+    record.respond_to?(:clarification?) && record.clarification?
   end
 
   # @return [Boolean]

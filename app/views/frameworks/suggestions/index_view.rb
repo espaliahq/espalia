@@ -13,12 +13,16 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
     "pending" => :warning,
     "approved" => :success,
     "rejected" => :default,
-    "withdrawn" => :default
+    "withdrawn" => :default,
+    "resolved" => :success
   }.freeze
 
   # Canonical badge wording for suggestion kinds. "Archive" (never "Delete")
   # per §11 — archiving is the single removal operation.
-  KIND_BADGE_LABELS = { "edit" => "Edit", "create" => "New", "delete" => "Archive" }.freeze
+  KIND_BADGE_LABELS = {
+    "edit" => "Edit", "create" => "New", "delete" => "Archive",
+    "clarification" => "Clarify"
+  }.freeze
 
   TIER_LABELS = {
     1 => "Tier 1 — Illustrations",
@@ -208,6 +212,9 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
       creation_preview(suggestion.proposed_attributes || {})
     when "delete"
       suggestion.current_value.to_s
+    when "clarification"
+      # A clarification proposes nothing — the question is its content.
+      suggestion.rationale.to_s
     else
       suggestion.suggested_value.to_s
     end

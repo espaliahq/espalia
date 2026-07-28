@@ -32,7 +32,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_link_commented"  => "bg-sky-500",
     "delegation_granted"       => "bg-indigo-500",
     "delegation_revoked"       => "bg-gray-400",
-    "reporting_manager_recorded" => "bg-sky-500"
+    "reporting_manager_recorded" => "bg-sky-500",
+    "rating_revisit_requested" => "bg-amber-500"
   }.freeze
 
   # Maps each entry kind into one of the four user-facing groups that
@@ -59,6 +60,9 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_reopened"      => "alignment",
     "comment_posted"          => "comments",
     "evidence_link_commented" => "comments",
+    # A calibration revisit request is about the manager rating — the
+    # ratings chip is where the rater will look for it.
+    "rating_revisit_requested" => "ratings",
     # No filter chip — these surface under "All" only.
     "delegation_granted"        => "authority",
     "delegation_revoked"        => "authority",
@@ -182,8 +186,19 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "delegation_granted"    then "#{actor_name || 'Manager'} delegated rating to #{delegate_name}"
     when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"
     when "reporting_manager_recorded" then "Reporting manager changed to #{manager_name}"
+    when "rating_revisit_requested" then revisit_summary
     else @entry.kind.humanize
     end
+  end
+
+  # "«Facilitator» asked «rater» to revisit this rating (Engineering
+  # calibration)" — value-free by design; the note rides the secondary line.
+  def revisit_summary
+    asker = payload_value(:requested_by_name).to_s.strip.presence || "Calibration"
+    rater = payload_value(:rater_name).to_s.strip.presence || "the rater"
+    session = payload_value(:session_name).to_s.strip.presence
+    base = "#{asker} asked #{rater} to revisit #{capability_label}"
+    session ? "#{base} (#{session})" : base
   end
 
   # Name of the delegate referenced by a delegation entry, or a generic label.
@@ -369,6 +384,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "comment_posted", "evidence_link_commented"
       body = @entry.payload.respond_to?(:body) ? @entry.payload.body : nil
       body.to_s.strip.presence
+    when "rating_revisit_requested"
+      payload_value(:note).to_s.strip.presence
     end
   end
 

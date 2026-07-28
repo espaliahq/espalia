@@ -56,7 +56,10 @@ class Views::Frameworks::ShowView < Views::Base
         framework_header
         explorer_layout
         structural_modals
-        reject_suggestion_modal if @mode == :edit
+        if @mode == :edit
+          reject_suggestion_modal
+          resolve_clarification_modal
+        end
       end
     end
   end
@@ -68,6 +71,14 @@ class Views::Frameworks::ShowView < Views::Base
   # #explorer_root_data) with the structural modals.
   def reject_suggestion_modal
     render Views::Frameworks::Explorer::RejectSuggestionModal.new(
+      framework_id: @framework.framework_id
+    )
+  end
+
+  # Same placement rules as the reject modal — a pending clarification's
+  # "Resolve…" (feed entry / pane card) opens it with a required note.
+  def resolve_clarification_modal
+    render Views::Frameworks::Explorer::ResolveClarificationModal.new(
       framework_id: @framework.framework_id
     )
   end

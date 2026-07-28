@@ -67,7 +67,9 @@ class FrameworksController < ApplicationController
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants,
       is_admin: fw_policy.admin?,
-      pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count,
+      # Proposals only — an open clarification is a discussion, not a pending
+      # change, and must not inflate the header's pending-change badge.
+      pending_suggestion_count: @framework.suggested_edits.pending.proposals.count,
       mode: mode,
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
@@ -219,7 +221,16 @@ class FrameworksController < ApplicationController
     # on iteration order.
     scope.find_each do |edit|
       key = [ edit.target_entity_type, edit.target_entity_id ]
-      entry = suggestions[key] ||= { count: 0, latest_by_field: {} }
+      entry = suggestions[key] ||= { count: 0, clarification_count: 0, latest_by_field: {} }
+
+      # Clarifications are discussions, not pending changes — they feed the
+      # comment glyph, never the wiggle/diff/"N pending" pending-change
+      # vocabulary, so they stay out of :count and :latest_by_field.
+      if edit.kind == "clarification"
+        entry[:clarification_count] += 1
+        next
+      end
+
       entry[:count] += 1
 
       next unless edit.kind == "edit" && edit.field.present?

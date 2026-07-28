@@ -208,6 +208,9 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
       creation_preview(suggestion.proposed_attributes || {})
     when "delete"
       suggestion.current_value.to_s
+    when "clarification"
+      # A clarification proposes nothing — the question is its content.
+      suggestion.rationale.to_s
     else
       suggestion.suggested_value.to_s
     end

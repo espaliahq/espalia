@@ -118,4 +118,15 @@ class Person < ApplicationRecord
     )
     self.class.where(id: ids)
   end
+
+  # Whether anyone in this person's org subtree has reports of their own —
+  # the "manager of managers" shape that qualifies someone to facilitate
+  # calibration sessions. all_reports is transitive, so any person managed
+  # by a subtree member implies subtree depth ≥ 2. The single source for
+  # this predicate — CalibrationSessionPolicy and the nav link both read it.
+  #
+  # @return [Boolean]
+  def manages_managers?
+    self.class.where(manager_id: all_reports.select(:id)).exists?
+  end
 end

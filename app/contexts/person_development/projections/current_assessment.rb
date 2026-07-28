@@ -89,7 +89,8 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::AlignmentCleared,
       PersonDevelopment::Events::FullAlignmentCompleted,
       PersonDevelopment::Events::AlignmentReopened,
-      PersonDevelopment::Events::FrameworkVersionMigrated
+      PersonDevelopment::Events::FrameworkVersionMigrated,
+      PersonDevelopment::Events::RatingRevisitRequested
     ]
   end
 
@@ -136,7 +137,16 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::FullAlignmentCompleted then handle_full_alignment_completed(event)
     when PersonDevelopment::Events::AlignmentReopened then handle_alignment_reopened(event)
     when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
+    when PersonDevelopment::Events::RatingRevisitRequested then handle_rating_revisit_requested(event)
     end
+  end
+
+  # No read-model write — the revisit request is a stream-only fact the
+  # activity feed reads directly (resolution is rating-change-based, at read
+  # time). Handled here solely so the assessment feed updates live for a
+  # rater who has the page open when a calibration session nudges them.
+  def handle_rating_revisit_requested(event)
+    broadcast_assessment_sync(event)
   end
 
   # Applies the migration mappings carried on `FrameworkVersionMigrated`

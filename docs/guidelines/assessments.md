@@ -615,7 +615,12 @@ the response lands pre-linked to it.
   org-neighbour suggestions** (manager, peers, direct reports — `Assessments::RequestCandidates`),
   a **multi-select** chip list, **one shared reason**, and an optional due date.
 - **Search + suggestions** are server-rendered: the search input (debounced ~250ms by
-  [request_evidence_controller.js](../../app/javascript/controllers/request_evidence_controller.js))
+  [request_evidence_controller.js](../../app/javascript/controllers/request_evidence_controller.js)
+  — now a thin subclass of the shared
+  [person_picker_controller.js](../../app/javascript/controllers/person_picker_controller.js),
+  the reusable typeahead+chips control this picker was extracted into; the
+  calibration participant picker reuses it via
+  [Views::Shared::PersonPicker](../../app/views/shared/person_picker.rb))
   repoints the `#request-candidates` frame
   ([RequestCandidatesFrame](../../app/views/evidence/request_candidates_frame.rb));
   selection is client-side (chips + `requestee_ids[]` hidden inputs). People with a
@@ -785,8 +790,18 @@ no entry, the other party (and the actor on reload) silently loses the story.
 This applies to ratings (self / manager / aligned + their revisions/clears),
 alignment milestones, comments, and **all evidence actions** — recording,
 editing, withdrawing, **and link add / remove** (`evidence_linked` /
-`evidence_unlinked`). When you add a new assessment action, you add its feed
-entry in the same change:
+`evidence_unlinked`). It also covers actions that originate OFF the
+assessment screen but land on the person's stream: a calibration session's
+**rating-revisit request** surfaces as `rating_revisit_requested` (ratings
+chip, cell-anchored, the room's note as the secondary line), gated by the
+same manager-rating privacy rule as `MANAGER_KINDS` — value-free by design,
+and resolved implicitly when the manager rating for that cell changes
+(no resolution entry; see
+[calibration-sessions.md](../architecture/calibration-sessions.md)). The
+rater is also **notified** (`rating_revisit_requested` Noticed type via the
+async `RatingRevisitNotifier` — in-app-first + Slack escalation, dropped if
+the rating already changed by delivery time, never a self-ping). When
+you add a new assessment action, you add its feed entry in the same change:
 
 1. **Source the entry.** Entries come from either the RES stream
    (`Assessments::ActivityFeedQuery#stream_events`, e.g. rating / relink /

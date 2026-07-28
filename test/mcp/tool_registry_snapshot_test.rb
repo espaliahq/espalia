@@ -608,6 +608,252 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_add_calibrant",
+        "description" => "Add a person from the facilitator's org to a draft calibration session's population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_add_participant",
+        "description" => "Add a participating rater to a draft calibration session (auto-removes them from the calibrant population if present).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_close",
+        "description" => "Close a calibration session (terminal — a closed session becomes the follow-through record).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_define",
+        "description" => "Define a calibration session (draft) for an assessment cycle. You become the facilitator; seed the participating raters and the calibrant population (typically the participants' reports).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cycle_id" => { "type" => "string" },
+            "name"     => { "type" => "string" },
+            "participant_ids" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "person_ids of the participating raters"
+            },
+            "calibrant_person_ids" => {
+              "type" => "array",
+              "items" => { "type" => "string" },
+              "description" => "person_ids of the people being calibrated — never a participant or the facilitator"
+            }
+          },
+          "required" => %w[cycle_id name participant_ids],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_flag_expectation",
+        "description" => "Flag a capability × level expectation as unclear from a live calibration session — raises a framework clarification.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"           => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "reason"               => { "type" => "string" }
+          },
+          "required" => %w[session_id capability_stable_id level_ordinal],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_get",
+        "description" => "Get one calibration session — lifecycle state plus participant and calibrant rosters.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "calibration_sessions_list",
+        "description" => "List calibration sessions you facilitate (admins see all), optionally filtered to one assessment cycle.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "cycle_id" => { "type" => "string" }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "calibration_sessions_overview",
+        "description" => "Calibration overview for a session — per-rater tendency (mean vs org, distribution, self-gap, evidence backing) and capabilities ranked by tendency-corrected rater disagreement.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "calibration_sessions_record_note",
+        "description" => "Record a free-text minute on a live calibration session, optionally anchored to a capability or person.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"           => { "type" => "string" },
+            "body"                 => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "person_id"            => { "type" => "string" }
+          },
+          "required" => %w[session_id body],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_remove_calibrant",
+        "description" => "Remove a person from a draft calibration session's population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_remove_participant",
+        "description" => "Remove a participating rater from a draft calibration session (their reports stay in the population).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "person_id"  => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_request_rating_revisit",
+        "description" => "Ask a rater to revisit a manager rating from a live calibration session — value-free, with the room's note.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"           => { "type" => "string" },
+            "person_id"            => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "note"                 => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id capability_stable_id level_ordinal note],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_start",
+        "description" => "Start a calibration session — freezes the participants and the calibrant population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_add_capability",
         "description" => "Add a capability to a category, binding it to one or more roles (owner/editor/lead only).",
         "inputSchema" => {
@@ -1223,6 +1469,46 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => %w[framework_id expectation_id role_id new_ordering],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_request_clarification",
+        "description" => "Ask for clarification of a capability × level expectation — opens a discussion, proposes nothing.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"  => { "type" => "string" },
+            "capability_id" => { "type" => "string" },
+            "level_ordinal" => { "type" => "integer" },
+            "rationale"     => { "type" => "string" }
+          },
+          "required" => %w[framework_id capability_id level_ordinal rationale],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "frameworks_resolve_clarification",
+        "description" => "Resolve a pending clarification with a note (expectation-tier authority required).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id"            => { "type" => "string" },
+            "suggestion_id"           => { "type" => "string" },
+            "note"                    => { "type" => "string" },
+            "resulting_suggestion_id" => { "type" => "string" }
+          },
+          "required" => %w[framework_id suggestion_id note],
           "additionalProperties" => false
         },
         "annotations" => {

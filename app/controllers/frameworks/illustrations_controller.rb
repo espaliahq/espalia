@@ -96,7 +96,9 @@ class Frameworks::IllustrationsController < ApplicationController
   end
 
   def pending_edits_on_illustration
-    pending_edits_scope.count
+    # Proposals only (defensive symmetry with the expectation frame — an
+    # illustration can't carry a clarification today).
+    pending_edits_scope.proposals.count
   end
 
   def latest_pending_edit

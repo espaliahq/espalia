@@ -20,7 +20,10 @@ class Frameworks::Repository
   GRAPH_IRRELEVANT_EVENTS = [
     Frameworks::Events::SuggestionCommented,
     Frameworks::Events::SuggestionCommentEdited,
-    Frameworks::Events::SuggestionCommentDeleted
+    Frameworks::Events::SuggestionCommentDeleted,
+    # Clarifications propose no content — the graph carries none of their state.
+    Frameworks::Events::ClarificationRequested,
+    Frameworks::Events::ClarificationResolved
   ].freeze
 
   # The active batch is execution-state-local (per thread/fiber), NOT

@@ -321,7 +321,7 @@ Each suggestion row in the panel must answer three questions at a glance: **what
 
 In edit mode, suggestions surface directly on the grid — not just in the context pane. The explorer has a shared visual vocabulary for "this entity has a pending change" with the proposal itself visible inline.
 
-**Pending-change vocabulary (NON-NEGOTIABLE): the wiggle is the universal "differs from published" signal — never a pill.** The amber wavy underline ("the wiggle", `PENDING_EDIT_CLASSES`) marks any text that is **not in the published framework**, whether it's a pending suggestion *or* a change already applied into the open draft (added/edited in draft, not yet published). Do **not** add a "New in draft"/"Draft"/"Unpublished" pill or badge for this — the wiggle says it. Apply it via `suggestion_text_classes(added_in_draft: …)` (it returns the wiggle for `added_in_draft` just as it does for a pending edit), and pair it with `draft_change_title(added_in_draft)` so the meaning is conveyed non-visually (a `title` tooltip — accessibility, since the wiggle is otherwise colour/decoration-only). The one explicit badge that remains is **"Pending archive"**, because *removal* is a distinct state (the row is also struck through), not merely "differs from published".
+**Pending-change vocabulary (NON-NEGOTIABLE): the wiggle is the universal "differs from published" signal — never a pill.** The amber wavy underline ("the wiggle", `PENDING_EDIT_CLASSES`) marks any text that is **not in the published framework**, whether it's a pending suggestion *or* a change already applied into the open draft (added/edited in draft, not yet published). Do **not** add a "New in draft"/"Draft"/"Unpublished" pill or badge for this — the wiggle says it. Apply it via `suggestion_text_classes(added_in_draft: …)` (it returns the wiggle for `added_in_draft` just as it does for a pending edit), and pair it with `draft_change_title(added_in_draft)` so the meaning is conveyed non-visually (a `title` tooltip — accessibility, since the wiggle is otherwise colour/decoration-only). The one explicit badge that remains is **"Pending archive"**, because *removal* is a distinct state (the row is also struck through), not merely "differs from published". Open **clarifications** are the other deliberate exception — they propose nothing, so they carry a speech-bubble **content glyph**, never the wiggle (see §12a).
 
 **Inline diff (primary affordance for text edits).** When an entity has a pending `kind: "edit"` on its text field, the entity re-renders as a character-level diff over the original text:
 
@@ -721,6 +721,54 @@ inside `[data-controller~='dropdown']`, so opening the kebab never expands the
 row. Expectation / illustration edits are not (yet) on the grid kebab — the feed
 covers those.
 
+### 12a. Suggestions are anchored discussions — the clarification kind
+
+A **suggestion is an anchored, lifecycled discussion**, of which *proposals*
+(edit / create / delete — the kinds applied on approval) are the applying
+subset. This framing became explicit with the fourth kind, **`clarification`**
+(born from calibration sessions — see
+[calibration-sessions.md](../architecture/calibration-sessions.md)): a
+discussion anchored on a capability × level cell that proposes nothing —
+"what does this expectation actually mean?" — and may resolve into a
+rewording, better illustrations, or "the text is fine, here's the reading".
+Future features that need an anchored conversation with a lifecycle (e.g.
+assessment-side open questions) should inherit this framing instead of
+rediscovering it. Mechanics:
+
+- **Domain**: `ClarificationRequested` → the same `framework_suggested_edits`
+  table with `kind: "clarification"` and nil `field`/`suggested_value` (the
+  presence validations were always proposal-kind rules). Anchor = the cell's
+  expectation when one exists; else the capability with `level_ordinal` in
+  `proposed_attributes`. The question itself is the `rationale`.
+- **Lifecycle verbs differ — that is the whole delta.** No approve/reject/
+  amend (the aggregate and `FrameworkSuggestionPolicy` both refuse): a
+  clarification is **resolved with a required note** (`ClarificationResolved`,
+  status `"resolved"`, note in `reviewer_comment`, optional
+  `resulting_suggestion_id` linking the concrete change it spawned) or
+  withdrawn by its author. Resolve authority is expectation-tier
+  (`FrameworkSuggestionPolicy#resolve?` — whoever could change the text can
+  declare the question settled).
+- **Everything else is inherited untouched**: discussion threads, the feed +
+  suggestion card rails, the suggestion index. Clarification entries
+  (`clarification_requested` / `clarification_resolved`, suggestions chip)
+  carry a **"Resolve…"** action for authorised viewers — the §12 pattern's
+  needs-input variant (the note is required, so there is no one-click path;
+  the root-mounted `resolve-clarification-modal` +
+  `resolve_clarification_form` controller mirror the reject modal exactly).
+- **Grid decoration is the content language, never the pending-change
+  vocabulary**: an open clarification renders a muted **speech-bubble glyph**
+  on the affected cell (capability row when the anchor is the capability) —
+  `SuggestionDecoration#render_clarification_glyph`, edit mode only. It is
+  deliberately NOT the wiggle: a clarification proposes no change, so
+  `build_suggestions_map` routes it to a separate `clarification_count`
+  (never `:count`/`latest_by_field`, so no wiggle, no diff, no "N pending"
+  pill). Same glyph vocabulary as the assessment level chips.
+- **Writers**: `frameworks_request_clarification` /
+  `frameworks_resolve_clarification` (web + MCP, `:mcp_client`), plus the
+  calibration flag (`Operations::CalibrationSessions::FlagExpectation` —
+  authorized as the session facilitator, deliberately independent of
+  framework collaborator roles).
+
 ### 13. Suggestion discussion threads
 
 Every suggestion carries a **discussion thread** — the collaborative
@@ -1054,7 +1102,11 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > edits/deletes stay thread-only — the feed shows conversation activity, not
 > comment meta-history), and every suggestion-anchored entry carries a
 > discussion affordance (comment count + latest excerpt) that opens the pane's
-> suggestion card. Still deferred (note when adding): reorders. The
+> suggestion card. **Clarifications surface too** (`clarification_requested`
+> with the question as the secondary line + an authority-gated "Resolve…"
+> action, `clarification_resolved` with the note — suggestions chip,
+> cell-anchored with the level pinned; see §12a). Still deferred (note when
+> adding): reorders. The
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
 > standalone suggestion index, not the pane.
 
@@ -1167,6 +1219,10 @@ line (§9).
 | `app/views/frameworks/explorer/reject_suggestion_modal.rb` | Shared reject-suggestion modal (optional reason) — explorer root, edit mode (§12) |
 | `app/models/frameworks/suggestion_approval_authority.rb` | Per-viewer approval authority value object — computed once, gates the actionable feed (§12) |
 | `app/operations/operations/frameworks/{approve,reject,amend,withdraw}_suggestion.rb` | Shared web + MCP suggestion-lifecycle operations (§12) |
+| `app/operations/operations/frameworks/{request,resolve}_clarification.rb` | Shared web + MCP clarification operations — the non-proposal suggestion kind (§12a) |
+| `app/views/frameworks/activity/clarification_actions.rb` | The "Resolve…" affordance on a pending clarification (feed entry + pane card) — opens the resolve modal (§12a) |
+| `app/views/frameworks/explorer/resolve_clarification_modal.rb` | Shared resolve-clarification modal (required note) — explorer root, edit mode (§12a) |
+| `app/javascript/controllers/resolve_clarification_form_controller.js` | Prefills the resolve modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12a) |
 | `app/operations/operations/frameworks/{comment_on_suggestion,edit_suggestion_comment,delete_suggestion_comment}.rb` | Shared web + MCP suggestion-thread write operations (§13) |
 | `app/operations/operations/frameworks/suggestion_get.rb` | MCP read drill-in — full suggestion (proposal + resolution + nested thread) |
 | `app/contexts/frameworks/projections/suggestion_thread.rb` | Projects the three comment events into `framework_suggestion_comments`; broadcasts the activity signal (§13) |

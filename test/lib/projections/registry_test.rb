@@ -15,6 +15,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           person_development/comment_thread
           person_development/assessment_authority
           assessment_cycles/current_state
+          assessment_cycles/calibration_sessions
         ].sort,
         Projections::Registry.names.sort
       )
@@ -41,6 +42,8 @@ class Projections::RegistryTest < ActiveSupport::TestCase
         AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments,
         AssessmentCycles::SyncHandlers::FrameworkVersionRollSync,
         AssessmentCycles::SyncHandlers::ParticipantRoleSync,
+        AssessmentCycles::SyncHandlers::CalibrationSessionCloseSync,
+        AssessmentCycles::SyncHandlers::CalibrationRevisitSync,
         Frameworks::SyncHandlers::FrameworkVersionMigrationSync
       ]
       assert_empty(Projections::Registry.classes & forbidden)
@@ -50,7 +53,8 @@ class Projections::RegistryTest < ActiveSupport::TestCase
       # Replaying these would re-send every historical notification.
       forbidden = [
         PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier,
-        PersonDevelopment::AsyncHandlers::CommentNotifier
+        PersonDevelopment::AsyncHandlers::CommentNotifier,
+        PersonDevelopment::AsyncHandlers::RatingRevisitNotifier
       ]
       assert_empty(Projections::Registry.classes & forbidden)
     end

@@ -55,6 +55,8 @@ class Frameworks::ActivityFeedQuery
     Frameworks::Events::SuggestionRejected         => "suggestion_rejected",
     Frameworks::Events::SuggestionWithdrawn        => "suggestion_withdrawn",
     Frameworks::Events::SuggestionCommented        => "suggestion_commented",
+    Frameworks::Events::ClarificationRequested     => "clarification_requested",
+    Frameworks::Events::ClarificationResolved      => "clarification_resolved",
     Frameworks::Events::DraftVersionStarted        => "draft_opened",
     Frameworks::Events::FrameworkVersionPublished  => "version_published",
     Frameworks::Events::MigrationMappingDefined    => "migration_mapping_defined",
@@ -92,7 +94,7 @@ class Frameworks::ActivityFeedQuery
   SUGGESTION_KINDS = %w[
     suggestion_edit suggestion_create suggestion_delete
     suggestion_amended suggestion_approved suggestion_rejected suggestion_withdrawn
-    suggestion_commented
+    suggestion_commented clarification_requested clarification_resolved
   ].freeze
 
   # Binding lifecycle kinds — their entries carry the role + scoring levers
@@ -118,6 +120,8 @@ class Frameworks::ActivityFeedQuery
     "suggestion_commented"     => :author_id,
     "suggestion_approved"      => :reviewer_id,
     "suggestion_rejected"      => :reviewer_id,
+    "clarification_requested"  => :author_id,
+    "clarification_resolved"   => :resolver_id,
     "draft_opened"             => :started_by,
     "version_published"        => :published_by,
     "collaborator_added"       => :added_by,
@@ -598,17 +602,17 @@ class Frameworks::ActivityFeedQuery
     end
   end
 
-  # The level a behavioural_expectation suggestion concerns — from the proposed
-  # attributes for a create, or the target expectation for an edit — so the feed
-  # entry can show "Capability · L<n>". nil for non-expectation suggestions.
+  # The level a suggestion concerns, so the feed entry can show
+  # "Capability · L<n>": proposed_attributes carries it for expectation
+  # creates AND capability-anchored clarifications; an expectation-targeting
+  # edit/delete/clarification resolves it from the target expectation. nil
+  # for everything else.
   def suggestion_level(suggestion)
+    from_attrs = suggestion.proposed_attributes&.dig("level_ordinal")
+    return from_attrs.to_i if from_attrs.present?
     return nil unless suggestion.target_entity_type == "behavioural_expectation"
 
-    if suggestion.kind == "create"
-      suggestion.proposed_attributes&.dig("level_ordinal")&.to_i
-    else
-      expectation_to_level[suggestion.target_entity_id]
-    end
+    expectation_to_level[suggestion.target_entity_id]
   end
 
   def suggested_edits

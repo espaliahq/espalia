@@ -483,6 +483,39 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Requests clarification of a behavioural expectation (or an empty
+  # capability × level cell) — a non-proposal suggestion that anchors a
+  # discussion. Never auto-approves (there is nothing to apply).
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID for the new suggestion
+  # @param target_entity_type [String] "behavioural_expectation" or "capability"
+  # @param target_entity_id [String] UUID of the anchored entity
+  # @param author_id [String] UUID of the requester
+  # @param level_ordinal [Integer, nil] the level the question concerns
+  # @param rationale [String] the question itself
+  def request_clarification(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                            author_id:, level_ordinal: nil, rationale:)
+    @repository.with_framework(framework_id) do |framework|
+      framework.request_clarification(framework_id, suggestion_id, target_entity_type, target_entity_id,
+                                      author_id: author_id, level_ordinal: level_ordinal, rationale: rationale)
+    end
+  end
+
+  # Resolves a pending clarification with a note.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param suggestion_id [String] UUID of the clarification
+  # @param resolver_id [String] UUID of the resolving person
+  # @param note [String] what settled the question
+  # @param resulting_suggestion_id [String, nil] the concrete suggestion spawned
+  def resolve_clarification(framework_id, suggestion_id, resolver_id, note:, resulting_suggestion_id: nil)
+    @repository.with_framework(framework_id) do |framework|
+      framework.resolve_clarification(suggestion_id, resolver_id,
+                                      note: note, resulting_suggestion_id: resulting_suggestion_id)
+    end
+  end
+
   # Amends the author's own pending suggestion.
   #
   # @param framework_id [String] UUID of the framework

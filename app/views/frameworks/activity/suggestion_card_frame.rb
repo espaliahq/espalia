@@ -46,6 +46,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
           alert_banner if @alert.present?
           proposal_block
           action_row if actionable?
+          resolve_action_row if resolvable?
           resolution_block if resolved?
           thread
         end
@@ -110,6 +111,10 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
         p(class: "text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400") do
           "#{entity_label} #{@suggestion.field}"
         end
+      elsif @suggestion.clarification? && clarification_level.present?
+        p(class: "text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400") do
+          "#{entity_label} · L#{clarification_level}"
+        end
       end
       current_and_proposed
       if @suggestion.rationale.present?
@@ -122,7 +127,15 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   end
 
   def current_and_proposed
-    if @suggestion.kind == "delete"
+    if @suggestion.clarification?
+      # Nothing is proposed — the question (rationale, rendered below) is the
+      # content; the anchored text shows plain, never struck through.
+      if @suggestion.current_value.present?
+        p(class: "mt-1 text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words") do
+          @suggestion.current_value
+        end
+      end
+    elsif @suggestion.kind == "delete"
       p(class: "mt-1 text-gray-700 dark:text-gray-300 line-through") do
         @suggestion.current_value.presence || "(this #{entity_label.downcase})"
       end
@@ -159,12 +172,21 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # The same inline approve + modal reject the feed entries carry (§12) —
   # deciding from the card keeps the read-thread-then-act flow in one place.
   def actionable?
-    @suggestion.status == "pending" &&
+    @suggestion.proposal? &&
+      @suggestion.status == "pending" &&
       @approval_authority.can_approve?(@suggestion.target_entity_type)
   end
 
+  # A pending clarification carries "Resolve…" instead of Approve/Reject —
+  # expectation-tier authority, matching FrameworkSuggestionPolicy#resolve?.
+  def resolvable?
+    @suggestion.clarification? &&
+      @suggestion.status == "pending" &&
+      @approval_authority.can_resolve_clarifications?
+  end
+
   def resolved?
-    %w[approved rejected withdrawn].include?(@suggestion.status)
+    %w[approved rejected withdrawn resolved].include?(@suggestion.status)
   end
 
   def action_row
@@ -178,6 +200,14 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     end
   end
 
+  def resolve_action_row
+    render Views::Frameworks::Activity::ClarificationActions.new(
+      framework_id: @framework.framework_id,
+      suggestion_id: @suggestion.suggestion_id,
+      question_preview: @suggestion.rationale.to_s.strip.presence
+    )
+  end
+
   def resolution_block
     div(class: "mt-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 p-3 text-[11px] " \
                "text-gray-600 dark:text-gray-300") do
@@ -185,6 +215,19 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       if @suggestion.reviewer_comment.present?
         p(class: "mt-1 italic") { "“#{@suggestion.reviewer_comment}”" }
       end
+      resulting_suggestion_link if @suggestion.resulting_suggestion_id.present?
+    end
+  end
+
+  # A resolved clarification can name the concrete change it spawned — link
+  # its detail page (full-page escape hatch, so break out of the frame).
+  def resulting_suggestion_link
+    p(class: "mt-1") do
+      a(
+        href: framework_suggestion_path(@framework.framework_id, @suggestion.resulting_suggestion_id),
+        class: "text-primary hover:underline",
+        data: { turbo_frame: "_top" }
+      ) { "View the resulting suggestion →" }
     end
   end
 
@@ -193,8 +236,16 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     case @suggestion.status
     when "approved"  then "Approved#{when_bit}."
     when "rejected"  then "Rejected#{when_bit}."
+    when "resolved"  then "Resolved#{when_bit}."
     when "withdrawn" then "Withdrawn by the author."
     end
+  end
+
+  # A capability-anchored clarification carries its level in
+  # proposed_attributes; an expectation anchor implies it (shown via the
+  # snapshot text instead).
+  def clarification_level
+    (@suggestion.proposed_attributes || {})["level_ordinal"]
   end
 
   def thread

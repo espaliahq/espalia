@@ -88,6 +88,9 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   def filled_cell
     td(class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top") do
       expectation_text
+      # Open clarification discussion on this expectation — content glyph,
+      # never the pending-change vocabulary (nothing is proposed).
+      render_clarification_glyph(@cell_data[:clarification_count])
       illustration_indicator if @cell_data[:illustration_count] > 0
     end
   end

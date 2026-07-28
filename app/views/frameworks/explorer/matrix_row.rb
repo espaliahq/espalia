@@ -100,6 +100,9 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               row_actions_kebab if show_row_kebab?
             end
             draft_state_badge if @mode == :edit
+            # Capability-anchored clarifications (a cell with no expectation
+            # to hang on) glyph the capability row.
+            render_clarification_glyph(@capability_data[:clarification_count])
             # Description: inline-editable in edit mode (also shown when blank,
             # as an "Add a description…" affordance). View mode renders it only
             # when present.

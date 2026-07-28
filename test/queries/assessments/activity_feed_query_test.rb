@@ -419,6 +419,53 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "calibration rating-revisit requests" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @session_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.request_rating_revisit(
+          @assessee.id, @framework_id,
+          capability_stable_id: @cap_sid, level_ordinal: 2,
+          calibration_session_id: @session_id, rater_id: @manager.id,
+          note: "The room compared against two peers", session_name: "Engineering calibration",
+          requested_by_id: @manager.id
+        )
+      end
+    end
+
+    should "emit a cell-anchored entry with names and the note for the manager" do
+      entries = run_query(viewer: @manager, sees_all: true, context: :manager, alignment_started: false)
+      entry = entries.find { |e| e.kind == "rating_revisit_requested" }
+
+      assert_not_nil entry
+      assert_equal @cap_sid, entry.capability_stable_id
+      assert_equal 2, entry.level_ordinal
+      assert_equal "Dana Lee", entry.payload[:rater_name]
+      assert_equal "The room compared against two peers", entry.payload[:note]
+      assert_equal "Engineering calibration", entry.payload[:session_name]
+    end
+
+    should "hide it from the assessee before alignment (manager-rating privacy gate)" do
+      entries = run_query(viewer: @assessee, sees_all: true, context: :self, alignment_started: false)
+      assert_nil entries.find { |e| e.kind == "rating_revisit_requested" }
+    end
+
+    should "show it to the assessee once alignment has started" do
+      entries = run_query(viewer: @assessee, sees_all: true, context: :self, alignment_started: true)
+      assert_not_nil entries.find { |e| e.kind == "rating_revisit_requested" }
+    end
+
+    should "hide it from peers" do
+      entries = run_query(viewer: @peer, sees_all: false, context: :self, alignment_started: true)
+      assert_nil entries.find { |e| e.kind == "rating_revisit_requested" }
+    end
+
+    should "land under the ratings filter chip" do
+      assert_equal "ratings",
+        Views::Assessments::Activity::Entry::KIND_GROUP["rating_revisit_requested"]
+    end
+  end
+
   def run_query(viewer:, sees_all:, context:, alignment_started:)
     ActsAsTenant.with_tenant(@tenant) do
       Assessments::ActivityFeedQuery.new(

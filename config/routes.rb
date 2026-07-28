@@ -213,6 +213,7 @@ Rails.application.routes.draw do
       member do
         post :approve
         post :reject
+        post :resolve
         patch :amend
       end
       resources :comments, only: [ :create, :update, :destroy ],
@@ -241,6 +242,36 @@ Rails.application.routes.draw do
         post :bulk
       end
     end
+  end
+
+  # Calibration sessions — facilitator-run rating-calibration forums.
+  # See docs/architecture/calibration-sessions.md.
+  resources :calibration_sessions, only: [ :index, :new, :create, :show ] do
+    collection do
+      # Typeahead for the participant picker (managers, viewer-scoped).
+      get :participant_candidates
+    end
+    member do
+      post :start, to: "calibration_sessions/starts#create"
+      post :close, to: "calibration_sessions/closes#create"
+    end
+    # :id on both nested resources is the person_id being added/removed.
+    resources :participants, only: [ :create, :destroy ],
+                             controller: "calibration_sessions/participants"
+    resources :calibrants, only: [ :create, :destroy ],
+                           controller: "calibration_sessions/calibrants"
+    # Capability drill-in — :id is the capability's cross-version stable_id.
+    resources :capabilities, only: [ :show ],
+                             controller: "calibration_sessions/capabilities"
+    # ⚑ Flag an expectation as unclear (live session) → framework clarification.
+    resources :expectation_flags, only: [ :create ],
+                                  controller: "calibration_sessions/expectation_flags"
+    # Ask a rater to revisit a rating (live session) → PD-stream mirror.
+    resources :rating_revisits, only: [ :create ],
+                                controller: "calibration_sessions/rating_revisits"
+    # Free-text session minutes (live session) → the session log.
+    resources :notes, only: [ :create ],
+                      controller: "calibration_sessions/notes"
   end
 
   # Home dashboard — composable, role-aware card grid (replaces the old

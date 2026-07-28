@@ -70,6 +70,11 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::Projections::CurrentState.handled_events
   )
 
+  event_store.subscribe(
+    AssessmentCycles::Projections::CalibrationSessions.new,
+    to: AssessmentCycles::Projections::CalibrationSessions.handled_events
+  )
+
   # ── Synchronous cross-stream sync handlers ──
   # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
   # so it MUST NOT be registered as a projection — running it twice
@@ -114,6 +119,24 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::SyncHandlers::ParticipantRoleSync.handled_events
   )
 
+  # CalibrationSessionCloseSync closes a cycle's not-yet-closed calibration
+  # sessions when the cycle closes. Dispatches CalibrationSession commands —
+  # same projection-rebuild hazard, MUST NOT be registered as a projection.
+  # Subscribed AFTER CalibrationSessions (the projection) so it reads
+  # fresh session rows.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::CalibrationSessionCloseSync.new,
+    to: AssessmentCycles::SyncHandlers::CalibrationSessionCloseSync.handled_events
+  )
+
+  # CalibrationRevisitSync mirrors a session's rating-revisit request onto the
+  # person's PD stream. Dispatches PersonDevelopment commands — same
+  # projection-rebuild hazard, MUST NOT be registered as a projection.
+  event_store.subscribe(
+    AssessmentCycles::SyncHandlers::CalibrationRevisitSync.new,
+    to: AssessmentCycles::SyncHandlers::CalibrationRevisitSync.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Side-effect handlers (notifications). NOT projections — never register
   # these in Projections::Registry (replaying would re-send notifications).
@@ -125,5 +148,10 @@ Rails.configuration.to_prepare do
   event_store.subscribe(
     PersonDevelopment::AsyncHandlers::CommentNotifier,
     to: PersonDevelopment::AsyncHandlers::CommentNotifier.handled_events
+  )
+
+  event_store.subscribe(
+    PersonDevelopment::AsyncHandlers::RatingRevisitNotifier,
+    to: PersonDevelopment::AsyncHandlers::RatingRevisitNotifier.handled_events
   )
 end

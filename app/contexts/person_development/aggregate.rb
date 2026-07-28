@@ -223,6 +223,41 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # ── Calibration revisit requests ──
+
+  # Records a calibration session's value-free ask that the rater revisit
+  # one of their manager ratings on this stream — the PD-side mirror,
+  # invoked ONLY by {AssessmentCycles::SyncHandlers::CalibrationRevisitSync}.
+  #
+  # No lifecycle state is tracked: resolution is rating-change-based and
+  # computed at read time (a manager rating recorded for the cell after the
+  # request settles every open request against it at once), so requests
+  # from any number of overlapping sessions compose without contradiction.
+  #
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @param calibration_session_id [String] provenance — the asking session
+  # @param rater_id [String] person_id of the rater being asked
+  # @param note [String] the room's discussion note
+  # @param session_name [String, nil] display name at event time
+  # @param requested_by_id [String, nil] the facilitator
+  # @raise [CommandError] if the person isn't assigned or the note is blank
+  def request_rating_revisit(capability_stable_id:, level_ordinal:, calibration_session_id:,
+                             rater_id:, note:, session_name: nil, requested_by_id: nil)
+    ensure_assigned!
+    raise CommandError, "Revisit note cannot be blank" if note.to_s.strip.empty?
+
+    apply(PersonDevelopment::Events::RatingRevisitRequested.new(data: {
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      calibration_session_id: calibration_session_id,
+      session_name: session_name,
+      rater_id: rater_id,
+      note: note,
+      requested_by_id: requested_by_id
+    }.compact))
+  end
+
   # ── Assessment Cycle Membership ──
   #
   # These commands are invoked ONLY by
@@ -1301,6 +1336,11 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::ManagerRatingDelegated do |event|
     @active_delegates[event.data[:delegate_person_id]] = event.data[:expires_at]
+  end
+
+  on PersonDevelopment::Events::RatingRevisitRequested do |_event|
+    # No aggregate state: resolution is rating-change-based, computed at
+    # read time — see #request_rating_revisit.
   end
 
   on PersonDevelopment::Events::ManagerRatingDelegationRevoked do |event|
