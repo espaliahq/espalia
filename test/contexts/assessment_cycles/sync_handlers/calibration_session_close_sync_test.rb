@@ -74,5 +74,22 @@ class AssessmentCycles::SyncHandlers::CalibrationSessionCloseSyncTest < ActiveSu
 
       assert_equal "draft", CalibrationSession.find(other_session).status
     end
+
+    should "not touch another tenant's session on a same-id cycle" do
+      # cycle_id is unique per tenant, not globally — a missing/incorrect
+      # tenant scope in the handler would sweep this session too.
+      other_tenant = create(:tenant)
+      other_session = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(other_tenant) do
+        @cycle_handler.define_cycle(@cycle_id, @framework_id, "Q3 2026", "regular", 1)
+        define_session(other_session)
+      end
+
+      @cycle_handler.close_cycle(@cycle_id)
+
+      ActsAsTenant.with_tenant(other_tenant) do
+        assert_equal "draft", CalibrationSession.find(other_session).status
+      end
+    end
   end
 end

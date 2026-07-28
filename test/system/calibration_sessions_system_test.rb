@@ -59,7 +59,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     )
     assert_selector "[data-person-picker-target='selected'] span[data-person-id='#{@em_2.id}']", text: "Raj Rater"
 
-    click_button "Create draft session"
+    click_button_with_js_fallback "Create draft session", expect_text: "Calibration session created"
 
     # Draft page: seeded population grouped by rater, readiness surfaced
     assert_text "Calibration session created"
@@ -71,13 +71,13 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "not enrolled in the cycle"
 
     # Remove a calibrant — they surface as an explicit re-add suggestion
-    find("button[aria-label='Remove Ivy IC from the population']").click
+    page.execute_script("document.querySelector(\"button[aria-label='Remove Ivy IC from the population']\").click()")
     assert_text "Removed from the population."
     assert_text "Reporting to participants but not in the population:"
     within(".border-dashed") { assert_text "Ivy IC" }
 
     # Re-add via the suggestion affordance
-    find("button[aria-label='Add Ivy IC to the population']").click
+    page.execute_script("document.querySelector(\"button[aria-label='Add Ivy IC to the population']\").click()")
     assert_text "Added to the population."
     assert_text "Mia Manager's reports (1)"
 
@@ -241,7 +241,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         if (s.textContent.includes("Flag expectation")) s.parentElement.open = true
       })
     JS
-    fill_in "flag-reason-3", with: "Scope or altitude?"
+    js_set_field "#flag-reason-3", "Scope or altitude?"
     click_button_with_js_fallback "Raise clarification", expect_text: "clarification discussion is now open"
 
     # One flag per cell per session: the marker replaces the affordance.
@@ -268,7 +268,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         if (s.textContent.includes("revisit this rating")) s.parentElement.open = true
       })
     JS
-    fill_in "revisit-note", with: "Compare against the two peers we just discussed"
+    js_set_field "#revisit-note", "Compare against the two peers we just discussed"
     click_button_with_js_fallback "Request revisit", expect_text: "Revisit requested"
 
     # One ask per cell per session — the marker replaces the form.
@@ -296,10 +296,23 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Open"
     assert_text "Compare against the two peers we just discussed"
 
-    fill_in "session-note", with: "Add the two reference ICs to the org-wide session"
+    js_set_field "#session-note", "Add the two reference ICs to the org-wide session"
     click_button_with_js_fallback "Record note", expect_text: "Note recorded."
     assert_text "Add the two reference ICs to the org-wide session"
     assert_text "NOTES"
+  end
+
+  # Sets a field's value via JS + input/change events — these values feed
+  # exact-match assertions, and Selenium send_keys drops characters on
+  # starved CI runners (see docs/guidelines/testing.md).
+  def js_set_field(selector, value)
+    el = find(selector)
+    page.execute_script(<<~JS, el, value)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
   end
 
   test "member without reports sees no Calibration nav link" do

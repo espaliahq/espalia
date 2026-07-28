@@ -13,7 +13,10 @@ class Operations::CalibrationSessions::RequestRatingRevisitTest < ActiveSupport:
     @dept_head = create(:person, tenant: @tenant, name: "Dana Dept")
     @em = create(:person, tenant: @tenant, name: "Mia Manager", manager: @dept_head)
     @report = create(:person, tenant: @tenant, name: "Ivy IC", manager: @em)
-    @outside_report = create(:person, tenant: @tenant, name: "Ref IC")
+    # A reference person whose rater exists but is NOT in the session — the
+    # honest "rater not in the room" case (not merely manager-less).
+    @outside_manager = create(:person, tenant: @tenant, name: "Kim Elsewhere")
+    @outside_report = create(:person, tenant: @tenant, name: "Ref IC", manager: @outside_manager)
 
     @framework_id = SecureRandom.uuid_v7
     @cap_stable = SecureRandom.uuid_v7

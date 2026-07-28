@@ -13,6 +13,7 @@ class Operations::Frameworks::RequestClarificationTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) do
       @admin_tu = create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
       @member_tu = create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
+      @member_person = create(:person, tenant: @tenant, email: @member_user.email)
       @admin_person = create(:person, tenant: @tenant, email: @admin_user.email)
 
       @framework_id = SecureRandom.uuid_v7
@@ -28,7 +29,9 @@ class Operations::Frameworks::RequestClarificationTest < ActiveSupport::TestCase
     end
 
     @admin_ctx = AuthorizationContext.new(user: @admin_user, tenant_user: @admin_tu, person: @admin_person)
-    @member_ctx = AuthorizationContext.new(user: @member_user, tenant_user: @member_tu, person: nil)
+    # A linked person WITH no collaborator role — so the denial below is
+    # about the missing suggest rights, not a missing person.
+    @member_ctx = AuthorizationContext.new(user: @member_user, tenant_user: @member_tu, person: @member_person)
   end
 
   context "as a tenant admin with a linked person" do

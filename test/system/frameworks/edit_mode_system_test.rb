@@ -1223,7 +1223,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
       within "#resolve-clarification-modal" do
-        fill_in "Resolution", with: "Reworded the L1 expectation"
+        # The exact note is asserted on the read model — JS assignment so
+        # send_keys can't drop characters on starved CI.
+        js_set_field "#resolve_note", "Reworded the L1 expectation"
         page.execute_script("arguments[0].requestSubmit();", find("form", match: :first))
       end
 
