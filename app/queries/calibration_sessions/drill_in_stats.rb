@@ -121,14 +121,12 @@ class CalibrationSessions::DrillInStats
     @ratings ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
       .for_capability(@capability_stable_id)
-      .where(person_id: assessed_ordinals.keys)
-      .each_with_object({}) do |row, map|
-        next unless row.level_ordinal == assessed_ordinals[row.person_id]
+      .where(person_id: assessed_ordinals.keys, level_ordinal: ordinals)
+      .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :self_rated_frequency)
+      .each_with_object({}) do |(person_id, level_ordinal, manager_frequency, self_frequency), map|
+        next unless level_ordinal == assessed_ordinals[person_id]
 
-        map[row.person_id] = {
-          frequency: row.manager_rated_frequency,
-          self_frequency: row.self_rated_frequency
-        }
+        map[person_id] = { frequency: manager_frequency, self_frequency: self_frequency }
       end
   end
 

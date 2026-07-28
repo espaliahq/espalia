@@ -75,12 +75,16 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       capability_stable_id: params[:id], person_id: person_id, level_ordinal: ordinal
     ).pluck(:evidence_id, :valence).to_h
 
+    # Resolved once per card, not per evidence item — it depends only on the
+    # person, and a card can carry many items.
+    manager_id = manager_id_for(person_id)
+
     EvidenceItem.active.where(id: links.keys).order(recorded_at: :desc).map do |item|
       {
         content: item.content,
         valence: links[item.id],
         author_id: item.author_id,
-        relation: author_relation(item.author_id, person_id),
+        relation: author_relation(item.author_id, person_id, manager_id),
         recorded_at: item.recorded_at
       }
     end
@@ -89,12 +93,15 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # Relation-first authorship for the projected room — names stay off the
   # card by default (the facilitator can open the full assessment when
   # authorship genuinely matters). See the design doc's evidence rules.
-  def author_relation(author_id, person_id)
+  def author_relation(author_id, person_id, manager_id)
     return "self" if author_id == person_id
 
-    manager_id = RecordedReportingManager.manager_id_for(person_id, @session.framework_id) ||
-                 Person.find_by(id: person_id)&.manager_id
     author_id == manager_id ? "manager" : "peer"
+  end
+
+  def manager_id_for(person_id)
+    RecordedReportingManager.manager_id_for(person_id, @session.framework_id) ||
+      Person.find_by(id: person_id)&.manager_id
   end
 
   def current_user_tenants
