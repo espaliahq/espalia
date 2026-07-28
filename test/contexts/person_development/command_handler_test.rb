@@ -231,6 +231,45 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "NOT auto-align carried (seeded) agreement — carried values are unvetted" do
+      cap_seeded = SecureRandom.uuid_v7
+      seed_source_cycle = SecureRandom.uuid_v7
+      # ADR-20 seeds both sides of a previously-agreed cell with equal
+      # values — deliberate agreement LAST cycle, not this one.
+      @handler.rate_self(@person_id, @framework_id, cap_seeded,
+        level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id,
+        comment: "Seeded from prior cycle", source: "seeded", seeded_from_cycle_id: seed_source_cycle)
+      @handler.rate_as_manager(@person_id, @framework_id, cap_seeded,
+        level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id,
+        comment: "Seeded from prior cycle", source: "seeded", seeded_from_cycle_id: seed_source_cycle)
+      # A second cell where the manager CONFIRMED their side but self is
+      # still carried — one unvetted side is enough to hold the cell open.
+      cap_half = SecureRandom.uuid_v7
+      @handler.rate_self(@person_id, @framework_id, cap_half,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id,
+        comment: "Seeded from prior cycle", source: "seeded", seeded_from_cycle_id: seed_source_cycle)
+      @handler.rate_as_manager(@person_id, @framework_id, cap_half,
+        level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id,
+        comment: "Seeded from prior cycle", source: "seeded", seeded_from_cycle_id: seed_source_cycle)
+      @handler.revise_manager_rating(@person_id, @framework_id, cap_half,
+        level_ordinal: 2, frequency: "consistent", rationale: "Confirmed carried-forward rating",
+        cycle_id: @cycle_id, rated_by_id: @manager.id)
+      # And one where BOTH sides were confirmed — that one auto-aligns.
+      cap_vetted = SecureRandom.uuid_v7
+      @handler.rate_self(@person_id, @framework_id, cap_vetted,
+        level_ordinal: 2, frequency: "some", cycle_id: @cycle_id)
+      @handler.rate_as_manager(@person_id, @framework_id, cap_vetted,
+        level_ordinal: 2, frequency: "some", cycle_id: @cycle_id, rated_by_id: @manager.id)
+
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+
+      stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
+      aligned = Rails.configuration.event_store.read.stream(stream).to_a
+        .grep(PersonDevelopment::Events::AssessmentAligned)
+      assert_equal [ cap_vetted ], aligned.map { |e| e.data[:capability_stable_id] },
+        "only the fully-vetted agreement may formalise at start; carried cells stay open for the conversation"
+    end
+
     should "NOT auto-align when self and manager differ" do
       cap_b = SecureRandom.uuid_v7
       @handler.rate_self(@person_id, @framework_id, cap_b,

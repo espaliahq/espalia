@@ -50,6 +50,11 @@ class PersonDevelopment::Aggregate
     @alignment_completed = false
     @self_ratings = {}    # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
+    # Per-cell provenance ("human" | "seeded"; nil for pre-provenance
+    # history = human). Auto-align reads these: only VETTED agreements
+    # formalise at alignment start.
+    @self_rating_sources = {}
+    @manager_rating_sources = {}
     @aligned_ratings = {} # [stable_id, level_ordinal] => frequency
     @evidence = {}       # evidence_id => { links: { [capability_stable_id, level_ordinal] => valence, ... }, ever_linked: Set, status: }
     @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
@@ -536,9 +541,18 @@ class PersonDevelopment::Aggregate
     # and `@manager_ratings`) so we're guaranteed consistent with the
     # event stream this aggregate was loaded from — unlike a read-model
     # query, which can race with concurrent rate_* commits.
+    #
+    # VETTED agreements only: a carried-forward (seeded) side is not
+    # deliberate agreement this cycle — ADR-20 seeds both sides of a
+    # previously-agreed cell with equal values, so without the provenance
+    # check, starting alignment would instantly formalise every unvetted
+    # carried cell. Those cells stay open for the alignment conversation
+    # instead (aligning one there IS the vetting). nil source = human
+    # (pre-provenance history).
     @self_ratings.each do |key, self_freq|
       manager_freq = @manager_ratings[key]
       next unless manager_freq == self_freq
+      next if @self_rating_sources[key] == "seeded" || @manager_rating_sources[key] == "seeded"
 
       capability_stable_id, level_ordinal = key
       apply(PersonDevelopment::Events::AssessmentAligned.new(data: {
@@ -1411,6 +1425,8 @@ class PersonDevelopment::Aggregate
     @alignment_completed = false
     @self_ratings = {}
     @manager_ratings = {}
+    @self_rating_sources = {}
+    @manager_rating_sources = {}
     @aligned_ratings = {}
   end
 
@@ -1441,31 +1457,39 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::SelfRated do |event|
-    @self_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
-      event.data[:frequency]
+    key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @self_ratings[key] = event.data[:frequency]
+    @self_rating_sources[key] = event.data[:source]
   end
 
   on PersonDevelopment::Events::SelfRatingRevised do |event|
-    @self_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
-      event.data[:frequency]
+    key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @self_ratings[key] = event.data[:frequency]
+    @self_rating_sources[key] = "human"
   end
 
   on PersonDevelopment::Events::SelfRatingCleared do |event|
-    @self_ratings.delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
+    key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @self_ratings.delete(key)
+    @self_rating_sources.delete(key)
   end
 
   on PersonDevelopment::Events::ManagerRated do |event|
-    @manager_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
-      event.data[:frequency]
+    key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @manager_ratings[key] = event.data[:frequency]
+    @manager_rating_sources[key] = event.data[:source]
   end
 
   on PersonDevelopment::Events::ManagerRatingRevised do |event|
-    @manager_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
-      event.data[:frequency]
+    key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @manager_ratings[key] = event.data[:frequency]
+    @manager_rating_sources[key] = "human"
   end
 
   on PersonDevelopment::Events::ManagerRatingCleared do |event|
-    @manager_ratings.delete([ event.data[:capability_stable_id], event.data[:level_ordinal] ])
+    key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @manager_ratings.delete(key)
+    @manager_rating_sources.delete(key)
   end
 
   on PersonDevelopment::Events::AssessmentAligned do |event|
