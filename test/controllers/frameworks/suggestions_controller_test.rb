@@ -131,6 +131,22 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Proactively seeks clarification"
     end
 
+    should "render a clarification's question as its preview (nothing is proposed)" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, SecureRandom.uuid_v7, "behavioural_expectation", @eid,
+          author_id: @author_person.id.to_s,
+          rationale: "What does 'asks questions' actually mean at L1?"
+        )
+      end
+
+      sign_in @member_user
+      get framework_suggestions_path(framework_id: @framework_id, layout: "panel")
+
+      assert_response :success
+      assert_includes response.body, "What does &#39;asks questions&#39; actually mean at L1?"
+    end
+
     should "fall back to framework focus when focus param is invalid" do
       sign_in @member_user
       get framework_suggestions_path(

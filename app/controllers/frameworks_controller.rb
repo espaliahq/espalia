@@ -67,7 +67,9 @@ class FrameworksController < ApplicationController
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants,
       is_admin: fw_policy.admin?,
-      pending_suggestion_count: @framework.suggested_edits.where(status: "pending").count,
+      # Proposals only — an open clarification is a discussion, not a pending
+      # change, and must not inflate the header's pending-change badge.
+      pending_suggestion_count: @framework.suggested_edits.pending.proposals.count,
       mode: mode,
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
