@@ -78,7 +78,9 @@ class Operations::Assessments::RateSelf < Operations::Base
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
         rationale: "Confirmed carried-forward rating", cycle_id: cycle_id,
-        comment: params[:comment]
+        # Confirm without a comment keeps the existing one (typically the
+        # seeded-provenance note) rather than wiping it.
+        comment: params[:comment].presence || existing.self_rated_comment
       )
     elsif existing_freq == params[:frequency]
       handler.clear_self_rating(

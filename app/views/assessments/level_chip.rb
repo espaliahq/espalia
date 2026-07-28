@@ -166,7 +166,7 @@ class Views::Assessments::LevelChip < Views::Base
     level_note = @context == :self ? "your level" : "current level"
     base = at_person_level? ? "Focus #{@level_code} (#{level_note})" : "Focus #{@level_code}"
     parts = [ "#{base}, rated #{rated_description}" ]
-    parts << "carried forward from the previous cycle" if !split? && solid_carried?
+    parts << "carried forward from the previous cycle" if solid_carried?
     parts << split_note if split?
     parts << activity_title if has_activity?
     parts.join(", ")
@@ -226,6 +226,11 @@ class Views::Assessments::LevelChip < Views::Base
   # visible on the expansion panel's pills instead. An aligned value is
   # conversation output and never carried.
   def solid_carried?
+    # Only a genuinely SOLID fill can be carried-styled — split chips keep
+    # the full tint and un-dashed borders by design (per-side carried state
+    # is visible on the expansion pills instead).
+    return false unless fill_state.first == :solid
+
     data = @cell_data || {}
     return false if data[:aligned_frequency].present?
 

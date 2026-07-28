@@ -64,7 +64,10 @@ class Assessments::RatingsController < ApplicationController
       handler.revise_self_rating(
         current_person.id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id, comment: comment
+        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id,
+        # The quick-confirm click sends no comment — keep the existing one
+        # (typically the seeded-provenance note) rather than wiping it.
+        comment: comment.presence || existing.self_rated_comment
       )
     elsif existing&.self_rated_frequency == frequency
       # Untoggle: clicking the already-selected frequency clears the rating

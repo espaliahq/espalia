@@ -1218,6 +1218,24 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "render the carried treatment and confirm on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment, capability: @cap1_stable)
+
+      assert_selector "#rating-#{@cap1_stable}-2 [data-carried='true']"
+      open_pill_popover("#rating-#{@cap1_stable}-2")
+      assert_text "Carried from your last cycle"
+
+      click_rating_frequency("#rating-#{@cap1_stable}-2", "Most of the time")
+      assert_no_selector "#rating-#{@cap1_stable}-2 [data-carried='true']"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap1_stable, level_ordinal: 2)
+        assert_equal "human", rating.self_rating_source
+      end
+    end
+
     should "clear a carried rating via the explicit Clear rating action" do
       visit assessment_path(@assignment, capability: @cap1_stable)
 

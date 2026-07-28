@@ -62,7 +62,9 @@ class Assessments::ManagerRatingsController < ApplicationController
       handler.revise_manager_rating(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id, comment: comment,
+        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id,
+        # Quick-confirm sends no comment — keep the existing one.
+        comment: comment.presence || existing.manager_rated_comment,
         rated_by_id: current_person.id
       )
     elsif existing&.manager_rated_frequency == frequency
