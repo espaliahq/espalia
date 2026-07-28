@@ -54,6 +54,9 @@ class Operations::CalibrationSessions::Define < Operations::Base
 
   def validate_inputs!
     raise ParameterError, "name can't be blank" if params[:name].strip.empty?
+    # An empty list also bypasses the per-id scope checks below — and a
+    # session without raters seeds nothing; participants are the point.
+    raise ParameterError, "participant_ids can't be empty" if participant_ids.empty?
 
     ensure_uuid!(:cycle_id, params[:cycle_id])
     raise ParameterError, "unknown cycle: #{params[:cycle_id]}" unless cycle

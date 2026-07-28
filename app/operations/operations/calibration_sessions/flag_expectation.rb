@@ -39,24 +39,32 @@ class Operations::CalibrationSessions::FlagExpectation < Operations::Base
     ensure_session_started!
     require_author!
     ensure_cell_unflagged!
+    ensure_level_exists!
     capability # 404s early when the stable_id isn't in the session's framework
 
     suggestion_id = SecureRandom.uuid_v7
-    Frameworks::CommandHandler.new.request_clarification(
-      session.framework_id, suggestion_id, anchor_type, anchor_id,
-      author_id: context.person&.id&.to_s,
-      level_ordinal: params[:level_ordinal],
-      rationale: composed_rationale
-    )
+    begin
+      Frameworks::CommandHandler.new.request_clarification(
+        session.framework_id, suggestion_id, anchor_type, anchor_id,
+        author_id: context.person&.id&.to_s,
+        level_ordinal: params[:level_ordinal],
+        rationale: composed_rationale
+      )
 
-    command_handler.flag_expectation(
-      session.id,
-      capability_stable_id: params[:capability_stable_id],
-      level_ordinal: params[:level_ordinal],
-      suggestion_id: suggestion_id,
-      flagged_by_id: context.person&.id,
-      reason: params[:reason].presence
-    )
+      command_handler.flag_expectation(
+        session.id,
+        capability_stable_id: params[:capability_stable_id],
+        level_ordinal: params[:level_ordinal],
+        suggestion_id: suggestion_id,
+        flagged_by_id: context.person&.id,
+        reason: params[:reason].presence
+      )
+    rescue RuntimeError => e
+      # Aggregate refusals (a concurrent flag winning the pre-check race,
+      # session lifecycle changes mid-request) are client-state problems —
+      # classify as invalid params (-32602 / flash), never a 500/-32603.
+      raise Operations::Base::ParameterError, e.message
+    end
 
     {
       session_id: session.id,
@@ -86,6 +94,23 @@ class Operations::CalibrationSessions::FlagExpectation < Operations::Base
 
     raise Operations::Base::ParameterError,
           "Flagging an expectation requires a linked person; this account has none."
+  end
+
+  # The flagged level must exist in the session's framework — a typo'd
+  # ordinal would otherwise mint a capability-anchored clarification for a
+  # level nobody can ever render or resolve against. A cell with an
+  # expectation at this ordinal proves the level by construction.
+  def ensure_level_exists!
+    return if expectation
+
+    ordinals = FrameworkState::Level
+      .joins(role: :role_family)
+      .where(framework_role_families: { framework_id: session.framework_id })
+      .distinct.pluck(:ordinal)
+    return if ordinals.include?(params[:level_ordinal])
+
+    raise Operations::Base::ParameterError,
+          "level_ordinal #{params[:level_ordinal]} does not exist in this framework"
   end
 
   # One flag per cell per session (the aggregate re-checks serialized against

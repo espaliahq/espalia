@@ -21,6 +21,12 @@ class Operations::CalibrationSessions::FlagExpectationTest < ActiveSupport::Test
     @exp_id = SecureRandom.uuid_v7
     handler = Frameworks::CommandHandler.new
     handler.create_framework(@framework_id, "Eng")
+    rfid = SecureRandom.uuid_v7
+    role_id = SecureRandom.uuid_v7
+    handler.add_role_family(@framework_id, rfid, "Engineering")
+    handler.add_role(@framework_id, role_id, rfid, "Software Engineer", "E", "ic")
+    handler.add_level(@framework_id, SecureRandom.uuid_v7, role_id, 4, "Engineer IV", "E4")
+    handler.add_level(@framework_id, SecureRandom.uuid_v7, role_id, 6, "Engineer VI", "E6")
     cat_id = SecureRandom.uuid_v7
     handler.add_capability_category(@framework_id, cat_id, "Thinking")
     handler.add_capability(@framework_id, @cap_id, @cap_stable, cat_id, "Strategic Thinking")
@@ -128,6 +134,12 @@ class Operations::CalibrationSessions::FlagExpectationTest < ActiveSupport::Test
         )
       end
       assert_match(/linked person/, err.message)
+      assert_equal 0, FrameworkState::SuggestedEdit.clarifications.count
+    end
+
+    should "refuse a level that doesn't exist in the framework" do
+      err = assert_raises(Operations::Base::ParameterError) { flag!(level_ordinal: 99, reason: nil) }
+      assert_match(/does not exist/, err.message)
       assert_equal 0, FrameworkState::SuggestedEdit.clarifications.count
     end
 
