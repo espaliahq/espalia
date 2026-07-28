@@ -47,7 +47,17 @@ class Assessments::ManagerRatingsController < ApplicationController
       level_ordinal: level_ordinal
     )
 
-    if existing&.manager_rated_frequency == frequency
+    if existing&.manager_rated_frequency == frequency && existing.manager_rating_carried?
+      # Confirming a carried-forward (seeded) value — re-emit as a human
+      # rating (provenance flips, carried treatment solidifies); untoggle-
+      # to-clear only applies to ratings the manager made themselves.
+      handler.revise_manager_rating(
+        @assignment.person_id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, frequency: frequency,
+        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id, comment: comment,
+        rated_by_id: current_person.id
+      )
+    elsif existing&.manager_rated_frequency == frequency
       # Untoggle: clicking the already-selected frequency clears the rating
       handler.clear_manager_rating(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,

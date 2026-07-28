@@ -114,6 +114,47 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "confirm a carried-forward rating on same-frequency click instead of clearing it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @assignment.framework_id, @cap.stable_id,
+          level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id,
+          comment: "Seeded from prior cycle", source: "seeded",
+          seeded_from_cycle_id: SecureRandom.uuid_v7
+        )
+      end
+
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "occasional" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+      assert_response :success
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2)
+        assert_equal "occasional", rating.self_rated_frequency, "confirming must keep the value, not clear it"
+        assert_equal "human", rating.self_rating_source, "confirming must flip provenance to human"
+      end
+    end
+
+    should "still untoggle-to-clear a rating the person made themselves" do
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "occasional" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+      post assessment_ratings_path(@assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "occasional" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+      assert_response :success
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2)
+        assert_nil rating.self_rated_frequency
+      end
+    end
+
     should "keep evidence and comment glyphs on the rated chip after rating" do
       # Regression: the rating re-render rebuilt the chip without passing
       # viewer_person_id / viewer_sees_all_evidence to the builder, so the

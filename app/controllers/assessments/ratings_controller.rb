@@ -43,7 +43,17 @@ class Assessments::RatingsController < ApplicationController
       level_ordinal: level_ordinal
     )
 
-    if existing&.self_rated_frequency == frequency
+    if existing&.self_rated_frequency == frequency && existing.self_rating_carried?
+      # Confirming a carried-forward (seeded) value: clicking the shown
+      # frequency means "yes, still true" — re-emit as a human rating so
+      # the provenance flips and the carried treatment solidifies. The
+      # untoggle-to-clear gesture only applies to ratings the person made.
+      handler.revise_self_rating(
+        current_person.id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, frequency: frequency,
+        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id, comment: comment
+      )
+    elsif existing&.self_rated_frequency == frequency
       # Untoggle: clicking the already-selected frequency clears the rating
       handler.clear_self_rating(
         current_person.id, @assignment.framework_id, capability_stable_id,
