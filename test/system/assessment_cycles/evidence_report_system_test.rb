@@ -25,19 +25,35 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
       report = FactoryBot.create(:person,
         tenant: @tenant, name: "Report One", manager: manager)
       author = FactoryBot.create(:person, tenant: @tenant, name: "Feedback Author")
-      FactoryBot.create(:person_framework_assignment,
-        tenant: @tenant, person_id: report.id, framework_id: framework_id,
-        role_id: role.role_id, level_id: level.level_id)
-      FactoryBot.create(:assessment_cycle_enrollment,
-        tenant: @tenant, cycle: @cycle, person_id: report.id,
-        role_id: role.role_id, level_ordinal: 2, enrolled_at: 1.day.ago)
+      [ report, manager ].each do |participant|
+        FactoryBot.create(:person_framework_assignment,
+          tenant: @tenant, person_id: participant.id, framework_id: framework_id,
+          role_id: role.role_id, level_id: level.level_id)
+        FactoryBot.create(:assessment_cycle_enrollment,
+          tenant: @tenant, cycle: @cycle, person_id: participant.id,
+          role_id: role.role_id, level_ordinal: 2, enrolled_at: 1.day.ago)
+      end
 
       FactoryBot.create(:evidence_item, with_link: false,
-        tenant: @tenant, author: author, person_id: report.id,
-        framework_id: framework_id, cycle_id: @cycle.cycle_id)
+        tenant: @tenant, author: manager, person_id: report.id,
+        framework_id: framework_id, cycle_id: @cycle.cycle_id,
+        source: "manager", feedback_direction: "manager_to_report")
       requested = FactoryBot.create(:evidence_item, with_link: false,
         tenant: @tenant, author: author, person_id: report.id,
-        framework_id: framework_id, cycle_id: @cycle.cycle_id)
+        framework_id: framework_id, cycle_id: @cycle.cycle_id,
+        source: "peer", feedback_direction: "peer_to_peer")
+      FactoryBot.create(:evidence_item, with_link: false,
+        tenant: @tenant, author: report, person_id: manager.id,
+        framework_id: framework_id, cycle_id: @cycle.cycle_id,
+        source: "peer", feedback_direction: "report_to_manager")
+      FactoryBot.create(:evidence_item, with_link: false,
+        tenant: @tenant, author: report, person_id: report.id,
+        framework_id: framework_id, cycle_id: @cycle.cycle_id,
+        source: "self", feedback_direction: "self")
+      FactoryBot.create(:evidence_item, with_link: false,
+        tenant: @tenant, author: author, person_id: report.id,
+        framework_id: framework_id, cycle_id: @cycle.cycle_id,
+        source: "peer", feedback_direction: nil)
       FactoryBot.create(:evidence_request,
         tenant: @tenant, requester: manager, requestee: author,
         person_id: report.id, framework_id: framework_id,
@@ -60,7 +76,15 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
     assert_text "Feedback provided"
     assert_text "Unsolicited"
     assert_text "Request fulfilment"
+    assert_text "Feedback direction"
+    assert_text "Manager → report"
+    assert_text "Peer → peer"
+    assert_text "Report → manager"
+    assert_text "Peer → peer or report → manager (historical)"
+    assert_text "Self-provided feedback"
+    assert_text "Historical peer-source feedback cannot be split reliably"
     assert_text "Team Manager"
+    screenshot("light_desktop")
   end
 
   should "render the report on mobile" do
@@ -70,6 +94,10 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
     assert_text "Feedback provided"
     assert_text "Participant coverage"
     assert_text "Breakdown"
+    assert_text "Feedback direction"
+    assert_text "Peer → peer or report → manager (historical)"
+    scroll_direction_card_into_view
+    screenshot("light_mobile_direction")
   end
 
   should "render the report in dark mode on desktop and mobile" do
@@ -83,9 +111,11 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
     assert_text "Feedback provided"
     screenshot("dark_desktop")
 
+    assert_text "Feedback direction"
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     assert_text "Participant coverage"
-    screenshot("dark_mobile")
+    scroll_direction_card_into_view
+    screenshot("dark_mobile_direction")
   ensure
     page.driver.browser.execute_cdp(
       "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
@@ -110,5 +140,14 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback "By role", expect_text: "Engineer"
 
     assert_text "Feedback and evidence coverage by role"
+  end
+
+  private
+
+  def scroll_direction_card_into_view
+    heading = find("h2", text: "Feedback direction")
+    page.execute_script(
+      "arguments[0].scrollIntoView({ block: 'start' });", heading.native
+    )
   end
 end

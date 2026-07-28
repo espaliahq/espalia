@@ -230,6 +230,52 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
+    should "stamp per-side provenance: seeded stays carried until a human touch" do
+      cap_sid = SecureRandom.uuid_v7
+
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
+        cycle_id: @cycle_id, comment: "Seeded from prior cycle",
+        source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+      emit(PersonDevelopment::Events::ManagerRated,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
+        cycle_id: @cycle_id, comment: "Seeded from prior cycle",
+        source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3)
+        assert rating.self_rating_carried?
+        assert rating.manager_rating_carried?
+      end
+
+      # A human revision of ONE side confirms only that side — the other
+      # stays carried (this is what the row-level `source` cannot express).
+      emit(PersonDevelopment::Events::SelfRatingRevised,
+        capability_stable_id: cap_sid, level_ordinal: 3, frequency: "consistent",
+        cycle_id: @cycle_id, rationale: "confirmed")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3)
+        assert_equal "human", rating.self_rating_source
+        assert rating.manager_rating_carried?, "manager side must stay carried after a self-only confirm"
+      end
+
+      # Clearing keeps the side HUMAN-owned (value nil): the person chose
+      # emptiness, so a seed re-run must not resurrect the carried value.
+      emit(PersonDevelopment::Events::ManagerRatingCleared,
+        capability_stable_id: cap_sid, level_ordinal: 3, cycle_id: @cycle_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person_id,
+          capability_stable_id: cap_sid, level_ordinal: 3)
+        assert_equal "human", rating.manager_rating_source
+        assert_nil rating.manager_rated_frequency
+        assert_not rating.manager_rating_carried?
+      end
+    end
+
     should "set progress started_at + status on first rating" do
       cap_sid = SecureRandom.uuid_v7
 

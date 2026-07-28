@@ -91,7 +91,7 @@ module ProjectionReplayHelpers
       when "AssessmentCycles::Projections::CurrentState"
         {
           cycles:                   rows(AssessmentCycle),
-          enrollments:              rows(AssessmentCycleEnrollment)
+          enrollments:              rows(AssessmentCycleEnrollment, stable_id: true)
         }
 
       when "AssessmentCycles::Projections::CalibrationSessions"

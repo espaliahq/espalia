@@ -87,6 +87,35 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     end
   end
 
+  context "feedback directionality" do
+    setup do
+      feedback(person: @first, source: "manager", feedback_direction: "manager_to_report")
+      feedback(person: @first, source: "peer", feedback_direction: "peer_to_peer")
+      feedback(person: @second, source: "peer", feedback_direction: "report_to_manager")
+      feedback(person: @second, source: "self", feedback_direction: "self")
+      feedback(person: @first, source: "peer", feedback_direction: nil)
+      feedback(person: @second, source: "manager", feedback_direction: nil)
+      feedback(person: @second, status: "withdrawn", source: "peer",
+        feedback_direction: "report_to_manager")
+    end
+
+    should "count active immutable directions and preserve historical peer ambiguity" do
+      directionality = result.metrics.directionality
+
+      assert_equal 6, result.metrics.feedback_provided
+      assert_equal 5, directionality.interpersonal_total
+      assert_equal 2, directionality.manager_to_report
+      assert_equal 1, directionality.peer_to_peer
+      assert_equal 1, directionality.report_to_manager
+      assert_equal 1, directionality.legacy_peer_or_upward
+      assert_equal 1, directionality.self_provided
+      assert_equal 40, directionality.percentage_for(:manager_to_report)
+      assert_equal 20, directionality.percentage_for(:peer_to_peer)
+      assert_equal 20, directionality.percentage_for(:report_to_manager)
+      assert_equal 20, directionality.percentage_for(:legacy_peer_or_upward)
+    end
+  end
+
   context "immutable provision attribution" do
     should "not count prior-cycle evidence that is relinked in this cycle" do
       previous = create(:assessment_cycle, :closed,
@@ -181,10 +210,12 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
   end
 
   def feedback(person:, cycle_id: @cycle.cycle_id, framework_id: @framework_id,
-               status: "active", recorded_at: Time.current)
+               status: "active", recorded_at: Time.current, source: "self",
+               feedback_direction: nil)
     create(:evidence_item, with_link: false,
       tenant: @tenant, author: @peer, person_id: person.id,
       framework_id: framework_id, cycle_id: cycle_id,
+      source: source, feedback_direction: feedback_direction,
       link_status: status, recorded_at: recorded_at)
   end
 

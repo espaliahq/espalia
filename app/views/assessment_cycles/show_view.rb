@@ -12,6 +12,11 @@ class Views::AssessmentCycles::ShowView < Views::Base
     "self_complete" => :info,
     "manager_complete" => :info,
     "aligned" => :success,
+    # Neutral by design: "concluded" says only that the cycle ended around
+    # the participant — an unrated enrollment concludes too, so green would
+    # over-claim. The outcome signal lives in the Aligned column / cohort
+    # report.
+    "concluded" => :default,
     "withdrawn" => :warning
   }.freeze
 
@@ -122,7 +127,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
       action: close_assessment_cycle_path(@cycle),
       method: "post",
       class: "inline",
-      data: { turbo_confirm: "Close this cycle? All enrolled participants will be withdrawn." }
+      data: { turbo_confirm: "Close this cycle? All enrolled participants' assessments will conclude as they stand." }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       button(

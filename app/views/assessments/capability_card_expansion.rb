@@ -107,7 +107,8 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
             assessment_id: @assessment_id,
             context: @context,
             category_id: @category_id,
-            interactive: !primary_perspective_frozen?
+            interactive: !primary_perspective_frozen?,
+            carried: primary_carried?
           )
         end
       end
@@ -199,6 +200,17 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     when :self      then @cell_data[:current_frequency]
     when :manager   then @cell_data[:manager_frequency]
     when :alignment then @cell_data[:aligned_frequency]
+    end
+  end
+
+  # Whether the primary perspective's value is carried forward (seeded)
+  # and not yet confirmed. Aligned values are conversation output — never
+  # seeded — so alignment context never renders the carried treatment.
+  def primary_carried?
+    case @context
+    when :self    then @cell_data[:current_frequency_carried] || false
+    when :manager then @cell_data[:manager_frequency_carried] || false
+    else false
     end
   end
 

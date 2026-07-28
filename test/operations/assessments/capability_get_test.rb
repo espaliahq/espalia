@@ -82,7 +82,51 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
       end
       result = call_assessment_op
       l3 = result[:expectations].find { |e| e[:level_ordinal] == 3 }
-      assert_equal({ self: nil, manager: nil, aligned: nil }, l3[:ratings])
+      assert_equal({ self: nil, manager: nil, aligned: nil,
+                     self_carried: false, manager_carried: false }, l3[:ratings])
+    end
+  end
+
+  context "self-assessment privacy" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant, name: "Mgr")
+        @person.update!(manager: @manager)
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @person.id, @framework_id, @cap.stable_id,
+          level_ordinal: 2, frequency: "occasional", cycle_id: @cycle_id,
+          comment: "Seeded from prior cycle", source: "seeded",
+          seeded_from_cycle_id: SecureRandom.uuid_v7, rated_by_id: @manager.id
+        )
+      end
+    end
+
+    should "scrub manager value AND carried provenance from the assessee pre-alignment" do
+      result = call_assessment_op
+      l2 = result[:expectations].find { |e| e[:level_ordinal] == 2 }
+      assert_nil l2.dig(:ratings, :manager)
+      assert_equal false, l2.dig(:ratings, :manager_carried),
+        "the carried flag leaks the manager rating's existence — must be gated like the value"
+      # The assessee's own side is untouched.
+      assert_equal "consistent", l2.dig(:ratings, :self)
+    end
+
+    should "expose manager fields to the manager viewer" do
+      mgr_user = create(:user)
+      mgr_tu = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: mgr_user, person: @manager)
+      end
+      mgr_context = AuthorizationContext.new(user: mgr_user, tenant_user: mgr_tu, person: @manager)
+
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::CapabilityGet.call(
+          context: mgr_context,
+          params: { assignment_id: @assignment.id, capability_id: @cap.capability_id }
+        )
+      end
+      l2 = result[:expectations].find { |e| e[:level_ordinal] == 2 }
+      assert_equal "occasional", l2.dig(:ratings, :manager)
+      assert_equal true, l2.dig(:ratings, :manager_carried)
     end
   end
 

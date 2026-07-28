@@ -21,12 +21,14 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       @author = create(:person, tenant: @tenant, name: "Author")
 
       [ @report, @other ].each do |person|
+        direction = person == @report ? "report_to_manager" : "peer_to_peer"
         create(:assessment_cycle_enrollment,
           tenant: @tenant, cycle: @cycle, person_id: person.id,
           role_id: role.role_id, level_ordinal: 2, enrolled_at: 1.day.ago)
         create(:evidence_item, with_link: false,
           tenant: @tenant, author: @author, person_id: person.id,
-          framework_id: framework_id, cycle_id: @cycle.cycle_id)
+          framework_id: framework_id, cycle_id: @cycle.cycle_id,
+          source: "peer", feedback_direction: direction)
       end
     end
     @manager_ctx = AuthorizationContext.new(
@@ -41,6 +43,9 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     assert_equal 1, result.dig(:metrics, :feedback_provided)
     assert_equal 100, result.dig(:metrics, :participant_coverage_pct)
     assert_empty result[:groups]
+    assert_equal 1, result.dig(:metrics, :feedback_directionality, :report_to_manager)
+    assert_equal 100, result.dig(:metrics, :feedback_directionality, :report_to_manager_pct)
+    assert_equal 0, result.dig(:metrics, :feedback_directionality, :self_provided)
   end
 
   should "return aggregate groups in full mode without feedback content or contributors" do
@@ -52,6 +57,7 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     assert_equal 1, result.dig(:groups, :role).size
     payload = result.dig(:groups, :role, 0)
     assert_equal 1, payload.dig(:metrics, :feedback_provided)
+    assert_equal 1, payload.dig(:metrics, :feedback_directionality, :report_to_manager)
     refute payload.key?(:participants)
     refute result[:metrics].key?(:content)
     refute result[:metrics].key?(:author_id)

@@ -34,7 +34,7 @@ module Assessments::TurboStreamHelpers
 
   # @return [String] HTML
   def rating_wrapper_html(stable_id, ordinal, frequency, context, category_id,
-                          interactive: true)
+                          interactive: true, carried: false)
     pill_html = render_to_string(
       Views::Assessments::FrequencyPill.new(
         capability_stable_id: stable_id,
@@ -43,7 +43,8 @@ module Assessments::TurboStreamHelpers
         assessment_id: @assignment.id,
         context: context,
         category_id: category_id,
-        interactive: interactive
+        interactive: interactive,
+        carried: carried
       ),
       layout: false
     )

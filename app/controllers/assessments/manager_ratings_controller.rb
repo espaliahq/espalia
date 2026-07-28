@@ -21,7 +21,7 @@ class Assessments::ManagerRatingsController < ApplicationController
   def create
     authorize @assignment, :create_manager_rating?
 
-    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id ])
+    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
     unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
@@ -47,7 +47,27 @@ class Assessments::ManagerRatingsController < ApplicationController
       level_ordinal: level_ordinal
     )
 
-    if existing&.manager_rated_frequency == frequency
+    if rating_params[:clear].present?
+      # Explicit clear-or-noop — see Assessments::RatingsController.
+      if existing&.manager_rated_frequency.present?
+        handler.clear_manager_rating(
+          @assignment.person_id, @assignment.framework_id, capability_stable_id,
+          level_ordinal: level_ordinal, cycle_id: cycle.cycle_id, rated_by_id: current_person.id
+        )
+      end
+    elsif existing&.manager_rated_frequency == frequency && existing&.manager_rating_carried?
+      # Confirming a carried-forward (seeded) value — re-emit as a human
+      # rating (provenance flips, carried treatment solidifies); untoggle-
+      # to-clear only applies to ratings the manager made themselves.
+      handler.revise_manager_rating(
+        @assignment.person_id, @assignment.framework_id, capability_stable_id,
+        level_ordinal: level_ordinal, frequency: frequency,
+        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id,
+        # Quick-confirm sends no comment — keep the existing one.
+        comment: comment.presence || existing.manager_rated_comment,
+        rated_by_id: current_person.id
+      )
+    elsif existing&.manager_rated_frequency == frequency
       # Untoggle: clicking the already-selected frequency clears the rating
       handler.clear_manager_rating(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
@@ -165,7 +185,8 @@ class Assessments::ManagerRatingsController < ApplicationController
       turbo_stream.replace(
         "rating-#{capability_stable_id}-#{level_ordinal}",
         rating_wrapper_html(capability_stable_id, level_ordinal, cell_data&.dig(:manager_frequency),
-                            :manager, active_category_id || category_id)
+                            :manager, active_category_id || category_id,
+                            carried: cell_data&.dig(:manager_frequency_carried) || false)
       ),
       turbo_stream.replace(
         "secondaries-#{capability_stable_id}-#{level_ordinal}",

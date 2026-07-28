@@ -698,6 +698,9 @@ from request workflow:
   cycle. Prior-cycle evidence reused in this cycle is not newly provided.
 - If existing evidence fulfils a new request, the request is fulfilled but the
   item is not counted as new feedback.
+- Active feedback is also grouped by immutable provider-to-recipient direction:
+  manager → report, peer → peer, or report → manager. Self feedback is separate
+  and requested versus unsolicited remains an orthogonal split.
 
 `EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
 feedback and requests use the PersonDevelopment aggregate's current cycle; a
@@ -705,6 +708,14 @@ response explicitly inherits its request's cycle so a late response remains
 with the original cycle after close. The projections copy this value without a
 `CODE_VERSION` bump. Historical null rows are inferred at report time only when
 one enrollment window matches; ambiguous records stay unattributed.
+
+New `EvidenceRecorded` events also carry nullable `feedback_direction`, captured
+from the provider and recipient's relationship at write time. Historical
+`source: manager` and `source: self` rows retain exact manager → report and self
+classification. Historical `source: peer` rows cannot be split reliably, so the
+report labels them `Peer → peer or report → manager (historical)` and omits that
+row once its count reaches zero. Replays leave the new column null for old
+events, so this additive field also needs no projection `CODE_VERSION` bump.
 
 The report is aggregate-only: no contributor identity, content, evidence title,
 or individual request row. Managers see their `Person#all_reports` subtree;
@@ -870,8 +881,10 @@ There is **no** `sticky_hero_controller.js`. The hero's collapse is pure CSS scr
 Each enrolled `AssessmentCycleParticipation` walks a lifecycle the views render explicitly:
 
 ```text
-enrolled → started → aligning → aligned → withdrawn
-                        ↑___________|   (manager re-opens, cycle still open)
+enrolled → started → aligning → aligned ─┐
+                        ↑___________|    ├→ concluded  (cycle closes)
+   (manager re-opens, cycle still open)  │
+              any pre-close state ───────┴→ withdrawn  (person unenrolled)
 ```
 
 | Status | Trigger | What's editable |
@@ -880,7 +893,23 @@ enrolled → started → aligning → aligned → withdrawn
 | `started` | First `SelfRated` / `ManagerRated` event with `source: "human"` | Self + manager ratings (incl. delegate) |
 | `aligning` | Manager fires `AlignmentStarted` | Aligned values only — self + manager FROZEN |
 | `aligned` | Manager fires `FullAlignmentCompleted` | Nothing — all ratings frozen |
-| `withdrawn` | Person unenrolled or cycle closed | Nothing |
+| `concluded` | Cycle closed (`AssessmentCycleConcluded` on the PD stream) | Nothing |
+| `withdrawn` | Person unenrolled (`LeftAssessmentCycle` on the PD stream) | Nothing |
+
+**Concluded vs withdrawn (deliberate distinction).** A cycle closing is a
+*conclusion*, not a removal: the participant stays part of the cycle's
+historical cohort (cohort reports, participant counts, and manager cohort
+access all keep concluded rows — the enrollment `active` scope is
+`not withdrawn`). An unrated enrollment still concludes — "concluded" says
+only that the cycle ended around them, never how far they got (that stays on
+the progress row). `withdrawn` exclusively means a person-scoped removal
+(opted out, left the company, enrolled by mistake). Historical PD streams
+retain `LeftAssessmentCycle(reason: "cycle_closed")` from before the two
+concepts were separated (immutable; the aggregate now rejects that reason for
+new commands). The enrollment read model heals independently: a `CurrentState`
+rebuild replays the historical **`CycleClosed`** events (its own stream's
+input — PD events are not) and re-derives those close-withdrawn enrollment
+rows as concluded.
 
 **Re-opening a completed alignment.** A completion made by accident is
 recoverable: the assessee's direct manager (never a delegate or the assessee)
@@ -925,7 +954,50 @@ The per-side `Complete` is a **projected, event-sourced fact**: [`CurrentAssessm
 
 **Auto-alignment on start.** Inside the same RES transaction as `AlignmentStarted`, `PersonDevelopment::CommandHandler#start_alignment` emits an `AssessmentAligned` event for every (capability × level) cell where both `self_rated_frequency` and `manager_rated_frequency` are explicitly recorded **and equal**. The conversation in alignment mode then focuses on disagreements and unrated cells. Default-fallback agreements are NOT auto-aligned. Auto-aligned events carry the comment "Auto-aligned: self and manager already agreed".
 
-**Cross-cycle seeding.** When a person enrols in a new cycle for a framework where they previously completed alignment, both their self and manager ratings are pre-populated from the prior cycle's `aligned_frequency`. The seeded events carry `source: "seeded"` (vs the default `"human"`) and `seeded_from_cycle_id`. The participant stays in `enrolled` until the user makes their first real edit — seeded events alone do not trigger `started`.
+**Cross-cycle seeding (carry-forward, ADR-20).** When a person enrols in a
+new cycle, their ratings are pre-populated from their **most recent prior
+participation** in the framework — aligned or not — with **per-cell
+precedence**: a cell the parties agreed on carries the aligned value into
+both sides (shared truth); a never-agreed cell carries each perspective's
+own last value forward, so the alignment conversation resumes where it
+stopped instead of starting blank. A side that never rated stays empty —
+seeding records what existed, never fabricates agreement.
+Most-recent-participation is lossless by construction: seeding chains, so
+an unaligned cycle already contains the previous aligned baseline plus
+whatever moved since. Seeded events carry `source: "seeded"` (vs the
+default `"human"`) and `seeded_from_cycle_id`; idempotency is **per side**
+(a human-touched side is never overwritten; the other side can still
+seed). The participant stays in `enrolled` until their first real edit —
+seeded events alone do not trigger `started`.
+
+> This deliberately reverses the original aligned-cycle-only gate ("a
+> partially-aligned cycle isn't a valid carry-forward baseline"): the
+> alternative to an imperfect baseline is not a better baseline, it is
+> blank — which punished a report for their manager's incomplete
+> alignment (observed as inconsistent seeding across the Q3 2026 cohort).
+
+**Carried-rating affordance.** A seeded rating the viewer hasn't confirmed
+renders **distinctly from a fresh rating**, mirroring the below-level
+assumed-consistent precedent (lighter = inherited, solid = explicit): the
+`FrequencyPill` shows a dashed outline in the frequency's hue
+(`pill_carried` in the palette) with a popover note ("Carried from your
+last cycle — pick the same value to confirm it"), and a level chip whose
+solid fill is entirely carried uses the lighter `chip_carried` tint (split
+slices deliberately keep full tint — carried state there is visible on the
+expansion pills). Non-visual parity via `title`/aria. Provenance is
+**per side** on the read model (`self_rating_source` /
+`manager_rating_source` — the row-level `source` flips to human on any
+touch and can't say which side is still carried). **Interaction:**
+selecting the shown value on a carried pill **confirms** it (re-emits as
+human; the pill solidifies); untoggle-to-clear applies only to ratings the
+person made themselves, and the popover's "Clear rating" posts an explicit
+`rating[clear]` marker since the same-frequency POST is no longer
+unambiguous.
+
+**Bulk enrollment is a background job** (`AssessmentCycles::BulkEnrollmentJob`)
+— each enrollment replays the person's PD stream and seeds carried ratings,
+so a real cohort inline reliably times the request out. Per-person
+transactions; skip-on-domain-failure; safe to re-run.
 
 ## Hard-Won Lessons
 

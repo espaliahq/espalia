@@ -10,11 +10,12 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_27_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_28_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
   create_table "assessment_cycle_enrollments", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "concluded_at"
     t.datetime "created_at", null: false
     t.uuid "cycle_id", null: false
     t.datetime "enrolled_at", null: false
@@ -90,12 +91,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000000) do
     t.uuid "manager_rated_by_id"
     t.text "manager_rated_comment"
     t.string "manager_rated_frequency"
+    t.string "manager_rating_source"
     t.string "migration_status", default: "not_flagged", null: false
     t.uuid "person_id", null: false
     t.text "reassessment_reason"
     t.uuid "seeded_from_cycle_id"
     t.text "self_rated_comment"
     t.string "self_rated_frequency"
+    t.string "self_rating_source"
     t.string "source", default: "human", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
@@ -177,6 +180,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000000) do
     t.uuid "edited_by_id"
     t.string "evidence_type", null: false
     t.jsonb "external_reference", default: {}, null: false
+    t.string "feedback_direction"
     t.uuid "framework_id", null: false
     t.integer "level_ordinal", null: false
     t.string "link_status", default: "active", null: false

@@ -271,7 +271,7 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
       end
     end
 
-    should "close the cycle and withdraw remaining participants" do
+    should "close the cycle and conclude remaining participants" do
       emit(AssessmentCycles::Events::CycleClosed,
         cycle_id: @cycle_id, framework_id: @framework_id,
         enrolled_person_ids: [ @p1, @p2 ], closed_by: nil)
@@ -283,9 +283,29 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
 
         [ @p1, @p2 ].each do |pid|
           enrollment = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: pid)
-          assert_equal "withdrawn", enrollment.status
-          assert_equal "cycle_closed", enrollment.withdrawal_reason
+          assert_equal "concluded", enrollment.status
+          assert_not_nil enrollment.concluded_at
+          assert_nil enrollment.withdrawn_at
+          assert_nil enrollment.withdrawal_reason
         end
+      end
+    end
+
+    should "preserve a prior withdrawal through close" do
+      emit(AssessmentCycles::Events::PersonUnenrolled,
+        cycle_id: @cycle_id, person_id: @p1, reason: "left team")
+      emit(AssessmentCycles::Events::CycleClosed,
+        cycle_id: @cycle_id, framework_id: @framework_id,
+        enrolled_person_ids: [ @p2 ], closed_by: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        withdrawn = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @p1)
+        assert_equal "withdrawn", withdrawn.status
+        assert_equal "left team", withdrawn.withdrawal_reason
+        assert_nil withdrawn.concluded_at
+
+        concluded = AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @p2)
+        assert_equal "concluded", concluded.status
       end
     end
   end
@@ -305,6 +325,9 @@ class AssessmentCycles::Projections::CurrentStateTest < ActiveSupport::TestCase
         framework_version: 1, enrolled_by: nil)
       append_and_project(AssessmentCycles::Events::PersonUnenrolled,
         cycle_id: @cycle_id, person_id: p1, reason: "left team")
+      append_and_project(AssessmentCycles::Events::CycleClosed,
+        cycle_id: @cycle_id, framework_id: @framework_id,
+        enrolled_person_ids: [ p2 ], closed_by: nil)
 
       before_snapshot = snapshot_read_models(AssessmentCycles::Projections::CurrentState, @tenant)
       assert_equal 1, before_snapshot[:cycles].size

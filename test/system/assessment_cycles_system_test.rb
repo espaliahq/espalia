@@ -74,24 +74,10 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
 
       assert_text "Q2 2026 Review"
 
-      # Enroll the assigned person — set the select value via JS and submit
-      # the enroll form via requestSubmit() because Capybara's pointer click
-      # on the Enroll button has been silently dropped on starved CI runners.
-      page.execute_script(<<~JS)
-        const select = Array.from(document.querySelectorAll("select"))
-          .find(s => Array.from(s.options).some(o => o.textContent.trim() === "Assigned Person"));
-        if (select) {
-          const opt = Array.from(select.options).find(o => o.textContent.trim() === "Assigned Person");
-          if (opt) {
-            select.value = opt.value;
-            select.dispatchEvent(new Event("input", { bubbles: true }));
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        }
-        const btn = Array.from(document.querySelectorAll("button"))
-          .find(b => b.textContent.trim() === "Enroll");
-        btn?.closest("form")?.requestSubmit(btn);
-      JS
+      # Enroll the assigned person — JS select + requestSubmit() because
+      # Capybara's pointer click on the Enroll button has been silently
+      # dropped on starved CI runners.
+      enroll_via_js("Assigned Person")
 
       assert_text "Person enrolled"
       assert_text "Assigned Person"
@@ -110,6 +96,12 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_text "Person unenrolled"
       assert_text "Withdrawn"
 
+      # Re-enroll (a withdrawn person is eligible again), then close with
+      # them still enrolled — closure concludes the participation, it does
+      # not withdraw it.
+      enroll_via_js("Assigned Person")
+      assert_text "Person enrolled"
+
       # Close the cycle — same requestSubmit pattern.
       auto_confirm do
         page.execute_script(<<~JS)
@@ -120,6 +112,7 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       end
       assert_text "Cycle closed"
       assert_text "Closed"
+      within("tr", text: "Assigned Person") { assert_text "Concluded" }
     end
   end
 
@@ -176,6 +169,46 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
       assert_no_selector "#cycle-name-#{@cycle_id} [data-controller='inline-editor']"
       assert_no_selector "#cycle-type-#{@cycle_id} [data-controller='inline-editor']"
       assert_no_selector "#cycle-planned-end-#{@cycle_id} [data-controller='inline-editor']"
+    end
+  end
+
+  context "closed cycle roster" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @second_person = FactoryBot.create(
+          :person, tenant: @tenant, name: "Departed Person", email: "departed@example.com"
+        )
+        PersonDevelopment::CommandHandler.new.assign_to_framework(
+          @second_person.id, @framework_id, @role.role_id, @level.level_id
+        )
+        @cycle_id = SecureRandom.uuid_v7
+        handler = AssessmentCycles::CommandHandler.new
+        handler.define_cycle(@cycle_id, @framework_id, "H2 2026 Review", "regular", 1)
+        handler.enroll(@cycle_id, @assigned_person.id)
+        handler.enroll(@cycle_id, @second_person.id)
+        handler.unenroll(@cycle_id, @second_person.id, "left team")
+        handler.close_cycle(@cycle_id)
+        @cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
+      end
+    end
+
+    should "show concluded and withdrawn participants distinctly on desktop" do
+      sign_in @admin_user
+      visit assessment_cycle_path(@cycle)
+      assert_text "Participants"
+
+      within("tr", text: "Assigned Person") { assert_text "Concluded" }
+      within("tr", text: "Departed Person") { assert_text "Withdrawn" }
+    end
+
+    should "show concluded and withdrawn participants distinctly on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in @admin_user
+      visit assessment_cycle_path(@cycle)
+      assert_text "Participants"
+
+      within("tr", text: "Assigned Person") { assert_text "Concluded" }
+      within("tr", text: "Departed Person") { assert_text "Withdrawn" }
     end
   end
 
@@ -252,6 +285,24 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # Selects a person in the enroll form and submits it via requestSubmit()
+  # — synchronous JS, immune to the dropped-pointer-click CI flake. Guards
+  # are deliberately absent: a missing select/option/button raises here (a
+  # loud JS error) instead of silently no-oping into a later assertion.
+  def enroll_via_js(person_name)
+    page.execute_script(<<~JS)
+      const select = Array.from(document.querySelectorAll("select"))
+        .find(s => Array.from(s.options).some(o => o.textContent.trim() === #{person_name.to_json}));
+      const opt = Array.from(select.options).find(o => o.textContent.trim() === #{person_name.to_json});
+      select.value = opt.value;
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      const btn = Array.from(document.querySelectorAll("button"))
+        .find(b => b.textContent.trim() === "Enroll");
+      btn.closest("form").requestSubmit(btn);
+    JS
+  end
 
   def sign_in(user)
     sign_in_as(user)

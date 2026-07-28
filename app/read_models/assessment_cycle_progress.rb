@@ -5,15 +5,16 @@
 # One row per (cycle_id, person_id). Owned exclusively by
 # {PersonDevelopment::Projections::CurrentAssessment}. Tracks per-cycle
 # progress — started_at, alignment timestamps, terminal aligned state.
-# Membership in the cycle (enrolled / withdrawn) lives on the sibling
-# {AssessmentCycleEnrollment} table.
+# Membership in the cycle (enrolled / concluded / withdrawn) lives on the
+# sibling {AssessmentCycleEnrollment} table.
 #
 # Status state machine:
 #   in_progress → started → self_complete / manager_complete → aligning → aligned
 #
-# On `LeftAssessmentCycle`, the row is intentionally retained as a
-# historical record of how far the person got. Active-participant queries
-# filter via the enrollment row's status flipping to "withdrawn".
+# On `LeftAssessmentCycle` and `AssessmentCycleConcluded`, the row is
+# intentionally retained as a historical record of how far the person got
+# (its `aligned_at` also drives next-cycle rating seeding).
+# Active-participant queries filter via the enrollment row's status.
 #
 class AssessmentCycleProgress < ApplicationRecord
   STATUSES = %w[in_progress started self_complete manager_complete aligning aligned].freeze

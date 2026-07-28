@@ -333,7 +333,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
-            "rationale"            => { "type" => "string" }
+            "rationale"            => { "type" => "string" },
+            "clear"                => { "type" => "boolean" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -355,7 +356,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
-            "rationale"            => { "type" => "string" }
+            "rationale"            => { "type" => "string" },
+            "clear"                => { "type" => "boolean" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -1793,8 +1795,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "reporting_evidence_coverage",
         "description" => "Aggregate feedback and evidence-request coverage for an assessment cycle " \
           "across the caller's org subtree (admins see the whole cycle): feedback " \
-          "provided by request or unsolicited, withdrawn feedback, request statuses, " \
-          "fulfilment rate, participant coverage, and optional manager/role/level groups.",
+          "provided by request or unsolicited, immutable manager/report/peer directionality, " \
+          "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
+          "and optional manager/role/level groups.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

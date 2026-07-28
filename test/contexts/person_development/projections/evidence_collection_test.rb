@@ -28,6 +28,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         capability_stable_id: cap_sid,
         level_ordinal: 3,
         source: "manager",
+        feedback_direction: "manager_to_report",
         evidence_type: "code_review",
         custom_type_label: nil,
         title: "Reviewed PR",
@@ -44,6 +45,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_equal cap_sid, item.capability_stable_id
         assert_equal 3, item.level_ordinal
         assert_equal "manager", item.source
+        assert_equal "manager_to_report", item.feedback_direction
         assert_equal "code_review", item.evidence_type
         assert_equal "Reviewed PR", item.title
         assert_equal "Strong testing approach", item.content
@@ -82,6 +84,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal "growth_area", EvidenceLink.find_by(evidence_id: with_valence).valence
         assert_nil EvidenceItem.find(pre_valence).cycle_id
+        assert_nil EvidenceItem.find(pre_valence).feedback_direction
         assert_nil EvidenceLink.find_by(evidence_id: pre_valence).valence
       end
     end
@@ -411,14 +414,15 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       ev1_id      = SecureRandom.uuid_v7
       ev2_id      = SecureRandom.uuid_v7
 
-      # ev1 carries a valence + a subsequent reclassification; ev2 stays the
-      # historical pre-valence shape — the round trip must reproduce both
-      # (this is what the "no CODE_VERSION bump needed" claim rests on).
+      # ev1 carries current valence and direction fields plus a subsequent
+      # reclassification; ev2 stays the historical pre-valence/direction shape.
+      # The round trip must reproduce both (this is what the "no CODE_VERSION
+      # bump needed" claim rests on).
       append_and_project(PersonDevelopment::Events::EvidenceRecorded,
         evidence_id: ev1_id, capability_stable_id: cap_sid, level_ordinal: 2,
         source: "self", evidence_type: "project_outcome", custom_type_label: nil,
         title: "Initial", content: "first", external_reference: nil,
-        author_id: @author.id, valence: "demonstrated")
+        author_id: @author.id, valence: "demonstrated", feedback_direction: "self")
 
       append_and_project(PersonDevelopment::Events::EvidenceLinkRevalenced,
         evidence_id: ev1_id, capability_stable_id: cap_sid, level_ordinal: 2,

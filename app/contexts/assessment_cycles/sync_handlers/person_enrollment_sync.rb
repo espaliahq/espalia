@@ -3,11 +3,12 @@
 # Cross-stream synchronous handler: propagates AssessmentCycle enrollment
 # events to PersonDevelopment streams.
 #
-# When a person is enrolled into (or unenrolled from) a cycle, this handler
-# dispatches a PersonDevelopment command which emits a corresponding
-# `JoinedAssessmentCycle` / `LeftAssessmentCycle` event on the person's
-# PersonDev stream. This keeps the PersonDev stream self-contained — replaying
-# it tells the full story of when the person was in which cycle.
+# When a person is enrolled into (or unenrolled from) a cycle, or the cycle
+# closes around them, this handler dispatches a PersonDevelopment command
+# which emits a corresponding `JoinedAssessmentCycle` / `LeftAssessmentCycle`
+# / `AssessmentCycleConcluded` event on the person's PersonDev stream. This
+# keeps the PersonDev stream self-contained — replaying it tells the full
+# story of when the person was in which cycle and how each stint ended.
 #
 # IMPORTANT INVARIANTS
 # ====================
@@ -64,26 +65,41 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
     seed_from_prior_cycle(person_id, framework_id, cycle_id, event.data[:enrolled_by])
   end
 
-  # Seeds the new cycle's ratings from the most recent prior cycle for
-  # this (person, framework) that ever reached `aligned`. We look at
-  # `aligned_at IS NOT NULL` because the progress row is preserved on
-  # LeftAssessmentCycle (and on cycle closure) — the timestamp is the
-  # durable signal that alignment was completed at some point.
-  # No-op if there is no prior aligned cycle.
+  # Seeds the new cycle's ratings from the person's MOST RECENT prior
+  # participation in this framework THAT HOLDS ANY RATINGS — aligned or
+  # not (per-cell precedence happens in the command handler).
+  # Most-recent-with-ratings is lossless by construction: seeding chains,
+  # so an unaligned Q2 already contains Q1's aligned baseline plus
+  # whatever moved since — skipping back to the last *aligned* cycle
+  # would discard newer information. The has-ratings filter matters for
+  # HISTORY: cycles enrolled under the old aligned-only gate can be
+  # entirely blank, and picking such a participation would strand the
+  # rated cycle behind it forever (each new empty cycle becoming the
+  # next one's "most recent"). Withdrawn and concluded enrollments both
+  # count: however the stint ended, its ratings are the person's latest
+  # known state. No-op when no prior cycle carries ratings.
   def seed_from_prior_cycle(person_id, framework_id, current_cycle_id, enrolled_by)
     # Use the association join (not a raw SQL join) so ActsAsTenant adds
     # the assessment_cycles tenant filter — otherwise the lookup could
     # resolve against another tenant's cycle row.
-    prior_cycle_id = AssessmentCycleProgress
+    candidate_cycle_ids = AssessmentCycleEnrollment
       .where(person_id: person_id)
-      .where.not(aligned_at: nil)
       .where.not(cycle_id: current_cycle_id)
       .joins(:cycle)
       .where(assessment_cycles: { framework_id: framework_id })
-      .order(aligned_at: :desc)
-      .limit(1)
+      .order("assessment_cycles.opened_at DESC")
       .pluck(:cycle_id)
-      .first
+
+    prior_cycle_id = candidate_cycle_ids.find do |cycle_id|
+      AssessmentLevelRating
+        .for_person(person_id)
+        .for_cycle(cycle_id)
+        .where(
+          "aligned_frequency IS NOT NULL OR self_rated_frequency IS NOT NULL " \
+          "OR manager_rated_frequency IS NOT NULL"
+        )
+        .exists?
+    end
 
     return unless prior_cycle_id
 
@@ -102,13 +118,17 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
     )
   end
 
+  # Cycle closure is a conclusion, not a removal: every still-enrolled
+  # participant's PersonDev stream records AssessmentCycleConcluded (their
+  # participation stands as part of the cycle's cohort), never a
+  # LeftAssessmentCycle — that event is reserved for person-scoped
+  # unenrollment.
   def handle_cycle_closed(event)
     Array(event.data[:enrolled_person_ids]).each do |person_id|
-      command_handler.leave_cycle(
+      command_handler.conclude_cycle(
         person_id,
         event.data[:framework_id],
-        event.data[:cycle_id],
-        "cycle_closed"
+        event.data[:cycle_id]
       )
     end
   end

@@ -4,14 +4,27 @@
 #
 # One row per (cycle_id, person_id). Owned exclusively by
 # {AssessmentCycles::Projections::CurrentState}. Tracks enrollment lifecycle
-# only — enrolled / withdrawn. Per-cycle journey progress
+# only — enrolled / concluded / withdrawn. Per-cycle journey progress
 # (started_at, alignment timestamps) lives on the sibling
 # {AssessmentCycleProgress} table, owned by
 # {PersonDevelopment::Projections::CurrentAssessment}. The two are joined
 # via {AssessmentCycleParticipation} for callers that need a unified view.
 #
 class AssessmentCycleEnrollment < ApplicationRecord
-  STATUSES = %w[enrolled withdrawn].freeze
+  # The unenroll route addresses this row by primary key
+  # (DELETE /assessment_cycles/:cycle/enrollments/:id), so the PK must be a
+  # pure function of event-sourced data — a projection rebuild reissuing
+  # random ids would 404 any captured URL (see event-sourcing.md).
+  include DeterministicId
+  deterministic_id_from :cycle_id, :person_id
+
+  # enrolled  — live membership in an (open) cycle
+  # concluded — the cycle closed with the person still enrolled; their
+  #             participation stands as part of the cycle's historical
+  #             cohort. An unrated enrollment still concludes.
+  # withdrawn — person-scoped removal (opted out, left the company,
+  #             enrolled by mistake) — the participation was revoked.
+  STATUSES = %w[enrolled concluded withdrawn].freeze
 
   # Pundit policy lookup: reuse the AssessmentCyclePolicy
   def self.policy_class
@@ -32,6 +45,11 @@ class AssessmentCycleEnrollment < ApplicationRecord
   validates :enrolled_at, presence: true
 
   scope :for_person, ->(person_id) { where(person_id: person_id) }
+  # Participations that stand — enrolled AND concluded. Cohort reporting,
+  # participant counts, and manager cohort access all read this scope so a
+  # closed cycle keeps its cohort. Callers that mean "live membership in an
+  # ongoing cycle" additionally join on the cycle's open status (concluded
+  # rows only ever exist on closed cycles).
   scope :active,     -> { where.not(status: "withdrawn") }
   scope :withdrawn,  -> { where(status: "withdrawn") }
 end

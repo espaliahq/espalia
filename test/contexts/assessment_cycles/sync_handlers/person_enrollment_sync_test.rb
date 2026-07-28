@@ -117,7 +117,7 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSyncTest < ActiveSupport::
       end
     end
 
-    should "dispatch leave_cycle to every enrolled person" do
+    should "dispatch conclude_cycle to every enrolled person" do
       event = AssessmentCycles::Events::CycleClosed.new(
         data: {
           cycle_id: @cycle_id, framework_id: @framework_id,
@@ -130,9 +130,11 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSyncTest < ActiveSupport::
       [ @person_id, @other_person_id ].each do |pid|
         stream = EventStreamNaming.person_development_stream(pid, @framework_id)
         events = Rails.configuration.event_store.read.stream(stream).to_a
-        left = events.find { |e| e.is_a?(PersonDevelopment::Events::LeftAssessmentCycle) }
-        assert_not_nil left, "expected LeftAssessmentCycle on stream for #{pid}"
-        assert_equal "cycle_closed", left.data[:reason]
+        concluded = events.find { |e| e.is_a?(PersonDevelopment::Events::AssessmentCycleConcluded) }
+        assert_not_nil concluded, "expected AssessmentCycleConcluded on stream for #{pid}"
+        assert_equal @cycle_id, concluded.data[:cycle_id]
+        assert_nil events.find { |e| e.is_a?(PersonDevelopment::Events::LeftAssessmentCycle) },
+          "cycle closure must conclude, not remove — no LeftAssessmentCycle expected for #{pid}"
       end
     end
   end

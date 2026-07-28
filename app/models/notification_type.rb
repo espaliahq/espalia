@@ -71,6 +71,12 @@ class NotificationType
       description: "Someone whose assessment you manage posts a comment on it.",
       defaults: { in_app: true, slack: true, email: false }
     ),
+    bulk_enrollment_completed: Definition.new(
+      key: :bulk_enrollment_completed,
+      label: "Bulk cycle enrollment finished",
+      description: "The background enrollment you started has completed, with its enrolled/skipped outcome.",
+      defaults: { in_app: true, slack: false, email: false }
+    ),
     rating_revisit_requested: Definition.new(
       key: :rating_revisit_requested,
       label: "Calibration asked you to revisit a rating",

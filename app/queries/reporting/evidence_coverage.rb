@@ -14,11 +14,33 @@
 # Privacy: this query returns workflow counts only. It never exposes evidence
 # content, contributor identity, or individual request details.
 class Reporting::EvidenceCoverage
+  # Immutable provider-to-recipient feedback flow counts. Self feedback is
+  # separate from the interpersonal denominator, while historical peer-source
+  # evidence remains in an explicit combined bucket rather than being inferred
+  # from today's org chart.
+  Directionality = Data.define(
+    :manager_to_report, :peer_to_peer, :report_to_manager,
+    :self_provided, :legacy_peer_or_upward
+  ) do
+    # @return [Integer] active interpersonal feedback items
+    def interpersonal_total
+      manager_to_report + peer_to_peer + report_to_manager + legacy_peer_or_upward
+    end
+
+    # @param direction [Symbol] interpersonal direction attribute
+    # @return [Integer] percentage of active interpersonal feedback
+    def percentage_for(direction)
+      return 0 if interpersonal_total.zero?
+
+      (public_send(direction).to_f / interpersonal_total * 100).round
+    end
+  end
+
   # Aggregate counts for a cohort or group.
   Metrics = Data.define(
     :participant_count, :participants_with_feedback,
     :feedback_provided, :provided_by_request, :provided_unsolicited,
-    :feedback_withdrawn, :requests_sent, :requests_fulfilled,
+    :feedback_withdrawn, :directionality, :requests_sent, :requests_fulfilled,
     :requests_pending, :requests_declined, :requests_cancelled
   ) do
     # @return [Integer] percent of participants with active cycle feedback
@@ -49,10 +71,13 @@ class Reporting::EvidenceCoverage
 
   Participant = Data.define(
     :person_id, :manager_id, :role_id, :role_name, :level_ordinal,
-    :provided_ids, :requested_provided_ids, :withdrawn_ids, :request_statuses
+    :provided_ids, :requested_provided_ids, :withdrawn_ids,
+    :feedback_directions, :request_statuses
   )
   RequestRow = Data.define(:id, :person_id, :status, :evidence_id, :requested_at, :cycle_id)
-  EvidenceRow = Data.define(:id, :person_id, :link_status, :recorded_at, :cycle_id)
+  EvidenceRow = Data.define(
+    :id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction
+  )
   Window = Data.define(:cycle_id, :starts_at, :ends_at)
   private_constant :Participant, :RequestRow, :EvidenceRow, :Window
 
@@ -130,7 +155,7 @@ class Reporting::EvidenceCoverage
     rows = EvidenceItem
       .where(person_id: @participant_ids, framework_id: @cycle.framework_id)
       .where(cycle_id: [ nil, @cycle.cycle_id ])
-      .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id)
+      .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction)
       .map { |attributes| EvidenceRow.new(*attributes) }
 
     refs_by_evidence = response_references(rows.map(&:id))
@@ -197,6 +222,16 @@ class Reporting::EvidenceCoverage
     matches.one? ? matches.first.cycle_id : nil
   end
 
+  def reporting_direction(row)
+    return row.feedback_direction if EvidenceItem::FEEDBACK_DIRECTIONS.include?(row.feedback_direction)
+
+    case row.source
+    when "manager" then "manager_to_report"
+    when "self" then "self"
+    else "legacy_peer_or_upward"
+    end
+  end
+
   def build_participants(enrollments, request_rows, evidence_rows, requested_evidence_ids)
     requests_by_person = request_rows.group_by(&:person_id)
     evidence_by_person = evidence_rows.group_by(&:person_id)
@@ -221,6 +256,7 @@ class Reporting::EvidenceCoverage
           item.id if requested_evidence_ids.include?(item.id)
         end.to_set,
         withdrawn_ids: items.filter_map { |item| item.id if item.link_status == "withdrawn" }.to_set,
+        feedback_directions: active.map { |item| reporting_direction(item) },
         request_statuses: requests_by_person.fetch(enrollment.person_id, []).map(&:status)
       )
     end
@@ -230,6 +266,7 @@ class Reporting::EvidenceCoverage
     statuses = participants.flat_map(&:request_statuses)
     provided = participants.sum { |participant| participant.provided_ids.size }
     requested = participants.sum { |participant| participant.requested_provided_ids.size }
+    directions = participants.flat_map(&:feedback_directions).tally
 
     Metrics.new(
       participant_count: participants.size,
@@ -238,6 +275,13 @@ class Reporting::EvidenceCoverage
       provided_by_request: requested,
       provided_unsolicited: provided - requested,
       feedback_withdrawn: participants.sum { |participant| participant.withdrawn_ids.size },
+      directionality: Directionality.new(
+        manager_to_report: directions.fetch("manager_to_report", 0),
+        peer_to_peer: directions.fetch("peer_to_peer", 0),
+        report_to_manager: directions.fetch("report_to_manager", 0),
+        self_provided: directions.fetch("self", 0),
+        legacy_peer_or_upward: directions.fetch("legacy_peer_or_upward", 0)
+      ),
       requests_sent: statuses.size,
       requests_fulfilled: statuses.count("responded"),
       requests_pending: statuses.count("pending"),

@@ -43,36 +43,22 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
 
   # POST /assessment_cycles/:assessment_cycle_id/enrollments/bulk
   #
-  # Enrolls every person currently eligible for this cycle (assigned to the
-  # framework and not yet an active participant). Each enrollment runs in
-  # its own transaction so a domain failure on one person — e.g. a race
-  # with another admin enrolling the same person — does not block the rest.
+  # Enqueues background enrollment of every person currently eligible for
+  # this cycle (assigned to the framework and not yet an active
+  # participant). Runs as a job because each enrollment replays the
+  # person's PersonDevelopment stream and seeds carried-forward ratings —
+  # a real cohort inline reliably times the request out (production
+  # incident, Q3 2026 cycle).
   def bulk
     authorize @cycle, :enroll?
 
-    enrolled = 0
-    skipped = 0
-    command_handler = AssessmentCycles::CommandHandler.new
-
-    @cycle.eligible_people.find_each do |person|
-      role_id, level_id = assignment_role_level(person.id)
-      ActiveRecord::Base.transaction do
-        command_handler.enroll(
-          @cycle.cycle_id, person.id, enrolled_by: current_person&.id,
-          role_id: role_id, level_id: level_id
-        )
-      end
-      enrolled += 1
-    rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
-      skipped += 1
-    end
-
-    if enrolled.zero? && skipped.zero?
+    eligible_count = @cycle.eligible_people.count
+    if eligible_count.zero?
       flash[:alert] = "No eligible people to enroll."
     else
-      message = "Enrolled #{enrolled} #{'person'.pluralize(enrolled)}."
-      message += " Skipped #{skipped}." if skipped.positive?
-      flash[enrolled.positive? ? :notice : :alert] = message
+      AssessmentCycles::BulkEnrollmentJob.perform_later(@cycle, enrolled_by: current_person&.id)
+      flash[:notice] = "Enrolling #{eligible_count} eligible #{'person'.pluralize(eligible_count)} " \
+                       "in the background — refresh in a moment to see them appear."
     end
 
     redirect_to assessment_cycle_path(@cycle)
@@ -94,6 +80,11 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
       )
     end
     redirect_to assessment_cycle_path(@cycle), status: :see_other, notice: "Person unenrolled."
+  rescue ActiveRecord::RecordNotFound
+    # A stale page can post an enrollment id that a projection rebuild has
+    # reissued or a concurrent unenroll removed — fail soft, not 500.
+    redirect_to assessment_cycle_path(@cycle), status: :see_other,
+                alert: "That participant is no longer enrolled."
   rescue RuntimeError, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
     redirect_to assessment_cycle_path(@cycle), status: :see_other, alert: e.message
   end

@@ -12,9 +12,9 @@
 # full per-cycle story.
 #
 # Cycle membership is driven from the {AssessmentCycles::Aggregate} via a
-# cross-stream sync handler. `join_cycle` / `leave_cycle` are called ONLY by
-# that sync handler in response to PersonEnrolled / PersonUnenrolled events —
-# never by controllers.
+# cross-stream sync handler. `join_cycle` / `leave_cycle` / `conclude_cycle`
+# are called ONLY by that sync handler in response to PersonEnrolled /
+# PersonUnenrolled / CycleClosed events — never by controllers.
 #
 class PersonDevelopment::Aggregate
   include AggregateRoot
@@ -28,6 +28,11 @@ class PersonDevelopment::Aggregate
   FREQUENCIES = %w[none some occasional consistent].freeze
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
+  EVIDENCE_DIRECTIONS_BY_SOURCE = {
+    "self" => %w[self],
+    "manager" => %w[manager_to_report],
+    "peer" => %w[peer_to_peer report_to_manager]
+  }.freeze
   EVIDENCE_VALENCES = EvidenceLink::VALENCES
   EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon manual].freeze
   EVIDENCE_REQUEST_NUDGE_GAP = EvidenceRequest::NUDGE_GAP
@@ -308,19 +313,42 @@ class PersonDevelopment::Aggregate
     }))
   end
 
-  # Leaves the given assessment cycle.
+  # Leaves the given assessment cycle — a person-scoped removal (opted out,
+  # left the company, enrolled by mistake). A cycle closing around the
+  # person is NOT a leave; that path is {#conclude_cycle}, and the legacy
+  # "cycle_closed" reason is rejected so a stale caller can't misclassify a
+  # normal closure as a withdrawal.
   #
   # @param cycle_id [String] UUID of the cycle being left (must match current)
-  # @param reason [String] why the person is leaving
-  # @raise [RuntimeError] if not in a cycle or cycle_id doesn't match
+  # @param reason [String] why the person is leaving (e.g. "withdrew")
+  # @raise [RuntimeError] if not in a cycle, cycle_id doesn't match, or the
+  #   reason is "cycle_closed"
   def leave_cycle(cycle_id, reason)
-    ensure_assigned!
-    raise "Not currently in a cycle" if @current_cycle_id.nil?
-    raise "Cycle ID does not match current cycle" unless @current_cycle_id == cycle_id
+    # Internal backstop only — AssessmentCycles::Aggregate#unenroll already
+    # rejects the reserved reason at the user-facing boundary, so this can
+    # only fire for a stale in-code caller still wiring closure to leave.
+    raise "Use conclude_cycle for cycle closure" if reason.to_s == "cycle_closed"
+    ensure_in_cycle!(cycle_id)
 
     apply(PersonDevelopment::Events::LeftAssessmentCycle.new(data: {
       cycle_id: cycle_id,
       reason: reason
+    }))
+  end
+
+  # Concludes the given assessment cycle for this person.
+  #
+  # Distinct from {#leave_cycle}: the person is not being removed — the
+  # cycle is ending around them. Their participation stands as part of the
+  # cycle's cohort; an unrated enrollment still concludes.
+  #
+  # @param cycle_id [String] UUID of the cycle concluding (must match current)
+  # @raise [RuntimeError] if not in a cycle or cycle_id doesn't match
+  def conclude_cycle(cycle_id)
+    ensure_in_cycle!(cycle_id)
+
+    apply(PersonDevelopment::Events::AssessmentCycleConcluded.new(data: {
+      cycle_id: cycle_id
     }))
   end
 
@@ -706,6 +734,8 @@ class PersonDevelopment::Aggregate
   # @param evidence_type [String] one of EVIDENCE_TYPES
   # @param content [String] the body of the evidence (required)
   # @param author_id [String] UUID of the Person recording the evidence
+  # @param feedback_direction [String] immutable provider-to-recipient
+  #   relationship at recording time
   # @param cycle_id [String, nil] cycle the evidence was provided for;
   #   defaults to the aggregate's current cycle
   # @param custom_type_label [String, nil] free text, only when evidence_type == "other"
@@ -721,11 +751,16 @@ class PersonDevelopment::Aggregate
   #   the first link or each other) are rejected.
   # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
   def record_evidence(evidence_id, capability_stable_id:, level_ordinal:, source:, evidence_type:,
-                      content:, author_id:, valence:, custom_type_label: nil, title: nil,
+                      content:, author_id:, valence:,
+                      feedback_direction: default_feedback_direction(source),
+                      custom_type_label: nil, title: nil,
                       external_reference: nil, additional_links: [], cycle_id: @current_cycle_id)
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
+    unless EVIDENCE_DIRECTIONS_BY_SOURCE.fetch(source).include?(feedback_direction)
+      raise CommandError, "Invalid feedback direction: #{feedback_direction}"
+    end
     raise CommandError, "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)
     raise CommandError, "Invalid evidence valence: #{valence}" unless EVIDENCE_VALENCES.include?(valence)
     raise CommandError, "Custom type label required when evidence_type is 'other'" if
@@ -745,6 +780,7 @@ class PersonDevelopment::Aggregate
       content: content,
       external_reference: external_reference,
       author_id: author_id,
+      feedback_direction: feedback_direction,
       valence: valence,
       cycle_id: cycle_id
     }))
@@ -1180,8 +1216,27 @@ class PersonDevelopment::Aggregate
 
   private
 
+  # Direct aggregate callers cannot inspect the org chart. The command handler
+  # supplies the exact value; this source-based default keeps lower-level
+  # domain calls classified for self, manager, and lateral feedback.
+  def default_feedback_direction(source)
+    {
+      "self" => "self",
+      "manager" => "manager_to_report",
+      "peer" => "peer_to_peer"
+    }[source]
+  end
+
   def ensure_assigned!
     raise "Person not yet assigned to a framework" unless @assigned
+  end
+
+  # Shared state reset for the two cycle-exit events — one place to extend
+  # when cycle-exit clearing grows, so leave and conclude can't diverge.
+  def reset_cycle_exit_state
+    @current_cycle_id = nil
+    @alignment_started = false
+    @alignment_completed = false
   end
 
   # Withdrawal retracts the evidence artifact itself, so its linkage
@@ -1360,9 +1415,11 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::LeftAssessmentCycle do |_event|
-    @current_cycle_id = nil
-    @alignment_started = false
-    @alignment_completed = false
+    reset_cycle_exit_state
+  end
+
+  on PersonDevelopment::Events::AssessmentCycleConcluded do |_event|
+    reset_cycle_exit_state
   end
 
   on PersonDevelopment::Events::AlignmentStarted do |_event|
