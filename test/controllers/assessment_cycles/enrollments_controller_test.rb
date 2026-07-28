@@ -3,6 +3,7 @@
 require "test_helper"
 
 class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationTest
+  include ActiveJob::TestHelper
   setup do
     @tenant = create(:tenant)
     @admin_user = create(:user, password: "password123")
@@ -109,14 +110,16 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
     end
 
     context "POST enrollments/bulk" do
-      should "enroll every eligible person and report the count" do
+      should "enroll every eligible person via the background job" do
         sign_in @admin_user
         assert_difference -> { AssessmentCycleEnrollment.where(cycle_id: @cycle_id).count }, 2 do
-          post bulk_assessment_cycle_enrollments_path(@cycle)
+          perform_enqueued_jobs only: AssessmentCycles::BulkEnrollmentJob do
+            post bulk_assessment_cycle_enrollments_path(@cycle)
+          end
         end
         assert_redirected_to assessment_cycle_path(@cycle)
         follow_redirect!
-        assert_match(/Enrolled 2 people/, flash[:notice].to_s)
+        assert_match(/Enrolling 2 eligible people in the background/, flash[:notice].to_s)
 
         ActsAsTenant.with_tenant(@tenant) do
           assert AssessmentCycleEnrollment.find_by(cycle_id: @cycle_id, person_id: @assigned_person.id)
@@ -131,20 +134,22 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
 
         sign_in @admin_user
         assert_difference -> { AssessmentCycleEnrollment.where(cycle_id: @cycle_id).count }, 1 do
-          post bulk_assessment_cycle_enrollments_path(@cycle)
+          perform_enqueued_jobs only: AssessmentCycles::BulkEnrollmentJob do
+            post bulk_assessment_cycle_enrollments_path(@cycle)
+          end
         end
         follow_redirect!
-        assert_match(/Enrolled 1 person/, flash[:notice].to_s)
+        assert_match(/Enrolling 1 eligible person in the background/, flash[:notice].to_s)
       end
 
-      should "report no eligible people when everyone is enrolled" do
+      should "report no eligible people (and enqueue nothing) when everyone is enrolled" do
         ActsAsTenant.with_tenant(@tenant) do
           AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @assigned_person.id)
           AssessmentCycles::CommandHandler.new.enroll(@cycle_id, @other_assigned.id)
         end
 
         sign_in @admin_user
-        assert_no_difference -> { AssessmentCycleEnrollment.where(cycle_id: @cycle_id).count } do
+        assert_no_enqueued_jobs only: AssessmentCycles::BulkEnrollmentJob do
           post bulk_assessment_cycle_enrollments_path(@cycle)
         end
         follow_redirect!
