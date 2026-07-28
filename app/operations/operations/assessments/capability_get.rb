@@ -34,7 +34,7 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   def perform
     base = Mcp::FrameworkSerializer.capability(assignment.framework, capability)
     cycle = assignment.current_open_cycle
-    ratings_index = ratings_by_level(cycle)
+    ratings_index = ratings_by_level(cycle, hide_others: hide_others?(cycle))
 
     base.merge(
       cycle_id: cycle&.cycle_id,
@@ -71,7 +71,22 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   EMPTY_RATING = { self: nil, manager: nil, aligned: nil,
                    self_carried: false, manager_carried: false }.freeze
 
-  def ratings_by_level(cycle)
+  # Self-assessment privacy (assessments.md): the assessee must not see
+  # the manager's rating — or its carried provenance — until alignment
+  # formally begins. Mirrors Assessments::MatrixDataBuilder#hide_others?.
+  # Manager-chain viewers and admins pass AssessmentPolicy#show? as
+  # non-assessees and are never scrubbed.
+  def hide_others?(cycle)
+    return false unless context.person&.id == assignment.person_id
+    return true unless cycle
+
+    status = AssessmentCycleParticipation.find_by(
+      cycle_id: cycle.cycle_id, person_id: assignment.person_id
+    )&.status
+    !%w[aligning aligned].include?(status)
+  end
+
+  def ratings_by_level(cycle, hide_others:)
     return Hash.new(EMPTY_RATING) unless cycle
 
     rows = AssessmentLevelRating.where(
@@ -82,13 +97,14 @@ class Operations::Assessments::CapabilityGet < Operations::Base
     index = rows.each_with_object({}) do |row, h|
       h[row.level_ordinal] = {
         self: row.self_rated_frequency,
-        manager: row.manager_rated_frequency,
-        aligned: row.aligned_frequency,
+        manager: hide_others ? nil : row.manager_rated_frequency,
+        aligned: hide_others ? nil : row.aligned_frequency,
         # Carried-forward (seeded, unconfirmed) provenance per side — an
         # MCP client should present these as "carried from the previous
-        # cycle", matching the web's dashed-pill treatment.
+        # cycle", matching the web's dashed-pill treatment. Same privacy
+        # gate as the values themselves.
         self_carried: row.self_rating_carried?,
-        manager_carried: row.manager_rating_carried?
+        manager_carried: hide_others ? false : row.manager_rating_carried?
       }
     end
     index.default = EMPTY_RATING
