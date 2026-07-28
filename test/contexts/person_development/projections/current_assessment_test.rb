@@ -800,6 +800,26 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       assert_equal "started", progress.status, "status stays the phase"
     end
 
+    should "not stamp completion from carried-forward (seeded) ratings alone" do
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: "consistent", cycle_id: @cycle_id,
+        comment: "Seeded from prior cycle", source: "seeded",
+        seeded_from_cycle_id: SecureRandom.uuid_v7)
+
+      progress = reload_progress
+      assert_nil progress.self_completed_at,
+        "a fully-carried side is To confirm, not Complete — completion means vetted"
+
+      # Confirming the carried value (a human revision) vets the cell and
+      # completion stamps.
+      emit(PersonDevelopment::Events::SelfRatingRevised,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: "consistent", cycle_id: @cycle_id, rationale: "Confirmed carried-forward rating")
+
+      assert_not_nil reload_progress.self_completed_at
+    end
+
     should "stamp manager_completed_at independently of self" do
       emit(PersonDevelopment::Events::ManagerRated,
         capability_stable_id: @cap.stable_id, level_ordinal: 2,

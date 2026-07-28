@@ -344,16 +344,27 @@ class AssessmentsController < ApplicationController
     progress = AssessmentCycleProgress
       .where(cycle_id: cycle_ids, person_id: person_ids)
       .index_by { |p| [ p.cycle_id, p.person_id ] }
+    # Per side: "any" (a value exists — carried or human) and "human" (the
+    # person touched the side this cycle: rated, revised, confirmed, or
+    # explicitly cleared — provenance "human"; nil provenance counts as
+    # human for legacy rows). The view derives the tri+1-state from these:
+    # Complete / In progress (human touch) / To confirm (all carried) /
+    # Not started.
     rated = AssessmentLevelRating
       .where(cycle_id: cycle_ids, person_id: person_ids)
       .group(:cycle_id, :person_id)
       .pluck(
         :cycle_id, :person_id,
         Arel.sql("COUNT(*) FILTER (WHERE self_rated_frequency IS NOT NULL)"),
-        Arel.sql("COUNT(*) FILTER (WHERE manager_rated_frequency IS NOT NULL)")
+        Arel.sql("COUNT(*) FILTER (WHERE manager_rated_frequency IS NOT NULL)"),
+        Arel.sql("COUNT(*) FILTER (WHERE self_rating_source = 'human' " \
+                 "OR (self_rated_frequency IS NOT NULL AND self_rating_source IS NULL))"),
+        Arel.sql("COUNT(*) FILTER (WHERE manager_rating_source = 'human' " \
+                 "OR (manager_rated_frequency IS NOT NULL AND manager_rating_source IS NULL))")
       )
-      .each_with_object({}) do |(cid, pid, self_n, mgr_n), h|
-        h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive? }
+      .each_with_object({}) do |(cid, pid, self_n, mgr_n, self_h, mgr_h), h|
+        h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive?,
+                            self_human: self_h.positive?, manager_human: mgr_h.positive? }
       end
 
     open_cycles.each_with_object({}) do |((framework_id, person_id), cycle), statuses|
@@ -364,7 +375,9 @@ class AssessmentsController < ApplicationController
         self_complete: prog&.self_completed_at.present?,
         manager_complete: prog&.manager_completed_at.present?,
         self_any: any[:self_any] || false,
-        manager_any: any[:manager_any] || false
+        manager_any: any[:manager_any] || false,
+        self_human: any[:self_human] || false,
+        manager_human: any[:manager_human] || false
       }
     end
   end

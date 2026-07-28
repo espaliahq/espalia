@@ -510,7 +510,9 @@ class Assessments::MatrixDataBuilder
       .filter_map { |cap| cap[:cells][@level.ordinal] }
     return false if cells.empty?
 
-    cells.all? { |cell| primary_cell_frequency(cell).present? }
+    # Complete means VETTED: a carried-forward value doesn't count until
+    # confirmed or changed (mirrors Assessments::LevelCoverage).
+    cells.all? { |cell| primary_cell_frequency(cell).present? && !primary_cell_carried?(cell) }
   end
 
   # The frequency that counts as "rated" for the active context.
@@ -519,6 +521,16 @@ class Assessments::MatrixDataBuilder
     when :self      then cell[:current_frequency]
     when :manager   then cell[:manager_frequency]
     when :alignment then cell[:aligned_frequency]
+    end
+  end
+
+  # Whether the active context's value is carried-forward (seeded,
+  # unconfirmed). Aligned values are never seeded.
+  def primary_cell_carried?(cell)
+    case @context
+    when :self    then cell[:current_frequency_carried] || false
+    when :manager then cell[:manager_frequency_carried] || false
+    else false
     end
   end
 end

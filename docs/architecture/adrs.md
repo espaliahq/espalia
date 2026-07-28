@@ -224,3 +224,5 @@ Shipped in PRs #139, #140, #141, #142.
 - Unilateral manager ratings now carry across a manager handover as the new manager's starting position; `source: "seeded"` + `seeded_from_cycle_id` keep the provenance honest (UI disclosure of the source cycle is a future affordance).
 - Anchoring is accepted, consistent with the product's diff-your-growth philosophy; engagement stays legible because seeded events never trip `started`.
 - Bulk enrollment moved to a background job — seeding volume made inline enrollment a request-timeout class.
+
+**Amendment (post-ship):** completion signals mean *vetted this cycle*. The per-side Complete chips, "Ready to align" cue, and header "Assessment Complete" pill count only human-owned cells (`Assessments::LevelCoverage` excludes `*_rating_source: "seeded"`; `CurrentAssessment` CODE_VERSION 7 retro-cleared stamps earned by seeds alone). A side whose values are entirely carried reads **"To confirm"** (dashed amber chip). The hero/score still count carried values — data vs work-state, deliberately asymmetric.

@@ -64,7 +64,15 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     tell which side is still carried. Derivable from historical
   #     events → rebuild backfills
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
-  CODE_VERSION = 6
+  #
+  # 7 — completion means VETTED: `refresh_completion` (via
+  #     Assessments::LevelCoverage) no longer counts carried-forward
+  #     (seeded, unconfirmed) sides toward `self_completed_at` /
+  #     `manager_completed_at` — the list's Complete chips and the
+  #     Ready-to-align cue were reading fully-carried assessments as done.
+  #     A rebuild retro-clears completion stamps that were earned by
+  #     seeds alone (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  CODE_VERSION = 7
 
   # All event classes this projection handles.
   #

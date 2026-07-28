@@ -67,6 +67,27 @@ class Assessments::LevelCoverageTest < ActiveSupport::TestCase
       assert_not coverage[:manager_complete]
     end
 
+    should "not count carried-forward (seeded) sides — completion means vetted" do
+      rate(@cap1, self_rated_frequency: "consistent", self_rating_source: "seeded")
+      rate(@cap2, self_rated_frequency: "some", self_rating_source: "seeded")
+
+      assert_not coverage[:self_complete], "a fully-carried side is not Complete"
+      assert_equal 0, coverage[:self_rated]
+    end
+
+    should "count a side once its carried value is confirmed (human provenance)" do
+      rate(@cap1, self_rated_frequency: "consistent", self_rating_source: "human")
+      rate(@cap2, self_rated_frequency: "some", self_rating_source: "seeded")
+      assert_not coverage[:self_complete]
+      assert_equal 1, coverage[:self_rated]
+    end
+
+    should "treat nil provenance as vetted (legacy rows)" do
+      rate(@cap1, self_rated_frequency: "consistent")
+      rate(@cap2, self_rated_frequency: "some")
+      assert coverage[:self_complete]
+    end
+
     should "be complete for both sides when both are fully rated" do
       rate(@cap1, self_rated_frequency: "consistent", manager_rated_frequency: "occasional")
       rate(@cap2, self_rated_frequency: "some", manager_rated_frequency: "none")
