@@ -63,7 +63,10 @@
 > person card; a pin only survives if it resolves to a card (no phantom that
 > can't be unpinned), and **pinning implies revealed**.
 > Still to build: auto-suggested contrast pairs (§e), evidence requests as a
-> session outcome (§f).
+> session outcome (§f), and **carried-vs-vetted provenance across the three
+> read surfaces** (overview / dot grid / wall stamp all show a carried
+> rating as if it were vetted this cycle, while the session's own readiness
+> badges already say "To confirm" — see *Deliberately deferred*).
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
@@ -713,11 +716,49 @@ Mechanics — everything not listed here is inherited untouched:
 |---|---|
 | Participant follow-along devices + the narrow session-scoped visibility grant | Facilitator-only projection proves insufficient in real sessions |
 | Auto-suggested contrast pairs in the compare tray | Manual pinning proves the gesture |
+| **Carried-vs-vetted provenance on the read surfaces** — see below | Before the next real session; or the next change to any of the three surfaces |
 | Cross-cycle calibration trend views ("is Raj converging?") | ≥2 cycles of session data exist |
 | Automated bias scoring beyond the tendency strip | Never, ideally — the strip states facts; the room supplies judgment |
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
+
+### Carried-vs-vetted provenance on the read surfaces
+
+**The gap.** Cross-cycle seeding (ADR-20) carries a rating forward, and the
+assessment side now treats "carried but unconfirmed" as materially different
+from "vetted this cycle" — it doesn't count toward completion and renders
+**"To confirm"** (see [assessments.md](../guidelines/assessments.md) →
+*Carried-rating affordance*, `Assessments::LevelCoverage`). The session
+page's **readiness** badges already speak that vocabulary. The three
+**read** surfaces do not: `OverviewStats` (tendency strip + divergence
+board), `DrillInStats` (the rater × level dot grid), and `EvidenceWall` (the
+per-item `Mgr:` stamp) all read `manager_rated_frequency` without consulting
+`manager_rating_source`.
+
+**Why it matters here specifically.** A calibration room's whole premise is
+that the numbers on screen are what each rater *decided*. A carried value is
+last cycle's decision, unexamined — the room can spend twenty minutes
+reconciling a divergence that neither rater has actually formed a view on.
+It also skews the tendency strip: a manager who confirmed nothing reads as
+having a tendency they never expressed this cycle.
+
+**Why it isn't fixed in the evidence-wall change.** The gap spans all three
+surfaces, and they sit on one screen — a wall that marked carried values
+while the grid directly above it did not would read as a bug, not a fix. It
+wants one change that threads provenance through all three consistently.
+
+**Shape when picked up.** Provenance is already on the read model
+(`assessment_level_ratings.manager_rating_source` / `self_rating_source`),
+so this is presentation, not data: pluck the source alongside the frequency
+in each of the three queries, and pick the signal per surface — the grid's
+dots already spend fill on evidence backing and colour on frequency, so
+carried state needs a third primitive (or a muted treatment), never a
+recolour. Decide deliberately whether a carried value should be *excluded*
+from the divergence/tendency maths or merely *marked*: excluding is more
+honest about what the room can act on, marking preserves the signal that a
+rater has coasted. Prefer marking first — the strip states facts and the
+room supplies judgment (the rule the tendency strip is already built on).
 
 ## Open questions
 
