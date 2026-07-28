@@ -133,7 +133,11 @@ class Views::Assessments::LevelChip < Views::Base
   end
 
   def focus_border
-    "border-gray-900 dark:border-white"
+    # A focused chip keeps the high-contrast focus edge, but carried fills
+    # render it DASHED — the displayed (person-level) chip is focused on
+    # every card, so without this the carried signal would never reach the
+    # chips it matters most on.
+    solid_carried? ? "border-dashed border-gray-900 dark:border-white" : "border-gray-900 dark:border-white"
   end
 
   # Unrated idle chips need a quiet but discernible edge so the strip
