@@ -198,7 +198,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # shows only its calibration shape.
     assert_selector "li[data-calibration-reveal-target='wallItem'][data-revealed='true']", count: 1
     assert_text "Ran the pricing spike end to end."
+    # Text AND name are both withheld for the unrevealed person.
     assert_no_text "Ran the billing spike end to end."
+    assert_no_text "Omar IC"
     assert_text "Open this person's dot to reveal the text."
 
     # Filtering narrows the wall.
@@ -209,6 +211,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     JS
     assert_text "1 item"
     assert_no_text "Ran the pricing spike end to end."
+
+    # The filter rides every pane link, so clear it before moving on.
+    page.execute_script(<<~JS)
+      const select = document.querySelector("#wall-filter-wall_valence")
+      select.value = ""
+      select.form.requestSubmit()
+    JS
+    assert_text "2 items"
 
     # ── Compare tray: pinning holds two cards side by side ──
     click_link_with_js_fallback("Person: Ivy IC", expect_text: "Manager: Consistently")
@@ -231,7 +241,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Ran the billing spike end to end."
 
     # Unpinning drops the card but not the reveal (sticky for the session).
-    click_link_with_js_fallback("Compare (2)", expect_text: "Ran the billing spike end to end.")
+    # Sync on the tray's own heading — a signal already on the wall could
+    # never arm the JS fallback (testing.md).
+    click_link_with_js_fallback("Compare (2)", expect_text: "COMPARE")
     click_with_retry(expect_text: "Compare (1)") do
       find("[data-compare-card='#{@report_2.id}'] a", text: "Unpin").click
     end

@@ -45,6 +45,12 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
     @ivy_item = evidence_for(@r1, author: @em_1, ordinal: 3,
                              valence: "demonstrated", content: "Led the pricing work.",
                              recorded_at: 2.days.ago)
+    # A second, newer L3 item — from a peer — so ordering within a level and
+    # the peer relation are both exercised.
+    @ivy_peer_item = evidence_for(@r1, author: @r2, ordinal: 3,
+                                  valence: "strongly_demonstrated",
+                                  content: "Unblocked our team's migration.",
+                                  recorded_at: 1.hour.ago)
     @omar_item = evidence_for(@r2, author: @r2, ordinal: 4,
                               valence: "growth_area", content: "Ran the platform retro.",
                               recorded_at: 1.day.ago)
@@ -81,7 +87,7 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
     result = wall
 
     assert_equal [ 4, 3 ], result[:groups].map { |g| g[:ordinal] }
-    assert_equal 2, result[:total]
+    assert_equal 3, result[:total]
 
     omar = result[:groups].first[:items].first
     assert_equal "Omar", omar[:person_name]
@@ -90,30 +96,48 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
     assert_equal "self", omar[:relation]
     assert_equal "growth_area", omar[:valence]
 
-    ivy = result[:groups].last[:items].first
-    assert_equal "manager", ivy[:relation]
-    assert_equal "consistent", ivy[:frequency]
+    # Within L3 the newer item leads.
+    l3 = result[:groups].last[:items]
+    assert_equal [ "Unblocked our team's migration.", "Led the pricing work." ], l3.map { |i| i[:content] }
+    assert_equal "manager", l3.last[:relation]
+    assert_equal "consistent", l3.last[:frequency]
     refute result[:groups].flat_map { |g| g[:items] }
       .any? { |i| i[:content].include?("Outsider") }
   end
 
-  should "list raters with items pre-filter for the filter control" do
-    assert_equal [ @em_2.id, @em_1.id ].sort, wall[:rater_ids].sort
+  should "label an item authored by neither the person nor their manager as peer" do
+    peer = wall(level: 3)[:groups].first[:items].find { |i| i[:content].start_with?("Unblocked") }
+
+    assert_equal "peer", peer[:relation]
+  end
+
+  should "list the levels and raters it holds, pre-filter, for the filter controls" do
+    result = wall
+
+    assert_equal [ 4, 3 ], result[:level_ordinals]
+    assert_equal [ @em_2.id, @em_1.id ].sort, result[:rater_ids].sort
+  end
+
+  should "read a caller-supplied population instead of the whole session" do
+    result = wall(person_ids: [ @r2.id ])
+
+    assert_equal [ "Ran the platform retro." ],
+                 result[:groups].flat_map { |g| g[:items] }.map { |i| i[:content] }
   end
 
   should "filter by level, valence, and rater independently" do
-    assert_equal [ "Led the pricing work." ],
-                 wall(level: 3)[:groups].flat_map { |g| g[:items] }.map { |i| i[:content] }
+    assert_equal 2, wall(level: 3)[:total]
     assert_equal [ "Ran the platform retro." ],
                  wall(valence: "growth_area")[:groups].flat_map { |g| g[:items] }.map { |i| i[:content] }
-    assert_equal [ "Led the pricing work." ],
-                 wall(rater_id: @em_1.id)[:groups].flat_map { |g| g[:items] }.map { |i| i[:content] }
+    # Rater = who owns the person's ratings, not who authored the item: the
+    # peer-authored item is still Mia's, because Ivy is Mia's report.
+    assert_equal 2, wall(rater_id: @em_1.id)[:total]
     # rater filter still reports the full rater list for the control
     assert_equal 2, wall(rater_id: @em_1.id)[:rater_ids].size
   end
 
   should "exclude withdrawn items and inactive links" do
-    @ivy_item.update!(link_status: "withdrawn")
+    [ @ivy_item, @ivy_peer_item ].each { |item| item.update!(link_status: "withdrawn") }
     EvidenceLink.where(evidence_id: @omar_item.id).update_all(link_status: "removed")
 
     assert_equal 0, wall[:total]
@@ -126,7 +150,7 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
            framework_id: @framework_id, manager_id: @em_1.id)
     @r1.update!(manager: @em_2)
 
-    ivy = wall(level: 3)[:groups].first[:items].first
+    ivy = wall(level: 3)[:groups].first[:items].find { |i| i[:content].start_with?("Led") }
     assert_equal "manager", ivy[:relation]
   end
 end

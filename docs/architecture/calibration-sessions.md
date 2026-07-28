@@ -43,19 +43,25 @@
 > **session log** (`SessionOutcomes` stream read + `SessionLog` view — flags
 > with live clarification status, revisits with acted/open state, minutes +
 > composer) make the session page the follow-through artifact.
-> **The drill-in's bottom pane is now a three-tab surface** (person card /
-> **evidence wall** §d / **compare tray** §e), every tab link preserving the
-> other axes (opened person, pins, wall filters) in the URL — and the flag /
-> revisit POSTs carry them through their redirects, so an outcome mid-
-> comparison never empties the tray. The wall (`EvidenceWall` query) groups
-> the population's linked feedback by level (highest first), stamping each
-> item with the manager-rated frequency its cell carries in the session's
-> cycle, filterable by level / valence / rater; item **text and name are
-> withheld until that person is revealed** (the collapsed half shows only
-> the calibration shape — rating, valence, relation, rater), server-rendered
-> hidden so the default holds before Stimulus connects. The tray pins up to
-> three cards (`MAX_COMPARE_PINS`), assembled through the same
-> `PersonCard` query as the person card, and **pinning implies revealed**.
+> **The drill-in's bottom pane now switches between three panes** (person
+> card / **evidence wall** §d / **compare tray** §e — links that navigate,
+> deliberately NOT the ARIA tabs pattern, which would promise in-place panel
+> swapping). Every pane link preserves the other axes — opened person, pins,
+> wall filters — in the URL, and the flag / revisit POSTs carry the same
+> state (plus which pane was open) through their redirects, so an outcome
+> recorded mid-comparison returns the room to the screen it was reading. The
+> wall (`EvidenceWall` query) groups the population's linked feedback by
+> level (highest first, newest first within), stamping each item with the
+> manager-rated frequency its cell carries in the session's cycle, filterable
+> by level / valence / rater; item **text and name are withheld until that
+> person is revealed** (the collapsed half shows only the calibration shape —
+> rating, valence, relation, rater), server-rendered hidden so the default
+> holds before Stimulus connects. The wall reads the **grid's** population,
+> not raw session membership, so every item's reveal gesture (open that
+> person's dot) is reachable. The tray pins up to three cards
+> (`MAX_COMPARE_PINS`), assembled through the same `PersonCard` query as the
+> person card; a pin only survives if it resolves to a card (no phantom that
+> can't be unpinned), and **pinning implies revealed**.
 > Still to build: auto-suggested contrast pairs (§e), evidence requests as a
 > session outcome (§f).
 > Read alongside [assessments.md](../guidelines/assessments.md),

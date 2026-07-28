@@ -17,21 +17,28 @@
 class CalibrationSessions::EvidenceWall
   # @param session [CalibrationSession]
   # @param capability_stable_id [String]
+  # @param person_ids [Array<String>, nil] the population to read; defaults
+  #   to the session's calibrants. The drill-in passes the grid's population
+  #   so the wall and the grid agree on who is on screen — every wall item's
+  #   reveal gesture (open that person's dot) has to be reachable.
   # @param level [Integer, nil] filter to one level ordinal
   # @param valence [String, nil] filter to one EvidenceLink valence
   # @param rater_id [String, nil] filter to one participant's people
-  def initialize(session:, capability_stable_id:, level: nil, valence: nil, rater_id: nil)
+  def initialize(session:, capability_stable_id:, person_ids: nil, level: nil,
+                 valence: nil, rater_id: nil)
     @session = session
     @capability_stable_id = capability_stable_id
+    @person_ids = person_ids
     @level = level
     @valence = valence
     @rater_id = rater_id
   end
 
-  # @return [Hash] `{ groups:, rater_ids:, total: }` — groups are
-  #   `[{ ordinal:, items: [...] }]`, highest level first; `rater_ids` lists
-  #   every participant with at least one item (pre-filter), for the filter
-  #   control; `total` counts items post-filter.
+  # @return [Hash] `{ groups:, level_ordinals:, rater_ids:, total: }` —
+  #   groups are `[{ ordinal:, items: [...] }]`, highest level first;
+  #   `level_ordinals` and `rater_ids` describe what the wall actually holds
+  #   (pre-filter), for the filter controls; `total` counts items
+  #   post-filter.
   def call
     filtered = items.select { |item| matches_filters?(item) }
     groups = filtered.group_by { |item| item[:level_ordinal] }
@@ -40,6 +47,10 @@ class CalibrationSessions::EvidenceWall
 
     {
       groups: groups,
+      # Levels come from the items, not the grid: evidence can be linked to a
+      # level nobody in the population is assessed at, and a group the wall
+      # renders must be selectable.
+      level_ordinals: items.map { |i| i[:level_ordinal] }.uniq.sort.reverse,
       rater_ids: items.map { |i| i[:rater_id] }.compact.uniq,
       total: filtered.size
     }
@@ -93,7 +104,7 @@ class CalibrationSessions::EvidenceWall
   end
 
   def calibrant_ids
-    @calibrant_ids ||= @session.calibrants.pluck(:person_id)
+    @calibrant_ids ||= @person_ids || @session.calibrants.pluck(:person_id)
   end
 
   # The manager-rated frequency each linked cell carries in the session's

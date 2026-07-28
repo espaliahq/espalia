@@ -27,20 +27,21 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       return
     end
 
-    cards = CalibrationSessions::PersonCard.new(
+    @cards = CalibrationSessions::PersonCard.new(
       session: @session, stats: stats, capability_stable_id: params.expect(:id)
     )
+    compare_cards = resolve_compare_cards(stats)
 
     render Views::CalibrationSessions::DrillInView.new(
       session: @session,
       stats: stats,
       people: Person.where(id: stats[:rows].map { |r| r[:rater_id] }.compact).index_by(&:id),
-      person_card: cards.for(params[:person].presence),
+      person_card: @cards.for(params[:person].presence),
       view: view_param,
-      wall: (evidence_wall if view_param == "wall"),
+      wall: (evidence_wall(stats) if view_param == "wall"),
       wall_filters: wall_filters,
-      compare_ids: compare_ids,
-      compare_cards: compare_ids.to_h { |person_id| [ person_id, cards.for(person_id) ] }.compact,
+      compare_ids: compare_cards.keys,
+      compare_cards: compare_cards,
       can_flag: @session.started? && policy(@session).flag_expectation?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -57,21 +58,34 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     params[:view].presence_in(VIEWS)
   end
 
-  # Pinned compare people — capped, deduplicated, and confined to the
-  # session's population (a foreign id in the URL renders nothing).
+  # Pinned compare cards, keyed by person_id. A pin only survives if it
+  # RESOLVES to a card — an id outside the session, or one for someone who
+  # has since left the cycle (so they hold no dot on this grid), is dropped
+  # rather than becoming a phantom that shows no card, offers no "Unpin",
+  # and permanently consumes one of the three slots. Resolve first, cap
+  # last, so stale ids ahead of a live one can't squeeze it out.
   #
-  # @return [Array<String>]
-  def compare_ids
-    @compare_ids ||= begin
-      requested = Array.wrap(params[:compare]).select(&:present?).uniq.first(MAX_COMPARE_PINS)
-      requested & @session.calibrants.pluck(:person_id)
-    end
+  # @return [Hash{String => Hash}]
+  def resolve_compare_cards(stats)
+    requested = Array.wrap(params[:compare]).grep(String).select(&:present?).uniq
+    (requested & grid_person_ids(stats))
+      .filter_map { |person_id| [ person_id, @cards.for(person_id) ] if @cards.for(person_id) }
+      .first(MAX_COMPARE_PINS).to_h
   end
 
-  def evidence_wall
+  # The people the grid actually plots — the wall and the tray share this
+  # population so every wall item's reveal gesture (opening that person's
+  # dot) is reachable.
+  def grid_person_ids(stats)
+    @grid_person_ids ||= stats[:rows].flat_map { |row| row[:people].values.flatten }
+      .map { |dot| dot[:person_id] }.uniq
+  end
+
+  def evidence_wall(stats)
     CalibrationSessions::EvidenceWall.new(
       session: @session,
       capability_stable_id: params.expect(:id),
+      person_ids: grid_person_ids(stats),
       level: wall_filters[:level],
       valence: wall_filters[:valence],
       rater_id: wall_filters[:rater_id]
@@ -80,10 +94,12 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
 
   # @return [Hash] sanitized wall filters (also echoed into the filter form)
   def wall_filters
+    # Every value is read straight off the query string, so each has to
+    # survive an array/hash param without raising (`[…].to_i` is a 500).
     @wall_filters ||= {
-      level: params[:wall_level].presence&.to_i,
+      level: params[:wall_level].to_s.presence&.then { |v| v.to_i if v.match?(/\A\d+\z/) },
       valence: params[:wall_valence].presence_in(EvidenceLink::VALENCES),
-      rater_id: params[:wall_rater].presence
+      rater_id: params[:wall_rater].presence_in(@session.participants.pluck(:person_id))
     }
   end
 

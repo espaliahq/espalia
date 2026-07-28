@@ -18,6 +18,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   RELATION_LABELS = { "self" => "Self", "manager" => "Manager", "peer" => "Peer feedback" }.freeze
 
+  MAX_PINS = CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS
+
   # @param session [CalibrationSession]
   # @param stats [Hash] DrillInStats result
   # @param people [Hash{String => Person}] rater people by id
@@ -281,16 +283,25 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # Every tab link preserves the other axes (opened person, pins, filters)
+  # Every pane link preserves the other axes (opened person, pins, filters)
   # so switching views never loses the room's working state.
+  #
+  # These look like tabs but ARE links that navigate the page, so they carry
+  # nav/aria-current semantics rather than the ARIA tabs pattern — declaring
+  # role="tab" would promise arrow-key navigation and in-place panel swapping
+  # that full-page links can't deliver.
   def tab_bar
-    div(class: "mt-6 flex flex-wrap items-center gap-2", role: "tablist") do
+    nav(class: "mt-6 flex flex-wrap items-center gap-2", aria: { label: "Capability views" }) do
       if @person_card
         tab_link("Person: #{@person_card[:dot][:name]}", drill_in_path(view: nil), active: @view.nil?)
       end
       tab_link("Feedback / Evidence wall", drill_in_path(view: "wall"), active: @view == "wall")
-      if @compare_ids.any? || @view == "compare"
-        tab_link("Compare (#{@compare_ids.size})", drill_in_path(view: "compare"), active: @view == "compare")
+      if @compare_cards.any? || @view == "compare"
+        # Count the cards actually rendered, not the requested pins — a pinned
+        # id for someone with no dot on THIS capability renders nothing, and a
+        # count that disagrees with the tray reads as a bug.
+        tab_link("Compare (#{@compare_cards.size})", drill_in_path(view: "compare"),
+                 active: @view == "compare")
       end
     end
   end
@@ -303,7 +314,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         "hover:bg-gray-50 dark:hover:bg-gray-800"
     end
     a(
-      href: href, role: "tab", aria: { selected: active.to_s },
+      href: href, aria: { current: active ? "page" : nil },
       class: "inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium #{classes}"
     ) { label }
   end
@@ -315,11 +326,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     query[:person] = person if person.present?
     query[:compare] = compare if compare.any?
     query[:view] = view if view
-    if view == "wall"
-      query[:wall_level] = filters[:level] if filters[:level]
-      query[:wall_valence] = filters[:valence] if filters[:valence]
-      query[:wall_rater] = filters[:rater_id] if filters[:rater_id]
-    end
+    # Filters ride every link, not just wall→wall, so stepping out to a
+    # person card and back returns to the wall the room was reading.
+    query[:wall_level] = filters[:level] if filters[:level]
+    query[:wall_valence] = filters[:valence] if filters[:valence]
+    query[:wall_rater] = filters[:rater_id] if filters[:rater_id]
     calibration_session_capability_path(@session, @stats[:capability][:stable_id], query)
   end
 
@@ -328,11 +339,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   # Rides the outcome POSTs (flag / revisit) so their redirects can restore
-  # the opened person and the compare pins — a mid-comparison outcome must
-  # not empty the tray.
+  # the whole working state — which pane was open, the opened person, the
+  # compare pins, the wall's filters. An outcome recorded mid-comparison
+  # must not reset the room's screen.
   def state_passthrough_fields
     input(type: "hidden", name: "person", value: opened_person_id) if opened_person_id.present?
     @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id) }
+    input(type: "hidden", name: "view", value: @view) if @view
+    { wall_level: @wall_filters[:level], wall_valence: @wall_filters[:valence],
+      wall_rater: @wall_filters[:rater_id] }.each do |name, value|
+      input(type: "hidden", name: name.to_s, value: value) if value.present?
+    end
   end
 
   # ── Evidence wall (§d — the norming surface) ──
@@ -374,7 +391,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       input(type: "hidden", name: "person", value: opened_person_id) if opened_person_id.present?
       @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id) }
 
-      wall_filter_select("wall_level", "Level", @stats[:ordinals].map { |o| [ "L#{o}", o ] },
+      wall_filter_select("wall_level", "Level", @wall[:level_ordinals].map { |o| [ "L#{o}", o ] },
                          @wall_filters[:level])
       wall_filter_select("wall_valence", "Valence",
                          EvidenceLink::VALENCES.map { |v| [ valence_label(v), v ] },
@@ -471,7 +488,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             # Literal class names — Tailwind's scanner can't see interpolation
             # (framework-explorer.md Hard-Won Lesson 12).
             cols = { 1 => "md:grid-cols-1", 2 => "md:grid-cols-2", 3 => "md:grid-cols-3" }
-            div(class: "mt-3 grid gap-4 #{cols.fetch([ @compare_cards.size, 3 ].min)}") do
+            div(class: "mt-3 grid gap-4 #{cols.fetch([ @compare_cards.size, MAX_PINS ].min)}") do
               @compare_cards.each { |person_id, card_data| compare_card(person_id, card_data) }
             end
           end
@@ -524,7 +541,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     if @compare_ids.include?(dot[:person_id])
       span(class: "inline-flex min-h-11 items-center px-2 text-xs font-medium " \
                   "text-gray-600 dark:text-gray-300") { "Pinned" }
-    elsif @compare_ids.size < 3
+    elsif @compare_ids.size < MAX_PINS
       a(
         href: drill_in_path(view: "compare", compare: @compare_ids + [ dot[:person_id] ]),
         class: "inline-flex min-h-11 items-center px-2 text-sm text-primary hover:underline",
