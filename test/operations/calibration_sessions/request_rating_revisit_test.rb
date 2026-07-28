@@ -120,15 +120,44 @@ class Operations::CalibrationSessions::RequestRatingRevisitTest < ActiveSupport:
       assert_raises(Operations::Base::ParameterError) { revisit!(note: "  ") }
     end
 
-    should "refuse a duplicate ask for the same cell" do
+    should "refuse a duplicate ask for the same cell as invalid params" do
       revisit!
-      err = assert_raises(RuntimeError) { revisit! }
+      err = assert_raises(Operations::Base::ParameterError) { revisit! }
       assert_match(/already requested/, err.message)
       assert_equal 1, pd_revisit_events(@report).size
     end
   end
 
   context "guards" do
+    should "classify a PD-side refusal as invalid params, not an internal error" do
+      # A person with an assignment READ-MODEL row but no PD stream
+      # assignment (projection drift / manual row): the mirror's aggregate
+      # raises CommandError inside the same transaction — the op must
+      # surface it as ParameterError (→ flash on web, -32602 over MCP).
+      ghost = create(:person, tenant: @tenant, name: "Ghost Row", manager: @em)
+      create(:person_framework_assignment, tenant: @tenant,
+             person_id: ghost.id, framework_id: @framework_id)
+
+      ghost_session = SecureRandom.uuid_v7
+      calibration = AssessmentCycles::CalibrationCommandHandler.new
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        calibration.define_session(ghost_session, @cycle.cycle_id, @framework_id, "Ghost session", 1,
+                                   facilitator_id: @dept_head.id,
+                                   participant_ids: [ @em.id ],
+                                   calibrant_person_ids: [ ghost.id ])
+        calibration.start_session(ghost_session, started_by_id: @dept_head.id)
+      end
+
+      err = assert_raises(Operations::Base::ParameterError) do
+        Operations::CalibrationSessions::RequestRatingRevisit.call(
+          context: @facilitator_context,
+          params: { session_id: ghost_session, person_id: ghost.id,
+                    capability_stable_id: @cap_stable, level_ordinal: 3, note: "n" }
+        )
+      end
+      assert_match(/not yet assigned/i, err.message)
+    end
+
     should "deny a participant EM" do
       assert_raises(Pundit::NotAuthorizedError) do
         Operations::CalibrationSessions::RequestRatingRevisit.call(

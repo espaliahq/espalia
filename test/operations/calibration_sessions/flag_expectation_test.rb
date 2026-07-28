@@ -115,6 +115,22 @@ class Operations::CalibrationSessions::FlagExpectationTest < ActiveSupport::Test
   end
 
   context "guards" do
+    should "refuse a tenant admin with no linked person (clean invalid-params, not a projection 500)" do
+      admin_user = create(:user)
+      admin_tu = create(:tenant_user, tenant: @tenant, user: admin_user, role: :admin)
+      ctx = AuthorizationContext.new(user: admin_user, tenant_user: admin_tu, person: nil)
+
+      err = assert_raises(Operations::Base::ParameterError) do
+        Operations::CalibrationSessions::FlagExpectation.call(
+          context: ctx,
+          params: { session_id: @session_id, capability_stable_id: @cap_stable,
+                    level_ordinal: 4, reason: "?" }
+        )
+      end
+      assert_match(/linked person/, err.message)
+      assert_equal 0, FrameworkState::SuggestedEdit.clarifications.count
+    end
+
     should "refuse flagging a draft session" do
       draft_id = SecureRandom.uuid_v7
       Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do

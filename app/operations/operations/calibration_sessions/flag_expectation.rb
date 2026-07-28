@@ -37,6 +37,7 @@ class Operations::CalibrationSessions::FlagExpectation < Operations::Base
   def perform
     ensure_uuid!(:capability_stable_id, params[:capability_stable_id])
     ensure_session_started!
+    require_author!
     ensure_cell_unflagged!
     capability # 404s early when the stable_id isn't in the session's framework
 
@@ -73,6 +74,18 @@ class Operations::CalibrationSessions::FlagExpectation < Operations::Base
 
     raise Operations::Base::ParameterError,
           "session is #{session.status} — expectations are flagged from a live session"
+  end
+
+  # The clarification's author is a first-class domain fact
+  # (framework_suggested_edits.author_id is NOT NULL), and
+  # flag_expectation? admits a tenant admin with no linked Person — guard
+  # here so that account gets a clean invalid-params error instead of a
+  # projection-level RecordInvalid (a 500 / MCP -32603).
+  def require_author!
+    return if context.person.present?
+
+    raise Operations::Base::ParameterError,
+          "Flagging an expectation requires a linked person; this account has none."
   end
 
   # One flag per cell per session (the aggregate re-checks serialized against

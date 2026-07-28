@@ -40,15 +40,25 @@ class Operations::CalibrationSessions::RequestRatingRevisit < Operations::Base
     ensure_note!
     ensure_rater_in_session!
 
-    command_handler.request_rating_revisit(
-      session.id,
-      person_id: params[:person_id],
-      capability_stable_id: params[:capability_stable_id],
-      level_ordinal: params[:level_ordinal],
-      rater_id: rater_id,
-      note: params[:note],
-      requested_by_id: context.person&.id
-    )
+    begin
+      command_handler.request_rating_revisit(
+        session.id,
+        person_id: params[:person_id],
+        capability_stable_id: params[:capability_stable_id],
+        level_ordinal: params[:level_ordinal],
+        rater_id: rater_id,
+        note: params[:note],
+        requested_by_id: context.person&.id
+      )
+    rescue PersonDevelopment::Aggregate::CommandError, RuntimeError => e
+      # Aggregate refusals from either stream — the session's own guards
+      # (duplicate ask, lifecycle) or the same-transaction PD mirror
+      # (CalibrationRevisitSync; e.g. the person was unassigned after the
+      # population froze) — are client-state problems, not server bugs:
+      # classify as invalid params (→ -32602 over MCP, a flash on the web),
+      # never an opaque 500/-32603.
+      raise Operations::Base::ParameterError, e.message
+    end
 
     {
       session_id: session.id,
@@ -81,18 +91,15 @@ class Operations::CalibrationSessions::RequestRatingRevisit < Operations::Base
           "this person's rater is not a participant in this session — reference points are exempt from outcomes"
   end
 
-  # The participant this person's ratings are attributed to (recorded
-  # reporting manager + active delegations — the same attribution the
-  # drill-in grid rows use). nil when their rater isn't in the room.
+  # The participant this person's ratings are attributed to — the CANONICAL
+  # PopulationSeeds#attribution the drill-in grid and tendency strip also
+  # read, so the rater named on the card is exactly the rater recorded on
+  # the event (and notified). nil when their rater isn't in the room.
   def rater_id
-    @rater_id ||= begin
-      participant_ids = session.participants.pluck(:person_id)
-      attributed = CalibrationSessions::PopulationSeeds.new(
-        framework_id: session.framework_id,
-        participant_ids: participant_ids,
-        facilitator_id: session.facilitator_id
-      ).call
-      attributed.find { |_participant_id, people| people.any? { |p| p.id == params[:person_id] } }&.first
-    end
+    @rater_id ||= CalibrationSessions::PopulationSeeds.new(
+      framework_id: session.framework_id,
+      participant_ids: session.participants.pluck(:person_id),
+      facilitator_id: session.facilitator_id
+    ).attribution[params[:person_id]]
   end
 end
