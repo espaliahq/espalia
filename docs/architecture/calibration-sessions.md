@@ -1,96 +1,43 @@
 # Calibration Sessions — Design
 
-> **Status: partially implemented.** V1 scope agreed 2026-07-24
-> (facilitator-only access, value-free revisit requests, own event stream).
-> Built so far: the CalibrationSession aggregate + projection + cycle-close
-> sync, `Operations::CalibrationSessions::*` (web + MCP),
-> `CalibrationSessionPolicy`, the population seeding query, the setup
-> surface (`/calibration_sessions` — list, define, draft curation,
-> readiness, start/close; participants are picked via the shared
-> `Views::Shared::PersonPicker` typeahead — managers only, admin =
-> org-wide / manager = own subtree, extracted from the evidence-request
-> recipient picker), and the overview — tendency strip + divergence
-> board (`CalibrationSessions::OverviewStats`, `calibration_sessions_overview`
-> MCP tool) plus the draft-phase suggested agenda. The divergence signal is
-> `divergence_score = min(spread, residual_spread)` — see the implementation
-> note under *The unit of calibration*. Known display nit: raters with
-> identical means on a capability render exactly-overlapping dots (tooltips
-> and the aria summary still carry both). The capability drill-in is built
-> in its v1 form: expectation text per level, the rater × level dot grid
-> (frequency colour; solid backed / outlined unbacked; unrated gaps;
-> out-of-session raters muted), the person card (rating pills + linked
-> evidence with valences and relation-first authorship). Development environments get
-> population-wide demo activity via `assessments:seed_calibration_activity`
-> (deterministic rater personas / ambiguous capabilities / evidence, wired
-> into `db/seeds.rb` after the HRIS sync) so every surface is demo-able.
-> **The outcome writes are built**: ⚑ expectation flags raise a framework
-> **clarification** (the non-proposal suggestion kind — resolve-with-note
-> lifecycle, edit-mode comment-glyph decoration; now documented as
-> framework-explorer.md §12a) via `Operations::CalibrationSessions::
-> FlagExpectation`, with the drill-in's per-level flag disclosure and
-> already-flagged markers (framework-wide, so overlapping sessions see each
-> other's flags); **revisit requests** (`RequestRatingRevisit`, person-card
-> ask, value-free note, rater resolved server-side) mirror onto the PD
-> stream via `CalibrationRevisitSync`, surface in the rater's assessment
-> feed (`rating_revisit_requested`, ratings chip, manager-rating privacy
-> gate), and **notify the rater** (async `RatingRevisitNotifier` →
-> `rating_revisit_requested` Noticed type, in-app-first + Slack escalation,
-> dropped when already acted on), with rating-change-based resolution
-> computed at read time;
-> **session notes** (`RecordNote`, live-only, optional anchors) and the
-> **session log** (`SessionOutcomes` stream read + `SessionLog` view — flags
-> with live clarification status, revisits with acted/open state, minutes +
-> composer) make the session page the follow-through artifact.
-> **The drill-in's bottom pane now switches between three panes** (person
-> card / **evidence wall** §d / **compare tray** §e — links that navigate,
-> deliberately NOT the ARIA tabs pattern, which would promise in-place panel
-> swapping). Every pane link preserves the other axes — opened person, pins,
-> wall filters — in the URL, and the flag / revisit POSTs carry the same
-> state (plus which pane was open) through their redirects, so an outcome
-> recorded mid-comparison returns the room to the screen it was reading. The
-> wall (`EvidenceWall` query) groups the population's linked feedback by
-> level (highest first, newest first within), stamping each item with the
-> manager-rated frequency its cell carries in the session's cycle, filterable
-> by level / valence / rater; each item names the person and shows what was
-> written about them. The wall reads the **grid's** population, not raw
-> session membership, so every item has a dot to open. The tray pins up to
-> three cards (`MAX_COMPARE_PINS`), assembled through the same `PersonCard`
-> query as the person card; a pin only survives if it resolves to a card (no
-> phantom that can't be unpinned).
-> **The bottom pane is a Turbo Frame** (`calibration-pane`): every pane
-> link differs from the current URL only by query string, so full-page
-> navigation scrolled the room to the top and hid whatever they just
-> opened. The frame swaps in place and the URL is pushed separately, so
-> deep links and Back still work. Consequence to respect when adding
-> links: anything rendered OUTSIDE the frame (the grid's dots, the ⚑ flag
-> form) freezes at page-load state and must opt into having the live
-> compare pins merged in at click/submit time
-> (`data-pane-keep-state` / `calibration-pane#stampState`). Grid dots
-> carry the ratee's **initials** as a compact label plus their full name
-> (tooltip + accessible name) — there is **no anonymisation layer**, see
-> *Naming*; the rater column is sticky-left so a sideways scroll can't
-> orphan a row of dots.
-> "What good looks like" shows each level's **role illustrations** under
-> its canonical expectation (a disagreement is often two raters reading
-> different examples), collapsed behind the evidence dialog's shared
-> **"Examples (N)"** disclosure so the rated text stays primary — and
-> scoped to the roles actually being calibrated **at that level**, since a
-> framework carries illustrations for every role and the rest is noise the
-> room reads past. The
-> **session log is a right-hand activity SIDE PANEL** — the product's
-> established pattern (the explorer's context pane, the assessment
-> sidebar): one reverse-chronological feed with kind dots and filter
-> chips, inline+sticky on lg and a fixed overlay below, rendered on the
-> drill-in as well as the session page so the room can raise an outcome
-> and watch it land without leaving the capability under discussion. It
-> defaults **open on the session page** (there, the log is the artifact)
-> and **closed on the drill-in** (the grid wants the width), with its own
-> cookie so it can't move the assessment sidebar's preference.
-> Still to build: auto-suggested contrast pairs (§e), evidence requests as a
-> session outcome (§f), and **carried-vs-vetted provenance across the three
-> read surfaces** (overview / dot grid / wall stamp all show a carried
-> rating as if it were vetted this cycle, while the session's own readiness
-> badges already say "To confirm" — see *Deliberately deferred*).
+> **Status: V1 shipped** (scope agreed 2026-07-24: facilitator-only access,
+> value-free revisit requests, own event stream). What follows is the design
+> record; the code is the source of truth for detail.
+>
+> **Built.**
+> *Domain* — `CalibrationSession` aggregate + projection + cycle-close sync;
+> every write through `Operations::CalibrationSessions::*` (web + MCP);
+> `CalibrationSessionPolicy`; `PopulationSeeds`.
+> *Setup* — list / define / draft curation / readiness / start / close, with
+> the shared `Views::Shared::PersonPicker` typeahead for participants.
+> *Overview* — rater-tendency strip + capability-divergence board
+> (`OverviewStats`, `calibration_sessions_overview`) + draft-phase agenda.
+> *Drill-in* — expectation text with role illustrations, the rater × level
+> dot grid, and a three-pane bottom half (person card / evidence wall §d /
+> compare tray §e). See *Drill-in implementation notes* under §3.
+> *Outcomes* — ⚑ expectation flags raising a framework **clarification**
+> (the non-proposal suggestion kind, framework-explorer.md §12a); **revisit
+> requests** mirrored onto the PD stream (`CalibrationRevisitSync`),
+> surfaced in the rater's assessment feed and notified
+> (`RatingRevisitNotifier`, dropped if already acted on), resolved by
+> rating-change at read time; **session notes**.
+> *Follow-through* — the session log, rendered as a right-hand activity
+> side panel on both the session page and the drill-in.
+> *Dev data* — `assessments:seed_calibration_activity` gives every surface
+> demo-able population-wide activity.
+>
+> **Not built** (each has its own section below):
+> auto-suggested contrast pairs (§e) · evidence requests as a session
+> outcome (§f) · carried-vs-vetted provenance on the read surfaces
+> (*Deliberately deferred*) · participant follow-along + the v2 visibility
+> grant · cross-cycle trends · MCP reads for the drill-in surfaces
+> (*Cross-cutting*) · in-surface definitions for the calibration vocabulary
+> (*Deliberately deferred*).
+>
+> **Known display nit:** raters with identical means on a capability render
+> exactly-overlapping dots on the divergence board (the tooltip and the aria
+> summary still carry both).
+>
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
@@ -440,6 +387,37 @@ positioned dots on a shared axis, sorted by spread; click → drill-in:
   session a roll-up, not a blind re-litigation. Read-time join across session
   read models; sequencing between sessions stays social, never enforced.
 
+#### Drill-in implementation notes
+
+Things that bite when changing this surface:
+
+- **The bottom pane is a Turbo Frame** (`calibration-pane`). Every pane link
+  — a dot, a tab, a pin, an unpin, the wall's filters — differs from the
+  current URL only by query string, so as full-page links they scrolled the
+  room to the top and hid whatever was just opened. The controller swaps the
+  frame and pushes the URL separately, so deep links and Back still work.
+- **Anything rendered OUTSIDE that frame freezes at page-load state.** The
+  grid's dots, the ⚑ flag form and the log panel's note composer all carry
+  pane state (pins, filters, the opened person) that goes stale the moment
+  the frame swaps. They opt into having the live values merged back in at
+  click/submit time — `data-pane-keep-state` for links,
+  `calibration-pane#stampState` for forms. A new link or form here needs the
+  same treatment or it will quietly resurrect state the room cleared.
+- **The room sees names** — dots carry initials as a compact label plus the
+  full name in tooltip and accessible name; there is no anonymisation layer
+  (see *Naming*).
+- The **rater column is sticky-left**, so a sideways scroll on a narrow
+  viewport can't orphan a row of dots from the rater they belong to.
+- **Role illustrations** sit under each level's expectation behind the
+  evidence dialog's shared "Examples (N)" disclosure, scoped to the roles
+  actually being calibrated *at that level* — a framework carries
+  illustrations for every role and the rest is noise.
+- **The session log rides this page** as the same right-hand side panel the
+  session page uses, defaulting closed here (the grid wants the width). It
+  is deliberately skipped for pane-frame requests: the page re-renders
+  server-side on every pane swap but Turbo keeps only the frame, so building
+  the log would buy an unbounded stream read per dot click.
+
 ## Evidence & feedback in the session
 
 > Surface labels follow the house terminology rule: users see
@@ -560,7 +538,11 @@ composed deliberately rather than scrolled past. V1 is manual pinning;
 auto-suggested contrast pairs (similar level + divergent rating + both
 backed) are a natural later increment once the manual gesture proves out.
 
-### f. Missing evidence as an outcome
+### f. Missing evidence as an outcome — NOT BUILT
+
+> The only part of the evidence design still outstanding. The person card
+> mock in §c shows its `[Request evidence…]` affordance; neither it nor
+> `EvidenceRequestRaised` exists yet.
 
 When a disputed cell is unbacked and the room can't answer "what did you
 see?", the resolution *is* an evidence request. The person card's
@@ -705,10 +687,18 @@ Mechanics — everything not listed here is inherited untouched:
 
 ## Cross-cutting
 
-- **MCP** (Operations-first, house rule): reads (`calibration_sessions_list`,
-  `calibration_sessions_get`, later the divergence overview) as `:none` ops
-  scoped by the same facilitator policy — "where are my EMs most
-  inconsistent?" is a genuinely good agent query. Define + population
+- **MCP** (Operations-first, house rule): reads
+  (`calibration_sessions_list`, `calibration_sessions_get`,
+  `calibration_sessions_overview`) as `:none` ops scoped by the same
+  facilitator policy — "where are my EMs most inconsistent?" is a genuinely
+  good agent query.
+  **Deferred deliberately: the drill-in's own reads** — the dot grid, the
+  evidence wall, the compare tray and the session log have no MCP tools.
+  They are read-time compositions of data MCP already exposes per person
+  (`assessments_evidence_list`, `assessments_capability_get`), and the whole
+  calibration read surface wants exposing as one considered increment rather
+  than view by view. Every calibration *write* already has a tool.
+  Define + population
   curation are `:mcp_client` (draft-phase, freely reversible); **start and
   close are `:in_app`** (start locks the room's denominators, close is
   terminal — the cheat sheet's lock/irreversible rows). Flags, revisit
@@ -736,12 +726,44 @@ Mechanics — everything not listed here is inherited untouched:
 |---|---|
 | Participant follow-along devices + the narrow session-scoped visibility grant | Facilitator-only projection proves insufficient in real sessions |
 | Auto-suggested contrast pairs in the compare tray | Manual pinning proves the gesture |
+| **In-surface definitions for the calibration vocabulary** — see below | Before a session run by facilitators who didn't design the metrics |
 | **Carried-vs-vetted provenance on the read surfaces** — see below | Before the next real session; or the next change to any of the three surfaces |
 | Cross-cycle calibration trend views ("is Raj converging?") | ≥2 cycles of session data exist |
 | Automated bias scoring beyond the tendency strip | Never, ideally — the strip states facts; the room supplies judgment |
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
+
+### In-surface definitions for the calibration vocabulary
+
+The session screens invent a vocabulary and then never define it. A
+facilitator meeting *self-gap* or *spread* for the first time — on a
+projector, mid-meeting, in front of their EMs — has nowhere to look, and a
+metric nobody can define is a metric the room will quietly ignore or, worse,
+misread as an accusation.
+
+Every term below has a precise definition that already exists, in this doc
+or in `OverviewStats`; none of it reaches the screen:
+
+| Term | Where it appears | What it means |
+|---|---|---|
+| **Org mean** | tendency strip header | mean at-level manager rating across the whole population, 0–3 |
+| **vs org mean** | tendency strip column | that rater's mean minus the org mean — their overall leniency/harshness |
+| **Distribution** | tendency strip column | how that rater's at-level ratings split across the four frequencies |
+| **Self-gap** | tendency strip column | mean of (manager − self) across the rater's cells: negative = they rate their people below those people's own view |
+| **Evidence** | tendency strip column | share of that rater's at-level cells carrying ≥1 active evidence link |
+| **spread** | divergence board row | max − min of rater means on that capability |
+| **⚠ raters disagree** | divergence board badge | `divergence_score` (= min of spread and residual spread) reached `DIVERGENCE_FLAG_THRESHOLD` **and** the capability has enough rated cells (`FLAG_MIN_CELLS`) — i.e. disagreement that survives subtracting each rater's overall tendency, on a big enough sample (see *The unit of calibration*) |
+| **solid vs outlined dot** | drill-in grid | evidence-backed vs unbacked, deliberately shape not colour |
+| **Mgr:** stamp | evidence wall | the manager-rated frequency that cell carries in this cycle |
+| **To confirm** | readiness badges | values exist but are carried forward from a prior cycle, unconfirmed this one |
+
+Shape when picked up: a hover/focus definition on each term, reachable by
+keyboard and not hover-only (the room is on a projector and the facilitator
+may be driving by keyboard). Prefer one shared component over per-view
+tooltips so the wording can't drift from the definitions above — and treat
+these definitions as the source, since `OverviewStats`' comments and this
+section already carry them.
 
 ### Carried-vs-vetted provenance on the read surfaces
 
