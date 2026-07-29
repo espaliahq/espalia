@@ -149,9 +149,9 @@ class CalibrationSessionsController < ApplicationController
     notes = outcomes.notes
 
     {
-      flags: flags,
-      revisits: revisits,
-      notes: notes,
+      # One reverse-chronological feed — the log renders in the product's
+      # activity-panel form, not split by outcome type.
+      entries: outcomes.entries,
       suggestions: FrameworkState::SuggestedEdit
         .where(suggestion_id: flags.filter_map { |f| f[:suggestion_id] }).index_by(&:suggestion_id),
       capability_names: session_log_capability_names(flags, revisits, notes),

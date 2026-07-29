@@ -73,6 +73,22 @@ class CalibrationSessions::SessionOutcomes
       end
   end
 
+  # Every outcome as one reverse-chronological feed, in the shape the
+  # product's activity panels render (kind + actor + timestamp + payload).
+  # The session log reads this instead of three separate sections: a
+  # session's story is one thread — a flag, then the note it prompted,
+  # then the revisit it produced — and splitting it by type hides that.
+  #
+  # @return [Array<Hash>] newest first; each `{ kind:, at:, actor_id:, … }`
+  #   plus the type's own keys
+  def entries
+    @entries ||= [
+      *flags.map { |flag| flag.merge(kind: "expectation_flagged", at: flag[:flagged_at], actor_id: flag[:flagged_by_id]) },
+      *revisit_requests.map { |r| r.merge(kind: "revisit_requested", at: r[:requested_at], actor_id: r[:requested_by_id]) },
+      *notes.map { |note| note.merge(kind: "note_recorded", at: note[:recorded_at], actor_id: note[:recorded_by_id]) }
+    ].sort_by { |entry| entry[:at] || Time.at(0) }.reverse
+  end
+
   private
 
   def stream_events

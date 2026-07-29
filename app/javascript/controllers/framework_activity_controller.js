@@ -1,10 +1,16 @@
-// Client-side filter chips for the framework activity feed.
+// Client-side filter chips for an activity feed.
 //
-// Switches the visible entry groups (All / Suggestions / Edits / Structural /
-// Lifecycle / Collaborators) by toggling a `data-hidden` attribute on each
-// entry — no server round-trip. Entry navigation (clicking an anchored entry
-// to drive the matrix) is handled by the ancestor `context-pane` controller,
-// not here.
+// Switches the visible entry groups by toggling a `data-hidden` attribute on
+// each entry — no server round-trip. Entry navigation (clicking an anchored
+// entry to drive the matrix) is handled by the ancestor `context-pane`
+// controller, not here.
+//
+// DOM-generic despite the name: the valid filter set is read from the chips
+// themselves, so any feed rendered in the product's activity-panel form can
+// use it with its own groups (the framework explorer's panel and the
+// calibration session log do today). The name is kept because
+// `framework-activity` also prefixes the explorer's element ids and its Turbo
+// stream, and renaming only the controller would split that vocabulary.
 //
 // Example markup:
 //   <div data-controller="framework-activity">
@@ -16,8 +22,6 @@
 
 import BaseController from "controllers/base_controller"
 
-const VALID_FILTERS = ["all", "suggestions", "edits", "structural", "lifecycle", "collaborators"]
-
 export default class extends BaseController {
   static targets = ["entry", "filterChip"]
 
@@ -28,7 +32,7 @@ export default class extends BaseController {
 
   setFilter(event) {
     const next = event.params.filter
-    if (!VALID_FILTERS.includes(next)) return
+    if (!this.#validFilters.includes(next)) return
     this.filter = next
     this.#paintFilterChips()
     this.#applyState()
@@ -52,6 +56,10 @@ export default class extends BaseController {
     const filter = this.filter || "all"
     const visible = filter === "all" || entry.dataset.kindGroup === filter
     entry.dataset.hidden = visible ? "false" : "true"
+  }
+
+  get #validFilters() {
+    return this.filterChipTargets.map(chip => chip.dataset.frameworkActivityFilterParam)
   }
 
   #paintFilterChips() {
