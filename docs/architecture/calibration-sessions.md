@@ -31,7 +31,8 @@
 > outcome (§f) · carried-vs-vetted provenance on the read surfaces
 > (*Deliberately deferred*) · participant follow-along + the v2 visibility
 > grant · cross-cycle trends · MCP reads for the drill-in surfaces
-> (*Cross-cutting*).
+> (*Cross-cutting*) · in-surface definitions for the calibration vocabulary
+> (*Deliberately deferred*).
 >
 > **Known display nit:** raters with identical means on a capability render
 > exactly-overlapping dots on the divergence board (the tooltip and the aria
@@ -725,12 +726,44 @@ Mechanics — everything not listed here is inherited untouched:
 |---|---|
 | Participant follow-along devices + the narrow session-scoped visibility grant | Facilitator-only projection proves insufficient in real sessions |
 | Auto-suggested contrast pairs in the compare tray | Manual pinning proves the gesture |
+| **In-surface definitions for the calibration vocabulary** — see below | Before a session run by facilitators who didn't design the metrics |
 | **Carried-vs-vetted provenance on the read surfaces** — see below | Before the next real session; or the next change to any of the three surfaces |
 | Cross-cycle calibration trend views ("is Raj converging?") | ≥2 cycles of session data exist |
 | Automated bias scoring beyond the tendency strip | Never, ideally — the strip states facts; the room supplies judgment |
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
+
+### In-surface definitions for the calibration vocabulary
+
+The session screens invent a vocabulary and then never define it. A
+facilitator meeting *self-gap* or *spread* for the first time — on a
+projector, mid-meeting, in front of their EMs — has nowhere to look, and a
+metric nobody can define is a metric the room will quietly ignore or, worse,
+misread as an accusation.
+
+Every term below has a precise definition that already exists, in this doc
+or in `OverviewStats`; none of it reaches the screen:
+
+| Term | Where it appears | What it means |
+|---|---|---|
+| **Org mean** | tendency strip header | mean at-level manager rating across the whole population, 0–3 |
+| **vs org mean** | tendency strip column | that rater's mean minus the org mean — their overall leniency/harshness |
+| **Distribution** | tendency strip column | how that rater's at-level ratings split across the four frequencies |
+| **Self-gap** | tendency strip column | mean of (manager − self) across the rater's cells: negative = they rate their people below those people's own view |
+| **Evidence** | tendency strip column | share of that rater's at-level cells carrying ≥1 active evidence link |
+| **spread** | divergence board row | max − min of rater means on that capability |
+| **⚠ raters disagree** | divergence board badge | `divergence_score` (= min of spread and residual spread) reached `DIVERGENCE_FLAG_THRESHOLD` **and** the capability has enough rated cells (`FLAG_MIN_CELLS`) — i.e. disagreement that survives subtracting each rater's overall tendency, on a big enough sample (see *The unit of calibration*) |
+| **solid vs outlined dot** | drill-in grid | evidence-backed vs unbacked, deliberately shape not colour |
+| **Mgr:** stamp | evidence wall | the manager-rated frequency that cell carries in this cycle |
+| **To confirm** | readiness badges | values exist but are carried forward from a prior cycle, unconfirmed this one |
+
+Shape when picked up: a hover/focus definition on each term, reachable by
+keyboard and not hover-only (the room is on a projector and the facilitator
+may be driving by keyboard). Prefer one shared component over per-view
+tooltips so the wording can't drift from the definitions above — and treat
+these definitions as the source, since `OverviewStats`' comments and this
+section already carry them.
 
 ### Carried-vs-vetted provenance on the read surfaces
 
