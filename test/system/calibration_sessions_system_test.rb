@@ -386,7 +386,13 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     # ── The log rides the drill-in as a side panel ──
     # Closed by default here (the grid wants the width), and it survives a
-    # pane switch — the whole point of a side panel.
+    # pane switch — the whole point of a side panel. Clear the cookie so
+    # this asserts the SURFACE's default, not a preference set earlier.
+    page.execute_script(<<~JS)
+      document.cookie = "calibration_drill_in_log_pane_open=; path=/; max-age=0"
+      document.cookie = "calibration_log_pane_open=; path=/; max-age=0"
+    JS
+    page.refresh
     assert_selector "#calibration-log-pane[data-pane-state='closed']", visible: :all
     page.execute_script(
       %{document.querySelector("[data-action*='activity-pane#toggle']").click()}
@@ -420,6 +426,21 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     js_set_field "#session-note", "Add the two reference ICs to the org-wide session"
     click_button_with_js_fallback "Record note", expect_text: "Note recorded."
     assert_text "Add the two reference ICs to the org-wide session"
+
+    # A note recorded from the DRILL-IN stays on the drill-in and carries
+    # the capability it was about — the panel exists so the room doesn't
+    # get yanked out of the discussion.
+    # `activity=open` wins over the cookie, so this doesn't depend on
+    # whatever state the toggling above left behind.
+    visit calibration_session_capability_path(@flag_session_id, @flag_cap_stable, activity: "open")
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
+    js_set_field "#session-note", "Ratings here look a level high"
+    click_button_with_js_fallback "Record note", expect_text: "Note recorded."
+    assert_current_path(/capabilities/)
+    assert_text "Ratings here look a level high"
+    assert_text "Strategic Thinking"
+
+    visit calibration_session_path(@flag_session_id)
 
     # The chips narrow the feed client-side, like every other activity panel.
     page.execute_script(

@@ -54,7 +54,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
         class: "max-w-6xl mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
           controller: ("activity-pane" if @session_log),
-          activity_pane_cookie_value: Views::CalibrationSessions::LogPane::COOKIE,
+          activity_pane_cookie_value: Views::CalibrationSessions::LogPane::SESSION_COOKIE,
           # Open by default here: on the session page the log IS the
           # artifact (the closed page is the next session's opening slide).
           # The drill-in leaves it closed — the grid wants the width.

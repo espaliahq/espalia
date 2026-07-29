@@ -12,17 +12,24 @@
 # assessment sidebar's preference).
 class Views::CalibrationSessions::LogPane < Views::Base
   PANE_ID = "calibration-log-pane"
-  COOKIE = "calibration_log_pane_open"
+
+  # One preference per SURFACE, not per feature: the two pages have
+  # genuinely different width economics (the drill-in's grid wants the
+  # room), so a single slot would let a choice made on one silently
+  # override the other's documented default.
+  SESSION_COOKIE = "calibration_log_pane_open"
+  DRILL_IN_COOKIE = "calibration_drill_in_log_pane_open"
 
   # @param session [CalibrationSession]
   # @param log [Hash] SessionLog's log hash
   # @param people [Hash{String => Person}]
   # @param can_note [Boolean]
-  def initialize(session:, log:, people:, can_note:)
+  def initialize(session:, log:, people:, can_note:, note_fields: [])
     @session = session
     @log = log
     @people = people
     @can_note = can_note
+    @note_fields = note_fields
   end
 
   def view_template
@@ -38,7 +45,8 @@ class Views::CalibrationSessions::LogPane < Views::Base
       data: { activity_pane_target: "pane", pane_state: "closed" }
     ) do
       render Views::CalibrationSessions::SessionLog.new(
-        session: @session, log: @log, people: @people, can_note: @can_note
+        session: @session, log: @log, people: @people, can_note: @can_note,
+        note_fields: @note_fields
       )
     end
   end

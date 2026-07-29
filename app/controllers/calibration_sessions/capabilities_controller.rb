@@ -34,8 +34,11 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     )
     compare_cards = resolve_compare_cards(stats)
     # The log rides along as a side panel so an outcome raised here lands
-    # in view without leaving the capability under discussion.
-    session_log = session_log_data(@session)
+    # in view without leaving the capability under discussion. Skipped for
+    # a pane-frame request: those re-render the whole page server-side but
+    # Turbo keeps only the frame, so building the log would buy an unbounded
+    # stream read plus three queries on every dot click and tab switch.
+    session_log = session_log_data(@session) unless pane_frame_request?
     people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
 
     render Views::CalibrationSessions::DrillInView.new(
@@ -60,6 +63,11 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   end
 
   private
+
+  # Turbo asks for one frame by name; the side panel isn't in it.
+  def pane_frame_request?
+    request.headers["Turbo-Frame"] == "calibration-bottom-pane"
+  end
 
   # @return [String, nil] "wall" / "compare" / nil (person card or nothing)
   def view_param

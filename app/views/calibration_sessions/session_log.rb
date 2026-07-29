@@ -52,11 +52,15 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   #   whose manager rating changed after the ask.
   # @param people [Hash{String => Person}]
   # @param can_note [Boolean] live session + facilitator/admin
-  def initialize(session:, log:, people:, can_note:)
+  # @param note_fields [Array<Array(String, String)>] extra hidden
+  #   name/value pairs for the composer — the drill-in uses these to anchor
+  #   the note to the capability on screen and to come back here afterwards
+  def initialize(session:, log:, people:, can_note:, note_fields: [])
     @session = session
     @log = log
     @people = people
     @can_note = can_note
+    @note_fields = note_fields
   end
 
   # Panel CONTENT — the surrounding surface is the side panel
@@ -248,9 +252,13 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     form(
       action: calibration_session_notes_path(@session),
       method: "post",
-      class: "mt-4 space-y-2"
+      class: "mt-4 space-y-2",
+      # The panel sits outside the drill-in's pane frame, so its carried
+      # state is refreshed from the live URL at submit time.
+      data: (@note_fields.any? ? { action: "submit->calibration-pane#stampState" } : {})
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      @note_fields.each { |name, value| input(type: "hidden", name: name, value: value) }
       label(for: "session-note", class: "block text-xs font-semibold uppercase " \
                                         "text-gray-600 dark:text-gray-300") { "Add a note" }
       textarea(

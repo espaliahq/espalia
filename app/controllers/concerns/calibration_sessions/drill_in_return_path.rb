@@ -16,16 +16,17 @@ module CalibrationSessions::DrillInReturnPath
 
   # @param session_record [CalibrationSession]
   # @param person_id [String, nil] the person card to re-open
+  # @param extra [Hash] additional query params (e.g. forcing the log panel open)
   # @return [String]
-  def drill_in_return_path(session_record, person_id: nil)
-    query = {
+  def drill_in_return_path(session_record, person_id: nil, extra: {})
+    query = extra.merge(
       person: person_id.presence,
       compare: Array.wrap(params[:compare]).grep(String).select(&:present?).presence,
       view: params[:view].presence_in(CalibrationSessions::CapabilitiesController::VIEWS),
       wall_level: params[:wall_level].to_s.presence,
       wall_valence: params[:wall_valence].presence_in(EvidenceLink::VALENCES),
       wall_rater: params[:wall_rater].to_s.presence
-    }.compact
+    ).compact
 
     calibration_session_capability_path(session_record, params[:capability_stable_id], query)
   end

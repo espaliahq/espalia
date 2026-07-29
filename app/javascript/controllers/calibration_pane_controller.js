@@ -112,7 +112,10 @@ export default class extends BaseController {
     url.searchParams.delete("compare[]")
     live.getAll("compare[]").forEach(id => url.searchParams.append("compare[]", id))
 
-    for (const key of [ "wall_level", "wall_valence", "wall_rater" ]) {
+    // `activity` (the log panel's open/closed state) is the pane
+    // controller's, not the link's — carry it so a shared drill-in URL
+    // keeps the panel as the room left it.
+    for (const key of [ "wall_level", "wall_valence", "wall_rater", "activity" ]) {
       url.searchParams.delete(key)
       if (live.get(key)) url.searchParams.set(key, live.get(key))
     }

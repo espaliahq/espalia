@@ -63,7 +63,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         class: "max-w-7xl mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
           controller: "calibration-reveal calibration-pane#{' activity-pane' if @session_log}",
-          activity_pane_cookie_value: Views::CalibrationSessions::LogPane::COOKIE,
+          activity_pane_cookie_value: Views::CalibrationSessions::LogPane::DRILL_IN_COOKIE,
           calibration_reveal_session_id_value: @session.id,
           calibration_reveal_reveal_person_value: @person_card&.dig(:dot, :person_id).to_s,
           # Pinning to compare implies discussing implies revealed.
@@ -83,7 +83,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         end
         if @session_log
           render Views::CalibrationSessions::LogPane.new(
-            session: @session, log: @session_log, people: @people, can_note: @can_note
+            session: @session, log: @session_log, people: @people, can_note: @can_note,
+            note_fields: note_fields
           )
         end
       end
@@ -424,6 +425,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   def opened_person_id
     @person_card&.dig(:dot, :person_id)
+  end
+
+  # A note typed here is ABOUT what's on screen, so it carries the
+  # capability, and `from` routes the redirect back to this drill-in
+  # instead of the session page. The opened person rides the pane's own
+  # `person` param, which `stampState` refreshes at submit time.
+  def note_fields
+    [ [ "capability_stable_id", @stats[:capability][:stable_id] ], [ "from", "drill_in" ] ]
   end
 
   # Rides the outcome POSTs (flag / revisit) so their redirects can restore
