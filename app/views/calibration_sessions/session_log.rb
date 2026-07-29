@@ -59,23 +59,20 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     @can_note = can_note
   end
 
+  # Panel CONTENT — the surrounding surface is the side panel
+  # ({Views::CalibrationSessions::LogPane}), matching how the assessment
+  # feed renders inside its aside.
   def view_template
-    div(class: "mt-6", id: "session-log") do
-      render Components::Kit::Card.new do |card|
-        card.body do
-          div(data: { controller: "framework-activity" }) do
-            header
-            if entries.empty?
-              empty_state
-            else
-              ul(class: "mt-3 space-y-1") do
-                entries.each { |entry| entry_row(entry) }
-              end
-            end
-          end
-          note_composer if @can_note
+    div(class: "p-4", id: "session-log", data: { controller: "framework-activity" }) do
+      header
+      if entries.empty?
+        empty_state
+      else
+        ul(class: "mt-3 space-y-1") do
+          entries.each { |entry| entry_row(entry) }
         end
       end
+      note_composer if @can_note
     end
   end
 
@@ -85,13 +82,22 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     @log[:entries] || []
   end
 
+  # Title + close in one row (the pane has no separate chrome), chips
+  # below — the assessment feed's arrangement.
   def header
-    div(class: "flex flex-wrap items-baseline justify-between gap-2") do
+    div(class: "flex items-center justify-between gap-2") do
       h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
         "Session log"
       end
-      filter_chips if entries.any?
+      button(
+        type: "button",
+        class: "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md " \
+               "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700",
+        data: { action: "click->activity-pane#close" },
+        aria: { label: "Close the session log" }
+      ) { span(aria: { hidden: "true" }) { "✕" } }
     end
+    div(class: "mt-2") { filter_chips } if entries.any?
   end
 
   def filter_chips

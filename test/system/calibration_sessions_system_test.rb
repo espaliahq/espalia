@@ -384,10 +384,26 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
 
+    # ── The log rides the drill-in as a side panel ──
+    # Closed by default here (the grid wants the width), and it survives a
+    # pane switch — the whole point of a side panel.
+    assert_selector "#calibration-log-pane[data-pane-state='closed']", visible: :all
+    page.execute_script(
+      %{document.querySelector("[data-action*='activity-pane#toggle']").click()}
+    )
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
+    assert_text "⚑ Flagged an expectation as unclear"
+
+    # Heading renders through CSS `uppercase`, so assert the rendered case.
+    click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "FEEDBACK / EVIDENCE —")
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
+    assert_text "⚑ Flagged an expectation as unclear"
+
     # ── The session page is the follow-through artifact ──
     # One reverse-chronological feed in the product's activity form: summary,
-    # live status, context line, the room's own words.
+    # live status, context line, the room's own words. Open by default here.
     visit calibration_session_path(@flag_session_id)
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
     assert_text "SESSION LOG"
     assert_text "⚑ Flagged an expectation as unclear"
     assert_text "Discussion open"

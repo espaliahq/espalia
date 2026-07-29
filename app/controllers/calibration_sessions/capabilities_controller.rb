@@ -9,6 +9,8 @@
 # client-side choreography keys off these params
 # (docs/architecture/calibration-sessions.md, "Anonymization").
 class CalibrationSessions::CapabilitiesController < ApplicationController
+  include CalibrationSessions::SessionLogData
+
   # The tray is a deliberate juxtaposition of 2–3 cards, not a dashboard.
   MAX_COMPARE_PINS = 3
 
@@ -31,11 +33,17 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       session: @session, stats: stats, capability_stable_id: params.expect(:id)
     )
     compare_cards = resolve_compare_cards(stats)
+    # The log rides along as a side panel so an outcome raised here lands
+    # in view without leaving the capability under discussion.
+    session_log = session_log_data(@session)
+    people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
 
     render Views::CalibrationSessions::DrillInView.new(
       session: @session,
       stats: stats,
-      people: Person.where(id: stats[:rows].map { |r| r[:rater_id] }.compact).index_by(&:id),
+      people: Person.where(id: people_ids).index_by(&:id),
+      session_log: session_log,
+      can_note: @session.started? && policy(@session).flag_expectation?,
       person_card: @cards.for(params[:person].presence),
       view: view_param,
       wall: (evidence_wall(stats) if view_param == "wall"),

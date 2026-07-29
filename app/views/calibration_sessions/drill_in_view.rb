@@ -15,6 +15,7 @@
 class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Assessments::FrequencyPalette
   include Views::Evidence::Valence
+  include Views::Evidence::ExamplesDisclosure
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
@@ -35,12 +36,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   #   as unclear (facilitator/admin AND the session is live)
   def initialize(session:, stats:, people:, person_card:, can_flag: false,
                  view: nil, wall: nil, wall_filters: {}, compare_ids: [], compare_cards: {},
+                 session_log: nil, can_note: false,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
     @stats = stats
     @people = people
     @person_card = person_card
     @can_flag = can_flag
+    @session_log = session_log
+    @can_note = can_note
     @view = view
     @wall = wall
     @wall_filters = wall_filters
@@ -56,9 +60,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(
-        class: "max-w-5xl mx-auto px-4 py-8",
+        class: "max-w-7xl mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
-          controller: "calibration-reveal calibration-pane",
+          controller: "calibration-reveal calibration-pane#{' activity-pane' if @session_log}",
+          activity_pane_cookie_value: Views::CalibrationSessions::LogPane::COOKIE,
           calibration_reveal_session_id_value: @session.id,
           calibration_reveal_reveal_person_value: @person_card&.dig(:dot, :person_id).to_s,
           # Pinning to compare implies discussing implies revealed.
@@ -70,10 +75,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                   "calibration:revealed@window->calibration-reveal#onRevealed"
         }
       ) do
-        header_row
-        expectations_card
-        grid_card
-        bottom_pane
+        div(class: "min-w-0 flex-1") do
+          header_row
+          expectations_card
+          grid_card
+          bottom_pane
+        end
+        if @session_log
+          render Views::CalibrationSessions::LogPane.new(
+            session: @session, log: @session_log, people: @people, can_note: @can_note
+          )
+        end
       end
     end
   end
@@ -100,6 +112,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                "px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800",
         data: { action: "calibration-reveal#toggleNamed", calibration_reveal_target: "toggle" }
       ) { "Show names" }
+      if @session_log
+        render Views::CalibrationSessions::LogPaneToggle.new(
+          entry_count: @session_log[:entries].size
+        )
+      end
     end
   end
 
@@ -127,25 +144,22 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # The role illustrations under a level's canonical expectation. The
-  # expectation is what people are rated against; the illustrations are what
-  # it looks like in a given role — and a disagreement often turns out to be
-  # two raters reading different examples, so the room needs both in view.
-  # Indented and role-labelled so the canonical text stays primary.
+  # The role illustrations under a level's canonical expectation, one
+  # collapsed disclosure per role — the same "Examples (N)" affordance the
+  # evidence dialog uses beside a behavioural expectation. The expectation
+  # is what people are rated against and stays in view; the examples are
+  # reference material one click away (a disagreement often turns out to be
+  # two raters reading different ones).
   def illustrations_for(ordinal)
     groups = @stats[:illustrations]&.dig(ordinal)
     return if groups.blank?
 
     div(class: "mt-1.5 space-y-1") do
       groups.each do |group|
-        div(class: "flex gap-2") do
+        div(class: "flex flex-wrap items-baseline gap-x-2") do
           span(class: "shrink-0 text-[11px] font-medium uppercase tracking-wide " \
-                      "text-gray-600 dark:text-gray-300 pt-px") { group[:role_name] }
-          ul(class: "flex-1 space-y-0.5 border-l border-gray-200 dark:border-gray-700 pl-2") do
-            group[:items].each do |text|
-              li(class: "text-xs text-gray-600 dark:text-gray-300") { text }
-            end
-          end
+                      "text-gray-600 dark:text-gray-300") { group[:role_name] }
+          div(class: "min-w-0 flex-1") { examples_disclosure(group[:items]) }
         end
       end
     end

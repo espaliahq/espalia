@@ -9,6 +9,7 @@
 class Views::Evidence::ModalForm < Views::Base
   include Phlex::Rails::Helpers::FormWith
   include Views::Evidence::Valence
+  include Views::Evidence::ExamplesDisclosure
 
   TYPE_OPTIONS = [
     [ "Peer feedback", "peer_feedback" ], [ "Manager feedback", "manager_feedback" ],
@@ -150,26 +151,6 @@ class Views::Evidence::ModalForm < Views::Base
         data: { testid: "visibility-note" }) do
       p(class: "text-xs text-blue-800 dark:text-blue-200") do
         "Your feedback will be added to #{assessee}'s assessment — visible to #{assessee}, their managers, and workspace admins."
-      end
-    end
-  end
-
-  # Collapsible examples list (role illustrations) — shared by the prompt card
-  # and every "Applies to" row. Native <details>, no JS.
-  def examples_disclosure(list, css: "text-xs", open: false)
-    details(class: "group", open: open) do
-      summary(class: "cursor-pointer select-none text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 " \
-                     "marker:content-none flex items-center gap-1") do
-        span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
-        span { "Examples (#{list.size})" }
-      end
-      ul(class: "mt-1 space-y-1") do
-        list.each do |text|
-          li(class: "flex gap-2 #{css} text-gray-700 dark:text-gray-200") do
-            span(class: "text-gray-400", aria: { hidden: "true" }) { "•" }
-            span { text }
-          end
-        end
       end
     end
   end

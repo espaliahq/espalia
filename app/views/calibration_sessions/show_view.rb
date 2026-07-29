@@ -48,26 +48,46 @@ class Views::CalibrationSessions::ShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(class: "max-w-4xl mx-auto px-4 py-8") do
-        header_row
-        readiness_bar
-        overview_section unless @session.draft?
-        agenda_card if @session.draft?
-        session_log_section if @session_log
-        div(class: "mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6") do
-          div(class: "lg:col-span-1") { participants_card }
-          div(class: "lg:col-span-2") { population_card }
+      # The log rides alongside the page as a side panel, so it stays in
+      # view while the room reads the strip, the board, and the rosters.
+      div(
+        class: "max-w-6xl mx-auto px-4 py-8 flex gap-6 items-start",
+        data: {
+          controller: ("activity-pane" if @session_log),
+          activity_pane_cookie_value: Views::CalibrationSessions::LogPane::COOKIE,
+          # Open by default here: on the session page the log IS the
+          # artifact (the closed page is the next session's opening slide).
+          # The drill-in leaves it closed — the grid wants the width.
+          activity_pane_default_state_value: "open"
+        }.compact
+      ) do
+        div(class: "min-w-0 flex-1") do
+          header_row
+          readiness_bar
+          overview_section unless @session.draft?
+          agenda_card if @session.draft?
+          div(class: "mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6") do
+            div(class: "lg:col-span-1") { participants_card }
+            div(class: "lg:col-span-2") { population_card }
+          end
+          live_note unless @session.draft?
         end
-        live_note unless @session.draft?
+        log_pane if @session_log
       end
     end
   end
 
   private
 
-  def session_log_section
-    render Views::CalibrationSessions::SessionLog.new(
+  def log_pane
+    render Views::CalibrationSessions::LogPane.new(
       session: @session, log: @session_log, people: @people, can_note: @can_note
+    )
+  end
+
+  def log_pane_toggle
+    render Views::CalibrationSessions::LogPaneToggle.new(
+      entry_count: @session_log[:entries].size
     )
   end
 
@@ -95,6 +115,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
 
   def action_cluster
     div(class: "flex items-center gap-2") do
+      log_pane_toggle if @session_log
       if @can_start
         form(action: start_calibration_session_path(@session), method: "post",
              data: { turbo_confirm: "Starting freezes the participants and population for the whole session. Start now?" }) do
