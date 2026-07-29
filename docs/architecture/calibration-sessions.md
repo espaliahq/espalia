@@ -77,7 +77,10 @@
 > "What good looks like" shows each level's **role illustrations** under
 > its canonical expectation (a disagreement is often two raters reading
 > different examples), collapsed behind the evidence dialog's shared
-> **"Examples (N)"** disclosure so the rated text stays primary. The
+> **"Examples (N)"** disclosure so the rated text stays primary — and
+> scoped to the roles actually being calibrated **at that level**, since a
+> framework carries illustrations for every role and the rest is noise the
+> room reads past. The
 > **session log is a right-hand activity SIDE PANEL** — the product's
 > established pattern (the explorer's context pane, the assessment
 > sidebar): one reverse-chronological feed with kind dots and filter
