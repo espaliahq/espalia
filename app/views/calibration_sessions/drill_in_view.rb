@@ -216,7 +216,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             table(class: "w-full text-sm") do
               thead do
                 tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do
-                  th(class: "py-1.5 pr-3 font-medium") { "Rater" }
+                  th(class: "sticky left-0 z-[2] bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium") do
+                    "Rater"
+                  end
                   @stats[:ordinals].each { |ordinal| th(class: "py-1.5 pr-3 font-medium") { "L#{ordinal}" } }
                 end
               end
@@ -234,7 +236,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   def grid_row(row)
     tr(class: "border-t border-gray-100 dark:border-gray-800 #{'opacity-60' unless row[:in_session]}") do
-      td(class: "py-2 pr-3 whitespace-nowrap") do
+      # Sticky-left like the explorer's matrix: the grid scrolls sideways on
+      # a narrow viewport, and a scrolled-away rater name makes the dots
+      # unattributable.
+      td(class: "sticky left-0 z-[2] bg-white dark:bg-gray-800 py-2 pr-3 whitespace-nowrap") do
         span(class: "font-medium text-gray-900 dark:text-white") { rater_label(row) }
         unless row[:in_session]
           span(class: "ml-2 text-xs text-gray-600 dark:text-gray-300") { "(not in session)" }
