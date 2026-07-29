@@ -199,9 +199,8 @@ class CalibrationSessionsController < ApplicationController
   def log_person_ids(session_log)
     return [] unless session_log
 
-    (session_log[:flags] + session_log[:revisits] + session_log[:notes]).flat_map do |row|
-      [ row[:flagged_by_id], row[:requested_by_id], row[:recorded_by_id],
-        row[:rater_id], row[:person_id] ]
+    session_log[:entries].flat_map do |row|
+      [ row[:actor_id], row[:rater_id], row[:person_id] ]
     end.compact.uniq
   end
 

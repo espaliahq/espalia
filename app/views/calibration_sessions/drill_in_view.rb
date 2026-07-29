@@ -56,11 +56,16 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       div(
         class: "max-w-5xl mx-auto px-4 py-8",
         data: {
-          controller: "calibration-reveal",
+          controller: "calibration-reveal calibration-pane",
           calibration_reveal_session_id_value: @session.id,
           calibration_reveal_reveal_person_value: @person_card&.dig(:dot, :person_id).to_s,
           # Pinning to compare implies discussing implies revealed.
-          calibration_reveal_reveal_persons_value: @compare_ids.to_json
+          calibration_reveal_reveal_persons_value: @compare_ids.to_json,
+          # One delegated handler for every in-page pane link (dots, tabs,
+          # pins, unpin, close) — they all differ from the current URL only
+          # by query string, which is exactly how the controller spots them.
+          action: "click->calibration-pane#navigate " \
+                  "calibration:revealed@window->calibration-reveal#onRevealed"
         }
       ) do
         header_row
@@ -168,7 +173,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       form(
         action: calibration_session_expectation_flags_path(@session),
         method: "post",
-        class: "mt-2 max-w-lg space-y-2"
+        class: "mt-2 max-w-lg space-y-2",
+        # Outside the pane frame, so its carried state is refreshed from the
+        # live URL at submit time rather than page-load time.
+        data: { action: "submit->calibration-pane#stampState" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
@@ -251,11 +259,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     base = dot_description(dot, ordinal)
     a(
       # Opening a dot returns to the person-card view but keeps the pins —
-      # the room browses dots mid-comparison without losing the tray.
-      href: drill_in_path(view: nil, person: dot[:person_id]),
+      # the room browses dots mid-comparison without losing the tray. The
+      # grid sits OUTSIDE the pane frame, so this href freezes at whatever
+      # the pins were on page load; `pane_keep_compare` tells the pane
+      # controller to merge the live set in at click time.
+      href: drill_in_path(view: nil, person: dot[:person_id], compare: []),
       class: "inline-flex h-11 w-11 items-center justify-center",
       aria: { label: "#{initials(dot[:name])} — #{base}. Open to discuss." },
       data: {
+        pane_keep_compare: "true",
         calibration_reveal_target: "dot",
         person_id: dot[:person_id],
         person_name: dot[:name],
@@ -314,12 +326,21 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   # ── Bottom pane: person card / evidence wall / compare tray ──
 
+  # The pane lives in a Turbo Frame so switching panes, opening a dot, or
+  # pinning replaces only this region — a full-page navigation would scroll
+  # the room back to the top, hiding the very thing they just clicked.
+  # `calibration_pane_controller` drives the frame's src and keeps the
+  # browser URL in step (the matrix-frame pattern from the explorer and the
+  # assessment views).
   def bottom_pane
-    tab_bar
-    case @view
-    when "wall" then wall_section
-    when "compare" then compare_section
-    else person_card_section if @person_card
+    turbo_frame_tag("calibration-bottom-pane",
+                    data: { calibration_pane_target: "frame" }) do
+      tab_bar
+      case @view
+      when "wall" then wall_section
+      when "compare" then compare_section
+      else person_card_section if @person_card
+      end
     end
   end
 
@@ -426,7 +447,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   def wall_filters_form
     form(action: calibration_session_capability_path(@session, @stats[:capability][:stable_id]),
-         method: "get", class: "mt-3 flex flex-wrap items-end gap-2") do
+         method: "get", class: "mt-3 flex flex-wrap items-end gap-2",
+         data: { action: "submit->calibration-pane#submitFilters" }) do
       input(type: "hidden", name: "view", value: "wall")
       input(type: "hidden", name: "person", value: opened_person_id) if opened_person_id.present?
       @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id) }

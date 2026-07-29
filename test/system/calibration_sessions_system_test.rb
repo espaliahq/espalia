@@ -194,8 +194,24 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_selector "a[data-person-id='#{@report_1.id}'][data-revealed='true']"
     assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='false']"
 
-    # ── Evidence wall: the shape shows, the text waits for the reveal ──
+    # ── The pane swaps in place: the room keeps its scroll position ──
+    # A full-page navigation would scroll back to the top, hiding the very
+    # card that was just opened. Shrink the window first so the drill-in
+    # actually overflows — on a tall window scrollY is 0 either way and the
+    # assertion could never fail.
+    # Anchor mid-page, not at the bottom: the panes differ slightly in
+    # height, and a bottom-anchored scroll gets clamped by that difference.
+    page.driver.browser.manage.window.resize_to(1000, 600)
+    page.execute_script("window.scrollTo(0, 300)")
+    scrolled = page.evaluate_script("window.scrollY")
+    assert_equal 300, scrolled, "precondition: the page must be scrollable to test this"
+
     click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "2 items")
+    assert_equal scrolled, page.evaluate_script("window.scrollY"),
+      "switching panes must not move the page"
+    # …and the URL still carries the pane, so the view stays shareable.
+    assert_includes page.current_url, "view=wall"
+    page.driver.browser.manage.window.resize_to(1400, 1400)
     wait_for_stimulus "calibration-reveal"
     # Ivy was revealed by opening her dot; Omar was never opened, so his item
     # shows only its calibration shape.
@@ -369,18 +385,32 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     end
 
     # ── The session page is the follow-through artifact ──
+    # One reverse-chronological feed in the product's activity form: summary,
+    # live status, context line, the room's own words.
     visit calibration_session_path(@flag_session_id)
     assert_text "SESSION LOG"
-    assert_text "⚑ Strategic Thinking · L3"
+    assert_text "⚑ Flagged an expectation as unclear"
     assert_text "Discussion open"
-    assert_text "Mia Manager · Ivy IC · Strategic Thinking L3"
+    assert_text "Strategic Thinking · L3"
+    assert_text "Asked Mia Manager to revisit a rating"
     assert_text "Open"
+    assert_text "Ivy IC · Strategic Thinking · L3"
     assert_text "Compare against the two peers we just discussed"
+    # Newest first — the revisit was asked after the flag.
+    entries = all("[data-framework-activity-target='entry']").map(&:text)
+    assert_match(/revisit a rating/, entries.first)
+    assert_match(/Flagged an expectation/, entries.last)
 
     js_set_field "#session-note", "Add the two reference ICs to the org-wide session"
     click_button_with_js_fallback "Record note", expect_text: "Note recorded."
     assert_text "Add the two reference ICs to the org-wide session"
-    assert_text "NOTES"
+
+    # The chips narrow the feed client-side, like every other activity panel.
+    page.execute_script(
+      %{document.querySelector("[data-framework-activity-filter-param='notes']").click()}
+    )
+    assert_text "Add the two reference ICs to the org-wide session"
+    assert_no_text "⚑ Flagged an expectation as unclear"
   end
 
   # Sets a field's value via JS + input/change events — these values feed

@@ -49,7 +49,39 @@ export default class extends BaseController {
     this.apply()
   }
 
+  // `calibration-pane` swaps the bottom pane without a page load, so the
+  // arriving values on this element never change — it republishes the newly
+  // opened / pinned ids here instead.
+  onRevealed(event) {
+    const arriving = (event.detail?.personIds || []).filter(Boolean)
+    if (!arriving.length) return
+
+    this.state.ids = Array.from(new Set([ ...this.state.ids, ...arriving ]))
+    this.saveState()
+    this.apply()
+  }
+
+  // The bottom pane is a Turbo Frame, so wall items arrive AFTER the last
+  // apply() — Stimulus fires this as each one connects, and without it a
+  // freshly-loaded wall would render every item unrevealed.
+  wallItemTargetConnected(item) {
+    // Can fire before connect() has loaded state; connect()'s own apply()
+    // covers those items.
+    if (this.state) this.applyWallItem(item)
+  }
+
   // private
+
+  // The text + name (detail half) follow the reveal automatically — free
+  // text identifies people, so it cannot precede the name.
+  applyWallItem(item) {
+    const isRevealed = this.state.named || this.state.ids.includes(item.dataset.personId)
+    const summary = item.querySelector("[data-reveal-role='summary']")
+    const detail = item.querySelector("[data-reveal-role='detail']")
+    if (summary) summary.classList.toggle("hidden", isRevealed)
+    if (detail) detail.classList.toggle("hidden", !isRevealed)
+    item.dataset.revealed = String(isRevealed)
+  }
 
   apply() {
     const revealed = new Set(this.state.ids)
@@ -67,16 +99,7 @@ export default class extends BaseController {
         dot.dataset.revealed = "false"
       }
     })
-    // Wall items: the text + name (detail) follow the reveal automatically —
-    // free text identifies people, so it cannot precede the name.
-    this.wallItemTargets.forEach((item) => {
-      const isRevealed = this.state.named || revealed.has(item.dataset.personId)
-      const summary = item.querySelector("[data-reveal-role='summary']")
-      const detail = item.querySelector("[data-reveal-role='detail']")
-      if (summary) summary.classList.toggle("hidden", isRevealed)
-      if (detail) detail.classList.toggle("hidden", !isRevealed)
-      item.dataset.revealed = String(isRevealed)
-    })
+    this.wallItemTargets.forEach((item) => this.applyWallItem(item))
     if (this.hasToggleTarget) {
       this.toggleTarget.textContent = this.state.named ? "Hide names" : "Show names"
       this.toggleTarget.setAttribute("aria-pressed", String(this.state.named))
