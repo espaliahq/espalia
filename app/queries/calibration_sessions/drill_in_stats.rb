@@ -33,6 +33,7 @@ class CalibrationSessions::DrillInStats
       },
       ordinals: ordinals,
       expectations: expectations,
+      illustrations: illustrations,
       clarifications: clarification_counts,
       rows: rows
     }
@@ -88,6 +89,33 @@ class CalibrationSessions::DrillInStats
     @expectations ||= FrameworkState::BehaviouralExpectation
       .where(capability_id: capability.capability_id, level_ordinal: ordinals)
       .pluck(:level_ordinal, :description).to_h
+  end
+
+  # Role illustrations per level, grouped by role — the clarifying examples
+  # that sit under the canonical expectation. The room reads both together:
+  # the expectation is what's rated, the illustrations are what it looks
+  # like in a given role, and a disagreement often turns out to be two
+  # raters reading different illustrations.
+  #
+  # @return [Hash{Integer => Array<Hash>}] ordinal => [{ role_name:, items: }]
+  def illustrations
+    @illustrations ||= begin
+      rows = FrameworkState::RoleIllustration
+        .joins(:expectation, :role)
+        .where(framework_behavioural_expectations: {
+                 capability_id: capability.capability_id, level_ordinal: ordinals
+               })
+        .order("framework_role_illustrations.ordinal", "framework_role_illustrations.created_at")
+        .pluck("framework_behavioural_expectations.level_ordinal",
+               "framework_roles.name",
+               "framework_role_illustrations.description")
+
+      rows.group_by(&:first).transform_values do |group|
+        group.group_by { |_, role_name, _| role_name }
+          .map { |role_name, items| { role_name: role_name, items: items.map(&:last) } }
+          .sort_by { |group_hash| group_hash[:role_name].to_s }
+      end
+    end
   end
 
   # ordinal => count of OPEN framework clarifications anchored on this

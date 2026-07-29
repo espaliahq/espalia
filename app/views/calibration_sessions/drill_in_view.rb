@@ -109,9 +109,34 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                 dt(class: "shrink-0 w-8 text-sm font-semibold text-gray-900 dark:text-white") { "L#{ordinal}" }
                 dd(class: "flex-1 text-sm text-gray-600 dark:text-gray-300") do
                   plain @stats[:expectations][ordinal] || "No expectation defined at this level."
+                  illustrations_for(ordinal)
                   flag_affordance(ordinal)
                 end
               end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  # The role illustrations under a level's canonical expectation. The
+  # expectation is what people are rated against; the illustrations are what
+  # it looks like in a given role — and a disagreement often turns out to be
+  # two raters reading different examples, so the room needs both in view.
+  # Indented and role-labelled so the canonical text stays primary.
+  def illustrations_for(ordinal)
+    groups = @stats[:illustrations]&.dig(ordinal)
+    return if groups.blank?
+
+    div(class: "mt-1.5 space-y-1") do
+      groups.each do |group|
+        div(class: "flex gap-2") do
+          span(class: "shrink-0 text-[11px] font-medium uppercase tracking-wide " \
+                      "text-gray-600 dark:text-gray-300 pt-px") { group[:role_name] }
+          ul(class: "flex-1 space-y-0.5 border-l border-gray-200 dark:border-gray-700 pl-2") do
+            group[:items].each do |text|
+              li(class: "text-xs text-gray-600 dark:text-gray-300") { text }
             end
           end
         end
@@ -217,9 +242,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # Anonymous by default: the server never puts the member's name in the
-  # accessible name — the reveal controller adds it client-side once the
-  # dot has been discussed (or the room runs named).
+  # The dot carries the member's INITIALS — a grid of unlabelled dots can't
+  # be discussed ("which one is that?"), and the divergence board already
+  # initials its rater dots. The reveal still governs the FULL name (title
+  # + accessible name) and the wall's text; initials identify the column
+  # without putting the room's attention on a name.
   def render_dot(dot, ordinal)
     base = dot_description(dot, ordinal)
     a(
@@ -227,27 +254,40 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       # the room browses dots mid-comparison without losing the tray.
       href: drill_in_path(view: nil, person: dot[:person_id]),
       class: "inline-flex h-11 w-11 items-center justify-center",
-      aria: { label: "Population member — #{base}. Open to discuss." },
+      aria: { label: "#{initials(dot[:name])} — #{base}. Open to discuss." },
       data: {
         calibration_reveal_target: "dot",
         person_id: dot[:person_id],
         person_name: dot[:name],
+        initials: initials(dot[:name]),
         base_label: base
       }
     ) do
-      span(class: "h-7 w-7 rounded-full #{dot_classes(dot)}", aria: { hidden: "true" })
+      span(
+        class: "inline-flex h-7 w-7 items-center justify-center rounded-full " \
+               "text-[10px] font-semibold #{dot_classes(dot)}"
+      ) { initials(dot[:name]) }
     end
   end
 
-  def dot_classes(dot)
-    return UNRATED_DOT unless dot[:frequency]
+  # Two letters, uppercased — the divergence board's convention.
+  def initials(name)
+    name.to_s.split.map(&:first).first(2).join.upcase
+  end
 
+  # Backed = solid fill, unbacked = outline (the backing signal is shape,
+  # never colour). The initials sit on both, so each branch also picks a
+  # text colour that clears AA against its own background.
+  def dot_classes(dot)
+    return "#{UNRATED_DOT} text-gray-600 dark:text-gray-300" unless dot[:frequency]
+
+    config = CONFIG.fetch(dot[:frequency])
     if dot[:backed]
-      CONFIG.fetch(dot[:frequency])[:chip_bg]
+      "#{config[:chip_bg]} #{config[:chip_txt]}"
     else
       # Outline from the shared palette so an unbacked dot's hue can never
       # drift from the chips/pills for the same frequency.
-      "border-2 #{CONFIG.fetch(dot[:frequency])[:border]}"
+      "border-2 #{config[:border]} text-gray-900 dark:text-white"
     end
   end
 

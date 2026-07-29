@@ -175,11 +175,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-calibration-reveal-target='dot']", minimum: 4
 
-    # Anonymized by default — accessible names are generic
+    # Initials identify the column; the FULL name waits for the reveal.
     wait_for_stimulus "calibration-reveal"
     dot = find("a[data-person-id='#{@report_1.id}']")
-    assert dot["aria-label"].start_with?("Population member"),
-      "dots must not carry names before reveal"
+    assert_equal "II", dot.text.strip, "dots carry the ratee's initials"
+    assert dot["aria-label"].start_with?("II —"),
+      "an unrevealed dot is named by its initials, not the person's name"
+    assert_not_includes dot["aria-label"], "Ivy IC",
+      "dots must not carry the full name before reveal"
 
     # Opening a dot IS the reveal: card shows the person, dot becomes named
     click_with_retry(expect_text: "Close") do

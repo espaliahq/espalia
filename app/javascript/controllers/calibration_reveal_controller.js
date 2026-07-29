@@ -61,7 +61,9 @@ export default class extends BaseController {
         dot.dataset.revealed = "true"
       } else {
         dot.removeAttribute("title")
-        dot.setAttribute("aria-label", `Population member — ${dot.dataset.baseLabel}. Open to discuss.`)
+        // Initials stay on the dot either way (they're how the room points at
+        // a column); the reveal governs the FULL name.
+        dot.setAttribute("aria-label", `${dot.dataset.initials} — ${dot.dataset.baseLabel}. Open to discuss.`)
         dot.dataset.revealed = "false"
       }
     })
