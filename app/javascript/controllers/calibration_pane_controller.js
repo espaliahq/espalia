@@ -50,10 +50,10 @@ export default class extends BaseController {
     if (url.pathname !== window.location.pathname) return
 
     // Links rendered outside the frame (the grid's dots) freeze at page-load
-    // state, so their pins would be stale. Links inside the frame own the
-    // compare set exactly — including an unpin that empties it — so only the
-    // opted-in ones get the live set merged back in.
-    if (link.dataset.paneKeepCompare === "true") this.#keepCompare(url)
+    // state, so their pins and wall filters would be stale. Links inside the
+    // frame own that state exactly — including an unpin that empties it — so
+    // only the opted-in ones get the live values merged back in.
+    if (link.dataset.paneKeepState === "true") this.#keepState(url)
 
     event.preventDefault()
     this.#load(url)
@@ -61,6 +61,9 @@ export default class extends BaseController {
 
   // Rewrites a full-page form's carried state (the ⚑ flag form lives
   // outside the frame, so its hidden fields go stale the same way).
+  // The sweep covers the SERVER-rendered fields too (they carry the same
+  // marker) — appending without removing would let a value the room
+  // cleared in the frame ride along and come back on the redirect.
   stampState(event) {
     const form = event.target
     form.querySelectorAll("[data-pane-state='true']").forEach(field => field.remove())
@@ -99,11 +102,20 @@ export default class extends BaseController {
 
   // private
 
-  #keepCompare(url) {
+  // Everything the link does NOT own: the pins and the wall's filters, so
+  // stepping out to a person card and back returns to the wall the room was
+  // reading. `view` and `person` are deliberately excluded — the dot owns
+  // those (opening one IS "show me this person's card").
+  #keepState(url) {
+    const live = new URL(window.location.href).searchParams
+
     url.searchParams.delete("compare[]")
-    new URL(window.location.href).searchParams
-      .getAll("compare[]")
-      .forEach(id => url.searchParams.append("compare[]", id))
+    live.getAll("compare[]").forEach(id => url.searchParams.append("compare[]", id))
+
+    for (const key of [ "wall_level", "wall_valence", "wall_rater" ]) {
+      url.searchParams.delete(key)
+      if (live.get(key)) url.searchParams.set(key, live.get(key))
+    }
   }
 
   #load(url, { push = true } = {}) {

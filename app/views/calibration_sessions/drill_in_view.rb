@@ -4,10 +4,12 @@
 # rater × level dot grid, with a person card when a dot is opened.
 #
 # Anonymization is conversation choreography, not privacy control
-# (docs/architecture/calibration-sessions.md): dots render anonymous by
-# default; opening a dot (`?person=`) IS the reveal, sticky per person in
-# sessionStorage via the calibration-reveal Stimulus controller; a
-# session-level "Show names" toggle overrides for high-trust rooms.
+# (docs/architecture/calibration-sessions.md): a dot carries the ratee's
+# INITIALS — a grid of unlabelled dots can't be discussed — but the FULL
+# name waits for the reveal. Opening a dot (`?person=`) IS that reveal,
+# sticky per person in sessionStorage via the calibration-reveal Stimulus
+# controller; a session-level "Show names" toggle overrides for
+# high-trust rooms.
 # Dot fill = evidence backing (solid backed / outlined unbacked), colour =
 # the shared frequency palette — the two signals never share a primitive.
 class Views::CalibrationSessions::DrillInView < Views::Base
@@ -266,13 +268,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       # Opening a dot returns to the person-card view but keeps the pins —
       # the room browses dots mid-comparison without losing the tray. The
       # grid sits OUTSIDE the pane frame, so this href freezes at whatever
-      # the pins were on page load; `pane_keep_compare` tells the pane
-      # controller to merge the live set in at click time.
-      href: drill_in_path(view: nil, person: dot[:person_id], compare: []),
+      # the pins and filters were on page load; `pane_keep_state` tells the
+      # pane controller to merge the live values in at click time.
+      href: drill_in_path(view: nil, person: dot[:person_id], compare: [],
+                          filters: {}),
       class: "inline-flex h-11 w-11 items-center justify-center",
       aria: { label: "#{initials(dot[:name])} — #{base}. Open to discuss." },
       data: {
-        pane_keep_compare: "true",
+        pane_keep_state: "true",
         calibration_reveal_target: "dot",
         person_id: dot[:person_id],
         person_name: dot[:name],
@@ -295,12 +298,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # Backed = solid fill, unbacked = outline (the backing signal is shape,
   # never colour). The initials sit on both, so each branch also picks a
   # text colour that clears AA against its own background.
+  #
+  # Solid dots use near-black rather than the palette's per-hue `chip_txt`:
+  # at 10px these are small text needing 4.5:1, and hue-950 on hue-500 only
+  # reaches ~4.0:1 on blue and ~4.3:1 on red. Near-black clears all four
+  # fills in both modes.
   def dot_classes(dot)
     return "#{UNRATED_DOT} text-gray-600 dark:text-gray-300" unless dot[:frequency]
 
     config = CONFIG.fetch(dot[:frequency])
     if dot[:backed]
-      "#{config[:chip_bg]} #{config[:chip_txt]}"
+      "#{config[:chip_bg]} text-gray-950"
     else
       # Outline from the shared palette so an unbacked dot's hue can never
       # drift from the chips/pills for the same frequency.
@@ -409,12 +417,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # compare pins, the wall's filters. An outcome recorded mid-comparison
   # must not reset the room's screen.
   def state_passthrough_fields
-    input(type: "hidden", name: "person", value: opened_person_id) if opened_person_id.present?
-    @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id) }
-    input(type: "hidden", name: "view", value: @view) if @view
+    # Tagged `pane_state` so `calibration-pane#stampState` can SWEEP these
+    # before re-stamping from the live URL. Without the sweep a value the
+    # room cleared inside the frame (an unpinned person, a closed card)
+    # would ride the POST from this page-load snapshot and come back.
+    tag = { pane_state: "true" }
+    input(type: "hidden", name: "person", value: opened_person_id, data: tag) if opened_person_id.present?
+    @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id, data: tag) }
+    input(type: "hidden", name: "view", value: @view, data: tag) if @view
     { wall_level: @wall_filters[:level], wall_valence: @wall_filters[:valence],
       wall_rater: @wall_filters[:rater_id] }.each do |name, value|
-      input(type: "hidden", name: name.to_s, value: value) if value.present?
+      input(type: "hidden", name: name.to_s, value: value, data: tag) if value.present?
     end
   end
 
@@ -681,7 +694,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       form(
         action: calibration_session_rating_revisits_path(@session),
         method: "post",
-        class: "mt-2 max-w-lg space-y-2"
+        class: "mt-2 max-w-lg space-y-2",
+        # Breaks out of the pane frame: the outcome's flash — including the
+        # alert when the ask is rejected — renders in the layout OUTSIDE the
+        # frame, so a frame-scoped submit would swallow it and the failure
+        # would look like nothing happened.
+        data: { turbo_frame: "_top" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])

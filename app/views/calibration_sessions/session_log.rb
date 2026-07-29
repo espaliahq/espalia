@@ -145,7 +145,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") { context } if context
         secondary = secondary_text(entry)
         if secondary
-          p(class: "mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap") { secondary }
+          p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap") { secondary }
         end
         resolution_line(entry)
         footer(entry)
@@ -231,7 +231,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   end
 
   def footer(entry)
-    div(class: "mt-1 text-[10px] text-gray-500 dark:text-gray-400") do
+    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
       bits = [ person_name(entry[:actor_id]),
                (entry[:at] ? "#{time_ago_in_words(entry[:at])} ago" : nil) ].compact
       span { bits.join(" · ") }
