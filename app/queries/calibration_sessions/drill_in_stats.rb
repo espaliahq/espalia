@@ -33,6 +33,7 @@ class CalibrationSessions::DrillInStats
       },
       ordinals: ordinals,
       expectations: expectations,
+      illustrations: illustrations,
       clarifications: clarification_counts,
       rows: rows
     }
@@ -88,6 +89,63 @@ class CalibrationSessions::DrillInStats
     @expectations ||= FrameworkState::BehaviouralExpectation
       .where(capability_id: capability.capability_id, level_ordinal: ordinals)
       .pluck(:level_ordinal, :description).to_h
+  end
+
+  # Role illustrations per level, grouped by role — the clarifying examples
+  # that sit under the canonical expectation. The room reads both together:
+  # the expectation is what's rated, the illustrations are what it looks
+  # like in a given role, and a disagreement often turns out to be two
+  # raters reading different illustrations.
+  #
+  # Scoped to the roles ACTUALLY BEING CALIBRATED at each level — a
+  # framework carries illustrations for every role, and examples for a role
+  # nobody on this grid holds are noise the room has to read past.
+  #
+  # @return [Hash{Integer => Array<Hash>}] ordinal => [{ role_name:, items: }]
+  def illustrations
+    @illustrations ||= begin
+      role_ids_by_ordinal = population_role_ids_by_ordinal
+      return {} if role_ids_by_ordinal.empty?
+
+      rows = FrameworkState::RoleIllustration
+        .joins(:expectation, :role)
+        .where(framework_behavioural_expectations: {
+                 capability_id: capability.capability_id, level_ordinal: ordinals
+               })
+        .where(framework_roles: { role_id: role_ids_by_ordinal.values.reduce(:|).to_a })
+        .order("framework_role_illustrations.ordinal", "framework_role_illustrations.created_at")
+        .pluck("framework_behavioural_expectations.level_ordinal",
+               "framework_roles.role_id",
+               "framework_roles.name",
+               "framework_role_illustrations.description")
+
+      rows
+        .select { |ordinal, role_id, _, _| role_ids_by_ordinal[ordinal]&.include?(role_id) }
+        .group_by(&:first)
+        .transform_values do |group|
+          group.group_by { |_, _, role_name, _| role_name }
+            .map { |role_name, items| { role_name: role_name, items: items.map(&:last) } }
+            .sort_by { |group_hash| group_hash[:role_name].to_s }
+        end
+    end
+  end
+
+  # ordinal => Set of role_ids held by the population members assessed at
+  # that level. Read from the framework assignment (the enrollment snapshot
+  # carries the level, not the role).
+  def population_role_ids_by_ordinal
+    @population_role_ids_by_ordinal ||= begin
+      roles = PersonFrameworkAssignment
+        .where(framework_id: @session.framework_id, person_id: assessed_ordinals.keys)
+        .pluck(:person_id, :role_id).to_h
+
+      assessed_ordinals.each_with_object({}) do |(person_id, ordinal), map|
+        role_id = roles[person_id]
+        next unless role_id
+
+        (map[ordinal] ||= Set.new) << role_id
+      end
+    end
   end
 
   # ordinal => count of OPEN framework clarifications anchored on this

@@ -34,6 +34,21 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
            manager_rated_frequency: frequency)
   end
 
+  # Evidence linked to a person's at-level cell — what the wall reads.
+  def back_evidence(person, author, capability, content, valence)
+    item = create(:evidence_item, tenant: @tenant, with_link: false,
+                  person_id: person.id, author: author,
+                  framework_id: @cycle.framework_id,
+                  capability_stable_id: capability.stable_id, level_ordinal: 3,
+                  content: content)
+    EvidenceLink.create!(
+      tenant_id: @tenant.id, evidence_id: item.id, person_id: person.id,
+      framework_id: @cycle.framework_id, capability_stable_id: capability.stable_id,
+      level_ordinal: 3, link_status: "active", linked_by_id: author.id,
+      linked_at: item.recorded_at, valence: valence
+    )
+  end
+
   test "facilitator defines, curates, and starts a calibration session" do
     sign_in_as(@facilitator_user)
 
@@ -119,6 +134,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       rate(@report_1, cap_b, "occasional")
       rate(@report_2, cap_b, "occasional")
 
+      # Near-identical evidence under divergent ratings — the wall's money shot.
+      back_evidence(@report_1, @em_1, @cap_a, "Ran the pricing spike end to end.", "demonstrated")
+      back_evidence(@report_2, @em_2, @cap_a, "Ran the billing spike end to end.", "growth_area")
+
       ctx = AuthorizationContext.new(
         user: @facilitator_user,
         tenant_user: TenantUser.find_by(user: @facilitator_user),
@@ -154,28 +173,86 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # ── Drill-in: divergence row → rater × level grid ──
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
     assert_text "AT-LEVEL RATINGS BY RATER"
-    assert_selector "a[data-calibration-reveal-target='dot']", minimum: 4
+    assert_selector "a[data-person-id]", minimum: 4
 
-    # Anonymized by default — accessible names are generic
-    wait_for_stimulus "calibration-reveal"
+    # The dot is initialled for compactness and named for everyone else.
     dot = find("a[data-person-id='#{@report_1.id}']")
-    assert dot["aria-label"].start_with?("Population member"),
-      "dots must not carry names before reveal"
+    assert_equal "II", dot.text.strip, "dots carry the ratee's initials"
+    assert_equal "Ivy IC", dot["title"]
+    assert dot["aria-label"].start_with?("Ivy IC —"),
+      "the accessible name carries the person, not just their initials"
 
-    # Opening a dot IS the reveal: card shows the person, dot becomes named
+    # Opening a dot shows their card.
     click_with_retry(expect_text: "Close") do
       find("a[data-person-id='#{@report_1.id}']").click
     end
     assert_text "Ivy IC"
     assert_text "Manager: Consistently"
-    wait_for_stimulus "calibration-reveal"
-    assert_selector "a[data-person-id='#{@report_1.id}'][data-revealed='true']"
-    assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='false']"
 
-    # Session-level "Show names" override (JS-dispatched — Stimulus toggle)
-    page.execute_script("document.querySelector(\"[data-calibration-reveal-target='toggle']\").click()")
-    assert_selector "button[data-calibration-reveal-target='toggle']", text: "Hide names"
-    assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='true']"
+    # ── The pane swaps in place: the room keeps its scroll position ──
+    # A full-page navigation would scroll back to the top, hiding the very
+    # card that was just opened. Shrink the window first so the drill-in
+    # actually overflows — on a tall window scrollY is 0 either way and the
+    # assertion could never fail.
+    # Anchor mid-page, not at the bottom: the panes differ slightly in
+    # height, and a bottom-anchored scroll gets clamped by that difference.
+    page.driver.browser.manage.window.resize_to(1000, 600)
+    page.execute_script("window.scrollTo(0, 300)")
+    scrolled = page.evaluate_script("window.scrollY")
+    assert_equal 300, scrolled, "precondition: the page must be scrollable to test this"
+
+    click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "2 items")
+    assert_equal scrolled, page.evaluate_script("window.scrollY"),
+      "switching panes must not move the page"
+    # …and the URL still carries the pane, so the view stays shareable.
+    assert_includes page.current_url, "view=wall"
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+    # Every item names its person and shows what was written — the room
+    # compares near-identical evidence under divergent ratings.
+    assert_text "Ran the pricing spike end to end."
+    assert_text "Ran the billing spike end to end."
+    assert_text "Ivy IC"
+    assert_text "Omar IC"
+
+    # Filtering narrows the wall.
+    page.execute_script(<<~JS)
+      const select = document.querySelector("#wall-filter-wall_valence")
+      select.value = "growth_area"
+      select.form.requestSubmit()
+    JS
+    assert_text "1 item"
+    assert_no_text "Ran the pricing spike end to end."
+
+    # The filter rides every pane link, so clear it before moving on.
+    page.execute_script(<<~JS)
+      const select = document.querySelector("#wall-filter-wall_valence")
+      select.value = ""
+      select.form.requestSubmit()
+    JS
+    assert_text "2 items"
+
+    # ── Compare tray: pinning holds two cards side by side ──
+    click_link_with_js_fallback("Person: Ivy IC", expect_text: "Manager: Consistently")
+    click_link_with_js_fallback("Pin to compare", expect_text: "Compare (1)")
+    assert_selector "[data-compare-card='#{@report_1.id}']"
+    assert_text "Ran the pricing spike end to end."
+
+    # Pin the second person from their card — the tray now juxtaposes both.
+    click_with_retry(expect_text: "Omar IC") do
+      find("a[data-person-id='#{@report_2.id}']").click
+    end
+    click_link_with_js_fallback("Pin to compare", expect_text: "Compare (2)")
+    assert_selector "[data-compare-card='#{@report_2.id}']"
+    assert_text "Ran the billing spike end to end."
+
+    # Unpinning drops the card.
+    # Sync on the tray's own heading — a signal already on the wall could
+    # never arm the JS fallback (testing.md).
+    click_link_with_js_fallback("Compare (2)", expect_text: "COMPARE")
+    click_with_retry(expect_text: "Compare (1)") do
+      find("[data-compare-card='#{@report_2.id}'] a", text: "Unpin").click
+    end
+    assert_no_selector "[data-compare-card='#{@report_2.id}']"
   end
 
   test "facilitator flags an unclear expectation from the drill-in" do
@@ -287,19 +364,70 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
 
+    # ── The log rides the drill-in as a side panel ──
+    # Closed by default here (the grid wants the width), and it survives a
+    # pane switch — the whole point of a side panel. Clear the cookie so
+    # this asserts the SURFACE's default, not a preference set earlier.
+    page.execute_script(<<~JS)
+      document.cookie = "calibration_drill_in_log_pane_open=; path=/; max-age=0"
+      document.cookie = "calibration_log_pane_open=; path=/; max-age=0"
+    JS
+    page.refresh
+    assert_selector "#calibration-log-pane[data-pane-state='closed']", visible: :all
+    page.execute_script(
+      %{document.querySelector("[data-action*='activity-pane#toggle']").click()}
+    )
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
+    assert_text "⚑ Flagged an expectation as unclear"
+
+    # Heading renders through CSS `uppercase`, so assert the rendered case.
+    click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "FEEDBACK / EVIDENCE —")
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
+    assert_text "⚑ Flagged an expectation as unclear"
+
     # ── The session page is the follow-through artifact ──
+    # One reverse-chronological feed in the product's activity form: summary,
+    # live status, context line, the room's own words. Open by default here.
     visit calibration_session_path(@flag_session_id)
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
     assert_text "SESSION LOG"
-    assert_text "⚑ Strategic Thinking · L3"
+    assert_text "⚑ Flagged an expectation as unclear"
     assert_text "Discussion open"
-    assert_text "Mia Manager · Ivy IC · Strategic Thinking L3"
+    assert_text "Strategic Thinking · L3"
+    assert_text "Asked Mia Manager to revisit a rating"
     assert_text "Open"
+    assert_text "Ivy IC · Strategic Thinking · L3"
     assert_text "Compare against the two peers we just discussed"
+    # Newest first — the revisit was asked after the flag.
+    entries = all("[data-framework-activity-target='entry']").map(&:text)
+    assert_match(/revisit a rating/, entries.first)
+    assert_match(/Flagged an expectation/, entries.last)
 
     js_set_field "#session-note", "Add the two reference ICs to the org-wide session"
     click_button_with_js_fallback "Record note", expect_text: "Note recorded."
     assert_text "Add the two reference ICs to the org-wide session"
-    assert_text "NOTES"
+
+    # A note recorded from the DRILL-IN stays on the drill-in and carries
+    # the capability it was about — the panel exists so the room doesn't
+    # get yanked out of the discussion.
+    # `activity=open` wins over the cookie, so this doesn't depend on
+    # whatever state the toggling above left behind.
+    visit calibration_session_capability_path(@flag_session_id, @flag_cap_stable, activity: "open")
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
+    js_set_field "#session-note", "Ratings here look a level high"
+    click_button_with_js_fallback "Record note", expect_text: "Note recorded."
+    assert_current_path(/capabilities/)
+    assert_text "Ratings here look a level high"
+    assert_text "Strategic Thinking"
+
+    visit calibration_session_path(@flag_session_id)
+
+    # The chips narrow the feed client-side, like every other activity panel.
+    page.execute_script(
+      %{document.querySelector("[data-framework-activity-filter-param='notes']").click()}
+    )
+    assert_text "Add the two reference ICs to the org-wide session"
+    assert_no_text "⚑ Flagged an expectation as unclear"
   end
 
   # Sets a field's value via JS + input/change events — these values feed

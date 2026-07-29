@@ -19,9 +19,7 @@
 > in its v1 form: expectation text per level, the rater × level dot grid
 > (frequency colour; solid backed / outlined unbacked; unrated gaps;
 > out-of-session raters muted), the person card (rating pills + linked
-> evidence with valences and relation-first authorship), and the
-> reveal-on-interrogation choreography (`calibration_reveal_controller`,
-> sessionStorage-sticky, Show-names override). Development environments get
+> evidence with valences and relation-first authorship). Development environments get
 > population-wide demo activity via `assessments:seed_calibration_activity`
 > (deterministic rater personas / ambiguous capabilities / evidence, wired
 > into `db/seeds.rb` after the HRIS sync) so every surface is demo-able.
@@ -43,7 +41,56 @@
 > **session log** (`SessionOutcomes` stream read + `SessionLog` view — flags
 > with live clarification status, revisits with acted/open state, minutes +
 > composer) make the session page the follow-through artifact.
-> Still to build: the evidence wall + compare tray.
+> **The drill-in's bottom pane now switches between three panes** (person
+> card / **evidence wall** §d / **compare tray** §e — links that navigate,
+> deliberately NOT the ARIA tabs pattern, which would promise in-place panel
+> swapping). Every pane link preserves the other axes — opened person, pins,
+> wall filters — in the URL, and the flag / revisit POSTs carry the same
+> state (plus which pane was open) through their redirects, so an outcome
+> recorded mid-comparison returns the room to the screen it was reading. The
+> wall (`EvidenceWall` query) groups the population's linked feedback by
+> level (highest first, newest first within), stamping each item with the
+> manager-rated frequency its cell carries in the session's cycle, filterable
+> by level / valence / rater; each item names the person and shows what was
+> written about them. The wall reads the **grid's** population, not raw
+> session membership, so every item has a dot to open. The tray pins up to
+> three cards (`MAX_COMPARE_PINS`), assembled through the same `PersonCard`
+> query as the person card; a pin only survives if it resolves to a card (no
+> phantom that can't be unpinned).
+> **The bottom pane is a Turbo Frame** (`calibration-pane`): every pane
+> link differs from the current URL only by query string, so full-page
+> navigation scrolled the room to the top and hid whatever they just
+> opened. The frame swaps in place and the URL is pushed separately, so
+> deep links and Back still work. Consequence to respect when adding
+> links: anything rendered OUTSIDE the frame (the grid's dots, the ⚑ flag
+> form) freezes at page-load state and must opt into having the live
+> compare pins merged in at click/submit time
+> (`data-pane-keep-state` / `calibration-pane#stampState`). Grid dots
+> carry the ratee's **initials** as a compact label plus their full name
+> (tooltip + accessible name) — there is **no anonymisation layer**, see
+> *Naming*; the rater column is sticky-left so a sideways scroll can't
+> orphan a row of dots.
+> "What good looks like" shows each level's **role illustrations** under
+> its canonical expectation (a disagreement is often two raters reading
+> different examples), collapsed behind the evidence dialog's shared
+> **"Examples (N)"** disclosure so the rated text stays primary — and
+> scoped to the roles actually being calibrated **at that level**, since a
+> framework carries illustrations for every role and the rest is noise the
+> room reads past. The
+> **session log is a right-hand activity SIDE PANEL** — the product's
+> established pattern (the explorer's context pane, the assessment
+> sidebar): one reverse-chronological feed with kind dots and filter
+> chips, inline+sticky on lg and a fixed overlay below, rendered on the
+> drill-in as well as the session page so the room can raise an outcome
+> and watch it land without leaving the capability under discussion. It
+> defaults **open on the session page** (there, the log is the artifact)
+> and **closed on the drill-in** (the grid wants the width), with its own
+> cookie so it can't move the assessment sidebar's preference.
+> Still to build: auto-suggested contrast pairs (§e), evidence requests as a
+> session outcome (§f), and **carried-vs-vetted provenance across the three
+> read surfaces** (overview / dot grid / wall stamp all show a carried
+> rating as if it were vetted this cycle, while the session's own readiness
+> badges already say "To confirm" — see *Deliberately deferred*).
 > Read alongside [assessments.md](../guidelines/assessments.md),
 > [scoring-model.md](scoring-model.md), and
 > [event-sourcing.md](../guidelines/event-sourcing.md).
@@ -217,50 +264,47 @@ screen-shared display. The facilitator is an ancestor of the entire population
 (subtree-scoped adds guarantee it), so existing `AssessmentPolicy`
 chain-visibility already admits every read. **Zero authorization changes.**
 
-- **Anonymized by default, reveal-on-interrogation** — see *Anonymization —
-  conversation choreography* below.
+- **The room sees who it is discussing** — see *Naming* below.
 - Session `create` is gated on "manages managers in own subtree" or tenant
   admin.
 
-### Anonymization — conversation choreography (resolved)
+### Naming — the room sees who it is discussing (resolved)
 
-Anonymization in the session screens is **not privacy control** (access
-control is already solved — facilitator-only means Pundit did its job before
-anything rendered) and **not secrecy** (every dot's rater is in the room,
-grid position often uniquely identifies — "Raj's only L5" — and evidence
-bodies name projects that name people; a determined room de-anonymizes any
-dot in seconds). Its one job is **conversation choreography**: make the room
-debate the *standard* before it debates *individuals*, and keep the
-reflexive derailment ("well, Priya's situation is special…") from firing
-before the pattern has been read. That framing decides the design:
+The drill-in **names everyone**: a dot carries the ratee's initials as its
+compact label plus their full name (tooltip + accessible name), the person
+card and compare cards name them outright, and evidence-wall items show the
+author and the text.
 
-- **Anonymized by default, everywhere.** The overview barely contains person
-  names anyway (the tendency strip names raters — the room; the divergence
-  board is aggregates), so this is effectively a drill-in rule.
-- **Reveal-on-interrogation.** Clicking a dot — the gesture that already
-  means "let's talk about this one" — opens the person card AND reveals that
-  person. No toggle friction: the reveal rides a gesture the facilitator was
-  making anyway, and the anonymity boundary lands exactly on the discussion
-  boundary — **revealed set = discussed set**. Dots the room never discusses
-  stay unnamed for the whole session, which is the one *real* value
-  anonymity has here.
-- **Sticky per person, across capabilities**, for the session screen's
-  lifetime. Once Priya was discussed under Strategic Thinking, her dot
-  arriving already-named under Communication is correct — the seal is
-  broken; re-anonymizing would be pretense. Client-side view state, not
-  evented.
-- **While anonymous, there is no card to open-without-revealing** — an
-  unrevealed dot shows only fill (evidence backing) and color (frequency).
-  Evidence bodies follow the reveal automatically (free text identifies
-  people, so it cannot precede the name).
-- **Compare-tray pinning implies discussing implies revealed** — no special
-  casing.
-- **A session-level "run named" override** exists — chosen at start,
-  changeable live — for small high-trust rooms where anonymity would be
-  ceremony (a 4-person team where every dot is obvious). An override, not a
-  mode to reach for.
-- Side effect worth keeping: the revealed set is an honest session artifact
-  ("discussed 6 of 23 people") the session log can carry for free.
+> **Superseded (2026-07-29).** V1 shipped an anonymisation layer —
+> anonymous-by-default dots, reveal-on-interrogation, sticky per person,
+> with a session-level "Show names" override
+> (`calibration_reveal_controller`). It has been **removed entirely**, along
+> with its controller, its state and its toggle.
+
+Why it went, since the reasoning is worth keeping for anyone tempted to
+reintroduce it:
+
+- **It never was privacy control, and it stopped being choreography.** Access
+  control was already solved (facilitator-only; Pundit ran before anything
+  rendered), and it was never secrecy — every dot's rater is in the room,
+  grid position often uniquely identifies ("Raj's only L5"), and evidence
+  bodies name projects that name people. Its one claim was *choreography*:
+  make the room debate the standard before the individual.
+- **The grid has to be discussable.** A wall of unlabelled dots can't be
+  pointed at ("which one is that?"), so the dots gained initials — and in a
+  room of six, beside a named rater column, initials identify people. What
+  remained was the *appearance* of anonymity over data that no longer was.
+- **Half-anonymity costs more than it buys.** Two vocabularies (revealed /
+  unrevealed), a sticky client-side state, a wall that hid its own content
+  behind a placeholder, and a per-person reveal set threaded through the
+  frame swaps — all to delay a name the room could already infer.
+
+What replaces it is the ordinary discipline the rest of the product uses:
+the facilitator is an ancestor of the whole population, so they were always
+entitled to every name on screen; the session is a projected working
+surface, not a publication. If a room wants to debate the standard before
+the person, the **divergence board** — which is aggregate by construction —
+is the surface for that, and it comes before the drill-in by design.
 
 ### V2 path — session-scoped visibility grant (documented, deferred)
 
@@ -459,7 +503,9 @@ Card contents and rules:
   as level chips — the viewer-familiar "contested" signal.
 - **Author identity is relation-first in session views.** The card shows
   "peer feedback" / "manager" / "self" / "requested from …" rather than the
-  author's name by default, with a facilitator reveal per item. Rationale:
+  author's name — and, unlike the ratee's name, this one has NOT been
+  dropped (see *Naming*): who is being discussed is the room's business,
+  who wrote the feedback is not. Rationale:
   the facilitator is entitled to author names under `EvidencePolicy`, but the
   projected room is a wider *practical* audience than the policy
   contemplates, and peers wrote frank feedback under the existing visibility
@@ -500,11 +546,8 @@ either the ratings converge, or the expectation text gets flagged, or both.
 The wall makes the comparison ambient instead of requiring the facilitator to
 hunt for it dot by dot.
 
-- The wall follows the same per-person reveal state as the grid (see
-  *Anonymization — conversation choreography*): items for not-yet-revealed
-  people collapse to valence badge + rating + relation (bodies identify
-  people); a person's items expand once they've been revealed anywhere in
-  the session.
+- Each wall item names its person and shows what was written (see
+  *Naming*).
 - Unbacked cells don't appear on the wall by definition — the hollow dots in
   the grid remain their signal.
 
@@ -693,17 +736,55 @@ Mechanics — everything not listed here is inherited untouched:
 |---|---|
 | Participant follow-along devices + the narrow session-scoped visibility grant | Facilitator-only projection proves insufficient in real sessions |
 | Auto-suggested contrast pairs in the compare tray | Manual pinning proves the gesture |
+| **Carried-vs-vetted provenance on the read surfaces** — see below | Before the next real session; or the next change to any of the three surfaces |
 | Cross-cycle calibration trend views ("is Raj converging?") | ≥2 cycles of session data exist |
 | Automated bias scoring beyond the tendency strip | Never, ideally — the strip states facts; the room supplies judgment |
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
 
+### Carried-vs-vetted provenance on the read surfaces
+
+**The gap.** Cross-cycle seeding (ADR-20) carries a rating forward, and the
+assessment side now treats "carried but unconfirmed" as materially different
+from "vetted this cycle" — it doesn't count toward completion and renders
+**"To confirm"** (see [assessments.md](../guidelines/assessments.md) →
+*Carried-rating affordance*, `Assessments::LevelCoverage`). The session
+page's **readiness** badges already speak that vocabulary. The three
+**read** surfaces do not: `OverviewStats` (tendency strip + divergence
+board), `DrillInStats` (the rater × level dot grid), and `EvidenceWall` (the
+per-item `Mgr:` stamp) all read `manager_rated_frequency` without consulting
+`manager_rating_source`.
+
+**Why it matters here specifically.** A calibration room's whole premise is
+that the numbers on screen are what each rater *decided*. A carried value is
+last cycle's decision, unexamined — the room can spend twenty minutes
+reconciling a divergence that neither rater has actually formed a view on.
+It also skews the tendency strip: a manager who confirmed nothing reads as
+having a tendency they never expressed this cycle.
+
+**Why it isn't fixed in the evidence-wall change.** The gap spans all three
+surfaces, and they sit on one screen — a wall that marked carried values
+while the grid directly above it did not would read as a bug, not a fix. It
+wants one change that threads provenance through all three consistently.
+
+**Shape when picked up.** Provenance is already on the read model
+(`assessment_level_ratings.manager_rating_source` / `self_rating_source`),
+so this is presentation, not data: pluck the source alongside the frequency
+in each of the three queries, and pick the signal per surface — the grid's
+dots already spend fill on evidence backing and colour on frequency, so
+carried state needs a third primitive (or a muted treatment), never a
+recolour. Decide deliberately whether a carried value should be *excluded*
+from the divergence/tendency maths or merely *marked*: excluding is more
+honest about what the room can act on, marking preserves the signal that a
+rater has coasted. Prefer marking first — the strip states facts and the
+room supplies judgment (the rule the tendency strip is already built on).
+
 ## Open questions
 
-1. **Evidence author reveal** — is relation-first with per-item reveal the
-   right default, or should tenant config choose (some orgs are
-   radically-transparent about feedback authorship)?
+1. **Evidence author identity** — relation-first is the default and no
+   per-item reveal is built. Should tenant config be able to name authors
+   (some orgs are radically-transparent about feedback authorship)?
 2. **Agenda persistence** — is the auto-agenda regenerated on every prep view
    until start (data may still be changing), then frozen with the session?
    (Proposed: yes — frozen agenda is part of the `SessionStarted` snapshot.)

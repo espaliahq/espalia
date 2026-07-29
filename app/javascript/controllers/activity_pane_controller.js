@@ -26,12 +26,19 @@
 import BaseController from "controllers/base_controller"
 import { useClickOutside, useTransition } from "stimulus-use"
 
-const COOKIE_NAME = "assessment_activity_pane_open"
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 const MOBILE_BREAKPOINT = 1024
 
 export default class extends BaseController {
   static targets = ["pane", "toggle"]
+  // Each surface keeps its own open/closed preference — a room that runs
+  // the calibration log open shouldn't force the assessment sidebar open —
+  // and its own first-visit default (a page whose point IS the feed opens
+  // it; one where the feed is a companion doesn't).
+  static values = {
+    cookie: { type: String, default: "assessment_activity_pane_open" },
+    defaultState: { type: String, default: "closed" }
+  }
 
   connect() {
     super.connect()
@@ -102,7 +109,7 @@ export default class extends BaseController {
     const cookie = this.#readCookie()
     if (cookie === "open" || cookie === "closed") return cookie
 
-    return "closed"
+    return this.defaultStateValue === "open" ? "open" : "closed"
   }
 
   #visualState() {
@@ -154,13 +161,13 @@ export default class extends BaseController {
   }
 
   #readCookie() {
-    const match = document.cookie.match(new RegExp("(?:^|; )" + COOKIE_NAME + "=([^;]+)"))
+    const match = document.cookie.match(new RegExp("(?:^|; )" + this.cookieValue + "=([^;]+)"))
     return match ? decodeURIComponent(match[1]) : null
   }
 
   #writeCookie(value) {
     document.cookie =
-      `${COOKIE_NAME}=${encodeURIComponent(value)}; ` +
+      `${this.cookieValue}=${encodeURIComponent(value)}; ` +
       `path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`
   }
 }

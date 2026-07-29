@@ -17,9 +17,14 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     @other_manager = create(:person, tenant: @tenant, name: "Kim Elsewhere")
     @ref = create(:person, tenant: @tenant, name: "Ref Point", manager: @other_manager) # L3
 
+    # The population is all engineers; the framework also carries an EM role
+    # that nobody on this grid holds.
+    @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer", code: "E")
+    @manager_role = create(:framework_role, tenant: @tenant, name: "Engineering Manager", code: "EM")
+
     { @r1 => 3, @r2 => 4, @ref => 3 }.each do |person, ordinal|
       create(:person_framework_assignment, tenant: @tenant,
-             person_id: person.id, framework_id: @framework_id)
+             person_id: person.id, framework_id: @framework_id, role_id: @engineer.role_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
              person_id: person.id, level_ordinal: ordinal)
     end
@@ -28,9 +33,9 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
                       framework_id: @framework_id, name: "Thinking")
     @cap = create(:framework_capability, tenant: @tenant,
                   category_id: category.category_id, name: "Strategic Thinking")
-    create(:framework_behavioural_expectation, tenant: @tenant,
-           capability_id: @cap.capability_id, level_ordinal: 3,
-           description: "Identifies root causes and weighs trade-offs.")
+    @exp_l3 = create(:framework_behavioural_expectation, tenant: @tenant,
+                     capability_id: @cap.capability_id, level_ordinal: 3,
+                     description: "Identifies root causes and weighs trade-offs.")
     create(:framework_behavioural_expectation, tenant: @tenant,
            capability_id: @cap.capability_id, level_ordinal: 4,
            description: "Shapes team direction by connecting work to strategy.")
@@ -118,5 +123,40 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
 
     dot = stats[:rows].find { |row| row[:rater_id] == @em_1.id }[:people][3].first
     assert_nil dot[:frequency]
+  end
+
+  context "illustrations" do
+    setup do
+      illustrate(@engineer, "Unwinds a circular dependency without help.")
+      illustrate(@manager_role, "Coaches the team through the trade-off.")
+    end
+
+    should "include only the roles being calibrated at that level" do
+      groups = stats[:illustrations][3]
+
+      assert_equal [ "Software Engineer" ], groups.map { |g| g[:role_name] }
+      assert_equal [ "Unwinds a circular dependency without help." ], groups.first[:items]
+    end
+
+    should "include a role once the population holds it" do
+      # Re-assign one L3 member to the manager role — now both are calibrated
+      # at L3 and both sets of examples are relevant.
+      PersonFrameworkAssignment
+        .find_by(person_id: @ref.id, framework_id: @framework_id)
+        .update!(role_id: @manager_role.role_id)
+
+      assert_equal [ "Engineering Manager", "Software Engineer" ],
+                   stats[:illustrations][3].map { |g| g[:role_name] }
+    end
+
+    should "leave a level with no illustrations for its roles empty" do
+      assert_nil stats[:illustrations][4]
+    end
+  end
+
+  def illustrate(role, description)
+    create(:framework_role_illustration, tenant: @tenant,
+           expectation_id: @exp_l3.expectation_id, role_id: role.role_id,
+           description: description)
   end
 end

@@ -85,10 +85,19 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
               capability[:category_name]
             end
           end
+          # Persistently underlined + chevroned: this row is the way into the
+          # drill-in, and a hover-only affordance hides that on a projector.
           a(
             href: calibration_session_capability_path(@session, capability[:stable_id]),
-            class: "text-sm font-medium text-gray-900 dark:text-white hover:text-primary hover:underline"
-          ) { capability[:name] }
+            class: "group/cap inline-flex items-baseline gap-1 text-sm font-medium " \
+                   "text-gray-900 dark:text-white underline decoration-gray-400 " \
+                   "dark:decoration-gray-500 underline-offset-4 hover:decoration-gray-900 " \
+                   "dark:hover:decoration-white"
+          ) do
+            plain capability[:name]
+            span(class: "text-gray-600 dark:text-gray-300 transition-transform " \
+                        "group-hover/cap:translate-x-0.5", aria: { hidden: "true" }) { "›" }
+          end
         end
         div(class: "flex items-center gap-2 text-xs") do
           span(class: "text-gray-600 dark:text-gray-300") do

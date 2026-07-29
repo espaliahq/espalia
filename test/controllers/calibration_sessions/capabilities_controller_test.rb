@@ -75,6 +75,111 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       get calibration_session_capability_path(@session, SecureRandom.uuid_v7)
       assert_redirected_to calibration_session_path(@session)
     end
+
+    should "render the evidence wall with named items and filters" do
+      get calibration_session_capability_path(@session, @cap.stable_id, view: "wall")
+
+      assert_response :success
+      assert_includes response.body, "1 item"
+      # Who it is about and what was written, both in the open.
+      assert_includes response.body, "Ivy IC"
+      assert_includes response.body, "Led the pricing re-architecture"
+      assert_includes response.body, "wall-filter-wall_level"
+    end
+
+    should "apply wall filters and carry them into every pane link" do
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_level: 4)
+
+      assert_response :success
+      assert_includes response.body, "0 items"
+      assert_not_includes response.body, "Led the pricing re-architecture"
+      # Stepping out to another pane and back must return to the same filter.
+      assert_includes response.body, "wall_level=4"
+    end
+
+    should "route the rater filter through to the wall" do
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_rater: @em.id)
+      assert_includes response.body, "1 item"
+
+      other_rater = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_rater: other_rater.id)
+      # Not a participant — the filter is rejected rather than emptying the wall.
+      assert_includes response.body, "1 item"
+    end
+
+    should "survive array and non-numeric filter params without erroring" do
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_level: [ "3" ])
+      assert_response :success
+
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_level: "abc")
+      assert_response :success
+      assert_includes response.body, "1 item"
+    end
+
+    should "render the compare tray for pinned people, dropping foreign pins" do
+      get calibration_session_capability_path(
+        @session, @cap.stable_id, view: "compare",
+        compare: [ @report.id, SecureRandom.uuid_v7, @em.id ]
+      )
+
+      assert_response :success
+      assert_includes response.body, "Compare (1)"
+      assert_includes response.body, "Ivy IC"
+      assert_includes response.body, "Unpin"
+    end
+
+    should "resolve pins before capping so stale ids can't squeeze out a live one" do
+      stale = Array.new(CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS) { SecureRandom.uuid_v7 }
+
+      get calibration_session_capability_path(
+        @session, @cap.stable_id, view: "compare", compare: stale + [ @report.id ]
+      )
+
+      assert_includes response.body, "Compare (1)"
+      assert_includes response.body, "Ivy IC"
+    end
+
+    should "carry the pane, the opened person, the pins and the filters through an outcome POST" do
+      post calibration_session_rating_revisits_path(@session), params: {
+        person_id: @report.id, capability_stable_id: @cap.stable_id,
+        level_ordinal: 3, note: "Compare the pricing work with Omar's.",
+        compare: [ @report.id ], view: "wall", wall_valence: "demonstrated"
+      }
+
+      assert_response :redirect
+      assert_includes response.redirect_url, "compare%5B%5D=#{@report.id}"
+      assert_includes response.redirect_url, "person=#{@report.id}"
+      assert_includes response.redirect_url, "view=wall"
+      assert_includes response.redirect_url, "wall_valence=demonstrated"
+    end
+
+    should "carry the same state through a flag POST, which names the person differently" do
+      post calibration_session_expectation_flags_path(@session), params: {
+        capability_stable_id: @cap.stable_id, level_ordinal: 3,
+        reason: "Scope or altitude?", person: @report.id,
+        compare: [ @report.id ], view: "compare"
+      }
+
+      assert_response :redirect
+      assert_includes response.redirect_url, "person=#{@report.id}"
+      assert_includes response.redirect_url, "compare%5B%5D=#{@report.id}"
+      assert_includes response.redirect_url, "view=compare"
+    end
+
+    should "not error when an outcome POST carries a hash compare param" do
+      post calibration_session_rating_revisits_path(@session), params: {
+        person_id: @report.id, capability_stable_id: @cap.stable_id,
+        level_ordinal: 3, note: "Malformed state.", compare: { "x" => "y" }
+      }
+
+      assert_response :redirect
+      assert_not_includes response.redirect_url, "compare"
+    end
   end
 
   context "as a participant EM (v1 facilitator-only)" do
