@@ -62,6 +62,23 @@
 > (`MAX_COMPARE_PINS`), assembled through the same `PersonCard` query as the
 > person card; a pin only survives if it resolves to a card (no phantom that
 > can't be unpinned), and **pinning implies revealed**.
+> **The bottom pane is a Turbo Frame** (`calibration-pane`): every pane
+> link differs from the current URL only by query string, so full-page
+> navigation scrolled the room to the top and hid whatever they just
+> opened. The frame swaps in place and the URL is pushed separately, so
+> deep links and Back still work. Consequence to respect when adding
+> links: anything rendered OUTSIDE the frame (the grid's dots, the ⚑ flag
+> form) freezes at page-load state and must opt into having the live
+> compare pins merged in at click/submit time
+> (`data-pane-keep-compare` / `calibration-pane#stampState`). Grid dots
+> carry the ratee's **initials** — an unlabelled dot can't be discussed —
+> while the reveal still governs the full name; the rater column is
+> sticky-left so a sideways scroll can't orphan a row of dots.
+> "What good looks like" shows each level's **role illustrations** under
+> its canonical expectation (a disagreement is often two raters reading
+> different examples), and the **session log renders in the product's
+> activity-panel form** — one reverse-chronological feed with kind dots
+> and filter chips, not sections split by outcome type.
 > Still to build: auto-suggested contrast pairs (§e), evidence requests as a
 > session outcome (§f), and **carried-vs-vetted provenance across the three
 > read surfaces** (overview / dot grid / wall stamp all show a carried
