@@ -3,13 +3,10 @@
 # The capability drill-in — expectation text per level above a
 # rater × level dot grid, with a person card when a dot is opened.
 #
-# Anonymization is conversation choreography, not privacy control
-# (docs/architecture/calibration-sessions.md): a dot carries the ratee's
-# INITIALS — a grid of unlabelled dots can't be discussed — but the FULL
-# name waits for the reveal. Opening a dot (`?person=`) IS that reveal,
-# sticky per person in sessionStorage via the calibration-reveal Stimulus
-# controller; a session-level "Show names" toggle overrides for
-# high-trust rooms.
+# The room sees who it is discussing: a dot carries the ratee's INITIALS
+# and their full name (tooltip + accessible name), and wall items show the
+# author and the text. There is no anonymisation layer — see
+# docs/architecture/calibration-sessions.md, "Naming".
 # Dot fill = evidence backing (solid backed / outlined unbacked), colour =
 # the shared frequency palette — the two signals never share a primitive.
 class Views::CalibrationSessions::DrillInView < Views::Base
@@ -62,17 +59,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       div(
         class: "max-w-7xl mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
-          controller: "calibration-reveal calibration-pane#{' activity-pane' if @session_log}",
+          controller: "calibration-pane#{' activity-pane' if @session_log}",
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::DRILL_IN_COOKIE,
-          calibration_reveal_session_id_value: @session.id,
-          calibration_reveal_reveal_person_value: @person_card&.dig(:dot, :person_id).to_s,
-          # Pinning to compare implies discussing implies revealed.
-          calibration_reveal_reveal_persons_value: @compare_ids.to_json,
           # One delegated handler for every in-page pane link (dots, tabs,
           # pins, unpin, close) — they all differ from the current URL only
           # by query string, which is exactly how the controller spots them.
-          action: "click->calibration-pane#navigate " \
-                  "calibration:revealed@window->calibration-reveal#onRevealed"
+          action: "click->calibration-pane#navigate"
         }
       ) do
         div(class: "min-w-0 flex-1") do
@@ -107,12 +99,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @stats[:capability][:name] }
         end
       end
-      button(
-        type: "button",
-        class: "inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 " \
-               "px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800",
-        data: { action: "calibration-reveal#toggleNamed", calibration_reveal_target: "toggle" }
-      ) { "Show names" }
       if @session_log
         render Views::CalibrationSessions::LogPaneToggle.new(
           entry_count: @session_log[:entries].size
@@ -274,9 +260,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   # The dot carries the member's INITIALS — a grid of unlabelled dots can't
   # be discussed ("which one is that?"), and the divergence board already
-  # initials its rater dots. The reveal still governs the FULL name (title
-  # + accessible name) and the wall's text; initials identify the column
-  # without putting the room's attention on a name.
+  # initials its rater dots. The full name rides the tooltip and the
+  # accessible name.
   def render_dot(dot, ordinal)
     base = dot_description(dot, ordinal)
     a(
@@ -288,15 +273,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       href: drill_in_path(view: nil, person: dot[:person_id], compare: [],
                           filters: {}),
       class: "inline-flex h-11 w-11 items-center justify-center",
-      aria: { label: "#{initials(dot[:name])} — #{base}. Open to discuss." },
-      data: {
-        pane_keep_state: "true",
-        calibration_reveal_target: "dot",
-        person_id: dot[:person_id],
-        person_name: dot[:name],
-        initials: initials(dot[:name]),
-        base_label: base
-      }
+      title: dot[:name],
+      # Initials are the compact label; the accessible name carries the
+      # person, since "BA" tells a screen-reader user nothing.
+      aria: { label: "#{dot[:name]} — #{base}. Open to discuss." },
+      data: { pane_keep_state: "true", person_id: dot[:person_id] }
     ) do
       span(
         class: "inline-flex h-7 w-7 items-center justify-center rounded-full " \
@@ -465,7 +446,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
               "Feedback / Evidence — #{@stats[:capability][:name]}"
             end
             p(class: "text-xs text-gray-600 dark:text-gray-300") do
-              "#{@wall[:total]} #{'item'.pluralize(@wall[:total])} · unrevealed people show the shape, not the text"
+              "#{@wall[:total]} #{'item'.pluralize(@wall[:total])} across the population"
             end
           end
           wall_filters_form
@@ -540,15 +521,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # One wall item. The body and name live in the detail half, hidden until
-  # the person is revealed (free text identifies people, so it cannot
-  # precede the name) — the collapsed half shows the calibration shape:
-  # rating stamp, valence, relation, rater. Server renders detail hidden so
-  # the unrevealed default holds even before Stimulus connects.
+  # One wall item: the calibration shape (rating stamp, valence, relation,
+  # rater) above the person and what was actually written about them.
   def wall_item(item)
     li(
       class: "rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2",
-      data: { calibration_reveal_target: "wallItem", person_id: item[:person_id] }
+      data: { person_id: item[:person_id] }
     ) do
       div(class: "flex flex-wrap items-center gap-2") do
         rating_pill("Mgr", item[:frequency])
@@ -558,12 +536,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           plain " · #{rater_name(item[:rater_id])}'s report" if item[:rater_id]
         end
       end
-      div(class: "mt-1.5", data: { reveal_role: "summary" }) do
-        p(class: "text-xs italic text-gray-600 dark:text-gray-300") do
-          "Open this person's dot to reveal the text."
-        end
-      end
-      div(class: "mt-1.5 hidden", data: { reveal_role: "detail" }) do
+      div(class: "mt-1.5") do
         p(class: "text-xs font-medium text-gray-900 dark:text-white") { item[:person_name] }
         p(class: "mt-0.5 text-sm text-gray-900 dark:text-white") { item[:content].truncate(280) }
         p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") do
@@ -600,8 +573,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # A pinned mini person card. Pinned ⇒ discussed ⇒ revealed, so the name
-  # renders server-side by design.
+  # A pinned mini person card.
   def compare_card(person_id, card_data)
     dot = card_data[:dot]
     div(class: "rounded-lg border border-gray-200 dark:border-gray-700 p-3",
@@ -653,8 +625,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # The opened member's card — rendering it is the reveal, so the name is
-  # shown here by design.
+  # The opened member's card.
   def person_card_section
     dot = @person_card[:dot]
     div(class: "mt-6", id: "calibration-person-card") do

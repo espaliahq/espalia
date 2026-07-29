@@ -9,12 +9,8 @@
 // the Back button honest — the matrix-frame pattern the framework explorer
 // and the assessment views already use.
 //
-// Opening a dot or pinning someone is also the reveal gesture, so each
-// navigation republishes the revealed ids for `calibration-reveal` (which
-// lives on the same element and can't see inside the frame's swap).
-//
 // Example usage:
-// <div data-controller="calibration-reveal calibration-pane"
+// <div data-controller="calibration-pane"
 //      data-action="click->calibration-pane#navigate">
 //   <a href="?person=…">…</a>
 //   <turbo-frame id="calibration-bottom-pane"
@@ -124,17 +120,5 @@ export default class extends BaseController {
   #load(url, { push = true } = {}) {
     this.frameTarget.src = `${url.pathname}${url.search}`
     if (push) history.pushState({}, "", url)
-    this.#publishRevealed(url)
-  }
-
-  // The opened person and every pin count as revealed — the reveal
-  // controller owns the sticky state, so hand it the ids rather than
-  // reaching into its storage.
-  #publishRevealed(url) {
-    const params = url.searchParams
-    const personIds = [params.get("person"), ...params.getAll("compare[]")].filter(Boolean)
-    if (!personIds.length) return
-
-    window.dispatchEvent(new CustomEvent("calibration:revealed", { detail: { personIds } }))
   }
 }

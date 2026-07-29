@@ -173,26 +173,21 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # ── Drill-in: divergence row → rater × level grid ──
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
     assert_text "AT-LEVEL RATINGS BY RATER"
-    assert_selector "a[data-calibration-reveal-target='dot']", minimum: 4
+    assert_selector "a[data-person-id]", minimum: 4
 
-    # Initials identify the column; the FULL name waits for the reveal.
-    wait_for_stimulus "calibration-reveal"
+    # The dot is initialled for compactness and named for everyone else.
     dot = find("a[data-person-id='#{@report_1.id}']")
     assert_equal "II", dot.text.strip, "dots carry the ratee's initials"
-    assert dot["aria-label"].start_with?("II —"),
-      "an unrevealed dot is named by its initials, not the person's name"
-    assert_not_includes dot["aria-label"], "Ivy IC",
-      "dots must not carry the full name before reveal"
+    assert_equal "Ivy IC", dot["title"]
+    assert dot["aria-label"].start_with?("Ivy IC —"),
+      "the accessible name carries the person, not just their initials"
 
-    # Opening a dot IS the reveal: card shows the person, dot becomes named
+    # Opening a dot shows their card.
     click_with_retry(expect_text: "Close") do
       find("a[data-person-id='#{@report_1.id}']").click
     end
     assert_text "Ivy IC"
     assert_text "Manager: Consistently"
-    wait_for_stimulus "calibration-reveal"
-    assert_selector "a[data-person-id='#{@report_1.id}'][data-revealed='true']"
-    assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='false']"
 
     # ── The pane swaps in place: the room keeps its scroll position ──
     # A full-page navigation would scroll back to the top, hiding the very
@@ -212,15 +207,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # …and the URL still carries the pane, so the view stays shareable.
     assert_includes page.current_url, "view=wall"
     page.driver.browser.manage.window.resize_to(1400, 1400)
-    wait_for_stimulus "calibration-reveal"
-    # Ivy was revealed by opening her dot; Omar was never opened, so his item
-    # shows only its calibration shape.
-    assert_selector "li[data-calibration-reveal-target='wallItem'][data-revealed='true']", count: 1
+    # Every item names its person and shows what was written — the room
+    # compares near-identical evidence under divergent ratings.
     assert_text "Ran the pricing spike end to end."
-    # Text AND name are both withheld for the unrevealed person.
-    assert_no_text "Ran the billing spike end to end."
-    assert_no_text "Omar IC"
-    assert_text "Open this person's dot to reveal the text."
+    assert_text "Ran the billing spike end to end."
+    assert_text "Ivy IC"
+    assert_text "Omar IC"
 
     # Filtering narrows the wall.
     page.execute_script(<<~JS)
@@ -253,13 +245,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_selector "[data-compare-card='#{@report_2.id}']"
     assert_text "Ran the billing spike end to end."
 
-    # Pinned ⇒ discussed ⇒ revealed: Omar's wall item now shows its text.
-    click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "2 items")
-    wait_for_stimulus "calibration-reveal"
-    assert_selector "li[data-calibration-reveal-target='wallItem'][data-revealed='true']", count: 2
-    assert_text "Ran the billing spike end to end."
-
-    # Unpinning drops the card but not the reveal (sticky for the session).
+    # Unpinning drops the card.
     # Sync on the tray's own heading — a signal already on the wall could
     # never arm the JS fallback (testing.md).
     click_link_with_js_fallback("Compare (2)", expect_text: "COMPARE")
@@ -267,12 +253,6 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       find("[data-compare-card='#{@report_2.id}'] a", text: "Unpin").click
     end
     assert_no_selector "[data-compare-card='#{@report_2.id}']"
-
-    # Session-level "Show names" override (JS-dispatched — Stimulus toggle)
-    wait_for_stimulus "calibration-reveal"
-    page.execute_script("document.querySelector(\"[data-calibration-reveal-target='toggle']\").click()")
-    assert_selector "button[data-calibration-reveal-target='toggle']", text: "Hide names"
-    assert_selector "a[data-person-id='#{@report_2.id}'][data-revealed='true']"
   end
 
   test "facilitator flags an unclear expectation from the drill-in" do

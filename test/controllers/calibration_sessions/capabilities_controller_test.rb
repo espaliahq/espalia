@@ -76,17 +76,14 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_redirected_to calibration_session_path(@session)
     end
 
-    should "render the evidence wall with reveal-gated items and filters" do
+    should "render the evidence wall with named items and filters" do
       get calibration_session_capability_path(@session, @cap.stable_id, view: "wall")
 
       assert_response :success
       assert_includes response.body, "1 item"
-      # The detail half (name + text) is server-rendered but hidden — the
-      # `hidden` class IS the pre-Stimulus guarantee, so pin it, not just
-      # the presence of the wrapper.
+      # Who it is about and what was written, both in the open.
+      assert_includes response.body, "Ivy IC"
       assert_includes response.body, "Led the pricing re-architecture"
-      assert_match(/class="mt-1\.5 hidden"[^>]*data-reveal-role="detail"/, response.body)
-      assert_includes response.body, 'data-reveal-role="summary"'
       assert_includes response.body, "wall-filter-wall_level"
     end
 
@@ -134,9 +131,6 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.body, "Compare (1)"
       assert_includes response.body, "Ivy IC"
       assert_includes response.body, "Unpin"
-      # Pinned people are seeded into the reveal controller's state.
-      assert_includes response.body,
-                      "data-calibration-reveal-reveal-persons-value=\"[&quot;#{@report.id}&quot;]\""
     end
 
     should "resolve pins before capping so stale ids can't squeeze out a live one" do

@@ -4,10 +4,7 @@
 # the rater × level dot grid, with three bottom-pane views — the per-person
 # card (`?person=`), the evidence wall (`?view=wall`), and the compare tray
 # (`?view=compare` + `compare[]=` pins). Facilitator-only, like every
-# session surface (v1). Opening a dot (`?person=`) IS the reveal gesture,
-# and pinning to compare implies discussing implies revealed — the
-# client-side choreography keys off these params
-# (docs/architecture/calibration-sessions.md, "Anonymization").
+# session surface (v1) — see docs/architecture/calibration-sessions.md.
 class CalibrationSessions::CapabilitiesController < ApplicationController
   include CalibrationSessions::SessionLogData
 
@@ -89,9 +86,8 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       .first(MAX_COMPARE_PINS).to_h
   end
 
-  # The people the grid actually plots — the wall and the tray share this
-  # population so every wall item's reveal gesture (opening that person's
-  # dot) is reachable.
+  # The people the grid actually plots — the wall and the tray read the
+  # same population, so every wall item has a dot to open.
   def grid_person_ids(stats)
     @grid_person_ids ||= stats[:rows].flat_map { |row| row[:people].values.flatten }
       .map { |dot| dot[:person_id] }.uniq

@@ -10,17 +10,15 @@
 # actually awarded for across teams — the norming surface. The money shot is
 # two near-identical pieces of evidence under divergent ratings.
 #
-# Anonymization is the VIEW's job (the wall follows the drill-in's reveal
-# state client-side); this query returns full items and names — the
-# facilitator is entitled to all of it, and the collapse is choreography,
-# not privacy (the design doc's framing).
+# Returns full items and names: the room discusses what was actually
+# written about whom (docs/architecture/calibration-sessions.md, "Naming").
 class CalibrationSessions::EvidenceWall
   # @param session [CalibrationSession]
   # @param capability_stable_id [String]
   # @param person_ids [Array<String>, nil] the population to read; defaults
   #   to the session's calibrants. The drill-in passes the grid's population
-  #   so the wall and the grid agree on who is on screen — every wall item's
-  #   reveal gesture (open that person's dot) has to be reachable.
+  #   so the wall and the grid agree on who is on screen — every wall item
+  #   needs a dot to open.
   # @param level [Integer, nil] filter to one level ordinal
   # @param valence [String, nil] filter to one EvidenceLink valence
   # @param rater_id [String, nil] filter to one participant's people
