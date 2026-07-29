@@ -76,9 +76,17 @@
 > sticky-left so a sideways scroll can't orphan a row of dots.
 > "What good looks like" shows each level's **role illustrations** under
 > its canonical expectation (a disagreement is often two raters reading
-> different examples), and the **session log renders in the product's
-> activity-panel form** — one reverse-chronological feed with kind dots
-> and filter chips, not sections split by outcome type.
+> different examples), collapsed behind the evidence dialog's shared
+> **"Examples (N)"** disclosure so the rated text stays primary. The
+> **session log is a right-hand activity SIDE PANEL** — the product's
+> established pattern (the explorer's context pane, the assessment
+> sidebar): one reverse-chronological feed with kind dots and filter
+> chips, inline+sticky on lg and a fixed overlay below, rendered on the
+> drill-in as well as the session page so the room can raise an outcome
+> and watch it land without leaving the capability under discussion. It
+> defaults **open on the session page** (there, the log is the artifact)
+> and **closed on the drill-in** (the grid wants the width), with its own
+> cookie so it can't move the assessment sidebar's preference.
 > Still to build: auto-suggested contrast pairs (§e), evidence requests as a
 > session outcome (§f), and **carried-vs-vetted provenance across the three
 > read surfaces** (overview / dot grid / wall stamp all show a carried
