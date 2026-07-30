@@ -159,4 +159,31 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
            expectation_id: @exp_l3.expectation_id, role_id: role.role_id,
            description: description)
   end
+
+  context "carried-forward provenance" do
+    should "mark a dot whose manager rating was seeded from the prior cycle" do
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: @r1.id, framework_id: @framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             manager_rated_frequency: "consistent", manager_rating_source: "seeded")
+
+      dot = stats[:rows].find { |row| row[:rater_id] == @em_1.id }[:people][3].first
+      assert dot[:carried], "a seeded manager rating is carried"
+      assert_equal "consistent", dot[:frequency], "the value is still shown"
+    end
+
+    should "not mark a human or legacy rating as carried" do
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: @r1.id, framework_id: @framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             manager_rated_frequency: "consistent", manager_rating_source: "human")
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: @r2.id, framework_id: @framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 4,
+             manager_rated_frequency: "some", manager_rating_source: nil)
+
+      carried = stats[:rows].flat_map { |r| r[:people].values.flatten }.map { |d| d[:carried] }
+      assert_equal [ false ], carried.uniq
+    end
+  end
 end

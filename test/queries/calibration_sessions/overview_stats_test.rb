@@ -46,11 +46,12 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
-  def rate(person, capability, manager:, self_freq: nil, ordinal: 3)
+  def rate(person, capability, manager:, self_freq: nil, ordinal: 3, source: nil)
     create(:assessment_level_rating, tenant: @tenant,
            cycle_id: @cycle.cycle_id, person_id: person.id, framework_id: @framework_id,
            capability_stable_id: capability.stable_id, level_ordinal: ordinal,
-           manager_rated_frequency: manager, self_rated_frequency: self_freq)
+           manager_rated_frequency: manager, self_rated_frequency: self_freq,
+           manager_rating_source: source)
   end
 
   def stats
@@ -191,6 +192,40 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
 
       result = stats
       assert_nil result[:org_mean], "reference person's ratings never enter the stats"
+    end
+  end
+
+  # Carried (seeded, unconfirmed) values still count toward every number —
+  # they are real data — but each surface marks them so the room can
+  # discount an inherited tendency or an unexamined disagreement.
+  context "carried-forward provenance" do
+    should "count carried cells per rater without changing the mean" do
+      rate(@r1, @cap_a, manager: "consistent", source: "seeded")
+      rate(@r2, @cap_a, manager: "none")
+
+      mia = stats[:raters].find { |r| r[:participant_id] == @em_1.id }
+      raj = stats[:raters].find { |r| r[:participant_id] == @em_2.id }
+
+      assert_equal 1, mia[:carried_count]
+      assert_equal 3.0, mia[:mean], "a carried value still counts as data"
+      assert_equal 0, raj[:carried_count]
+    end
+
+    should "treat only \"seeded\" as carried — nil is a legacy human row" do
+      rate(@r1, @cap_a, manager: "consistent", source: nil)
+      rate(@r2, @cap_a, manager: "some", source: "human")
+
+      assert_equal [ 0, 0 ], stats[:raters].map { |r| r[:carried_count] }
+    end
+
+    should "count carried cells behind each capability comparison" do
+      rate(@r1, @cap_a, manager: "consistent", source: "seeded")
+      rate(@r2, @cap_a, manager: "none")
+
+      row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 1, row[:carried_count]
+      assert_equal 2, row[:cell_count]
+      assert_equal 3.0, row[:spread], "the divergence is still ranked on real data"
     end
   end
 end

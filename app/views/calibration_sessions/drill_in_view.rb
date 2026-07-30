@@ -7,8 +7,10 @@
 # and their full name (tooltip + accessible name), and wall items show the
 # author and the text. There is no anonymisation layer — see
 # docs/architecture/calibration-sessions.md, "Naming".
-# Dot fill = evidence backing (solid backed / outlined unbacked), colour =
-# the shared frequency palette — the two signals never share a primitive.
+# Three signals on a dot, three primitives that never collide: colour =
+# frequency (the shared palette), fill = evidence backing (solid backed /
+# outlined unbacked), dashed edge = carried forward from the previous cycle
+# and unconfirmed.
 class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Assessments::FrequencyPalette
   include Views::Evidence::Valence
@@ -299,23 +301,36 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # at 10px these are small text needing 4.5:1, and hue-950 on hue-500 only
   # reaches ~4.0:1 on blue and ~4.3:1 on red. Near-black clears all four
   # fills in both modes.
+  # Three independent signals, three primitives that never collide:
+  # hue = frequency, fill = evidence backing (solid / outlined), and a
+  # DASHED edge = carried forward from the previous cycle, unconfirmed —
+  # the same "dashed means carried" vocabulary the assessment chips and
+  # pills use (see FrequencyPalette). A carried backed dot also drops to the
+  # lighter `chip_carried` tint, mirroring lighter = inherited.
   def dot_classes(dot)
     return "#{UNRATED_DOT} text-gray-600 dark:text-gray-300" unless dot[:frequency]
 
     config = CONFIG.fetch(dot[:frequency])
-    if dot[:backed]
+    if dot[:backed] && dot[:carried]
+      "#{config[:chip_carried]} border-2 #{config[:chip_carried_border]} text-gray-950"
+    elsif dot[:backed]
       "#{config[:chip_bg]} text-gray-950"
     else
       # Outline from the shared palette so an unbacked dot's hue can never
       # drift from the chips/pills for the same frequency.
-      "border-2 #{config[:border]} text-gray-900 dark:text-white"
+      "border-2 #{config[:border]} #{'border-dashed' if dot[:carried]} " \
+        "text-gray-900 dark:text-white"
     end
   end
 
+  # Carried state must be conveyed non-visually too — the dashed edge is
+  # decoration-only (FrequencyPalette's rule).
   def dot_description(dot, ordinal)
     rating = dot[:frequency] ? CONFIG.fetch(dot[:frequency])[:phrase] : "unrated"
     backing = dot[:backed] ? "evidence attached" : "no evidence"
-    "L#{ordinal} · #{rating} · #{backing}"
+    parts = [ "L#{ordinal}", rating, backing ]
+    parts << "carried forward from the previous cycle" if dot[:carried]
+    parts.join(" · ")
   end
 
   def frequency_legend
@@ -329,6 +344,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
         span(class: "inline-block h-3 w-3 rounded-full #{UNRATED_DOT}", aria: { hidden: "true" })
         plain "Unrated"
+      end
+      div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
+        span(class: "inline-block h-3 w-3 rounded-full border-2 border-dashed " \
+                    "border-gray-500 dark:border-gray-400", aria: { hidden: "true" })
+        plain "Carried from last cycle"
       end
     end
   end
@@ -529,7 +549,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       data: { person_id: item[:person_id] }
     ) do
       div(class: "flex flex-wrap items-center gap-2") do
-        rating_pill("Mgr", item[:frequency])
+        rating_pill("Mgr", item[:frequency], carried: item[:frequency_carried])
         valence_badge(item[:valence])
         span(class: "text-xs text-gray-600 dark:text-gray-300") do
           plain RELATION_LABELS.fetch(item[:relation], item[:relation])
@@ -594,7 +614,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         ) { "Unpin" }
       end
       div(class: "mt-2 flex flex-wrap gap-1.5") do
-        rating_pill("Mgr", dot[:frequency])
+        rating_pill("Mgr", dot[:frequency], carried: dot[:carried])
         rating_pill("Self", dot[:self_frequency])
       end
       if card_data[:evidence].empty?
@@ -651,7 +671,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           end
 
           div(class: "mt-3 flex flex-wrap gap-2") do
-            rating_pill("Manager", dot[:frequency])
+            rating_pill("Manager", dot[:frequency], carried: dot[:carried])
             rating_pill("Self", dot[:self_frequency])
           end
 
@@ -717,11 +737,25 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  def rating_pill(label, frequency)
+  # `carried:` renders the palette's dashed-outline variant — the same
+  # "carried forward, unconfirmed" signal the assessment pills use — and
+  # says so in the title, since the dash alone is decoration.
+  def rating_pill(label, frequency, carried: false)
     config = frequency && CONFIG[frequency]
-    classes = config ? config[:pill_bg] : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-    span(class: "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium #{classes}") do
-      plain "#{label}: #{config ? config[:phrase] : 'unrated'}"
+    classes = if config
+      carried ? config[:pill_carried] : config[:pill_bg]
+    else
+      "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+    end
+    phrase = config ? config[:phrase] : "unrated"
+    span(
+      class: "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium #{classes}",
+      title: (carried ? "Carried forward from the previous cycle, not confirmed this one" : nil)
+    ) do
+      plain "#{label}: #{phrase}"
+      if carried
+        span(class: "ml-1 font-normal") { "· carried" }
+      end
     end
   end
 

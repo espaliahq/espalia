@@ -111,7 +111,15 @@ class CalibrationSessions::OverviewStats
   end
 
   # One entry per manager-rated at-level cell:
-  # { person_id:, rater_id:, capability_stable_id:, frequency:, value:, self_value: }
+  # { person_id:, rater_id:, capability_stable_id:, frequency:, value:,
+  #   self_value:, carried: }
+  #
+  # `carried` marks a value seeded from the rater's previous cycle and not
+  # confirmed this one (ADR-20). Carried values still COUNT — they are real
+  # data, and excluding them would silently change every denominator on
+  # screen — but the surfaces mark them, because a tendency nobody expressed
+  # this cycle and a disagreement between two unexamined numbers are both
+  # things the room should discount rather than debate.
   def rated_cells
     @rated_cells ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
@@ -119,8 +127,8 @@ class CalibrationSessions::OverviewStats
       .where(level_ordinal: assessed_ordinals.values.uniq)
       .where.not(manager_rated_frequency: nil)
       .pluck(:person_id, :level_ordinal, :capability_stable_id,
-             :manager_rated_frequency, :self_rated_frequency)
-      .filter_map do |person_id, level_ordinal, stable_id, manager_frequency, self_frequency|
+             :manager_rated_frequency, :self_rated_frequency, :manager_rating_source)
+      .filter_map do |person_id, level_ordinal, stable_id, manager_frequency, self_frequency, source|
         # The level filter above is population-wide; keep only each person's
         # OWN assessed level.
         next unless assessed_ordinals[person_id] == level_ordinal
@@ -131,7 +139,10 @@ class CalibrationSessions::OverviewStats
           capability_stable_id: stable_id,
           frequency: manager_frequency,
           value: FREQUENCY_VALUES.fetch(manager_frequency),
-          self_value: self_frequency && FREQUENCY_VALUES.fetch(self_frequency)
+          self_value: self_frequency && FREQUENCY_VALUES.fetch(self_frequency),
+          # Only "seeded" is carried; nil is a legacy/factory row and counts
+          # as human, matching Assessments::LevelCoverage.
+          carried: source == "seeded"
         }
       end
   end
@@ -157,6 +168,10 @@ class CalibrationSessions::OverviewStats
         distribution: FREQUENCY_VALUES.keys.index_with { |f| cells.count { |c| c[:frequency] == f } },
         self_gap: gaps.any? ? mean(gaps) : nil,
         evidence_pct: evidence_pct(cells),
+        # How much of this rater's tendency they actually expressed THIS
+        # cycle: an all-carried row shows a tendency inherited from the last
+        # one, which is not a coaching conversation.
+        carried_count: cells.count { |c| c[:carried] },
         small_n: cells.size < SMALL_N
       }
     end
@@ -217,7 +232,12 @@ class CalibrationSessions::OverviewStats
         spread: spread,
         residual_spread: residual_spread,
         divergence_score: divergence_score,
-        flagged: divergence_score >= DIVERGENCE_FLAG_THRESHOLD && cells.size >= FLAG_MIN_CELLS
+        flagged: divergence_score >= DIVERGENCE_FLAG_THRESHOLD && cells.size >= FLAG_MIN_CELLS,
+        # A gap between two numbers nobody looked at this cycle isn't a live
+        # disagreement — the board still ranks it (the divergence is real in
+        # the data), but the row says how much of it is inherited.
+        carried_count: cells.count { |c| c[:carried] },
+        cell_count: cells.size
       }
     end
 

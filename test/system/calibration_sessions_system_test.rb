@@ -115,6 +115,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
                      category_id: category.category_id, name: "Delivery")
 
       report_3 = create(:person, tenant: @tenant, name: "Nia IC", manager: @em_1)
+      @report_3_id = report_3.id
       report_4 = create(:person, tenant: @tenant, name: "Pax IC", manager: @em_2)
       population = [ @report_1, @report_2, report_3, report_4 ]
       # report_1/2 already hold assignments from setup (DeterministicId PK).
@@ -133,6 +134,13 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       rate(report_4, @cap_a, "none")
       rate(@report_1, cap_b, "occasional")
       rate(@report_2, cap_b, "occasional")
+
+      # One of Mia's ratings is carried forward, unconfirmed this cycle — the
+      # surfaces must say so rather than presenting it as a fresh judgment.
+      AssessmentLevelRating
+        .find_by(cycle_id: @cycle.cycle_id, person_id: report_3.id,
+                 capability_stable_id: @cap_a.stable_id)
+        .update!(manager_rating_source: "seeded")
 
       # Near-identical evidence under divergent ratings — the wall's money shot.
       back_evidence(@report_1, @em_1, @cap_a, "Ran the pricing spike end to end.", "demonstrated")
@@ -167,6 +175,13 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Strategic Thinking"
     assert_text "spread 3.0"
     assert_text "raters disagree"
+    # Carried-forward values are marked, not hidden and not excluded: the
+    # spread above is still computed from them.
+    assert_text "Carried"
+    # Mia has 3 at-level cells; 1 of them is carried.
+    assert_text "1 of 3"
+    # The capability comparison spans all 4 raters' cells on it.
+    assert_text "1 of 4 carried"
     # No curation affordances on a live session
     assert_no_text "Add person from your org"
 
@@ -174,6 +189,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-person-id]", minimum: 4
+    # The carried dot wears the dashed edge and says so non-visually.
+    carried_dot = find("a[data-person-id='#{@report_3_id}']")
+    assert_includes carried_dot["aria-label"], "carried forward from the previous cycle"
+    assert_selector "a[data-person-id='#{@report_3_id}'] span.border-dashed"
 
     # The dot is initialled for compactness and named for everyone else.
     dot = find("a[data-person-id='#{@report_1.id}']")

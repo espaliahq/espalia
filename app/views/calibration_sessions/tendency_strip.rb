@@ -57,7 +57,8 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
             th(class: "py-1.5 pr-3 font-medium") { "vs org mean" }
             th(class: "py-1.5 pr-3 font-medium") { "Distribution" }
             th(class: "py-1.5 pr-3 font-medium") { "Self-gap" }
-            th(class: "py-1.5 font-medium") { "Evidence" }
+            th(class: "py-1.5 pr-3 font-medium") { "Evidence" }
+            th(class: "py-1.5 font-medium") { "Carried" }
           end
         end
         tbody do
@@ -78,17 +79,39 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
       td(class: "py-2 pr-3 whitespace-nowrap") { org_delta_cell(rater) }
       td(class: "py-2 pr-3") { distribution_bar(rater) }
       td(class: "py-2 pr-3 whitespace-nowrap") { self_gap_cell(rater) }
-      td(class: "py-2 whitespace-nowrap text-gray-600 dark:text-gray-300") do
+      td(class: "py-2 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300") do
         plain rater[:evidence_pct] ? "#{(rater[:evidence_pct] * 100).round}%" : "—"
       end
+      td(class: "py-2 whitespace-nowrap") { carried_cell(rater) }
     end
+  end
+
+  # How much of this rater's row they actually decided THIS cycle. An
+  # all-carried row is last cycle's tendency, unexamined — which is why it
+  # also suppresses the ▲/▼/⚠ emphasis below.
+  def carried_cell(rater)
+    carried = rater[:carried_count].to_i
+    return span(class: "text-gray-600 dark:text-gray-300") { "—" } if carried.zero?
+
+    span(
+      class: "text-amber-700 dark:text-amber-300#{' font-medium' if all_carried?(rater)}",
+      title: "#{carried} of #{rater[:cell_count]} ratings carried forward from the previous " \
+             "cycle and not confirmed this one"
+    ) { all_carried?(rater) ? "all #{carried}" : "#{carried} of #{rater[:cell_count]}" }
+  end
+
+  # Every rated cell carried — nothing in this row was decided this cycle.
+  def all_carried?(rater)
+    rater[:cell_count].to_i.positive? && rater[:carried_count].to_i == rater[:cell_count]
   end
 
   def org_delta_cell(rater)
     delta = rater[:org_delta]
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } unless delta
 
-    notable = delta.abs >= DEVIATION_THRESHOLD && !rater[:small_n]
+    # Not "notable" when the whole row is carried: calling a rater lenient
+    # on numbers they never confirmed this cycle is the wrong conversation.
+    notable = delta.abs >= DEVIATION_THRESHOLD && !rater[:small_n] && !all_carried?(rater)
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(delta)
       plain delta.positive? ? " ▲" : (delta.negative? ? " ▼" : "")
@@ -99,7 +122,7 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     gap = rater[:self_gap]
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } unless gap
 
-    notable = gap <= -DEVIATION_THRESHOLD && !rater[:small_n]
+    notable = gap <= -DEVIATION_THRESHOLD && !rater[:small_n] && !all_carried?(rater)
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(gap)
       plain " ⚠" if notable

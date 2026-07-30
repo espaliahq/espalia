@@ -91,7 +91,11 @@ class CalibrationSessions::EvidenceWall
           person_name: person_names[person_id],
           rater_id: rater_for[person_id],
           level_ordinal: level_ordinal,
-          frequency: frequencies[[ person_id, level_ordinal ]],
+          frequency: frequencies.dig([ person_id, level_ordinal ], :frequency),
+          # Marks a stamp whose rating was carried from the previous cycle
+          # and not confirmed this one — the room shouldn't norm against a
+          # grade nobody awarded this time round.
+          frequency_carried: frequencies.dig([ person_id, level_ordinal ], :carried) || false,
           valence: valence,
           relation: relation_for(item[:author_id], person_id),
           content: item[:content],
@@ -112,8 +116,10 @@ class CalibrationSessions::EvidenceWall
       .for_cycle(@session.cycle_id)
       .for_capability(@capability_stable_id)
       .where(person_id: calibrant_ids)
-      .pluck(:person_id, :level_ordinal, :manager_rated_frequency)
-      .to_h { |person_id, ordinal, frequency| [ [ person_id, ordinal ], frequency ] }
+      .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :manager_rating_source)
+      .to_h do |person_id, ordinal, frequency, source|
+        [ [ person_id, ordinal ], { frequency: frequency, carried: source == "seeded" } ]
+      end
   end
 
   # The canonical attribution (who owns the person's ratings) for the rater
