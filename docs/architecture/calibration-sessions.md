@@ -26,11 +26,13 @@
 > *Dev data* — `assessments:seed_calibration_activity` gives every surface
 > demo-able population-wide activity.
 >
+> *Provenance* — carried-forward (seeded, unconfirmed) ratings are marked
+> on every read surface; see *Carried-vs-vetted provenance*.
+>
 > **Not built** (each has its own section below):
 > auto-suggested contrast pairs (§e) · evidence requests as a session
-> outcome (§f) · carried-vs-vetted provenance on the read surfaces
-> (*Deliberately deferred*) · participant follow-along + the v2 visibility
-> grant · cross-cycle trends · MCP reads for the drill-in surfaces
+> outcome (§f) · participant follow-along + the v2 visibility grant ·
+> cross-cycle trends · MCP reads for the drill-in surfaces
 > (*Cross-cutting*) · in-surface definitions for the calibration vocabulary
 > (*Deliberately deferred*).
 >
@@ -727,7 +729,6 @@ Mechanics — everything not listed here is inherited untouched:
 | Participant follow-along devices + the narrow session-scoped visibility grant | Facilitator-only projection proves insufficient in real sessions |
 | Auto-suggested contrast pairs in the compare tray | Manual pinning proves the gesture |
 | **In-surface definitions for the calibration vocabulary** — see below | Before a session run by facilitators who didn't design the metrics |
-| **Carried-vs-vetted provenance on the read surfaces** — see below | Before the next real session; or the next change to any of the three surfaces |
 | Cross-cycle calibration trend views ("is Raj converging?") | ≥2 cycles of session data exist |
 | Automated bias scoring beyond the tendency strip | Never, ideally — the strip states facts; the room supplies judgment |
 | Enforced session sequencing | No known need |
@@ -767,40 +768,31 @@ section already carry them.
 
 ### Carried-vs-vetted provenance on the read surfaces
 
-**The gap.** Cross-cycle seeding (ADR-20) carries a rating forward, and the
-assessment side now treats "carried but unconfirmed" as materially different
-from "vetted this cycle" — it doesn't count toward completion and renders
-**"To confirm"** (see [assessments.md](../guidelines/assessments.md) →
-*Carried-rating affordance*, `Assessments::LevelCoverage`). The session
-page's **readiness** badges already speak that vocabulary. The three
-**read** surfaces do not: `OverviewStats` (tendency strip + divergence
-board), `DrillInStats` (the rater × level dot grid), and `EvidenceWall` (the
-per-item `Mgr:` stamp) all read `manager_rated_frequency` without consulting
-`manager_rating_source`.
+Cross-cycle seeding (ADR-20) means a rating on screen can be last cycle's
+decision, unexamined. The assessment side treats that as materially
+different from "vetted this cycle" — it doesn't count toward completion and
+renders **"To confirm"** — and the calibration surfaces now say so too.
 
-**Why it matters here specifically.** A calibration room's whole premise is
-that the numbers on screen are what each rater *decided*. A carried value is
-last cycle's decision, unexamined — the room can spend twenty minutes
-reconciling a divergence that neither rater has actually formed a view on.
-It also skews the tendency strip: a manager who confirmed nothing reads as
-having a tendency they never expressed this cycle.
+**Marked, not excluded.** A carried value still counts toward every mean,
+spread, distribution and denominator: it is real data, and dropping it would
+silently move every number on screen. What each surface adds is *how much is
+inherited*, so the room can discount rather than debate:
 
-**Why it isn't fixed in the evidence-wall change.** The gap spans all three
-surfaces, and they sit on one screen — a wall that marked carried values
-while the grid directly above it did not would read as a bug, not a fix. It
-wants one change that threads provenance through all three consistently.
+| Surface | Marker |
+|---|---|
+| Drill-in dot grid | a **dashed edge** — the shared "dashed means carried" primitive from `FrequencyPalette`; hue still means frequency and fill still means evidence backing, so the three signals never collide. A backed carried dot also drops to the lighter `chip_carried` tint (lighter = inherited). Legend gains "Carried from last cycle" |
+| Person / compare cards | the Manager pill uses the palette's dashed-outline `pill_carried` variant plus "· carried" |
+| Evidence wall | the same treatment on the `Mgr:` stamp — the room shouldn't norm against a grade nobody awarded this time |
+| Tendency strip | a **Carried** column ("12 of 53", or "all N"), **and** an all-carried row no longer earns the ▲/▼/⚠ emphasis — calling a rater lenient on numbers they never confirmed is the wrong conversation |
+| Divergence board | "· 1 of 21 carried" beside the spread. The row keeps its rank (the divergence is real in the data) but says how much of it is inherited |
 
-**Shape when picked up.** Provenance is already on the read model
-(`assessment_level_ratings.manager_rating_source` / `self_rating_source`),
-so this is presentation, not data: pluck the source alongside the frequency
-in each of the three queries, and pick the signal per surface — the grid's
-dots already spend fill on evidence backing and colour on frequency, so
-carried state needs a third primitive (or a muted treatment), never a
-recolour. Decide deliberately whether a carried value should be *excluded*
-from the divergence/tendency maths or merely *marked*: excluding is more
-honest about what the room can act on, marking preserves the signal that a
-rater has coasted. Prefer marking first — the strip states facts and the
-room supplies judgment (the rule the tendency strip is already built on).
+Every marker is also stated in a `title`/aria string: per the palette's rule,
+carried state must never rest on decoration alone.
+
+Only `manager_rating_source == "seeded"` counts as carried — `nil` is a
+legacy or factory row and is treated as human, matching
+`Assessments::LevelCoverage`. Dev seeds emit ~15% genuinely carried ratings
+so the markers are demo-able.
 
 ## Open questions
 
