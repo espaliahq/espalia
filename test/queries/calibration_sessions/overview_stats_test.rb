@@ -227,5 +227,28 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       assert_equal 2, row[:cell_count]
       assert_equal 3.0, row[:spread], "the divergence is still ranked on real data"
     end
+
+    should "scope the capability count to the raters whose means ARE the spread" do
+      # A third rater's carried cell sits in the middle of the range, so it
+      # is not part of the comparison the row displays. Counting it would
+      # claim the gap is partly inherited when both extremes are vetted.
+      em_3 = create(:person, tenant: @tenant, name: "Sam", manager: @dept_head)
+      create(:calibration_session_member, :participant, tenant: @tenant,
+             session: @session, person_id: em_3.id)
+      mid = create(:person, tenant: @tenant, name: "Mid", manager: em_3)
+      create(:person_framework_assignment, tenant: @tenant,
+             person_id: mid.id, framework_id: @framework_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: mid.id, level_ordinal: 3)
+
+      rate(@r1, @cap_a, manager: "consistent")            # 3.0 — high extreme
+      rate(@r2, @cap_a, manager: "none")                  # 0.0 — low extreme
+      rate(mid, @cap_a, manager: "some", source: "seeded")  # 1.0 — middle, carried
+
+      row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 3.0, row[:spread]
+      assert_equal 0, row[:carried_count], "the middle rater isn't in the comparison"
+      assert_equal 2, row[:cell_count], "only the two extreme raters' cells"
+    end
   end
 end

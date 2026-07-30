@@ -784,7 +784,15 @@ inherited*, so the room can discount rather than debate:
 | Person / compare cards | the Manager pill uses the palette's dashed-outline `pill_carried` variant plus "· carried" |
 | Evidence wall | the same treatment on the `Mgr:` stamp — the room shouldn't norm against a grade nobody awarded this time |
 | Tendency strip | a **Carried** column ("12 of 53", or "all N"), **and** an all-carried row no longer earns the ▲/▼/⚠ emphasis — calling a rater lenient on numbers they never confirmed is the wrong conversation |
-| Divergence board | "· 1 of 21 carried" beside the spread. The row keeps its rank (the divergence is real in the data) but says how much of it is inherited |
+| Divergence board | "· 1 of 2 carried" beside the spread, counted over **only the two raters whose means define that spread** — the comparison on screen. Counting the capability's whole cell set would both cry wolf (a carried cell belonging to a third rater who isn't in the comparison) and reassure wrongly ("2 of 20" when both extremes are wholly inherited). The row keeps its rank; the divergence is real in the data |
+
+**Asymmetry to keep**: an all-carried rater loses the tendency strip's
+▲/▼ org-delta emphasis, but **keeps** the self-gap ⚠. Org-delta is a
+tendency they never expressed this cycle; self-gap compares their coasted
+value against their reports' *fresh* self-ratings, which makes it the most
+actionable row on the strip, not the least. (Known gap: the mirror case —
+fresh manager values against carried *self*-ratings — still flags, because
+`self_rating_source` isn't threaded into any calibration query yet.)
 
 Every marker is also stated in a `title`/aria string: per the palette's rule,
 carried state must never rest on decoration alone.

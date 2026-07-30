@@ -79,8 +79,10 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
 
       assert_response :success
-      # Dashed edge on the dot, the shared "carried" primitive.
-      assert_match(/border-dashed/, response.body)
+      # Scoped to the DOT: the legend renders an unconditional dashed
+      # swatch, so a bare /border-dashed/ match would pass even with the
+      # marker gone.
+      assert_select "a[data-person-id=?] span.border-dashed", @report.id
       # …and stated, not left to decoration alone.
       assert_includes response.body, "carried forward from the previous cycle"
       assert_includes response.body, "· carried"

@@ -122,7 +122,16 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     gap = rater[:self_gap]
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } unless gap
 
-    notable = gap <= -DEVIATION_THRESHOLD && !rater[:small_n] && !all_carried?(rater)
+    # Deliberately NOT suppressed for an all-carried row, unlike org-delta:
+    # self-gap compares the manager value against the report's OWN rating,
+    # and those self-ratings are fresh. "Your reports have formed a view this
+    # cycle and it disagrees with the record you're coasting on" is the most
+    # actionable thing on this row, not the least.
+    #
+    # Known asymmetry: the mirror case (fresh manager values against carried
+    # SELF ratings) still earns the flag, because self_rating_source isn't
+    # threaded into any calibration query yet.
+    notable = gap <= -DEVIATION_THRESHOLD && !rater[:small_n]
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(gap)
       plain " ⚠" if notable

@@ -56,9 +56,19 @@ class CalibrationSessions::OverviewStats
 
   # @return [Hash] `{ org_mean:, raters: [...], capabilities: [...], insufficient_capability_count: }`
   #   Raters: `{ participant_id:, report_count:, rated_count:, cell_count:, mean:,
-  #   org_delta:, distribution: {frequency => count}, self_gap:, evidence_pct:, small_n: }`
+  #   org_delta:, distribution: {frequency => count}, self_gap:, evidence_pct:,
+  #   carried_count:, small_n: }` — `carried_count` counts this rater's cells
+  #   seeded from a prior cycle, out of `cell_count`.
   #   Capabilities (sorted most-divergent first): `{ stable_id:, name:, category_name:,
-  #   rater_means: {participant_id => {mean:, n:}}, spread:, residual_spread:, flagged: }`
+  #   rater_means: {participant_id => {mean:, n:}}, spread:, residual_spread:,
+  #   divergence_score:, flagged:, carried_count:, cell_count: }` — here
+  #   `cell_count`/`carried_count` cover ONLY the two raters whose means define
+  #   `spread`, so the pair describes the comparison on screen (they are NOT
+  #   the capability's whole cell set).
+  #
+  #   Both row shapes are part of the `calibration_sessions_overview` MCP
+  #   response (Operations::CalibrationSessions::Overview passes them
+  #   through), so additions here are a client-visible contract change.
   def call
     @call ||= build
   end
@@ -221,6 +231,14 @@ class CalibrationSessions::OverviewStats
       means = rater_means.values.map { |v| v[:mean] }
       residuals = rater_means.map { |rater_id, v| v[:mean] - (rater_offsets[rater_id] || 0.0) }
       spread = (means.max - means.min).round(2)
+      # The two raters whose means ARE the spread — the comparison the row
+      # displays. Carried state is counted against their cells only, so the
+      # note can't reassure ("2 of 20") while the gap on screen is wholly
+      # inherited, nor alarm about a carried cell belonging to a third rater
+      # who isn't part of the comparison at all.
+      extremes = [ rater_means.min_by { |_, v| v[:mean] }&.first,
+                   rater_means.max_by { |_, v| v[:mean] }&.first ].compact.uniq
+      compared = by_rater.values_at(*extremes).compact.flatten
       residual_spread = (residuals.max - residuals.min).round(2)
       divergence_score = [ spread, residual_spread ].min
 
@@ -236,8 +254,8 @@ class CalibrationSessions::OverviewStats
         # A gap between two numbers nobody looked at this cycle isn't a live
         # disagreement — the board still ranks it (the divergence is real in
         # the data), but the row says how much of it is inherited.
-        carried_count: cells.count { |c| c[:carried] },
-        cell_count: cells.size
+        carried_count: compared.count { |c| c[:carried] },
+        cell_count: compared.size
       }
     end
 
