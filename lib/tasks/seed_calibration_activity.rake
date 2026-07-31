@@ -111,13 +111,14 @@ namespace :assessments do
         rater_offset = weight.("rater-offset", rater_id) * 1.5 - 0.75
         self_bias = 0.15 + weight.("self-bias", person.id) * 0.5
         # Carriage is drawn per RATER, not per cell. Per-cell (~15% each)
-        # looked reasonable but had two bad effects: LevelCoverage excludes
-        # seeded values, so a single carried cell makes a person permanently
-        # not manager-complete — the readiness bars this demo also relies on
-        # emptied out — and an ALL-carried rater became statistically
-        # unreachable (0.15^C), which is exactly the state the "all N" copy,
-        # the "· all carried" note and the suppressed ▲/▼ emphasis exist to
-        # show. One rater in ~6 now coasts entirely on last cycle.
+        # had two bad effects: LevelCoverage excludes seeded values, so a
+        # single carried cell makes a person permanently not manager-complete
+        # — the readiness bars this demo also relies on emptied out — and an
+        # ALL-carried rater became statistically unreachable (0.15^C), which
+        # is the state the "all N" / "· all carried" copy exists to show.
+        # One rater in ~6 now coasts entirely on last cycle, which also
+        # demos the point that a coasting rater still carries their tendency
+        # and self-gap flags.
         rater_coasting = weight.("coasting-rater", rater_id) < 0.17
 
         capabilities.each do |cap|
@@ -132,9 +133,9 @@ namespace :assessments do
             if !manager_rated.include?(cell_key) && weight.("cover", person.id, cap.stable_id) >= 0.1
               # A coasting rater's cells all arrive CARRIED (seeded from a
               # prior cycle, unconfirmed), so every carried marker is
-              # demo-able: the dashed dot, the strip's "all N" Carried cell
-              # and suppressed ▲/▼, the divergence row's carried note, the
-              # wall's dashed Mgr stamp, and the session page's "To confirm".
+              # demo-able: the dashed dot, the strip's "all N" Carried cell,
+              # the divergence row's carried note, the wall's dashed Mgr
+              # stamp, and the session page's "To confirm".
               # A real seed writes source: "seeded" (ADR-20), so this is the
               # genuine event, not a patched read model.
               carried = rater_coasting

@@ -46,23 +46,34 @@ class Views::CalibrationSessions::TendencyStripTest < ActiveSupport::TestCase
     end
   end
 
-  context "emphasis on an all-carried row" do
-    should "drop the org-delta arrow emphasis — an unexpressed tendency isn't a coaching conversation" do
-      emphasised = render_strip(rater(carried_count: 0, org_delta: 0.9))
-      all_carried = render_strip(rater(carried_count: 10, org_delta: 0.9))
+  # Carried ratings are still the rater's ratings — leaving them unrevisited
+  # is a decision they own — so the flags fire exactly as on fresh values.
+  # The Carried column marks how the row got there; it never softens it.
+  context "a carried row is not exempt from the flags" do
+    should "keep the org-delta emphasis when the whole row is carried" do
+      fresh = render_strip(rater(carried_count: 0, org_delta: 0.9))
+      carried = render_strip(rater(carried_count: 10, org_delta: 0.9))
 
-      assert_includes emphasised, "text-amber-700"
-      # Only the Carried cell's own amber remains, not the org-delta's.
-      assert_equal 1, all_carried.scan("text-amber-700").size
-      assert_includes all_carried, "+0.9"
+      assert_includes fresh, "text-amber-700"
+      # Both the org-delta cell AND the Carried cell are amber.
+      assert_equal 2, carried.scan("text-amber-700").size,
+        "a tendency built from values the rater declined to revisit is still theirs"
+      assert_includes carried, "+0.9"
     end
 
-    should "KEEP the self-gap warning — the reports' own ratings are fresh" do
+    should "keep the self-gap warning when the whole row is carried" do
       html = render_strip(rater(carried_count: 10, self_gap: -1.2))
 
       assert_includes html, "⚠",
-        "a manager coasting on last cycle while their reports rate themselves " \
-        "higher this cycle is the most actionable row on the strip"
+        "the reports' self-ratings are fresh, so the gap is live: they have " \
+        "formed a view this cycle that disagrees with the carried record"
+    end
+
+    should "still mark the row as carried while flagging it" do
+      html = render_strip(rater(carried_count: 10, org_delta: 0.9, self_gap: -1.2))
+
+      assert_includes html, ">all 10<"
+      assert_includes html, "⚠"
     end
   end
 end

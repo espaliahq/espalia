@@ -86,9 +86,12 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     end
   end
 
-  # How much of this rater's row they actually decided THIS cycle. An
-  # all-carried row is last cycle's tendency, unexamined — which is why it
-  # also suppresses the ▲/▼/⚠ emphasis below.
+  # How much of this rater's row is carried forward. This MARKS the row;
+  # it never softens it. A carried rating is still the rater's rating —
+  # leaving it unrevisited is a decision they own — so the tendency and
+  # self-gap flags below fire on carried numbers exactly as on fresh ones.
+  # The column tells the room where to push ("own these, or do the work to
+  # verify or amend them"), which matters most when the numbers diverge.
   def carried_cell(rater)
     carried = rater[:carried_count].to_i
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } if carried.zero?
@@ -109,9 +112,10 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     delta = rater[:org_delta]
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } unless delta
 
-    # Not "notable" when the whole row is carried: calling a rater lenient
-    # on numbers they never confirmed this cycle is the wrong conversation.
-    notable = delta.abs >= DEVIATION_THRESHOLD && !rater[:small_n] && !all_carried?(rater)
+    # Carried rows are NOT exempt: these are still this rater's ratings, and
+    # a lenient tendency built out of values they declined to revisit is a
+    # tendency they own. The Carried column says how it got there.
+    notable = delta.abs >= DEVIATION_THRESHOLD && !rater[:small_n]
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(delta)
       plain delta.positive? ? " ▲" : (delta.negative? ? " ▼" : "")
@@ -122,15 +126,14 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     gap = rater[:self_gap]
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } unless gap
 
-    # Deliberately NOT suppressed for an all-carried row, unlike org-delta:
-    # self-gap compares the manager value against the report's OWN rating,
-    # and those self-ratings are fresh. "Your reports have formed a view this
-    # cycle and it disagrees with the record you're coasting on" is the most
-    # actionable thing on this row, not the least.
+    # Carried rows are not exempt here either — and this is the sharpest
+    # case for it: the reports' self-ratings are fresh, so a gap against a
+    # carried manager value means "they have formed a view this cycle and it
+    # disagrees with the record you are standing on".
     #
     # Known asymmetry: the mirror case (fresh manager values against carried
-    # SELF ratings) still earns the flag, because self_rating_source isn't
-    # threaded into any calibration query yet.
+    # SELF ratings) is indistinguishable here, because self_rating_source
+    # isn't threaded into any calibration query yet.
     notable = gap <= -DEVIATION_THRESHOLD && !rater[:small_n]
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(gap)

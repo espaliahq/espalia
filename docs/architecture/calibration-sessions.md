@@ -783,16 +783,29 @@ inherited*, so the room can discount rather than debate:
 | Drill-in dot grid | a **dashed edge** — the shared "dashed means carried" primitive from `FrequencyPalette`; hue still means frequency and fill still means evidence backing, so the three signals never collide. A backed carried dot also drops to the lighter `chip_carried` tint (lighter = inherited). Legend gains "Carried from last cycle" |
 | Person / compare cards | the Manager pill uses the palette's dashed-outline `pill_carried` variant plus "· carried" |
 | Evidence wall | the same treatment on the `Mgr:` stamp — the room shouldn't norm against a grade nobody awarded this time |
-| Tendency strip | a **Carried** column ("12 of 53", or "all N"), **and** an all-carried row no longer earns the ▲/▼/⚠ emphasis — calling a rater lenient on numbers they never confirmed is the wrong conversation |
+| Tendency strip | a **Carried** column ("12 of 53", or "all N") |
 | Divergence board | "· 1 of 2 carried" beside the spread, counted over **only the two raters whose means define that spread** — the comparison on screen. Counting the capability's whole cell set would both cry wolf (a carried cell belonging to a third rater who isn't in the comparison) and reassure wrongly ("2 of 20" when both extremes are wholly inherited). The row keeps its rank; the divergence is real in the data |
 
-**Asymmetry to keep**: an all-carried rater loses the tendency strip's
-▲/▼ org-delta emphasis, but **keeps** the self-gap ⚠. Org-delta is a
-tendency they never expressed this cycle; self-gap compares their coasted
-value against their reports' *fresh* self-ratings, which makes it the most
-actionable row on the strip, not the least. (Known gap: the mirror case —
-fresh manager values against carried *self*-ratings — still flags, because
-`self_rating_source` isn't threaded into any calibration query yet.)
+**Marking never softens (NON-NEGOTIABLE).** A carried rating is still the
+rater's rating: declining to revisit it is a decision they own. So every
+flag — the ▲/▼ tendency emphasis, the self-gap ⚠, the divergence badge —
+fires on carried values exactly as on fresh ones, and the markers only say
+*how the number got there*. The room's move is "own these, or do the work
+to verify or amend them", which matters **most** when the carried numbers
+show a real discrepancy, not least.
+
+An earlier build suppressed the ▲/▼ emphasis on an all-carried row, on the
+theory that a tendency nobody expressed this cycle isn't a coaching
+conversation. That was wrong twice over: it let a rater escape their own
+ratings by not touching them, and it went quiet exactly where the signal
+was strongest. Don't reintroduce it. (The self-gap case is the sharpest
+illustration: the reports' self-ratings are fresh, so a gap against a
+carried manager value means they have formed a view this cycle that
+disagrees with the record the manager is standing on.)
+
+Known gap: the mirror case — fresh manager values against carried
+*self*-ratings — is indistinguishable on these surfaces, because
+`self_rating_source` isn't threaded into any calibration query yet.
 
 Every marker is also stated in a `title`/aria string: per the palette's rule,
 carried state must never rest on decoration alone.
