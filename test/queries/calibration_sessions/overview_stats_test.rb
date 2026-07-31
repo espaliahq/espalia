@@ -228,6 +228,18 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       assert_equal 3.0, row[:spread], "the divergence is still ranked on real data"
     end
 
+    should "keep two distinct raters in the comparison when their means tie" do
+      # min_by and max_by both return the FIRST match on a tie, which would
+      # collapse the pair to one rater and count half the comparison.
+      rate(@r1, @cap_a, manager: "occasional", source: "seeded")  # Mia: 2.0, carried
+      rate(@r2, @cap_a, manager: "occasional")                    # Raj: 2.0, fresh
+
+      row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 0.0, row[:spread]
+      assert_equal 2, row[:cell_count], "both tied raters are in the comparison"
+      assert_equal 1, row[:carried_count]
+    end
+
     should "scope the capability count to the raters whose means ARE the spread" do
       # A third rater's carried cell sits in the middle of the range, so it
       # is not part of the comparison the row displays. Counting it would

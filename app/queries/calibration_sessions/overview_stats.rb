@@ -236,8 +236,14 @@ class CalibrationSessions::OverviewStats
       # note can't reassure ("2 of 20") while the gap on screen is wholly
       # inherited, nor alarm about a carried cell belonging to a third rater
       # who isn't part of the comparison at all.
-      extremes = [ rater_means.min_by { |_, v| v[:mean] }&.first,
-                   rater_means.max_by { |_, v| v[:mean] }&.first ].compact.uniq
+      #
+      # Sorted rather than min_by/max_by: on TIED means both would return the
+      # same rater, collapsing the pair to one and counting half the
+      # comparison. The rater_id tiebreak keeps the choice deterministic
+      # across requests. `by_rater.size >= 2` is guaranteed above, so first
+      # and last are always distinct raters.
+      ordered = rater_means.sort_by { |rater_id, v| [ v[:mean], rater_id ] }
+      extremes = [ ordered.first.first, ordered.last.first ]
       compared = by_rater.values_at(*extremes).compact.flatten
       residual_spread = (residuals.max - residuals.min).round(2)
       divergence_score = [ spread, residual_spread ].min
