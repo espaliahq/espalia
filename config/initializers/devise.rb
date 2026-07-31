@@ -275,7 +275,7 @@ Devise.setup do |config|
   # Google OAuth 2.0. Credentials live under the `google:` key in
   # config/credentials.yml.enc — set `client_id` and `client_secret` from
   # Google Cloud Console (OAuth client type "Web application"). The dev
-  # callback URL is http://localhost:3000/users/auth/google_oauth2/callback.
+  # callback URL is http://localhost:6600/users/auth/google_oauth2/callback.
   #
   # Always register the strategy so the OmniAuth middleware is installed
   # (Devise wires it up only when `config.omniauth` runs). In production a

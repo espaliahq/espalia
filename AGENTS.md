@@ -189,8 +189,9 @@ Runs standalone with Postgres + Solid Queue. Includes a SaaS control plane (tena
 
 ```bash
 bin/setup                    # Install dependencies and setup database
-bin/dev                      # Start development server (Overmind/Foreman)
-bin/rails server             # Standard Rails server only
+bin/dev                      # Start development server (Overmind/Foreman) on port 6600
+bin/rails server             # Standard Rails server only (PORT=6600 in the devcontainer;
+                             # pass -p 6600 outside it — Rails' own default is still 3000)
 
 bin/rails db:prepare         # Setup database (creates, migrates, seeds)
 bin/rails db:migrate         # Run migrations
@@ -205,7 +206,7 @@ SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per actio
 
 # Visual verification in a real browser via the chrome-devtools MCP — the MANDATORY
 # visual pass for every front-end change (additional to system tests, never a
-# substitute), plus exploration and UI bug repro. Navigate to http://rails-app:3000
+# substitute), plus exploration and UI bug repro. Navigate to http://rails-app:6600
 # (NOT localhost — the browser is a separate container). Connection relies on the
 # socat forwarder started by .devcontainer/start-chrome-cdp-proxy.sh. Full setup,
 # the connect-failure fix, login, viewports, and gotchas: docs/guidelines/chrome-mcp.md

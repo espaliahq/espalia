@@ -194,7 +194,7 @@ belong to multiple tenants re-authorise to switch. Implementation:
 ### 7. Discovery + DCR for self-onboarding
 
 A fresh CLI install gets a working OAuth flow from just `url:
-http://localhost:3000/mcp` — no manual app registration. The chain:
+http://localhost:6600/mcp` — no manual app registration. The chain:
 
 ```
 POST /mcp → 401 + WWW-Authenticate: Bearer resource_metadata="<url>"
