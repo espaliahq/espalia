@@ -277,6 +277,14 @@ Devise.setup do |config|
   # Google Cloud Console (OAuth client type "Web application"). The dev
   # callback URL is http://localhost:6600/users/auth/google_oauth2/callback.
   #
+  # We deliberately don't set OmniAuth.config.full_host, so `redirect_uri` is
+  # derived from the request host: Google sign-in works from whichever host you
+  # registered, and only that one. In practice that's the developer's own
+  # browser on localhost. It is NOT reachable from the chrome-debug container
+  # (there `localhost` is chrome-debug, not the app) — the Chrome MCP pass
+  # signs in with the Devise email/password form instead, see
+  # docs/guidelines/chrome-mcp.md.
+  #
   # Always register the strategy so the OmniAuth middleware is installed
   # (Devise wires it up only when `config.omniauth` runs). In production a
   # missing credential is a misconfiguration we want to surface at boot, not
