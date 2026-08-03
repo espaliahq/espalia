@@ -174,18 +174,22 @@ class CalibrationSessions::DrillInStats
     end
   end
 
-  # (person_id) => { frequency:, self_frequency: } for this capability at
-  # the person's assessed level.
+  # (person_id) => { frequency:, self_frequency:, carried: } for this
+  # capability at the person's assessed level. `carried` = the manager value
+  # was seeded from the previous cycle and not confirmed this one (ADR-20);
+  # only "seeded" counts, nil being a legacy/factory row.
   def ratings
     @ratings ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
       .for_capability(@capability_stable_id)
       .where(person_id: assessed_ordinals.keys, level_ordinal: ordinals)
-      .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :self_rated_frequency)
-      .each_with_object({}) do |(person_id, level_ordinal, manager_frequency, self_frequency), map|
+      .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :self_rated_frequency,
+             :manager_rating_source)
+      .each_with_object({}) do |(person_id, level_ordinal, manager_frequency, self_frequency, source), map|
         next unless level_ordinal == assessed_ordinals[person_id]
 
-        map[person_id] = { frequency: manager_frequency, self_frequency: self_frequency }
+        map[person_id] = { frequency: manager_frequency, self_frequency: self_frequency,
+                           carried: source == "seeded" }
       end
   end
 
@@ -223,6 +227,7 @@ class CalibrationSessions::DrillInStats
                 name: people[person_id]&.name || "Unknown",
                 frequency: rating[:frequency],
                 self_frequency: rating[:self_frequency],
+                carried: rating[:carried] || false,
                 backed: backed_person_ids.include?(person_id)
               }
             end.sort_by { |dot| dot[:name] }

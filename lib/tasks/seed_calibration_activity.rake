@@ -110,6 +110,16 @@ namespace :assessments do
         base = 1.1 + weight.("base", person.id) * 1.5
         rater_offset = weight.("rater-offset", rater_id) * 1.5 - 0.75
         self_bias = 0.15 + weight.("self-bias", person.id) * 0.5
+        # Carriage is drawn per RATER, not per cell. Per-cell (~15% each)
+        # had two bad effects: LevelCoverage excludes seeded values, so a
+        # single carried cell makes a person permanently not manager-complete
+        # — the readiness bars this demo also relies on emptied out — and an
+        # ALL-carried rater became statistically unreachable (0.15^C), which
+        # is the state the "all N" / "· all carried" copy exists to show.
+        # One rater in ~6 now coasts entirely on last cycle, which also
+        # demos the point that a coasting rater still carries their tendency
+        # and self-gap flags.
+        rater_coasting = weight.("coasting-rater", rater_id) < 0.17
 
         capabilities.each do |cap|
           cell_key = [ person.id, cap.stable_id, enrollment.level_ordinal ]
@@ -121,14 +131,24 @@ namespace :assessments do
             # Manager rating (~90% coverage; the gaps feed readiness bars
             # and hollow "what did you see?" moments).
             if !manager_rated.include?(cell_key) && weight.("cover", person.id, cap.stable_id) >= 0.1
+              # A coasting rater's cells all arrive CARRIED (seeded from a
+              # prior cycle, unconfirmed), so every carried marker is
+              # demo-able: the dashed dot, the strip's "all N" Carried cell,
+              # the divergence row's carried note, the wall's dashed Mgr
+              # stamp, and the session page's "To confirm".
+              # A real seed writes source: "seeded" (ADR-20), so this is the
+              # genuine event, not a patched read model.
+              carried = rater_coasting
               handler.rate_as_manager(
                 person.id, framework.framework_id, cap.stable_id,
                 level_ordinal: enrollment.level_ordinal,
                 frequency: to_frequency.(value),
                 cycle_id: cycle.cycle_id,
-                rated_by_id: rater_id
+                rated_by_id: rater_id,
+                source: carried ? "seeded" : "human"
               )
               stats[:manager_ratings] += 1
+              stats[:carried_ratings] += 1 if carried
 
               seed_calibration_evidence = weight.("evidence", person.id, cap.stable_id) < 0.18
               if seed_calibration_evidence
@@ -173,8 +193,9 @@ namespace :assessments do
       end
 
       puts "Calibration activity seed complete for '#{cycle.name}':"
-      puts "  Manager ratings: #{stats[:manager_ratings]}, self ratings: #{stats[:self_ratings]}, " \
-           "evidence items: #{stats[:evidence_items]}"
+      puts "  Manager ratings: #{stats[:manager_ratings]} " \
+           "(#{stats[:carried_ratings]} carried forward), " \
+           "self ratings: #{stats[:self_ratings]}, evidence items: #{stats[:evidence_items]}"
       skipped = stats.slice(:skipped_no_person, :skipped_no_manager, :skipped_no_capabilities)
       puts "  Skipped: #{skipped.map { |k, v| "#{k}=#{v}" }.join(', ')}" if skipped.values.sum.positive?
       if errors.any?

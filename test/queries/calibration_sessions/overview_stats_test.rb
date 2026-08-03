@@ -46,11 +46,12 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
-  def rate(person, capability, manager:, self_freq: nil, ordinal: 3)
+  def rate(person, capability, manager:, self_freq: nil, ordinal: 3, source: nil)
     create(:assessment_level_rating, tenant: @tenant,
            cycle_id: @cycle.cycle_id, person_id: person.id, framework_id: @framework_id,
            capability_stable_id: capability.stable_id, level_ordinal: ordinal,
-           manager_rated_frequency: manager, self_rated_frequency: self_freq)
+           manager_rated_frequency: manager, self_rated_frequency: self_freq,
+           manager_rating_source: source)
   end
 
   def stats
@@ -191,6 +192,75 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
 
       result = stats
       assert_nil result[:org_mean], "reference person's ratings never enter the stats"
+    end
+  end
+
+  # Carried (seeded, unconfirmed) values still count toward every number —
+  # they are real data — but each surface marks them so the room can
+  # discount an inherited tendency or an unexamined disagreement.
+  context "carried-forward provenance" do
+    should "count carried cells per rater without changing the mean" do
+      rate(@r1, @cap_a, manager: "consistent", source: "seeded")
+      rate(@r2, @cap_a, manager: "none")
+
+      mia = stats[:raters].find { |r| r[:participant_id] == @em_1.id }
+      raj = stats[:raters].find { |r| r[:participant_id] == @em_2.id }
+
+      assert_equal 1, mia[:carried_count]
+      assert_equal 3.0, mia[:mean], "a carried value still counts as data"
+      assert_equal 0, raj[:carried_count]
+    end
+
+    should "treat only \"seeded\" as carried — nil is a legacy human row" do
+      rate(@r1, @cap_a, manager: "consistent", source: nil)
+      rate(@r2, @cap_a, manager: "some", source: "human")
+
+      assert_equal [ 0, 0 ], stats[:raters].map { |r| r[:carried_count] }
+    end
+
+    should "count carried cells behind each capability comparison" do
+      rate(@r1, @cap_a, manager: "consistent", source: "seeded")
+      rate(@r2, @cap_a, manager: "none")
+
+      row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 1, row[:carried_count]
+      assert_equal 2, row[:cell_count]
+      assert_equal 3.0, row[:spread], "the divergence is still ranked on real data"
+    end
+
+    should "keep two distinct raters in the comparison when their means tie" do
+      # min_by and max_by both return the FIRST match on a tie, which would
+      # collapse the pair to one rater and count half the comparison.
+      rate(@r1, @cap_a, manager: "occasional", source: "seeded")  # Mia: 2.0, carried
+      rate(@r2, @cap_a, manager: "occasional")                    # Raj: 2.0, fresh
+
+      row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 0.0, row[:spread]
+      assert_equal 2, row[:cell_count], "both tied raters are in the comparison"
+      assert_equal 1, row[:carried_count]
+    end
+
+    should "scope the capability count to the raters whose means ARE the spread" do
+      # A third rater's carried cell sits in the middle of the range, so it
+      # is not part of the comparison the row displays. Counting it would
+      # claim the gap is partly inherited when both extremes are vetted.
+      em_3 = create(:person, tenant: @tenant, name: "Sam", manager: @dept_head)
+      create(:calibration_session_member, :participant, tenant: @tenant,
+             session: @session, person_id: em_3.id)
+      mid = create(:person, tenant: @tenant, name: "Mid", manager: em_3)
+      create(:person_framework_assignment, tenant: @tenant,
+             person_id: mid.id, framework_id: @framework_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: mid.id, level_ordinal: 3)
+
+      rate(@r1, @cap_a, manager: "consistent")            # 3.0 — high extreme
+      rate(@r2, @cap_a, manager: "none")                  # 0.0 — low extreme
+      rate(mid, @cap_a, manager: "some", source: "seeded")  # 1.0 — middle, carried
+
+      row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 3.0, row[:spread]
+      assert_equal 0, row[:carried_count], "the middle rater isn't in the comparison"
+      assert_equal 2, row[:cell_count], "only the two extreme raters' cells"
     end
   end
 end

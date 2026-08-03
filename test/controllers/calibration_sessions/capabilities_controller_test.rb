@@ -71,6 +71,23 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.body, "Led the pricing re-architecture"
     end
 
+    should "mark a carried rating on the grid dot and the person card pill" do
+      AssessmentLevelRating
+        .find_by(cycle_id: @cycle.cycle_id, person_id: @report.id)
+        .update!(manager_rating_source: "seeded")
+
+      get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+
+      assert_response :success
+      # Scoped to the DOT: the legend renders an unconditional dashed
+      # swatch, so a bare /border-dashed/ match would pass even with the
+      # marker gone.
+      assert_select "a[data-person-id=?] span.border-dashed", @report.id
+      # …and stated, not left to decoration alone.
+      assert_includes response.body, "carried forward from the previous cycle"
+      assert_includes response.body, "· carried"
+    end
+
     should "redirect for an unknown capability" do
       get calibration_session_capability_path(@session, SecureRandom.uuid_v7)
       assert_redirected_to calibration_session_path(@session)

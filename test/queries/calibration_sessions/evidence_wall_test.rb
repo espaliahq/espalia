@@ -153,4 +153,17 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
     ivy = wall(level: 3)[:groups].first[:items].find { |i| i[:content].start_with?("Led") }
     assert_equal "manager", ivy[:relation]
   end
+
+  should "mark a stamp whose manager rating was carried from the prior cycle" do
+    AssessmentLevelRating
+      .find_by(cycle_id: @cycle.cycle_id, person_id: @r1.id, level_ordinal: 3)
+      .update!(manager_rating_source: "seeded")
+
+    ivy = wall(level: 3)[:groups].first[:items].first
+    assert ivy[:frequency_carried], "the stamp is marked carried"
+    assert_equal "consistent", ivy[:frequency], "the grade is still shown"
+
+    omar = wall(level: 4)[:groups].first[:items].first
+    assert_not omar[:frequency_carried]
+  end
 end

@@ -56,9 +56,19 @@ class CalibrationSessions::OverviewStats
 
   # @return [Hash] `{ org_mean:, raters: [...], capabilities: [...], insufficient_capability_count: }`
   #   Raters: `{ participant_id:, report_count:, rated_count:, cell_count:, mean:,
-  #   org_delta:, distribution: {frequency => count}, self_gap:, evidence_pct:, small_n: }`
+  #   org_delta:, distribution: {frequency => count}, self_gap:, evidence_pct:,
+  #   carried_count:, small_n: }` — `carried_count` counts this rater's cells
+  #   seeded from a prior cycle, out of `cell_count`.
   #   Capabilities (sorted most-divergent first): `{ stable_id:, name:, category_name:,
-  #   rater_means: {participant_id => {mean:, n:}}, spread:, residual_spread:, flagged: }`
+  #   rater_means: {participant_id => {mean:, n:}}, spread:, residual_spread:,
+  #   divergence_score:, flagged:, carried_count:, cell_count: }` — here
+  #   `cell_count`/`carried_count` cover ONLY the two raters whose means define
+  #   `spread`, so the pair describes the comparison on screen (they are NOT
+  #   the capability's whole cell set).
+  #
+  #   Both row shapes are part of the `calibration_sessions_overview` MCP
+  #   response (Operations::CalibrationSessions::Overview passes them
+  #   through), so additions here are a client-visible contract change.
   def call
     @call ||= build
   end
@@ -111,7 +121,15 @@ class CalibrationSessions::OverviewStats
   end
 
   # One entry per manager-rated at-level cell:
-  # { person_id:, rater_id:, capability_stable_id:, frequency:, value:, self_value: }
+  # { person_id:, rater_id:, capability_stable_id:, frequency:, value:,
+  #   self_value:, carried: }
+  #
+  # `carried` marks a value seeded from the rater's previous cycle and not
+  # confirmed this one (ADR-20). Carried values still COUNT — they are real
+  # data, and excluding them would silently change every denominator on
+  # screen — but the surfaces mark them, because a tendency nobody expressed
+  # this cycle and a disagreement between two unexamined numbers are both
+  # things the room should discount rather than debate.
   def rated_cells
     @rated_cells ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
@@ -119,8 +137,8 @@ class CalibrationSessions::OverviewStats
       .where(level_ordinal: assessed_ordinals.values.uniq)
       .where.not(manager_rated_frequency: nil)
       .pluck(:person_id, :level_ordinal, :capability_stable_id,
-             :manager_rated_frequency, :self_rated_frequency)
-      .filter_map do |person_id, level_ordinal, stable_id, manager_frequency, self_frequency|
+             :manager_rated_frequency, :self_rated_frequency, :manager_rating_source)
+      .filter_map do |person_id, level_ordinal, stable_id, manager_frequency, self_frequency, source|
         # The level filter above is population-wide; keep only each person's
         # OWN assessed level.
         next unless assessed_ordinals[person_id] == level_ordinal
@@ -131,7 +149,10 @@ class CalibrationSessions::OverviewStats
           capability_stable_id: stable_id,
           frequency: manager_frequency,
           value: FREQUENCY_VALUES.fetch(manager_frequency),
-          self_value: self_frequency && FREQUENCY_VALUES.fetch(self_frequency)
+          self_value: self_frequency && FREQUENCY_VALUES.fetch(self_frequency),
+          # Only "seeded" is carried; nil is a legacy/factory row and counts
+          # as human, matching Assessments::LevelCoverage.
+          carried: source == "seeded"
         }
       end
   end
@@ -157,6 +178,10 @@ class CalibrationSessions::OverviewStats
         distribution: FREQUENCY_VALUES.keys.index_with { |f| cells.count { |c| c[:frequency] == f } },
         self_gap: gaps.any? ? mean(gaps) : nil,
         evidence_pct: evidence_pct(cells),
+        # How much of this rater's tendency they actually expressed THIS
+        # cycle: an all-carried row shows a tendency inherited from the last
+        # one, which is not a coaching conversation.
+        carried_count: cells.count { |c| c[:carried] },
         small_n: cells.size < SMALL_N
       }
     end
@@ -206,6 +231,20 @@ class CalibrationSessions::OverviewStats
       means = rater_means.values.map { |v| v[:mean] }
       residuals = rater_means.map { |rater_id, v| v[:mean] - (rater_offsets[rater_id] || 0.0) }
       spread = (means.max - means.min).round(2)
+      # The two raters whose means ARE the spread — the comparison the row
+      # displays. Carried state is counted against their cells only, so the
+      # note can't reassure ("2 of 20") while the gap on screen is wholly
+      # inherited, nor alarm about a carried cell belonging to a third rater
+      # who isn't part of the comparison at all.
+      #
+      # Sorted rather than min_by/max_by: on TIED means both would return the
+      # same rater, collapsing the pair to one and counting half the
+      # comparison. The rater_id tiebreak keeps the choice deterministic
+      # across requests. `by_rater.size >= 2` is guaranteed above, so first
+      # and last are always distinct raters.
+      ordered = rater_means.sort_by { |rater_id, v| [ v[:mean], rater_id ] }
+      extremes = [ ordered.first.first, ordered.last.first ]
+      compared = by_rater.values_at(*extremes).compact.flatten
       residual_spread = (residuals.max - residuals.min).round(2)
       divergence_score = [ spread, residual_spread ].min
 
@@ -217,7 +256,12 @@ class CalibrationSessions::OverviewStats
         spread: spread,
         residual_spread: residual_spread,
         divergence_score: divergence_score,
-        flagged: divergence_score >= DIVERGENCE_FLAG_THRESHOLD && cells.size >= FLAG_MIN_CELLS
+        flagged: divergence_score >= DIVERGENCE_FLAG_THRESHOLD && cells.size >= FLAG_MIN_CELLS,
+        # A gap between two numbers nobody looked at this cycle isn't a live
+        # disagreement — the board still ranks it (the divergence is real in
+        # the data), but the row says how much of it is inherited.
+        carried_count: compared.count { |c| c[:carried] },
+        cell_count: compared.size
       }
     end
 

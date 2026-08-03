@@ -57,7 +57,8 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
             th(class: "py-1.5 pr-3 font-medium") { "vs org mean" }
             th(class: "py-1.5 pr-3 font-medium") { "Distribution" }
             th(class: "py-1.5 pr-3 font-medium") { "Self-gap" }
-            th(class: "py-1.5 font-medium") { "Evidence" }
+            th(class: "py-1.5 pr-3 font-medium") { "Evidence" }
+            th(class: "py-1.5 font-medium") { "Carried" }
           end
         end
         tbody do
@@ -78,16 +79,42 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
       td(class: "py-2 pr-3 whitespace-nowrap") { org_delta_cell(rater) }
       td(class: "py-2 pr-3") { distribution_bar(rater) }
       td(class: "py-2 pr-3 whitespace-nowrap") { self_gap_cell(rater) }
-      td(class: "py-2 whitespace-nowrap text-gray-600 dark:text-gray-300") do
+      td(class: "py-2 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300") do
         plain rater[:evidence_pct] ? "#{(rater[:evidence_pct] * 100).round}%" : "—"
       end
+      td(class: "py-2 whitespace-nowrap") { carried_cell(rater) }
     end
+  end
+
+  # How much of this rater's row is carried forward. This MARKS the row;
+  # it never softens it. A carried rating is still the rater's rating —
+  # leaving it unrevisited is a decision they own — so the tendency and
+  # self-gap flags below fire on carried numbers exactly as on fresh ones.
+  # The column tells the room where to push ("own these, or do the work to
+  # verify or amend them"), which matters most when the numbers diverge.
+  def carried_cell(rater)
+    carried = rater[:carried_count].to_i
+    return span(class: "text-gray-600 dark:text-gray-300") { "—" } if carried.zero?
+
+    span(
+      class: "text-amber-700 dark:text-amber-300#{' font-medium' if all_carried?(rater)}",
+      title: "#{carried} of #{rater[:cell_count]} ratings carried forward from the previous " \
+             "cycle and not confirmed this one"
+    ) { all_carried?(rater) ? "all #{carried}" : "#{carried} of #{rater[:cell_count]}" }
+  end
+
+  # Every rated cell carried — nothing in this row was decided this cycle.
+  def all_carried?(rater)
+    rater[:cell_count].to_i.positive? && rater[:carried_count].to_i == rater[:cell_count]
   end
 
   def org_delta_cell(rater)
     delta = rater[:org_delta]
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } unless delta
 
+    # Carried rows are NOT exempt: these are still this rater's ratings, and
+    # a lenient tendency built out of values they declined to revisit is a
+    # tendency they own. The Carried column says how it got there.
     notable = delta.abs >= DEVIATION_THRESHOLD && !rater[:small_n]
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(delta)
@@ -99,6 +126,14 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     gap = rater[:self_gap]
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } unless gap
 
+    # Carried rows are not exempt here either — and this is the sharpest
+    # case for it: the reports' self-ratings are fresh, so a gap against a
+    # carried manager value means "they have formed a view this cycle and it
+    # disagrees with the record you are standing on".
+    #
+    # Known asymmetry: the mirror case (fresh manager values against carried
+    # SELF ratings) is indistinguishable here, because self_rating_source
+    # isn't threaded into any calibration query yet.
     notable = gap <= -DEVIATION_THRESHOLD && !rater[:small_n]
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(gap)

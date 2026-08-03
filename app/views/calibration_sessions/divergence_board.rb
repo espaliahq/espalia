@@ -103,6 +103,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
           span(class: "text-gray-600 dark:text-gray-300") do
             plain "spread #{sprintf('%.1f', capability[:spread])}"
           end
+          carried_note(capability)
           if capability[:flagged]
             render Components::Kit::Badge.new("⚠ raters disagree", variant: :warning)
           end
@@ -138,6 +139,23 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
     p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
       "Nothing to compare yet — capabilities appear once two raters have rated them."
     end
+  end
+
+  # A gap between numbers nobody re-examined this cycle isn't a live
+  # disagreement. The row keeps its rank — the divergence is real in the
+  # data — but says how much of it is inherited, so the room can decide
+  # whether to spend the meeting on it.
+  def carried_note(capability)
+    carried = capability[:carried_count].to_i
+    return if carried.zero?
+
+    total = capability[:cell_count].to_i
+    all = total.positive? && carried == total
+    span(
+      class: "text-amber-700 dark:text-amber-300",
+      title: "#{carried} of #{total} ratings behind this comparison were carried forward " \
+             "from the previous cycle and not confirmed this one"
+    ) { all ? "· all carried" : "· #{carried} of #{total} carried" }
   end
 
   def rater_index(participant_id)
