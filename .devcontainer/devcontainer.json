@@ -27,15 +27,19 @@
     "OTEL_EXPORTER_OTLP_HEADERS": "${localEnv:OTEL_EXPORTER_OTLP_HEADERS}"
   },
   "containerEnv": {
-    "CLAUDE_CODE_EFFORT_LEVEL": "high"
+    "CLAUDE_CODE_EFFORT_LEVEL": "high",
+    // Rails' `server` command defaults to 3000 regardless of config/puma.rb, so
+    // set PORT to keep a bare `bin/rails server` on the same port bin/dev uses.
+    // 6600 avoids clashing with other apps devs run on the host.
+    "PORT": "6600"
   },
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   "forwardPorts": [
-    3000,
+    6600,
     5432
   ],
   "portsAttributes": {
-    "3000": { "label": "Rails", "onAutoForward": "notify" },
+    "6600": { "label": "Rails", "onAutoForward": "notify" },
     "5432": { "label": "Postgres", "onAutoForward": "silent" }
   },
   // Configure tool-specific properties.

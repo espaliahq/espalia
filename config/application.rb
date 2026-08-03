@@ -36,6 +36,14 @@ module GrowthOs
     # Client Registration. Disabled in test/dev via the initializer.
     config.middleware.use Rack::Attack
 
+    # Nothing in this app attaches images, so Active Storage never needs to
+    # process a variant. Say so explicitly: since 8.1.3.1 the engine resolves
+    # the variant transformer at boot, and the default (:vips) hard-requires
+    # the ruby-vips gem plus the libvips system library. :disabled selects the
+    # NullTransformer, so we don't carry a native dependency we never use.
+    # Revisit if we ever add an attachment that needs variants.
+    config.active_storage.variant_processor = :disabled
+
     # Configuration for the application, engines, and railties goes here.
     #
     # These settings can be overridden in specific environments using the files

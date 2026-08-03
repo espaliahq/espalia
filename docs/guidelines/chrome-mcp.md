@@ -95,12 +95,12 @@ which socat                             # is socat even installed?
 - **Verify the browser itself is alive** (bypassing the forwarder):
   `curl -s chrome-debug:9222/json/version -H 'Host: localhost'` → Chrome JSON.
 
-## Reaching the app — use `rails-app:3000`, not `localhost`
+## Reaching the app — use `rails-app:6600`, not `localhost`
 
 The browser runs in the `chrome-debug` container, so **`localhost` there is
-chrome-debug, not the app.** Navigate to **`http://rails-app:3000/`** (`rails-app`
+chrome-debug, not the app.** Navigate to **`http://rails-app:6600/`** (`rails-app`
 is the compose service name; the dev server binds `0.0.0.0`). Start the server
-with `bin/dev` if nothing answers on `:3000`.
+with `bin/dev` if nothing answers on `:6600`.
 
 ## Signing in
 

@@ -40,7 +40,7 @@ Rails.application.configure do
   config.action_mailer.perform_caching = false
 
   # Set localhost to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { host: "localhost", port: 3000 }
+  config.action_mailer.default_url_options = { host: "localhost", port: 6600 }
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
@@ -81,11 +81,11 @@ Rails.application.configure do
   # Allow the in-compose service hostname so the headless Chrome
   # running in the `chrome-debug` container (driven by the
   # `chrome-devtools-mcp` npm CLI Claude Code spawns) can hit the
-  # dev server via http://rails-app:3000 without tripping Rails'
+  # dev server via http://rails-app:6600 without tripping Rails'
   # Host Authorization. The MCP client itself runs in whichever
   # container Claude Code is started in (typically `rails-app`);
   # Chrome inside `chrome-debug` is what actually issues the
-  # cross-container HTTP requests against `rails-app:3000`. Only
+  # cross-container HTTP requests against `rails-app:6600`. Only
   # applies in development.
   config.hosts << "rails-app"
 end

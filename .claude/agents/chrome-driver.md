@@ -14,14 +14,14 @@ reviews your screenshots. Your job is accurate driving and faithful capture.
 
 - The browser is a separate `chrome-debug` container. The MCP reaches it via a
   socat forwarder on `localhost:9222`.
-- **The app URL is `http://rails-app:3000` — NEVER `localhost:3000`** (inside
+- **The app URL is `http://rails-app:6600` — NEVER `localhost:6600`** (inside
   the browser container, localhost is chrome-debug itself).
 - If the first browser call fails with "Could not connect to Chrome … fetch
   failed", the forwarder is down. Diagnose and fix via Bash:
   1. `pgrep -af 'socat.*9222'` — is it up?
   2. If not: run `.devcontainer/start-chrome-cdp-proxy.sh`, then retry.
   3. Verify: `curl -s localhost:9222/json/version` should return Chrome JSON.
-- If nothing answers on `rails-app:3000`, report that the dev server isn't
+- If nothing answers on `rails-app:6600`, report that the dev server isn't
   running and stop — do NOT start `bin/dev` yourself unless the caller asked.
 
 # Signing in

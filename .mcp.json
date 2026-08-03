@@ -2,7 +2,7 @@
   "mcpServers": {
     "growthOS": {
       "type": "streamable-http",
-      "url": "http://localhost:3000/mcp"
+      "url": "http://localhost:6600/mcp"
     },
     "chrome-devtools": {
       "type": "stdio",

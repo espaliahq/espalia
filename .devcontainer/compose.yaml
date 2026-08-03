@@ -1,3 +1,11 @@
+# No service pins `platform:` — every image below publishes a native
+# linux/arm64 manifest alongside linux/amd64, so each host resolves its own
+# architecture. The chrome-debug and selenium services used to carry
+# `platform: linux/amd64` (from before those images shipped arm64 builds),
+# which forced Chrome and all four Selenium nodes through emulation on Apple
+# Silicon — the slowest part of the suite, running on the slowest possible
+# path. Don't reintroduce a pin without checking `docker manifest inspect`
+# first; CI doesn't use this file, so a pin only ever costs local developers.
 services:
   rails-app:
     build:
@@ -42,7 +50,6 @@ services:
   # appends flags that duplicate the port and break the proxy.
   chrome-debug:
     image: chromedp/headless-shell:latest
-    platform: linux/amd64
     restart: unless-stopped
     # Extra flag only — the image's entrypoint appends `command:` to
     # its own defaults. `--remote-allow-origins=*` lifts Chrome 111+'s
@@ -55,7 +62,6 @@ services:
 
   selenium-hub:
     image: selenium/hub:latest
-    platform: linux/amd64
     restart: unless-stopped
     environment:
       GRID_MAX_SESSION: 4
@@ -65,7 +71,6 @@ services:
 
   selenium-node-1:
     image: selenium/node-chromium:latest
-    platform: linux/amd64
     restart: unless-stopped
     shm_size: 1g
     depends_on:
@@ -85,7 +90,6 @@ services:
 
   selenium-node-2:
     image: selenium/node-chromium:latest
-    platform: linux/amd64
     restart: unless-stopped
     shm_size: 1g
     depends_on:
@@ -105,7 +109,6 @@ services:
 
   selenium-node-3:
     image: selenium/node-chromium:latest
-    platform: linux/amd64
     restart: unless-stopped
     shm_size: 1g
     depends_on:
@@ -125,7 +128,6 @@ services:
 
   selenium-node-4:
     image: selenium/node-chromium:latest
-    platform: linux/amd64
     restart: unless-stopped
     shm_size: 1g
     depends_on:
