@@ -822,7 +822,7 @@ inherited*, so the room can discount rather than debate:
 | Person / compare cards | the Manager pill uses the palette's dashed-outline `pill_carried` variant plus "· carried" |
 | Evidence wall | the same treatment on the `Mgr:` stamp — the room shouldn't norm against a grade nobody awarded this time |
 | Tendency strip | a **Carried** column ("12 of 53", or "all N") |
-| Divergence board | "· 1 of 2 carried" beside the spread, counted over **only the two raters whose means define that spread** — the comparison on screen. Counting the capability's whole cell set would both cry wolf (a carried cell belonging to a third rater who isn't in the comparison) and reassure wrongly ("2 of 20" when both extremes are wholly inherited). The row keeps its rank; the divergence is real in the data |
+| Divergence board | "· 1 of 2 carried" beside the spread, counted over **only the raters sitting at the two means that define that spread** — the comparison on screen (every rater at an extreme, so a tie counts them all). Counting the capability's whole cell set would both cry wolf (a carried cell belonging to a rater in the middle, who isn't in the comparison) and reassure wrongly ("2 of 20" when both extremes are wholly inherited). The row keeps its rank; the divergence is real in the data |
 
 **Marking never softens (NON-NEGOTIABLE).** A carried rating is still the
 rater's rating: declining to revisit it is a decision they own. So every

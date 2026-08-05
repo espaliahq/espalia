@@ -229,8 +229,9 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     end
 
     should "keep two distinct raters in the comparison when their means tie" do
-      # min_by and max_by both return the FIRST match on a tie, which would
-      # collapse the pair to one rater and count half the comparison.
+      # When every rater agrees, min == max: the comparison is the whole
+      # agreeing set, not one rater picked twice — which would count half
+      # the cells and mis-state how much of the row is inherited.
       rate(@r1, @cap_a, manager: "occasional", source: "seeded")  # Mia: 2.0, carried
       rate(@r2, @cap_a, manager: "occasional")                    # Raj: 2.0, fresh
 

@@ -8,7 +8,9 @@
 # for a handful of rows (docs/architecture/calibration-sessions.md →
 # "Read models", which records the decision rather than pointing back here).
 class CalibrationSessions::SessionOutcomes
-  # Most-recent events read per session. See #stream_events.
+  # Most-recent events read per session — ALL session events, not just
+  # outcomes (the stream also carries definition and curation). See
+  # #stream_events.
   STREAM_READ_LIMIT = 250
 
   # @param session [CalibrationSession]

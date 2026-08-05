@@ -17,6 +17,11 @@
 class Views::CalibrationSessions::SessionLog < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
 
+  # The most recent outcomes to render. SessionOutcomes already caps the
+  # stream read; this caps the HTML, which was ~530KB at 800 entries on a
+  # page that re-renders server-side for every pane swap.
+  RENDER_LIMIT = 100
+
   CLARIFICATION_STATUS = {
     "pending"   => [ "Discussion open", "text-amber-700 dark:text-amber-300" ],
     "resolved"  => [ "Resolved", "text-green-700 dark:text-green-300" ],
@@ -82,11 +87,6 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   end
 
   private
-
-  # The most recent RENDER_LIMIT outcomes. SessionOutcomes already caps the
-  # stream read; this caps the HTML, which was ~530KB at 800 entries on a
-  # page that re-renders server-side for every pane swap.
-  RENDER_LIMIT = 100
 
   def entries
     @entries ||= (@log[:entries] || []).first(RENDER_LIMIT)

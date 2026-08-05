@@ -71,14 +71,22 @@ class CalibrationSessions::DrillInStats
     end
   end
 
-  # person_id => assessed level ordinal (cycle enrollment snapshot).
+  # person_id => [assessed level ordinal, role_id] — the cycle enrollment
+  # snapshot, both halves from the one row (see
+  # #population_role_ids_by_ordinal for why the role comes from here).
   # Unenrolled members carry no assessed level and are omitted from the
   # grid — the setup page's readiness badges already surface them.
-  def assessed_ordinals
-    @assessed_ordinals ||= AssessmentCycleEnrollment.active
+  def enrollment_snapshot
+    @enrollment_snapshot ||= AssessmentCycleEnrollment.active
       .where(cycle_id: @session.cycle_id, person_id: calibrant_ids)
       .where.not(level_ordinal: nil)
-      .pluck(:person_id, :level_ordinal).to_h
+      .pluck(:person_id, :level_ordinal, :role_id)
+      .to_h { |person_id, ordinal, role_id| [ person_id, [ ordinal, role_id ] ] }
+  end
+
+  # person_id => assessed level ordinal.
+  def assessed_ordinals
+    @assessed_ordinals ||= enrollment_snapshot.transform_values(&:first)
   end
 
   def ordinals
@@ -133,14 +141,24 @@ class CalibrationSessions::DrillInStats
   # ordinal => Set of role_ids held by the population members assessed at
   # that level.
   #
-  # Read from the CYCLE ENROLLMENT, not the live PersonFrameworkAssignment:
-  # the assignment row is updated in place on an HRIS PersonRoleChanged, so
-  # sourcing the role there would let a mid-cycle role change retroactively
-  # rewrite which role's examples the room reads beside a rating that was
-  # made against the old role's expectation. The enrollment is the ADR-19
-  # snapshot and carries `role_id` alongside `level_ordinal` — the same
-  # pairing Assessments::MatrixDataBuilder gates on. Falls back to the live
-  # assignment only when the snapshot predates the column.
+  # Read from the CYCLE ENROLLMENT, not the live PersonFrameworkAssignment,
+  # so role and level come from ONE row and cannot disagree. The enrollment
+  # is the ADR-19 snapshot and carries `role_id` alongside `level_ordinal` —
+  # the same pairing Assessments::MatrixDataBuilder gates on; the dot's
+  # column has always come from it.
+  #
+  # The divergence is real once the cycle CLOSES. While it is open,
+  # `ParticipantRoleSync` re-snapshots the enrollment on every HRIS
+  # `PersonRoleChanged`, so both sources move together (the room's dot moves
+  # levels too — that is the sync's intent, not something this query
+  # second-guesses). After close the sync stops and the enrollment stays
+  # frozen while the assignment keeps moving, so sourcing the role from the
+  # assignment would show a closed session — the follow-through artifact,
+  # read for months — the examples for a role the person moved into after
+  # the ratings were made.
+  #
+  # Falls back to the live assignment only when the snapshot predates the
+  # column.
   def population_role_ids_by_ordinal
     @population_role_ids_by_ordinal ||= begin
       snapshot = enrollment_role_ids
@@ -162,10 +180,9 @@ class CalibrationSessions::DrillInStats
     end
   end
 
+  # person_id => snapshot role_id, dropping the rows that predate the column.
   def enrollment_role_ids
-    AssessmentCycleEnrollment.active
-      .where(cycle_id: @session.cycle_id, person_id: assessed_ordinals.keys)
-      .pluck(:person_id, :role_id).to_h.compact
+    @enrollment_role_ids ||= enrollment_snapshot.transform_values(&:last).compact
   end
 
   # ordinal => count of OPEN framework clarifications anchored on this

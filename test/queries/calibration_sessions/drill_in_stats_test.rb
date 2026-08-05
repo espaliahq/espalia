@@ -156,16 +156,19 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
                    stats[:illustrations][3].map { |g| g[:role_name] }
     end
 
-    should "read the cycle's role snapshot, not a later live role change" do
-      # An HRIS PersonRoleChanged updates the assignment row IN PLACE. The
-      # room must still see the examples for the role the rating was made
-      # against, not the one the person moved to mid-cycle.
+    should "read the cycle's role snapshot when the live assignment has moved on" do
+      # The state a CLOSED cycle reaches: ParticipantRoleSync stops
+      # re-snapshotting the enrollment, so a later HRIS PersonRoleChanged
+      # moves the assignment row alone. A closed session is read for months
+      # afterwards and must still show the examples for the role the ratings
+      # were made against.
+      @cycle.update!(status: "closed")
       PersonFrameworkAssignment
         .find_by(person_id: @r1.id, framework_id: @framework_id)
         .update!(role_id: @manager_role.role_id)
 
       assert_equal [ "Software Engineer" ], stats[:illustrations][3].map { |g| g[:role_name] },
-        "a mid-cycle role change must not rewrite which examples the room reads"
+        "a role change after the cycle closed must not rewrite the examples"
     end
 
     should "narrow per level, not just to the union of the grid's roles" do

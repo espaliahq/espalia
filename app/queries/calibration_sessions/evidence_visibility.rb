@@ -35,15 +35,19 @@ class CalibrationSessions::EvidenceVisibility
 
   # @return [Array<String>] the subset whose evidence the viewer may read
   def person_ids
-    @person_ids ||= begin
-      return [] if @viewer.nil? && !@admin
-      return @candidate_ids if @admin || @candidate_ids.empty?
-
-      (subtree_ids + delegated_ids + [ @viewer.id ]).uniq & @candidate_ids
-    end
+    @person_ids ||= resolve
   end
 
   private
+
+  # Split out so every branch memoizes — a `return` inside the `||=`'s block
+  # returns from the method, leaving the early exits recomputed on each call.
+  def resolve
+    return [] if @viewer.nil? && !@admin
+    return @candidate_ids if @admin || @candidate_ids.empty?
+
+    (subtree_ids + delegated_ids + [ @viewer.id ]).uniq & @candidate_ids
+  end
 
   def subtree_ids
     @viewer.all_reports.where(id: @candidate_ids).pluck(:id)
