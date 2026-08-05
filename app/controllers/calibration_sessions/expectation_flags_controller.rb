@@ -21,7 +21,11 @@ class CalibrationSessions::ExpectationFlagsController < ApplicationController
       }
     )
 
-    redirect_to drill_in_return_path(session_record, person_id: params[:person]),
+    # `activity=open` so the flag lands somewhere visible even if the room
+    # had the log panel closed — same rule the note composer follows. Only
+    # on success: a failed flag records nothing for the panel to show.
+    redirect_to drill_in_return_path(session_record, person_id: params[:person],
+                                     extra: { activity: "open" }),
                 notice: "Expectation flagged — a clarification discussion is now open on the framework."
   rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to drill_in_return_path(session_record, person_id: params[:person]), alert: e.message
