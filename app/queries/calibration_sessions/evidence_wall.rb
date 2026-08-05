@@ -24,7 +24,7 @@ class CalibrationSessions::EvidenceWall
   # @param rater_id [String, nil] filter to one participant's people
   # @param visible_person_ids [Array<String>, nil] the subset of the
   #   population whose evidence the VIEWER may read
-  #   ({CalibrationSessions::EvidenceVisibility}). nil means unfiltered and
+  #   ({CalibrationSessions::AssesseeVisibility}). nil means unfiltered and
   #   is for non-request callers (tests, rake) only — a request must always
   #   pass it, or peer feedback about someone outside the facilitator's
   #   entitlement renders verbatim.

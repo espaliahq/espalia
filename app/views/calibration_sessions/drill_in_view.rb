@@ -620,7 +620,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       end
       div(class: "mt-2 flex flex-wrap gap-1.5") do
         rating_pill("Mgr", dot[:frequency], carried: dot[:carried])
-        rating_pill("Self", dot[:self_frequency])
+        rating_pill("Self", dot[:self_frequency], withheld: dot[:self_withheld])
       end
       if card_data[:evidence].empty?
         p(class: "mt-3 text-xs text-gray-600 dark:text-gray-300") do
@@ -677,7 +677,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
           div(class: "mt-3 flex flex-wrap gap-2") do
             rating_pill("Manager", dot[:frequency], carried: dot[:carried])
-            rating_pill("Self", dot[:self_frequency])
+            rating_pill("Self", dot[:self_frequency], withheld: dot[:self_withheld])
           end
 
           evidence_section
@@ -745,17 +745,29 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # `carried:` renders the palette's dashed-outline variant — the same
   # "carried forward, unconfirmed" signal the assessment pills use — and
   # says so in the title, since the dash alone is decoration.
-  def rating_pill(label, frequency, carried: false)
+  # `withheld` is NOT "unrated": the viewer isn't entitled to this person's
+  # assessment (AssesseeVisibility), so their self-rating is hidden. Saying
+  # so beats a blank that reads as data.
+  def rating_pill(label, frequency, carried: false, withheld: false)
     config = frequency && CONFIG[frequency]
     classes = if config
       carried ? config[:pill_carried] : config[:pill_bg]
     else
       "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
     end
-    phrase = config ? config[:phrase] : "unrated"
+    phrase = if withheld
+      "not shown"
+    else
+      config ? config[:phrase] : "unrated"
+    end
+    title = if withheld
+      "Hidden — you don't have access to this person's assessment"
+    elsif carried
+      "Carried forward from the previous cycle, not confirmed this one"
+    end
     span(
       class: "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium #{classes}",
-      title: (carried ? "Carried forward from the previous cycle, not confirmed this one" : nil)
+      title: title
     ) do
       plain "#{label}: #{phrase}"
       if carried

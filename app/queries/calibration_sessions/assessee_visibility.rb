@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
-# Which of a calibration session's population the VIEWER may read evidence
-# for, per {EvidencePolicy#view_assessment?}.
+# Which of a calibration session's population the VIEWER is entitled to read
+# an assessment for — the same set `EvidencePolicy#view_assessment?` and
+# `AssessmentPolicy#show?` admit (both are: admin ∥ self ∥ manager chain ∥
+# active delegate).
 #
 # The session surfaces used to assume this rather than check it: the design
 # says the facilitator is an ancestor of the whole population, so the
@@ -11,17 +13,22 @@
 # delegation, or a recorded reporting manager that diverges from the live
 # chain — and those people sit outside the facilitator's own subtree by
 # construction. So a session can legitimately contain someone whose
-# evidence `/assessments` would refuse the facilitator, and the wall and
-# person card would render their peer feedback verbatim.
+# assessment `/assessments` would refuse the facilitator.
 #
-# Ratings are deliberately NOT filtered here: the grid is the session's
-# whole point and the population is a curated, frozen decision. It is the
-# free-text feedback — written by peers under a narrower visibility
-# disclosure — that needs the entitlement check.
+# **What the gate covers is the ASSESSEE's own contributions**: their peer
+# and self feedback, and their self-rating. Those are the person's private
+# inputs, written under a visibility disclosure naming their managers and
+# admins — not "a room of EMs one of their peers' managers happens to run".
+#
+# **Manager ratings are deliberately NOT gated.** They belong to a rater who
+# is in the room and is there to defend them — calibrating those raters is
+# the session's entire purpose, and the population is a curated, frozen
+# decision the facilitator made. Withholding the rating would empty the grid
+# of exactly the cells the delegation exemption exists to include.
 #
 # Batched: one subtree query plus one delegation query, never a policy call
 # per person.
-class CalibrationSessions::EvidenceVisibility
+class CalibrationSessions::AssesseeVisibility
   # @param viewer [Person, nil] the acting person (nil ⇒ nothing visible)
   # @param framework_id [String]
   # @param candidate_ids [Array<String>] population person_ids

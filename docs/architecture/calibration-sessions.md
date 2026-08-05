@@ -220,9 +220,26 @@ point), but their rater's row is **visually muted ("not in session")** and:
 ## Access model — facilitator-only (v1)
 
 Only the facilitator loads the session pages; the room views a projected /
-screen-shared display. The facilitator is an ancestor of the entire population
-(subtree-scoped adds guarantee it), so existing `AssessmentPolicy`
-chain-visibility already admits every read. **Zero authorization changes.**
+screen-shared display.
+
+**The facilitator is NOT an ancestor of the entire population** — the original
+design said subtree-scoped adds guarantee it, and that is wrong.
+`ScopeChecks` deliberately exempts anyone a *participant* is attributed (an
+active rating delegation, or a recorded reporting manager diverging from the
+live chain), and those people sit outside the facilitator's subtree by
+construction. So the session can contain someone `/assessments` would refuse
+the facilitator, and `CalibrationSessions::AssesseeVisibility` checks the
+entitlement per calibrant instead of assuming it. The line it draws:
+
+- **The assessee's own contributions are gated** — feedback written about
+  them, and their self-rating. Those are private inputs given under a
+  disclosure naming their managers and admins, not a room of EMs. Outside the
+  entitlement the wall and card omit the feedback, and the self pill reads
+  "not shown" rather than a blank that would look like *unrated*.
+- **Manager ratings are not gated.** They belong to a rater who is in the
+  room to defend them; calibrating those raters is the session's purpose, and
+  withholding them would empty the grid of exactly the cells the delegation
+  exemption exists to include.
 
 - **The room sees who it is discussing** — see *Naming* below.
 - Session `create` is gated on "manages managers in own subtree" or tenant

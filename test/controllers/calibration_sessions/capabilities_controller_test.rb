@@ -159,10 +159,11 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
 
     # The population can legitimately include someone outside the
     # facilitator's subtree: ScopeChecks exempts anyone a PARTICIPANT is
-    # attributed via an active rating delegation. Their peer feedback is
-    # still not the facilitator's to read — EvidencePolicy would refuse it
-    # on /assessments, and the session must not be a way around that.
-    should "withhold evidence for a calibrant outside the facilitator's entitlement" do
+    # attributed via an active rating delegation. That person's own
+    # contributions — peer feedback about them, and their self-rating — are
+    # still not the facilitator's to read: /assessments would refuse them,
+    # and the session must not be a way around that.
+    should "withhold the assessee's own inputs outside the facilitator's entitlement" do
       outsider = ActsAsTenant.with_tenant(@tenant) do
         stranger_head = create(:person, tenant: @tenant, name: "Other Dept Head")
         seconded = create(:person, tenant: @tenant, name: "Zed Outside", manager: stranger_head)
@@ -177,6 +178,12 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
                framework_id: @cycle.framework_id, author_id: stranger_head.id,
                capability_stable_id: @cap.stable_id, level_ordinal: 3,
                content: "CONFIDENTIAL peer feedback about Zed.")
+        # Manager rated Some, Zed rated himself Consistently — so a leak of
+        # the self value is distinguishable from the manager value.
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: seconded.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "some", self_rated_frequency: "consistent")
         create(:calibration_session_member, tenant: @tenant,
                session: @session, person_id: seconded.id)
         seconded
@@ -194,6 +201,21 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_response :success
       assert_not_includes response.body, "CONFIDENTIAL peer feedback",
         "the person card must withhold it too"
+      # The self-rating is the assessee's own input and goes with it — said
+      # so, not left as a blank that reads as "never rated".
+      assert_includes response.body, "Self: not shown"
+      assert_not_includes response.body, "Self: Consistently"
+      # The MANAGER rating stays: it belongs to a rater in the room, and
+      # calibrating them is why the exemption puts Zed on the grid at all.
+      assert_includes response.body, "Manager: Some of the time"
+    end
+
+    should "show the self-rating for a calibrant the facilitator does manage" do
+      get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+
+      assert_response :success
+      assert_includes response.body, "Self: Some of the time"
+      assert_not_includes response.body, "Self: not shown"
     end
 
     should "render the compare tray for pinned people, dropping foreign pins" do

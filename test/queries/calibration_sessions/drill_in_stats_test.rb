@@ -186,6 +186,38 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
            description: description)
   end
 
+  # @r1's dot, built with the given entitlement set (nil = ungated).
+  def gated_dot(visible)
+    CalibrationSessions::DrillInStats.new(
+      session: @session, capability_stable_id: @cap.stable_id,
+      visible_person_ids: visible
+    ).call[:rows].find { |row| row[:rater_id] == @em_1.id }[:people][3].first
+  end
+
+  context "assessee entitlement" do
+    setup do
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: @r1.id, framework_id: @framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             manager_rated_frequency: "consistent", self_rated_frequency: "occasional")
+    end
+
+    should "withhold the self-rating outside the viewer's entitlement" do
+      dot = gated_dot([ @r2.id ])
+
+      assert dot[:self_withheld]
+      assert_nil dot[:self_frequency], "the value must not reach the view at all"
+      # The rater is in the room to defend this one — it is the session's subject.
+      assert_equal "consistent", dot[:frequency]
+    end
+
+    should "keep it for someone inside the entitlement, and when ungated" do
+      assert_equal "occasional", gated_dot([ @r1.id, @r2.id ])[:self_frequency]
+      assert_not gated_dot([ @r1.id, @r2.id ])[:self_withheld]
+      assert_equal "occasional", gated_dot(nil)[:self_frequency]
+    end
+  end
+
   context "carried-forward provenance" do
     should "mark a dot whose manager rating was seeded from the prior cycle" do
       create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,

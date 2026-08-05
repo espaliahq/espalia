@@ -14,9 +14,15 @@
 class CalibrationSessions::DrillInStats
   # @param session [CalibrationSession]
   # @param capability_stable_id [String]
-  def initialize(session:, capability_stable_id:)
+  # @param visible_person_ids [Array<String>, nil] the population subset the
+  #   viewer is entitled to an assessment for
+  #   ({CalibrationSessions::AssesseeVisibility}). Outside it, the dot keeps
+  #   its manager rating — the rater is in the room to defend it — but the
+  #   assessee's own SELF rating is withheld. nil skips the gate entirely.
+  def initialize(session:, capability_stable_id:, visible_person_ids: nil)
     @session = session
     @capability_stable_id = capability_stable_id
+    @visible_person_ids = visible_person_ids&.to_set
   end
 
   # @return [Hash, nil] nil when the capability isn't in the session's
@@ -181,6 +187,15 @@ class CalibrationSessions::DrillInStats
   end
 
   # person_id => snapshot role_id, dropping the rows that predate the column.
+  # A self-rating is the assessee's own input, so it needs the same
+  # entitlement as their feedback. Reported separately from "unrated" —
+  # rendering a withheld value as a gap would misread as data.
+  def self_withheld?(person_id)
+    return false if @visible_person_ids.nil?
+
+    !@visible_person_ids.include?(person_id)
+  end
+
   def enrollment_role_ids
     @enrollment_role_ids ||= enrollment_snapshot.transform_values(&:last).compact
   end
@@ -259,11 +274,13 @@ class CalibrationSessions::DrillInStats
           .transform_values do |ids|
             ids.map do |person_id|
               rating = ratings[person_id] || {}
+              withheld = self_withheld?(person_id)
               {
                 person_id: person_id,
                 name: people[person_id]&.name || "Unknown",
                 frequency: rating[:frequency],
-                self_frequency: rating[:self_frequency],
+                self_frequency: withheld ? nil : rating[:self_frequency],
+                self_withheld: withheld,
                 carried: rating[:carried] || false,
                 backed: backed_person_ids.include?(person_id)
               }

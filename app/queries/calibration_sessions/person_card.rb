@@ -13,7 +13,7 @@ class CalibrationSessions::PersonCard
   # @param stats [Hash] DrillInStats result for the capability
   # @param capability_stable_id [String]
   # @param visible_person_ids [Array<String>, nil] population subset whose
-  #   evidence the VIEWER may read ({CalibrationSessions::EvidenceVisibility}).
+  #   evidence the VIEWER may read ({CalibrationSessions::AssesseeVisibility}).
   #   nil means unfiltered — non-request callers only.
   # @param outcomes [CalibrationSessions::SessionOutcomes, nil] pass the
   #   request's existing instance so the session stream is read ONCE per
