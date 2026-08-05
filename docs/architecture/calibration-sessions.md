@@ -29,12 +29,14 @@
 > *Provenance* — carried-forward (seeded, unconfirmed) ratings are marked
 > on every read surface; see *Carried-vs-vetted provenance*.
 >
-> **Not built** (each has its own section below):
+> **Not built** (each is marked at the section that describes it):
 > auto-suggested contrast pairs (§e) · evidence requests as a session
-> outcome (§f) · participant follow-along + the v2 visibility grant ·
-> cross-cycle trends · MCP reads for the drill-in surfaces
-> (*Cross-cutting*) · in-surface definitions for the calibration vocabulary
-> (*Deliberately deferred*).
+> outcome (§f) · the person card's linked-by / requested provenance and
+> valence↔rating coherence flag (§c) · prior-session markers on the grid
+> (§3, *Overlapping sessions*) · participant follow-along + the v2
+> visibility grant · cross-cycle trends · MCP reads for the drill-in
+> surfaces (*Cross-cutting*) · in-surface definitions for the calibration
+> vocabulary (*Deliberately deferred*).
 >
 > **Known display nit:** raters with identical means on a capability render
 > exactly-overlapping dots on the divergence board (the tooltip and the aria
@@ -160,11 +162,20 @@ metadata, the house rule).
 ### Read models
 
 A session projection owning its own tables (session header, population
-membership, agenda state, outcomes). Per the read-model ownership invariant it
-never writes to any other projection's tables; everything it displays about
+membership, agenda state). Per the read-model ownership invariant it never
+writes to any other projection's tables; everything it displays about
 ratings/evidence is a **read-time join** against `AssessmentLevelRating`,
 `PersonFrameworkAssignment`, `RecordedReportingManager`,
 `AssessmentCycleProgress`, and the evidence read models.
+
+**Outcomes are NOT projected.** Flags, revisit requests, and notes are read
+back off the session stream at render time
+(`CalibrationSessions::SessionOutcomes`): a session's outcome count is
+bounded by one meeting's discussion, so a table would carry a projection's
+rebuild and ownership cost for a handful of rows. The read is capped at the
+most recent `STREAM_READ_LIMIT` events and shared across the surfaces of one
+render. If a session ever outgrows that cap, the fix is the framework feed's
+cursor "load older" footer, not a projection.
 
 ## Population rules
 
@@ -324,6 +335,12 @@ Suggested agenda (auto-generated, drag to reorder):
 **Rater tendency strip** — one row per participant; the "acknowledge our
 biases first" moment. Aggregates only, never individual self-ratings:
 
+Every column is computed over the EM's **rated at-level cells** — the
+population's cells at each person's own assessed level, with a manager
+rating. "vs. org mean" compares against the mean of every such cell in the
+session, all raters pooled (not the mean of the rater means, which would
+weight a rater with two reports like one with nine).
+
 ```
             reports   vs. org mean      distribution     self-gap   evidence
   Mia          6        +0.4 ▲       ▁▂▅█  (skews high)    −0.1       21%
@@ -332,10 +349,12 @@ biases first" moment. Aggregates only, never individual self-ratings:
   Ana          5        −0.1         ▂▆▄▁                  −0.2       48%
 ```
 
-- **self-gap** = mean(manager rating − self rating) across the EM's team — an
-  independent bias signal (an EM far below their whole team's self-perception
-  is either the room's only honest rater or has a calibration problem;
-  either way, that's the conversation).
+- **self-gap** = mean(manager rating − self rating) over the EM's
+  **at-level cells where BOTH sides rated** — a cell the report never
+  self-rated has no gap to average, and counting it as zero would read as
+  agreement. An independent bias signal (an EM far below their whole team's
+  self-perception is either the room's only honest rater or has a calibration
+  problem; either way, that's the conversation).
 - **evidence** = % of the EM's current-level ratings backed by ≥1 active
   evidence link (see the evidence section). Leniency and substantiation are
   different axes: "Raj rates low but backs 90%; Mia rates high on 21%
@@ -382,9 +401,9 @@ positioned dots on a shared axis, sorted by spread; click → drill-in:
   `FrequencyPalette` — the vocabulary everyone already knows from the
   assessment screen. **Dot fill = evidence backing** (● backed / ◌ unbacked —
   see below).
-- **Prior calibration context** (overlapping sessions): a small marker on
-  dots already discussed in an earlier session this cycle, with the outcome
-  on hover — "discussed in Engineering calibration July 10 — revisit
+- **Prior calibration context — NOT BUILT** (overlapping sessions): a small
+  marker on dots already discussed in an earlier session this cycle, with the
+  outcome on hover — "discussed in Engineering calibration July 10 — revisit
   requested, rating since revised Some → Most". This makes a later org-wide
   session a roll-up, not a blind re-litigation. Read-time join across session
   read models; sequencing between sessions stays social, never enforced.
@@ -450,6 +469,16 @@ Substantiation is an axis of rater quality independent of leniency.
 
 ### c. Person card (dot click)
 
+> **Built:** the header (ratings, gap, carried marker, revisit ask) and the
+> evidence list as *valence badge · author relation · date · excerpt*.
+> **Not built** — the mock below is the target, not the current card:
+> per-item linked-by and requested/proactive provenance; the
+> valence↔rating coherence flag; the `[Request evidence…]` affordance
+> (§f). "Manager vs self" renders as two labelled rating pills, not the
+> level chips' diagonal split — the split reads as *contested* between two
+> parties looking at one chip, whereas the card has room to state both
+> values outright.
+
 The selected cell's evidence, full-width in the drill-in's bottom pane:
 
 ```
@@ -469,18 +498,20 @@ Card contents and rules:
 
 - **Valence badge first** (`Views::Evidence::Valence` vocabulary — emerald /
   amber / rose, never the frequency palette: red/yellow/green/blue means
-  *ratings*), then the excerpt, then provenance — author *relation* +
-  linked-by + date + requested/proactive.
-- **Valence↔rating coherence flag.** When the strongest linked valence
-  contradicts the rating — *Strongly demonstrates* under a *Some*, or
+  *ratings*), then provenance, then the excerpt. Provenance today is author
+  *relation* + date; linked-by and requested/proactive are not built.
+- **Valence↔rating coherence flag (not built).** When the strongest linked
+  valence contradicts the rating — *Strongly demonstrates* under a *Some*, or
   *significant growth area* under a *Consistently* — the card carries a quiet
   ⚠ "evidence and rating point in different directions". This is precisely a
   calibration conversation ("the evidence says more than the rating does —
   what else did you see?"), computed read-time from data that already exists.
   It is a discussion prompt, **not** a scoring input (ADR-10 stands: valence
   never feeds scoring).
-- **Manager vs self split** rendered with the same diagonal-split vocabulary
-  as level chips — the viewer-familiar "contested" signal.
+- **Manager vs self** are stated as two labelled rating pills, each carrying
+  its own carried-forward marker. (An earlier draft borrowed the level
+  chips' diagonal split; the card has room for both values in words, and the
+  split's meaning — *contested* — is the grid's job, not the card's.)
 - **Author identity is relation-first in session views.** The card shows
   "peer feedback" / "manager" / "self" / "requested from …" rather than the
   author's name — and, unlike the ratee's name, this one has NOT been
@@ -680,7 +711,8 @@ Mechanics — everything not listed here is inherited untouched:
   coordination.
 - **Prior-session context is read-time** (drill-in markers, overview
   "previously calibrated" badges) so later sessions roll up rather than
-  re-litigate.
+  re-litigate. **Not built** — the semantics below hold today (sessions
+  already run concurrently with no coordination); the surfacing does not.
 - **Ordering is social.** Nothing enforces "departments before org-wide";
   the history surface makes ordering visible and useful without making it
   mandatory.
@@ -694,6 +726,12 @@ Mechanics — everything not listed here is inherited untouched:
   `calibration_sessions_overview`) as `:none` ops scoped by the same
   facilitator policy — "where are my EMs most inconsistent?" is a genuinely
   good agent query.
+  *Payload gotcha:* `calibration_sessions_overview` returns `cell_count`
+  under two different denominators. On a **rater** row it is that rater's
+  whole rated at-level cell set; on a **capability** row it covers only the
+  raters sitting at the two means that define the spread — the comparison
+  the board displays. `carried_count` follows its row's denominator. Read
+  them per row, never across the two.
   **Deferred deliberately: the drill-in's own reads** — the dot grid, the
   evidence wall, the compare tray and the session log have no MCP tools.
   They are read-time compositions of data MCP already exposes per person

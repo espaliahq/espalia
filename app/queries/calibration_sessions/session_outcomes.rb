@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
-# Reads a calibration session's outcome events from its stream — the
-# follow-through material (expectation flags today; revisit requests and
-# notes join as they are built). Read-time by design: outcomes are
-# low-volume session artifacts, so no projection table is warranted
-# (docs/architecture/calibration-sessions.md → "Outcomes").
+# Reads a calibration session's outcome events — expectation flags, revisit
+# requests, and notes — from its stream.
+#
+# Read-time by design: a session's outcome count is bounded by one meeting's
+# discussion, so a projection table would carry rebuild and ownership cost
+# for a handful of rows (docs/architecture/calibration-sessions.md →
+# "Read models", which records the decision rather than pointing back here).
 class CalibrationSessions::SessionOutcomes
   # Most-recent events read per session. See #stream_events.
   STREAM_READ_LIMIT = 250
