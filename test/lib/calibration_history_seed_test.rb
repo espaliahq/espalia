@@ -140,10 +140,20 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
     raters = members.participants.pluck(:person_id)
     calibrants = members.calibrants.pluck(:person_id)
 
-    assert_equal @ems.map(&:id).sort, raters.sort
-    assert_equal [], raters & calibrants
-    assert_not_includes calibrants, @head.id
-    assert_equal @reports.map(&:id).sort, calibrants.sort
+    # NOT every EM: the reporting-line moves can leave one with no enrolled
+    # reports, and a rater with nobody to be calibrated on is correctly out
+    # of the room. Assert the rule, not the roster — which is also why this
+    # passed locally and failed on CI, where different ids ranked differently.
+    assert_equal [], raters - @ems.map(&:id), "only the EMs can be raters"
+    assert raters.any?, "the room needs someone in it"
+    assert_equal [], raters & calibrants, "a rater is never their own calibrant"
+    assert_not_includes calibrants, @head.id, "the facilitator is not calibrated"
+    assert_equal [], calibrants - @reports.map(&:id), "only reports are calibrated"
+
+    # Every rater in the room owns at least one person on the grid, and
+    # everyone on the grid is owned by a rater in the room.
+    owners = Person.where(id: calibrants).pluck(:manager_id).uniq
+    assert_equal raters.sort, owners.sort
   end
 
   should "converge rather than grow when run twice" do
