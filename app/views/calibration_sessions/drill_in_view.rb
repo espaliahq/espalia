@@ -465,7 +465,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
               "Feedback / Evidence — #{@stats[:capability][:name]}"
             end
-            p(class: "text-xs text-gray-600 dark:text-gray-300") do
+            # `data-wall-total` is the machine-readable count. The visible
+            # text is not assertable: "1 item" is a substring of the utility
+            # class `min-h-11 items-center`, so a body-substring check on it
+            # passes on pages with no wall at all.
+            p(class: "text-xs text-gray-600 dark:text-gray-300",
+              data: { wall_total: @wall[:total] }) do
               "#{@wall[:total]} #{'item'.pluralize(@wall[:total])} across the population"
             end
           end

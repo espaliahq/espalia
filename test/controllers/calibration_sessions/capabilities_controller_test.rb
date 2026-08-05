@@ -97,7 +97,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       get calibration_session_capability_path(@session, @cap.stable_id, view: "wall")
 
       assert_response :success
-      assert_includes response.body, "1 item"
+      assert_wall_total 1
       # Who it is about and what was written, both in the open.
       assert_includes response.body, "Ivy IC"
       assert_includes response.body, "Led the pricing re-architecture"
@@ -109,22 +109,33 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
                                               view: "wall", wall_level: 4)
 
       assert_response :success
-      assert_includes response.body, "0 items"
+      assert_wall_total 0
       assert_not_includes response.body, "Led the pricing re-architecture"
       # Stepping out to another pane and back must return to the same filter.
       assert_includes response.body, "wall_level=4"
     end
 
     should "route the rater filter through to the wall" do
+      # A second rater whose report also has evidence here, so a filter that
+      # does nothing is distinguishable from one that works.
+      other_em, = seed_second_rater
+
       get calibration_session_capability_path(@session, @cap.stable_id,
                                               view: "wall", wall_rater: @em.id)
-      assert_includes response.body, "1 item"
+      assert_wall_total 1
+      assert_includes response.body, "Led the pricing re-architecture"
+      assert_not_includes response.body, "Ran the billing spike"
 
-      other_rater = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
       get calibration_session_capability_path(@session, @cap.stable_id,
-                                              view: "wall", wall_rater: other_rater.id)
+                                              view: "wall", wall_rater: other_em.id)
+      assert_wall_total 1
+      assert_includes response.body, "Ran the billing spike"
+
+      stranger = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_rater: stranger.id)
       # Not a participant — the filter is rejected rather than emptying the wall.
-      assert_includes response.body, "1 item"
+      assert_wall_total 2
     end
 
     should "survive array and non-numeric filter params without erroring" do
@@ -135,7 +146,9 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       get calibration_session_capability_path(@session, @cap.stable_id,
                                               view: "wall", wall_level: "abc")
       assert_response :success
-      assert_includes response.body, "1 item"
+      # A junk level must be IGNORED, not coerced to 0 (which would empty
+      # the wall while still returning 200).
+      assert_wall_total 1
     end
 
     should "render the compare tray for pinned people, dropping foreign pins" do
@@ -206,6 +219,42 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
 
       assert_redirected_to root_path
       assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+  end
+
+  # The wall's count, read from `data-wall-total` rather than the visible
+  # text: "1 item" is a substring of the utility class `min-h-11
+  # items-center`, so a body-substring assertion on it passes even on a
+  # page that renders no wall at all.
+  def assert_wall_total(expected)
+    assert_select %(p[data-wall-total="#{expected}"]), { count: 1 },
+      "expected the wall to report #{expected} item(s)"
+  end
+
+  # A second participant with their own report and evidence on the same
+  # capability, so a rater filter that does nothing is distinguishable
+  # from one that works.
+  def seed_second_rater
+    ActsAsTenant.with_tenant(@tenant) do
+      other_em = create(:person, tenant: @tenant, name: "Raj Rater", manager: @facilitator)
+      other_report = create(:person, tenant: @tenant, name: "Omar IC", manager: other_em)
+      create(:person_framework_assignment, tenant: @tenant,
+             person_id: other_report.id, framework_id: @cycle.framework_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: other_report.id, level_ordinal: 3)
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: other_report.id, framework_id: @cycle.framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             manager_rated_frequency: "some")
+      create(:evidence_item, tenant: @tenant, person_id: other_report.id,
+             framework_id: @cycle.framework_id, author_id: other_em.id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             content: "Ran the billing spike end to end.")
+      create(:calibration_session_member, :participant, tenant: @tenant,
+             session: @session, person_id: other_em.id)
+      create(:calibration_session_member, tenant: @tenant,
+             session: @session, person_id: other_report.id)
+      [ other_em, other_report ]
     end
   end
 end

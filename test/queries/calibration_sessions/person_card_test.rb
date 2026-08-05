@@ -171,11 +171,17 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
     assert_no_queries { second = subject.for(@report.id) }
     assert_same first, second
 
-    # Misses are memoized too — a stale pin is asked about twice. Use a real
-    # id, not nil, so the memo is exercised rather than the blank short-circuit.
+    # Misses are memoized too — a stale pin is asked about twice. A miss
+    # costs no queries either way, so booby-trap the data `locate` walks:
+    # asking again must NOT re-enter it. A truthiness guard (rather than
+    # `key?`) would recompute and trip the wire.
     stale = create(:person, tenant: @tenant).id
     assert_nil subject.for(stale)
-    assert_no_queries { assert_nil subject.for(stale) }
+
+    tripwire = Object.new
+    def tripwire.[](*) = raise("recomputed a memoized miss")
+    subject.instance_variable_set(:@stats, tripwire)
+    assert_nil subject.for(stale), "a miss must be served from the memo"
   end
 
   def assert_no_queries(&block)

@@ -22,12 +22,17 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer", code: "E")
     @manager_role = create(:framework_role, tenant: @tenant, name: "Engineering Manager", code: "EM")
 
-    { @r1 => 3, @r2 => 4, @ref => 3 }.each do |person, ordinal|
-      create(:person_framework_assignment, tenant: @tenant,
-             person_id: person.id, framework_id: @framework_id, role_id: @engineer.role_id)
-      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: person.id, level_ordinal: ordinal)
-    end
+    # Deliberately split by level: L3 is engineers, L4 is the manager. Only
+    # a population whose LEVELS hold different roles exercises the
+    # per-ordinal narrowing — with one role everywhere, the union `where`
+    # already excludes everything and the narrowing is untested.
+    { @r1 => [ 3, @engineer ], @ref => [ 3, @engineer ], @r2 => [ 4, @manager_role ] }
+      .each do |person, (ordinal, role)|
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: person.id, framework_id: @framework_id, role_id: role.role_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: person.id, level_ordinal: ordinal)
+      end
 
     category = create(:framework_capability_category, tenant: @tenant,
                       framework_id: @framework_id, name: "Thinking")
@@ -138,9 +143,9 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
       assert_equal [ "Unwinds a circular dependency without help." ], groups.first[:items]
     end
 
-    should "include a role once the population holds it" do
-      # Re-assign one L3 member to the manager role — now both are calibrated
-      # at L3 and both sets of examples are relevant.
+    should "include a role once the population holds it at that level" do
+      # Re-assign one L3 member to the manager role — now both roles are
+      # calibrated at L3 and both sets of examples are relevant.
       PersonFrameworkAssignment
         .find_by(person_id: @ref.id, framework_id: @framework_id)
         .update!(role_id: @manager_role.role_id)
@@ -149,8 +154,12 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
                    stats[:illustrations][3].map { |g| g[:role_name] }
     end
 
-    should "leave a level with no illustrations for its roles empty" do
-      assert_nil stats[:illustrations][4]
+    should "narrow per level, not just to the union of the grid's roles" do
+      # The manager role IS calibrated — at L4 — so it survives the SQL
+      # `where`. Only the per-ordinal narrowing keeps its L3 examples out of
+      # L3, where nobody holds that role.
+      assert_equal [ "Software Engineer" ], stats[:illustrations][3].map { |g| g[:role_name] },
+        "manager examples must not leak into a level with no managers"
     end
   end
 

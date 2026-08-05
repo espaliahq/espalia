@@ -248,6 +248,11 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       create(:calibration_session_member, :participant, tenant: @tenant,
              session: @session, person_id: em_3.id)
       mid = create(:person, tenant: @tenant, name: "Mid", manager: em_3)
+      # Membership is what puts them on the grid — without it rater_for
+      # slices them out and the third rater never enters the comparison,
+      # making the whole assertion trivial.
+      create(:calibration_session_member, tenant: @tenant,
+             session: @session, person_id: mid.id)
       create(:person_framework_assignment, tenant: @tenant,
              person_id: mid.id, framework_id: @framework_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
