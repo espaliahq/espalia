@@ -131,21 +131,41 @@ class CalibrationSessions::DrillInStats
   end
 
   # ordinal => Set of role_ids held by the population members assessed at
-  # that level. Read from the framework assignment (the enrollment snapshot
-  # carries the level, not the role).
+  # that level.
+  #
+  # Read from the CYCLE ENROLLMENT, not the live PersonFrameworkAssignment:
+  # the assignment row is updated in place on an HRIS PersonRoleChanged, so
+  # sourcing the role there would let a mid-cycle role change retroactively
+  # rewrite which role's examples the room reads beside a rating that was
+  # made against the old role's expectation. The enrollment is the ADR-19
+  # snapshot and carries `role_id` alongside `level_ordinal` — the same
+  # pairing Assessments::MatrixDataBuilder gates on. Falls back to the live
+  # assignment only when the snapshot predates the column.
   def population_role_ids_by_ordinal
     @population_role_ids_by_ordinal ||= begin
-      roles = PersonFrameworkAssignment
-        .where(framework_id: @session.framework_id, person_id: assessed_ordinals.keys)
-        .pluck(:person_id, :role_id).to_h
+      snapshot = enrollment_role_ids
+      missing = assessed_ordinals.keys - snapshot.compact.keys
+      live = if missing.any?
+        PersonFrameworkAssignment
+          .where(framework_id: @session.framework_id, person_id: missing)
+          .pluck(:person_id, :role_id).to_h
+      else
+        {}
+      end
 
       assessed_ordinals.each_with_object({}) do |(person_id, ordinal), map|
-        role_id = roles[person_id]
+        role_id = snapshot[person_id] || live[person_id]
         next unless role_id
 
         (map[ordinal] ||= Set.new) << role_id
       end
     end
+  end
+
+  def enrollment_role_ids
+    AssessmentCycleEnrollment.active
+      .where(cycle_id: @session.cycle_id, person_id: assessed_ordinals.keys)
+      .pluck(:person_id, :role_id).to_h.compact
   end
 
   # ordinal => count of OPEN framework clarifications anchored on this

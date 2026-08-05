@@ -30,8 +30,9 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
       .each do |person, (ordinal, role)|
         create(:person_framework_assignment, tenant: @tenant,
                person_id: person.id, framework_id: @framework_id, role_id: role.role_id)
+        # role_id on the enrollment is the ADR-19 snapshot the drill-in reads.
         create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-               person_id: person.id, level_ordinal: ordinal)
+               person_id: person.id, level_ordinal: ordinal, role_id: role.role_id)
       end
 
     category = create(:framework_capability_category, tenant: @tenant,
@@ -144,14 +145,27 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     end
 
     should "include a role once the population holds it at that level" do
-      # Re-assign one L3 member to the manager role — now both roles are
-      # calibrated at L3 and both sets of examples are relevant.
-      PersonFrameworkAssignment
-        .find_by(person_id: @ref.id, framework_id: @framework_id)
+      # Enrol one L3 member AS a manager — the cycle snapshot is what says
+      # which roles are being calibrated, so now both sets of examples are
+      # relevant at L3.
+      AssessmentCycleEnrollment
+        .find_by(cycle_id: @cycle.cycle_id, person_id: @ref.id)
         .update!(role_id: @manager_role.role_id)
 
       assert_equal [ "Engineering Manager", "Software Engineer" ],
                    stats[:illustrations][3].map { |g| g[:role_name] }
+    end
+
+    should "read the cycle's role snapshot, not a later live role change" do
+      # An HRIS PersonRoleChanged updates the assignment row IN PLACE. The
+      # room must still see the examples for the role the rating was made
+      # against, not the one the person moved to mid-cycle.
+      PersonFrameworkAssignment
+        .find_by(person_id: @r1.id, framework_id: @framework_id)
+        .update!(role_id: @manager_role.role_id)
+
+      assert_equal [ "Software Engineer" ], stats[:illustrations][3].map { |g| g[:role_name] },
+        "a mid-cycle role change must not rewrite which examples the room reads"
     end
 
     should "narrow per level, not just to the union of the grid's roles" do
