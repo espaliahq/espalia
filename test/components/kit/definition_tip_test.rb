@@ -37,6 +37,27 @@ class Components::Kit::DefinitionTipTest < ActiveSupport::TestCase
       "hover-only leaves the keyboard-driving facilitator with nothing"
   end
 
+  should "escape a clipping ancestor via the top layer" do
+    html = render_tip
+
+    # The tendency table scrolls horizontally, and an overflow ancestor
+    # clips on BOTH axes — without the popover the definition is cut in half.
+    assert_includes html, %(popover="manual")
+    assert_includes html, "[&:popover-open]:block"
+    assert_includes html, %(data-controller="definition-tip")
+    assert_includes html, %(data-definition-tip-target="panel")
+    assert_includes html, %(data-definition-tip-target="trigger")
+  end
+
+  should "draw the info glyph rather than typing it" do
+    # U+24D8 rendered as a tofu box in the headless browser's font, on a
+    # surface whose whole job is legibility on a projector.
+    html = render_tip
+
+    assert_includes html, "<svg"
+    assert_not_includes html, "ⓘ"
+  end
+
   should "keep the tap target and focus ring when a caller restyles the trigger" do
     html = render_tip(trigger_class: "rounded-full bg-amber-100")
 

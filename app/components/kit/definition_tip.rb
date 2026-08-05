@@ -40,7 +40,7 @@ class Components::Kit::DefinitionTip < Components::Base
   end
 
   def view_template
-    span(class: "group/deftip relative inline-flex") do
+    span(class: "group/deftip relative inline-flex", data: { controller: "definition-tip" }) do
       trigger
       panel
     end
@@ -55,24 +55,46 @@ class Components::Kit::DefinitionTip < Components::Base
     button(
       type: "button",
       class: "#{@trigger_class || DEFAULT_TRIGGER} #{FOCUS}",
-      aria: { describedby: @id }
+      aria: { describedby: @id },
+      data: { definition_tip_target: "trigger" }
     ) do
       plain @term
-      span(class: "ml-0.5 text-[10px] opacity-70", aria: { hidden: "true" }) { "ⓘ" }
+      info_glyph
     end
   end
 
-  # Hidden until hover or focus-within. Both variants are written as
-  # literals — Tailwind scans source for class names, so a token assembled
-  # at runtime generates no CSS (framework-explorer.md, Hard-Won Lesson 12).
+  # Drawn, not typed: the headless/-shell font on some machines has no ⓘ
+  # (U+24D8) and rendered a tofu box in its place — on a surface whose whole
+  # job is to be legible on a projector.
+  def info_glyph
+    svg(
+      class: "ml-0.5 h-2.5 w-2.5 shrink-0 opacity-60", viewbox: "0 0 16 16",
+      fill: "currentColor", aria: { hidden: "true" }
+    ) do |s|
+      s.path(
+        fill_rule: "evenodd",
+        d: "M8 1a7 7 0 100 14A7 7 0 008 1zM7 6.5A1 1 0 118 5.5a1 1 0 01-1 1zm" \
+           "-.25 1.75h1.5v4h-1.5v-4z"
+      )
+    end
+  end
+
+  # Hidden until hover or focus. `popover` puts it in the top layer, out of
+  # reach of any clipping ancestor (the tendency table scrolls horizontally,
+  # which clips on BOTH axes); the Stimulus controller opens and positions
+  # it. The group-hover/focus-within classes stay as the no-JS fallback, and
+  # are written as literals because Tailwind scans source for class names
+  # (framework-explorer.md, Hard-Won Lesson 12).
   def panel
     span(
       id: @id,
       role: "tooltip",
+      popover: "manual",
+      data: { definition_tip_target: "panel" },
       class: "pointer-events-none absolute top-full z-30 mt-1 hidden w-64 rounded-md " \
              "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 " \
              "px-3 py-2 text-xs font-normal normal-case tracking-normal " \
-             "text-gray-700 dark:text-gray-200 shadow-lg " \
+             "text-gray-700 dark:text-gray-200 shadow-lg [&:popover-open]:block " \
              "group-hover/deftip:block group-focus-within/deftip:block #{alignment}"
     ) { @definition }
   end

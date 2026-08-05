@@ -834,11 +834,21 @@ Shape as built:
   drift apart. If a definition here and `OverviewStats` ever disagree, the
   code is right and the room has been misled — fix the wording.
 - **`Components::Kit::DefinitionTip`** is the mechanism: a real `<button>`
-  wired to its panel with `aria-describedby`, revealed on hover **and**
-  `focus-within`. Deliberately not the native `title` attribute, which no
-  keyboard user can reach — and the facilitator is often driving by keyboard
-  with the room watching a projection. Pinned by a system-test assertion
-  that focuses the term and expects the panel (`send_keys` with no click).
+  wired to its panel with `aria-describedby`, revealed on hover **and** on
+  focus. Deliberately not the native `title` attribute, which no keyboard
+  user can reach — and the facilitator is often driving by keyboard with the
+  room watching a projection. Pinned by a system-test assertion that focuses
+  the term and expects the panel (`send_keys` with no click).
+- **The panel rides the top layer** (`popover` + `definition_tip_controller`),
+  because the tendency table scrolls horizontally and an `overflow-x: auto`
+  ancestor clips on BOTH axes — the spec gives no way to keep one axis
+  visible, so the CSS-only version had half of every definition sliced off at
+  the card's edge. The CSS hover/focus classes remain as the no-JS fallback.
+  The same system test measures the panel's rect against the viewport, since
+  this is invisible to any DOM-only assertion.
+- **The info glyph is drawn, not typed.** U+24D8 (ⓘ) rendered as a tofu box
+  in the headless browser's font — on a surface whose whole job is legibility
+  on a projector — so it is an inline SVG.
 - **A term with an adjacent value is one trigger** ("spread 1.3", "Org mean
   1.82") rather than a term, a glyph, and then a number — the whole stat is
   what the reader points at, and a glyph mid-phrase breaks it.

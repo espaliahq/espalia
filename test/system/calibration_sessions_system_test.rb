@@ -189,11 +189,23 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # The room is on a projector and the facilitator may be driving by
     # keyboard, so a hover-only definition reaches nobody. Focus the term
     # and the panel must appear.
+    wait_for_stimulus "definition-tip"
     tip = find("button[aria-describedby='calibration-term-self-gap']")
     assert_no_selector "#calibration-term-self-gap", visible: true
     tip.send_keys("")   # focus without clicking
     assert_selector "#calibration-term-self-gap", visible: true,
                     text: /both sides rated/
+
+    # …and the panel must be readable, not sliced off by the tendency
+    # table's horizontal scroll. It rides the top layer for exactly this.
+    clipped = page.evaluate_script(<<~JS)
+      (() => {
+        const p = document.getElementById("calibration-term-self-gap");
+        const r = p.getBoundingClientRect();
+        return r.right > window.innerWidth || r.left < 0 || r.width < 100;
+      })()
+    JS
+    assert_not clipped, "the definition must not be clipped by a scrolling ancestor"
 
     # ── Drill-in: divergence row → rater × level grid ──
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
