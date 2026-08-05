@@ -162,6 +162,22 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
     refute cards.for(@peer.id)[:revisit_requested]
   end
 
+  should "still suppress a second ask when many notes were recorded after it" do
+    # The revisit read must not be capped: an ask buried under later session
+    # chatter would otherwise re-offer the form, which the aggregate then
+    # refuses. 300 notes is past any read cap a feed would want.
+    request_revisit(person_id: @report.id, level_ordinal: 3)
+    handler = AssessmentCycles::CalibrationCommandHandler.new
+    Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+      300.times do |i|
+        handler.record_note(@session.id, body: "Minute #{i}.", recorded_by_id: @dept_head.id)
+      end
+    end
+
+    assert cards.for(@report.id)[:revisit_requested],
+      "the ask is still known however much followed it"
+  end
+
   should "memoize per person so the tray can resolve then render for free" do
     link_evidence(author: @em, content: "Ivy led the migration.")
     subject = cards

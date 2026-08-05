@@ -172,10 +172,16 @@ ratings/evidence is a **read-time join** against `AssessmentLevelRating`,
 back off the session stream at render time
 (`CalibrationSessions::SessionOutcomes`): a session's outcome count is
 bounded by one meeting's discussion, so a table would carry a projection's
-rebuild and ownership cost for a handful of rows. The read is capped at the
-most recent `STREAM_READ_LIMIT` events and shared across the surfaces of one
-render. If a session ever outgrows that cap, the fix is the framework feed's
-cursor "load older" footer, not a projection.
+rebuild and ownership cost for a handful of rows. One `of_type` read per
+render, shared across the surfaces that need it.
+
+**The read is deliberately unbounded; the LOG's render is what is capped**
+(`SessionLog::RENDER_LIMIT`). These events are not only a feed — the person
+card suppresses an already-asked revisit from them and the flag operation
+pre-checks an already-flagged cell — so an event dropped by a read cap
+becomes an affordance the aggregate then refuses. If a session's log ever
+outgrows the render cap, the fix is the framework feed's cursor "load older"
+footer, not a read cap.
 
 ## Population rules
 
@@ -277,9 +283,13 @@ reintroduce it:
   frame swaps — all to delay a name the room could already infer.
 
 What replaces it is the ordinary discipline the rest of the product uses:
-the facilitator is an ancestor of the whole population, so they were always
-entitled to every name on screen; the session is a projected working
-surface, not a publication. If a room wants to debate the standard before
+the session is a projected working surface, not a publication, and the
+facilitator curated this population deliberately — a name is the least of
+what they already know about someone they chose to put on the grid. (An
+earlier draft justified this with "the facilitator is an ancestor of the
+whole population"; that is not true — see *Access model* — but names are
+not what the entitlement gate protects. What it gates is the assessee's own
+contributions: their feedback and their self-rating.) If a room wants to debate the standard before
 the person, the **divergence board** — which is aggregate by construction —
 is the surface for that, and it comes before the drill-in by design.
 

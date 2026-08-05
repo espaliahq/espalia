@@ -1,9 +1,19 @@
 # frozen_string_literal: true
 
 # Which of a calibration session's population the VIEWER is entitled to read
-# an assessment for — the same set `EvidencePolicy#view_assessment?` and
-# `AssessmentPolicy#show?` admit (both are: admin ∥ self ∥ manager chain ∥
-# active delegate).
+# an assessment for: the `EvidencePolicy#view_assessment?` set — admin ∥ self
+# ∥ LIVE manager chain ∥ active delegate.
+#
+# Deliberately the narrower of the two assessment policies.
+# `AssessmentPolicy#show?` also admits a RECORDED reporting manager who has
+# dropped out of the live chain (`manages_assessee?` short-circuits on the
+# recorded fact); `EvidencePolicy` has no such branch. Since this gate covers
+# feedback — which EvidencePolicy governs everywhere else — matching the
+# stricter set keeps calibration consistent with what `/assessments` would
+# show that viewer. The cost is a fail-CLOSED edge: a recorded-but-no-longer-
+# live manager sees the self-rating on /assessments and "not shown" here.
+# Rare, and the safe direction; revisit if the two policies are ever
+# reconciled.
 #
 # The session surfaces used to assume this rather than check it: the design
 # says the facilitator is an ancestor of the whole population, so the

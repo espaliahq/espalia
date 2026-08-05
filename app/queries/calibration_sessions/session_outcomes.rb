@@ -8,10 +8,14 @@
 # for a handful of rows (docs/architecture/calibration-sessions.md →
 # "Read models", which records the decision rather than pointing back here).
 class CalibrationSessions::SessionOutcomes
-  # Most-recent events read per session — ALL session events, not just
-  # outcomes (the stream also carries definition and curation). See
-  # #stream_events.
-  STREAM_READ_LIMIT = 250
+  # The three outcome events, in stream order. Read as a set so the query
+  # skips the definition / curation / agenda / lifecycle events the stream
+  # also carries.
+  OUTCOME_EVENTS = [
+    AssessmentCycles::Events::CalibrationExpectationFlagged,
+    AssessmentCycles::Events::CalibrationRatingRevisitRequested,
+    AssessmentCycles::Events::CalibrationNoteRecorded
+  ].freeze
 
   # @param session [CalibrationSession]
   # @param event_store [RailsEventStore::Client]
@@ -98,25 +102,22 @@ class CalibrationSessions::SessionOutcomes
 
   private
 
-  # Bounded, newest-first, then restored to chronological order.
+  # One type-filtered read per instance, chronological.
   #
-  # An unbounded `.to_a` made every read O(session lifetime): a long-running
-  # session with hundreds of outcome events paid the whole stream on the
-  # session page AND on drill-in renders. Reading the most recent
-  # STREAM_READ_LIMIT makes it O(cap) instead — the same trade
-  # Frameworks::ActivityFeedQuery makes.
+  # Deliberately UNBOUNDED. These reads are not only a feed: PersonCard
+  # suppresses an already-asked revisit from them, and FlagExpectation
+  # pre-checks an already-flagged cell — so an event dropped by a cap
+  # becomes an affordance the aggregate then refuses. The cap belongs on
+  # what is RENDERED (SessionLog::RENDER_LIMIT), not on what is known.
   #
-  # Trade-off, deliberately matching that precedent: an outcome older than
-  # the cap drops off the log. Acceptable because the log is a session's
-  # working record and the cap is far above a realistic session's output;
-  # if sessions ever run past it, the fix is the same cursor "load older"
-  # footer the framework feed has, not an unbounded read.
+  # `of_type` is what keeps this cheap: a session stream also carries
+  # definition, curation, agenda and lifecycle events, and outcomes are
+  # bounded by one meeting's discussion. The instance is shared across a
+  # render (see CapabilitiesController) so the read happens once.
   def stream_events
     @stream_events ||= @event_store.read
       .stream(EventStreamNaming.calibration_session_stream(@session.id))
-      .backward
-      .limit(STREAM_READ_LIMIT)
+      .of_type(OUTCOME_EVENTS)
       .to_a
-      .reverse
   end
 end

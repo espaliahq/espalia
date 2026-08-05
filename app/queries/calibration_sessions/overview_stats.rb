@@ -63,8 +63,10 @@ class CalibrationSessions::OverviewStats
   #   rater_means: {participant_id => {mean:, n:}}, spread:, residual_spread:,
   #   divergence_score:, flagged:, carried_count:, cell_count: }` — here
   #   `cell_count`/`carried_count` cover ONLY the raters sitting at the two
-  #   means that define `spread`, so the pair describes the comparison on
-  #   screen (they are NOT the capability's whole cell set).
+  #   means that define `spread`, so they describe the comparison on screen.
+  #   Usually a subset of the capability's cells; when every rater ties, min
+  #   and max are the same mean and the "comparison" is the whole agreeing
+  #   set, so the counts can equal it.
   #
   #   Both row shapes are part of the `calibration_sessions_overview` MCP
   #   response (Operations::CalibrationSessions::Overview passes them

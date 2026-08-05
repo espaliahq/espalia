@@ -252,6 +252,8 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       rate(mid, @cap_a, manager: "some", source: "seeded")  # 1.0 — middle, carried
 
       row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 3, row[:rater_means].size,
+        "all three raters must reach the board, or the narrowing is untested"
       assert_equal 3.0, row[:spread]
       assert_equal 0, row[:carried_count], "the middle rater isn't in the comparison"
       assert_equal 2, row[:cell_count], "only the two extreme raters' cells"
@@ -268,6 +270,8 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       rate(tied, @cap_a, manager: "none")             # 0.0 — low, vetted
 
       row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 3, row[:rater_means].size,
+        "the tie needs three DISTINCT raters, two of them sharing the low mean"
       assert_equal 3.0, row[:spread]
       assert_equal 3, row[:cell_count], "both low raters are in the comparison"
       assert_equal 1, row[:carried_count]

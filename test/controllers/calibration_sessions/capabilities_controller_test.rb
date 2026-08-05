@@ -208,6 +208,13 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # The MANAGER rating stays: it belongs to a rater in the room, and
       # calibrating them is why the exemption puts Zed on the grid at all.
       assert_includes response.body, "Manager: Some of the time"
+
+      # Same rule on the compare tray, which renders its own pill pair.
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "compare", compare: [ outsider.id ])
+      assert_response :success
+      assert_includes response.body, "Self: not shown"
+      assert_includes response.body, "Mgr: Some of the time"
     end
 
     should "show the self-rating for a calibrant the facilitator does manage" do
@@ -291,6 +298,8 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
     end
 
     should "not error when an outcome POST carries a hash compare param" do
+      start_session_stream
+
       post calibration_session_rating_revisits_path(@session), params: {
         person_id: @report.id, capability_stable_id: @cap.stable_id,
         level_ordinal: 3, note: "Malformed state.", compare: { "x" => "y" }
