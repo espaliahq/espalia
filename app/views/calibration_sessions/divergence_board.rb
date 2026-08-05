@@ -7,6 +7,8 @@
 # divergent after each rater's overall tendency offset is subtracted
 # (docs/architecture/calibration-sessions.md, "The unit of calibration").
 class Views::CalibrationSessions::DivergenceBoard < Views::Base
+  include Views::CalibrationSessions::Glossary
+
   AXIS_MAX = 3.0
 
   # Distinct dot fills per rater column (cycled). Deliberately NOT the
@@ -101,11 +103,14 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
         end
         div(class: "flex items-center gap-2 text-xs") do
           span(class: "text-gray-600 dark:text-gray-300") do
-            plain "spread #{sprintf('%.1f', capability[:spread])}"
+            defined_term(:spread, align: :right,
+                         label: sprintf("spread %.1f", capability[:spread]))
           end
           carried_note(capability)
           if capability[:flagged]
-            render Components::Kit::Badge.new("⚠ raters disagree", variant: :warning)
+            # The badge itself is the term, so it carries its own definition
+            # rather than sitting next to a second affordance.
+            defined_term(:raters_disagree, align: :right, trigger_class: BADGE_TRIGGER)
           end
         end
       end

@@ -185,6 +185,16 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # No curation affordances on a live session
     assert_no_text "Add person from your org"
 
+    # ── The vocabulary defines itself, by KEYBOARD ──
+    # The room is on a projector and the facilitator may be driving by
+    # keyboard, so a hover-only definition reaches nobody. Focus the term
+    # and the panel must appear.
+    tip = find("button[aria-describedby='calibration-term-self-gap']")
+    assert_no_selector "#calibration-term-self-gap", visible: true
+    tip.send_keys("")   # focus without clicking
+    assert_selector "#calibration-term-self-gap", visible: true,
+                    text: /both sides rated/
+
     # ── Drill-in: divergence row → rater × level grid ──
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
     assert_text "AT-LEVEL RATINGS BY RATER"

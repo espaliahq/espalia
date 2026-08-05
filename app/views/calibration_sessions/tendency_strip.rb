@@ -11,6 +11,7 @@
 # extreme.
 class Views::CalibrationSessions::TendencyStrip < Views::Base
   include Views::Assessments::FrequencyPalette
+  include Views::CalibrationSessions::Glossary
 
   DEVIATION_THRESHOLD = 0.5
 
@@ -29,9 +30,12 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
         h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
           "Rater tendency"
         end
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+        div(class: "mt-1 flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
           plain "At-level manager ratings, 0–3 scale."
-          plain " Org mean #{sprintf('%.2f', @org_mean)}." if @org_mean
+          # Term and value are one trigger: a glyph wedged between "Org mean"
+          # and its number breaks the phrase, and the whole stat is what the
+          # reader is pointing at anyway.
+          defined_term(:org_mean, label: sprintf("Org mean %.2f.", @org_mean)) if @org_mean
         end
 
         if @raters.all? { |r| r[:cell_count].zero? }
@@ -53,12 +57,12 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
         thead do
           tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do
             th(class: "py-1.5 pr-3 font-medium") { "Rater" }
-            th(class: "py-1.5 pr-3 font-medium") { "Reports" }
-            th(class: "py-1.5 pr-3 font-medium") { "vs org mean" }
-            th(class: "py-1.5 pr-3 font-medium") { "Distribution" }
-            th(class: "py-1.5 pr-3 font-medium") { "Self-gap" }
-            th(class: "py-1.5 pr-3 font-medium") { "Evidence" }
-            th(class: "py-1.5 font-medium") { "Carried" }
+            th(class: "py-1.5 pr-3 font-medium") { defined_term(:reports) }
+            th(class: "py-1.5 pr-3 font-medium") { defined_term(:org_delta) }
+            th(class: "py-1.5 pr-3 font-medium") { defined_term(:distribution) }
+            th(class: "py-1.5 pr-3 font-medium") { defined_term(:self_gap) }
+            th(class: "py-1.5 pr-3 font-medium") { defined_term(:evidence) }
+            th(class: "py-1.5 font-medium") { defined_term(:carried, align: :right) }
           end
         end
         tbody do
