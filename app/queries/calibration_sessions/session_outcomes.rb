@@ -1,11 +1,22 @@
 # frozen_string_literal: true
 
-# Reads a calibration session's outcome events from its stream — the
-# follow-through material (expectation flags today; revisit requests and
-# notes join as they are built). Read-time by design: outcomes are
-# low-volume session artifacts, so no projection table is warranted
-# (docs/architecture/calibration-sessions.md → "Outcomes").
+# Reads a calibration session's outcome events — expectation flags, revisit
+# requests, and notes — from its stream.
+#
+# Read-time by design: a session's outcome count is bounded by one meeting's
+# discussion, so a projection table would carry rebuild and ownership cost
+# for a handful of rows (docs/architecture/calibration-sessions.md →
+# "Read models", which records the decision rather than pointing back here).
 class CalibrationSessions::SessionOutcomes
+  # The three outcome events, in stream order. Read as a set so the query
+  # skips the definition / curation / agenda / lifecycle events the stream
+  # also carries.
+  OUTCOME_EVENTS = [
+    AssessmentCycles::Events::CalibrationExpectationFlagged,
+    AssessmentCycles::Events::CalibrationRatingRevisitRequested,
+    AssessmentCycles::Events::CalibrationNoteRecorded
+  ].freeze
+
   # @param session [CalibrationSession]
   # @param event_store [RailsEventStore::Client]
   def initialize(session:, event_store: Rails.configuration.event_store)
@@ -91,9 +102,22 @@ class CalibrationSessions::SessionOutcomes
 
   private
 
+  # One type-filtered read per instance, chronological.
+  #
+  # Deliberately UNBOUNDED. These reads are not only a feed: PersonCard
+  # suppresses an already-asked revisit from them, and FlagExpectation
+  # pre-checks an already-flagged cell — so an event dropped by a cap
+  # becomes an affordance the aggregate then refuses. The cap belongs on
+  # what is RENDERED (SessionLog::RENDER_LIMIT), not on what is known.
+  #
+  # `of_type` is what keeps this cheap: a session stream also carries
+  # definition, curation, agenda and lifecycle events, and outcomes are
+  # bounded by one meeting's discussion. The instance is shared across a
+  # render (see CapabilitiesController) so the read happens once.
   def stream_events
     @stream_events ||= @event_store.read
       .stream(EventStreamNaming.calibration_session_stream(@session.id))
+      .of_type(OUTCOME_EVENTS)
       .to_a
   end
 end

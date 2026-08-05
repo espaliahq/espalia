@@ -19,23 +19,32 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     authorize @session, :show?, policy_class: CalibrationSessionPolicy
 
     stats = CalibrationSessions::DrillInStats.new(
-      session: @session, capability_stable_id: params.expect(:id)
+      session: @session, capability_stable_id: params.expect(:id),
+      visible_person_ids: visible_person_ids
     ).call
     if stats.nil?
       redirect_to calibration_session_path(@session), alert: "Capability not found in this framework."
       return
     end
 
+    outcomes = CalibrationSessions::SessionOutcomes.new(session: @session)
     @cards = CalibrationSessions::PersonCard.new(
-      session: @session, stats: stats, capability_stable_id: params.expect(:id)
+      session: @session, stats: stats, capability_stable_id: params.expect(:id),
+      visible_person_ids: visible_person_ids,
+      # Shared so the session stream is read once per render, not once here
+      # and again for the log.
+      outcomes: outcomes
     )
     compare_cards = resolve_compare_cards(stats)
     # The log rides along as a side panel so an outcome raised here lands
     # in view without leaving the capability under discussion. Skipped for
     # a pane-frame request: those re-render the whole page server-side but
-    # Turbo keeps only the frame, so building the log would buy an unbounded
-    # stream read plus three queries on every dot click and tab switch.
-    session_log = session_log_data(@session) unless pane_frame_request?
+    # Turbo keeps only the frame, so the log would be built and discarded.
+    #
+    # NB this does NOT avoid the stream read — PersonCard needs the same
+    # outcomes to mark an already-asked revisit — which is why the instance
+    # above is shared rather than each building its own.
+    session_log = session_log_data(@session, outcomes: outcomes) unless pane_frame_request?
     people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
 
     render Views::CalibrationSessions::DrillInView.new(
@@ -93,11 +102,29 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       .map { |dot| dot[:person_id] }.uniq
   end
 
+  # Whose assessment the ACTING person may read. The session population can
+  # legitimately include someone outside the facilitator's own subtree (see
+  # ScopeChecks' delegation exemption), and that person's own feedback and
+  # self-rating are not the facilitator's to read just because the session
+  # lists them.
+  #
+  # Resolved from the session's population rather than the built grid, so it
+  # is available to DrillInStats itself.
+  def visible_person_ids
+    @visible_person_ids ||= CalibrationSessions::AssesseeVisibility.new(
+      viewer: current_person,
+      framework_id: @session.framework_id,
+      candidate_ids: CalibrationSessionMember.calibrants.where(session_id: @session.id).pluck(:person_id),
+      admin: pundit_user.tenant_admin?
+    ).person_ids
+  end
+
   def evidence_wall(stats)
     CalibrationSessions::EvidenceWall.new(
       session: @session,
       capability_stable_id: params.expect(:id),
       person_ids: grid_person_ids(stats),
+      visible_person_ids: visible_person_ids,
       level: wall_filters[:level],
       valence: wall_filters[:valence],
       rater_id: wall_filters[:rater_id]

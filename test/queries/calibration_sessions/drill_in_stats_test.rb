@@ -22,12 +22,18 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer", code: "E")
     @manager_role = create(:framework_role, tenant: @tenant, name: "Engineering Manager", code: "EM")
 
-    { @r1 => 3, @r2 => 4, @ref => 3 }.each do |person, ordinal|
-      create(:person_framework_assignment, tenant: @tenant,
-             person_id: person.id, framework_id: @framework_id, role_id: @engineer.role_id)
-      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: person.id, level_ordinal: ordinal)
-    end
+    # Deliberately split by level: L3 is engineers, L4 is the manager. Only
+    # a population whose LEVELS hold different roles exercises the
+    # per-ordinal narrowing — with one role everywhere, the union `where`
+    # already excludes everything and the narrowing is untested.
+    { @r1 => [ 3, @engineer ], @ref => [ 3, @engineer ], @r2 => [ 4, @manager_role ] }
+      .each do |person, (ordinal, role)|
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: person.id, framework_id: @framework_id, role_id: role.role_id)
+        # role_id on the enrollment is the ADR-19 snapshot the drill-in reads.
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: person.id, level_ordinal: ordinal, role_id: role.role_id)
+      end
 
     category = create(:framework_capability_category, tenant: @tenant,
                       framework_id: @framework_id, name: "Thinking")
@@ -138,19 +144,39 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
       assert_equal [ "Unwinds a circular dependency without help." ], groups.first[:items]
     end
 
-    should "include a role once the population holds it" do
-      # Re-assign one L3 member to the manager role — now both are calibrated
-      # at L3 and both sets of examples are relevant.
-      PersonFrameworkAssignment
-        .find_by(person_id: @ref.id, framework_id: @framework_id)
+    should "include a role once the population holds it at that level" do
+      # Enrol one L3 member AS a manager — the cycle snapshot is what says
+      # which roles are being calibrated, so now both sets of examples are
+      # relevant at L3.
+      AssessmentCycleEnrollment
+        .find_by(cycle_id: @cycle.cycle_id, person_id: @ref.id)
         .update!(role_id: @manager_role.role_id)
 
       assert_equal [ "Engineering Manager", "Software Engineer" ],
                    stats[:illustrations][3].map { |g| g[:role_name] }
     end
 
-    should "leave a level with no illustrations for its roles empty" do
-      assert_nil stats[:illustrations][4]
+    should "read the cycle's role snapshot when the live assignment has moved on" do
+      # The state a CLOSED cycle reaches: ParticipantRoleSync stops
+      # re-snapshotting the enrollment, so a later HRIS PersonRoleChanged
+      # moves the assignment row alone. A closed session is read for months
+      # afterwards and must still show the examples for the role the ratings
+      # were made against.
+      @cycle.update!(status: "closed")
+      PersonFrameworkAssignment
+        .find_by(person_id: @r1.id, framework_id: @framework_id)
+        .update!(role_id: @manager_role.role_id)
+
+      assert_equal [ "Software Engineer" ], stats[:illustrations][3].map { |g| g[:role_name] },
+        "a role change after the cycle closed must not rewrite the examples"
+    end
+
+    should "narrow per level, not just to the union of the grid's roles" do
+      # The manager role IS calibrated — at L4 — so it survives the SQL
+      # `where`. Only the per-ordinal narrowing keeps its L3 examples out of
+      # L3, where nobody holds that role.
+      assert_equal [ "Software Engineer" ], stats[:illustrations][3].map { |g| g[:role_name] },
+        "manager examples must not leak into a level with no managers"
     end
   end
 
@@ -158,6 +184,38 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     create(:framework_role_illustration, tenant: @tenant,
            expectation_id: @exp_l3.expectation_id, role_id: role.role_id,
            description: description)
+  end
+
+  # @r1's dot, built with the given entitlement set (nil = ungated).
+  def gated_dot(visible)
+    CalibrationSessions::DrillInStats.new(
+      session: @session, capability_stable_id: @cap.stable_id,
+      visible_person_ids: visible
+    ).call[:rows].find { |row| row[:rater_id] == @em_1.id }[:people][3].first
+  end
+
+  context "assessee entitlement" do
+    setup do
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: @r1.id, framework_id: @framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             manager_rated_frequency: "consistent", self_rated_frequency: "occasional")
+    end
+
+    should "withhold the self-rating outside the viewer's entitlement" do
+      dot = gated_dot([ @r2.id ])
+
+      assert dot[:self_withheld]
+      assert_nil dot[:self_frequency], "the value must not reach the view at all"
+      # The rater is in the room to defend this one — it is the session's subject.
+      assert_equal "consistent", dot[:frequency]
+    end
+
+    should "keep it for someone inside the entitlement, and when ungated" do
+      assert_equal "occasional", gated_dot([ @r1.id, @r2.id ])[:self_frequency]
+      assert_not gated_dot([ @r1.id, @r2.id ])[:self_withheld]
+      assert_equal "occasional", gated_dot(nil)[:self_frequency]
+    end
   end
 
   context "carried-forward provenance" do

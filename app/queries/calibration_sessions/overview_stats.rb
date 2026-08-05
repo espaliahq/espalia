@@ -62,9 +62,11 @@ class CalibrationSessions::OverviewStats
   #   Capabilities (sorted most-divergent first): `{ stable_id:, name:, category_name:,
   #   rater_means: {participant_id => {mean:, n:}}, spread:, residual_spread:,
   #   divergence_score:, flagged:, carried_count:, cell_count: }` — here
-  #   `cell_count`/`carried_count` cover ONLY the two raters whose means define
-  #   `spread`, so the pair describes the comparison on screen (they are NOT
-  #   the capability's whole cell set).
+  #   `cell_count`/`carried_count` cover ONLY the raters sitting at the two
+  #   means that define `spread`, so they describe the comparison on screen.
+  #   Usually a subset of the capability's cells; when every rater ties, min
+  #   and max are the same mean and the "comparison" is the whole agreeing
+  #   set, so the counts can equal it.
   #
   #   Both row shapes are part of the `calibration_sessions_overview` MCP
   #   response (Operations::CalibrationSessions::Overview passes them
@@ -178,9 +180,10 @@ class CalibrationSessions::OverviewStats
         distribution: FREQUENCY_VALUES.keys.index_with { |f| cells.count { |c| c[:frequency] == f } },
         self_gap: gaps.any? ? mean(gaps) : nil,
         evidence_pct: evidence_pct(cells),
-        # How much of this rater's tendency they actually expressed THIS
-        # cycle: an all-carried row shows a tendency inherited from the last
-        # one, which is not a coaching conversation.
+        # How much of this rater's tendency is inherited rather than vetted
+        # this cycle. Disclosure only: a carried rating is still the rater's
+        # rating, so this NEVER softens the tendency it reports — it tells
+        # the room the owner has work to do confirming it.
         carried_count: cells.count { |c| c[:carried] },
         small_n: cells.size < SMALL_N
       }
@@ -237,13 +240,19 @@ class CalibrationSessions::OverviewStats
       # inherited, nor alarm about a carried cell belonging to a third rater
       # who isn't part of the comparison at all.
       #
-      # Sorted rather than min_by/max_by: on TIED means both would return the
-      # same rater, collapsing the pair to one and counting half the
-      # comparison. The rater_id tiebreak keeps the choice deterministic
-      # across requests. `by_rater.size >= 2` is guaranteed above, so first
-      # and last are always distinct raters.
-      ordered = rater_means.sort_by { |rater_id, v| [ v[:mean], rater_id ] }
-      extremes = [ ordered.first.first, ordered.last.first ]
+      # EVERY rater at either extreme, not one per end: two raters sharing the
+      # low mean are equally part of the gap on screen, and picking one of
+      # them (by whatever tiebreak) would let the same data render different
+      # carried counts depending on ids. Means are rounded to 2dp from the
+      # same values, so a genuine tie compares equal here.
+      #
+      # When every rater ties, min == max and all of them are "compared" —
+      # correct: the row's spread is zero and the note describes the whole
+      # agreeing set.
+      low, high = means.minmax
+      extremes = rater_means.filter_map do |rater_id, v|
+        rater_id if v[:mean] == low || v[:mean] == high
+      end
       compared = by_rater.values_at(*extremes).compact.flatten
       residual_spread = (residuals.max - residuals.min).round(2)
       divergence_score = [ spread, residual_spread ].min

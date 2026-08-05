@@ -229,8 +229,9 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     end
 
     should "keep two distinct raters in the comparison when their means tie" do
-      # min_by and max_by both return the FIRST match on a tie, which would
-      # collapse the pair to one rater and count half the comparison.
+      # When every rater agrees, min == max: the comparison is the whole
+      # agreeing set, not one rater picked twice — which would count half
+      # the cells and mis-state how much of the row is inherited.
       rate(@r1, @cap_a, manager: "occasional", source: "seeded")  # Mia: 2.0, carried
       rate(@r2, @cap_a, manager: "occasional")                    # Raj: 2.0, fresh
 
@@ -244,23 +245,53 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       # A third rater's carried cell sits in the middle of the range, so it
       # is not part of the comparison the row displays. Counting it would
       # claim the gap is partly inherited when both extremes are vetted.
-      em_3 = create(:person, tenant: @tenant, name: "Sam", manager: @dept_head)
-      create(:calibration_session_member, :participant, tenant: @tenant,
-             session: @session, person_id: em_3.id)
-      mid = create(:person, tenant: @tenant, name: "Mid", manager: em_3)
-      create(:person_framework_assignment, tenant: @tenant,
-             person_id: mid.id, framework_id: @framework_id)
-      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: mid.id, level_ordinal: 3)
+      mid = add_rater(rater_name: "Sam", report_name: "Mid")
 
       rate(@r1, @cap_a, manager: "consistent")            # 3.0 — high extreme
       rate(@r2, @cap_a, manager: "none")                  # 0.0 — low extreme
       rate(mid, @cap_a, manager: "some", source: "seeded")  # 1.0 — middle, carried
 
       row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 3, row[:rater_means].size,
+        "all three raters must reach the board, or the narrowing is untested"
       assert_equal 3.0, row[:spread]
       assert_equal 0, row[:carried_count], "the middle rater isn't in the comparison"
       assert_equal 2, row[:cell_count], "only the two extreme raters' cells"
     end
+
+    should "count every rater sitting at an extreme, not one per end" do
+      # Two raters share the low mean. Both are equally part of the gap on
+      # screen, so both belong in the note — picking one of them would let
+      # the same data read differently depending on which id sorts first.
+      tied = add_rater(rater_name: "Sam", report_name: "Tied")
+
+      rate(@r1, @cap_a, manager: "consistent")        # 3.0 — high extreme
+      rate(@r2, @cap_a, manager: "none", source: "seeded")  # 0.0 — low, carried
+      rate(tied, @cap_a, manager: "none")             # 0.0 — low, vetted
+
+      row = stats[:capabilities].find { |c| c[:stable_id] == @cap_a.stable_id }
+      assert_equal 3, row[:rater_means].size,
+        "the tie needs three DISTINCT raters, two of them sharing the low mean"
+      assert_equal 3.0, row[:spread]
+      assert_equal 3, row[:cell_count], "both low raters are in the comparison"
+      assert_equal 1, row[:carried_count]
+    end
+  end
+
+  # A further rater on the grid: a participant EM plus one enrolled report.
+  # Membership is what puts them there — without it `rater_for` slices them
+  # out and any assertion about a third rater is trivially true.
+  def add_rater(rater_name:, report_name:)
+    em = create(:person, tenant: @tenant, name: rater_name, manager: @dept_head)
+    create(:calibration_session_member, :participant, tenant: @tenant,
+           session: @session, person_id: em.id)
+    report = create(:person, tenant: @tenant, name: report_name, manager: em)
+    create(:calibration_session_member, tenant: @tenant,
+           session: @session, person_id: report.id)
+    create(:person_framework_assignment, tenant: @tenant,
+           person_id: report.id, framework_id: @framework_id)
+    create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+           person_id: report.id, level_ordinal: 3)
+    report
   end
 end

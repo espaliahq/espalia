@@ -17,19 +17,25 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       create(:tenant_user, tenant: @tenant, user: @facilitator_user, person: @facilitator)
       create(:tenant_user, tenant: @tenant, user: @em_user, person: @em)
 
-      @cycle = create(:assessment_cycle, tenant: @tenant)
-      create(:person_framework_assignment, tenant: @tenant,
-             person_id: @report.id, framework_id: @cycle.framework_id)
-      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: @report.id, level_ordinal: 3)
+      # Real streams throughout, not factory read-model rows: an outcome POST
+      # against a stream-less session fails in the aggregate and answers from
+      # the rescue branch, where the redirect looks identical — so the
+      # success path would never actually be under test. The flag also raises
+      # a framework clarification, which needs a real framework stream.
+      framework_id, role_id, level_id = seed_framework
 
-      category = create(:framework_capability_category, tenant: @tenant,
-                        framework_id: @cycle.framework_id, name: "Thinking")
-      @cap = create(:framework_capability, tenant: @tenant,
-                    category_id: category.category_id, name: "Strategic Thinking")
-      create(:framework_behavioural_expectation, tenant: @tenant,
-             capability_id: @cap.capability_id, level_ordinal: 3,
-             description: "Identifies root causes.")
+      # The PD assignment goes in before the cycle row exists, so
+      # AutoEnrollNewAssignments doesn't reach for a factory cycle that has
+      # no event stream. Its projection writes the assignment row too.
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        PersonDevelopment::CommandHandler.new.assign_to_framework(
+          @report.id, framework_id, role_id, level_id
+        )
+      end
+      @cycle = create(:assessment_cycle, tenant: @tenant, framework_id: framework_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: @report.id, level_ordinal: 3, role_id: role_id)
+
       create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
              person_id: @report.id, framework_id: @cycle.framework_id,
              capability_stable_id: @cap.stable_id, level_ordinal: 3,
@@ -97,7 +103,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       get calibration_session_capability_path(@session, @cap.stable_id, view: "wall")
 
       assert_response :success
-      assert_includes response.body, "1 item"
+      assert_wall_total 1
       # Who it is about and what was written, both in the open.
       assert_includes response.body, "Ivy IC"
       assert_includes response.body, "Led the pricing re-architecture"
@@ -109,22 +115,33 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
                                               view: "wall", wall_level: 4)
 
       assert_response :success
-      assert_includes response.body, "0 items"
+      assert_wall_total 0
       assert_not_includes response.body, "Led the pricing re-architecture"
       # Stepping out to another pane and back must return to the same filter.
       assert_includes response.body, "wall_level=4"
     end
 
     should "route the rater filter through to the wall" do
+      # A second rater whose report also has evidence here, so a filter that
+      # does nothing is distinguishable from one that works.
+      other_em, = seed_second_rater
+
       get calibration_session_capability_path(@session, @cap.stable_id,
                                               view: "wall", wall_rater: @em.id)
-      assert_includes response.body, "1 item"
+      assert_wall_total 1
+      assert_includes response.body, "Led the pricing re-architecture"
+      assert_not_includes response.body, "Ran the billing spike"
 
-      other_rater = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
       get calibration_session_capability_path(@session, @cap.stable_id,
-                                              view: "wall", wall_rater: other_rater.id)
+                                              view: "wall", wall_rater: other_em.id)
+      assert_wall_total 1
+      assert_includes response.body, "Ran the billing spike"
+
+      stranger = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "wall", wall_rater: stranger.id)
       # Not a participant — the filter is rejected rather than emptying the wall.
-      assert_includes response.body, "1 item"
+      assert_wall_total 2
     end
 
     should "survive array and non-numeric filter params without erroring" do
@@ -135,7 +152,77 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       get calibration_session_capability_path(@session, @cap.stable_id,
                                               view: "wall", wall_level: "abc")
       assert_response :success
-      assert_includes response.body, "1 item"
+      # A junk level must be IGNORED, not coerced to 0 (which would empty
+      # the wall while still returning 200).
+      assert_wall_total 1
+    end
+
+    # The population can legitimately include someone outside the
+    # facilitator's subtree: ScopeChecks exempts anyone a PARTICIPANT is
+    # attributed via an active rating delegation. That person's own
+    # contributions — peer feedback about them, and their self-rating — are
+    # still not the facilitator's to read: /assessments would refuse them,
+    # and the session must not be a way around that.
+    should "withhold the assessee's own inputs outside the facilitator's entitlement" do
+      outsider = ActsAsTenant.with_tenant(@tenant) do
+        stranger_head = create(:person, tenant: @tenant, name: "Other Dept Head")
+        seconded = create(:person, tenant: @tenant, name: "Zed Outside", manager: stranger_head)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: seconded.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: seconded.id, level_ordinal: 3)
+        create(:manager_assessment_delegation, tenant: @tenant,
+               person_id: seconded.id, framework_id: @cycle.framework_id,
+               delegate_person_id: @em.id, granted_by_id: stranger_head.id)
+        create(:evidence_item, tenant: @tenant, person_id: seconded.id,
+               framework_id: @cycle.framework_id, author_id: stranger_head.id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 3,
+               content: "CONFIDENTIAL peer feedback about Zed.")
+        # Manager rated Some, Zed rated himself Consistently — so a leak of
+        # the self value is distinguishable from the manager value.
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: seconded.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "some", self_rated_frequency: "consistent")
+        create(:calibration_session_member, tenant: @tenant,
+               session: @session, person_id: seconded.id)
+        seconded
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id, view: "wall")
+
+      assert_response :success
+      assert_not_includes response.body, "CONFIDENTIAL peer feedback",
+        "the wall must not render evidence the facilitator can't read on /assessments"
+      # Their own report's evidence still shows — this narrows, not disables.
+      assert_includes response.body, "Led the pricing re-architecture"
+
+      get calibration_session_capability_path(@session, @cap.stable_id, person: outsider.id)
+      assert_response :success
+      assert_not_includes response.body, "CONFIDENTIAL peer feedback",
+        "the person card must withhold it too"
+      # The self-rating is the assessee's own input and goes with it — said
+      # so, not left as a blank that reads as "never rated".
+      assert_includes response.body, "Self: not shown"
+      assert_not_includes response.body, "Self: Consistently"
+      # The MANAGER rating stays: it belongs to a rater in the room, and
+      # calibrating them is why the exemption puts Zed on the grid at all.
+      assert_includes response.body, "Manager: Some of the time"
+
+      # Same rule on the compare tray, which renders its own pill pair.
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              view: "compare", compare: [ outsider.id ])
+      assert_response :success
+      assert_includes response.body, "Self: not shown"
+      assert_includes response.body, "Mgr: Some of the time"
+    end
+
+    should "show the self-rating for a calibrant the facilitator does manage" do
+      get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+
+      assert_response :success
+      assert_includes response.body, "Self: Some of the time"
+      assert_not_includes response.body, "Self: not shown"
     end
 
     should "render the compare tray for pinned people, dropping foreign pins" do
@@ -162,33 +249,57 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
     end
 
     should "carry the pane, the opened person, the pins and the filters through an outcome POST" do
+      start_session_stream
+
       post calibration_session_rating_revisits_path(@session), params: {
         person_id: @report.id, capability_stable_id: @cap.stable_id,
         level_ordinal: 3, note: "Compare the pricing work with Omar's.",
         compare: [ @report.id ], view: "wall", wall_valence: "demonstrated"
       }
 
-      assert_response :redirect
+      assert_equal "Revisit requested — it will appear in the rater's assessment activity.",
+                   flash[:notice], "the success path, not the rescue branch"
       assert_includes response.redirect_url, "compare%5B%5D=#{@report.id}"
       assert_includes response.redirect_url, "person=#{@report.id}"
       assert_includes response.redirect_url, "view=wall"
       assert_includes response.redirect_url, "wall_valence=demonstrated"
+      assert_includes response.redirect_url, "activity=open",
+        "the ask must land somewhere visible even with the log panel closed"
     end
 
     should "carry the same state through a flag POST, which names the person differently" do
+      start_session_stream
+
       post calibration_session_expectation_flags_path(@session), params: {
         capability_stable_id: @cap.stable_id, level_ordinal: 3,
         reason: "Scope or altitude?", person: @report.id,
         compare: [ @report.id ], view: "compare"
       }
 
-      assert_response :redirect
+      assert_match(/clarification discussion is now open/, flash[:notice].to_s,
+                   "the success path, not the rescue branch")
       assert_includes response.redirect_url, "person=#{@report.id}"
       assert_includes response.redirect_url, "compare%5B%5D=#{@report.id}"
       assert_includes response.redirect_url, "view=compare"
+      assert_includes response.redirect_url, "activity=open"
+    end
+
+    should "leave the log panel closed when an outcome POST fails" do
+      start_session_stream
+
+      post calibration_session_expectation_flags_path(@session), params: {
+        capability_stable_id: @cap.stable_id, level_ordinal: 99,
+        reason: "No such level.", person: @report.id
+      }
+
+      assert flash[:alert].present?
+      assert_not_includes response.redirect_url, "activity=open",
+        "nothing was recorded, so there is nothing to open the panel for"
     end
 
     should "not error when an outcome POST carries a hash compare param" do
+      start_session_stream
+
       post calibration_session_rating_revisits_path(@session), params: {
         person_id: @report.id, capability_stable_id: @cap.stable_id,
         level_ordinal: 3, note: "Malformed state.", compare: { "x" => "y" }
@@ -206,6 +317,90 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
 
       assert_redirected_to root_path
       assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+  end
+
+  # The wall's count, read from `data-wall-total` rather than the visible
+  # text: "1 item" is a substring of the utility class `min-h-11
+  # items-center`, so a body-substring assertion on it passes even on a
+  # page that renders no wall at all.
+  def assert_wall_total(expected)
+    assert_select %(p[data-wall-total="#{expected}"]), { count: 1 },
+      "expected the wall to report #{expected} item(s)"
+  end
+
+  # One published framework on a real stream, with the names the assertions
+  # read back. Sets @cap to the projected capability so tests keep using
+  # `@cap.stable_id` / `@cap.capability_id`.
+  #
+  # @return [Array(String, String, String)] framework_id, role_id, level_id
+  def seed_framework
+    framework_id = SecureRandom.uuid_v7
+    family_id = SecureRandom.uuid_v7
+    role_id = SecureRandom.uuid_v7
+    level_id = SecureRandom.uuid_v7
+    category_id = SecureRandom.uuid_v7
+    capability_id = SecureRandom.uuid_v7
+
+    handler = Frameworks::CommandHandler.new
+    handler.create_framework(framework_id, "Engineering")
+    handler.add_role_family(framework_id, family_id, "Engineering")
+    handler.add_role(framework_id, role_id, family_id, "Software Engineer", "E", "ic")
+    handler.add_level(framework_id, level_id, role_id, 3, "Engineer III", "E3")
+    handler.add_capability_category(framework_id, category_id, "Thinking")
+    handler.add_capability(framework_id, capability_id, SecureRandom.uuid_v7,
+                           category_id, "Strategic Thinking")
+    handler.set_behavioural_expectation(framework_id, SecureRandom.uuid_v7,
+                                        SecureRandom.uuid_v7, capability_id, 3,
+                                        "Identifies root causes.")
+    handler.publish_version(framework_id, "seed")
+
+    @cap = FrameworkState::Capability.find_by!(capability_id: capability_id)
+    [ framework_id, role_id, level_id ]
+  end
+
+  # The factory row is a read model with no event stream behind it, so an
+  # outcome POST against it fails in the aggregate ("Session not defined")
+  # and answers from the rescue branch — where the state pass-through looks
+  # identical. Define and start the real stream so the success path is what
+  # the assertions actually exercise.
+  def start_session_stream
+    handler = AssessmentCycles::CalibrationCommandHandler.new
+    ActsAsTenant.with_tenant(@tenant) do
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        handler.define_session(@session.id, @cycle.cycle_id, @cycle.framework_id,
+                               @session.name, 1, facilitator_id: @facilitator.id,
+                               participant_ids: [ @em.id ],
+                               calibrant_person_ids: [ @report.id ])
+        handler.start_session(@session.id, started_by_id: @facilitator.id)
+      end
+    end
+  end
+
+  # A second participant with their own report and evidence on the same
+  # capability, so a rater filter that does nothing is distinguishable
+  # from one that works.
+  def seed_second_rater
+    ActsAsTenant.with_tenant(@tenant) do
+      other_em = create(:person, tenant: @tenant, name: "Raj Rater", manager: @facilitator)
+      other_report = create(:person, tenant: @tenant, name: "Omar IC", manager: other_em)
+      create(:person_framework_assignment, tenant: @tenant,
+             person_id: other_report.id, framework_id: @cycle.framework_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: other_report.id, level_ordinal: 3)
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: other_report.id, framework_id: @cycle.framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             manager_rated_frequency: "some")
+      create(:evidence_item, tenant: @tenant, person_id: other_report.id,
+             framework_id: @cycle.framework_id, author_id: other_em.id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             content: "Ran the billing spike end to end.")
+      create(:calibration_session_member, :participant, tenant: @tenant,
+             session: @session, person_id: other_em.id)
+      create(:calibration_session_member, tenant: @tenant,
+             session: @session, person_id: other_report.id)
+      [ other_em, other_report ]
     end
   end
 end

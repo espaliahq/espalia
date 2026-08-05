@@ -14,9 +14,15 @@
 class CalibrationSessions::DrillInStats
   # @param session [CalibrationSession]
   # @param capability_stable_id [String]
-  def initialize(session:, capability_stable_id:)
+  # @param visible_person_ids [Array<String>, nil] the population subset the
+  #   viewer is entitled to an assessment for
+  #   ({CalibrationSessions::AssesseeVisibility}). Outside it, the dot keeps
+  #   its manager rating — the rater is in the room to defend it — but the
+  #   assessee's own SELF rating is withheld. nil skips the gate entirely.
+  def initialize(session:, capability_stable_id:, visible_person_ids: nil)
     @session = session
     @capability_stable_id = capability_stable_id
+    @visible_person_ids = visible_person_ids&.to_set
   end
 
   # @return [Hash, nil] nil when the capability isn't in the session's
@@ -71,14 +77,22 @@ class CalibrationSessions::DrillInStats
     end
   end
 
-  # person_id => assessed level ordinal (cycle enrollment snapshot).
+  # person_id => [assessed level ordinal, role_id] — the cycle enrollment
+  # snapshot, both halves from the one row (see
+  # #population_role_ids_by_ordinal for why the role comes from here).
   # Unenrolled members carry no assessed level and are omitted from the
   # grid — the setup page's readiness badges already surface them.
-  def assessed_ordinals
-    @assessed_ordinals ||= AssessmentCycleEnrollment.active
+  def enrollment_snapshot
+    @enrollment_snapshot ||= AssessmentCycleEnrollment.active
       .where(cycle_id: @session.cycle_id, person_id: calibrant_ids)
       .where.not(level_ordinal: nil)
-      .pluck(:person_id, :level_ordinal).to_h
+      .pluck(:person_id, :level_ordinal, :role_id)
+      .to_h { |person_id, ordinal, role_id| [ person_id, [ ordinal, role_id ] ] }
+  end
+
+  # person_id => assessed level ordinal.
+  def assessed_ordinals
+    @assessed_ordinals ||= enrollment_snapshot.transform_values(&:first)
   end
 
   def ordinals
@@ -131,21 +145,59 @@ class CalibrationSessions::DrillInStats
   end
 
   # ordinal => Set of role_ids held by the population members assessed at
-  # that level. Read from the framework assignment (the enrollment snapshot
-  # carries the level, not the role).
+  # that level.
+  #
+  # Read from the CYCLE ENROLLMENT, not the live PersonFrameworkAssignment,
+  # so role and level come from ONE row and cannot disagree. The enrollment
+  # is the ADR-19 snapshot and carries `role_id` alongside `level_ordinal` —
+  # the same pairing Assessments::MatrixDataBuilder gates on; the dot's
+  # column has always come from it.
+  #
+  # The divergence is real once the cycle CLOSES. While it is open,
+  # `ParticipantRoleSync` re-snapshots the enrollment on every HRIS
+  # `PersonRoleChanged`, so both sources move together (the room's dot moves
+  # levels too — that is the sync's intent, not something this query
+  # second-guesses). After close the sync stops and the enrollment stays
+  # frozen while the assignment keeps moving, so sourcing the role from the
+  # assignment would show a closed session — the follow-through artifact,
+  # read for months — the examples for a role the person moved into after
+  # the ratings were made.
+  #
+  # Falls back to the live assignment only when the snapshot predates the
+  # column.
   def population_role_ids_by_ordinal
     @population_role_ids_by_ordinal ||= begin
-      roles = PersonFrameworkAssignment
-        .where(framework_id: @session.framework_id, person_id: assessed_ordinals.keys)
-        .pluck(:person_id, :role_id).to_h
+      snapshot = enrollment_role_ids
+      missing = assessed_ordinals.keys - snapshot.compact.keys
+      live = if missing.any?
+        PersonFrameworkAssignment
+          .where(framework_id: @session.framework_id, person_id: missing)
+          .pluck(:person_id, :role_id).to_h
+      else
+        {}
+      end
 
       assessed_ordinals.each_with_object({}) do |(person_id, ordinal), map|
-        role_id = roles[person_id]
+        role_id = snapshot[person_id] || live[person_id]
         next unless role_id
 
         (map[ordinal] ||= Set.new) << role_id
       end
     end
+  end
+
+  # person_id => snapshot role_id, dropping the rows that predate the column.
+  # A self-rating is the assessee's own input, so it needs the same
+  # entitlement as their feedback. Reported separately from "unrated" —
+  # rendering a withheld value as a gap would misread as data.
+  def self_withheld?(person_id)
+    return false if @visible_person_ids.nil?
+
+    !@visible_person_ids.include?(person_id)
+  end
+
+  def enrollment_role_ids
+    @enrollment_role_ids ||= enrollment_snapshot.transform_values(&:last).compact
   end
 
   # ordinal => count of OPEN framework clarifications anchored on this
@@ -222,11 +274,13 @@ class CalibrationSessions::DrillInStats
           .transform_values do |ids|
             ids.map do |person_id|
               rating = ratings[person_id] || {}
+              withheld = self_withheld?(person_id)
               {
                 person_id: person_id,
                 name: people[person_id]&.name || "Unknown",
                 frequency: rating[:frequency],
-                self_frequency: rating[:self_frequency],
+                self_frequency: withheld ? nil : rating[:self_frequency],
+                self_withheld: withheld,
                 carried: rating[:carried] || false,
                 backed: backed_person_ids.include?(person_id)
               }

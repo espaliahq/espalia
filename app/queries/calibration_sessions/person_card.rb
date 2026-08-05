@@ -12,10 +12,19 @@ class CalibrationSessions::PersonCard
   # @param session [CalibrationSession]
   # @param stats [Hash] DrillInStats result for the capability
   # @param capability_stable_id [String]
-  def initialize(session:, stats:, capability_stable_id:)
+  # @param visible_person_ids [Array<String>, nil] population subset whose
+  #   evidence the VIEWER may read ({CalibrationSessions::AssesseeVisibility}).
+  #   nil means unfiltered — non-request callers only.
+  # @param outcomes [CalibrationSessions::SessionOutcomes, nil] pass the
+  #   request's existing instance so the session stream is read ONCE per
+  #   render; omitted, this builds its own.
+  def initialize(session:, stats:, capability_stable_id:, visible_person_ids: nil,
+                 outcomes: nil)
     @session = session
     @stats = stats
     @capability_stable_id = capability_stable_id
+    @visible_person_ids = visible_person_ids
+    @outcomes = outcomes
     @cards = {}
   end
 
@@ -61,6 +70,10 @@ class CalibrationSessions::PersonCard
   end
 
   def evidence_for(person_id, ordinal)
+    # The card still renders (ratings are the session's business); only the
+    # free-text feedback is withheld when the viewer isn't entitled to it.
+    return [] if @visible_person_ids && !@visible_person_ids.include?(person_id)
+
     links = EvidenceLink.where(
       link_status: "active", framework_id: @session.framework_id,
       capability_stable_id: @capability_stable_id, person_id: person_id, level_ordinal: ordinal
@@ -106,7 +119,9 @@ class CalibrationSessions::PersonCard
   end
 
   # Memoized across cards — the compare tray assembles up to three from one
-  # instance, and the stream read shouldn't repeat per card.
+  # instance, and the stream read shouldn't repeat per card. The controller
+  # passes the one it already built for the log, so a full render reads the
+  # stream once rather than twice.
   def outcomes
     @outcomes ||= CalibrationSessions::SessionOutcomes.new(session: @session)
   end

@@ -21,7 +21,11 @@ class CalibrationSessions::RatingRevisitsController < ApplicationController
       }
     )
 
-    redirect_to drill_in_return_path(session_record, person_id: params[:person_id]),
+    # `activity=open` so the ask lands somewhere visible even if the room had
+    # the log panel closed — same rule the note composer follows. Only on
+    # success: a failed request records nothing for the panel to show.
+    redirect_to drill_in_return_path(session_record, person_id: params[:person_id],
+                                     extra: { activity: "open" }),
                 notice: "Revisit requested — it will appear in the rater's assessment activity."
   rescue Operations::Base::ParameterError, RuntimeError => e
     redirect_to drill_in_return_path(session_record, person_id: params[:person_id]), alert: e.message
