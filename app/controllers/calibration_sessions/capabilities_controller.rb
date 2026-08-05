@@ -27,7 +27,8 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     end
 
     @cards = CalibrationSessions::PersonCard.new(
-      session: @session, stats: stats, capability_stable_id: params.expect(:id)
+      session: @session, stats: stats, capability_stable_id: params.expect(:id),
+      visible_person_ids: visible_person_ids(stats)
     )
     compare_cards = resolve_compare_cards(stats)
     # The log rides along as a side panel so an outcome raised here lands
@@ -93,11 +94,25 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       .map { |dot| dot[:person_id] }.uniq
   end
 
+  # Whose evidence the ACTING person may read. The session population can
+  # legitimately include someone outside the facilitator's own subtree (see
+  # ScopeChecks' delegation exemption), and their peer feedback is not the
+  # facilitator's to read just because the session lists them.
+  def visible_person_ids(stats)
+    @visible_person_ids ||= CalibrationSessions::EvidenceVisibility.new(
+      viewer: current_person,
+      framework_id: @session.framework_id,
+      candidate_ids: grid_person_ids(stats),
+      admin: pundit_user.tenant_admin?
+    ).person_ids
+  end
+
   def evidence_wall(stats)
     CalibrationSessions::EvidenceWall.new(
       session: @session,
       capability_stable_id: params.expect(:id),
       person_ids: grid_person_ids(stats),
+      visible_person_ids: visible_person_ids(stats),
       level: wall_filters[:level],
       valence: wall_filters[:valence],
       rater_id: wall_filters[:rater_id]

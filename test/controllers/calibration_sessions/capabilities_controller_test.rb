@@ -151,6 +151,45 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_wall_total 1
     end
 
+    # The population can legitimately include someone outside the
+    # facilitator's subtree: ScopeChecks exempts anyone a PARTICIPANT is
+    # attributed via an active rating delegation. Their peer feedback is
+    # still not the facilitator's to read — EvidencePolicy would refuse it
+    # on /assessments, and the session must not be a way around that.
+    should "withhold evidence for a calibrant outside the facilitator's entitlement" do
+      outsider = ActsAsTenant.with_tenant(@tenant) do
+        stranger_head = create(:person, tenant: @tenant, name: "Other Dept Head")
+        seconded = create(:person, tenant: @tenant, name: "Zed Outside", manager: stranger_head)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: seconded.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: seconded.id, level_ordinal: 3)
+        create(:manager_assessment_delegation, tenant: @tenant,
+               person_id: seconded.id, framework_id: @cycle.framework_id,
+               delegate_person_id: @em.id, granted_by_id: stranger_head.id)
+        create(:evidence_item, tenant: @tenant, person_id: seconded.id,
+               framework_id: @cycle.framework_id, author_id: stranger_head.id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 3,
+               content: "CONFIDENTIAL peer feedback about Zed.")
+        create(:calibration_session_member, tenant: @tenant,
+               session: @session, person_id: seconded.id)
+        seconded
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id, view: "wall")
+
+      assert_response :success
+      assert_not_includes response.body, "CONFIDENTIAL peer feedback",
+        "the wall must not render evidence the facilitator can't read on /assessments"
+      # Their own report's evidence still shows — this narrows, not disables.
+      assert_includes response.body, "Led the pricing re-architecture"
+
+      get calibration_session_capability_path(@session, @cap.stable_id, person: outsider.id)
+      assert_response :success
+      assert_not_includes response.body, "CONFIDENTIAL peer feedback",
+        "the person card must withhold it too"
+    end
+
     should "render the compare tray for pinned people, dropping foreign pins" do
       get calibration_session_capability_path(
         @session, @cap.stable_id, view: "compare",

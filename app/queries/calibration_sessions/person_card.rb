@@ -12,10 +12,14 @@ class CalibrationSessions::PersonCard
   # @param session [CalibrationSession]
   # @param stats [Hash] DrillInStats result for the capability
   # @param capability_stable_id [String]
-  def initialize(session:, stats:, capability_stable_id:)
+  # @param visible_person_ids [Array<String>, nil] population subset whose
+  #   evidence the VIEWER may read ({CalibrationSessions::EvidenceVisibility}).
+  #   nil means unfiltered — non-request callers only.
+  def initialize(session:, stats:, capability_stable_id:, visible_person_ids: nil)
     @session = session
     @stats = stats
     @capability_stable_id = capability_stable_id
+    @visible_person_ids = visible_person_ids
     @cards = {}
   end
 
@@ -61,6 +65,10 @@ class CalibrationSessions::PersonCard
   end
 
   def evidence_for(person_id, ordinal)
+    # The card still renders (ratings are the session's business); only the
+    # free-text feedback is withheld when the viewer isn't entitled to it.
+    return [] if @visible_person_ids && !@visible_person_ids.include?(person_id)
+
     links = EvidenceLink.where(
       link_status: "active", framework_id: @session.framework_id,
       capability_stable_id: @capability_stable_id, person_id: person_id, level_ordinal: ordinal

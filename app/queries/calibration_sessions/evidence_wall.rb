@@ -22,11 +22,18 @@ class CalibrationSessions::EvidenceWall
   # @param level [Integer, nil] filter to one level ordinal
   # @param valence [String, nil] filter to one EvidenceLink valence
   # @param rater_id [String, nil] filter to one participant's people
+  # @param visible_person_ids [Array<String>, nil] the subset of the
+  #   population whose evidence the VIEWER may read
+  #   ({CalibrationSessions::EvidenceVisibility}). nil means unfiltered and
+  #   is for non-request callers (tests, rake) only — a request must always
+  #   pass it, or peer feedback about someone outside the facilitator's
+  #   entitlement renders verbatim.
   def initialize(session:, capability_stable_id:, person_ids: nil, level: nil,
-                 valence: nil, rater_id: nil)
+                 valence: nil, rater_id: nil, visible_person_ids: nil)
     @session = session
     @capability_stable_id = capability_stable_id
     @person_ids = person_ids
+    @visible_person_ids = visible_person_ids
     @level = level
     @valence = valence
     @rater_id = rater_id
@@ -74,7 +81,7 @@ class CalibrationSessions::EvidenceWall
         link_status: "active",
         framework_id: @session.framework_id,
         capability_stable_id: @capability_stable_id,
-        person_id: calibrant_ids
+        person_id: readable_ids
       ).pluck(:evidence_id, :person_id, :level_ordinal, :valence)
 
       item_rows = EvidenceItem.active.where(id: links.map(&:first).uniq)
@@ -107,6 +114,11 @@ class CalibrationSessions::EvidenceWall
 
   def calibrant_ids
     @calibrant_ids ||= @person_ids || @session.calibrants.pluck(:person_id)
+  end
+
+  # The population narrowed to what the viewer is entitled to read.
+  def readable_ids
+    @readable_ids ||= @visible_person_ids ? calibrant_ids & @visible_person_ids : calibrant_ids
   end
 
   # The manager-rated frequency each linked cell carries in the session's
