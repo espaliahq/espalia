@@ -26,8 +26,10 @@
 > *Vocabulary* — every invented term (self-gap, spread, org mean, carried,
 > the backing dot) defines itself in place, hover AND keyboard; see
 > *In-surface definitions*.
-> *Dev data* — `assessments:seed_calibration_activity` gives every surface
-> demo-able population-wide activity.
+> *Dev data* — `assessments:seed_calibration_activity` populates the current
+> cycle, then advances the tenant through two more (`CalibrationHistorySeed`)
+> so carried ratings, vetting-vs-coasting raters and reporting-line moves are
+> real cross-cycle history, and leaves a live session to open.
 >
 > *Provenance* — carried-forward (seeded, unconfirmed) ratings are marked
 > on every read surface; see *Carried-vs-vetted provenance*.
@@ -843,6 +845,36 @@ Shape as built:
 - **A term that already has a visual form keeps it**: "⚠ raters disagree"
   stays an amber badge and "To confirm" stays the dashed carried chip, via
   `trigger_class:`. The tap target and focus ring are added either way.
+
+### Dev data — a history, not a snapshot
+
+`assessments:seed_calibration_activity` populates the open cycle, then hands
+off to `CalibrationHistorySeed` (`lib/tasks/`, outside Zeitwerk's eager-load
+so it can't reach production).
+
+The point of the second half: **carried ratings are a claim about a previous
+cycle, so they need one.** The single-cycle seed could only fake them by
+writing `source: "seeded"` directly. Now each cycle is closed and the next
+enrolled through `BulkEnrollmentJob` — the same path production uses — so
+ADR-20's cross-cycle seeding does the carrying, with the real events and
+provenance. What that buys the surfaces:
+
+- **Raters who vet and raters who coast**, assigned by RANK over each
+  cycle's raters rather than an independent draw per rater — ranking
+  guarantees all three states appear, where independent draws can leave a
+  small tenant entirely coasting, which is precisely the demo the Carried
+  column cannot make.
+- **Reporting-line moves** between cycles, always to a sibling under the
+  same department head (the re-org that actually happens, and one that keeps
+  everyone inside the facilitator's scope). Applied to the org chart AND
+  recorded on the PersonDevelopment stream, so the drill-in attributes by
+  the recorded fact.
+- **A live session on the current cycle**, because otherwise every visual
+  check of this feature begins by hand-rolling one that satisfies the
+  population rules.
+
+Re-running converges rather than growing: cycles are keyed by name, the
+session by cycle, and every persona derives from a SHA of stable ids.
 
 ### Carried-vs-vetted provenance on the read surfaces
 

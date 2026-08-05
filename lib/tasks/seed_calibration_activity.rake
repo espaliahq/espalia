@@ -192,12 +192,27 @@ namespace :assessments do
         puts "  ...#{index + 1}/#{enrollments.size} people processed" if ((index + 1) % 15).zero?
       end
 
+      # The single-cycle population above is only the starting state: the
+      # carried vocabulary is a claim about a PREVIOUS cycle, so advance the
+      # tenant through a couple more and let cross-cycle seeding carry the
+      # values for real.
+      require_relative "calibration_history_seed"
+      history = CalibrationHistorySeed.new(tenant: tenant, framework: framework).call
+
       puts "Calibration activity seed complete for '#{cycle.name}':"
       puts "  Manager ratings: #{stats[:manager_ratings]} " \
            "(#{stats[:carried_ratings]} carried forward), " \
            "self ratings: #{stats[:self_ratings]}, evidence items: #{stats[:evidence_items]}"
       skipped = stats.slice(:skipped_no_person, :skipped_no_manager, :skipped_no_capabilities)
       puts "  Skipped: #{skipped.map { |k, v| "#{k}=#{v}" }.join(', ')}" if skipped.values.sum.positive?
+      if history.any?
+        puts "  History: #{history[:cycles_opened]} further cycle(s) opened, " \
+             "#{history[:reporting_moves]} reporting-line move(s); raters " \
+             "#{history[:raters_vetting_fully]} vetting fully / " \
+             "#{history[:raters_vetting_partly]} partly / " \
+             "#{history[:raters_coasting]} coasting " \
+             "(#{history[:ratings_confirmed]} confirmed, #{history[:ratings_revised]} revised)"
+      end
       if errors.any?
         puts "  #{errors.size} cells skipped with errors (first 5):"
         errors.first(5).each { |line| puts "    #{line}" }
