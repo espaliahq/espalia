@@ -383,15 +383,21 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
 
+    # An outcome opens the log, so the entry it just wrote is visible even if
+    # the room had the panel collapsed — the rule the note composer follows.
+    assert_selector "#calibration-log-pane[data-pane-state='open']"
+    assert_text "Asked Mia Manager to revisit a rating"
+
     # ── The log rides the drill-in as a side panel ──
     # Closed by default here (the grid wants the width), and it survives a
-    # pane switch — the whole point of a side panel. Clear the cookie so
-    # this asserts the SURFACE's default, not a preference set earlier.
+    # pane switch — the whole point of a side panel. Clear the cookie AND
+    # re-enter by the bare path, so this asserts the SURFACE's default
+    # rather than a preference set earlier or the outcome's `activity=open`.
     page.execute_script(<<~JS)
       document.cookie = "calibration_drill_in_log_pane_open=; path=/; max-age=0"
       document.cookie = "calibration_log_pane_open=; path=/; max-age=0"
     JS
-    page.refresh
+    visit calibration_session_capability_path(@flag_session_id, @flag_cap_stable)
     assert_selector "#calibration-log-pane[data-pane-state='closed']", visible: :all
     page.execute_script(
       %{document.querySelector("[data-action*='activity-pane#toggle']").click()}
