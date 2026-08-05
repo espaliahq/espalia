@@ -15,10 +15,12 @@ module CalibrationSessions::SessionLogData
 
   # @param session [CalibrationSession]
   # @return [Hash, nil] nil while draft — a draft session has no outcomes
-  def session_log_data(session)
+  # @param outcomes [CalibrationSessions::SessionOutcomes, nil] reuse the
+  #   request's instance so the session stream is read once per render
+  def session_log_data(session, outcomes: nil)
     return nil if session.draft?
 
-    outcomes = CalibrationSessions::SessionOutcomes.new(session: session)
+    outcomes ||= CalibrationSessions::SessionOutcomes.new(session: session)
     flags = outcomes.flags
     revisits = outcomes.revisit_requests
 

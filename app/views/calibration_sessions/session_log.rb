@@ -75,6 +75,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         ul(class: "mt-3 space-y-1") do
           entries.each { |entry| entry_row(entry) }
         end
+        older_note if truncated?
       end
       note_composer if @can_note
     end
@@ -82,8 +83,17 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   private
 
+  # The most recent RENDER_LIMIT outcomes. SessionOutcomes already caps the
+  # stream read; this caps the HTML, which was ~530KB at 800 entries on a
+  # page that re-renders server-side for every pane swap.
+  RENDER_LIMIT = 100
+
   def entries
-    @log[:entries] || []
+    @entries ||= (@log[:entries] || []).first(RENDER_LIMIT)
+  end
+
+  def truncated?
+    (@log[:entries] || []).size > RENDER_LIMIT
   end
 
   # Title + close in one row (the pane has no separate chrome), chips
@@ -126,6 +136,14 @@ class Views::CalibrationSessions::SessionLog < Views::Base
       },
       aria: { pressed: chip[:value] == "all" ? "true" : "false" }
     ) { chip[:label] }
+  end
+
+  # Says so rather than silently truncating — a log that quietly stops is
+  # indistinguishable from one with nothing older in it.
+  def older_note
+    p(class: "mt-3 text-[11px] text-gray-600 dark:text-gray-300") do
+      "Showing the #{RENDER_LIMIT} most recent outcomes."
+    end
   end
 
   def empty_state

@@ -26,17 +26,24 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       return
     end
 
+    outcomes = CalibrationSessions::SessionOutcomes.new(session: @session)
     @cards = CalibrationSessions::PersonCard.new(
       session: @session, stats: stats, capability_stable_id: params.expect(:id),
-      visible_person_ids: visible_person_ids(stats)
+      visible_person_ids: visible_person_ids(stats),
+      # Shared so the session stream is read once per render, not once here
+      # and again for the log.
+      outcomes: outcomes
     )
     compare_cards = resolve_compare_cards(stats)
     # The log rides along as a side panel so an outcome raised here lands
     # in view without leaving the capability under discussion. Skipped for
     # a pane-frame request: those re-render the whole page server-side but
-    # Turbo keeps only the frame, so building the log would buy an unbounded
-    # stream read plus three queries on every dot click and tab switch.
-    session_log = session_log_data(@session) unless pane_frame_request?
+    # Turbo keeps only the frame, so the log would be built and discarded.
+    #
+    # NB this does NOT avoid the stream read — PersonCard needs the same
+    # outcomes to mark an already-asked revisit — which is why the instance
+    # above is shared rather than each building its own.
+    session_log = session_log_data(@session, outcomes: outcomes) unless pane_frame_request?
     people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
 
     render Views::CalibrationSessions::DrillInView.new(

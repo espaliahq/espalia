@@ -6,6 +6,9 @@
 # low-volume session artifacts, so no projection table is warranted
 # (docs/architecture/calibration-sessions.md → "Outcomes").
 class CalibrationSessions::SessionOutcomes
+  # Most-recent events read per session. See #stream_events.
+  STREAM_READ_LIMIT = 250
+
   # @param session [CalibrationSession]
   # @param event_store [RailsEventStore::Client]
   def initialize(session:, event_store: Rails.configuration.event_store)
@@ -91,9 +94,25 @@ class CalibrationSessions::SessionOutcomes
 
   private
 
+  # Bounded, newest-first, then restored to chronological order.
+  #
+  # An unbounded `.to_a` made every read O(session lifetime): a long-running
+  # session with hundreds of outcome events paid the whole stream on the
+  # session page AND on drill-in renders. Reading the most recent
+  # STREAM_READ_LIMIT makes it O(cap) instead — the same trade
+  # Frameworks::ActivityFeedQuery makes.
+  #
+  # Trade-off, deliberately matching that precedent: an outcome older than
+  # the cap drops off the log. Acceptable because the log is a session's
+  # working record and the cap is far above a realistic session's output;
+  # if sessions ever run past it, the fix is the same cursor "load older"
+  # footer the framework feed has, not an unbounded read.
   def stream_events
     @stream_events ||= @event_store.read
       .stream(EventStreamNaming.calibration_session_stream(@session.id))
+      .backward
+      .limit(STREAM_READ_LIMIT)
       .to_a
+      .reverse
   end
 end
