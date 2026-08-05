@@ -185,7 +185,7 @@ class CalibrationHistorySeed
     people = population(cycle).sort_by { |person| weight("move", cycle.cycle_id, person.id) }
     return [] if people.empty?
 
-    people.select { |person| weight("move", cycle.cycle_id, person.id) < MOVER_SHARE }
+    people.first([ (people.size * MOVER_SHARE).ceil, 1 ].max)
   end
 
   # Another rater reporting to the same person as this one's current rater.

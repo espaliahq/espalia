@@ -102,7 +102,14 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
   end
 
   should "record a moved reporting line on the person's stream" do
-    run_seed
+    stats = run_seed
+
+    # Movers are taken by RANK, so the count is a function of the population
+    # (9 reports × 0.12, rounded up = 2) not of a per-person coin flip: two
+    # advances, two moves each. An independent draw would vary run to run —
+    # and can move nobody at all, which is the state that leaves the
+    # recorded-vs-live distinction undemonstrated.
+    assert_equal 4, stats[:reporting_moves]
 
     # A move is deterministic per person, so assert on the invariant rather
     # than on which person drew it: every recorded manager must be a real
