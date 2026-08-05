@@ -66,6 +66,14 @@ class Components::Kit::DefinitionTipTest < ActiveSupport::TestCase
     assert_not_includes html, "decoration-dotted", "the caller's styling replaces the default"
   end
 
+  should "use the caller's id verbatim, so repeated terms stay distinct" do
+    # aria-describedby points at an id: two terms sharing one makes both
+    # references ambiguous, and the glossary renders `spread` once per
+    # capability row.
+    assert_includes render_tip(id: "calibration-term-spread-abc"),
+                    %(id="calibration-term-spread-abc")
+  end
+
   should "flip the panel for a term near the right edge" do
     assert_includes render_tip(align: :right), "right-0"
     assert_includes render_tip, "left-0"

@@ -103,14 +103,15 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
         end
         div(class: "flex items-center gap-2 text-xs") do
           span(class: "text-gray-600 dark:text-gray-300") do
-            defined_term(:spread, align: :right,
+            defined_term(:spread, align: :right, suffix: capability[:stable_id],
                          label: sprintf("spread %.1f", capability[:spread]))
           end
           carried_note(capability)
           if capability[:flagged]
             # The badge itself is the term, so it carries its own definition
             # rather than sitting next to a second affordance.
-            defined_term(:raters_disagree, align: :right, trigger_class: BADGE_TRIGGER)
+            defined_term(:raters_disagree, align: :right, suffix: capability[:stable_id],
+                         trigger_class: BADGE_TRIGGER)
           end
         end
       end

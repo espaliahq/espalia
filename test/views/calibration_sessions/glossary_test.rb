@@ -36,6 +36,27 @@ class Views::CalibrationSessions::GlossaryTest < ActiveSupport::TestCase
                  "the org mean pools at-level cells, not rater means")
   end
 
+  should "give a repeated term a distinct id per instance" do
+    # The board renders `spread` once per capability. Without the suffix
+    # every one of them claims id="calibration-term-spread", which makes
+    # each trigger's aria-describedby ambiguous and the HTML invalid.
+    view = Class.new(Views::Base) do
+      include Views::CalibrationSessions::Glossary
+      def view_template
+        defined_term(:spread, suffix: "cap-1")
+        defined_term(:spread, suffix: "cap-2")
+        defined_term(:self_gap)
+      end
+    end
+
+    html = view.new.call
+
+    assert_includes html, %(id="calibration-term-spread-cap-1")
+    assert_includes html, %(id="calibration-term-spread-cap-2")
+    # A term that appears once keeps the short, linkable id.
+    assert_includes html, %(id="calibration-term-self-gap")
+  end
+
   should "describe carried ratings as real ratings" do
     # The house rule: marking never softens. A definition that implied a
     # carried value doesn't count would contradict the surfaces it explains.

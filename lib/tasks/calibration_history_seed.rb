@@ -34,6 +34,9 @@ class CalibrationHistorySeed
   FUTURE_CYCLES = [ "Q2 2026 Review", "Q3 2026 Review" ].freeze
 
   # Share of each cycle's population that changes rater before the next one.
+  # Taken by RANK, like the personas below: an independent draw per person
+  # can move nobody at all, and a demo tenant where reporting lines never
+  # change cannot show what recorded-vs-live attribution is for.
   MOVER_SHARE = 0.12
 
   # Rater personas for the newly-carried cycle, assigned by RANK rather
@@ -62,7 +65,10 @@ class CalibrationHistorySeed
   # @return [Hash] counters for the task's summary line
   def call
     FUTURE_CYCLES.each do |name|
-      if AssessmentCycle.find_by(name: name)
+      # Scoped to the framework, like every other cycle query here: a
+      # same-named cycle on another of the tenant's frameworks is not this
+      # history, and would skip the advance while reporting it as done.
+      if AssessmentCycle.for_framework(@framework.framework_id).find_by(name: name)
         @io.puts "  '#{name}' already exists — skipping."
         next
       end
@@ -92,6 +98,11 @@ class CalibrationHistorySeed
     return if CalibrationSession.where(cycle_id: cycle.cycle_id).exists?
 
     facilitator = Person.find_by(id: facilitator_id)
+    # A tenant with no root person (every Person has a manager) leaves us no
+    # facilitator; without this the nil reaches `all_reports` and the
+    # NoMethodError escapes the RuntimeError rescue below, killing the run.
+    return @io.puts "  No root person to facilitate — skipping the demo session." unless facilitator
+
     raters, calibrants = room_for(cycle, facilitator)
     return @io.puts "  No rater with enrolled reports — skipping the demo session." if raters.empty?
 
@@ -156,9 +167,7 @@ class CalibrationHistorySeed
   # on the person's stream, because manager-rating authority reads the
   # recorded fact first (see authorization.md).
   def move_reporting_lines(cycle)
-    population(cycle).each do |person|
-      next unless weight("move", cycle.cycle_id, person.id) < MOVER_SHARE
-
+    movers(cycle).each do |person|
       sibling = sibling_rater_for(person)
       next unless sibling
 
@@ -170,12 +179,25 @@ class CalibrationHistorySeed
     end
   end
 
+  # The population slice that changes rater this time — at least one whenever
+  # there is anyone to move.
+  def movers(cycle)
+    people = population(cycle).sort_by { |person| weight("move", cycle.cycle_id, person.id) }
+    return [] if people.empty?
+
+    people.select { |person| weight("move", cycle.cycle_id, person.id) < MOVER_SHARE }
+  end
+
   # Another rater reporting to the same person as this one's current rater.
   def sibling_rater_for(person)
     current = person.manager
     return nil unless current&.manager_id
 
-    candidates = Person.where(manager_id: current.manager_id).where.not(id: current.id).to_a
+    # Ordered: an unordered read gives Postgres licence to return rows in a
+    # different sequence per run, which would pick a different sibling and
+    # break the convergence this class promises.
+    candidates = Person.where(manager_id: current.manager_id)
+      .where.not(id: current.id).order(:id).to_a
     return nil if candidates.empty?
 
     candidates[(weight("sibling", person.id) * candidates.size).floor.clamp(0, candidates.size - 1)]
@@ -211,9 +233,16 @@ class CalibrationHistorySeed
   def confirm_or_revise(rating, rater_id, cycle)
     frequencies = AssessmentLevelRating::FREQUENCIES
     current = frequencies.index(rating.manager_rated_frequency) || 0
-    revising = weight("revise", rating.id) < REVISION_SHARE
     step = weight("direction", rating.id) < 0.5 ? -1 : 1
-    value = revising ? (current + step).clamp(0, frequencies.size - 1) : current
+    value = if weight("revise", rating.id) < REVISION_SHARE
+      (current + step).clamp(0, frequencies.size - 1)
+    else
+      current
+    end
+    # A revision off either end of the scale clamps back to where it was, so
+    # it re-emits the same value — that is a confirmation, and counting it as
+    # a revision overstates what the summary reports.
+    revising = value != current
 
     @development.rate_as_manager(
       rating.person_id, @framework.framework_id, rating.capability_stable_id,

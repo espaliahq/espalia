@@ -257,7 +257,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
     elsif @readiness[:carried_only_ids]&.include?(person_id)
       # Values exist but are entirely carried forward — same dashed
       # "To confirm" vocabulary as the /assessments list chips.
-      defined_term(:to_confirm, align: :right, trigger_class: CARRIED_BADGE_TRIGGER)
+      defined_term(:to_confirm, align: :right, suffix: person_id,
+                   trigger_class: CARRIED_BADGE_TRIGGER)
     else
       render Components::Kit::Badge.new("Unrated", variant: :default)
     end

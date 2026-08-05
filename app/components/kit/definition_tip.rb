@@ -39,6 +39,9 @@ class Components::Kit::DefinitionTip < Components::Base
     @trigger_class = trigger_class
   end
 
+  # Renders the term and its (hidden until hover/focus) definition panel.
+  #
+  # @return [void]
   def view_template
     span(class: "group/deftip relative inline-flex", data: { controller: "definition-tip" }) do
       trigger

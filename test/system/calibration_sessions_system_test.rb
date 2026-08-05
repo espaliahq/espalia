@@ -206,6 +206,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       })()
     JS
     assert_not clipped, "the definition must not be clipped by a scrolling ancestor"
+    # NOTE: the controller also flips the panel above a term with no room
+    # below it. That path is deliberately NOT asserted here — this fixture's
+    # strip is too short to put a term at the fold, and every contrivance
+    # that forced one (short viewport, scrollIntoView) still left room below,
+    # so the assertion passed with the flip removed. A test that cannot fail
+    # is worse than none; the flip is verified visually instead.
 
     # ── Drill-in: divergence row → rater × level grid ──
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")

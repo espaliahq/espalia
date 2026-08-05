@@ -72,20 +72,33 @@ export default class extends BaseController {
     this.panelTarget.hidePopover()
   }
 
-  // Under the term, and nudged back inside the viewport when the term sits
-  // near an edge — the Carried column is the far-right one on a wide table.
+  // Under the term, but nudged back inside the viewport on both axes: the
+  // Carried column is the far-right one on a wide table, and a term in the
+  // last rows of a long strip has no room below it — a definition that opens
+  // off-screen is the same as no definition.
   reposition() {
     const anchor = this.triggerTarget.getBoundingClientRect()
     const panel = this.panelTarget.getBoundingClientRect()
     const margin = 8
+    const gap = 4
+
     const left = Math.min(
       Math.max(margin, anchor.left),
       Math.max(margin, window.innerWidth - panel.width - margin)
     )
 
+    // Prefer below; flip above when that would overflow and there is more
+    // room up there. Clamp either way, so a panel taller than the viewport
+    // still starts on screen.
+    const below = anchor.bottom + gap
+    const above = anchor.top - panel.height - gap
+    const overflowsBelow = below + panel.height > window.innerHeight - margin
+    const top = overflowsBelow && above >= margin ? above : below
+
     // The top layer is viewport-relative; the fallback styling is absolute.
     this.panelTarget.style.position = "fixed"
     this.panelTarget.style.left = `${left}px`
-    this.panelTarget.style.top = `${anchor.bottom + 4}px`
+    this.panelTarget.style.top =
+      `${Math.min(Math.max(margin, top), Math.max(margin, window.innerHeight - panel.height - margin))}px`
   }
 }

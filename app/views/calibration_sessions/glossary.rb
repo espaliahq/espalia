@@ -100,12 +100,17 @@ module Views::CalibrationSessions::Glossary
   #   unchanged (e.g. a column header that reads "Reports" but shows counts)
   # @param trigger_class [String, nil] for a term that already has a visual
   #   form — the "raters disagree" badge keeps its warning colour
-  def defined_term(key, align: :left, label: nil, trigger_class: nil)
+  # @param suffix [String, nil] REQUIRED wherever a term repeats on one page
+  #   (a spread per capability row, a "To confirm" per person). The id wires
+  #   `aria-describedby`, so a duplicate makes every one of them ambiguous —
+  #   pass the row's stable id. Terms that appear once (the strip's column
+  #   headers) can omit it and keep the short, linkable id.
+  def defined_term(key, align: :left, label: nil, trigger_class: nil, suffix: nil)
     term = TERMS.fetch(key)
     render Components::Kit::DefinitionTip.new(
       label || term[:label],
       definition: term[:definition],
-      id: "calibration-term-#{key.to_s.tr('_', '-')}",
+      id: [ "calibration-term", key.to_s.tr("_", "-"), suffix ].compact.join("-"),
       align: align,
       trigger_class: trigger_class
     )
