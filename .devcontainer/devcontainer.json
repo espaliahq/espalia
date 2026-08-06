@@ -12,6 +12,13 @@
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {},
+    // Authenticates gh from the HOST's GitHub credential on every attach, via the
+    // git credential helper the Dev Containers extension already forwards. The
+    // github-cli feature above installs the binary only — it forwards no
+    // credentials — and gh never reads git's credential helper for its own auth,
+    // so without this the container needs a `gh auth login` of its own: a
+    // point-in-time credential that shadows the delegation and then rots.
+    "ghcr.io/redbeard/devcontainer-features/gh-auth-from-host:1": {},
     "ghcr.io/rails/devcontainer/features/activestorage": {},
     "ghcr.io/rails/devcontainer/features/postgres-client": {},
     "ghcr.io/devcontainers/features/node:1": {}
