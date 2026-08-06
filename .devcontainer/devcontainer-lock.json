@@ -21,9 +21,9 @@
       "integrity": "sha256:dc995acf6d691de8fc2dcc88fede02c55df608aa9de17cfa4b38de06903d7715"
     },
     "ghcr.io/redbeard/devcontainer-features/gh-auth-from-host:1": {
-      "version": "1.0.0",
-      "resolved": "ghcr.io/redbeard/devcontainer-features/gh-auth-from-host@sha256:b5f48be52bccc11cf6c333a75641fb29a0adebb6809acdc939c8e74bed3f2287",
-      "integrity": "sha256:b5f48be52bccc11cf6c333a75641fb29a0adebb6809acdc939c8e74bed3f2287",
+      "version": "1.0.1",
+      "resolved": "ghcr.io/redbeard/devcontainer-features/gh-auth-from-host@sha256:22686d18950b7b66f09c4f08f3974c7c03a214b6b27302a0e7f415602a845527",
+      "integrity": "sha256:22686d18950b7b66f09c4f08f3974c7c03a214b6b27302a0e7f415602a845527",
       "dependsOn": [
         "ghcr.io/devcontainers/features/github-cli:1"
       ]
