@@ -121,7 +121,7 @@ gem "lexxy", "~> 0.9.25"
 gem "json_translate"
 
 # Type-safe structured objects in JSONB columns
-gem "store_model", "~> 4.5"
+gem "store_model", "~> 4.6"
 
 # Event sourcing for Framework and Person Development aggregates.
 # `rails_event_store/all` is required instead of the umbrella's default entrypoint
