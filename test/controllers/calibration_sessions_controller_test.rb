@@ -128,6 +128,68 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "a rater with nothing rated on a live session" do
+    setup do
+      sign_in @facilitator_user
+      ActsAsTenant.with_tenant(@tenant) do
+        # Quinn brings a report but no ratings; Mia rates hers, so the strip
+        # is a live table with one silent row rather than the empty state.
+        @quinn = create(:person, tenant: @tenant, name: "Quinn Alderberry", manager: @facilitator)
+        quinn_report = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: @quinn)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: quinn_report.id, framework_id: @cycle.framework_id)
+        [ @report, quinn_report ].each do |person|
+          create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+                 person_id: person.id, level_ordinal: 3)
+        end
+        category = create(:framework_capability_category, tenant: @tenant,
+                          framework_id: @cycle.framework_id, name: "Thinking")
+        cap = create(:framework_capability, tenant: @tenant,
+                     category_id: category.category_id, name: "Strategic Thinking")
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: @report.id, framework_id: @cycle.framework_id,
+               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "consistent")
+
+        # A second RATED rater so the board actually renders rows — with one
+        # rater everything is "not comparable" and the legend never exists.
+        raj = create(:person, tenant: @tenant, name: "Raj Elderbrook", manager: @facilitator)
+        raj_report = create(:person, tenant: @tenant, name: "Omar IC", manager: raj)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: raj_report.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: raj_report.id, level_ordinal: 3)
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: raj_report.id, framework_id: @cycle.framework_id,
+               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "none")
+
+        @session_record = define_session(
+          participant_ids: [ @em.id, raj.id, @quinn.id ],
+          calibrant_person_ids: [ @report.id, raj_report.id, quinn_report.id ]
+        )
+        @session_record.update!(status: "started")
+      end
+    end
+
+    should "say so on the strip and keep them off the board" do
+      get calibration_session_path(@session_record)
+
+      assert_response :success
+      # Strip: the row stays (readiness is its job) but reads as a state,
+      # not as zeroed measurements.
+      assert_includes response.body, "No ratings yet"
+      assert_select "td[colspan='5']", text: /No ratings yet/
+      # Board: no legend swatch promising a dot that exists on no axis —
+      # a footnote names them instead.
+      assert_includes response.body, "Quinn Alderberry hasn&#39;t rated yet — not on the board."
+      board = response.body[/Capability divergence.*?(?=PARTICIPANTS|Participants)/m]
+      legend_names = board.scan(/rounded-full bg-\w+-600[^>]*><\/span>([^<]+)/).flatten if board
+      assert_not_includes response.body.scan(/<div class="flex items-center gap-1\.5[^>]*>.*?<\/div>/m).join,
+                          "Quinn Alderberry hasn&#39;t", "footnote is a sentence, not a legend entry"
+    end
+  end
+
   context "lifecycle endpoints as facilitator" do
     should "start then close the session" do
       session_record = define_session
@@ -168,7 +230,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
 
   private
 
-  def define_session
+  def define_session(participant_ids: nil, calibrant_person_ids: nil)
     ActsAsTenant.with_tenant(@tenant) do
       result = Operations::CalibrationSessions::Define.call(
         context: AuthorizationContext.new(
@@ -178,7 +240,8 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         ),
         params: {
           cycle_id: @cycle.cycle_id, name: "Engineering calibration",
-          participant_ids: [ @em.id ], calibrant_person_ids: [ @report.id ]
+          participant_ids: participant_ids || [ @em.id ],
+          calibrant_person_ids: calibrant_person_ids || [ @report.id ]
         }
       )
       CalibrationSession.find(result[:session_id])

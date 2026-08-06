@@ -25,6 +25,39 @@ class Views::CalibrationSessions::TendencyStripTest < ActiveSupport::TestCase
     ).call
   end
 
+  # An unrated rater beside a RATED one — an all-unrated strip renders the
+  # card-level empty state instead, and these are about one row inside a
+  # live table. (Class-level: shoulda-context can't see defs inside a
+  # context block.)
+  def render_mixed_strip
+    unrated = rater(participant_id: "rater-2", cell_count: 0, rated_count: 0,
+                    mean: nil, org_delta: nil, self_gap: nil, evidence_pct: nil,
+                    distribution: { "none" => 0, "some" => 0,
+                                    "occasional" => 0, "consistent" => 0 })
+    people = { RATER_ID => Person.new(name: "Mia Manager"),
+               "rater-2" => Person.new(name: "Quinn Alderberry") }
+    Views::CalibrationSessions::TendencyStrip.new(
+      org_mean: 1.6, raters: [ rater, unrated ], people: people
+    ).call
+  end
+
+  context "a rater with nothing rated" do
+    should "say so instead of rendering zeroed columns" do
+      html = render_mixed_strip
+
+      assert_includes html, "No ratings yet"
+      assert_includes html, "not counted in the org mean"
+      # Exactly ONE distribution bar — the rated rater's. A second, zeroed
+      # bar would render the unrated row as a measurement.
+      assert_equal 1, html.scan("Rating distribution").size
+      assert_includes html, "Quinn Alderberry"
+    end
+
+    should "keep the full columns for a rated rater" do
+      assert_not_includes render_strip(rater), "No ratings yet"
+    end
+  end
+
   context "the Carried column" do
     should "show a dash when nothing was carried" do
       html = render_strip(rater(carried_count: 0))

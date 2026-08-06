@@ -432,6 +432,26 @@ positioned dots on a shared axis, sorted by spread; click → drill-in:
   `FrequencyPalette` — the vocabulary everyone already knows from the
   assessment screen. **Dot fill = evidence backing** (● backed / ◌ unbacked —
   see below).
+- **A silent rater collapses, everywhere in presentation — never in math.**
+  Unrated cells never enter any aggregate (`OverviewStats#rated_cells`
+  filters before anything is computed); the fix here is what RENDERS. A
+  rater with nothing rated on the drill-in capability collapses to one
+  muted sentence naming them and their people — the people as LINKS to
+  their person cards, because the unrated cell is precisely the "what did
+  you see?" moment and the card carries the evidence and the revisit ask
+  (a full row of grey dots reads as data on a projector, but severing the
+  card path would sever the outcome); the tendency strip keeps their row but
+  says "No ratings yet" in place of zeroed columns; the divergence board
+  names them in a footnote instead of a legend swatch that promises a dot
+  existing on no axis. A PARTIALLY rated rater keeps a normal row — grey
+  dots beside rated ones are the per-person gaps, which are data.
+- **Rater dot palette order is load-bearing.** `RATER_DOT_CLASSES` cycles
+  teal → purple → orange → pink → indigo → cyan. Orange sits third so pink
+  never neighbours purple: the dark pair (pink-400/purple-400) is ΔE 13.3 —
+  indistinguishable even to full colour vision — and the reorder lifts the
+  worst adjacent pair to 27.8 (validated light AND dark). Initials on every
+  dot remain the identity signal of record; don't reorder without
+  re-validating both modes.
 - **Prior calibration context — NOT BUILT** (overlapping sessions): a small
   marker on dots already discussed in an earlier session this cycle, with the
   outcome on hover — "discussed in Engineering calibration July 10 — revisit
