@@ -230,7 +230,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                 end
               end
               tbody do
-                @stats[:rows].each { |row| grid_row(row) }
+                rated_rows.each { |row| grid_row(row) }
+                unrated_raters_row
               end
             end
           end
@@ -239,6 +240,62 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         end
       end
     end
+  end
+
+  # Rows with at least one rated dot on THIS capability. A rater who hasn't
+  # touched it yet renders as one muted sentence instead of a full row of
+  # grey dots — a row of nothing reads as data on a projector, and the room
+  # only needs to know who is missing. Their people are named in it AS
+  # LINKS to their person cards: the unrated cell is precisely the "what
+  # did you see?" moment, and the card is where the evidence and the
+  # revisit ask live, so collapsing the row must never sever that path.
+  # The "other raters" reference row is exempt — context, not a
+  # participant being calibrated.
+  def rated_rows
+    @rated_rows ||= @stats[:rows].select do |row|
+      row[:rater_id].nil? || row_has_rating?(row)
+    end
+  end
+
+  def row_has_rating?(row)
+    row[:people].values.flatten.any? { |dot| dot[:frequency] }
+  end
+
+  def unrated_raters_row
+    missing = @stats[:rows].reject { |row| rated_rows.include?(row) }
+    return if missing.empty?
+
+    tr(class: "border-t border-gray-100 dark:border-gray-800") do
+      td(class: "py-2.5 text-sm italic text-gray-600 dark:text-gray-300",
+         colspan: @stats[:ordinals].size + 1) do
+        missing.each_with_index do |row, index|
+          plain ", " if index.positive?
+          plain "#{rater_label(row)} hasn't rated this capability yet"
+          people = row[:people].values.flatten
+          next if people.empty?
+
+          plain " ("
+          people.each_with_index do |dot, person_index|
+            plain ", " if person_index.positive?
+            unrated_person_link(dot)
+          end
+          plain ")"
+        end
+        plain "."
+      end
+    end
+  end
+
+  # Same destination and pane behaviour as a dot — an inline link within
+  # the sentence (the in-sentence exception to the 44px target rule).
+  def unrated_person_link(dot)
+    a(
+      href: drill_in_path(view: nil, person: dot[:person_id], compare: [], filters: {}),
+      class: "underline underline-offset-2 decoration-gray-400 dark:decoration-gray-500 " \
+             "hover:decoration-gray-900 dark:hover:decoration-white",
+      aria: { label: "#{dot[:name]} — unrated. Open to discuss." },
+      data: { pane_keep_state: "true", person_id: dot[:person_id] }
+    ) { dot[:name] }
   end
 
   def grid_row(row)

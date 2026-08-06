@@ -7,7 +7,9 @@
 #
 # Rows are raters; columns are assessed-level ordinals; each population
 # member appears as one dot at (their rater, their level) carrying their
-# manager-rated frequency (nil = unrated — the gap is data too) and
+# manager-rated frequency (nil = unrated; a rater with NOTHING rated on
+# this capability is collapsed by the view into a single "hasn't rated
+# yet" sentence rather than a full row of grey dots) and
 # whether the cell has active evidence backing. Population members whose
 # rater is not a participant group into one muted "other raters" row
 # (`rater_id: nil`) — reference points, visible but exempt from outcomes.

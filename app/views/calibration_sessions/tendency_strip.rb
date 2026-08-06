@@ -80,13 +80,33 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
       td(class: "py-2 pr-2 text-gray-600 dark:text-gray-300 whitespace-nowrap") do
         plain "#{rater[:report_count]} · #{rater[:cell_count]} cells"
       end
-      td(class: "py-2 pr-2 whitespace-nowrap") { org_delta_cell(rater) }
-      td(class: "py-2 pr-2") { distribution_bar(rater) }
-      td(class: "py-2 pr-2 whitespace-nowrap") { self_gap_cell(rater) }
-      td(class: "py-2 pr-2 whitespace-nowrap text-gray-600 dark:text-gray-300") do
-        plain rater[:evidence_pct] ? "#{(rater[:evidence_pct] * 100).round}%" : "—"
+      if rater[:cell_count].zero?
+        unrated_cells
+      else
+        rated_cells_for(rater)
       end
-      td(class: "py-2 whitespace-nowrap") { carried_cell(rater) }
+    end
+  end
+
+  def rated_cells_for(rater)
+    td(class: "py-2 pr-2 whitespace-nowrap") { org_delta_cell(rater) }
+    td(class: "py-2 pr-2") { distribution_bar(rater) }
+    td(class: "py-2 pr-2 whitespace-nowrap") { self_gap_cell(rater) }
+    td(class: "py-2 pr-2 whitespace-nowrap text-gray-600 dark:text-gray-300") do
+      plain rater[:evidence_pct] ? "#{(rater[:evidence_pct] * 100).round}%" : "—"
+    end
+    td(class: "py-2 whitespace-nowrap") { carried_cell(rater) }
+  end
+
+  # A rater with nothing rated keeps their row — readiness is this strip's
+  # job too — but gets an explicit sentence, never zeroed columns. An empty
+  # distribution bar and a "—" mean render like measurements; "No ratings
+  # yet" reads as the state it is. (Their absence from the org mean and
+  # every other aggregate is guaranteed upstream: OverviewStats#rated_cells
+  # filters unrated cells before anything is computed.)
+  def unrated_cells
+    td(class: "py-2 text-sm italic text-gray-600 dark:text-gray-300", colspan: 5) do
+      "No ratings yet — not counted in the org mean or any column."
     end
   end
 

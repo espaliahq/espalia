@@ -13,12 +13,19 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
 
   # Distinct dot fills per rater column (cycled). Deliberately NOT the
   # frequency palette — these identify raters, not ratings.
+  #
+  # ORDER IS LOAD-BEARING: adjacent slots must stay tell-apart-able in BOTH
+  # themes. With pink beside purple the dark pair (pink-400 / purple-400)
+  # sat at ΔE 13.3 — below the distinguishability floor for full colour
+  # vision, let alone CVD. Orange between them lifts the worst dark pair to
+  # 27.8 (validated with the dataviz palette checker, light and dark).
+  # Initials on every dot remain the identity signal of record.
   RATER_DOT_CLASSES = %w[
     bg-teal-600 dark:bg-teal-400
     bg-purple-600 dark:bg-purple-400
+    bg-orange-600 dark:bg-orange-400
     bg-pink-600 dark:bg-pink-400
     bg-indigo-600 dark:bg-indigo-400
-    bg-orange-600 dark:bg-orange-400
     bg-cyan-600 dark:bg-cyan-400
   ].each_slice(2).map { |light, dark| "#{light} #{dark}" }.freeze
 
@@ -49,6 +56,9 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
 
         if @capabilities.empty?
           empty_state
+          # Most relevant precisely here: a silent rater is often WHY
+          # nothing is comparable yet.
+          unrated_footnote
         else
           legend
           div(class: "mt-4 space-y-5") do
@@ -67,14 +77,31 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
 
   private
 
+  # Only raters with a dot somewhere on the board. A colour swatch for a
+  # rater with no ratings promises a dot that exists on no axis — the
+  # unrated are named in a plain footnote instead, which is also the honest
+  # shape ("not here yet"), not a legend entry pretending to be data.
   def legend
     div(class: "mt-3 flex flex-wrap gap-x-4 gap-y-1") do
       @raters.each_with_index do |rater, index|
+        next if rater[:cell_count].zero?
+
         div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
           span(class: "inline-block h-3 w-3 rounded-full #{dot_class(index)}", aria: { hidden: "true" })
           plain rater_name(rater[:participant_id])
         end
       end
+    end
+    unrated_footnote
+  end
+
+  def unrated_footnote
+    names = @raters.select { |rater| rater[:cell_count].zero? }
+      .map { |rater| rater_name(rater[:participant_id]) }
+    return if names.empty?
+
+    p(class: "mt-1.5 text-xs italic text-gray-600 dark:text-gray-300") do
+      "#{names.to_sentence} #{names.size == 1 ? 'hasn\'t' : 'haven\'t'} rated yet — not on the board."
     end
   end
 

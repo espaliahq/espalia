@@ -217,6 +217,36 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.body, "Mgr: Some of the time"
     end
 
+    should "collapse a rater with nothing rated here into one sentence" do
+      # Quinn's report is on the grid's population but Quinn hasn't rated
+      # this capability — a full row of grey dots reads as data on a
+      # projector, so it collapses to a sentence naming both of them.
+      ActsAsTenant.with_tenant(@tenant) do
+        quinn = create(:person, tenant: @tenant, name: "Quinn Alderberry", manager: @facilitator)
+        pax = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: quinn)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: pax.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: pax.id, level_ordinal: 3)
+        create(:calibration_session_member, :participant, tenant: @tenant,
+               session: @session, person_id: quinn.id)
+        create(:calibration_session_member, tenant: @tenant,
+               session: @session, person_id: pax.id)
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id)
+
+      assert_response :success
+      assert_includes response.body, "Quinn Alderberry hasn&#39;t rated this capability yet ("
+      # Pax appears as a LINK in the sentence, never as a grey dot: the
+      # person card (evidence, the revisit ask) stays one click away — the
+      # unrated cell is the "what did you see?" moment.
+      assert_select "td[colspan] a[data-person-id]", text: "Pax Thistledown", count: 1
+      assert_select "a[data-person-id] span.h-7", { count: 1 },
+                    "exactly one dot row remains — the rated rater's"
+      assert_select "a[data-person-id='#{@report.id}']"
+    end
+
     should "show the self-rating for a calibrant the facilitator does manage" do
       get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
 

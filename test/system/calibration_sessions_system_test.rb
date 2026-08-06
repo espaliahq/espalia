@@ -142,6 +142,19 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
                  capability_stable_id: @cap_a.stable_id)
         .update!(manager_rating_source: "seeded")
 
+      # A rater with NOTHING rated: keeps a strip row (as a sentence, not
+      # zeroed columns), stays off the board's legend, and collapses to one
+      # line on the drill-in grid. Adds zero cells, so no aggregate below
+      # moves.
+      quinn = create(:person, tenant: @tenant, name: "Quinn Alderberry", manager: @facilitator)
+      pax = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: quinn)
+      create(:person_framework_assignment, tenant: @tenant,
+             person_id: pax.id, framework_id: @cycle.framework_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: pax.id, level_ordinal: 3)
+      @quinn_id = quinn.id
+      @pax_id = pax.id
+
       # Near-identical evidence under divergent ratings — the wall's money shot.
       back_evidence(@report_1, @em_1, @cap_a, "Ran the pricing spike end to end.", "demonstrated")
       back_evidence(@report_2, @em_2, @cap_a, "Ran the billing spike end to end.", "growth_area")
@@ -155,8 +168,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         context: ctx,
         params: {
           cycle_id: @cycle.cycle_id, name: "Live calibration",
-          participant_ids: [ @em_1.id, @em_2.id ],
-          calibrant_person_ids: population.map(&:id)
+          participant_ids: [ @em_1.id, @em_2.id, @quinn_id ],
+          calibrant_person_ids: population.map(&:id) + [ @pax_id ]
         }
       )
       Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
@@ -184,6 +197,11 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "1 of 4 carried"
     # No curation affordances on a live session
     assert_no_text "Add person from your org"
+
+    # The silent rater: a sentence on the strip, a footnote off the board —
+    # never zeroed columns or a legend colour with no dot behind it.
+    assert_text "No ratings yet — not counted in the org mean or any column."
+    assert_text "Quinn Alderberry hasn't rated yet — not on the board."
 
     # ── The vocabulary defines itself, by KEYBOARD ──
     # The room is on a projector and the facilitator may be driving by
@@ -217,6 +235,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-person-id]", minimum: 4
+    # …and on the grid, the silent rater collapses to one sentence — with
+    # their people as links, so the person card (and its revisit ask) stays
+    # reachable for exactly the unrated cell the room will ask about.
+    assert_text "Quinn Alderberry hasn't rated this capability yet"
+    click_with_retry(expect_text: "Close") do
+      find("a[data-person-id='#{@pax_id}']", text: "Pax Thistledown").click
+    end
+    assert_text "Pax Thistledown"
     # The carried dot wears the dashed edge and says so non-visually.
     carried_dot = find("a[data-person-id='#{@report_3_id}']")
     assert_includes carried_dot["aria-label"], "carried forward from the previous cycle"
