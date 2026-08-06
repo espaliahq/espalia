@@ -1,19 +1,20 @@
 # frozen_string_literal: true
 
 # Reads a calibration session's outcome events — expectation flags, revisit
-# requests, and notes — from its stream.
+# requests, evidence requests, and notes — from its stream.
 #
 # Read-time by design: a session's outcome count is bounded by one meeting's
 # discussion, so a projection table would carry rebuild and ownership cost
 # for a handful of rows (docs/architecture/calibration-sessions.md →
 # "Read models", which records the decision rather than pointing back here).
 class CalibrationSessions::SessionOutcomes
-  # The three outcome events, in stream order. Read as a set so the query
+  # The outcome events, in stream order. Read as a set so the query
   # skips the definition / curation / agenda / lifecycle events the stream
   # also carries.
   OUTCOME_EVENTS = [
     AssessmentCycles::Events::CalibrationExpectationFlagged,
     AssessmentCycles::Events::CalibrationRatingRevisitRequested,
+    AssessmentCycles::Events::CalibrationEvidenceRequestRaised,
     AssessmentCycles::Events::CalibrationNoteRecorded
   ].freeze
 
@@ -65,6 +66,29 @@ class CalibrationSessions::SessionOutcomes
       end
   end
 
+  # Evidence requests fired by this session, chronological. Fulfilment is
+  # NOT here — read it from {EvidenceRequest} by request_id at render time.
+  #
+  # @return [Array<Hash>] `{ request_id:, person_id:, capability_stable_id:,
+  #   level_ordinal:, requestee_id:, requested_by_id:, requested_at: }`
+  def evidence_requests
+    @evidence_requests ||= stream_events
+      .select { |e| e.is_a?(AssessmentCycles::Events::CalibrationEvidenceRequestRaised) }
+      .map do |event|
+        data = event.data
+        {
+          request_id: data[:request_id],
+          person_id: data[:person_id],
+          capability_stable_id: data[:capability_stable_id],
+          level_ordinal: data[:level_ordinal],
+          requestee_id: data[:requestee_id],
+          message: data[:message],
+          requested_by_id: data[:requested_by_id],
+          requested_at: event.metadata[:timestamp]
+        }
+      end
+  end
+
   # Free-text minutes recorded by this session, chronological.
   #
   # @return [Array<Hash>] `{ body:, capability_stable_id:, person_id:,
@@ -96,6 +120,7 @@ class CalibrationSessions::SessionOutcomes
     @entries ||= [
       *flags.map { |flag| flag.merge(kind: "expectation_flagged", at: flag[:flagged_at], actor_id: flag[:flagged_by_id]) },
       *revisit_requests.map { |r| r.merge(kind: "revisit_requested", at: r[:requested_at], actor_id: r[:requested_by_id]) },
+      *evidence_requests.map { |r| r.merge(kind: "evidence_requested", at: r[:requested_at], actor_id: r[:requested_by_id]) },
       *notes.map { |note| note.merge(kind: "note_recorded", at: note[:recorded_at], actor_id: note[:recorded_by_id]) }
     ].sort_by { |entry| entry[:at] || Time.at(0) }.reverse
   end

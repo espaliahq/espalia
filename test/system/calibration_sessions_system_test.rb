@@ -437,10 +437,38 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
 
+    # ── §f: request feedback / evidence from the person card ──
+    # The redirect re-opened Ivy's card (person= rides the return path).
+    assert_text "Ivy IC"
+    assert_selector "summary", text: "Request feedback / evidence about Ivy IC"
+    page.execute_script(<<~JS)
+      document.querySelectorAll("details > summary").forEach((s) => {
+        if (s.textContent.includes("Request feedback / evidence")) s.parentElement.open = true
+      })
+    JS
+    page.execute_script(<<~JS)
+      const select = document.querySelector("#evidence-request-requestee")
+      select.value = [...select.options].find((o) => o.text.includes("Mia Manager")).value
+    JS
+    js_set_field "#evidence-request-message", "Nobody could answer what good looks like here"
+    click_button_with_js_fallback "Send request", expect_text: "Feedback / evidence requested"
+
+    ActsAsTenant.with_tenant(@tenant) do
+      request = EvidenceRequest.sole
+      assert_equal @em_1.id, request.requestee_person_id
+      assert_equal @report_1.id, request.person_id
+      recorded = CalibrationSessions::SessionOutcomes
+        .new(session: CalibrationSession.find(@flag_session_id)).evidence_requests
+      assert_equal [ request.id ], recorded.map { |r| r[:request_id] }
+    end
+
     # An outcome opens the log, so the entry it just wrote is visible even if
     # the room had the panel collapsed — the rule the note composer follows.
     assert_selector "#calibration-log-pane[data-pane-state='open']"
     assert_text "Asked Mia Manager to revisit a rating"
+    assert_text "Asked Mia Manager for feedback / evidence"
+    assert_text "Awaiting response"
+    assert_selector "button", text: "Requests"
 
     # ── The log rides the drill-in as a side panel ──
     # Closed by default here (the grid wants the width), and it survives a
@@ -477,9 +505,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Open"
     assert_text "Ivy IC · Strategic Thinking · L3"
     assert_text "Compare against the two peers we just discussed"
-    # Newest first — the revisit was asked after the flag.
+    assert_text "Asked Mia Manager for feedback / evidence"
+    assert_text "Awaiting response"
+    # Newest first — flag, then revisit, then the feedback request.
     entries = all("[data-framework-activity-target='entry']").map(&:text)
-    assert_match(/revisit a rating/, entries.first)
+    assert_match(/feedback \/ evidence/, entries.first)
+    assert_match(/revisit a rating/, entries[1])
     assert_match(/Flagged an expectation/, entries.last)
 
     js_set_field "#session-note", "Add the two reference ICs to the org-wide session"

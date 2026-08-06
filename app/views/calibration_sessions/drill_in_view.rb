@@ -35,6 +35,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # @param can_flag [Boolean] whether the viewer can ⚑ flag an expectation
   #   as unclear (facilitator/admin AND the session is live)
   def initialize(session:, stats:, people:, person_card:, can_flag: false,
+                 request_candidates: nil,
                  view: nil, wall: nil, wall_filters: {}, compare_ids: [], compare_cards: {},
                  session_log: nil, can_note: false,
                  user: nil, current_tenant: nil, tenants: [])
@@ -43,6 +44,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @people = people
     @person_card = person_card
     @can_flag = can_flag
+    @request_candidates = request_candidates
     @session_log = session_log
     @can_note = can_note
     @view = view
@@ -740,10 +742,86 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           end
 
           evidence_section
+          request_evidence_section
           revisit_section
         end
       end
     end
+  end
+
+  # §f — when the room can't answer "what did you see?", the resolution IS
+  # an evidence request. Rendered only when the controller resolved
+  # candidates: that already encodes every gate (live session, viewer
+  # entitlement to this person's assessment, a linked Person). Rides the
+  # existing request machinery; the session records provenance so the log
+  # tracks fulfilment.
+  def request_evidence_section
+    return unless @can_flag && @request_candidates
+
+    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+      if @request_candidates.empty?
+        p(class: "text-xs text-gray-600 dark:text-gray-300") do
+          "No colleagues to ask about this behaviour — org neighbours appear here."
+        end
+      else
+        request_evidence_form
+      end
+    end
+  end
+
+  def request_evidence_form
+    details do
+      summary(
+        class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
+               "text-gray-600 dark:text-gray-300 hover:text-emerald-700 dark:hover:text-emerald-300"
+      ) { "Request feedback / evidence about #{@person_card[:dot][:name]}" }
+      form(
+        action: calibration_session_evidence_requests_path(@session),
+        method: "post",
+        class: "mt-2 max-w-lg space-y-2",
+        # Breaks out of the pane frame so the flash — success or refusal —
+        # renders in the layout (the revisit form's rule).
+        data: { turbo_frame: "_top" }
+      ) do
+        input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+        input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
+        input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
+        input(type: "hidden", name: "level_ordinal", value: @person_card[:ordinal])
+        state_passthrough_fields
+        select(
+          id: "evidence-request-requestee", name: "requestee_person_id", required: true,
+          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          aria: { label: "Who to ask for feedback / evidence" }
+        ) do
+          option(value: "") { "Who to ask…" }
+          @request_candidates.each { |candidate| requestee_option(candidate) }
+        end
+        textarea(
+          id: "evidence-request-message", name: "message", rows: "2",
+          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          placeholder: "Why the room is asking — e.g. \u201cnobody could answer what good looks like here\u201d",
+          aria: { label: "Message to the person being asked" }
+        )
+        button(
+          type: "submit",
+          class: "inline-flex items-center rounded-md bg-emerald-700 px-3 py-2 text-sm " \
+                 "font-semibold text-white hover:bg-emerald-800 transition-colors"
+        ) { "Send request" }
+      end
+    end
+  end
+
+  # One option per org neighbour; a pending ask on this exact cell greys
+  # the person out rather than hiding them ("already asked" beats
+  # silently missing).
+  def requestee_option(candidate)
+    label = "#{candidate.person.name} — #{candidate.relation}"
+    label += " · already asked" if candidate.already_requested
+    option(value: candidate.person.id, disabled: candidate.already_requested) { label }
   end
 
   # Value-free revisit ask, on the card because discussing the dot is what

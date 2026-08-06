@@ -269,6 +269,10 @@ Rails.application.routes.draw do
     # Ask a rater to revisit a rating (live session) → PD-stream mirror.
     resources :rating_revisits, only: [ :create ],
                                 controller: "calibration_sessions/rating_revisits"
+    # Fire a cell-scoped evidence request (live session) → the existing
+    # request machinery + session provenance (§f).
+    resources :evidence_requests, only: [ :create ],
+                                  controller: "calibration_sessions/evidence_requests"
     # Free-text session minutes (live session) → the session log.
     resources :notes, only: [ :create ],
                       controller: "calibration_sessions/notes"
