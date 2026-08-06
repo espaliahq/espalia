@@ -31,7 +31,12 @@ module CalibrationSessions::SessionLogData
       suggestions: FrameworkState::SuggestedEdit
         .where(suggestion_id: flags.filter_map { |f| f[:suggestion_id] }).index_by(&:suggestion_id),
       capability_names: session_log_capability_names(session, outcomes.entries),
-      acted: acted_revisit_cells(session, revisits)
+      acted: acted_revisit_cells(session, revisits),
+      # request_id => EvidenceRequest status — fulfilment lives on the read
+      # model the hub already maintains, never duplicated onto the stream.
+      requests: EvidenceRequest
+        .where(id: outcomes.evidence_requests.map { |r| r[:request_id] })
+        .pluck(:id, :status).to_h
     }
   end
 
@@ -76,7 +81,7 @@ module CalibrationSessions::SessionLogData
     return [] unless session_log
 
     session_log[:entries].flat_map do |row|
-      [ row[:actor_id], row[:rater_id], row[:person_id] ]
+      [ row[:actor_id], row[:rater_id], row[:person_id], row[:requestee_id] ]
     end.compact.uniq
   end
 end

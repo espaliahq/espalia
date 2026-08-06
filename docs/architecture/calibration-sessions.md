@@ -20,7 +20,9 @@
 > requests** mirrored onto the PD stream (`CalibrationRevisitSync`),
 > surfaced in the rater's assessment feed and notified
 > (`RatingRevisitNotifier`, dropped if already acted on), resolved by
-> rating-change at read time; **session notes**.
+> rating-change at read time; **evidence requests** (§f — the existing
+> request machinery + session provenance, fulfilment read from the
+> request); **session notes**.
 > *Follow-through* — the session log, rendered as a right-hand activity
 > side panel on both the session page and the drill-in.
 > *Vocabulary* — every invented term (self-gap, spread, org mean, carried,
@@ -35,8 +37,8 @@
 > on every read surface; see *Carried-vs-vetted provenance*.
 >
 > **Not built** (each is marked at the section that describes it):
-> auto-suggested contrast pairs (§e) · evidence requests as a session
-> outcome (§f) · the person card's linked-by / requested provenance and
+> auto-suggested contrast pairs (§e) · the person card's linked-by /
+> requested provenance and
 > valence↔rating coherence flag (§c) · prior-session markers on the grid
 > (§3, *Overlapping sessions*) · participant follow-along + the v2
 > visibility grant · cross-cycle trends · MCP reads for the drill-in
@@ -156,7 +158,7 @@ draft ──▶ started ──▶ closed
 | `AgendaItemDiscussed` | live | walk-through progress |
 | `ExpectationFlagged` | live | capability × level + reason; carries the `suggestion_id` of the framework clarification it raised (see Outcomes → *The clarification kind*) |
 | `RatingRevisitRequested` | live | person × capability × level + discussion note; mirrored to the PD stream (see Outcomes) |
-| `EvidenceRequestRaised` | live | records that a cell-scoped evidence request was fired from the session (the request itself rides the existing machinery) |
+| `CalibrationEvidenceRequestRaised` | live | provenance for a cell-scoped evidence request fired from the session (the request itself rides the existing machinery; fulfilment is read back from `EvidenceRequest`) |
 | `NoteRecorded` | live | free-text minute, anchored to capability or person |
 | `SessionClosed` | live→closed | facilitator action or cycle-close sync |
 
@@ -172,8 +174,8 @@ ratings/evidence is a **read-time join** against `AssessmentLevelRating`,
 `PersonFrameworkAssignment`, `RecordedReportingManager`,
 `AssessmentCycleProgress`, and the evidence read models.
 
-**Outcomes are NOT projected.** Flags, revisit requests, and notes are read
-back off the session stream at render time
+**Outcomes are NOT projected.** Flags, revisit requests, evidence
+requests, and notes are read back off the session stream at render time
 (`CalibrationSessions::SessionOutcomes`): a session's outcome count is
 bounded by one meeting's discussion, so a table would carry a projection's
 rebuild and ownership cost for a handful of rows. One `of_type` read per
@@ -524,8 +526,8 @@ Substantiation is an axis of rater quality independent of leniency.
 > evidence list as *valence badge · author relation · date · excerpt*.
 > **Not built** — the mock below is the target, not the current card:
 > per-item linked-by and requested/proactive provenance; the
-> valence↔rating coherence flag; the `[Request evidence…]` affordance
-> (§f). "Manager vs self" renders as two labelled rating pills, not the
+> valence↔rating coherence flag. The `[Request evidence…]` affordance IS
+> built (§f). "Manager vs self" renders as two labelled rating pills, not the
 > level chips' diagonal split — the split reads as *contested* between two
 > parties looking at one chip, whereas the card has room to state both
 > values outright.
@@ -622,27 +624,44 @@ composed deliberately rather than scrolled past. V1 is manual pinning;
 auto-suggested contrast pairs (similar level + divergent rating + both
 backed) are a natural later increment once the manual gesture proves out.
 
-### f. Missing evidence as an outcome — NOT BUILT
-
-> The only part of the evidence design still outstanding. The person card
-> mock in §c shows its `[Request evidence…]` affordance; neither it nor
-> `EvidenceRequestRaised` exists yet.
+### f. Missing evidence as an outcome — BUILT
 
 When a disputed cell is unbacked and the room can't answer "what did you
 see?", the resolution *is* an evidence request. The person card's
-**[Request evidence…]** rides the existing cell-scoped request machinery
-(`Operations::Assessments::RequestEvidence` — modal with candidate
-suggestions, shared reason, due date), fired by the facilitator. The session
-records an `EvidenceRequestRaised` event referencing the request so the
-follow-through page can track it; the request itself lives where evidence
-requests already live (the hub, reminders, the response flow — nothing new).
+**"Request feedback / evidence"** disclosure (a `<details>` beside the
+revisit ask, not the assessment surface's modal — the card's outcome
+affordances share one form vocabulary) offers the assessee's org
+neighbours (`Assessments::RequestCandidates` — a pending ask on this cell
+greys the person out) with one optional shared reason.
+`Operations::CalibrationSessions::RequestEvidence`
+(`calibration_sessions_request_evidence` over MCP) dispatches the SAME
+PersonDevelopment command the assessment surface uses — hub card,
+requestee notification, reminder sweep, response flow all ride along —
+then records `CalibrationEvidenceRequestRaised` on the session stream.
+Two streams, deliberately not atomic, request leads (the flag →
+clarification shape).
+
+**Two authorization bars, both in the Operation**: the facilitator bar
+(outcomes are raised on the session's authority) AND the per-person
+`EvidenceRequestPolicy#request?` — the delegation exemption means the
+population can hold someone the facilitator has no assessment entitlement
+for, and the session must not become a way to fire requests about them.
+The card only offers the affordance inside the `AssesseeVisibility` set;
+the Operation enforces it against a forged POST.
+
+The log gains the fourth outcome kind (`evidence_requested`, emerald dot,
+"Requests" chip); **fulfilment is read from the `EvidenceRequest` read
+model at render time** ("Awaiting response" / "Answered" / "Declined") —
+resolution state is never duplicated onto the session stream, matching
+rating-change-based revisit resolution.
 
 ### Data notes
 
 Everything above is read-time over existing read models (`EvidenceItem`,
 `EvidenceLink` + valences, per-cell like the assessment screen reads them).
-The only evidence-related *write* from a session is (f), which is an existing
-operation. No new evidence tables, no projection changes.
+The only evidence-related *write* from a session is (f) — the existing
+PersonDevelopment command plus a session-stream provenance event. No new
+evidence tables, no projection changes.
 
 ## Outcomes
 
@@ -672,7 +691,9 @@ into existing machinery:
      the rating is revised, every open revisit request against it resolves at
      once ("flagged in 2 calibration sessions" is one coherent signal, not
      two tickets).
-3. **Request evidence** for an unbacked disputed cell (see evidence §f).
+3. **Request evidence** for an unbacked disputed cell (see evidence §f —
+   built; provenance on the session stream, fulfilment read from the
+   request itself).
 4. **Session note** — free-text minute anchored to a capability or person,
    rendered as a feed on the session page.
 

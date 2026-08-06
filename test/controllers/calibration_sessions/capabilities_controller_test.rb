@@ -314,6 +314,68 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.redirect_url, "activity=open"
     end
 
+    should "offer the request affordance, fire it, and land it in the log" do
+      start_session_stream
+
+      get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+      assert_response :success
+      assert_includes response.body, "Request feedback / evidence about Ivy IC"
+      # Mia (the manager) is an org neighbour; the facilitator isn't listed.
+      assert_select "select[name='requestee_person_id'] option", text: /Mia Manager/
+
+      post calibration_session_evidence_requests_path(@session), params: {
+        person_id: @report.id, requestee_person_id: @em.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 3,
+        message: "The room couldn't answer what good looks like here."
+      }
+      assert_match(/requested — it lands on their hub/, flash[:notice].to_s,
+                   "the success path, not the rescue branch")
+      assert_includes response.redirect_url, "activity=open"
+
+      request = EvidenceRequest.sole
+      assert_equal @em.id, request.requestee_person_id
+
+      # The log entry, with fulfilment read from the request itself.
+      get calibration_session_capability_path(@session, @cap.stable_id)
+      assert_includes response.body, "Asked Mia Manager for feedback / evidence"
+      assert_includes response.body, "Awaiting response"
+
+      # …and the pending ask greys Mia out of a second offer.
+      get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+      assert_select "select[name='requestee_person_id'] option[disabled]", text: /already asked/
+    end
+
+    should "not offer the request affordance outside the assessment entitlement" do
+      outsider = ActsAsTenant.with_tenant(@tenant) do
+        stranger_head = create(:person, tenant: @tenant, name: "Other Dept Head")
+        seconded = create(:person, tenant: @tenant, name: "Zed Outside", manager: stranger_head)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: seconded.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: seconded.id, level_ordinal: 3)
+        create(:manager_assessment_delegation, tenant: @tenant,
+               person_id: seconded.id, framework_id: @cycle.framework_id,
+               delegate_person_id: @em.id, granted_by_id: stranger_head.id)
+        create(:calibration_session_member, tenant: @tenant,
+               session: @session, person_id: seconded.id)
+        seconded
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id, person: outsider.id)
+      assert_response :success
+      assert_not_includes response.body, "Request feedback / evidence about Zed Outside",
+                          "no affordance for a person whose assessment the facilitator can't read"
+
+      # …and the POST is refused by the Operation even if forged.
+      post calibration_session_evidence_requests_path(@session), params: {
+        person_id: outsider.id, requestee_person_id: @em.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 3
+      }
+      assert_response :redirect
+      assert flash[:alert].present?
+      assert_equal 0, EvidenceRequest.count
+    end
+
     should "leave the log panel closed when an outcome POST fails" do
       start_session_stream
 

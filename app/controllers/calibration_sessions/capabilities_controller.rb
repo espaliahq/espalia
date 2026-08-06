@@ -47,13 +47,15 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     session_log = session_log_data(@session, outcomes: outcomes) unless pane_frame_request?
     people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
 
+    person_card = @cards.for(params[:person].presence)
     render Views::CalibrationSessions::DrillInView.new(
       session: @session,
       stats: stats,
       people: Person.where(id: people_ids).index_by(&:id),
       session_log: session_log,
       can_note: @session.started? && policy(@session).flag_expectation?,
-      person_card: @cards.for(params[:person].presence),
+      person_card: person_card,
+      request_candidates: evidence_request_candidates(person_card),
       view: view_param,
       wall: (evidence_wall(stats) if view_param == "wall"),
       wall_filters: wall_filters,
@@ -100,6 +102,33 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   def grid_person_ids(stats)
     @grid_person_ids ||= stats[:rows].flat_map { |row| row[:people].values.flatten }
       .map { |dot| dot[:person_id] }.uniq
+  end
+
+  # Who the open person card can offer as evidence requestees — the
+  # assessee's org neighbours, with pending asks on this cell greyed out
+  # (the assessment surface's candidate rules verbatim). nil — no
+  # affordance — when the viewer isn't entitled to this person's
+  # assessment (AssesseeVisibility) or holds no linked Person: the same
+  # bars the Operation enforces, checked up front so the card never
+  # offers an ask that would be refused.
+  def evidence_request_candidates(person_card)
+    return nil unless person_card && current_person
+    return nil unless @session.started?
+
+    person_id = person_card[:dot][:person_id]
+    return nil unless visible_person_ids.include?(person_id)
+
+    assignment = PersonFrameworkAssignment.find_by(
+      person_id: person_id, framework_id: @session.framework_id
+    )
+    return nil unless assignment
+
+    Assessments::RequestCandidates.new(
+      assignment: assignment,
+      requester_person_id: current_person.id,
+      capability_stable_id: params.expect(:id),
+      level_ordinal: person_card[:ordinal]
+    ).suggestions
   end
 
   # Whose assessment the ACTING person may read. The session population can

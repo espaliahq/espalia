@@ -29,16 +29,19 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   }.freeze
 
   # Kind → dot colour, borrowing the framework feed's vocabulary: amber
-  # raises a question, sky is a request, indigo is editorial.
+  # raises a question, sky is a request, emerald asks for evidence, indigo
+  # is editorial.
   KIND_DOT = {
     "expectation_flagged" => "bg-amber-500",
     "revisit_requested"   => "bg-sky-500",
+    "evidence_requested"  => "bg-emerald-500",
     "note_recorded"       => "bg-indigo-500"
   }.freeze
 
   KIND_GROUP = {
     "expectation_flagged" => "flags",
     "revisit_requested"   => "revisits",
+    "evidence_requested"  => "requests",
     "note_recorded"       => "notes"
   }.freeze
 
@@ -46,15 +49,26 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     { value: "all",      label: "All" },
     { value: "flags",    label: "Flags" },
     { value: "revisits", label: "Revisits" },
+    { value: "requests", label: "Requests" },
     { value: "notes",    label: "Notes" }
   ].freeze
 
+  # EvidenceRequest status → badge label + AA-safe classes. Fulfilment is
+  # the read model's word, looked up at render time.
+  REQUEST_STATUS = {
+    "pending"   => [ "Awaiting response", "text-amber-700 dark:text-amber-300" ],
+    "answered"  => [ "Answered", "text-green-700 dark:text-green-300" ],
+    "declined"  => [ "Declined", "text-gray-600 dark:text-gray-300" ],
+    "cancelled" => [ "Cancelled", "text-gray-600 dark:text-gray-300" ]
+  }.freeze
+
   # @param session [CalibrationSession]
-  # @param log [Hash] `{ entries:, suggestions:, capability_names:, acted: }`
-  #   — entries from {CalibrationSessions::SessionOutcomes#entries};
+  # @param log [Hash] `{ entries:, suggestions:, capability_names:, acted:,
+  #   requests: }` — entries from {CalibrationSessions::SessionOutcomes#entries};
   #   suggestions maps suggestion_id → FrameworkState::SuggestedEdit;
   #   acted is a Set of [person_id, capability_stable_id, level_ordinal]
-  #   whose manager rating changed after the ask.
+  #   whose manager rating changed after the ask; requests maps
+  #   request_id → EvidenceRequest status (fulfilment, read at render time).
   # @param people [Hash{String => Person}]
   # @param can_note [Boolean] live session + facilitator/admin
   # @param note_fields [Array<Array(String, String)>] extra hidden
@@ -148,7 +162,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   def empty_state
     p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
-      "No outcomes recorded yet — flags, revisit requests, and notes land here."
+      "No outcomes recorded yet — flags, revisits, feedback requests, and notes land here."
     end
   end
 
@@ -185,6 +199,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     case entry[:kind]
     when "expectation_flagged" then "⚑ Flagged an expectation as unclear"
     when "revisit_requested"   then "Asked #{person_name(entry[:rater_id])} to revisit a rating"
+    when "evidence_requested"  then "Asked #{person_name(entry[:requestee_id])} for feedback / evidence"
     else                            "Recorded a note"
     end
   end
@@ -194,7 +209,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     case entry[:kind]
     when "expectation_flagged"
       "#{capability_name(entry[:capability_stable_id])} · L#{entry[:level_ordinal]}"
-    when "revisit_requested"
+    when "revisit_requested", "evidence_requested"
       "#{person_name(entry[:person_id])} · #{capability_name(entry[:capability_stable_id])} " \
         "· L#{entry[:level_ordinal]}"
     else
@@ -210,6 +225,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     case entry[:kind]
     when "expectation_flagged" then entry[:reason].presence
     when "revisit_requested"   then entry[:note].presence
+    when "evidence_requested"  then entry[:message].presence
     else                            entry[:body].presence
     end
   end
@@ -220,7 +236,18 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     case entry[:kind]
     when "expectation_flagged" then clarification_badge(entry)
     when "revisit_requested"   then revisit_badge(entry)
+    when "evidence_requested"  then request_badge(entry)
     end
+  end
+
+  def request_badge(entry)
+    status = (@log[:requests] || {})[entry[:request_id]]
+    return unless status
+
+    label, classes = REQUEST_STATUS.fetch(
+      status, [ status.humanize, "text-gray-600 dark:text-gray-300" ]
+    )
+    span(class: "text-[11px] font-medium #{classes}") { label }
   end
 
   def clarification_badge(entry)

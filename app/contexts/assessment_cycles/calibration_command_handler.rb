@@ -139,6 +139,21 @@ class AssessmentCycles::CalibrationCommandHandler
   # @param capability_stable_id [String, nil]
   # @param person_id [String, nil]
   # @param recorded_by_id [String, nil]
+  # Records session provenance for an evidence request fired from the room.
+  #
+  # @param session_id [String]
+  # @see AssessmentCycles::CalibrationSessionAggregate#raise_evidence_request
+  def raise_evidence_request(session_id, request_id:, person_id:, capability_stable_id:,
+                             level_ordinal:, requestee_id:, message: nil, requested_by_id: nil)
+    @repository.with_calibration_session(session_id) do |session|
+      session.raise_evidence_request(
+        request_id: request_id, person_id: person_id,
+        capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
+        requestee_id: requestee_id, message: message, requested_by_id: requested_by_id
+      )
+    end
+  end
+
   def record_note(session_id, body:, capability_stable_id: nil, person_id: nil, recorded_by_id: nil)
     @repository.with_calibration_session(session_id) do |session|
       session.record_note(body: body, capability_stable_id: capability_stable_id,

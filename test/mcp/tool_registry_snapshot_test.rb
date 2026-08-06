@@ -816,6 +816,29 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_request_evidence",
+        "description" => "Ask a colleague for feedback / evidence on a capability × level from a live calibration session.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"           => { "type" => "string" },
+            "person_id"            => { "type" => "string" },
+            "requestee_person_id"  => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string" },
+            "level_ordinal"        => { "type" => "integer" },
+            "message"              => { "type" => "string" },
+            "due_at"               => { "type" => "string" }
+          },
+          "required" => %w[session_id person_id requestee_person_id capability_stable_id level_ordinal],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_request_rating_revisit",
         "description" => "Ask a rater to revisit a manager rating from a live calibration session — value-free, with the room's note.",
         "inputSchema" => {

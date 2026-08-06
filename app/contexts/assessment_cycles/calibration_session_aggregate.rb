@@ -37,6 +37,7 @@ class AssessmentCycles::CalibrationSessionAggregate
     @calibrant_ids = Set.new
     @flagged_cells = Set.new
     @revisited_cells = Set.new
+    @raised_request_ids = Set.new
     @status = :new
   end
 
@@ -253,6 +254,40 @@ class AssessmentCycles::CalibrationSessionAggregate
     }.compact))
   end
 
+  # Records that this session fired a cell-scoped evidence request — the
+  # provenance half of §f (the request itself already exists on the
+  # person's PD stream; this event lets the follow-through page track it).
+  # No one-per-cell rule: several people can legitimately be asked about
+  # the same behaviour. Duplicate request_ids are refused so a retried
+  # dispatch can't double-record one request.
+  #
+  # @param request_id [String] UUID of the EvidenceRequest being recorded
+  # @param person_id [String] the calibrated person the ask is about
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @param requestee_id [String] person being asked
+  # @param requested_by_id [String, nil] person_id of the actor
+  # @raise [RuntimeError] on any invariant breach
+  def raise_evidence_request(request_id:, person_id:, capability_stable_id:,
+                             level_ordinal:, requestee_id:, message: nil,
+                             requested_by_id: nil)
+    ensure_started!
+    raise "Person is not in this session's population" unless @calibrant_ids.include?(person_id)
+    raise "Request id cannot be blank" if request_id.to_s.strip.empty?
+    raise "Request already recorded in this session" if @raised_request_ids.include?(request_id)
+
+    apply(AssessmentCycles::Events::CalibrationEvidenceRequestRaised.new(data: {
+      session_id: @session_id,
+      request_id: request_id,
+      person_id: person_id,
+      capability_stable_id: capability_stable_id,
+      level_ordinal: level_ordinal,
+      requestee_id: requestee_id,
+      message: message,
+      requested_by_id: requested_by_id
+    }.compact))
+  end
+
   # Records a free-text session minute, optionally anchored to a
   # capability or a calibrant. Live sessions only — the note narrates the
   # room.
@@ -351,6 +386,10 @@ class AssessmentCycles::CalibrationSessionAggregate
   on AssessmentCycles::Events::CalibrationRatingRevisitRequested do |event|
     @revisited_cells << [ event.data[:person_id], event.data[:capability_stable_id],
                           event.data[:level_ordinal] ]
+  end
+
+  on AssessmentCycles::Events::CalibrationEvidenceRequestRaised do |event|
+    @raised_request_ids << event.data[:request_id]
   end
 
   on AssessmentCycles::Events::CalibrationNoteRecorded do |_event|
