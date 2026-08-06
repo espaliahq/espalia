@@ -343,6 +343,14 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # …and the pending ask greys Mia out of a second offer.
       get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
       assert_select "select[name='requestee_person_id'] option[disabled]", text: /already asked/
+
+      # Fulfilment is live: the read model says "responded", the room reads
+      # a green "Answered" — the key must match EvidenceRequest::STATUSES
+      # verbatim or the label silently falls back to a gray humanize.
+      request.update!(status: "responded")
+      get calibration_session_capability_path(@session, @cap.stable_id)
+      assert_select "span.text-green-700", text: "Answered"
+      assert_not_includes response.body, "Awaiting response"
     end
 
     should "not offer the request affordance outside the assessment entitlement" do

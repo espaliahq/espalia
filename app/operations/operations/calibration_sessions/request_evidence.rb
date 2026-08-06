@@ -70,16 +70,27 @@ class Operations::CalibrationSessions::RequestEvidence < Operations::Base
         due_at: params[:due_at].presence
       )
 
-      command_handler.raise_evidence_request(
-        session.id,
-        request_id: request_id,
-        person_id: params[:person_id],
-        capability_stable_id: params[:capability_stable_id],
-        level_ordinal: params[:level_ordinal],
-        requestee_id: params[:requestee_person_id],
-        message: params[:message].presence,
-        requested_by_id: context.person.id
-      )
+      begin
+        command_handler.raise_evidence_request(
+          session.id,
+          request_id: request_id,
+          person_id: params[:person_id],
+          capability_stable_id: params[:capability_stable_id],
+          level_ordinal: params[:level_ordinal],
+          requestee_id: params[:requestee_person_id],
+          message: params[:message].presence,
+          requested_by_id: context.person.id
+        )
+      rescue RuntimeError
+        # The request committed but the provenance write lost a race (the
+        # session closed mid-request — every other session invariant is
+        # pre-checked against a frozen population). An error here would lie:
+        # the ask went out, the requestee was notified. Compensate by
+        # cancelling the orphaned request so the refusal is TRUE again, then
+        # re-raise the session's refusal.
+        cancel_orphaned_request(request_id)
+        raise
+      end
     rescue PersonDevelopment::Aggregate::CommandError, RuntimeError => e
       # Aggregate refusals (a duplicate pending ask on the cell, session
       # lifecycle changes mid-request) are client-state problems — invalid
@@ -156,6 +167,22 @@ class Operations::CalibrationSessions::RequestEvidence < Operations::Base
 
     raise Operations::Base::ParameterError,
           "capability_stable_id does not belong to the session's framework"
+  end
+
+  # Best-effort undo of a request whose session provenance lost the race.
+  # If the cancel ITSELF fails (the requestee responded in the gap — the
+  # aggregate refuses cancelling a non-pending request), the request stands
+  # as a valid ask without session provenance — the documented trade-off of
+  # the two-stream, request-leads design.
+  def cancel_orphaned_request(request_id)
+    PersonDevelopment::CommandHandler.new.cancel_evidence_request(
+      params[:person_id], session.framework_id, request_id,
+      cancelled_by_id: context.person.id
+    )
+  rescue StandardError => e
+    Rails.logger.warn(
+      "calibration evidence request #{request_id} kept without session provenance: #{e.message}"
+    )
   end
 
   # The per-person entitlement anchor — the same record the assessment

@@ -132,6 +132,26 @@ class Operations::CalibrationSessions::RequestEvidenceTest < ActiveSupport::Test
     end
   end
 
+  context "the two-stream race" do
+    should "cancel the committed request when the provenance write loses" do
+      # The only surviving race: the session closes between the pre-check
+      # and the serialized session-stream write. An error that leaves the
+      # request pending would lie — the requestee was already notified.
+      handler = AssessmentCycles::CalibrationCommandHandler.new
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        handler.close_session(@session_id, closed_by_id: @dept_head.id)
+      end
+      # Read model lags deliberately (simulates the race): the op's
+      # pre-check still sees "started".
+      CalibrationSession.find(@session_id).update!(status: "started")
+
+      error = assert_raises(Operations::Base::ParameterError) { request! }
+      assert error.message.present?
+      assert_equal [ "cancelled" ], EvidenceRequest.pluck(:status),
+                   "the orphaned ask must be compensated, not left pending"
+    end
+  end
+
   context "lifecycle and authorization" do
     should "refuse a draft session" do
       CalibrationSession.find(@session_id).update!(status: "draft")

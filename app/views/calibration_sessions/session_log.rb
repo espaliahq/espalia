@@ -55,9 +55,11 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   # EvidenceRequest status → badge label + AA-safe classes. Fulfilment is
   # the read model's word, looked up at render time.
+  # Keys are EvidenceRequest::STATUSES verbatim — the read model says
+  # "responded"; the room reads "Answered".
   REQUEST_STATUS = {
     "pending"   => [ "Awaiting response", "text-amber-700 dark:text-amber-300" ],
-    "answered"  => [ "Answered", "text-green-700 dark:text-green-300" ],
+    "responded" => [ "Answered", "text-green-700 dark:text-green-300" ],
     "declined"  => [ "Declined", "text-gray-600 dark:text-gray-300" ],
     "cancelled" => [ "Cancelled", "text-gray-600 dark:text-gray-300" ]
   }.freeze
