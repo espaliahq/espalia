@@ -11,6 +11,7 @@
 # extreme.
 class Views::CalibrationSessions::TendencyStrip < Views::Base
   include Views::Assessments::FrequencyPalette
+  include Views::CalibrationSessions::Glossary
 
   DEVIATION_THRESHOLD = 0.5
 
@@ -29,9 +30,12 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
         h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
           "Rater tendency"
         end
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+        div(class: "mt-1 flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
           plain "At-level manager ratings, 0–3 scale."
-          plain " Org mean #{sprintf('%.2f', @org_mean)}." if @org_mean
+          # Term and value are one trigger: a glyph wedged between "Org mean"
+          # and its number breaks the phrase, and the whole stat is what the
+          # reader is pointing at anyway.
+          defined_term(:org_mean, label: sprintf("Org mean %.2f.", @org_mean)) if @org_mean
         end
 
         if @raters.all? { |r| r[:cell_count].zero? }
@@ -52,13 +56,13 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
       table(class: "w-full text-sm") do
         thead do
           tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do
-            th(class: "py-1.5 pr-3 font-medium") { "Rater" }
-            th(class: "py-1.5 pr-3 font-medium") { "Reports" }
-            th(class: "py-1.5 pr-3 font-medium") { "vs org mean" }
-            th(class: "py-1.5 pr-3 font-medium") { "Distribution" }
-            th(class: "py-1.5 pr-3 font-medium") { "Self-gap" }
-            th(class: "py-1.5 pr-3 font-medium") { "Evidence" }
-            th(class: "py-1.5 font-medium") { "Carried" }
+            th(class: "py-1.5 pr-2 font-medium") { "Rater" }
+            th(class: "py-1.5 pr-2 font-medium") { defined_term(:reports) }
+            th(class: "py-1.5 pr-2 font-medium") { defined_term(:org_delta) }
+            th(class: "py-1.5 pr-2 font-medium") { defined_term(:distribution) }
+            th(class: "py-1.5 pr-2 font-medium") { defined_term(:self_gap) }
+            th(class: "py-1.5 pr-2 font-medium") { defined_term(:evidence) }
+            th(class: "py-1.5 font-medium") { defined_term(:carried, align: :right) }
           end
         end
         tbody do
@@ -70,16 +74,16 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
 
   def rater_row(rater)
     tr(class: "border-t border-gray-100 dark:border-gray-800") do
-      td(class: "py-2 pr-3 font-medium text-gray-900 dark:text-white whitespace-nowrap") do
+      td(class: "py-2 pr-2 font-medium text-gray-900 dark:text-white whitespace-nowrap") do
         plain @people[rater[:participant_id]]&.name || "Unknown"
       end
-      td(class: "py-2 pr-3 text-gray-600 dark:text-gray-300 whitespace-nowrap") do
+      td(class: "py-2 pr-2 text-gray-600 dark:text-gray-300 whitespace-nowrap") do
         plain "#{rater[:report_count]} · #{rater[:cell_count]} cells"
       end
-      td(class: "py-2 pr-3 whitespace-nowrap") { org_delta_cell(rater) }
-      td(class: "py-2 pr-3") { distribution_bar(rater) }
-      td(class: "py-2 pr-3 whitespace-nowrap") { self_gap_cell(rater) }
-      td(class: "py-2 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300") do
+      td(class: "py-2 pr-2 whitespace-nowrap") { org_delta_cell(rater) }
+      td(class: "py-2 pr-2") { distribution_bar(rater) }
+      td(class: "py-2 pr-2 whitespace-nowrap") { self_gap_cell(rater) }
+      td(class: "py-2 pr-2 whitespace-nowrap text-gray-600 dark:text-gray-300") do
         plain rater[:evidence_pct] ? "#{(rater[:evidence_pct] * 100).round}%" : "—"
       end
       td(class: "py-2 whitespace-nowrap") { carried_cell(rater) }

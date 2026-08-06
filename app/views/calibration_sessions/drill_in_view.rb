@@ -15,6 +15,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Assessments::FrequencyPalette
   include Views::Evidence::Valence
   include Views::Evidence::ExamplesDisclosure
+  include Views::CalibrationSessions::Glossary
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
@@ -212,8 +213,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
               "At-level ratings by rater"
             end
-            p(class: "text-xs text-gray-600 dark:text-gray-300") do
-              plain "Solid dot = feedback / evidence attached · outlined = unbacked · click a dot to discuss"
+            div(class: "flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
+              defined_term(:backing, align: :right)
+              plain "· click a dot to discuss"
             end
           end
 

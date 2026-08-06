@@ -23,8 +23,13 @@
 > rating-change at read time; **session notes**.
 > *Follow-through* — the session log, rendered as a right-hand activity
 > side panel on both the session page and the drill-in.
-> *Dev data* — `assessments:seed_calibration_activity` gives every surface
-> demo-able population-wide activity.
+> *Vocabulary* — every invented term (self-gap, spread, org mean, carried,
+> the backing dot) defines itself in place, hover AND keyboard; see
+> *In-surface definitions*.
+> *Dev data* — `assessments:seed_calibration_activity` populates the current
+> cycle, then advances the tenant through two more (`CalibrationHistorySeed`)
+> so carried ratings, vetting-vs-coasting raters and reporting-line moves are
+> real cross-cycle history, and leaves a live session to open.
 >
 > *Provenance* — carried-forward (seeded, unconfirmed) ratings are marked
 > on every read surface; see *Carried-vs-vetted provenance*.
@@ -35,8 +40,7 @@
 > valence↔rating coherence flag (§c) · prior-session markers on the grid
 > (§3, *Overlapping sessions*) · participant follow-along + the v2
 > visibility grant · cross-cycle trends · MCP reads for the drill-in
-> surfaces (*Cross-cutting*) · in-surface definitions for the calibration
-> vocabulary (*Deliberately deferred*).
+> surfaces (*Cross-cutting*).
 >
 > **Known display nit:** raters with identical means on a capability render
 > exactly-overlapping dots on the divergence board (the tooltip and the aria
@@ -793,23 +797,21 @@ Mechanics — everything not listed here is inherited untouched:
 |---|---|
 | Participant follow-along devices + the narrow session-scoped visibility grant | Facilitator-only projection proves insufficient in real sessions |
 | Auto-suggested contrast pairs in the compare tray | Manual pinning proves the gesture |
-| **In-surface definitions for the calibration vocabulary** — see below | Before a session run by facilitators who didn't design the metrics |
 | Cross-cycle calibration trend views ("is Raj converging?") | ≥2 cycles of session data exist |
 | Automated bias scoring beyond the tendency strip | Never, ideally — the strip states facts; the room supplies judgment |
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
 
-### In-surface definitions for the calibration vocabulary
+### In-surface definitions for the calibration vocabulary — BUILT
 
-The session screens invent a vocabulary and then never define it. A
+The session screens invented a vocabulary and never defined it. A
 facilitator meeting *self-gap* or *spread* for the first time — on a
-projector, mid-meeting, in front of their EMs — has nowhere to look, and a
+projector, mid-meeting, in front of their EMs — had nowhere to look, and a
 metric nobody can define is a metric the room will quietly ignore or, worse,
 misread as an accusation.
 
-Every term below has a precise definition that already exists, in this doc
-or in `OverviewStats`; none of it reaches the screen:
+Every term below now carries its definition on the surface that renders it:
 
 | Term | Where it appears | What it means |
 |---|---|---|
@@ -824,12 +826,65 @@ or in `OverviewStats`; none of it reaches the screen:
 | **Mgr:** stamp | evidence wall | the manager-rated frequency that cell carries in this cycle |
 | **To confirm** | readiness badges | values exist but are carried forward from a prior cycle, unconfirmed this one |
 
-Shape when picked up: a hover/focus definition on each term, reachable by
-keyboard and not hover-only (the room is on a projector and the facilitator
-may be driving by keyboard). Prefer one shared component over per-view
-tooltips so the wording can't drift from the definitions above — and treat
-these definitions as the source, since `OverviewStats`' comments and this
-section already carry them.
+Shape as built:
+
+- **`Views::CalibrationSessions::Glossary`** holds the wording — one `TERMS`
+  hash, mixed into every calibration view via `defined_term(:self_gap)`, so
+  the strip, the board, the drill-in legend and the readiness badges cannot
+  drift apart. If a definition here and `OverviewStats` ever disagree, the
+  code is right and the room has been misled — fix the wording.
+- **`Components::Kit::DefinitionTip`** is the mechanism: a real `<button>`
+  wired to its panel with `aria-describedby`, revealed on hover **and** on
+  focus. Deliberately not the native `title` attribute, which no keyboard
+  user can reach — and the facilitator is often driving by keyboard with the
+  room watching a projection. Pinned by a system-test assertion that focuses
+  the term and expects the panel (`send_keys` with no click).
+- **The panel rides the top layer** (`popover` + `definition_tip_controller`),
+  because the tendency table scrolls horizontally and an `overflow-x: auto`
+  ancestor clips on BOTH axes — the spec gives no way to keep one axis
+  visible, so the CSS-only version had half of every definition sliced off at
+  the card's edge. The CSS hover/focus classes remain as the no-JS fallback.
+  The same system test measures the panel's rect against the viewport, since
+  this is invisible to any DOM-only assertion.
+- **The info glyph is drawn, not typed.** U+24D8 (ⓘ) rendered as a tofu box
+  in the headless browser's font — on a surface whose whole job is legibility
+  on a projector — so it is an inline SVG.
+- **A term with an adjacent value is one trigger** ("spread 1.3", "Org mean
+  1.82") rather than a term, a glyph, and then a number — the whole stat is
+  what the reader points at, and a glyph mid-phrase breaks it.
+- **A term that already has a visual form keeps it**: "⚠ raters disagree"
+  stays an amber badge and "To confirm" stays the dashed carried chip, via
+  `trigger_class:`. The tap target and focus ring are added either way.
+
+### Dev data — a history, not a snapshot
+
+`assessments:seed_calibration_activity` populates the open cycle, then hands
+off to `CalibrationHistorySeed` (`lib/tasks/`, outside Zeitwerk's eager-load
+so it can't reach production).
+
+The point of the second half: **carried ratings are a claim about a previous
+cycle, so they need one.** The single-cycle seed could only fake them by
+writing `source: "seeded"` directly. Now each cycle is closed and the next
+enrolled through `BulkEnrollmentJob` — the same path production uses — so
+ADR-20's cross-cycle seeding does the carrying, with the real events and
+provenance. What that buys the surfaces:
+
+- **Raters who vet and raters who coast**, assigned by RANK over each
+  cycle's raters rather than an independent draw per rater — ranking
+  guarantees all three states appear, where independent draws can leave a
+  small tenant entirely coasting, which is precisely the demo the Carried
+  column cannot make.
+- **Reporting-line moves** between cycles, always to a sibling under the
+  same department head (the re-org that actually happens, and one that keeps
+  everyone inside the facilitator's scope). Applied to the org chart AND
+  recorded on the PersonDevelopment stream, so the drill-in attributes by
+  the recorded fact.
+- **A live session on the current cycle**, because otherwise every visual
+  check of this feature begins by hand-rolling one that satisfies the
+  population rules.
+
+Re-running converges rather than growing: cycles are keyed by name, the
+session by cycle, and every persona derives from a SHA of stable ids.
 
 ### Carried-vs-vetted provenance on the read surfaces
 

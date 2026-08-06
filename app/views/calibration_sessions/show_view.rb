@@ -5,6 +5,13 @@
 # started/closed. The live overview & drill-in surfaces are separate
 # increments; see docs/architecture/calibration-sessions.md.
 class Views::CalibrationSessions::ShowView < Views::Base
+  include Views::CalibrationSessions::Glossary
+
+  # The dashed carried vocabulary, kept as the term's own trigger styling.
+  CARRIED_BADGE_TRIGGER = "inline-flex min-h-11 items-center rounded-full px-2.5 text-xs " \
+                          "font-medium border border-dashed border-amber-500 " \
+                          "dark:border-amber-400 text-amber-800 dark:text-amber-300"
+
   STATUS_VARIANTS = { "draft" => :warning, "started" => :success, "closed" => :default }.freeze
   STATUS_LABELS = { "draft" => "Draft", "started" => "Live", "closed" => "Closed" }.freeze
 
@@ -250,12 +257,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
     elsif @readiness[:carried_only_ids]&.include?(person_id)
       # Values exist but are entirely carried forward — same dashed
       # "To confirm" vocabulary as the /assessments list chips.
-      span(
-        class: "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " \
-               "border border-dashed border-amber-500 dark:border-amber-400 " \
-               "text-amber-800 dark:text-amber-300",
-        title: "Manager ratings are carried from the previous cycle — not yet confirmed"
-      ) { "To confirm" }
+      defined_term(:to_confirm, align: :right, suffix: person_id,
+                   trigger_class: CARRIED_BADGE_TRIGGER)
     else
       render Components::Kit::Badge.new("Unrated", variant: :default)
     end
