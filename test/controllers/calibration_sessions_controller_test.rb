@@ -207,24 +207,32 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         (1..4).each do |ordinal|
           create(:framework_level, tenant: @tenant, role_id: engineer.role_id, ordinal: ordinal)
         end
-        category = create(:framework_capability_category, tenant: @tenant,
-                          framework_id: @cycle.framework_id)
+        @category = create(:framework_capability_category, tenant: @tenant,
+                           framework_id: @cycle.framework_id)
+        @engineer = engineer
         cap = create(:framework_capability, tenant: @tenant,
-                     category_id: category.category_id, name: "Strategic Thinking")
+                     category_id: @category.category_id, name: "Strategic Thinking")
         create(:framework_capability_role_binding, tenant: @tenant,
                capability_id: cap.capability_id, role_id: engineer.role_id)
         create(:framework_behavioural_expectation, tenant: @tenant,
                capability_id: cap.capability_id, level_ordinal: 3)
 
         @gated = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: @em)
+        # In the facilitator's org (a lead who isn't in the room), so the
+        # rating is real — but no PARTICIPANT is attributed, and the dot
+        # must wear the neutral fill, not rater #1's colour.
+        other_lead = create(:person, tenant: @tenant, name: "Lior Lead", manager: @facilitator)
+        @outsider = create(:person, tenant: @tenant, name: "Zed Outerling", manager: other_lead)
         # @report's assignment exists from the file setup (DeterministicId
         # PK — re-creating collides); it just needs the scorable role.
         PersonFrameworkAssignment
           .find_by(person_id: @report.id, framework_id: @cycle.framework_id)
           .update!(role_id: engineer.role_id)
-        create(:person_framework_assignment, tenant: @tenant,
-               person_id: @gated.id, framework_id: @cycle.framework_id, role_id: engineer.role_id)
-        [ @report, @gated ].each do |person|
+        [ @gated, @outsider ].each do |person|
+          create(:person_framework_assignment, tenant: @tenant,
+                 person_id: person.id, framework_id: @cycle.framework_id, role_id: engineer.role_id)
+        end
+        [ @report, @gated, @outsider ].each do |person|
           create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
                  person_id: person.id, level_ordinal: 3, role_id: engineer.role_id)
         end
@@ -232,8 +240,14 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
                person_id: @report.id, framework_id: @cycle.framework_id,
                capability_stable_id: cap.stable_id, level_ordinal: 3,
                manager_rated_frequency: "consistent", manager_rating_source: "seeded")
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: @outsider.id, framework_id: @cycle.framework_id,
+               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "consistent")
 
-        @session_record = define_session(calibrant_person_ids: [ @report.id, @gated.id ])
+        @session_record = define_session(
+          calibrant_person_ids: [ @report.id, @gated.id, @outsider.id ]
+        )
         @session_record.update!(status: "started")
       end
     end
@@ -257,16 +271,46 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Rater tendency</h2>"
     end
 
+    should "give an unattributed dot the neutral fill, never a rater's colour" do
+      get calibration_session_path(@session_record, view: "cohort")
+
+      assert_response :success
+      # Zed is rated to 100% by someone outside the room: plotted, honest.
+      assert_select "a[aria-label*='Zed Outerling — 100% of expected, rated by someone outside this session']"
+      # …and the disc is the neutral grey, never rater #1's colour.
+      assert_select "a[aria-label*='Zed Outerling'] span.bg-gray-500"
+      assert_includes response.body, "rated outside this session",
+                      "the legend names the neutral swatch"
+    end
+
     should "open the why-panel for a dot, with the rater-context line" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # A second behaviour rated "some" so the panel has a genuine
+        # pulling-down row to drill into.
+        weak = create(:framework_capability, tenant: @tenant,
+                      category_id: @category.category_id, name: "Delivery")
+        create(:framework_capability_role_binding, tenant: @tenant,
+               capability_id: weak.capability_id, role_id: @engineer.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: weak.capability_id, level_ordinal: 3)
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: @report.id, framework_id: @cycle.framework_id,
+               capability_stable_id: weak.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "some")
+      end
+
       get calibration_session_path(@session_record, view: "cohort", cohort_person: @report.id)
 
       assert_response :success
-      assert_includes response.body, "100% of expected"
+      assert_match(/\d+% of expected/, response.body)
       assert_includes response.body, "Rated by Mia Manager"
       assert_includes response.body, "vs org mean"
       assert_includes response.body, "may be tendency, not Ivy IC"
       assert_select "a[href*='capabilities']", text: /Open drill-in/
-      assert_includes response.body, "Nothing below expectations."
+      assert_includes response.body, "Delivery", "the some-rated behaviour is the weakest row"
+      # Ivy's other behaviour merely meets (+0.0) — that is not "pulling
+      # it up", so the strongest column stays honest and empty.
+      assert_includes response.body, "Nothing above expectations yet."
     end
 
     should "render no why-panel for a gated or foreign person" do

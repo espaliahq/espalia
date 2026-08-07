@@ -22,7 +22,10 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # overlapping — the board's exactly-overlapping-dots nit, addressed here.
   # A real cohort clusters hard (twenty people between 75 and 100), so the
   # packing is greedy k-lane, not a two-lane flip-flop.
-  LANE_NUDGE_PCT = 5
+  # ≥ the 28px disc at the track's 480px min width (8% of a 0–125 axis
+  # ≈ 30px there) — a "far enough for the same lane" that still overlapped
+  # defeated the point.
+  LANE_NUDGE_PCT = 8
   MAX_LANES = 4
   # A full 44px per lane: each dot's tap target is 44px high, so anything
   # tighter stacks one lane's links over the lane above and steals its
@@ -82,10 +85,21 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def legend
     div(class: "mt-3 flex flex-wrap gap-x-4 gap-y-1") do
       if @raters.size <= RATER_DOT_CLASSES.size
+        # Only raters who own a plotted dot — a swatch promising a dot that
+        # exists on no axis is the lie the divergence board's legend rule
+        # exists to prevent, and it holds here too.
         @raters.each_with_index do |rater, index|
+          next unless plotted_rater_ids.include?(rater[:participant_id])
+
           div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
             span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(index)}", aria: { hidden: "true" })
             plain person_name(rater[:participant_id])
+          end
+        end
+        if plotted_rater_ids.include?(nil)
+          div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
+            span(class: "inline-block h-3 w-3 rounded-full bg-gray-500 dark:bg-gray-400", aria: { hidden: "true" })
+            plain "rated outside this session"
           end
         end
       else
@@ -137,19 +151,20 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def axis(cohort, plotted)
     placed = lanes(plotted)
     lane_count = placed.map(&:last).max + 1
-    height = DOT_TOP + 44 + (lane_count - 1) * LANE_HEIGHT
+    # A lane IS one 44px tap-target row, so total height is pure lanes.
+    height = DOT_TOP + lane_count * LANE_HEIGHT
 
     div(class: "overflow-x-auto") do
       div(class: "relative mt-6 min-w-[480px]", style: "height: #{height}px") do
         span(class: "absolute left-0 right-0 top-[30px] h-1.5 rounded-full bg-gray-100 dark:bg-gray-700")
-        reference_line(height)
+        reference_line
         median_tick(cohort[:median_pct]) if cohort[:median_pct]
         placed.each { |dot, lane| render_dot(dot, lane) }
       end
     end
   end
 
-  def reference_line(_height)
+  def reference_line
     span(class: "absolute top-2 bottom-1 w-px bg-gray-300 dark:bg-gray-600",
          style: "left: #{position_pct(100)}%") do
       span(class: "absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap " \
@@ -173,9 +188,13 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def lanes(plotted)
     lane_edges = []
     plotted.map do |dot|
-      lane = lane_edges.index { |edge| (dot[:pct] - edge).abs >= LANE_NUDGE_PCT }
-      lane ||= lane_edges.size < MAX_LANES ? lane_edges.size : (dot[:pct].round % MAX_LANES)
-      lane_edges[lane] = dot[:pct]
+      # Distance on the RENDERED position: two overperformers at 128% and
+      # 140% both draw at the 125% cap, so measuring the raw pcts would
+      # call them "far apart" and stack their tap targets exactly.
+      pct = dot[:pct].clamp(0, AXIS_MAX_PCT)
+      lane = lane_edges.index { |edge| (pct - edge).abs >= LANE_NUDGE_PCT }
+      lane ||= lane_edges.size < MAX_LANES ? lane_edges.size : (pct.round % MAX_LANES)
+      lane_edges[lane] = pct
       [ dot, lane ]
     end
   end
@@ -193,14 +212,21 @@ class Views::CalibrationSessions::CohortView < Views::Base
         class: "inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] " \
                "font-semibold text-white dark:text-gray-900 border-2 " \
                "#{dot[:carried_majority] ? 'border-dashed border-gray-900 dark:border-white' : 'border-white dark:border-gray-800'} " \
-               "#{rater_dot_class(rater_index(dot[:rater_id]))} " \
+               "#{dot_fill(dot)} " \
                "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if dot[:person_id] == @selected_person_id}"
       ) { initials(name) }
     end
   end
 
+  # Rater colour, or the neutral fill for a dot rated outside the room.
+  def dot_fill(dot)
+    index = rater_index(dot[:rater_id])
+    index ? rater_dot_class(index) : "bg-gray-500 dark:bg-gray-400"
+  end
+
   def dot_description(dot, name)
-    base = "#{name} — #{dot[:pct]}% of expected, rated by #{person_name(dot[:rater_id])}"
+    rated_by = dot[:rater_id] ? person_name(dot[:rater_id]) : "someone outside this session"
+    base = "#{name} — #{dot[:pct]}% of expected, rated by #{rated_by}"
     base += ", #{dot[:carried_count]} of #{dot[:rated]} ratings carried forward" if dot[:carried_count].positive?
     "#{base}. Open to see why."
   end
@@ -215,7 +241,9 @@ class Views::CalibrationSessions::CohortView < Views::Base
                     "border-gray-300 dark:border-gray-600 px-2.5 py-1") do
           plain person_name(dot[:person_id])
           plain " · "
-          if dot[:total].zero?
+          if dot[:role_missing]
+            plain "no role snapshot for this cycle — their assessment still opens from the population list"
+          elsif dot[:total].zero?
             plain "no behaviours at this level"
           else
             plain "#{dot[:rated]} of #{dot[:total]} rated — "
@@ -326,18 +354,32 @@ class Views::CalibrationSessions::CohortView < Views::Base
     end
   end
 
+  # Rater ids owning at least one plotted (unlocked) dot; nil marks
+  # unattributed dots.
+  def plotted_rater_ids
+    @plotted_rater_ids ||= @cohorts.flat_map do |cohort|
+      cohort[:people].select { |dot| dot[:unlocked] }.map { |dot| dot[:rater_id] }
+    end.uniq.to_set
+  end
+
   # Cohort-tab links, preserving the view param; nil clears the why-panel.
   def cohort_path(cohort_person:)
     calibration_session_path(@session, { view: "cohort", cohort_person: cohort_person }.compact)
   end
 
+  # nil for a calibrant no participant is attributed — their dot must NOT
+  # wear rater #1's colour (the palette's whole job is "whose judgment is
+  # this"; a misattributed hue is worse than none).
   def rater_index(rater_id)
     @rater_index ||= @raters.each_with_index.to_h { |rater, index| [ rater[:participant_id], index ] }
-    @rater_index.fetch(rater_id, 0)
+    @rater_index[rater_id]
   end
 
+  # Display position, held off the wrapper's edges: a dot centred at 0% or
+  # 125% would hang half its 44px tap target outside the overflow container
+  # and get clipped.
   def position_pct(pct)
-    ((pct.clamp(0, AXIS_MAX_PCT).to_f / AXIS_MAX_PCT) * 100).round(1)
+    ((pct.clamp(0, AXIS_MAX_PCT).to_f / AXIS_MAX_PCT) * 100).clamp(3.0, 97.0).round(1)
   end
 
   def person_name(person_id)

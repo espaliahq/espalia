@@ -107,7 +107,11 @@ class CalibrationSessionsController < ApplicationController
     people_ids = (participant_ids + calibrant_ids + [ @session.facilitator_id ] +
                   log_person_ids(session_log)).uniq
 
-    cohorts = overview_view == "cohort" ? CalibrationSessions::CohortScores.new(session: @session) : nil
+    # Only when the view will render it: the overview section exists on
+    # started/closed sessions with participants — a draft hit on
+    # ?view=cohort must not pay the whole scoring pipeline for nothing.
+    build_cohorts = overview_view == "cohort" && !@session.draft? && participant_ids.any?
+    cohorts = build_cohorts ? CalibrationSessions::CohortScores.new(session: @session) : nil
 
     render Views::CalibrationSessions::ShowView.new(
       session: @session,

@@ -165,6 +165,22 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
     assert_equal 2, ivy[:total]
   end
 
+  should "surface a pre-snapshot enrollment as gated with the reason, not silence" do
+    # An enrollment written before the ADR-19 role snapshot carries no
+    # role_id — un-scorable, but vanishing would misread as "not enrolled".
+    drift = create(:person, tenant: @tenant, name: "Quinn", manager: @em_1)
+    create(:calibration_session_member, tenant: @tenant,
+           session: @session, person_id: drift.id)
+    create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+           person_id: drift.id, level_ordinal: 3, role_id: nil)
+
+    dot = dot_for(drift)
+    assert dot, "the person still appears in their cohort"
+    assert dot[:role_missing]
+    assert_not dot[:unlocked]
+    assert_nil dot[:pct]
+  end
+
   should "exclude gated people from the median" do
     rate(@r1, @cap_a, "consistent")
     rate(@r1, @cap_b, "consistent")
@@ -189,8 +205,18 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
       assert_equal [ "Strategic Thinking" ], why[:weakest].map { |c| c[:name] },
                    "only genuinely-negative contributions are 'pulling down'"
       assert why[:weakest].first[:delta].negative?
-      assert_includes why[:strongest].map { |c| c[:name] }, "Delivery"
-      assert why[:strongest].none? { |c| c[:delta].negative? }
+      assert_empty why[:strongest],
+                   "a +0.0 merely meets the level — it is not 'pulling it up'"
+    end
+
+    should "list only genuinely-positive contributions as pulling it up" do
+      # Delivery consistent ABOVE level too → a positive delta.
+      rate(@r1, @cap_b, "consistent", ordinal: 4)
+
+      why = CalibrationSessions::CohortScores.new(session: @session).why_for(@r1.id)
+
+      assert_equal [ "Delivery" ], why[:strongest].map { |c| c[:name] }
+      assert why[:strongest].first[:delta].positive?
     end
 
     should "return nil for a gated or unknown person" do

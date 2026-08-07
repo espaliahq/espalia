@@ -75,7 +75,10 @@ class CalibrationSessions::CohortScores
 
     {
       weakest: contributions.take_while { |c| c[:delta].negative? }.first(WEAKEST_LIMIT),
-      strongest: contributions.reverse.take_while { |c| !c[:delta].negative? }.first(STRONGEST_LIMIT)
+      # Positive only: a +0.0 is MEETING the level, which is neither "above
+      # expectations" (the column's empty copy) nor pulling anything up —
+      # listing it green contradicted both.
+      strongest: contributions.reverse.take_while { |c| c[:delta].positive? }.first(STRONGEST_LIMIT)
     }
   end
 
@@ -83,7 +86,10 @@ class CalibrationSessions::CohortScores
 
   def dots
     @dots ||= enrollment.filter_map do |person_id, (ordinal, role_id)|
-      next unless role_id
+      # An enrollment predating the ADR-19 role snapshot can't be scored —
+      # but silence would misread as "not in the population". It renders as
+      # a gated chip naming the reason instead of vanishing.
+      next no_snapshot_dot(person_id, ordinal) unless role_id
 
       total = eligible_stable_ids(role_id, ordinal).size
       rated, carried = at_level_rated(person_id, role_id, ordinal)
@@ -106,6 +112,14 @@ class CalibrationSessions::CohortScores
         carried_majority: rated.positive? && carried * 2 > rated
       }
     end
+  end
+
+  # The un-scorable shape for a pre-snapshot enrollment: gated, zero
+  # totals, flagged so the view can word the chip honestly.
+  def no_snapshot_dot(person_id, ordinal)
+    { person_id: person_id, rater_id: rater_for[person_id], ordinal: ordinal,
+      pct: nil, rated: 0, total: 0, unlock_target: 0, unlocked: false,
+      carried_count: 0, carried_majority: false, role_missing: true }
   end
 
   # person_id => [ordinal, role_id] — the ADR-19 cycle snapshot, both halves
