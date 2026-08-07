@@ -25,7 +25,10 @@ module CalibrationSessions::DrillInReturnPath
       view: params[:view].presence_in(CalibrationSessions::CapabilitiesController::VIEWS),
       wall_level: params[:wall_level].to_s.presence,
       wall_valence: params[:wall_valence].presence_in(EvidenceLink::VALENCES),
-      wall_rater: params[:wall_rater].to_s.presence
+      wall_rater: params[:wall_rater].to_s.presence,
+      # The focused strip level survives an outcome POST; the open form
+      # (person_action) deliberately does NOT — the submit finished it.
+      person_level: params[:person_level].to_s.presence
     ).compact
 
     calibration_session_capability_path(session_record, params[:capability_stable_id], query)

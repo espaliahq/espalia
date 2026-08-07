@@ -433,11 +433,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       handler.add_role_family(fw_id, rfid, "Engineering")
       handler.add_role(fw_id, role_id, rfid, "Software Engineer", "E", "ic")
       handler.add_level(fw_id, level_id, role_id, 3, "Engineer III", "E3")
+      handler.add_level(fw_id, SecureRandom.uuid_v7, role_id, 4, "Engineer IV", "E4")
       cat_id = SecureRandom.uuid_v7
       handler.add_capability_category(fw_id, cat_id, "Thinking")
       handler.add_capability(fw_id, cap_id, cap_stable, cat_id, "Strategic Thinking")
       handler.set_behavioural_expectation(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
                                           cap_id, 3, "Shapes team direction")
+      handler.set_behavioural_expectation(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                          cap_id, 4, "Shapes system direction")
       handler.publish_version(fw_id, "test")
 
       # A real PD assignment (not a factory row) — the revisit mirror lands on
@@ -449,7 +452,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       end
       cycle = create(:assessment_cycle, tenant: @tenant, name: "H2 2026 Review", framework_id: fw_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
-             person_id: @report_1.id, level_ordinal: 3)
+             person_id: @report_1.id, level_ordinal: 3, role_id: role_id)
+      # Rated ABOVE the assessed level — the person card's ladder must
+      # surface it (at-level stays unrated, so the grid's unrated-rater
+      # sentence is untouched).
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: cycle.cycle_id,
+             person_id: @report_1.id, framework_id: fw_id,
+             capability_stable_id: cap_stable, level_ordinal: 4,
+             manager_rated_frequency: "occasional")
 
       ctx = AuthorizationContext.new(
         user: @facilitator_user,
@@ -503,18 +513,32 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
     assert_text "Ivy IC"
 
-    assert_selector "summary", text: "Ask Mia Manager to revisit this rating"
-    page.execute_script(<<~JS)
-      document.querySelectorAll("details > summary").forEach((s) => {
-        if (s.textContent.includes("revisit this rating")) s.parentElement.open = true
-      })
-    JS
+    # ── The read-only ladder: the E4 chip swaps the panel to the
+    # above-level cell in place (pane frame, no scroll jump) ──
+    click_selector_with_js_fallback(
+      "#calibration-person-card a[href*='person_level=4']",
+      expect_selector: "#calibration-person-card a[aria-current='true'][href*='person_level=4']"
+    )
+    assert_text "Shapes system direction"
+    assert_text "Manager: Most of the time"
+    # …and back to the assessed level before the asks below, so they scope
+    # to the L3 cell the room is discussing.
+    click_selector_with_js_fallback(
+      "#calibration-person-card a[href*='person_level=3']",
+      expect_selector: "#calibration-person-card a[aria-current='true'][href*='person_level=3']"
+    )
+
+    # The ask lives in the card's kebab; the item swaps the form in via the
+    # pane frame (URL-driven, no scroll jump).
+    open_dropdown(scope: "#calibration-person-card")
+    click_link_with_js_fallback "revisit this rating…",
+                                expect_text: "to revisit this rating at L"
     js_set_field "#revisit-note", "Compare against the two peers we just discussed"
     click_button_with_js_fallback "Request revisit", expect_text: "Revisit requested"
 
-    # One ask per cell per session — the marker replaces the form.
+    # One ask per cell per session — the marker replaces the kebab item.
     assert_text "Revisit requested — it will appear in Mia Manager's assessment activity."
-    assert_no_selector "summary", text: "Ask Mia Manager to revisit this rating"
+    assert_no_selector "a", text: /revisit this rating…/
 
     ActsAsTenant.with_tenant(@tenant) do
       revisits = CalibrationSessions::SessionOutcomes
@@ -528,15 +552,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
 
-    # ── §f: request feedback / evidence from the person card ──
+    # ── §f: request feedback / evidence from the person card's kebab ──
     # The redirect re-opened Ivy's card (person= rides the return path).
     assert_text "Ivy IC"
-    assert_selector "summary", text: "Request feedback / evidence about Ivy IC"
-    page.execute_script(<<~JS)
-      document.querySelectorAll("details > summary").forEach((s) => {
-        if (s.textContent.includes("Request feedback / evidence")) s.parentElement.open = true
-      })
-    JS
+    open_dropdown(scope: "#calibration-person-card")
+    click_link_with_js_fallback "Request feedback / evidence…",
+                                expect_text: "Request feedback / evidence about Ivy IC"
     page.execute_script(<<~JS)
       const select = document.querySelector("#evidence-request-requestee")
       select.value = [...select.options].find((o) => o.text.includes("Mia Manager")).value

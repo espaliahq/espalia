@@ -13,6 +13,9 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
 
   VIEWS = %w[wall compare].freeze
 
+  # The person card's kebab actions — which (single) form renders open.
+  PERSON_ACTIONS = %w[request revisit].freeze
+
   # GET /calibration_sessions/:calibration_session_id/capabilities/:id
   def show
     @session = CalibrationSession.find(params.expect(:calibration_session_id))
@@ -48,6 +51,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
 
     person_card = @cards.for(params[:person].presence)
+    focus_ordinal = person_focus_ordinal(person_card)
     render Views::CalibrationSessions::DrillInView.new(
       session: @session,
       stats: stats,
@@ -55,7 +59,9 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       session_log: session_log,
       can_note: @session.started? && policy(@session).flag_expectation?,
       person_card: person_card,
-      request_candidates: evidence_request_candidates(person_card),
+      person_focus_ordinal: focus_ordinal,
+      person_action: params[:person_action].presence_in(PERSON_ACTIONS),
+      request_candidates: evidence_request_candidates(person_card, focus_ordinal),
       view: view_param,
       wall: (evidence_wall(stats) if view_param == "wall"),
       wall_filters: wall_filters,
@@ -111,7 +117,18 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # assessment (AssesseeVisibility) or holds no linked Person: the same
   # bars the Operation enforces, checked up front so the card never
   # offers an ask that would be refused.
-  def evidence_request_candidates(person_card)
+  # The strip's focused level: ?person_level= when it names a rung of the
+  # card's ladder, else the assessed level — a person can be rated above
+  # their level, and the room reads the whole column.
+  def person_focus_ordinal(person_card)
+    return nil unless person_card
+
+    requested = params[:person_level].to_s.presence&.to_i
+    ordinals = person_card[:levels].map { |level| level[:ordinal] }
+    ordinals.include?(requested) ? requested : person_card[:ordinal]
+  end
+
+  def evidence_request_candidates(person_card, focus_ordinal)
     return nil unless person_card && current_person
     return nil unless @session.started?
 
@@ -127,7 +144,8 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       assignment: assignment,
       requester_person_id: current_person.id,
       capability_stable_id: params.expect(:id),
-      level_ordinal: person_card[:ordinal]
+      # "Already asked" is per cell — grey out for the level on screen.
+      level_ordinal: focus_ordinal
     ).suggestions
   end
 

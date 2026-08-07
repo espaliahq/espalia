@@ -977,6 +977,33 @@ provenance. What that buys the surfaces:
 Re-running converges rather than growing: cycles are keyed by name, the
 session by cycle, and every persona derives from a SHA of stable ids.
 
+### The person card is a read-only assessment column
+
+A person can be rated **above their level**, so the drill-in's person card
+renders the capability's whole ladder, not just the assessed cell — a
+read-only adaptation of the assessment capability view:
+
+- **Level strip** — one chip per rung of the role ladder (ADR-19 enrollment
+  snapshot; a pre-snapshot enrollment degrades to the assessed level alone),
+  in the assessment chip vocabulary at manager perspective: solid palette
+  fill when rated, the lighter carried tint + dashed edge when inherited,
+  assumed-consistent blue below the assessed level, neutral above. The
+  assessed level wears **CURRENT**; chips are pane links
+  (`?person_level=`) so switching levels swaps the card in place.
+- **Focused panel** — initial focus is the assessed level; it shows that
+  cell's expectation text, Manager + Self pills (self withheld under
+  AssesseeVisibility, as before), the revisit marker when this session
+  already asked about that cell, and the feedback / evidence linked at
+  that level.
+- **Kebab actions** — "Request feedback / evidence…" and "Ask the rater to
+  revisit…" live in one ⋮ menu on the card header (the assessment-surface
+  pattern). Each item is a `?person_action=` pane link that opens the form
+  scoped to the FOCUSED level — the ask is about the cell on screen, which
+  may sit above the assessed level. Gates unchanged (live session, viewer
+  entitlement, one revisit ask per cell per session).
+- The cohort why-panel's "Open drill-in →" anchors at
+  `#calibration-person-card`, landing the reader on the card it names.
+
 ### Carried-vs-vetted provenance on the read surfaces
 
 Cross-cycle seeding (ADR-20) means a rating on screen can be last cycle's

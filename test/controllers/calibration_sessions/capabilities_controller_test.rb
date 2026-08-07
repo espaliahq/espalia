@@ -297,6 +297,67 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
         "the ask must land somewhere visible even with the log panel closed"
     end
 
+    should "render the whole ladder read-only, focused at the assessed level" do
+      # Rated ABOVE their level — the reason the card shows every level.
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: @report.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 4,
+               manager_rated_frequency: "occasional")
+        create(:evidence_item, tenant: @tenant, person_id: @report.id,
+               framework_id: @cycle.framework_id, author_id: @em.id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 4,
+               content: "Already operating at staff scope on the platform bet.")
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+
+      assert_response :success
+      # One chip per ladder level; focus (aria-current) sits at the
+      # assessed level by default, which also wears the CURRENT badge.
+      assert_select "a[aria-current='true'][href*='person_level=3']"
+      assert_select "a[href*='person_level=4']"
+      assert_includes response.body, "CURRENT"
+      assert_includes response.body, "Identifies root causes."
+      assert_includes response.body, "Feedback / Evidence at L3"
+
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              person: @report.id, person_level: 4)
+
+      assert_response :success
+      # The focused panel is now the above-level cell: its expectation,
+      # its rating, its evidence.
+      assert_select "a[aria-current='true'][href*='person_level=4']"
+      assert_includes response.body, "Shapes system direction."
+      assert_includes response.body, "Most of the time"
+      assert_includes response.body, "Already operating at staff scope on the platform bet."
+      assert_not_includes response.body, "Led the pricing re-architecture across squads.",
+                          "the L3 evidence belongs to the L3 panel"
+    end
+
+    should "scope the kebab's asks to the focused level" do
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              person: @report.id, person_level: 4,
+                                              person_action: "revisit")
+
+      assert_response :success
+      assert_includes response.body, "to revisit this rating at L4"
+      assert_select "form[action*='rating_revisits'] input[name='level_ordinal'][value='4']"
+
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              person: @report.id, person_level: 4,
+                                              person_action: "request")
+      assert_select "form[action*='evidence_requests'] input[name='level_ordinal'][value='4']"
+    end
+
+    should "fall back to the assessed level on a mangled person_level" do
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              person: @report.id, person_level: 99)
+
+      assert_response :success
+      assert_select "a[aria-current='true'][href*='person_level=3']"
+    end
+
     should "carry the same state through a flag POST, which names the person differently" do
       start_session_stream
 
@@ -318,6 +379,13 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       start_session_stream
 
       get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+      assert_response :success
+      # The affordance lives in the card's kebab; the form opens on demand.
+      assert_select "a[href*='person_action=request']", text: /Request feedback \/ evidence/
+      assert_not_includes response.body, "select[name='requestee_person_id']"
+
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              person: @report.id, person_action: "request")
       assert_response :success
       assert_includes response.body, "Request feedback / evidence about Ivy IC"
       # Mia (the manager) is an org neighbour; the facilitator isn't listed.
@@ -341,7 +409,8 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.body, "Awaiting response"
 
       # …and the pending ask greys Mia out of a second offer.
-      get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              person: @report.id, person_action: "request")
       assert_select "select[name='requestee_person_id'] option[disabled]", text: /already asked/
 
       # Fulfilment is live: the read model says "responded", the room reads
@@ -447,12 +516,16 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
     handler.add_role_family(framework_id, family_id, "Engineering")
     handler.add_role(framework_id, role_id, family_id, "Software Engineer", "E", "ic")
     handler.add_level(framework_id, level_id, role_id, 3, "Engineer III", "E3")
+    handler.add_level(framework_id, SecureRandom.uuid_v7, role_id, 4, "Engineer IV", "E4")
     handler.add_capability_category(framework_id, category_id, "Thinking")
     handler.add_capability(framework_id, capability_id, SecureRandom.uuid_v7,
                            category_id, "Strategic Thinking")
     handler.set_behavioural_expectation(framework_id, SecureRandom.uuid_v7,
                                         SecureRandom.uuid_v7, capability_id, 3,
                                         "Identifies root causes.")
+    handler.set_behavioural_expectation(framework_id, SecureRandom.uuid_v7,
+                                        SecureRandom.uuid_v7, capability_id, 4,
+                                        "Shapes system direction.")
     handler.publish_version(framework_id, "seed")
 
     @cap = FrameworkState::Capability.find_by!(capability_id: capability_id)

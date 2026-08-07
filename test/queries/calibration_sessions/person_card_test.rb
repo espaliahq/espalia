@@ -106,6 +106,62 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
     ).call
   end
 
+  should "assemble the whole ladder: per-level ratings, expectations, and evidence" do
+    # The enrollment carries no role snapshot in this fixture, so the
+    # ladder degrades to just the assessed level…
+    assert_equal [ { ordinal: 3, code: "L3" } ], cards.for(@report.id)[:levels]
+
+    # …and with a snapshot, it is the role's full ladder.
+    role = create(:framework_role, tenant: @tenant, name: "Engineer", code: "E",
+                  role_family_id: create(:framework_role_family, tenant: @tenant,
+                                         framework_id: @framework_id).role_family_id)
+    [ 3, 4 ].each do |ordinal|
+      create(:framework_level, tenant: @tenant, role_id: role.role_id,
+             ordinal: ordinal, code: "E#{ordinal}")
+    end
+    AssessmentCycleEnrollment.find_by(cycle_id: @cycle.cycle_id, person_id: @report.id)
+      .update!(role_id: role.role_id)
+
+    # Rated ABOVE the assessed level — the card must not throw that away.
+    create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+           person_id: @report.id, framework_id: @framework_id,
+           capability_stable_id: @cap.stable_id, level_ordinal: 4,
+           manager_rated_frequency: "occasional", manager_rating_source: "seeded",
+           self_rated_frequency: "consistent")
+    create(:framework_behavioural_expectation, tenant: @tenant,
+           capability_id: @cap.capability_id, level_ordinal: 4,
+           description: "Shapes system direction.")
+    link_evidence(author: @em, content: "Operating at staff scope.", ordinal: 4)
+    link_evidence(author: @em, content: "Root-caused the outage.", ordinal: 3)
+
+    card = cards.for(@report.id)
+    assert_equal %w[E3 E4], card[:levels].map { |level| level[:code] }
+    assert_equal({ manager: "occasional", manager_carried: true, self: "consistent" },
+                 card[:ratings_by_level][4])
+    assert_equal "Shapes system direction.", card[:expectations_by_level][4]
+    assert_equal [ "Operating at staff scope." ],
+                 card[:evidence_by_level][4].map { |entry| entry[:content] }
+    assert_equal [ "Root-caused the outage." ],
+                 card[:evidence_by_level][3].map { |entry| entry[:content] }
+    assert_equal card[:evidence_by_level][3], card[:evidence],
+                 "the at-level list is the assessed level's slice"
+    assert_not card[:self_withheld]
+  end
+
+  should "withhold per-level self ratings from a viewer outside the entitlement set" do
+    restricted = CalibrationSessions::PersonCard.new(
+      session: @session, stats: stats, capability_stable_id: @cap.stable_id,
+      visible_person_ids: []
+    )
+    card = restricted.for(@report.id)
+
+    assert card[:self_withheld]
+    assert_nil card[:ratings_by_level][3][:self]
+    assert_equal "consistent", card[:ratings_by_level][3][:manager],
+                 "manager ratings are the session's business — always shown"
+    assert_empty card[:evidence_by_level]
+  end
+
   should "locate the person's dot, level, and owning rater" do
     card = cards.for(@report.id)
 
