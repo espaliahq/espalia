@@ -306,7 +306,8 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Rated by Mia Manager"
       assert_includes response.body, "vs org mean"
       assert_includes response.body, "may be tendency, not Ivy IC"
-      assert_select "a[href*='capabilities']", text: /Open drill-in/
+      assert_select "a[href*='capabilities'][href*='#calibration-person-card']",
+                    text: /Open drill-in/
       assert_includes response.body, "Delivery", "the some-rated behaviour is the weakest row"
       # Ivy's other behaviour merely meets (+0.0) — that is not "pulling
       # it up", so the strongest column stays honest and empty.

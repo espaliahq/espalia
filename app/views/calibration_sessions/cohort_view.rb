@@ -321,7 +321,10 @@ class Views::CalibrationSessions::CohortView < Views::Base
       end
       a(
         href: calibration_session_capability_path(@session, entry[:stable_id],
-                                                  person: @selected_person_id),
+                                                  person: @selected_person_id,
+                                                  # Land ON the person card — the reader followed a
+                                                  # person's row, not the capability in general.
+                                                  anchor: "calibration-person-card"),
         class: "text-xs text-gray-700 dark:text-gray-200 underline underline-offset-2 " \
                "whitespace-nowrap min-h-11 inline-flex items-center",
         # Off-page link inside the overview frame — without _top, Turbo
