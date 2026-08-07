@@ -329,7 +329,9 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # its rating, its evidence.
       assert_select "a[aria-current='true'][href*='person_level=4']"
       assert_includes response.body, "Shapes system direction."
-      assert_includes response.body, "Most of the time"
+      # Scoped to the card — the frequency legend renders the same phrase
+      # elsewhere on the page.
+      assert_select "#calibration-person-card span", text: /Manager: Most of the time/
       assert_includes response.body, "Already operating at staff scope on the platform bet."
       assert_not_includes response.body, "Led the pricing re-architecture across squads.",
                           "the L3 evidence belongs to the L3 panel"
@@ -348,6 +350,19 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
                                               person: @report.id, person_level: 4,
                                               person_action: "request")
       assert_select "form[action*='evidence_requests'] input[name='level_ordinal'][value='4']"
+    end
+
+    should "not leak the focused level onto links that open a different person" do
+      _other_em, other_report = seed_second_rater
+
+      get calibration_session_capability_path(@session, @cap.stable_id,
+                                              person: @report.id, person_level: 4)
+
+      assert_response :success
+      # Omar's dot must open HIS card at HIS assessed level — Ivy's focused
+      # ordinal belongs to Ivy's open card only.
+      assert_select "a[data-person-id='#{other_report.id}'][href*='person_level']", count: 0
+      assert_select "a[data-person-id='#{other_report.id}']"
     end
 
     should "fall back to the assessed level on a mangled person_level" do
@@ -382,7 +397,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_response :success
       # The affordance lives in the card's kebab; the form opens on demand.
       assert_select "a[href*='person_action=request']", text: /Request feedback \/ evidence/
-      assert_not_includes response.body, "select[name='requestee_person_id']"
+      assert_select "select[name='requestee_person_id']", count: 0
 
       get calibration_session_capability_path(@session, @cap.stable_id,
                                               person: @report.id, person_action: "request")

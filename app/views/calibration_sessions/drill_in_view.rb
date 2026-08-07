@@ -472,8 +472,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   # Rebuilds the drill-in URL with the given view, preserving the opened
   # person, the compare pins, and (within the wall) the active filters.
-  def drill_in_path(view:, person: opened_person_id, person_level: @person_focus_ordinal,
+  def drill_in_path(view:, person: opened_person_id, person_level: :current,
                     person_action: nil, compare: @compare_ids, filters: @wall_filters)
+    # Focus belongs to the OPEN card: a link that opens a different person
+    # (a grid dot, an unrated-sentence name) must start at THEIR assessed
+    # level, not inherit this card's focused ordinal.
+    person_level = (@person_focus_ordinal if person == opened_person_id) if person_level == :current
     query = {}
     query[:person] = person if person.present?
     # Focus and open-form state belong to the open card — never carried
@@ -784,13 +788,19 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     fill, border, note = person_chip_appearance(ordinal)
 
     div(class: "flex flex-col items-center gap-0.5") do
+      # The 44px tap target is the link; the visual chip is the inner span
+      # (the grid dot's pattern).
       a(
         href: drill_in_path(view: nil, person_level: ordinal),
-        class: "inline-flex h-9 min-w-11 items-center justify-center rounded-md border-2 px-1.5 " \
-               "text-[11px] font-semibold #{fill} #{border} " \
-               "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if focused}",
+        class: "inline-flex h-11 min-w-11 items-center justify-center",
         aria: { label: person_chip_label(level, note, assessed: assessed), current: focused ? "true" : nil }
-      ) { level[:code] }
+      ) do
+        span(
+          class: "inline-flex h-9 min-w-11 items-center justify-center rounded-md border-2 px-1.5 " \
+                 "text-[11px] font-semibold #{fill} #{border} " \
+                 "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if focused}"
+        ) { level[:code] }
+      end
       if assessed
         span(class: "text-[9px] font-semibold tracking-wide text-gray-600 dark:text-gray-300") do
           "CURRENT"

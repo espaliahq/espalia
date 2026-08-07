@@ -103,11 +103,14 @@ class CalibrationSessions::PersonCard
   end
 
   # Expectation text per level for this capability — shared across cards
-  # (it's capability-scoped, not person-scoped).
+  # (it's capability-scoped, not person-scoped). Scoped to the session's
+  # framework: a cloned framework can carry the same stable_id, and the
+  # wrong framework's text must never win the to_h.
   def expectations_by_level
     @expectations_by_level ||= FrameworkState::BehaviouralExpectation
-      .joins(:capability)
+      .joins(capability: :category)
       .where(framework_capabilities: { stable_id: @capability_stable_id })
+      .merge(FrameworkState::CapabilityCategory.where(framework_id: @session.framework_id))
       .to_h { |expectation| [ expectation.level_ordinal, expectation.description ] }
   end
 
