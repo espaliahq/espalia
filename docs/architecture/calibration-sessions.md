@@ -966,6 +966,13 @@ provenance. What that buys the surfaces:
 - **A live session on the current cycle**, because otherwise every visual
   check of this feature begins by hand-rolling one that satisfies the
   population rules.
+- **Above-level surplus for the org's high performers** (top ~30% by base
+  competence, consistent-ish at L+1 on ~60% of behaviours). Without it no
+  seeded person can read "above expectations" — every rating sits at the
+  enrolled level, performance never exceeds 100%, and the cohort
+  why-panel's positive-only "Pulling it up" column is empty by
+  construction. Skipped under a coasting rater (a fresh human rating would
+  break their "all carried" story).
 
 Re-running converges rather than growing: cycles are keyed by name, the
 session by cycle, and every persona derives from a SHA of stable ids.

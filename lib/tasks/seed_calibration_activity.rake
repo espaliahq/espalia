@@ -120,6 +120,18 @@ namespace :assessments do
         # demos the point that a coasting rater still carries their tendency
         # and self-gap flags.
         rater_coasting = weight.("coasting-rater", rater_id) < 0.17
+        # The org's high performers (top ~30% by base competence) earn
+        # genuine ABOVE-level surplus. Without this nobody can read "above
+        # expectations": every rating sits at the enrolled level, so
+        # performance never exceeds 100% and the cohort why-panel's
+        # positive-only "Pulling it up" column is empty by construction.
+        # Conditioning on base keeps it coherent — the same people whose
+        # at-level cells rated near-consistent are the ones overreaching —
+        # and makes >100% dots actually occur (an independent star draw
+        # mostly handed surplus to people whose at-level deficits swallowed
+        # it). Stars under a coasting rater are skipped — a fresh human
+        # above-level rating would break that rater's "all carried" story.
+        star = !rater_coasting && base > 2.15
 
         capabilities.each do |cap|
           cell_key = [ person.id, cap.stable_id, enrollment.level_ordinal ]
@@ -172,6 +184,25 @@ namespace :assessments do
               end
             end
 
+            # Above-level surplus for stars: consistent-ish at L+1 on ~60%
+            # of behaviours that have an expectation there → positive
+            # contributions, >100% scores, a populated strongest column.
+            if star && expectation_cells.include?([ cap.capability_id, enrollment.level_ordinal + 1 ])
+              above_key = [ person.id, cap.stable_id, enrollment.level_ordinal + 1 ]
+              if !manager_rated.include?(above_key) && weight.("above-cover", person.id, cap.stable_id) < 0.6
+                above_value = (2.1 + weight.("above", person.id, cap.stable_id) * 0.9).clamp(0.0, 3.0)
+                handler.rate_as_manager(
+                  person.id, framework.framework_id, cap.stable_id,
+                  level_ordinal: enrollment.level_ordinal + 1,
+                  frequency: to_frequency.(above_value),
+                  cycle_id: cycle.cycle_id,
+                  rated_by_id: rater_id,
+                  source: "human"
+                )
+                stats[:above_level_ratings] += 1
+              end
+            end
+
             # Self rating (~78% coverage, optimism bias).
             if !self_rated.include?(cell_key) && weight.("self-cover", person.id, cap.stable_id) < 0.78
               self_value = (base + self_bias + weight.("self-noise", person.id, cap.stable_id) * 0.8 - 0.4)
@@ -201,7 +232,8 @@ namespace :assessments do
 
       puts "Calibration activity seed complete for '#{cycle.name}':"
       puts "  Manager ratings: #{stats[:manager_ratings]} " \
-           "(#{stats[:carried_ratings]} carried forward), " \
+           "(#{stats[:carried_ratings]} carried forward, " \
+           "#{stats[:above_level_ratings]} above-level for the stars), " \
            "self ratings: #{stats[:self_ratings]}, evidence items: #{stats[:evidence_items]}"
       skipped = stats.slice(:skipped_no_person, :skipped_no_manager, :skipped_no_capabilities)
       puts "  Skipped: #{skipped.map { |k, v| "#{k}=#{v}" }.join(', ')}" if skipped.values.sum.positive?
