@@ -17,7 +17,12 @@
 > agenda.
 > *Drill-in* — expectation text with role illustrations, the rater × level
 > dot grid, and a three-pane bottom half (person card / evidence wall §d /
-> compare tray §e). See *Drill-in implementation notes* under §3.
+> compare tray §e). The person card is a **read-only assessment column**:
+> the capability's whole ladder as chips, a focused per-level panel
+> (expectation + ratings + feedback/evidence), and the request-evidence /
+> revisit asks in a kebab scoped to the focused level — see *The person
+> card is a read-only assessment column*. See *Drill-in implementation
+> notes* under §3.
 > *Outcomes* — ⚑ expectation flags raising a framework **clarification**
 > (the non-proposal suggestion kind, framework-explorer.md §12a); **revisit
 > requests** mirrored onto the PD stream (`CalibrationRevisitSync`),
@@ -34,10 +39,20 @@
 > *Dev data* — `assessments:seed_calibration_activity` populates the current
 > cycle, then advances the tenant through two more (`CalibrationHistorySeed`)
 > so carried ratings, vetting-vs-coasting raters and reporting-line moves are
-> real cross-cycle history, and leaves a live session to open.
+> real cross-cycle history, and leaves a live session to open. The org's
+> high performers earn above-level surplus so ">100% of expected" and the
+> why-panel's positive-only strengths are demo-able.
 >
 > *Provenance* — carried-forward (seeded, unconfirmed) ratings are marked
 > on every read surface; see *Carried-vs-vetted provenance*.
+>
+> **Next up (agreed direction, design below):** the **unified comparison
+> drawer** — one sticky bottom drawer (inspector + pins, side by side)
+> shared by Score by cohort and the capability drill-in, replacing the
+> inline why-panel, the bottom person card, and the separate compare
+> tray; the drill-in's standalone "What good looks like" card folds into
+> the person card (examples visible per level, ⚑ flags — expectation AND
+> example — via kebabs). See *The comparison drawer* below.
 >
 > **Not built** (each is marked at the section that describes it):
 > auto-suggested contrast pairs (§e) · the person card's linked-by /
@@ -976,6 +991,59 @@ provenance. What that buys the surfaces:
 
 Re-running converges rather than growing: cycles are keyed by name, the
 session by cycle, and every persona derives from a SHA of stable ids.
+
+### The comparison drawer (agreed direction, not yet built)
+
+Both comparison surfaces exist to calibrate how each individual is
+presented, so they share ONE presentation of a person. **The rule:
+clicking any person anywhere in the module opens them in the inspector —
+the left slot of a sticky bottom drawer; pinning holds them side by side
+while the next person opens.** Comparison is a horizontal act — two
+ladders compare by eye, not by memory — and the bottom placement keeps
+the session log visible throughout. Design decisions:
+
+- **Three panes everywhere**: main pane · session log (far right,
+  unchanged) · the comparison drawer pinned to the bottom of the
+  viewport. The drawer renders only when the inspector or ≥1 pin is
+  occupied; max height ~40vh, cards scroll internally, and a Collapse
+  toggle drops it to a slim bar of names + unpin (the main pane keeps
+  bottom padding either way). Mobile is the SAME drawer one card wide —
+  a sticky bar of pinned initials, tap to expand one card.
+- **Inspector + pins, max 3 people across** (the compare tray's cap;
+  horizontally scrollable if cramped). A pin is a PERSON, not a
+  snapshot: the card renders the context's face — cohort face (% of
+  expected, gate, why columns, rater-tendency note) on the session page;
+  capability face (the read-only ladder + level panel) on the drill-in.
+  Pins ride every calibration-internal link, so they survive tab
+  switches, capability changes, and the cohort → drill-in jump. This
+  retires the inline why-panel, the bottom person card placement, and
+  the separate `?view=compare` tray — one component, three fewer
+  surfaces.
+- **Sticky main-pane headers**: the overview tab bar (session page); the
+  capability header + focused-level expectation line and the grid's
+  level-ordinal header row (drill-in) — "what am I looking at" never
+  scrolls away.
+- **"What good looks like" folds in** (drill-in): the standalone card is
+  replaced by (a) the sticky focused-level expectation line, (b) a ⋮ on
+  each level column header — "Show expectation & examples" popover +
+  "⚑ Flag expectation as unclear…" (the no-person-open path), and
+  (c) the person card's level panel, which gains the Examples disclosure.
+- **One kebab**: the person card's ⋮ carries Request feedback/evidence…,
+  Ask the rater to revisit…, and (drill-in) ⚑ Flag expectation as
+  unclear… — all scoped to the focused level.
+- **Flag example as unclear** (new): a clarification anchored on the
+  role illustration — same table, lifecycle (required note to resolve),
+  feed rails, and light review tier as expectation flags; a new anchor
+  type only.
+- **State stays URL-carried**: `person=` (inspector) + `person_level=` +
+  `pins[]=`, stamped by the existing pane-state machinery; `compare[]`
+  and `cohort_person` retire into them.
+
+Build order: (1) drawer on the drill-in — re-home the shipped person
+card + compare tray, sticky headers; (2) drawer on the session page —
+why-panel becomes the inspector's cohort face, cross-screen pins;
+(3) fold in "what good looks like" + the illustration-anchored
+clarification.
 
 ### The person card is a read-only assessment column
 
