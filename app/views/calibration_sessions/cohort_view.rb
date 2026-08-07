@@ -272,7 +272,11 @@ class Views::CalibrationSessions::CohortView < Views::Base
         href: calibration_session_capability_path(@session, entry[:stable_id],
                                                   person: @selected_person_id),
         class: "text-xs text-gray-700 dark:text-gray-200 underline underline-offset-2 " \
-               "whitespace-nowrap min-h-11 inline-flex items-center"
+               "whitespace-nowrap min-h-11 inline-flex items-center",
+        # Off-page link inside the overview frame — without _top, Turbo
+        # navigates the FRAME and renders "Content missing" (the classic
+        # in-frame trap; phlex-views.md).
+        data: { turbo_frame: "_top" }
       ) { "Open drill-in →" }
     end
   end

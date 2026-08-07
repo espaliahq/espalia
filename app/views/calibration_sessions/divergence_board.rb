@@ -105,7 +105,11 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
             class: "group/cap inline-flex items-baseline gap-1 text-sm font-medium " \
                    "text-gray-900 dark:text-white underline decoration-gray-400 " \
                    "dark:decoration-gray-500 underline-offset-4 hover:decoration-gray-900 " \
-                   "dark:hover:decoration-white"
+                   "dark:hover:decoration-white",
+            # The board renders inside the overview tab frame now — this
+            # off-page link must break out or Turbo swaps the frame to
+            # "Content missing" (phlex-views.md's in-frame trap).
+            data: { turbo_frame: "_top" }
           ) do
             plain capability[:name]
             span(class: "text-gray-600 dark:text-gray-300 transition-transform " \

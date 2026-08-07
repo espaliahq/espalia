@@ -107,6 +107,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
   test "facilitator sees tendency strip and divergence board on a live session" do
     ActsAsTenant.with_tenant(@tenant) do
+      # A scorable ladder so the cohort tab has real numbers: role, levels,
+      # and both capabilities bound. Adds nothing to the strip/board math.
+      family = create(:framework_role_family, tenant: @tenant, framework_id: @cycle.framework_id)
+      engineer = create(:framework_role, tenant: @tenant, role_family_id: family.role_family_id)
+      (1..5).each { |o| create(:framework_level, tenant: @tenant, role_id: engineer.role_id, ordinal: o) }
+
       category = create(:framework_capability_category, tenant: @tenant,
                         framework_id: @cycle.framework_id, name: "Thinking")
       @cap_a = create(:framework_capability, tenant: @tenant,
@@ -121,11 +127,19 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       # report_1/2 already hold assignments from setup (DeterministicId PK).
       [ report_3, report_4 ].each do |person|
         create(:person_framework_assignment, tenant: @tenant,
-               person_id: person.id, framework_id: @cycle.framework_id)
+               person_id: person.id, framework_id: @cycle.framework_id, role_id: engineer.role_id)
       end
+      PersonFrameworkAssignment.where(person_id: [ @report_1.id, @report_2.id ])
+        .update_all(role_id: engineer.role_id)
       population.each do |person|
         create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-               person_id: person.id, level_ordinal: 3)
+               person_id: person.id, level_ordinal: 3, role_id: engineer.role_id)
+      end
+      [ @cap_a, cap_b ].each do |cap|
+        create(:framework_capability_role_binding, tenant: @tenant,
+               capability_id: cap.capability_id, role_id: engineer.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: cap.capability_id, level_ordinal: 3)
       end
       # Mia rates high, Raj rates low on Strategic Thinking; both agree on Delivery.
       rate(@report_1, @cap_a, "consistent")
@@ -184,24 +198,66 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "RATER TENDENCY"
     assert_text "Org mean"
     assert_text "Mia Manager"
-    assert_text "CAPABILITY DIVERGENCE"
-    assert_text "Strategic Thinking"
-    assert_text "spread 3.0"
-    assert_text "raters disagree"
-    # Carried-forward values are marked, not hidden and not excluded: the
-    # spread above is still computed from them.
+    # ── Strip content, on the default tab ──
+    assert_selector "a[role='tab'][aria-selected='true']", text: "Rater tendency"
+    assert_no_text "CAPABILITY DIVERGENCE"
+    # Carried-forward values are marked, not hidden and not excluded.
     assert_text "Carried"
     # Mia has 3 at-level cells; 1 of them is carried.
     assert_text "1 of 3"
-    # The capability comparison spans all 4 raters' cells on it.
-    assert_text "1 of 4 carried"
+    # The silent rater: a sentence, never zeroed columns.
+    assert_text "No ratings yet — not counted in the org mean or any column."
     # No curation affordances on a live session
     assert_no_text "Add person from your org"
 
-    # The silent rater: a sentence on the strip, a footnote off the board —
-    # never zeroed columns or a legend colour with no dot behind it.
-    assert_text "No ratings yet — not counted in the org mean or any column."
+    # ── Tabs: one pane at a time, swapped in place ──
+    # A sentinel that survives frame swaps but not full navigations — the
+    # whole point of the pane frame is that a tab click doesn't reload (or
+    # scroll) the page.
+    page.execute_script("window.__staying = true")
+    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
+    assert_text "Strategic Thinking"
+    assert_text "spread 3.0"
+    assert_text "raters disagree"
+    # The capability comparison spans all 4 raters' cells on it.
+    assert_text "1 of 4 carried"
+    # …and the silent rater is a footnote here, not a legend colour with no
+    # dot behind it. One pane at a time: the strip is gone.
     assert_text "Quinn Alderberry hasn't rated yet — not on the board."
+    assert_no_text "RATER TENDENCY"
+
+    # ── Score by cohort ──
+    click_with_retry(expect_text: "SCORE BY COHORT") { click_link "Score by cohort" }
+    assert page.evaluate_script("window.__staying === true"),
+           "tab clicks must swap the pane frame, never reload the page"
+    assert_equal "cohort", URI.parse(current_url).then { |u| Rack::Utils.parse_query(u.query)["view"] },
+                 "the tab is shareable — pushState carries ?view="
+    assert_text "100% — meets expectations"
+    assert_text "median"
+    # All four L3 people scored (each has ≥1 of 2 at-level cells rated).
+    assert_selector "a[aria-label*='% of expected']", count: 4
+
+    # Open a dot → the why panel, with the rater-context reframe.
+    why_dot = find("a[aria-label^='Nia IC']")
+    click_with_retry(expect_text: "Rated by Mia Manager") { why_dot.click }
+    assert page.evaluate_script("window.__staying === true"),
+           "a dot click swaps the pane too — no scroll jump mid-discussion"
+    assert_text "of expected"
+    assert_text "vs org mean"
+    # The why-panel composes with the drill-in rather than growing a grid.
+    # (Two contribution rows → two links; the first is fine.)
+    assert_selector "a[href*='capabilities'][href*='person=']", minimum: 1
+    click_with_retry(expect_text: "WHAT GOOD LOOKS LIKE") do
+      find("a[href*='capabilities'][href*='person=']", match: :first).click
+    end
+    assert_text "Nia IC"
+
+    # Back to the session page for the rest of the flow — a deep link to
+    # the cohort tab renders it directly (the ?view= param is shareable),
+    # then over to the strip for the vocabulary check.
+    visit calibration_session_path(@live_session_id, view: "cohort")
+    assert_text "SCORE BY COHORT"
+    click_with_retry(expect_text: "RATER TENDENCY") { click_link "Rater tendency" }
 
     # ── The vocabulary defines itself, by KEYBOARD ──
     # The room is on a projector and the facilitator may be driving by
@@ -232,6 +288,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # is worse than none; the flip is verified visually instead.
 
     # ── Drill-in: divergence row → rater × level grid ──
+    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-person-id]", minimum: 4
