@@ -23,8 +23,9 @@
 #   marked, never suppressed.
 class CalibrationSessions::CohortScores
   # Fraction of at-level cells that must carry a manager rating before a
-  # score shows — mirrors the assessment hero's unlock threshold.
-  COVERAGE_UNLOCK = 0.5
+  # score shows — the assessment hero's own unlock threshold, so the two
+  # gates can never drift apart.
+  COVERAGE_UNLOCK = Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD
 
   # How many capability contributions the why-panel lists per direction.
   WEAKEST_LIMIT = 3
@@ -64,7 +65,7 @@ class CalibrationSessions::CohortScores
     dot = dots.find { |d| d[:person_id] == person_id }
     return nil unless dot && dot[:unlocked]
 
-    engine = engines[person_id]
+    engine = engine_for(person_id)
     contributions = bindings_for(enrollment[person_id][1]).filter_map do |binding|
       capability = binding.capability
       next unless expectation_cells.include?([ capability.capability_id, dot[:ordinal] ])
@@ -103,7 +104,7 @@ class CalibrationSessions::CohortScores
         person_id: person_id,
         rater_id: rater_for[person_id],
         ordinal: ordinal,
-        pct: unlocked ? (engines[person_id].performance_ratio * 100).round : nil,
+        pct: unlocked ? (engine_for(person_id).performance_ratio * 100).round : nil,
         rated: rated,
         total: total,
         unlock_target: unlock_target,
@@ -147,9 +148,13 @@ class CalibrationSessions::CohortScores
 
   # One Scoring engine per person — manager-only, the framework's own
   # thresholds, the same wiring Assessments::MatrixDataBuilder uses.
-  def engines
-    @engines ||= enrollment.to_h do |person_id, (ordinal, role_id)|
-      [ person_id, PersonDevelopment::Scoring.new(
+  # Built lazily: only unlocked dots (and the why-panel's person) ever
+  # need one, so gated and pre-snapshot people cost nothing here.
+  def engine_for(person_id)
+    @engine_for ||= {}
+    @engine_for[person_id] ||= begin
+      ordinal, role_id = enrollment[person_id]
+      PersonDevelopment::Scoring.new(
         level_ratings: ratings_by_person.fetch(person_id, []),
         bindings: bindings_for(role_id),
         categories: categories,
@@ -157,7 +162,7 @@ class CalibrationSessions::CohortScores
         all_level_ordinals: all_level_ordinals,
         perspective: :manager_only,
         thresholds: thresholds
-      ) ]
+      )
     end
   end
 
@@ -227,13 +232,7 @@ class CalibrationSessions::CohortScores
   end
 
   def thresholds
-    @thresholds ||= {
-      mastery_threshold: framework&.mastery_threshold&.to_f,
-      meeting_expectation_threshold: framework&.meeting_expectation_threshold&.to_f,
-      underperforming_threshold: framework&.underperforming_threshold&.to_f,
-      overperformance_cap: framework&.overperformance_cap,
-      deficit_threshold: framework&.deficit_threshold&.to_f
-    }
+    @thresholds ||= framework&.scoring_thresholds || {}
   end
 
   def median(values)

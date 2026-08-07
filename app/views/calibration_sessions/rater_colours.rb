@@ -26,4 +26,9 @@ module Views::CalibrationSessions::RaterColours
   def rater_dot_class(index)
     RATER_DOT_CLASSES[index % RATER_DOT_CLASSES.size]
   end
+  # Two letters, uppercased — the shared identity mark on every rater/
+  # person disc (tendency strip, divergence board, cohort dots).
+  def initials(name)
+    name.to_s.split.map(&:first).first(2).join.upcase
+  end
 end

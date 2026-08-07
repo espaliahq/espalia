@@ -44,4 +44,19 @@ class FrameworkState::Framework < ApplicationRecord
   #
   # @return [Boolean]
   def draft? = draft_in_progress
+
+  # The thresholds hash PersonDevelopment::Scoring's constructor takes —
+  # one derivation for every engine the app builds (assessment matrix,
+  # attainment report, calibration cohorts), so they can't drift.
+  #
+  # @return [Hash]
+  def scoring_thresholds
+    {
+      mastery_threshold: mastery_threshold&.to_f,
+      meeting_expectation_threshold: meeting_expectation_threshold&.to_f,
+      underperforming_threshold: underperforming_threshold&.to_f,
+      overperformance_cap: overperformance_cap,
+      deficit_threshold: deficit_threshold&.to_f
+    }
+  end
 end

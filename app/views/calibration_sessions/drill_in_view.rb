@@ -16,6 +16,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Evidence::Valence
   include Views::Evidence::ExamplesDisclosure
   include Views::CalibrationSessions::Glossary
+  include Views::CalibrationSessions::RaterColours
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
@@ -350,10 +351,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   # Two letters, uppercased — the divergence board's convention.
-  def initials(name)
-    name.to_s.split.map(&:first).first(2).join.upcase
-  end
-
   # Backed = solid fill, unbacked = outline (the backing signal is shape,
   # never colour). The initials sit on both, so each branch also picks a
   # text colour that clears AA against its own background.

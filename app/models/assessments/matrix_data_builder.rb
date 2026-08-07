@@ -399,13 +399,7 @@ class Assessments::MatrixDataBuilder
       person_level: @level.ordinal,
       all_level_ordinals: all_ordinals,
       perspective: perspective,
-      thresholds: {
-        mastery_threshold: @framework.mastery_threshold&.to_f,
-        meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f,
-        underperforming_threshold: @framework.underperforming_threshold&.to_f,
-        overperformance_cap: @framework.overperformance_cap,
-        deficit_threshold: @framework.deficit_threshold&.to_f
-      }
+      thresholds: @framework.scoring_thresholds
     )
   end
 

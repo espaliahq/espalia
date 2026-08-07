@@ -151,7 +151,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
                  "justify-center rounded-full text-[10px] font-semibold text-white #{rater_dot_class(index)}",
           style: "left: #{left}%",
           title: "#{rater_name(participant_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})"
-        ) { initials(participant_id) }
+        ) { rater_initials(participant_id) }
       end
     end
   end
@@ -188,7 +188,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
     @people[participant_id]&.name || "Unknown"
   end
 
-  def initials(participant_id)
-    rater_name(participant_id).split.map(&:first).first(2).join.upcase
+  def rater_initials(participant_id)
+    initials(rater_name(participant_id))
   end
 end
