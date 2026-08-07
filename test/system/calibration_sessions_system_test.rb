@@ -227,9 +227,25 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_no_text "RATER TENDENCY"
 
     # ── Score by cohort ──
-    click_with_retry(expect_text: "SCORE BY COHORT") { click_link "Score by cohort" }
+    # JS-dispatched so Selenium's scroll-into-view can't touch scrollY, and
+    # in a SHORT viewport so the fixture page actually scrolls: the frame
+    # swap must leave the room's scroll position alone — the entire reason
+    # the tabs live in a pane frame.
+    page.driver.browser.manage.window.resize_to(1400, 500)
+    page.execute_script("window.scrollTo(0, 300)")
+    assert_operator page.evaluate_script("window.scrollY"), :>=, 300,
+                    "the instrument needs a page that scrolls"
+    click_with_retry(expect_text: "SCORE BY COHORT") do
+      page.execute_script(<<~JS)
+        [...document.querySelectorAll("a[role='tab']")]
+          .find((a) => a.textContent.includes("Score by cohort")).click()
+      JS
+    end
     assert page.evaluate_script("window.__staying === true"),
            "tab clicks must swap the pane frame, never reload the page"
+    assert_operator page.evaluate_script("window.scrollY"), :>=, 200,
+                    "the swap must not scroll the room back to the top"
+    page.driver.browser.manage.window.resize_to(1400, 1400)
     assert_equal "cohort", URI.parse(current_url).then { |u| Rack::Utils.parse_query(u.query)["view"] },
                  "the tab is shareable — pushState carries ?view="
     assert_text "100% — meets expectations"

@@ -18,9 +18,14 @@ class Views::CalibrationSessions::CohortView < Views::Base
   include Views::CalibrationSessions::RaterColours
 
   AXIS_MAX_PCT = 125
-  # Dots closer than this (in % points) drop to a second lane instead of
+  # Dots closer than this (in % points) stack into further lanes instead of
   # overlapping — the board's exactly-overlapping-dots nit, addressed here.
+  # A real cohort clusters hard (twenty people between 75 and 100), so the
+  # packing is greedy k-lane, not a two-lane flip-flop.
   LANE_NUDGE_PCT = 5
+  MAX_LANES = 4
+  LANE_HEIGHT = 22
+  DOT_TOP = 9
 
   # @param session [CalibrationSession]
   # @param cohorts [Array<Hash>] {CalibrationSessions::CohortScores#call}[:cohorts]
@@ -67,12 +72,23 @@ class Views::CalibrationSessions::CohortView < Views::Base
     end
   end
 
+  # Colour identifies raters only while the palette can — beyond its six
+  # hues the colours cycle and a name-per-swatch legend would be a lie (and
+  # at an org-wide session's ~25 raters, a wall). Past that, say so and let
+  # initials + hover carry identity, which they do at every size.
   def legend
     div(class: "mt-3 flex flex-wrap gap-x-4 gap-y-1") do
-      @raters.each_with_index do |rater, index|
-        div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
-          span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(index)}", aria: { hidden: "true" })
-          plain person_name(rater[:participant_id])
+      if @raters.size <= RATER_DOT_CLASSES.size
+        @raters.each_with_index do |rater, index|
+          div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
+            span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(index)}", aria: { hidden: "true" })
+            plain person_name(rater[:participant_id])
+          end
+        end
+      else
+        p(class: "text-xs text-gray-600 dark:text-gray-300") do
+          "#{@raters.size} raters — more than the palette's #{RATER_DOT_CLASSES.size} colours, " \
+            "so colours repeat; hover a dot for who rated whom."
         end
       end
       div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
@@ -112,19 +128,25 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
   # A 0–125% track: labelled reference line at 100%, a median tick, one
   # initialed dot per unlocked person. The text equivalent rides each dot's
-  # aria-label — position and colour are never the only carriers.
+  # aria-label — position and colour are never the only carriers. Height
+  # grows with the lanes the cluster needs, so tap targets never overflow
+  # into a phantom scrollbar.
   def axis(cohort, plotted)
+    placed = lanes(plotted)
+    lane_count = placed.map(&:last).max + 1
+    height = DOT_TOP + 44 + (lane_count - 1) * LANE_HEIGHT
+
     div(class: "overflow-x-auto") do
-      div(class: "relative mt-6 h-16 min-w-[480px]") do
+      div(class: "relative mt-6 min-w-[480px]", style: "height: #{height}px") do
         span(class: "absolute left-0 right-0 top-[30px] h-1.5 rounded-full bg-gray-100 dark:bg-gray-700")
-        reference_line
+        reference_line(height)
         median_tick(cohort[:median_pct]) if cohort[:median_pct]
-        lanes(plotted).each { |dot, lane| render_dot(dot, lane) }
+        placed.each { |dot, lane| render_dot(dot, lane) }
       end
     end
   end
 
-  def reference_line
+  def reference_line(_height)
     span(class: "absolute top-2 bottom-1 w-px bg-gray-300 dark:bg-gray-600",
          style: "left: #{position_pct(100)}%") do
       span(class: "absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap " \
@@ -140,19 +162,17 @@ class Views::CalibrationSessions::CohortView < Views::Base
          title: "Cohort median: #{median_pct}%")
   end
 
-  # dot => lane (0 top, 1 bottom). A dot landing within LANE_NUDGE_PCT of
-  # the previous one drops a lane so near-ties stay countable.
+  # dot => lane. Greedy packing: each dot (already sorted by score) takes
+  # the first lane whose last occupant is at least LANE_NUDGE_PCT away;
+  # a dense cluster stacks downward instead of smearing into a pile. At
+  # MAX_LANES the densest ties do overlap — countable is the goal, not a
+  # beeswarm.
   def lanes(plotted)
-    last_pct = nil
-    last_lane = 1
+    lane_edges = []
     plotted.map do |dot|
-      lane = if last_pct && (dot[:pct] - last_pct).abs < LANE_NUDGE_PCT
-        last_lane.zero? ? 1 : 0
-      else
-        0
-      end
-      last_pct = dot[:pct]
-      last_lane = lane
+      lane = lane_edges.index { |edge| (dot[:pct] - edge).abs >= LANE_NUDGE_PCT }
+      lane ||= lane_edges.size < MAX_LANES ? lane_edges.size : (dot[:pct].round % MAX_LANES)
+      lane_edges[lane] = dot[:pct]
       [ dot, lane ]
     end
   end
@@ -162,7 +182,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
     a(
       href: cohort_path(cohort_person: dot[:person_id]),
       class: "absolute inline-flex h-11 w-11 -ml-[22px] items-center justify-center",
-      style: "left: #{position_pct(dot[:pct])}%; top: #{lane.zero? ? 9 : 31}px",
+      style: "left: #{position_pct(dot[:pct])}%; top: #{DOT_TOP + lane * LANE_HEIGHT}px",
       title: "#{name} · #{dot[:pct]}% of expected",
       aria: { label: dot_description(dot, name) }
     ) do
