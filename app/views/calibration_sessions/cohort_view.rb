@@ -22,10 +22,10 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # overlapping — the board's exactly-overlapping-dots nit, addressed here.
   # A real cohort clusters hard (twenty people between 75 and 100), so the
   # packing is greedy k-lane, not a two-lane flip-flop.
-  # ≥ the 28px disc at the track's 480px min width (8% of a 0–125 axis
-  # ≈ 30px there) — a "far enough for the same lane" that still overlapped
-  # defeated the point.
-  LANE_NUDGE_PCT = 8
+  # ≥ the 44px tap-target LINK at the track's 480px min width (12% of a
+  # 0–125 axis ≈ 46px there) — a "far enough for the same lane" that still
+  # let the later link cover the earlier dot defeated the point.
+  LANE_NUDGE_PCT = 12
   MAX_LANES = 4
   # A full 44px per lane: each dot's tap target is 44px high, so anything
   # tighter stacks one lane's links over the lane above and steals its
