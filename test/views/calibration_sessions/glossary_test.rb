@@ -14,6 +14,7 @@ class Views::CalibrationSessions::GlossaryTest < ActiveSupport::TestCase
     expected = %i[
       org_mean reports org_delta distribution self_gap evidence carried
       spread raters_disagree backing to_confirm
+      pct_of_expected cohort_median score_gate
     ]
 
     assert_equal expected.sort, TERMS.keys.sort
@@ -55,6 +56,12 @@ class Views::CalibrationSessions::GlossaryTest < ActiveSupport::TestCase
     assert_includes html, %(id="calibration-term-spread-cap-2")
     # A term that appears once keeps the short, linkable id.
     assert_includes html, %(id="calibration-term-self-gap")
+  end
+
+  should "tie the cohort score to the assessment's own number" do
+    assert_match(/own assessment/, TERMS[:pct_of_expected][:definition],
+                 "the room and the individual must never argue about arithmetic")
+    assert_match(/[Mm]anager ratings only/, TERMS[:pct_of_expected][:definition])
   end
 
   should "describe carried ratings as real ratings" do

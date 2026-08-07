@@ -6,6 +6,16 @@
 # increments; see docs/architecture/calibration-sessions.md.
 class Views::CalibrationSessions::ShowView < Views::Base
   include Views::CalibrationSessions::Glossary
+  include Phlex::Rails::Helpers::TurboFrameTag
+
+  # The overview's tabs — pane-switcher chips synced to ?view=, swapped
+  # inside a Turbo Frame so a tab (or cohort dot) click never scrolls the
+  # room back to the top (the drill-in's calibration-pane pattern).
+  OVERVIEW_TABS = [
+    [ "tendency", "Rater tendency" ],
+    [ "divergence", "Capability divergence" ],
+    [ "cohort", "Score by cohort" ]
+  ].freeze
 
   # The dashed carried vocabulary, kept as the term's own trigger styling.
   CARRIED_BADGE_TRIGGER = "inline-flex min-h-11 items-center rounded-full px-2.5 text-xs " \
@@ -29,6 +39,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
                  groups:, suggestions:, readiness:, stats:,
                  add_calibrant_candidates:,
                  can_curate:, can_start:, can_close:,
+                 overview_view: "tendency", cohorts: nil,
+                 cohort_person_id: nil, cohort_why: nil,
                  session_log: nil, can_note: false,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
@@ -46,6 +58,10 @@ class Views::CalibrationSessions::ShowView < Views::Base
     @can_curate = can_curate
     @can_start = can_start
     @can_close = can_close
+    @overview_view = overview_view
+    @cohorts = cohorts
+    @cohort_person_id = cohort_person_id
+    @cohort_why = cohort_why
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -60,7 +76,11 @@ class Views::CalibrationSessions::ShowView < Views::Base
       div(
         class: "max-w-6xl mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
-          controller: ("activity-pane" if @session_log),
+          # calibration-pane swaps the overview frame on same-page links
+          # (tabs, cohort dots) with no scroll jump — the drill-in's rule.
+          controller: [ ("activity-pane" if @session_log),
+                        ("calibration-pane" unless @session.draft?) ].compact.join(" ").presence,
+          action: ("click->calibration-pane#navigate" unless @session.draft?),
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::SESSION_COOKIE,
           # Open by default here: on the session page the log IS the
           # artifact (the closed page is the next session's opening slide).
@@ -335,20 +355,54 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
-  # The overview: tendency strip + divergence board (started/closed only —
-  # in draft the same data powers the compact suggested agenda instead).
+  # The overview (started/closed only — in draft the same data powers the
+  # compact suggested agenda instead): three tabs inside a Turbo Frame, so
+  # switching — or opening a cohort dot's why-panel — swaps the pane in
+  # place instead of reloading and scrolling the room to the top. The tab
+  # bar lives INSIDE the frame so its active chip always matches what the
+  # frame shows.
   def overview_section
     return unless @stats
 
-    div(class: "mt-6 space-y-6") do
-      render Views::CalibrationSessions::TendencyStrip.new(
-        raters: @stats[:raters], org_mean: @stats[:org_mean], people: @people
-      )
-      render Views::CalibrationSessions::DivergenceBoard.new(
-        session: @session,
-        capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
-        insufficient_count: @stats[:insufficient_capability_count]
-      )
+    div(class: "mt-6") do
+      turbo_frame_tag "calibration-overview-pane",
+                      data: { calibration_pane_target: "frame" } do
+        tab_bar
+        case @overview_view
+        when "divergence"
+          render Views::CalibrationSessions::DivergenceBoard.new(
+            session: @session,
+            capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
+            insufficient_count: @stats[:insufficient_capability_count]
+          )
+        when "cohort"
+          render Views::CalibrationSessions::CohortView.new(
+            session: @session, cohorts: @cohorts || [], raters: @stats[:raters],
+            people: @people, selected_person_id: @cohort_person_id, why: @cohort_why
+          )
+        else
+          render Views::CalibrationSessions::TendencyStrip.new(
+            raters: @stats[:raters], org_mean: @stats[:org_mean], people: @people
+          )
+        end
+      end
+    end
+  end
+
+  def tab_bar
+    div(class: "mb-4 flex flex-wrap gap-2", role: "tablist", aria_label: "Calibration views") do
+      OVERVIEW_TABS.each do |value, label|
+        active = @overview_view == value
+        a(
+          href: calibration_session_path(@session, view: value),
+          role: "tab",
+          class: "inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-semibold " \
+                 "#{active ?
+                     'border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-gray-900' :
+                     'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}",
+          aria: { selected: active.to_s }
+        ) { label }
+      end
     end
   end
 

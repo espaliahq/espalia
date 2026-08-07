@@ -107,6 +107,8 @@ class CalibrationSessionsController < ApplicationController
     people_ids = (participant_ids + calibrant_ids + [ @session.facilitator_id ] +
                   log_person_ids(session_log)).uniq
 
+    cohorts = overview_view == "cohort" ? CalibrationSessions::CohortScores.new(session: @session) : nil
+
     render Views::CalibrationSessions::ShowView.new(
       session: @session,
       cycle: AssessmentCycle.find_by(cycle_id: @session.cycle_id),
@@ -117,6 +119,10 @@ class CalibrationSessionsController < ApplicationController
       suggestions: suggested_additions(seed_groups, calibrant_ids, participant_ids),
       readiness: readiness_for(calibrant_ids),
       stats: participant_ids.any? ? CalibrationSessions::OverviewStats.new(session: @session).call : nil,
+      overview_view: overview_view,
+      cohorts: cohorts&.call&.dig(:cohorts),
+      cohort_person_id: cohort_person_id,
+      cohort_why: (cohorts.why_for(cohort_person_id) if cohorts && cohort_person_id),
       add_calibrant_candidates: @session.draft? ? add_calibrant_candidates(calibrant_ids, participant_ids) : [],
       can_curate: @session.draft? && policy(@session).curate?,
       can_start: @session.draft? && policy(@session).start?,
@@ -130,6 +136,22 @@ class CalibrationSessionsController < ApplicationController
   end
 
   private
+
+  # Which overview tab renders — tendency (default) / divergence / cohort.
+  # Unknown values fall back rather than 500 on a mangled link.
+  def overview_view
+    params[:view].presence_in(Views::CalibrationSessions::ShowView::OVERVIEW_TABS.map(&:first)) ||
+      "tendency"
+  end
+
+  # The open why-panel's person — meaningful only on the cohort tab, and
+  # only for someone actually in the population (a foreign id renders no
+  # panel rather than erroring).
+  def cohort_person_id
+    return nil unless overview_view == "cohort"
+
+    params[:cohort_person].presence
+  end
 
   def set_session
     @session = CalibrationSession.find(params.expect(:id))

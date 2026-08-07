@@ -84,6 +84,25 @@ module Views::CalibrationSessions::Glossary
                   "A rater whose high ratings are systematically outlined is one " \
                   "of the most useful things this grid shows."
     },
+    pct_of_expected: {
+      label: "% of expected",
+      definition: "The same number this person's own assessment shows: manager " \
+                  "ratings measured against what their level expects, across every " \
+                  "capability. 100% means meeting the level. Manager ratings only, " \
+                  "so cohorts compare exactly the judgments being calibrated."
+    },
+    cohort_median: {
+      label: "median",
+      definition: "The midpoint of the unlocked scores in this cohort — half sit " \
+                  "above it, half below. People whose score is still locked behind " \
+                  "the coverage gate aren't counted."
+    },
+    score_gate: {
+      label: "score unlocks",
+      definition: "A score only shows once at least half of someone's at-level " \
+                  "behaviours carry a manager rating. Below that, the number would " \
+                  "read as a judgment when it only means \"not rated yet\"."
+    },
     to_confirm: {
       label: "To confirm",
       definition: "Every manager rating for this person is carried from the " \

@@ -172,21 +172,118 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "say so on the strip and keep them off the board" do
+    # The overview is tabbed now, so each surface asserts on its own tab.
+    should "say so on the strip (the default tab)" do
       get calibration_session_path(@session_record)
 
       assert_response :success
-      # Strip: the row stays (readiness is its job) but reads as a state,
-      # not as zeroed measurements.
+      # The row stays (readiness is its job) but reads as a state, not as
+      # zeroed measurements.
       assert_includes response.body, "No ratings yet"
       assert_select "td[colspan='5']", text: /No ratings yet/
-      # Board: no legend swatch promising a dot that exists on no axis —
-      # a footnote names them instead.
+      # The other tabs' content is NOT on this page — one pane at a time.
+      assert_not_includes response.body, "Capability divergence</h2>"
+    end
+
+    should "keep them off the board tab's legend" do
+      get calibration_session_path(@session_record, view: "divergence")
+
+      assert_response :success
       assert_includes response.body, "Quinn Alderberry hasn&#39;t rated yet — not on the board."
-      board = response.body[/Capability divergence.*?(?=PARTICIPANTS|Participants)/m]
-      legend_names = board.scan(/rounded-full bg-\w+-600[^>]*><\/span>([^<]+)/).flatten if board
-      assert_not_includes response.body.scan(/<div class="flex items-center gap-1\.5[^>]*>.*?<\/div>/m).join,
-                          "Quinn Alderberry hasn&#39;t", "footnote is a sentence, not a legend entry"
+      # Exactly two legend swatches — the rated raters. A third would be a
+      # colour promising a dot that exists on no axis.
+      assert_select ".h-3.w-3.rounded-full", count: 2
+    end
+  end
+
+  context "the Score by cohort tab" do
+    setup do
+      sign_in @facilitator_user
+      ActsAsTenant.with_tenant(@tenant) do
+        # A scorable fixture: level ladder + binding, one L3 cohort of two
+        # people under Mia, one rated to 100%, one left gated.
+        family = create(:framework_role_family, tenant: @tenant, framework_id: @cycle.framework_id)
+        engineer = create(:framework_role, tenant: @tenant, role_family_id: family.role_family_id)
+        (1..4).each do |ordinal|
+          create(:framework_level, tenant: @tenant, role_id: engineer.role_id, ordinal: ordinal)
+        end
+        category = create(:framework_capability_category, tenant: @tenant,
+                          framework_id: @cycle.framework_id)
+        cap = create(:framework_capability, tenant: @tenant,
+                     category_id: category.category_id, name: "Strategic Thinking")
+        create(:framework_capability_role_binding, tenant: @tenant,
+               capability_id: cap.capability_id, role_id: engineer.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: cap.capability_id, level_ordinal: 3)
+
+        @gated = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: @em)
+        # @report's assignment exists from the file setup (DeterministicId
+        # PK — re-creating collides); it just needs the scorable role.
+        PersonFrameworkAssignment
+          .find_by(person_id: @report.id, framework_id: @cycle.framework_id)
+          .update!(role_id: engineer.role_id)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: @gated.id, framework_id: @cycle.framework_id, role_id: engineer.role_id)
+        [ @report, @gated ].each do |person|
+          create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+                 person_id: person.id, level_ordinal: 3, role_id: engineer.role_id)
+        end
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: @report.id, framework_id: @cycle.framework_id,
+               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "consistent", manager_rating_source: "seeded")
+
+        @session_record = define_session(calibrant_person_ids: [ @report.id, @gated.id ])
+        @session_record.update!(status: "started")
+      end
+    end
+
+    should "plot scored dots, gate the unrated, and mark the tab active" do
+      get calibration_session_path(@session_record, view: "cohort")
+
+      assert_response :success
+      # Tabs + content live inside the pane frame, so a tab or dot click
+      # swaps in place instead of scrolling the room back to the top.
+      assert_select "turbo-frame#calibration-overview-pane a[role='tab']", count: 3
+      assert_select "a[role='tab'][aria-selected='true']", text: "Score by cohort"
+      # Ivy: 100%, entirely carried → dashed disclosure on the dot.
+      assert_select "a[aria-label*='Ivy IC — 100% of expected']"
+      assert_includes response.body, "1 of 1 ratings carried forward"
+      # Pax: no dot, an honest gate chip.
+      assert_select "a[aria-label*='Pax Thistledown']", count: 0
+      assert_includes response.body, "0 of 1 rated"
+      assert_includes response.body, "score unlocks at 1"
+      # One pane at a time — the strip isn't here.
+      assert_not_includes response.body, "Rater tendency</h2>"
+    end
+
+    should "open the why-panel for a dot, with the rater-context line" do
+      get calibration_session_path(@session_record, view: "cohort", cohort_person: @report.id)
+
+      assert_response :success
+      assert_includes response.body, "100% of expected"
+      assert_includes response.body, "Rated by Mia Manager"
+      assert_includes response.body, "vs org mean"
+      assert_includes response.body, "may be tendency, not Ivy IC"
+      assert_select "a[href*='capabilities']", text: /Open drill-in/
+      assert_includes response.body, "Nothing below expectations."
+    end
+
+    should "render no why-panel for a gated or foreign person" do
+      get calibration_session_path(@session_record, view: "cohort", cohort_person: @gated.id)
+      assert_response :success
+      assert_not_includes response.body, "Rated by", "a gated score has no why to show"
+
+      get calibration_session_path(@session_record, view: "cohort",
+                                   cohort_person: SecureRandom.uuid_v7)
+      assert_response :success
+    end
+
+    should "fall back to the tendency tab on a mangled view param" do
+      get calibration_session_path(@session_record, view: "garbage")
+
+      assert_response :success
+      assert_select "a[role='tab'][aria-selected='true']", text: "Rater tendency"
     end
   end
 
