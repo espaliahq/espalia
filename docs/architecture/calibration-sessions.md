@@ -10,8 +10,11 @@
 > `CalibrationSessionPolicy`; `PopulationSeeds`.
 > *Setup* — list / define / draft curation / readiness / start / close, with
 > the shared `Views::Shared::PersonPicker` typeahead for participants.
-> *Overview* — rater-tendency strip + capability-divergence board
-> (`OverviewStats`, `calibration_sessions_overview`) + draft-phase agenda.
+> *Overview* — three tabs swapped inside a Turbo Frame (`?view=`, no
+> scroll jump — the drill-in's pane pattern): rater-tendency strip,
+> capability-divergence board, and **Score by cohort** (`OverviewStats` +
+> `CohortScores`, both in `calibration_sessions_overview`); draft-phase
+> agenda.
 > *Drill-in* — expectation text with role illustrations, the rater × level
 > dot grid, and a three-pane bottom half (person card / evidence wall §d /
 > compare tray §e). See *Drill-in implementation notes* under §3.
@@ -403,6 +406,42 @@ positioned dots on a shared axis, sorted by spread; click → drill-in:
   Tech Communication         Raj●   Ana● Sam●  Mia●           spread 1.1
   Delivery                        ●●● ●                       spread 0.4
 ```
+
+**Score by cohort** — the third tab: every calibrated person as an
+initialed dot on a 0–125% axis, grouped by assessed level (the enrollment
+snapshot) and coloured by WHO rated them, so "Raj's people cluster low"
+is pre-attentive. Design rules, all deliberate:
+
+- **The metric is the assessment's own number** — `% of expected`
+  (`Scoring#performance_ratio`) at `perspective: :manager_only`, computed
+  with the framework's own thresholds. The room and the individual's
+  assessment can never disagree about arithmetic, % of expected stays
+  comparable across roles sharing a level, and manager-only keeps the
+  assessee's private self-ratings out entirely (no AssesseeVisibility
+  interaction by construction).
+- **The hero's coverage gate**: below half the at-level cells rated, no
+  dot — an honest "4 of 12 rated · score unlocks at 6" chip instead of a
+  misleadingly low number. Carried values COUNT toward coverage (they are
+  real ratings; `LevelCoverage`'s seeded-exclusion measures *work-state*,
+  a different question) and are disclosed per dot: a mostly-carried score
+  wears the dashed ring.
+- **Axis grammar is the divergence board's** — same track, same rater
+  palette (`RaterColours`, shared), a labelled 100% reference line, a
+  median tick per cohort (median over unlocked scores only). Near-tied
+  dots drop to a second lane rather than overlapping.
+- **Drill into why**: clicking a dot opens a server-rendered why-panel
+  (`?cohort_person=`, swapped in the same frame) — the capabilities
+  pulling the score down and up (`CohortScores#why_for`), each linking
+  into the capability drill-in with that person's card open, composing
+  with the existing surface. The **rater-context line** ("Mia rates +0.41
+  vs org mean across their whole team") ties the tendency strip to this
+  view — a low dot under a harsh rater is a calibration question, not a
+  verdict.
+- **Tabs live inside the frame** so the active chip can't drift from what
+  the frame shows, and every off-page link inside the frame carries
+  `data-turbo-frame="_top"` (the phlex-views.md in-frame trap — the board's
+  capability links and the why-panel's drill-in links both hit it when the
+  overview moved into a frame).
 
 ### 3. Capability drill-in — the core session surface
 
@@ -798,6 +837,10 @@ Mechanics — everything not listed here is inherited untouched:
   `calibration_sessions_overview`) as `:none` ops scoped by the same
   facilitator policy — "where are my EMs most inconsistent?" is a genuinely
   good agent query.
+  `calibration_sessions_overview` also carries `cohorts` — per-person % of
+  expected with the coverage gate verbatim (`pct` nil + `rated`/`total`/
+  `unlock_target` when gated): an agent must never read a gated person as
+  low-scoring.
   *Payload gotcha:* `calibration_sessions_overview` returns `cell_count`
   under two different denominators. On a **rater** row it is that rater's
   whole rated at-level cell set; on a **capability** row it covers only the
@@ -923,9 +966,43 @@ provenance. What that buys the surfaces:
 - **A live session on the current cycle**, because otherwise every visual
   check of this feature begins by hand-rolling one that satisfies the
   population rules.
+- **Above-level surplus for the org's high performers** (top ~30% by base
+  competence, consistent-ish at L+1 on ~60% of behaviours). Without it no
+  seeded person can read "above expectations" — every rating sits at the
+  enrolled level, performance never exceeds 100%, and the cohort
+  why-panel's positive-only "Pulling it up" column is empty by
+  construction. Skipped under a coasting rater (a fresh human rating would
+  break their "all carried" story).
 
 Re-running converges rather than growing: cycles are keyed by name, the
 session by cycle, and every persona derives from a SHA of stable ids.
+
+### The person card is a read-only assessment column
+
+A person can be rated **above their level**, so the drill-in's person card
+renders the capability's whole ladder, not just the assessed cell — a
+read-only adaptation of the assessment capability view:
+
+- **Level strip** — one chip per rung of the role ladder (ADR-19 enrollment
+  snapshot; a pre-snapshot enrollment degrades to the assessed level alone),
+  in the assessment chip vocabulary at manager perspective: solid palette
+  fill when rated, the lighter carried tint + dashed edge when inherited,
+  assumed-consistent blue below the assessed level, neutral above. The
+  assessed level wears **CURRENT**; chips are pane links
+  (`?person_level=`) so switching levels swaps the card in place.
+- **Focused panel** — initial focus is the assessed level; it shows that
+  cell's expectation text, Manager + Self pills (self withheld under
+  AssesseeVisibility, as before), the revisit marker when this session
+  already asked about that cell, and the feedback / evidence linked at
+  that level.
+- **Kebab actions** — "Request feedback / evidence…" and "Ask the rater to
+  revisit…" live in one ⋮ menu on the card header (the assessment-surface
+  pattern). Each item is a `?person_action=` pane link that opens the form
+  scoped to the FOCUSED level — the ask is about the cell on screen, which
+  may sit above the assessed level. Gates unchanged (live session, viewer
+  entitlement, one revisit ask per cell per session).
+- The cohort why-panel's "Open drill-in →" anchors at
+  `#calibration-person-card`, landing the reader on the card it names.
 
 ### Carried-vs-vetted provenance on the read surfaces
 

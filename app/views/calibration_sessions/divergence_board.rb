@@ -11,23 +11,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
 
   AXIS_MAX = 3.0
 
-  # Distinct dot fills per rater column (cycled). Deliberately NOT the
-  # frequency palette — these identify raters, not ratings.
-  #
-  # ORDER IS LOAD-BEARING: adjacent slots must stay tell-apart-able in BOTH
-  # themes. With pink beside purple the dark pair (pink-400 / purple-400)
-  # sat at ΔE 13.3 — below the distinguishability floor for full colour
-  # vision, let alone CVD. Orange between them lifts the worst dark pair to
-  # 27.8 (validated with the dataviz palette checker, light and dark).
-  # Initials on every dot remain the identity signal of record.
-  RATER_DOT_CLASSES = %w[
-    bg-teal-600 dark:bg-teal-400
-    bg-purple-600 dark:bg-purple-400
-    bg-orange-600 dark:bg-orange-400
-    bg-pink-600 dark:bg-pink-400
-    bg-indigo-600 dark:bg-indigo-400
-    bg-cyan-600 dark:bg-cyan-400
-  ].each_slice(2).map { |light, dark| "#{light} #{dark}" }.freeze
+  include Views::CalibrationSessions::RaterColours
 
   # @param session [CalibrationSession] for drill-in links
   # @param capabilities [Array<Hash>] OverviewStats capability rows (sorted)
@@ -87,7 +71,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
         next if rater[:cell_count].zero?
 
         div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
-          span(class: "inline-block h-3 w-3 rounded-full #{dot_class(index)}", aria: { hidden: "true" })
+          span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(index)}", aria: { hidden: "true" })
           plain rater_name(rater[:participant_id])
         end
       end
@@ -121,7 +105,11 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
             class: "group/cap inline-flex items-baseline gap-1 text-sm font-medium " \
                    "text-gray-900 dark:text-white underline decoration-gray-400 " \
                    "dark:decoration-gray-500 underline-offset-4 hover:decoration-gray-900 " \
-                   "dark:hover:decoration-white"
+                   "dark:hover:decoration-white",
+            # The board renders inside the overview tab frame now — this
+            # off-page link must break out or Turbo swaps the frame to
+            # "Content missing" (phlex-views.md's in-frame trap).
+            data: { turbo_frame: "_top" }
           ) do
             plain capability[:name]
             span(class: "text-gray-600 dark:text-gray-300 transition-transform " \
@@ -160,10 +148,10 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
         left = (stats_hash[:mean] / AXIS_MAX * 100).clamp(0, 100).round(1)
         div(
           class: "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-6 w-6 items-center " \
-                 "justify-center rounded-full text-[10px] font-semibold text-white #{dot_class(index)}",
+                 "justify-center rounded-full text-[10px] font-semibold text-white #{rater_dot_class(index)}",
           style: "left: #{left}%",
           title: "#{rater_name(participant_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})"
-        ) { initials(participant_id) }
+        ) { rater_initials(participant_id) }
       end
     end
   end
@@ -196,15 +184,11 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
     @rater_index.fetch(participant_id, 0)
   end
 
-  def dot_class(index)
-    RATER_DOT_CLASSES[index % RATER_DOT_CLASSES.size]
-  end
-
   def rater_name(participant_id)
     @people[participant_id]&.name || "Unknown"
   end
 
-  def initials(participant_id)
-    rater_name(participant_id).split.map(&:first).first(2).join.upcase
+  def rater_initials(participant_id)
+    initials(rater_name(participant_id))
   end
 end

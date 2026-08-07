@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 # Assembles one population member's drill-in card: their dot (at-level
-# ratings + backing), the rater who owns the ratings, the active feedback /
-# evidence linked to this capability at their level (relation-first
-# authorship — the projected room sees "peer" / "manager" / "self", never a
-# name by default), and whether THIS session already asked for a revisit.
+# ratings + backing), the rater who owns the ratings, and — across EVERY
+# level of their role's ladder for this capability — the ratings, the
+# active feedback / evidence (relation-first authorship — the projected
+# room sees "peer" / "manager" / "self", never a name by default), and the
+# expectation text. A person can be rated above their level, so the card
+# is a read-only adaptation of the assessment's capability view: the room
+# reads the whole column, focused initially at the assessed level.
 #
 # Extracted from the drill-in controller so the person card and the compare
 # tray (2–3 cards side by side) assemble through one code path.
@@ -49,13 +52,70 @@ class CalibrationSessions::PersonCard
     return nil unless located
 
     dot, ordinal, rater_id = located
+    evidence_by_level = evidence_for(person_id)
     {
       dot: dot,
       ordinal: ordinal,
       rater_id: rater_id,
-      evidence: evidence_for(person_id, ordinal),
-      revisit_requested: revisit_requested?(person_id, ordinal)
+      levels: ladder_for(person_id, ordinal),
+      ratings_by_level: ratings_by_level(person_id, visible: visible?(person_id)),
+      expectations_by_level: expectations_by_level,
+      evidence_by_level: evidence_by_level,
+      evidence: evidence_by_level[ordinal] || [],
+      revisit_ordinals: revisit_ordinals(person_id),
+      revisit_requested: revisit_ordinals(person_id).include?(ordinal),
+      self_withheld: !visible?(person_id)
     }
+  end
+
+  # The level ladder the strip renders — the person's role ladder from the
+  # ADR-19 enrollment snapshot. A pre-snapshot enrollment (no role_id)
+  # degrades to just the assessed level, so the card still renders.
+  #
+  # @return [Array<Hash>] `[{ ordinal:, code: }]`, ascending
+  def ladder_for(person_id, ordinal)
+    role_id = AssessmentCycleEnrollment.active
+      .find_by(cycle_id: @session.cycle_id, person_id: person_id)&.role_id
+    levels = role_id ? FrameworkState::Level.where(role_id: role_id).order(:ordinal) : []
+    return [ { ordinal: ordinal, code: "L#{ordinal}" } ] if levels.empty?
+
+    levels.map { |level| { ordinal: level.ordinal, code: level.code.presence || "L#{level.ordinal}" } }
+  end
+
+  # Per-level rating frequencies for this capability. Manager ratings are
+  # the session's business and always shown; self ratings follow the same
+  # entitlement rule as evidence (AssesseeVisibility) — withheld, not
+  # blanked, when the viewer may not read this person's assessment.
+  #
+  # @return [Hash{Integer => Hash}] ordinal => { manager:, manager_carried:, self: }
+  def ratings_by_level(person_id, visible:)
+    AssessmentLevelRating.for_cycle(@session.cycle_id)
+      .where(framework_id: @session.framework_id, person_id: person_id,
+             capability_stable_id: @capability_stable_id)
+      .to_h do |rating|
+        [ rating.level_ordinal, {
+          manager: rating.manager_rated_frequency,
+          manager_carried: rating.manager_rated_frequency.present? &&
+            rating.manager_rating_source == "seeded",
+          self: visible ? rating.self_rated_frequency : nil
+        } ]
+      end
+  end
+
+  # Expectation text per level for this capability — shared across cards
+  # (it's capability-scoped, not person-scoped). Scoped to the session's
+  # framework: a cloned framework can carry the same stable_id, and the
+  # wrong framework's text must never win the to_h.
+  def expectations_by_level
+    @expectations_by_level ||= FrameworkState::BehaviouralExpectation
+      .joins(capability: :category)
+      .where(framework_capabilities: { stable_id: @capability_stable_id })
+      .merge(FrameworkState::CapabilityCategory.where(framework_id: @session.framework_id))
+      .to_h { |expectation| [ expectation.level_ordinal, expectation.description ] }
+  end
+
+  def visible?(person_id)
+    @visible_person_ids.nil? || @visible_person_ids.include?(person_id)
   end
 
   # @return [Array(Hash, Integer, String), nil] [dot, ordinal, rater_id]
@@ -69,28 +129,38 @@ class CalibrationSessions::PersonCard
     nil
   end
 
-  def evidence_for(person_id, ordinal)
+  # All levels at once — same query count as the old at-level read, the
+  # card just stops throwing away the other levels' rows.
+  #
+  # @return [Hash{Integer => Array<Hash>}] ordinal => evidence entries
+  def evidence_for(person_id)
     # The card still renders (ratings are the session's business); only the
     # free-text feedback is withheld when the viewer isn't entitled to it.
-    return [] if @visible_person_ids && !@visible_person_ids.include?(person_id)
+    return {} unless visible?(person_id)
 
     links = EvidenceLink.where(
       link_status: "active", framework_id: @session.framework_id,
-      capability_stable_id: @capability_stable_id, person_id: person_id, level_ordinal: ordinal
-    ).pluck(:evidence_id, :valence).to_h
+      capability_stable_id: @capability_stable_id, person_id: person_id
+    ).pluck(:evidence_id, :level_ordinal, :valence)
 
     # Resolved once per card, not per evidence item — it depends only on the
     # person, and a card can carry many items.
     manager_id = manager_id_for(person_id)
+    items = EvidenceItem.active.where(id: links.map(&:first)).index_by(&:id)
 
-    EvidenceItem.active.where(id: links.keys).order(recorded_at: :desc).map do |item|
-      {
+    links.filter_map do |evidence_id, ordinal, valence|
+      item = items[evidence_id]
+      next unless item
+
+      [ ordinal, {
         content: item.content,
-        valence: links[item.id],
+        valence: valence,
         author_id: item.author_id,
         relation: author_relation(item.author_id, person_id, manager_id),
         recorded_at: item.recorded_at
-      }
+      } ]
+    end.group_by(&:first).transform_values do |entries|
+      entries.map(&:last).sort_by { |entry| entry[:recorded_at] }.reverse
     end
   end
 
@@ -108,14 +178,14 @@ class CalibrationSessions::PersonCard
       Person.find_by(id: person_id)&.manager_id
   end
 
-  # Whether THIS session already asked the rater to revisit this cell —
-  # the card then shows the marker instead of a second ask.
-  def revisit_requested?(person_id, ordinal)
-    outcomes.revisit_requests.any? do |r|
-      r[:person_id] == person_id &&
-        r[:capability_stable_id] == @capability_stable_id &&
-        r[:level_ordinal] == ordinal
-    end
+  # The ordinals THIS session already asked the rater to revisit for this
+  # capability — the card shows a marker at those levels instead of a
+  # second ask (one ask per cell per session).
+  def revisit_ordinals(person_id)
+    @revisit_ordinals ||= {}
+    @revisit_ordinals[person_id] ||= outcomes.revisit_requests
+      .select { |r| r[:person_id] == person_id && r[:capability_stable_id] == @capability_stable_id }
+      .to_set { |r| r[:level_ordinal] }
   end
 
   # Memoized across cards — the compare tray assembles up to three from one

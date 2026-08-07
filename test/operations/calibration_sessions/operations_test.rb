@@ -278,6 +278,30 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
       assert result.key?(:capabilities)
     end
 
+    should "carry the level cohorts with names and the coverage gate intact" do
+      # This fixture has no scorable ladder, so everyone in a cohort is
+      # GATED — exactly the payload shape an agent must read correctly:
+      # pct nil + rated/total/unlock_target, never a fake low number.
+      family = create(:framework_role_family, tenant: @tenant, framework_id: @cycle.framework_id)
+      engineer = create(:framework_role, tenant: @tenant, role_family_id: family.role_family_id)
+      create(:framework_level, tenant: @tenant, role_id: engineer.role_id, ordinal: 3)
+      # This fixture never enrolls anyone — the cohort's whole input is the
+      # cycle snapshot, so create it here.
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: @report_1.id, level_ordinal: 3, role_id: engineer.role_id)
+
+      result = Operations::CalibrationSessions::Overview.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+
+      cohort = result[:cohorts].find { |c| c[:ordinal] == 3 }
+      dot = cohort[:people].find { |d| d[:person_id] == @report_1.id }
+      assert_equal "Ivy IC", dot[:name]
+      assert_nil dot[:pct]
+      assert_not dot[:unlocked]
+      assert dot.key?(:unlock_target)
+    end
+
     should "deny the overview to a participant" do
       assert_raises(Pundit::NotAuthorizedError) do
         Operations::CalibrationSessions::Overview.call(

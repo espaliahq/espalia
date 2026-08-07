@@ -306,20 +306,7 @@ class Reporting::CapabilityAttainment
   # Constant across the whole call — memoized so per-participant scoring
   # doesn't rebuild it.
   def framework_thresholds
-    @framework_thresholds ||= begin
-      framework = @cycle.framework
-      if framework
-        {
-          mastery_threshold: framework.mastery_threshold&.to_f,
-          meeting_expectation_threshold: framework.meeting_expectation_threshold&.to_f,
-          underperforming_threshold: framework.underperforming_threshold&.to_f,
-          overperformance_cap: framework.overperformance_cap,
-          deficit_threshold: framework.deficit_threshold&.to_f
-        }
-      else
-        {}
-      end
-    end
+    @framework_thresholds ||= @cycle.framework&.scoring_thresholds || {}
   end
 
   # Bound capabilities across all scoped roles, ordered by category then name —

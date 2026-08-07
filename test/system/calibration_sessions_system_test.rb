@@ -107,6 +107,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
   test "facilitator sees tendency strip and divergence board on a live session" do
     ActsAsTenant.with_tenant(@tenant) do
+      # A scorable ladder so the cohort tab has real numbers: role, levels,
+      # and both capabilities bound. Adds nothing to the strip/board math.
+      family = create(:framework_role_family, tenant: @tenant, framework_id: @cycle.framework_id)
+      engineer = create(:framework_role, tenant: @tenant, role_family_id: family.role_family_id)
+      (1..5).each { |o| create(:framework_level, tenant: @tenant, role_id: engineer.role_id, ordinal: o) }
+
       category = create(:framework_capability_category, tenant: @tenant,
                         framework_id: @cycle.framework_id, name: "Thinking")
       @cap_a = create(:framework_capability, tenant: @tenant,
@@ -121,11 +127,19 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       # report_1/2 already hold assignments from setup (DeterministicId PK).
       [ report_3, report_4 ].each do |person|
         create(:person_framework_assignment, tenant: @tenant,
-               person_id: person.id, framework_id: @cycle.framework_id)
+               person_id: person.id, framework_id: @cycle.framework_id, role_id: engineer.role_id)
       end
+      PersonFrameworkAssignment.where(person_id: [ @report_1.id, @report_2.id ])
+        .update_all(role_id: engineer.role_id)
       population.each do |person|
         create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-               person_id: person.id, level_ordinal: 3)
+               person_id: person.id, level_ordinal: 3, role_id: engineer.role_id)
+      end
+      [ @cap_a, cap_b ].each do |cap|
+        create(:framework_capability_role_binding, tenant: @tenant,
+               capability_id: cap.capability_id, role_id: engineer.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: cap.capability_id, level_ordinal: 3)
       end
       # Mia rates high, Raj rates low on Strategic Thinking; both agree on Delivery.
       rate(@report_1, @cap_a, "consistent")
@@ -184,24 +198,103 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "RATER TENDENCY"
     assert_text "Org mean"
     assert_text "Mia Manager"
-    assert_text "CAPABILITY DIVERGENCE"
-    assert_text "Strategic Thinking"
-    assert_text "spread 3.0"
-    assert_text "raters disagree"
-    # Carried-forward values are marked, not hidden and not excluded: the
-    # spread above is still computed from them.
+    # ── Strip content, on the default tab ──
+    assert_selector "a[role='tab'][aria-selected='true']", text: "Rater tendency"
+    assert_no_text "CAPABILITY DIVERGENCE"
+    # Carried-forward values are marked, not hidden and not excluded.
     assert_text "Carried"
     # Mia has 3 at-level cells; 1 of them is carried.
     assert_text "1 of 3"
-    # The capability comparison spans all 4 raters' cells on it.
-    assert_text "1 of 4 carried"
+    # The silent rater: a sentence, never zeroed columns.
+    assert_text "No ratings yet — not counted in the org mean or any column."
     # No curation affordances on a live session
     assert_no_text "Add person from your org"
 
-    # The silent rater: a sentence on the strip, a footnote off the board —
-    # never zeroed columns or a legend colour with no dot behind it.
-    assert_text "No ratings yet — not counted in the org mean or any column."
+    # ── Tabs: one pane at a time, swapped in place ──
+    # A sentinel that survives frame swaps but not full navigations — the
+    # whole point of the pane frame is that a tab click doesn't reload (or
+    # scroll) the page.
+    page.execute_script("window.__staying = true")
+    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
+    assert_text "Strategic Thinking"
+    assert_text "spread 3.0"
+    assert_text "raters disagree"
+    # The capability comparison spans all 4 raters' cells on it.
+    assert_text "1 of 4 carried"
+    # …and the silent rater is a footnote here, not a legend colour with no
+    # dot behind it. One pane at a time: the strip is gone.
     assert_text "Quinn Alderberry hasn't rated yet — not on the board."
+    assert_no_text "RATER TENDENCY"
+
+    # ── Score by cohort ──
+    # JS-dispatched so Selenium's scroll-into-view can't touch scrollY, and
+    # in a SHORT viewport so the fixture page actually scrolls: the frame
+    # swap must leave the room's scroll position alone — the entire reason
+    # the tabs live in a pane frame.
+    page.driver.browser.manage.window.resize_to(1400, 500)
+    page.execute_script("window.scrollTo(0, 300)")
+    assert_operator page.evaluate_script("window.scrollY"), :>=, 300,
+                    "the instrument needs a page that scrolls"
+    click_with_retry(expect_text: "SCORE BY COHORT") do
+      page.execute_script(<<~JS)
+        [...document.querySelectorAll("a[role='tab']")]
+          .find((a) => a.textContent.includes("Score by cohort")).click()
+      JS
+    end
+    assert page.evaluate_script("window.__staying === true"),
+           "tab clicks must swap the pane frame, never reload the page"
+    assert_operator page.evaluate_script("window.scrollY"), :>=, 200,
+                    "the swap must not scroll the room back to the top"
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+    assert_equal "cohort", URI.parse(current_url).then { |u| Rack::Utils.parse_query(u.query)["view"] },
+                 "the tab is shareable — pushState carries ?view="
+    assert_text "100% — meets expectations"
+    assert_text "median"
+    # All four L3 people scored (each has ≥1 of 2 at-level cells rated).
+    assert_selector "a[aria-label*='% of expected']", count: 4
+
+    # Open a dot → the why panel, with the rater-context reframe.
+    why_dot = find("a[aria-label^='Nia IC']")
+    click_with_retry(expect_text: "Rated by Mia Manager") { why_dot.click }
+    assert page.evaluate_script("window.__staying === true"),
+           "a dot click swaps the pane too — no scroll jump mid-discussion"
+    assert_text "of expected"
+    assert_text "vs org mean"
+    # The why-panel composes with the drill-in rather than growing a grid.
+    # (Two contribution rows → two links; the first is fine.)
+    assert_selector "a[href*='capabilities'][href*='person=']", minimum: 1
+    click_with_retry(expect_text: "WHAT GOOD LOOKS LIKE") do
+      find("a[href*='capabilities'][href*='person=']", match: :first).click
+    end
+    assert_text "Nia IC"
+
+    # ── The cohort axis on a phone: scrolls inside its own container ──
+    page.driver.browser.manage.window.resize_to(375, 812)
+    visit calibration_session_path(@live_session_id, view: "cohort")
+    assert_text "SCORE BY COHORT"
+    overflowing = page.evaluate_script(<<~JS)
+      (() => {
+        const wrap = document.querySelector(".overflow-x-auto");
+        return wrap.scrollWidth > wrap.clientWidth &&
+               document.documentElement.scrollWidth <= window.innerWidth + 1;
+      })()
+    JS
+    assert overflowing, "the axis scrolls inside its wrapper, never the page body"
+    # A dot is still reachable after scrolling the wrapper.
+    page.execute_script(<<~JS)
+      const wrap = document.querySelector(".overflow-x-auto");
+      wrap.scrollLeft = wrap.scrollWidth;
+      [...wrap.querySelectorAll("a[aria-label*='% of expected']")].at(-1).click();
+    JS
+    assert_text "Rated by"
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+
+    # Back to the session page for the rest of the flow — a deep link to
+    # the cohort tab renders it directly (the ?view= param is shareable),
+    # then over to the strip for the vocabulary check.
+    visit calibration_session_path(@live_session_id, view: "cohort")
+    assert_text "SCORE BY COHORT"
+    click_with_retry(expect_text: "RATER TENDENCY") { click_link "Rater tendency" }
 
     # ── The vocabulary defines itself, by KEYBOARD ──
     # The room is on a projector and the facilitator may be driving by
@@ -232,6 +325,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # is worse than none; the flip is verified visually instead.
 
     # ── Drill-in: divergence row → rater × level grid ──
+    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
     click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-person-id]", minimum: 4
@@ -239,9 +333,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # their people as links, so the person card (and its revisit ask) stays
     # reachable for exactly the unrated cell the room will ask about.
     assert_text "Quinn Alderberry hasn't rated this capability yet"
-    click_with_retry(expect_text: "Close") do
-      find("a[data-person-id='#{@pax_id}']", text: "Pax Thistledown").click
-    end
+    click_selector_with_js_fallback("a[data-person-id='#{@pax_id}']", expect_text: "Close")
     assert_text "Pax Thistledown"
     # The carried dot wears the dashed edge and says so non-visually.
     carried_dot = find("a[data-person-id='#{@report_3_id}']")
@@ -256,9 +348,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       "the accessible name carries the person, not just their initials"
 
     # Opening a dot shows their card.
-    click_with_retry(expect_text: "Close") do
-      find("a[data-person-id='#{@report_1.id}']").click
-    end
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
     assert_text "Ivy IC"
     assert_text "Manager: Consistently"
 
@@ -343,11 +433,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       handler.add_role_family(fw_id, rfid, "Engineering")
       handler.add_role(fw_id, role_id, rfid, "Software Engineer", "E", "ic")
       handler.add_level(fw_id, level_id, role_id, 3, "Engineer III", "E3")
+      handler.add_level(fw_id, SecureRandom.uuid_v7, role_id, 4, "Engineer IV", "E4")
       cat_id = SecureRandom.uuid_v7
       handler.add_capability_category(fw_id, cat_id, "Thinking")
       handler.add_capability(fw_id, cap_id, cap_stable, cat_id, "Strategic Thinking")
       handler.set_behavioural_expectation(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
                                           cap_id, 3, "Shapes team direction")
+      handler.set_behavioural_expectation(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                          cap_id, 4, "Shapes system direction")
       handler.publish_version(fw_id, "test")
 
       # A real PD assignment (not a factory row) — the revisit mirror lands on
@@ -359,7 +452,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       end
       cycle = create(:assessment_cycle, tenant: @tenant, name: "H2 2026 Review", framework_id: fw_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
-             person_id: @report_1.id, level_ordinal: 3)
+             person_id: @report_1.id, level_ordinal: 3, role_id: role_id)
+      # Rated ABOVE the assessed level — the person card's ladder must
+      # surface it (at-level stays unrated, so the grid's unrated-rater
+      # sentence is untouched).
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: cycle.cycle_id,
+             person_id: @report_1.id, framework_id: fw_id,
+             capability_stable_id: cap_stable, level_ordinal: 4,
+             manager_rated_frequency: "occasional")
 
       ctx = AuthorizationContext.new(
         user: @facilitator_user,
@@ -407,23 +507,38 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     end
 
     # ── Ask the rater to revisit, from the person card ──
-    click_with_retry(expect_text: "Close") do
-      find("a[data-person-id='#{@report_1.id}']").click
-    end
+    # This dot click dropped TWICE through click_with_retry on a starved CI
+    # runner (both attempts share Selenium's pointer mechanism) — the
+    # JS-fallback guarantees the second attempt fires.
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
     assert_text "Ivy IC"
 
-    assert_selector "summary", text: "Ask Mia Manager to revisit this rating"
-    page.execute_script(<<~JS)
-      document.querySelectorAll("details > summary").forEach((s) => {
-        if (s.textContent.includes("revisit this rating")) s.parentElement.open = true
-      })
-    JS
+    # ── The read-only ladder: the E4 chip swaps the panel to the
+    # above-level cell in place (pane frame, no scroll jump) ──
+    click_selector_with_js_fallback(
+      "#calibration-person-card a[href*='person_level=4']",
+      expect_selector: "#calibration-person-card a[aria-current='true'][href*='person_level=4']"
+    )
+    assert_text "Shapes system direction"
+    assert_text "Manager: Most of the time"
+    # …and back to the assessed level before the asks below, so they scope
+    # to the L3 cell the room is discussing.
+    click_selector_with_js_fallback(
+      "#calibration-person-card a[href*='person_level=3']",
+      expect_selector: "#calibration-person-card a[aria-current='true'][href*='person_level=3']"
+    )
+
+    # The ask lives in the card's kebab; the item swaps the form in via the
+    # pane frame (URL-driven, no scroll jump).
+    open_dropdown(scope: "#calibration-person-card")
+    click_link_with_js_fallback "revisit this rating…",
+                                expect_text: "to revisit this rating at L"
     js_set_field "#revisit-note", "Compare against the two peers we just discussed"
     click_button_with_js_fallback "Request revisit", expect_text: "Revisit requested"
 
-    # One ask per cell per session — the marker replaces the form.
+    # One ask per cell per session — the marker replaces the kebab item.
     assert_text "Revisit requested — it will appear in Mia Manager's assessment activity."
-    assert_no_selector "summary", text: "Ask Mia Manager to revisit this rating"
+    assert_no_selector "a", text: /revisit this rating…/
 
     ActsAsTenant.with_tenant(@tenant) do
       revisits = CalibrationSessions::SessionOutcomes
@@ -437,15 +552,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       assert_equal 1, mirrored.size, "the nudge must mirror onto the person's PD stream"
     end
 
-    # ── §f: request feedback / evidence from the person card ──
+    # ── §f: request feedback / evidence from the person card's kebab ──
     # The redirect re-opened Ivy's card (person= rides the return path).
     assert_text "Ivy IC"
-    assert_selector "summary", text: "Request feedback / evidence about Ivy IC"
-    page.execute_script(<<~JS)
-      document.querySelectorAll("details > summary").forEach((s) => {
-        if (s.textContent.includes("Request feedback / evidence")) s.parentElement.open = true
-      })
-    JS
+    open_dropdown(scope: "#calibration-person-card")
+    click_link_with_js_fallback "Request feedback / evidence…",
+                                expect_text: "Request feedback / evidence about Ivy IC"
     page.execute_script(<<~JS)
       const select = document.querySelector("#evidence-request-requestee")
       select.value = [...select.options].find((o) => o.text.includes("Mia Manager")).value
@@ -551,6 +663,48 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
     JS
+  end
+
+  test "calibration screens stretch to at least 80% of a large desktop" do
+    session_id = nil
+    ActsAsTenant.with_tenant(@tenant) do
+      ctx = AuthorizationContext.new(
+        user: @facilitator_user,
+        tenant_user: TenantUser.find_by(user: @facilitator_user),
+        person: @facilitator
+      )
+      result = Operations::CalibrationSessions::Define.call(
+        context: ctx,
+        params: {
+          cycle_id: @cycle.cycle_id, name: "Wide calibration",
+          participant_ids: [ @em_1.id ],
+          calibrant_person_ids: [ @report_1.id ]
+        }
+      )
+      Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
+      session_id = result[:session_id]
+    end
+
+    page.driver.browser.manage.window.resize_to(2400, 1100)
+    sign_in_as(@facilitator_user)
+
+    visit calibration_sessions_path
+    assert_text "Wide calibration"
+    assert_operator width_ratio, :>=, 0.78,
+                    "the index must not sit in a narrow column on a big screen"
+
+    visit calibration_session_path(session_id)
+    assert_text "RATER TENDENCY"
+    assert_operator width_ratio, :>=, 0.78,
+                    "the session room must not sit in a narrow column on a big screen"
+  end
+
+  # The page wrapper's share of the viewport — the calibration screens
+  # promise at least 80% on a large desktop.
+  def width_ratio
+    page.evaluate_script(
+      "document.querySelector('#main-content > div').getBoundingClientRect().width / window.innerWidth"
+    )
   end
 
   test "member without reports sees no Calibration nav link" do

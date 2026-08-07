@@ -67,7 +67,7 @@ export default class extends BaseController {
     const current = new URL(window.location.href)
     const carried = [
       ...current.searchParams.getAll("compare[]").map(value => [ "compare[]", value ]),
-      ...[ "person", "view", "wall_level", "wall_valence", "wall_rater" ]
+      ...[ "person", "person_level", "view", "wall_level", "wall_valence", "wall_rater" ]
         .filter(key => current.searchParams.get(key))
         .map(key => [ key, current.searchParams.get(key) ])
     ]

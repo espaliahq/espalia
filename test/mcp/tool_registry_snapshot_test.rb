@@ -744,7 +744,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_overview",
-        "description" => "Calibration overview for a session — per-rater tendency (mean vs org, distribution, self-gap, evidence backing) and capabilities ranked by tendency-corrected rater disagreement.",
+        "description" => "Calibration overview for a session — per-rater tendency (mean vs org, distribution, self-gap, evidence backing), capabilities ranked by tendency-corrected rater disagreement, and level cohorts of per-person % of expected (manager ratings only; a coverage-gated person carries pct: null with rated/total/unlock_target — not rated yet, never a low score).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

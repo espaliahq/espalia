@@ -16,6 +16,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Evidence::Valence
   include Views::Evidence::ExamplesDisclosure
   include Views::CalibrationSessions::Glossary
+  include Views::CalibrationSessions::RaterColours
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
@@ -35,6 +36,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # @param can_flag [Boolean] whether the viewer can ⚑ flag an expectation
   #   as unclear (facilitator/admin AND the session is live)
   def initialize(session:, stats:, people:, person_card:, can_flag: false,
+                 person_focus_ordinal: nil, person_action: nil,
                  request_candidates: nil,
                  view: nil, wall: nil, wall_filters: {}, compare_ids: [], compare_cards: {},
                  session_log: nil, can_note: false,
@@ -43,6 +45,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @stats = stats
     @people = people
     @person_card = person_card
+    @person_focus_ordinal = person_focus_ordinal
+    @person_action = person_action
     @can_flag = can_flag
     @request_candidates = request_candidates
     @session_log = session_log
@@ -62,7 +66,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(
-        class: "max-w-7xl mx-auto px-4 py-8 flex gap-6 items-start",
+        class: "max-w-[max(80rem,80vw)] mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
           controller: "calibration-pane#{' activity-pane' if @session_log}",
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::DRILL_IN_COOKIE,
@@ -350,10 +354,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   # Two letters, uppercased — the divergence board's convention.
-  def initials(name)
-    name.to_s.split.map(&:first).first(2).join.upcase
-  end
-
   # Backed = solid fill, unbacked = outline (the backing signal is shape,
   # never colour). The initials sit on both, so each branch also picks a
   # text colour that clears AA against its own background.
@@ -472,9 +472,20 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   # Rebuilds the drill-in URL with the given view, preserving the opened
   # person, the compare pins, and (within the wall) the active filters.
-  def drill_in_path(view:, person: opened_person_id, compare: @compare_ids, filters: @wall_filters)
+  def drill_in_path(view:, person: opened_person_id, person_level: :current,
+                    person_action: nil, compare: @compare_ids, filters: @wall_filters)
+    # Focus belongs to the OPEN card: a link that opens a different person
+    # (a grid dot, an unrated-sentence name) must start at THEIR assessed
+    # level, not inherit this card's focused ordinal.
+    person_level = (@person_focus_ordinal if person == opened_person_id) if person_level == :current
     query = {}
     query[:person] = person if person.present?
+    # Focus and open-form state belong to the open card — never carried
+    # once the card is closed.
+    if person.present?
+      query[:person_level] = person_level if person_level
+      query[:person_action] = person_action if person_action
+    end
     query[:compare] = compare if compare.any?
     query[:view] = view if view
     # Filters ride every link, not just wall→wall, so stepping out to a
@@ -508,6 +519,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     # would ride the POST from this page-load snapshot and come back.
     tag = { pane_state: "true" }
     input(type: "hidden", name: "person", value: opened_person_id, data: tag) if opened_person_id.present?
+    if opened_person_id.present? && @person_focus_ordinal
+      input(type: "hidden", name: "person_level", value: @person_focus_ordinal, data: tag)
+    end
     @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id, data: tag) }
     input(type: "hidden", name: "view", value: @view, data: tag) if @view
     { wall_level: @wall_filters[:level], wall_valence: @wall_filters[:valence],
@@ -726,6 +740,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
               end
             end
             div(class: "flex items-center gap-1") do
+              person_card_kebab
               pin_to_compare_link(dot)
               a(
                 href: drill_in_path(view: nil, person: nil),
@@ -736,25 +751,173 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             end
           end
 
-          div(class: "mt-3 flex flex-wrap gap-2") do
-            rating_pill("Manager", dot[:frequency], carried: dot[:carried])
-            rating_pill("Self", dot[:self_frequency], withheld: dot[:self_withheld])
-          end
-
-          evidence_section
-          request_evidence_section
-          revisit_section
+          person_level_strip
+          person_level_panel
+          person_action_form
         end
       end
     end
   end
 
-  # §f — when the room can't answer "what did you see?", the resolution IS
-  # an evidence request. Rendered only when the controller resolved
-  # candidates: that already encodes every gate (live session, viewer
-  # entitlement to this person's assessment, a linked Person). Rides the
-  # existing request machinery; the session records provenance so the log
-  # tracks fulfilment.
+  # ── The read-only per-level column (the assessment capability view,
+  # adapted) ──
+  #
+  # A person can be rated above their level, so the card renders the whole
+  # ladder for this capability: one chip per level in the assessment's
+  # rating vocabulary (manager perspective — the judgments being
+  # calibrated), focused initially at the assessed level. Chips are pane
+  # links (`?person_level=`), so switching levels swaps the card in place
+  # without scrolling the room.
+  def person_level_strip
+    levels = @person_card[:levels]
+    return if levels.size <= 1
+
+    div(class: "mt-4 overflow-x-auto") do
+      # The inner padding keeps the focused chip's offset ring inside the
+      # scroll wrapper instead of clipped at its edge.
+      div(class: "flex items-start gap-1.5 p-1") do
+        levels.each { |level| person_level_chip(level) }
+      end
+    end
+  end
+
+  def person_level_chip(level)
+    ordinal = level[:ordinal]
+    focused = ordinal == focus_ordinal
+    assessed = ordinal == @person_card[:ordinal]
+    fill, border, note = person_chip_appearance(ordinal)
+
+    div(class: "flex flex-col items-center gap-0.5") do
+      # The 44px tap target is the link; the visual chip is the inner span
+      # (the grid dot's pattern).
+      a(
+        href: drill_in_path(view: nil, person_level: ordinal),
+        class: "inline-flex h-11 min-w-11 items-center justify-center",
+        aria: { label: person_chip_label(level, note, assessed: assessed), current: focused ? "true" : nil }
+      ) do
+        span(
+          class: "inline-flex h-9 min-w-11 items-center justify-center rounded-md border-2 px-1.5 " \
+                 "text-[11px] font-semibold #{fill} #{border} " \
+                 "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if focused}"
+        ) { level[:code] }
+      end
+      if assessed
+        span(class: "text-[9px] font-semibold tracking-wide text-gray-600 dark:text-gray-300") do
+          "CURRENT"
+        end
+      end
+    end
+  end
+
+  # The assessment chip vocabulary, manager perspective: solid palette fill
+  # when rated, the lighter carried tint + dashed edge when inherited,
+  # assumed-consistent blue below the assessed level, neutral above.
+  def person_chip_appearance(ordinal)
+    rating = @person_card[:ratings_by_level][ordinal] || {}
+    config = rating[:manager] && CONFIG[rating[:manager]]
+    if config && rating[:manager_carried]
+      [ "#{config[:chip_carried]} #{config[:chip_txt]}", config[:chip_carried_border],
+        "#{config[:phrase]} (carried forward, unconfirmed)" ]
+    elsif config
+      [ "#{config[:chip_bg]} #{config[:chip_txt]}", "border-white dark:border-gray-800",
+        config[:phrase] ]
+    elsif ordinal < @person_card[:ordinal]
+      [ "bg-blue-300 dark:bg-blue-300 text-blue-950", "border-white dark:border-gray-800",
+        "unrated — assumed consistent below the assessed level" ]
+    else
+      [ "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200",
+        "border-white dark:border-gray-800", "unrated" ]
+    end
+  end
+
+  def person_chip_label(level, note, assessed:)
+    label = "L#{level[:ordinal]} — Manager: #{note}"
+    label += " — assessed level" if assessed
+    label
+  end
+
+  # The focused level's read-only cell: expectation text, both rating
+  # pills, the revisit marker when this session already asked, and the
+  # feedback / evidence linked at this level.
+  def person_level_panel
+    ordinal = focus_ordinal
+    rating = @person_card[:ratings_by_level][ordinal] || {}
+
+    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+      p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        "L#{ordinal}"
+      end
+      expectation = @person_card[:expectations_by_level][ordinal]
+      p(class: "mt-1 text-sm text-gray-900 dark:text-white") do
+        expectation || "No expectation defined at this level for this capability."
+      end
+
+      div(class: "mt-3 flex flex-wrap gap-2") do
+        rating_pill("Manager", rating[:manager], carried: rating[:manager_carried])
+        rating_pill("Self", rating[:self], withheld: @person_card[:self_withheld])
+      end
+
+      if @person_card[:revisit_ordinals].include?(ordinal)
+        p(class: "mt-3 text-xs font-medium text-amber-700 dark:text-amber-300") do
+          plain "Revisit requested — it will appear in #{rater_name(@person_card[:rater_id])}'s assessment activity."
+        end
+      end
+
+      evidence_section(@person_card[:evidence_by_level][ordinal] || [], ordinal)
+    end
+  end
+
+  def focus_ordinal
+    @person_focus_ordinal || @person_card[:ordinal]
+  end
+
+  # The card's actions live in one kebab (the assessment strip's pattern):
+  # "Request feedback / evidence…" (§f — when the room can't answer "what
+  # did you see?", the resolution IS an evidence request) and "Ask the
+  # rater to revisit…". Each item is a pane link (`?person_action=`) that
+  # re-renders the card with that form open at the focused level — the
+  # page's URL-driven state, no extra JS. Items only render when their
+  # gates hold (live session, viewer entitlement, a rater to ask, no
+  # duplicate revisit on this cell).
+  def person_card_kebab
+    request_ok = @can_flag && @request_candidates&.any?
+    revisit_ok = @can_flag && @person_card[:rater_id] &&
+                 !@person_card[:revisit_ordinals].include?(focus_ordinal)
+    return unless request_ok || revisit_ok
+
+    render Components::Kit::Dropdown.new(align: :right) do |dropdown|
+      dropdown.trigger(label: "Actions for #{@person_card[:dot][:name]}") do
+        span(class: "inline-flex h-11 w-11 items-center justify-center rounded-md text-lg " \
+                    "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") do
+          "⋮"
+        end
+      end
+      dropdown.menu do
+        person_kebab_item("Request feedback / evidence…", "request") if request_ok
+        person_kebab_item("Ask #{rater_name(@person_card[:rater_id])} to revisit this rating…", "revisit") if revisit_ok
+      end
+    end
+  end
+
+  def person_kebab_item(label, action)
+    a(
+      href: drill_in_path(view: nil, person_action: action),
+      role: "menuitem",
+      class: "block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 " \
+             "hover:bg-gray-100 dark:hover:bg-gray-700"
+    ) { label }
+  end
+
+  # The form the kebab opened, rendered expanded under the focused-level
+  # panel. Scoped to the FOCUSED level — the ask is about the cell on
+  # screen, which may sit above the person's assessed level.
+  def person_action_form
+    case @person_action
+    when "request" then request_evidence_section
+    when "revisit" then revisit_section
+    end
+  end
+
   def request_evidence_section
     return unless @can_flag && @request_candidates
 
@@ -770,11 +933,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   def request_evidence_form
-    details do
-      summary(
-        class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
-               "text-gray-600 dark:text-gray-300 hover:text-emerald-700 dark:hover:text-emerald-300"
-      ) { "Request feedback / evidence about #{@person_card[:dot][:name]}" }
+    div do
+      p(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+        "Request feedback / evidence about #{@person_card[:dot][:name]} at L#{focus_ordinal}"
+      end
       form(
         action: calibration_session_evidence_requests_path(@session),
         method: "post",
@@ -786,7 +948,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
         input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
-        input(type: "hidden", name: "level_ordinal", value: @person_card[:ordinal])
+        input(type: "hidden", name: "level_ordinal", value: focus_ordinal)
         state_passthrough_fields
         select(
           id: "evidence-request-requestee", name: "requestee_person_id", required: true,
@@ -826,27 +988,23 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   # Value-free revisit ask, on the card because discussing the dot is what
   # earns the outcome. Only for in-session raters (reference points are
-  # exempt), only while live; one ask per cell per session.
+  # exempt), only while live; one ask per cell per session — the focused
+  # level's marker renders in the level panel, so this only ever opens for
+  # a cell without one.
   def revisit_section
-    return unless @person_card[:rater_id]
+    return unless @can_flag && @person_card[:rater_id]
+    return if @person_card[:revisit_ordinals].include?(focus_ordinal)
 
     div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
-      if @person_card[:revisit_requested]
-        p(class: "text-xs font-medium text-amber-700 dark:text-amber-300") do
-          plain "Revisit requested — it will appear in #{rater_name(@person_card[:rater_id])}'s assessment activity."
-        end
-      elsif @can_flag
-        revisit_form
-      end
+      revisit_form
     end
   end
 
   def revisit_form
-    details do
-      summary(
-        class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
-               "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
-      ) { "Ask #{rater_name(@person_card[:rater_id])} to revisit this rating" }
+    div do
+      p(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+        "Ask #{rater_name(@person_card[:rater_id])} to revisit this rating at L#{focus_ordinal}"
+      end
       form(
         action: calibration_session_rating_revisits_path(@session),
         method: "post",
@@ -860,7 +1018,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
         input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
-        input(type: "hidden", name: "level_ordinal", value: @person_card[:ordinal])
+        input(type: "hidden", name: "level_ordinal", value: focus_ordinal)
         state_passthrough_fields
         textarea(
           id: "revisit-note", name: "note", rows: "2", required: true,
@@ -913,18 +1071,18 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  def evidence_section
+  def evidence_section(items, ordinal)
     div(class: "mt-4") do
       h3(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-        "Feedback / Evidence at this behaviour"
+        "Feedback / Evidence at L#{ordinal}"
       end
-      if @person_card[:evidence].empty?
+      if items.empty?
         p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
           plain "None linked — if the room can't answer “what did you see?”, that is the finding."
         end
       else
         ul(class: "mt-2 space-y-3") do
-          @person_card[:evidence].each { |item| evidence_row(item) }
+          items.each { |item| evidence_row(item) }
         end
       end
     end
