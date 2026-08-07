@@ -644,6 +644,48 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  test "calibration screens stretch to at least 80% of a large desktop" do
+    session_id = nil
+    ActsAsTenant.with_tenant(@tenant) do
+      ctx = AuthorizationContext.new(
+        user: @facilitator_user,
+        tenant_user: TenantUser.find_by(user: @facilitator_user),
+        person: @facilitator
+      )
+      result = Operations::CalibrationSessions::Define.call(
+        context: ctx,
+        params: {
+          cycle_id: @cycle.cycle_id, name: "Wide calibration",
+          participant_ids: [ @em_1.id ],
+          calibrant_person_ids: [ @report_1.id ]
+        }
+      )
+      Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
+      session_id = result[:session_id]
+    end
+
+    page.driver.browser.manage.window.resize_to(2400, 1100)
+    sign_in_as(@facilitator_user)
+
+    visit calibration_sessions_path
+    assert_text "Wide calibration"
+    assert_operator width_ratio, :>=, 0.78,
+                    "the index must not sit in a narrow column on a big screen"
+
+    visit calibration_session_path(session_id)
+    assert_text "RATER TENDENCY"
+    assert_operator width_ratio, :>=, 0.78,
+                    "the session room must not sit in a narrow column on a big screen"
+  end
+
+  # The page wrapper's share of the viewport — the calibration screens
+  # promise at least 80% on a large desktop.
+  def width_ratio
+    page.evaluate_script(
+      "document.querySelector('#main-content > div').getBoundingClientRect().width / window.innerWidth"
+    )
+  end
+
   test "member without reports sees no Calibration nav link" do
     sign_in_as(@member_user)
 

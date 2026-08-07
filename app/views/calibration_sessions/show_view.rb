@@ -74,7 +74,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
       # The log rides alongside the page as a side panel, so it stays in
       # view while the room reads the strip, the board, and the rosters.
       div(
-        class: "max-w-6xl mx-auto px-4 py-8 flex gap-6 items-start",
+        class: "max-w-[max(72rem,80vw)] mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
           # calibration-pane swaps the overview frame on same-page links
           # (tabs, cohort dots) with no scroll jump — the drill-in's rule.

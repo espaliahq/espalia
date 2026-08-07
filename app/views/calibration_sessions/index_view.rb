@@ -25,7 +25,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(class: "max-w-6xl mx-auto px-4 py-8") do
+      div(class: "max-w-[max(72rem,80vw)] mx-auto px-4 py-8") do
         page_header
         if @sessions.any?
           div(class: "mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6") do

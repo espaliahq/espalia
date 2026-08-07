@@ -63,7 +63,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(
-        class: "max-w-7xl mx-auto px-4 py-8 flex gap-6 items-start",
+        class: "max-w-[max(80rem,80vw)] mx-auto px-4 py-8 flex gap-6 items-start",
         data: {
           controller: "calibration-pane#{' activity-pane' if @session_log}",
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::DRILL_IN_COOKIE,
