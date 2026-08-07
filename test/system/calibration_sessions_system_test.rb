@@ -333,9 +333,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # their people as links, so the person card (and its revisit ask) stays
     # reachable for exactly the unrated cell the room will ask about.
     assert_text "Quinn Alderberry hasn't rated this capability yet"
-    click_with_retry(expect_text: "Close") do
-      find("a[data-person-id='#{@pax_id}']", text: "Pax Thistledown").click
-    end
+    click_selector_with_js_fallback("a[data-person-id='#{@pax_id}']", expect_text: "Close")
     assert_text "Pax Thistledown"
     # The carried dot wears the dashed edge and says so non-visually.
     carried_dot = find("a[data-person-id='#{@report_3_id}']")
@@ -350,9 +348,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       "the accessible name carries the person, not just their initials"
 
     # Opening a dot shows their card.
-    click_with_retry(expect_text: "Close") do
-      find("a[data-person-id='#{@report_1.id}']").click
-    end
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
     assert_text "Ivy IC"
     assert_text "Manager: Consistently"
 
@@ -501,9 +497,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     end
 
     # ── Ask the rater to revisit, from the person card ──
-    click_with_retry(expect_text: "Close") do
-      find("a[data-person-id='#{@report_1.id}']").click
-    end
+    # This dot click dropped TWICE through click_with_retry on a starved CI
+    # runner (both attempts share Selenium's pointer mechanism) — the
+    # JS-fallback guarantees the second attempt fires.
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
     assert_text "Ivy IC"
 
     assert_selector "summary", text: "Ask Mia Manager to revisit this rating"

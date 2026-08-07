@@ -196,6 +196,33 @@ module StimulusHelpers
     end
   end
 
+  # Like +click_link_with_js_fallback+ but for elements addressed by a CSS
+  # selector rather than visible text (e.g. the calibration drill-in's
+  # person dots, `a[data-person-id=…]`). One Capybara click; if the
+  # destination signal doesn't land, a synchronous JS `el.click()` bypasses
+  # Selenium pointer hit-testing entirely.
+  #
+  # @param selector [String] CSS selector of the element to click
+  # @param expect_text [String, nil] text expected after the click
+  # @param expect_selector [String, nil] selector expected after the click
+  def click_selector_with_js_fallback(selector, expect_text: nil, expect_selector: nil)
+    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+
+    find(selector, match: :first).click
+    return if landed?(expect_text, expect_selector, wait: 8)
+
+    page.execute_script(<<~JS, selector)
+      const el = document.querySelector(arguments[0]);
+      if (el) el.click();
+    JS
+
+    if expect_text
+      assert_text expect_text, wait: Capybara.default_max_wait_time
+    else
+      assert_selector expect_selector, wait: Capybara.default_max_wait_time
+    end
+  end
+
   # Like +click_link_with_js_fallback+ but for buttons (incl. form submits).
   #
   # Pass +expect_no_text+ when the click's success signal is content
