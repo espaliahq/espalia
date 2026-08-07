@@ -268,6 +268,27 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     end
     assert_text "Nia IC"
 
+    # ── The cohort axis on a phone: scrolls inside its own container ──
+    page.driver.browser.manage.window.resize_to(375, 812)
+    visit calibration_session_path(@live_session_id, view: "cohort")
+    assert_text "SCORE BY COHORT"
+    overflowing = page.evaluate_script(<<~JS)
+      (() => {
+        const wrap = document.querySelector(".overflow-x-auto");
+        return wrap.scrollWidth > wrap.clientWidth &&
+               document.documentElement.scrollWidth <= window.innerWidth + 1;
+      })()
+    JS
+    assert overflowing, "the axis scrolls inside its wrapper, never the page body"
+    # A dot is still reachable after scrolling the wrapper.
+    page.execute_script(<<~JS)
+      const wrap = document.querySelector(".overflow-x-auto");
+      wrap.scrollLeft = wrap.scrollWidth;
+      [...wrap.querySelectorAll("a[aria-label*='% of expected']")].at(-1).click();
+    JS
+    assert_text "Rated by"
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+
     # Back to the session page for the rest of the flow — a deep link to
     # the cohort tab renders it directly (the ?view= param is shareable),
     # then over to the strip for the vocabulary check.

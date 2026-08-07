@@ -24,7 +24,10 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # packing is greedy k-lane, not a two-lane flip-flop.
   LANE_NUDGE_PCT = 5
   MAX_LANES = 4
-  LANE_HEIGHT = 22
+  # A full 44px per lane: each dot's tap target is 44px high, so anything
+  # tighter stacks one lane's links over the lane above and steals its
+  # clicks. Airier than the mock — correct beats dense.
+  LANE_HEIGHT = 44
   DOT_TOP = 9
 
   # @param session [CalibrationSession]

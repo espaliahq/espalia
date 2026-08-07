@@ -85,8 +85,8 @@ class CalibrationSessions::CohortScores
     @dots ||= enrollment.filter_map do |person_id, (ordinal, role_id)|
       next unless role_id
 
-      total = at_level_total(role_id, ordinal)
-      rated, carried = at_level_rated(person_id, ordinal)
+      total = eligible_stable_ids(role_id, ordinal).size
+      rated, carried = at_level_rated(person_id, role_id, ordinal)
       unlock_target = (total * COVERAGE_UNLOCK).ceil
       # A role with zero at-level cells has nothing to score — gated with
       # total 0, which the view words as "no behaviours at this level"
@@ -156,18 +156,27 @@ class CalibrationSessions::CohortScores
       .group_by(&:person_id)
   end
 
-  def at_level_total(role_id, ordinal)
-    bindings_for(role_id).count do |binding|
-      expectation_cells.include?([ binding.capability_id, ordinal ])
-    end
+  # The stable_ids that count for this (role, level): active, bound
+  # capabilities with an expectation at the ordinal — the same set Scoring
+  # actually scores. Both halves of the coverage fraction read THIS set: a
+  # stale rating on an unbound / archived / no-expectation capability must
+  # not inflate `rated` past what the score is computed from.
+  def eligible_stable_ids(role_id, ordinal)
+    @eligible_stable_ids ||= {}
+    @eligible_stable_ids[[ role_id, ordinal ]] ||= bindings_for(role_id)
+      .select { |binding| expectation_cells.include?([ binding.capability_id, ordinal ]) }
+      .to_set { |binding| binding.capability.stable_id }
   end
 
-  # [rated, carried] counts over the person's at-level cells. Carried
-  # counts as rated (a carried rating is the rater's rating); it is also
-  # reported separately so the dot can wear the disclosure.
-  def at_level_rated(person_id, ordinal)
+  # [rated, carried] counts over the person's ELIGIBLE at-level cells.
+  # Carried counts as rated (a carried rating is the rater's rating); it is
+  # also reported separately so the dot can wear the disclosure.
+  def at_level_rated(person_id, role_id, ordinal)
+    eligible = eligible_stable_ids(role_id, ordinal)
     rows = ratings_by_person.fetch(person_id, []).select do |rating|
-      rating.level_ordinal == ordinal && rating.manager_rated_frequency.present?
+      rating.level_ordinal == ordinal &&
+        rating.manager_rated_frequency.present? &&
+        eligible.include?(rating.capability_stable_id)
     end
     [ rows.size, rows.count { |rating| rating.manager_rating_source == "seeded" } ]
   end

@@ -148,6 +148,23 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
     assert_not dot_for(@r2)[:carried_majority]
   end
 
+  should "not let an ineligible rating unlock a score" do
+    # A rating on a capability that is bound to no role — Scoring never
+    # reads it, so it must not count toward coverage either. Without the
+    # eligibility filter this row alone (1 >= unlock target 1) unlocks a
+    # score computed from zero usable data.
+    unbound = create(:framework_capability, tenant: @tenant,
+                     category_id: @cap_a.category_id, name: "Orphaned")
+    create(:framework_behavioural_expectation, tenant: @tenant,
+           capability_id: unbound.capability_id, level_ordinal: 3)
+    rate(@r1, unbound, "consistent")
+
+    ivy = dot_for(@r1)
+    assert_not ivy[:unlocked], "an unbound capability's rating is not coverage"
+    assert_equal 0, ivy[:rated]
+    assert_equal 2, ivy[:total]
+  end
+
   should "exclude gated people from the median" do
     rate(@r1, @cap_a, "consistent")
     rate(@r1, @cap_b, "consistent")
