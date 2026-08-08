@@ -38,15 +38,15 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # @param raters [Array<Hash>] OverviewStats rater rows — colour order + the
   #   why-panel's tendency context
   # @param people [Hash{String => Person}]
-  # @param selected_person_id [String, nil] the open why-panel's person
-  # @param why [Hash, nil] {CalibrationSessions::CohortScores#why_for}
-  def initialize(session:, cohorts:, raters:, people:, selected_person_id: nil, why: nil)
+  # @param selected_person_id [String, nil] the drawer's inspected person
+  # @param pin_ids [Array<String>] drawer pins, preserved on every dot link
+  def initialize(session:, cohorts:, raters:, people:, selected_person_id: nil, pin_ids: [])
     @session = session
     @cohorts = cohorts
     @raters = raters
     @people = people
     @selected_person_id = selected_person_id
-    @why = why
+    @pin_ids = pin_ids
   end
 
   def view_template
@@ -122,7 +122,6 @@ class Views::CalibrationSessions::CohortView < Views::Base
       plotted = cohort[:people].select { |dot| dot[:unlocked] }
       axis(cohort, plotted) if plotted.any?
       gated_row(cohort[:people].reject { |dot| dot[:unlocked] })
-      why_panel(cohort) if selected_in?(cohort)
     end
   end
 
@@ -202,7 +201,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def render_dot(dot, lane)
     name = person_name(dot[:person_id])
     a(
-      href: cohort_path(cohort_person: dot[:person_id]),
+      href: cohort_path(person: dot[:person_id]),
       class: "absolute inline-flex h-11 w-11 -ml-[22px] items-center justify-center",
       style: "left: #{position_pct(dot[:pct])}%; top: #{DOT_TOP + lane * LANE_HEIGHT}px",
       title: "#{name} · #{dot[:pct]}% of expected",
@@ -228,7 +227,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
     rated_by = dot[:rater_id] ? person_name(dot[:rater_id]) : "someone outside this session"
     base = "#{name} — #{dot[:pct]}% of expected, rated by #{rated_by}"
     base += ", #{dot[:carried_count]} of #{dot[:rated]} ratings carried forward" if dot[:carried_count].positive?
-    "#{base}. Open to see why."
+    "#{base}. Open in the comparison drawer."
   end
 
   # The coverage gate's honest face: no dot, a "score unlocks at N" chip.
@@ -237,8 +236,12 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
     div(class: "mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300") do
       gated.each do |dot|
-        span(class: "inline-flex items-center gap-1.5 rounded-full border border-dashed " \
-                    "border-gray-300 dark:border-gray-600 px-2.5 py-1") do
+        # A gated person still opens in the drawer — the card shows the
+        # gate's copy instead of a number.
+        a(href: cohort_path(person: dot[:person_id]),
+          class: "inline-flex items-center gap-1.5 rounded-full border border-dashed " \
+                 "border-gray-300 dark:border-gray-600 px-2.5 py-1 hover:border-gray-500 " \
+                 "dark:hover:border-gray-400 min-h-11") do
           plain person_name(dot[:person_id])
           plain " · "
           if dot[:role_missing]
@@ -255,108 +258,6 @@ class Views::CalibrationSessions::CohortView < Views::Base
     end
   end
 
-  def selected_in?(cohort)
-    @why && cohort[:people].any? { |dot| dot[:person_id] == @selected_person_id }
-  end
-
-  # The drill-into-why: what pulls this person's score down and up, each
-  # linking into the capability drill-in with their card open — composing
-  # with the existing surface rather than growing a second grid. The
-  # rater-context line ties the tendency strip to this view: a low dot
-  # under a harsh rater is a calibration question, not a verdict.
-  def why_panel(cohort)
-    dot = cohort[:people].find { |d| d[:person_id] == @selected_person_id }
-    name = person_name(dot[:person_id])
-
-    div(class: "mt-4 rounded-lg border border-gray-200 dark:border-gray-700 " \
-               "bg-gray-50 dark:bg-gray-900 px-4 py-3") do
-      div(class: "flex flex-wrap items-baseline justify-between gap-2") do
-        div(class: "flex flex-wrap items-baseline gap-2") do
-          span(class: "text-sm font-semibold text-gray-900 dark:text-white") { name }
-          span(class: "text-sm font-bold text-gray-900 dark:text-white tabular-nums") do
-            "#{dot[:pct]}% of expected"
-          end
-        end
-        a(href: cohort_path(cohort_person: nil),
-          class: "inline-flex min-h-11 items-center px-2 text-xs text-gray-600 " \
-                 "dark:text-gray-300 hover:underline") { "Close" }
-      end
-      p(class: "mt-0.5 text-xs text-gray-600 dark:text-gray-300") do
-        plain "Rated by #{person_name(dot[:rater_id])} · #{dot[:rated]} of #{dot[:total]} rated"
-        plain " · #{dot[:carried_count]} carried" if dot[:carried_count].positive?
-      end
-
-      why_columns
-      rater_context(dot)
-    end
-  end
-
-  def why_columns
-    div(class: "mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-2") do
-      why_column("Pulling the score down", @why[:weakest],
-                 empty: "Nothing below expectations.")
-      why_column("Pulling it up", @why[:strongest],
-                 empty: "Nothing above expectations yet.")
-    end
-  end
-
-  def why_column(heading, entries, empty:)
-    div do
-      h3(class: "text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-        heading
-      end
-      if entries.empty?
-        p(class: "mt-1.5 text-xs text-gray-600 dark:text-gray-300") { empty }
-      else
-        entries.each { |entry| why_row(entry) }
-      end
-    end
-  end
-
-  def why_row(entry)
-    div(class: "flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 py-1.5 text-sm") do
-      span(class: "min-w-0 flex-1 text-gray-900 dark:text-white") { entry[:name] }
-      span(class: "tabular-nums font-bold #{delta_classes(entry[:delta])}") do
-        sprintf("%+.1f", entry[:delta])
-      end
-      a(
-        href: calibration_session_capability_path(@session, entry[:stable_id],
-                                                  person: @selected_person_id,
-                                                  # Land ON the person card — the reader followed a
-                                                  # person's row, not the capability in general.
-                                                  anchor: "calibration-person-card"),
-        class: "text-xs text-gray-700 dark:text-gray-200 underline underline-offset-2 " \
-               "whitespace-nowrap min-h-11 inline-flex items-center",
-        # Off-page link inside the overview frame — without _top, Turbo
-        # navigates the FRAME and renders "Content missing" (the classic
-        # in-frame trap; phlex-views.md).
-        data: { turbo_frame: "_top" }
-      ) { "Open drill-in →" }
-    end
-  end
-
-  def delta_classes(delta)
-    if delta.negative?
-      delta <= -1.0 ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300"
-    else
-      "text-green-700 dark:text-green-300"
-    end
-  end
-
-  # "Mia rates +0.41 vs org mean overall" — part of a low score may be the
-  # rater's tendency, which is the conversation this room exists to have.
-  def rater_context(dot)
-    rater = @raters.find { |row| row[:participant_id] == dot[:rater_id] }
-    return unless rater && rater[:org_delta]
-
-    p(class: "mt-3 rounded-md bg-amber-100 dark:bg-amber-900/25 px-3 py-2 text-xs " \
-             "text-amber-800 dark:text-amber-200 max-w-xl") do
-      plain "Rater context: #{person_name(dot[:rater_id])} rates "
-      strong { sprintf("%+.2f vs org mean", rater[:org_delta]) }
-      plain " across their whole team — part of this score may be tendency, not #{person_name(dot[:person_id])}."
-    end
-  end
-
   # Rater ids owning at least one plotted (unlocked) dot; nil marks
   # unattributed dots.
   def plotted_rater_ids
@@ -365,9 +266,11 @@ class Views::CalibrationSessions::CohortView < Views::Base
     end.uniq.to_set
   end
 
-  # Cohort-tab links, preserving the view param; nil clears the why-panel.
-  def cohort_path(cohort_person:)
-    calibration_session_path(@session, { view: "cohort", cohort_person: cohort_person }.compact)
+  # Cohort-tab links, preserving the tab and the drawer's pins.
+  def cohort_path(person:)
+    calibration_session_path(
+      @session, { view: "cohort", person: person, pins: @pin_ids.presence }.compact
+    )
   end
 
   # nil for a calibrant no participant is attributed — their dot must NOT
@@ -387,9 +290,5 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
   def person_name(person_id)
     @people[person_id]&.name || "Unknown"
-  end
-
-  def initials(name)
-    name.to_s.split.map(&:first).first(2).join.upcase
   end
 end

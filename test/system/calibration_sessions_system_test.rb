@@ -253,20 +253,36 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # All four L3 people scored (each has ≥1 of 2 at-level cells rated).
     assert_selector "a[aria-label*='% of expected']", count: 4
 
-    # Open a dot → the why panel, with the rater-context reframe.
+    # Open a dot → the comparison drawer, with the rater-context reframe.
     why_dot = find("a[aria-label^='Nia IC']")
-    click_with_retry(expect_text: "Rated by Mia Manager") { why_dot.click }
+    click_with_retry(expect_text: "rated by Mia Manager") { why_dot.click }
     assert page.evaluate_script("window.__staying === true"),
            "a dot click swaps the pane too — no scroll jump mid-discussion"
+    assert_selector "#calibration-comparison-drawer [data-drawer-card]"
     assert_text "of expected"
     assert_text "vs org mean"
-    # The why-panel composes with the drill-in rather than growing a grid.
-    # (Two contribution rows → two links; the first is fine.)
+
+    # Pin Nia, open another dot — both cards hold side by side, and the
+    # pin survives a tab switch (it rides every overview link).
+    nia_id = page.find("#calibration-comparison-drawer [data-drawer-card]")["data-drawer-card"]
+    click_link_with_js_fallback("Pin", expect_text: "1 pinned")
+    other_dot = find("a[aria-label*='% of expected']:not([aria-label^='Nia IC'])", match: :first)
+    click_with_retry(expect_selector: "[data-drawer-card]:not([data-drawer-card='#{nia_id}'])") do
+      other_dot.click
+    end
+    assert_selector "#calibration-comparison-drawer [data-drawer-card]", count: 2
+    click_with_retry(expect_text: "RATER TENDENCY") { click_link "Rater tendency" }
+    assert_selector "[data-drawer-card='#{nia_id}']", count: 1
+    click_with_retry(expect_text: "SCORE BY COHORT") { click_link "Score by cohort" }
+
+    # The drawer composes with the drill-in rather than growing a grid —
+    # and the pins ride along into it.
     assert_selector "a[href*='capabilities'][href*='person=']", minimum: 1
     click_with_retry(expect_text: "WHAT GOOD LOOKS LIKE") do
       find("a[href*='capabilities'][href*='person=']", match: :first).click
     end
-    assert_text "Nia IC"
+    assert_includes page.current_url, "pins%5B%5D=#{nia_id}"
+    assert_selector "[data-drawer-card='#{nia_id}']"
 
     # ── The cohort axis on a phone: scrolls inside its own container ──
     page.driver.browser.manage.window.resize_to(375, 812)
@@ -286,7 +302,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       wrap.scrollLeft = wrap.scrollWidth;
       [...wrap.querySelectorAll("a[aria-label*='% of expected']")].at(-1).click();
     JS
-    assert_text "Rated by"
+    assert_text "rated by"
     page.driver.browser.manage.window.resize_to(1400, 1400)
 
     # Back to the session page for the rest of the flow — a deep link to
@@ -364,7 +380,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     scrolled = page.evaluate_script("window.scrollY")
     assert_equal 300, scrolled, "precondition: the page must be scrollable to test this"
 
-    click_link_with_js_fallback("Feedback / Evidence wall", expect_text: "2 items")
+    # JS-dispatched on purpose: a pointer click would scroll the link into
+    # view first (Selenium mechanics), which is exactly the movement this
+    # step exists to rule out for the SWAP itself.
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("a")]
+        .find((a) => a.textContent.includes("Feedback / Evidence wall")).click()
+    JS
+    assert_text "2 items"
     assert_equal scrolled, page.evaluate_script("window.scrollY"),
       "switching panes must not move the page"
     # …and the URL still carries the pane, so the view stays shareable.

@@ -17,6 +17,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Evidence::ExamplesDisclosure
   include Views::CalibrationSessions::Glossary
   include Views::CalibrationSessions::RaterColours
+  include Views::CalibrationSessions::ComparisonDrawerChrome
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
@@ -66,7 +67,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(
-        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start",
+        # Bottom padding clears the fixed comparison drawer whenever it
+        # will render, so page-end content can always scroll above it.
+        # overflow-anchor: pane swaps insert/remove the wall mid-page and
+        # Chrome's scroll anchoring turns that into a scroll jump (the
+        # assessment scroll-root's lesson) — anchoring off, swaps hold still.
+        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start [overflow-anchor:none] " \
+               "#{'pb-[45vh]' if drawer_occupied?}",
         data: {
           controller: "calibration-pane#{' activity-pane' if @session_log}",
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::DRILL_IN_COOKIE,
@@ -101,7 +108,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     div(class: "sticky top-0 z-30 -mx-4 sm:-mx-6 bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-2 " \
                "flex flex-wrap items-center gap-3") do
       div(class: "flex-1 min-w-0") do
-        a(href: calibration_session_path(@session),
+        # The drawer follows the room home: whoever is open and pinned here
+        # is open and pinned on the session page too.
+        a(href: calibration_session_path(
+            @session, { person: opened_person_id, pins: @pin_ids.presence }.compact
+          ),
           class: "text-sm text-gray-600 dark:text-gray-300 hover:underline") { "← #{@session.name}" }
         div(class: "mt-1 flex flex-wrap items-baseline gap-x-3") do
           if @stats[:capability][:category_name]
@@ -431,13 +442,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # browser URL in step (the matrix-frame pattern from the explorer and the
   # assessment views).
   def bottom_pane
-    # [overflow-anchor:none] — a pane swap inserts/removes the wall ABOVE
-    # the sticky drawer; if Chrome picks a scroll anchor inside this
-    # subtree it "helpfully" scrolls the page to keep the drawer visually
-    # put, and switching panes jumps the room (the assessment hero's
-    # anti-shake lesson, applied to frame swaps).
     turbo_frame_tag("calibration-bottom-pane",
-                    class: "block [overflow-anchor:none]",
+                    class: "block",
                     data: { calibration_pane_target: "frame" }) do
       tab_bar
       wall_section if @view == "wall"
@@ -664,6 +670,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # the viewport bottom while the room scrolls the grid — and the session
   # log at the page's right edge stays visible throughout. Cards scroll
   # internally; the collapse toggle drops the drawer to its header bar.
+  def drawer_occupied?
+    @person_card || @pinned_cards.any?
+  end
+
   def comparison_drawer
     inspector_pinned = opened_person_id && @pin_ids.include?(opened_person_id)
     cards = []
@@ -671,36 +681,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @pinned_cards.each { |person_id, card| cards << [ card, person_id == opened_person_id ] }
     return if cards.empty?
 
-    div(
-      class: "sticky bottom-0 z-20 -mx-4 sm:-mx-6 mt-6 border-t-2 border-violet-500 " \
-             "bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 pb-3 pt-2",
-      id: "calibration-comparison-drawer",
-      data: { controller: "comparison-drawer" }
-    ) do
-      div(class: "flex items-center justify-between gap-2") do
-        p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-          plain "Comparison"
-          if @pin_ids.any?
-            span(class: "ml-2 font-medium normal-case tracking-normal text-violet-700 dark:text-violet-300") do
-              "#{@pin_ids.size} pinned · #{MAX_PINS - @pin_ids.size} free"
-            end
-          end
-        end
-        button(
-          type: "button",
-          class: "inline-flex min-h-11 items-center px-2 text-xs font-medium " \
-                 "text-gray-600 dark:text-gray-300 hover:underline",
-          data: { action: "comparison-drawer#toggle", comparison_drawer_target: "label" },
-          aria: { expanded: "true", controls: "comparison-drawer-body" }
-        ) { "Collapse" }
-      end
-      div(
-        id: "comparison-drawer-body",
-        class: "mt-1 flex items-start gap-4 overflow-x-auto pb-1",
-        data: { comparison_drawer_target: "body" }
-      ) do
-        cards.each { |card_data, inspector| drawer_card(card_data, inspector: inspector) }
-      end
+    comparison_drawer_chrome(pin_count: @pin_ids.size, max_pins: MAX_PINS) do
+      cards.each { |card_data, inspector| drawer_card(card_data, inspector: inspector) }
     end
   end
 

@@ -283,7 +283,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
                       "the legend names the neutral swatch"
     end
 
-    should "open the why-panel for a dot, with the rater-context line" do
+    should "open a dot in the comparison drawer, with the rater-context line" do
       ActsAsTenant.with_tenant(@tenant) do
         # A second behaviour rated "some" so the panel has a genuine
         # pulling-down row to drill into.
@@ -299,11 +299,12 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
                manager_rated_frequency: "some")
       end
 
-      get calibration_session_path(@session_record, view: "cohort", cohort_person: @report.id)
+      get calibration_session_path(@session_record, view: "cohort", person: @report.id)
 
       assert_response :success
+      assert_select "#calibration-comparison-drawer [data-drawer-card='#{@report.id}']"
       assert_match(/\d+% of expected/, response.body)
-      assert_includes response.body, "Rated by Mia Manager"
+      assert_includes response.body, "rated by Mia Manager"
       assert_includes response.body, "vs org mean"
       assert_includes response.body, "may be tendency, not Ivy IC"
       assert_select "a[href*='capabilities'][href*='#calibration-person-card']",
@@ -314,14 +315,31 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Nothing above expectations yet."
     end
 
-    should "render no why-panel for a gated or foreign person" do
-      get calibration_session_path(@session_record, view: "cohort", cohort_person: @gated.id)
-      assert_response :success
-      assert_not_includes response.body, "Rated by", "a gated score has no why to show"
-
+    should "hold a pinned person beside the inspected one, across tabs" do
       get calibration_session_path(@session_record, view: "cohort",
-                                   cohort_person: SecureRandom.uuid_v7)
+                                   person: @gated.id, pins: [ @report.id ])
+
       assert_response :success
+      # Both cards, side by side: the gated inspector wears the gate's
+      # copy (never a fake number), the pinned card keeps its score.
+      assert_select "[data-drawer-card='#{@gated.id}']"
+      assert_select "[data-drawer-card='#{@report.id}']"
+      assert_includes response.body, "score unlocks at"
+      assert_includes response.body, "1 pinned"
+      # The tab links carry the drawer, so switching views keeps it.
+      assert_select "a[role='tab'][href*='pins%5B%5D=#{@report.id}']", count: 3
+
+      get calibration_session_path(@session_record, view: "tendency", pins: [ @report.id ])
+      assert_response :success
+      assert_select "[data-drawer-card='#{@report.id}']",
+                    { count: 1 }, "pins persist on the other tabs"
+    end
+
+    should "render no drawer card for a foreign person" do
+      get calibration_session_path(@session_record, view: "cohort",
+                                   person: SecureRandom.uuid_v7)
+      assert_response :success
+      assert_select "#calibration-comparison-drawer", count: 0
     end
 
     should "fall back to the tendency tab on a mangled view param" do

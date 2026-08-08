@@ -107,11 +107,22 @@ class CalibrationSessionsController < ApplicationController
     people_ids = (participant_ids + calibrant_ids + [ @session.facilitator_id ] +
                   log_person_ids(session_log)).uniq
 
-    # Only when the view will render it: the overview section exists on
-    # started/closed sessions with participants — a draft hit on
+    # Only when something will render from it: the cohort tab, or the
+    # comparison drawer (person/pins ride every tab). A draft hit on
     # ?view=cohort must not pay the whole scoring pipeline for nothing.
-    build_cohorts = overview_view == "cohort" && !@session.draft? && participant_ids.any?
+    requested_pins = Array.wrap(params[:pins]).grep(String).select(&:present?).uniq
+    build_cohorts = !@session.draft? && participant_ids.any? &&
+                    (overview_view == "cohort" || params[:person].present? || requested_pins.any?)
     cohorts = build_cohorts ? CalibrationSessions::CohortScores.new(session: @session) : nil
+    dots_by_person = cohorts ? cohorts.call[:cohorts].flat_map { |c| c[:people] }.index_by { |d| d[:person_id] } : {}
+    # Only people with a dot resolve to a card (a foreign or stale id is
+    # dropped, never a phantom slot) — the drill-in's pin rule.
+    pin_ids = requested_pins.select { |id| dots_by_person.key?(id) }
+      .first(CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS)
+    drawer_person_id = params[:person].presence&.then { |id| id if dots_by_person.key?(id) }
+    drawer_cards = ([ drawer_person_id ] + pin_ids).compact.uniq.map do |person_id|
+      { person_id: person_id, dot: dots_by_person[person_id], why: cohorts.why_for(person_id) }
+    end
 
     render Views::CalibrationSessions::ShowView.new(
       session: @session,
@@ -125,8 +136,9 @@ class CalibrationSessionsController < ApplicationController
       stats: participant_ids.any? ? CalibrationSessions::OverviewStats.new(session: @session).call : nil,
       overview_view: overview_view,
       cohorts: cohorts&.call&.dig(:cohorts),
-      cohort_person_id: cohort_person_id,
-      cohort_why: (cohorts.why_for(cohort_person_id) if cohorts && cohort_person_id),
+      drawer_cards: drawer_cards,
+      drawer_person_id: drawer_person_id,
+      pin_ids: pin_ids,
       add_calibrant_candidates: @session.draft? ? add_calibrant_candidates(calibrant_ids, participant_ids) : [],
       can_curate: @session.draft? && policy(@session).curate?,
       can_start: @session.draft? && policy(@session).start?,
@@ -146,15 +158,6 @@ class CalibrationSessionsController < ApplicationController
   def overview_view
     params[:view].presence_in(Views::CalibrationSessions::ShowView::OVERVIEW_TABS.map(&:first)) ||
       "tendency"
-  end
-
-  # The open why-panel's person — meaningful only on the cohort tab, and
-  # only for someone actually in the population (a foreign id renders no
-  # panel rather than erroring).
-  def cohort_person_id
-    return nil unless overview_view == "cohort"
-
-    params[:cohort_person].presence
   end
 
   def set_session
