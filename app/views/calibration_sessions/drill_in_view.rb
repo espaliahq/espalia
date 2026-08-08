@@ -323,7 +323,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                     "Rater"
                   end
                   @stats[:ordinals].each do |ordinal|
-                    th(class: "sticky top-0 z-[2] bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium",
+                    # has-[…]:z-30 — sibling sticky headers share a stacking
+                    # context, so a later column would paint THROUGH this
+                    # column's open ⓘ menu unless the host th out-ranks its
+                    # siblings while the menu is open.
+                    th(class: "sticky top-0 z-[2] has-[[aria-expanded=true]]:z-30 " \
+                              "bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium",
                        data: { level_menu: ordinal }) do
                       div(class: "flex items-center gap-1") do
                         span { "L#{ordinal}" }
