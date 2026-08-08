@@ -14,7 +14,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   VIEWS = %w[wall].freeze
 
   # The person card's kebab actions — which (single) form renders open.
-  PERSON_ACTIONS = %w[request revisit].freeze
+  PERSON_ACTIONS = %w[request revisit flag].freeze
 
   # GET /calibration_sessions/:calibration_session_id/capabilities/:id
   def show

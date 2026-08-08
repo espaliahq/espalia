@@ -75,10 +75,12 @@ class Components::Kit::Dropdown < Components::Base
 
   # Renders the dropdown menu panel.
   #
+  # @param width [String] Tailwind width class for the panel (literal —
+  #   the JIT can't see interpolation, so callers pass a whole class)
   # @yield The menu content (links, buttons, dividers, etc.)
-  def menu(&block)
+  def menu(width: "w-56", &block)
     div(
-      class: "absolute #{ALIGNMENT_CLASSES[@align]} mt-2 w-56 rounded-md shadow-lg " \
+      class: "absolute #{ALIGNMENT_CLASSES[@align]} mt-2 #{width} rounded-md shadow-lg " \
              "bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 " \
              "z-50 hidden",
       data: { dropdown_target: "menu" },

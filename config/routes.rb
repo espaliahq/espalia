@@ -266,6 +266,8 @@ Rails.application.routes.draw do
     # ⚑ Flag an expectation as unclear (live session) → framework clarification.
     resources :expectation_flags, only: [ :create ],
                                   controller: "calibration_sessions/expectation_flags"
+    resources :illustration_flags, only: [ :create ],
+                                   controller: "calibration_sessions/illustration_flags"
     # Ask a rater to revisit a rating (live session) → PD-stream mirror.
     resources :rating_revisits, only: [ :create ],
                                 controller: "calibration_sessions/rating_revisits"

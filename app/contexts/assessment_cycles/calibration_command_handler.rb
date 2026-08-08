@@ -100,12 +100,15 @@ class AssessmentCycles::CalibrationCommandHandler
   # @param suggestion_id [String] the framework clarification's UUID
   # @param flagged_by_id [String, nil]
   # @param reason [String, nil]
+  # @param illustration_id [String, nil] set when flagging ONE example
+  #   (role illustration) under the cell rather than the expectation text
   def flag_expectation(session_id, capability_stable_id:, level_ordinal:, suggestion_id:,
-                       flagged_by_id: nil, reason: nil)
+                       flagged_by_id: nil, reason: nil, illustration_id: nil)
     @repository.with_calibration_session(session_id) do |session|
       session.flag_expectation(
         capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
-        suggestion_id: suggestion_id, flagged_by_id: flagged_by_id, reason: reason
+        suggestion_id: suggestion_id, flagged_by_id: flagged_by_id, reason: reason,
+        illustration_id: illustration_id
       )
     end
   end

@@ -85,7 +85,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       ) do
         div(class: "min-w-0 flex-1") do
           header_row
-          expectations_card
           grid_card
           bottom_pane
         end
@@ -122,6 +121,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           end
           h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @stats[:capability][:name] }
         end
+        focused_expectation_line
       end
       if @session_log
         render Views::CalibrationSessions::LogPaneToggle.new(
@@ -131,46 +131,115 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  def expectations_card
-    div(class: "mt-5") do
-      render Components::Kit::Card.new do |card|
-        card.body do
-          h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-            "What good looks like"
+  # The open card's focused cell, spelled out in the sticky header — the
+  # "what is being rated here" line that replaced the standalone "What
+  # good looks like" card (per-level text lives in the column-header ⓘ
+  # menus and on every person card).
+  def focused_expectation_line
+    return unless @person_card
+
+    p(class: "mt-1 w-full text-sm text-gray-600 dark:text-gray-300 truncate") do
+      strong(class: "text-gray-900 dark:text-white") { "L#{focus_ordinal} · " }
+      plain @person_card[:expectations_by_level][focus_ordinal] ||
+            "No expectation defined at this level for this capability."
+    end
+  end
+
+  # One level's reference material — the column header's ⓘ menu: the
+  # canonical expectation, the role illustrations (each flaggable), and
+  # the cell's ⚑ flag affordance. What the "What good looks like" card
+  # used to show, now anchored to the column it describes.
+  def level_header_menu(ordinal)
+    render Components::Kit::Dropdown.new(strategy: :fixed, align: :left) do |dropdown|
+      dropdown.trigger(label: "L#{ordinal} — expectation, examples, and flags") do
+        span(class: "inline-flex h-6 w-6 items-center justify-center rounded-md text-[11px] " \
+                    "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") { "ⓘ" }
+      end
+      dropdown.menu(width: "w-96") do
+        div(class: "px-3 py-2 text-left") do
+          p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+            "L#{ordinal} — what good looks like"
           end
-          dl(class: "mt-2 space-y-2") do
-            @stats[:ordinals].each do |ordinal|
-              div(class: "flex gap-3") do
-                dt(class: "shrink-0 w-8 text-sm font-semibold text-gray-900 dark:text-white") { "L#{ordinal}" }
-                dd(class: "flex-1 text-sm text-gray-600 dark:text-gray-300") do
-                  plain @stats[:expectations][ordinal] || "No expectation defined at this level."
-                  illustrations_for(ordinal)
-                  flag_affordance(ordinal)
-                end
-              end
-            end
+          p(class: "mt-1 text-sm text-gray-900 dark:text-white whitespace-normal") do
+            @stats[:expectations][ordinal] || "No expectation defined at this level."
+          end
+          example_groups(ordinal)
+          flag_affordance(ordinal)
+        end
+      end
+    end
+  end
+
+  # The role illustrations under a level's canonical expectation, grouped
+  # per role. Each example is itself flaggable — "this example is what
+  # misleads raters" is narrower and more actionable than flagging the
+  # whole cell.
+  def example_groups(ordinal)
+    groups = @stats[:illustrations]&.dig(ordinal)
+    return if groups.blank?
+
+    div(class: "mt-2 space-y-1.5") do
+      groups.each do |group|
+        div do
+          span(class: "text-[11px] font-medium uppercase tracking-wide " \
+                      "text-gray-600 dark:text-gray-300") { group[:role_name] }
+          ul(class: "mt-0.5 space-y-1") do
+            group[:items].each { |item| example_row(item) }
           end
         end
       end
     end
   end
 
-  # The role illustrations under a level's canonical expectation, one
-  # collapsed disclosure per role — the same "Examples (N)" affordance the
-  # evidence dialog uses beside a behavioural expectation. The expectation
-  # is what people are rated against and stays in view; the examples are
-  # reference material one click away (a disagreement often turns out to be
-  # two raters reading different ones).
-  def illustrations_for(ordinal)
-    groups = @stats[:illustrations]&.dig(ordinal)
-    return if groups.blank?
+  def example_row(item)
+    li(class: "text-xs text-gray-700 dark:text-gray-200") do
+      div(class: "flex gap-2") do
+        span(class: "text-gray-400", aria: { hidden: "true" }) { "•" }
+        div(class: "min-w-0 flex-1") do
+          plain item[:text]
+          example_flag(item)
+        end
+      end
+    end
+  end
 
-    div(class: "mt-1.5 space-y-1") do
-      groups.each do |group|
-        div(class: "flex flex-wrap items-baseline gap-x-2") do
-          span(class: "shrink-0 text-[11px] font-medium uppercase tracking-wide " \
-                      "text-gray-600 dark:text-gray-300") { group[:role_name] }
-          div(class: "min-w-0 flex-1") { examples_disclosure(group[:items]) }
+  # Per-example ⚑ — an open illustration clarification (any session) shows
+  # as a marker; otherwise a live session's facilitator can raise one.
+  def example_flag(item)
+    if @stats[:flagged_illustration_ids].include?(item[:id])
+      div(class: "mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300") do
+        "⚑ Example flagged — clarification open on the framework"
+      end
+    elsif @can_flag
+      details(class: "mt-0.5") do
+        summary(
+          class: "inline-flex min-h-11 cursor-pointer items-center text-[11px] font-medium " \
+                 "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
+        ) { "⚑ Flag example as unclear" }
+        form(
+          action: calibration_session_illustration_flags_path(@session),
+          method: "post",
+          class: "mt-1.5 max-w-lg space-y-2",
+          data: { action: "submit->calibration-pane#stampState", turbo_frame: "_top" }
+        ) do
+          input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+          input(type: "hidden", name: "illustration_id", value: item[:id])
+          # The return path rebuilds THIS drill-in URL from it.
+          input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
+          state_passthrough_fields
+          textarea(
+            name: "reason", rows: "2",
+            class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+                   "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+                   "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+            placeholder: "What misleads about this example (optional)",
+            aria: { label: "Why this example is unclear" }
+          )
+          button(
+            type: "submit",
+            class: "inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-xs " \
+                   "font-semibold text-white hover:bg-amber-700 transition-colors"
+          ) { "Flag example" }
         end
       end
     end
@@ -197,7 +266,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
                "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
       ) { "⚑ Flag expectation as unclear" }
-      form(
+      expectation_flag_form(ordinal)
+    end
+  end
+
+  def expectation_flag_form(ordinal, field_id: "flag-reason-#{ordinal}")
+    form(
         action: calibration_session_expectation_flags_path(@session),
         method: "post",
         class: "mt-2 max-w-lg space-y-2",
@@ -210,7 +284,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         input(type: "hidden", name: "level_ordinal", value: ordinal)
         state_passthrough_fields
         textarea(
-          id: "flag-reason-#{ordinal}", name: "reason", rows: "2",
+          id: field_id, name: "reason", rows: "2",
           class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                  "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
                  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
@@ -223,7 +297,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                  "font-semibold text-white hover:bg-amber-700 transition-colors"
         ) { "Raise clarification" }
       end
-    end
   end
 
   def grid_card
@@ -250,7 +323,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                     "Rater"
                   end
                   @stats[:ordinals].each do |ordinal|
-                    th(class: "sticky top-0 z-[2] bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium") { "L#{ordinal}" }
+                    th(class: "sticky top-0 z-[2] bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium",
+                       data: { level_menu: ordinal }) do
+                      div(class: "flex items-center gap-1") do
+                        span { "L#{ordinal}" }
+                        level_header_menu(ordinal)
+                      end
+                    end
                   end
                 end
               end
@@ -852,8 +931,30 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           plain "Revisit requested — it will appear in #{rater_name(card_data[:rater_id])}'s assessment activity."
         end
       end
+      if @stats[:clarifications][ordinal].to_i.positive?
+        div(class: "mt-2 text-xs font-medium text-amber-700 dark:text-amber-300") do
+          "⚑ Flagged — #{@stats[:clarifications][ordinal]} open " \
+            "#{'clarification'.pluralize(@stats[:clarifications][ordinal])} on the framework"
+        end
+      end
 
+      card_examples(ordinal)
       evidence_section(card_data[:evidence_by_level][ordinal] || [], ordinal)
+    end
+  end
+
+  # The cell's reference examples, on the card so "what does good look
+  # like here" never needs a navigation away from the person under
+  # discussion. Each example carries its own ⚑ (see #example_flag).
+  def card_examples(ordinal)
+    groups = @stats[:illustrations]&.dig(ordinal)
+    return if groups.blank?
+
+    div(class: "mt-3") do
+      h3(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        "Examples at L#{ordinal}"
+      end
+      example_groups(ordinal)
     end
   end
 
@@ -881,7 +982,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     request_ok = @can_flag && @request_candidates&.any?
     revisit_ok = @can_flag && @person_card[:rater_id] &&
                  !@person_card[:revisit_ordinals].include?(focus_ordinal)
-    return unless request_ok || revisit_ok
+    flag_ok = @can_flag && @stats[:clarifications][focus_ordinal].to_i.zero?
+    return unless request_ok || revisit_ok || flag_ok
 
     render Components::Kit::Dropdown.new(align: :right) do |dropdown|
       dropdown.trigger(label: "Actions for #{@person_card[:dot][:name]}") do
@@ -893,6 +995,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       dropdown.menu do
         person_kebab_item("Request feedback / evidence…", "request") if request_ok
         person_kebab_item("Ask #{rater_name(@person_card[:rater_id])} to revisit this rating…", "revisit") if revisit_ok
+        person_kebab_item("⚑ Flag expectation as unclear…", "flag") if flag_ok
       end
     end
   end
@@ -913,6 +1016,21 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     case @person_action
     when "request" then request_evidence_section
     when "revisit" then revisit_section
+    when "flag" then card_flag_section
+    end
+  end
+
+  # The kebab's flag path — the same clarification the column header's ⚑
+  # raises, opened from the card and scoped to the focused level.
+  def card_flag_section
+    return unless @can_flag
+    return if @stats[:clarifications][focus_ordinal].to_i.positive?
+
+    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+      p(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+        "Flag the L#{focus_ordinal} expectation as unclear"
+      end
+      expectation_flag_form(focus_ordinal, field_id: "flag-reason-card")
     end
   end
 

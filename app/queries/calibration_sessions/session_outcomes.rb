@@ -37,6 +37,7 @@ class CalibrationSessions::SessionOutcomes
         {
           capability_stable_id: data[:capability_stable_id],
           level_ordinal: data[:level_ordinal],
+          illustration_id: data[:illustration_id],
           suggestion_id: data[:suggestion_id],
           flagged_by_id: data[:flagged_by_id],
           reason: data[:reason],

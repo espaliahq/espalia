@@ -199,7 +199,8 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   def summary_text(entry)
     case entry[:kind]
-    when "expectation_flagged" then "⚑ Flagged an expectation as unclear"
+    when "expectation_flagged"
+      entry[:illustration_id] ? "⚑ Flagged an example as unclear" : "⚑ Flagged an expectation as unclear"
     when "revisit_requested"   then "Asked #{person_name(entry[:rater_id])} to revisit a rating"
     when "evidence_requested"  then "Asked #{person_name(entry[:requestee_id])} for feedback / evidence"
     else                            "Recorded a note"

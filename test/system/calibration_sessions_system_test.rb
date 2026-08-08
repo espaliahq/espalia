@@ -278,7 +278,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # The drawer composes with the drill-in rather than growing a grid —
     # and the pins ride along into it.
     assert_selector "a[href*='capabilities'][href*='person=']", minimum: 1
-    click_with_retry(expect_text: "WHAT GOOD LOOKS LIKE") do
+    click_with_retry(expect_text: "AT-LEVEL RATINGS BY RATER") do
       find("a[href*='capabilities'][href*='person=']", match: :first).click
     end
     assert_includes page.current_url, "pins%5B%5D=#{nia_id}"
@@ -342,7 +342,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     # ── Drill-in: divergence row → rater × level grid ──
     click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
-    click_link_with_js_fallback("Strategic Thinking", expect_text: "WHAT GOOD LOOKS LIKE")
+    click_link_with_js_fallback("Strategic Thinking", expect_text: "AT-LEVEL RATINGS BY RATER")
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-person-id]", minimum: 4
     # …and on the grid, the silent rater collapses to one sentence — with
@@ -378,7 +378,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1000, 600)
     page.execute_script("window.scrollTo(0, 300)")
     scrolled = page.evaluate_script("window.scrollY")
-    assert_equal 300, scrolled, "precondition: the page must be scrollable to test this"
+    # The exact resting point tracks page height (it shrank when the
+    # standalone expectations card folded away) — any real scroll works.
+    assert_operator scrolled, :>, 100, "precondition: the page must be scrollable to test this"
 
     # JS-dispatched on purpose: a pointer click would scroll the link into
     # view first (Selenium mechanics), which is exactly the movement this
@@ -462,10 +464,13 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       cat_id = SecureRandom.uuid_v7
       handler.add_capability_category(fw_id, cat_id, "Thinking")
       handler.add_capability(fw_id, cap_id, cap_stable, cat_id, "Strategic Thinking")
-      handler.set_behavioural_expectation(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+      exp3_id = SecureRandom.uuid_v7
+      handler.set_behavioural_expectation(fw_id, exp3_id, SecureRandom.uuid_v7,
                                           cap_id, 3, "Shapes team direction")
       handler.set_behavioural_expectation(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
                                           cap_id, 4, "Shapes system direction")
+      handler.add_role_illustration(fw_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                    exp3_id, role_id, 1, "Runs the team retro end to end")
       handler.publish_version(fw_id, "test")
 
       # A real PD assignment (not a factory row) — the revisit mirror lands on
@@ -504,12 +509,16 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     sign_in_as(@facilitator_user)
     visit calibration_session_capability_path(@flag_session_id, @flag_cap_stable)
-    assert_text "WHAT GOOD LOOKS LIKE"
-    assert_text "Shapes team direction"
+    assert_text "AT-LEVEL RATINGS BY RATER"
 
-    # Open the per-level disclosure (native <details> — set .open directly;
-    # a synthetic summary click can be dropped on starved CI) and raise the
-    # clarification.
+    # "What good looks like" lives in the level column's ⓘ menu now —
+    # expectation, examples, and the ⚑ flags, anchored to the column.
+    open_dropdown(scope: "th[data-level-menu='3']")
+    assert_text "Shapes team direction"
+    assert_text "Runs the team retro end to end"
+
+    # Raise the cell clarification from the menu (native <details> — set
+    # .open directly; a synthetic summary click can be dropped on CI).
     assert_selector "summary", text: "⚑ Flag expectation as unclear"
     page.execute_script(<<~JS)
       document.querySelectorAll("details > summary").forEach((s) => {
@@ -520,11 +529,29 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_button_with_js_fallback "Raise clarification", expect_text: "clarification discussion is now open"
 
     # One flag per cell per session: the marker replaces the affordance.
+    open_dropdown(scope: "th[data-level-menu='3']")
     assert_text "⚑ Flagged — 1 open clarification on the framework"
     assert_no_selector "summary", text: "⚑ Flag expectation as unclear"
 
+    # ── An EXAMPLE is flaggable on its own — narrower than the cell ──
+    page.execute_script(<<~JS)
+      document.querySelectorAll("details > summary").forEach((s) => {
+        if (s.textContent.includes("Flag example")) s.parentElement.open = true
+      })
+    JS
+    js_set_field "textarea[aria-label='Why this example is unclear']", "Reads as an L5 behaviour"
+    click_button_with_js_fallback "Flag example", expect_text: "Example flagged"
+    open_dropdown(scope: "th[data-level-menu='3']")
+    assert_text "⚑ Example flagged — clarification open on the framework"
     ActsAsTenant.with_tenant(@tenant) do
-      clarification = FrameworkState::SuggestedEdit.clarifications.pending.sole
+      example_flag = FrameworkState::SuggestedEdit.clarifications.pending
+        .find_by!(target_entity_type: "role_illustration")
+      assert_includes example_flag.rationale, "Reads as an L5 behaviour"
+    end
+
+    ActsAsTenant.with_tenant(@tenant) do
+      clarification = FrameworkState::SuggestedEdit.clarifications.pending
+        .where(target_entity_type: "behavioural_expectation").sole
       assert_includes clarification.rationale, "Flagged during Flag calibration"
       assert_includes clarification.rationale, "Scope or altitude?"
       flags = CalibrationSessions::SessionOutcomes.new(session: CalibrationSession.find(@flag_session_id)).flags

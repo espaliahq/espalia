@@ -709,6 +709,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_flag_illustration",
+        "description" => "Flag one role illustration (example) as unclear from a live calibration session — raises a framework clarification anchored on the illustration.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id"      => { "type" => "string" },
+            "illustration_id" => { "type" => "string" },
+            "reason"          => { "type" => "string" }
+          },
+          "required" => %w[session_id illustration_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_get",
         "description" => "Get one calibration session — lifecycle state plus participant and calibrant rosters.",
         "inputSchema" => {
