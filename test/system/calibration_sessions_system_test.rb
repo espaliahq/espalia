@@ -665,7 +665,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     JS
   end
 
-  test "calibration screens stretch to at least 80% of a large desktop" do
+  test "calibration screens use the full width of a large desktop" do
     session_id = nil
     ActsAsTenant.with_tenant(@tenant) do
       ctx = AuthorizationContext.new(
@@ -690,17 +690,17 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     visit calibration_sessions_path
     assert_text "Wide calibration"
-    assert_operator width_ratio, :>=, 0.78,
+    assert_operator width_ratio, :>=, 0.95,
                     "the index must not sit in a narrow column on a big screen"
 
     visit calibration_session_path(session_id)
     assert_text "RATER TENDENCY"
-    assert_operator width_ratio, :>=, 0.78,
+    assert_operator width_ratio, :>=, 0.95,
                     "the session room must not sit in a narrow column on a big screen"
   end
 
   # The page wrapper's share of the viewport — the calibration screens
-  # promise at least 80% on a large desktop.
+  # use the full desktop width (the comparison-drawer design needs it).
   def width_ratio
     page.evaluate_script(
       "document.querySelector('#main-content > div').getBoundingClientRect().width / window.innerWidth"
