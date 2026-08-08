@@ -384,7 +384,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       select.form.requestSubmit()
     JS
     assert_text "1 item"
-    assert_no_text "Ran the pricing spike end to end."
+    # Scoped to the WALL — the same evidence legitimately shows on Ivy's
+    # open drawer card, which wall filters must not touch.
+    within("#calibration-wall") { assert_no_text "Ran the pricing spike end to end." }
 
     # The filter rides every pane link, so clear it before moving on.
     page.execute_script(<<~JS)
@@ -394,28 +396,28 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     JS
     assert_text "2 items"
 
-    # ── Compare tray: pinning holds two cards side by side ──
-    click_link_with_js_fallback("Person: Ivy IC", expect_text: "Manager: Consistently")
-    click_link_with_js_fallback("Pin to compare", expect_text: "Compare (1)")
-    assert_selector "[data-compare-card='#{@report_1.id}']"
+    # ── Comparison drawer: pinning holds two cards side by side ──
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
+                                    expect_text: "Manager: Consistently")
+    click_link_with_js_fallback("Pin", expect_text: "1 pinned")
+    assert_selector "[data-drawer-card='#{@report_1.id}']"
     assert_text "Ran the pricing spike end to end."
 
-    # Pin the second person from their card — the tray now juxtaposes both.
-    click_with_retry(expect_text: "Omar IC") do
-      find("a[data-person-id='#{@report_2.id}']").click
-    end
-    click_link_with_js_fallback("Pin to compare", expect_text: "Compare (2)")
-    assert_selector "[data-compare-card='#{@report_2.id}']"
+    # Open the second person — the pinned card stays put beside the
+    # inspector, so the room reads both at once.
+    click_selector_with_js_fallback("a[data-person-id='#{@report_2.id}']",
+                                    expect_text: "Omar IC")
+    assert_selector "[data-drawer-card='#{@report_1.id}']"
+    assert_selector "[data-drawer-card='#{@report_2.id}']"
+    click_link_with_js_fallback("Pin", expect_text: "2 pinned")
     assert_text "Ran the billing spike end to end."
 
-    # Unpinning drops the card.
-    # Sync on the tray's own heading — a signal already on the wall could
-    # never arm the JS fallback (testing.md).
-    click_link_with_js_fallback("Compare (2)", expect_text: "COMPARE")
-    click_with_retry(expect_text: "Compare (1)") do
-      find("[data-compare-card='#{@report_2.id}'] a", text: "Unpin").click
+    # Unpinning releases the slot.
+    click_with_retry(expect_text: "1 pinned") do
+      find("[data-drawer-card='#{@report_2.id}'] a", text: "Unpin").click
     end
-    assert_no_selector "[data-compare-card='#{@report_2.id}']"
+    assert_selector "[data-drawer-card='#{@report_2.id}']",
+                    text: /Omar IC/ # still open as the inspector, just unpinned
   end
 
   test "facilitator flags an unclear expectation from the drill-in" do
@@ -512,6 +514,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # JS-fallback guarantees the second attempt fires.
     click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
     assert_text "Ivy IC"
+
+    # ── Mobile: the drawer scrolls its cards internally, never the page ──
+    page.driver.browser.manage.window.resize_to(375, 812)
+    assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth + 1"),
+           "the drawer must not widen the page on mobile"
+    page.driver.browser.manage.window.resize_to(1400, 1400)
 
     # ── The read-only ladder: the E4 chip swaps the panel to the
     # above-level cell in place (pane frame, no scroll jump) ──

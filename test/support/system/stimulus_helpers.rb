@@ -177,8 +177,15 @@ module StimulusHelpers
   def click_link_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
-    click_link locator
-    return if landed?(expect_text, expect_selector, wait: 8)
+    # An intercepted click (a sticky overlay — the comparison drawer, a
+    # sticky header — sitting over the link at the current scroll) is the
+    # same failure the JS dispatch below exists for; don't let it raise.
+    begin
+      click_link locator
+      return if landed?(expect_text, expect_selector, wait: 8)
+    rescue Selenium::WebDriver::Error::ElementClickInterceptedError
+      # fall through to the JS dispatch
+    end
 
     # First click was dropped. Find the link by visible text and dispatch
     # a synthetic click via JS — bypasses Selenium pointer hit-testing.

@@ -21,7 +21,7 @@ module CalibrationSessions::DrillInReturnPath
   def drill_in_return_path(session_record, person_id: nil, extra: {})
     query = extra.merge(
       person: person_id.presence,
-      compare: Array.wrap(params[:compare]).grep(String).select(&:present?).presence,
+      pins: Array.wrap(params[:pins]).grep(String).select(&:present?).presence,
       view: params[:view].presence_in(CalibrationSessions::CapabilitiesController::VIEWS),
       wall_level: params[:wall_level].to_s.presence,
       wall_valence: params[:wall_valence].presence_in(EvidenceLink::VALENCES),

@@ -11,7 +11,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # The tray is a deliberate juxtaposition of 2–3 cards, not a dashboard.
   MAX_COMPARE_PINS = 3
 
-  VIEWS = %w[wall compare].freeze
+  VIEWS = %w[wall].freeze
 
   # The person card's kebab actions — which (single) form renders open.
   PERSON_ACTIONS = %w[request revisit].freeze
@@ -38,7 +38,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       # and again for the log.
       outcomes: outcomes
     )
-    compare_cards = resolve_compare_cards(stats)
+    pinned_cards = resolve_pinned_cards(stats)
     # The log rides along as a side panel so an outcome raised here lands
     # in view without leaving the capability under discussion. Skipped for
     # a pane-frame request: those re-render the whole page server-side but
@@ -65,8 +65,8 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       view: view_param,
       wall: (evidence_wall(stats) if view_param == "wall"),
       wall_filters: wall_filters,
-      compare_ids: compare_cards.keys,
-      compare_cards: compare_cards,
+      pin_ids: pinned_cards.keys,
+      pinned_cards: pinned_cards,
       can_flag: @session.started? && policy(@session).flag_expectation?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -88,7 +88,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     params[:view].presence_in(VIEWS)
   end
 
-  # Pinned compare cards, keyed by person_id. A pin only survives if it
+  # Pinned drawer cards, keyed by person_id. A pin only survives if it
   # RESOLVES to a card — an id outside the session, or one for someone who
   # has since left the cycle (so they hold no dot on this grid), is dropped
   # rather than becoming a phantom that shows no card, offers no "Unpin",
@@ -96,8 +96,8 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # last, so stale ids ahead of a live one can't squeeze it out.
   #
   # @return [Hash{String => Hash}]
-  def resolve_compare_cards(stats)
-    requested = Array.wrap(params[:compare]).grep(String).select(&:present?).uniq
+  def resolve_pinned_cards(stats)
+    requested = Array.wrap(params[:pins]).grep(String).select(&:present?).uniq
     (requested & grid_person_ids(stats))
       .filter_map { |person_id| @cards.for(person_id)&.then { |card| [ person_id, card ] } }
       .first(MAX_COMPARE_PINS).to_h

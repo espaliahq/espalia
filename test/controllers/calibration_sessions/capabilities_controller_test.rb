@@ -209,12 +209,12 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # calibrating them is why the exemption puts Zed on the grid at all.
       assert_includes response.body, "Manager: Some of the time"
 
-      # Same rule on the compare tray, which renders its own pill pair.
+      # Same rule on a PINNED drawer card, which renders the same panel.
       get calibration_session_capability_path(@session, @cap.stable_id,
-                                              view: "compare", compare: [ outsider.id ])
+                                              pins: [ outsider.id ])
       assert_response :success
       assert_includes response.body, "Self: not shown"
-      assert_includes response.body, "Mgr: Some of the time"
+      assert_includes response.body, "Manager: Some of the time"
     end
 
     should "collapse a rater with nothing rated here into one sentence" do
@@ -255,15 +255,15 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_not_includes response.body, "Self: not shown"
     end
 
-    should "render the compare tray for pinned people, dropping foreign pins" do
+    should "render the drawer for pinned people, dropping foreign pins" do
       get calibration_session_capability_path(
-        @session, @cap.stable_id, view: "compare",
-        compare: [ @report.id, SecureRandom.uuid_v7, @em.id ]
+        @session, @cap.stable_id,
+        pins: [ @report.id, SecureRandom.uuid_v7, @em.id ]
       )
 
       assert_response :success
-      assert_includes response.body, "Compare (1)"
-      assert_includes response.body, "Ivy IC"
+      assert_includes response.body, "1 pinned"
+      assert_select "[data-drawer-card='#{@report.id}']"
       assert_includes response.body, "Unpin"
     end
 
@@ -271,11 +271,11 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       stale = Array.new(CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS) { SecureRandom.uuid_v7 }
 
       get calibration_session_capability_path(
-        @session, @cap.stable_id, view: "compare", compare: stale + [ @report.id ]
+        @session, @cap.stable_id, pins: stale + [ @report.id ]
       )
 
-      assert_includes response.body, "Compare (1)"
-      assert_includes response.body, "Ivy IC"
+      assert_includes response.body, "1 pinned"
+      assert_select "[data-drawer-card='#{@report.id}']"
     end
 
     should "carry the pane, the opened person, the pins and the filters through an outcome POST" do
@@ -284,12 +284,12 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       post calibration_session_rating_revisits_path(@session), params: {
         person_id: @report.id, capability_stable_id: @cap.stable_id,
         level_ordinal: 3, note: "Compare the pricing work with Omar's.",
-        compare: [ @report.id ], view: "wall", wall_valence: "demonstrated"
+        pins: [ @report.id ], view: "wall", wall_valence: "demonstrated"
       }
 
       assert_equal "Revisit requested — it will appear in the rater's assessment activity.",
                    flash[:notice], "the success path, not the rescue branch"
-      assert_includes response.redirect_url, "compare%5B%5D=#{@report.id}"
+      assert_includes response.redirect_url, "pins%5B%5D=#{@report.id}"
       assert_includes response.redirect_url, "person=#{@report.id}"
       assert_includes response.redirect_url, "view=wall"
       assert_includes response.redirect_url, "wall_valence=demonstrated"
@@ -379,14 +379,14 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       post calibration_session_expectation_flags_path(@session), params: {
         capability_stable_id: @cap.stable_id, level_ordinal: 3,
         reason: "Scope or altitude?", person: @report.id,
-        compare: [ @report.id ], view: "compare"
+        pins: [ @report.id ], view: "wall"
       }
 
       assert_match(/clarification discussion is now open/, flash[:notice].to_s,
                    "the success path, not the rescue branch")
       assert_includes response.redirect_url, "person=#{@report.id}"
-      assert_includes response.redirect_url, "compare%5B%5D=#{@report.id}"
-      assert_includes response.redirect_url, "view=compare"
+      assert_includes response.redirect_url, "pins%5B%5D=#{@report.id}"
+      assert_includes response.redirect_url, "view=wall"
       assert_includes response.redirect_url, "activity=open"
     end
 
@@ -481,16 +481,16 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
         "nothing was recorded, so there is nothing to open the panel for"
     end
 
-    should "not error when an outcome POST carries a hash compare param" do
+    should "not error when an outcome POST carries a hash pins param" do
       start_session_stream
 
       post calibration_session_rating_revisits_path(@session), params: {
         person_id: @report.id, capability_stable_id: @cap.stable_id,
-        level_ordinal: 3, note: "Malformed state.", compare: { "x" => "y" }
+        level_ordinal: 3, note: "Malformed state.", pins: { "x" => "y" }
       }
 
       assert_response :redirect
-      assert_not_includes response.redirect_url, "compare"
+      assert_not_includes response.redirect_url, "pins"
     end
   end
 
