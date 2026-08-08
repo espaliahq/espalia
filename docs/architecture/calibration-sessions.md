@@ -46,13 +46,15 @@
 > *Provenance* — carried-forward (seeded, unconfirmed) ratings are marked
 > on every read surface; see *Carried-vs-vetted provenance*.
 >
-> **Next up (agreed direction, design below):** the **unified comparison
-> drawer** — one sticky bottom drawer (inspector + pins, side by side)
-> shared by Score by cohort and the capability drill-in, replacing the
-> inline why-panel, the bottom person card, and the separate compare
-> tray; the drill-in's standalone "What good looks like" card folds into
-> the person card (examples visible per level, ⚑ flags — expectation AND
-> example — via kebabs). See *The comparison drawer* below.
+> **Comparison drawer: SHIPPED** — the sticky bottom drawer (inspector +
+> pins, side by side) shared by Score by cohort and the capability
+> drill-in, replacing the inline why-panel, the bottom person card, and
+> the separate compare tray; "What good looks like" folded into the
+> column-header ⓘ menus + person cards; **⚑ Flag example as unclear**
+> (illustration-anchored clarification,
+> `Operations::CalibrationSessions::FlagIllustration`, web + MCP). The
+> calibration screens use the full desktop width. See *The comparison
+> drawer* below for the design record.
 >
 > **Not built** (each is marked at the section that describes it):
 > auto-suggested contrast pairs (§e) · the person card's linked-by /
@@ -992,7 +994,7 @@ provenance. What that buys the surfaces:
 Re-running converges rather than growing: cycles are keyed by name, the
 session by cycle, and every persona derives from a SHA of stable ids.
 
-### The comparison drawer (agreed direction, not yet built)
+### The comparison drawer
 
 Both comparison surfaces exist to calibrate how each individual is
 presented, so they share ONE presentation of a person. **The rule:
@@ -1039,11 +1041,14 @@ the session log visible throughout. Design decisions:
   `pins[]=`, stamped by the existing pane-state machinery; `compare[]`
   and `cohort_person` retire into them.
 
-Build order: (1) drawer on the drill-in — re-home the shipped person
-card + compare tray, sticky headers; (2) drawer on the session page —
-why-panel becomes the inspector's cohort face, cross-screen pins;
-(3) fold in "what good looks like" + the illustration-anchored
-clarification.
+All three phases are shipped: the drawer on both screens (person= +
+pins[] URL-carried, `compare[]`/`cohort_person` retired), the sticky
+capability header + in-card grid scroll with pinned level headers, the
+"What good looks like" fold-in (column-header ⓘ menus with expectation +
+examples + flags; examples and the focused expectation on every person
+card), and per-example flags (`CalibrationExpectationFlagged` carries an
+optional `illustration_id`, so the cell's flag and each example's flag
+are independent one-per-session outcomes).
 
 ### The person card is a read-only assessment column
 
