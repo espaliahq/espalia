@@ -490,9 +490,6 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
-  def person_name(person_id)
-    @people[person_id]&.name || "Unknown person"
-  end
 
   def primary_button_classes
     "inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold " \

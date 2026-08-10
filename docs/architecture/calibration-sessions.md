@@ -41,7 +41,7 @@
 > so carried ratings, vetting-vs-coasting raters and reporting-line moves are
 > real cross-cycle history, and leaves a live session to open. The org's
 > high performers earn above-level surplus so ">100% of expected" and the
-> why-panel's positive-only strengths are demo-able.
+> drawer card's positive-only "Pulling it up" column are demo-able.
 >
 > *Provenance* — carried-forward (seeded, unconfirmed) ratings are marked
 > on every read surface; see *Carried-vs-vetted provenance*.
@@ -1026,9 +1026,10 @@ the session log visible throughout. Design decisions:
   level-ordinal header row (drill-in) — "what am I looking at" never
   scrolls away.
 - **"What good looks like" folds in** (drill-in): the standalone card is
-  replaced by (a) the sticky focused-level expectation line, (b) a ⋮ on
-  each level column header — "Show expectation & examples" popover +
-  "⚑ Flag expectation as unclear…" (the no-person-open path), and
+  replaced by (a) the sticky focused-level expectation line, (b) an ⓘ on
+  each level column header — a dialog panel with the expectation, the
+  role examples (each flaggable), and "⚑ Flag expectation as unclear…"
+  (the no-person-open path), and
   (c) the person card's level panel, which gains the Examples disclosure.
 - **One kebab**: the person card's ⋮ carries Request feedback/evidence…,
   Ask the rater to revisit…, and (drill-in) ⚑ Flag expectation as

@@ -29,6 +29,11 @@ class CalibrationSessions::SessionOutcomes
   #
   # @return [Array<Hash>] `{ capability_stable_id:, level_ordinal:, suggestion_id:,
   #   flagged_by_id:, reason:, flagged_at: }`
+  # @return [Array<Hash>] one entry per flag —
+  #   `{ capability_stable_id:, level_ordinal:, illustration_id:,
+  #   suggestion_id:, flagged_by_id:, reason:, flagged_at: }`;
+  #   `illustration_id` is non-nil for an EXAMPLE flag (one role
+  #   illustration under the cell) and nil for the cell's expectation flag.
   def flags
     @flags ||= stream_events
       .select { |e| e.is_a?(AssessmentCycles::Events::CalibrationExpectationFlagged) }

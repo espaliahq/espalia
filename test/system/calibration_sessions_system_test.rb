@@ -254,8 +254,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_selector "a[aria-label*='% of expected']", count: 4
 
     # Open a dot → the comparison drawer, with the rater-context reframe.
-    why_dot = find("a[aria-label^='Nia IC']")
-    click_with_retry(expect_text: "rated by Mia Manager") { why_dot.click }
+    # JS-fallback: the fixed drawer can intercept pointer clicks near the
+    # viewport bottom (the drop class the helpers exist for).
+    click_selector_with_js_fallback("a[aria-label^='Nia IC']",
+                                    expect_text: "rated by Mia Manager")
     assert page.evaluate_script("window.__staying === true"),
            "a dot click swaps the pane too — no scroll jump mid-discussion"
     assert_selector "#calibration-comparison-drawer [data-drawer-card]"
@@ -266,14 +268,14 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # pin survives a tab switch (it rides every overview link).
     nia_id = page.find("#calibration-comparison-drawer [data-drawer-card]")["data-drawer-card"]
     click_link_with_js_fallback("Pin", expect_text: "1 pinned")
-    other_dot = find("a[aria-label*='% of expected']:not([aria-label^='Nia IC'])", match: :first)
-    click_with_retry(expect_selector: "[data-drawer-card]:not([data-drawer-card='#{nia_id}'])") do
-      other_dot.click
-    end
+    click_selector_with_js_fallback(
+      "a[aria-label*='% of expected']:not([aria-label^='Nia IC'])",
+      expect_selector: "[data-drawer-card]:not([data-drawer-card='#{nia_id}'])"
+    )
     assert_selector "#calibration-comparison-drawer [data-drawer-card]", count: 2
-    click_with_retry(expect_text: "RATER TENDENCY") { click_link "Rater tendency" }
+    click_link_with_js_fallback("Rater tendency", expect_text: "RATER TENDENCY")
     assert_selector "[data-drawer-card='#{nia_id}']", count: 1
-    click_with_retry(expect_text: "SCORE BY COHORT") { click_link "Score by cohort" }
+    click_link_with_js_fallback("Score by cohort", expect_text: "SCORE BY COHORT")
 
     # The drawer composes with the drill-in rather than growing a grid —
     # and the pins ride along into it.
@@ -438,9 +440,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Ran the billing spike end to end."
 
     # Unpinning releases the slot.
-    click_with_retry(expect_text: "1 pinned") do
-      find("[data-drawer-card='#{@report_2.id}'] a", text: "Unpin").click
-    end
+    click_selector_with_js_fallback(
+      "[data-drawer-card='#{@report_2.id}'] a[aria-label^='Unpin']",
+      expect_text: "1 pinned"
+    )
     # Still open as the inspector — and genuinely unpinned: the violet
     # ring is gone and Pin is offered again.
     assert_selector "[data-drawer-card='#{@report_2.id}'] a", text: "Pin"

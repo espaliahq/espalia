@@ -7,9 +7,10 @@
 #
 # Fixed to the viewport bottom, full width — the main pane and the session
 # log both stay visible above it. Renders nothing while unoccupied. The
-# host page wrapper must carry
-# `has-[#calibration-comparison-drawer]:pb-[45vh]` so page-end content can
-# scroll clear of the fixed shelf.
+# host page wrapper must carry `data-drawer-host` —
+# `comparison_drawer_controller` pads it by the drawer's measured height
+# (applied on connect, so it survives Turbo Frame swaps) so page-end
+# content can scroll clear of the fixed shelf.
 module Views::CalibrationSessions::ComparisonDrawerChrome
   # The drawer holds at most this many people (inspector + pins) — the
   # deliberate juxtaposition is 2–3 cards, not a dashboard.
