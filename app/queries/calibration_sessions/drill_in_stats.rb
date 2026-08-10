@@ -120,9 +120,13 @@ class CalibrationSessions::DrillInStats
   #
   # @return [Hash{Integer => Array<Hash>}] ordinal => [{ role_name:, items: }]
   def illustrations
-    @illustrations ||= begin
+    # defined? memo — a `return` inside `||= begin` escapes WITHOUT setting
+    # the memo, re-running the whole build on every call for the empty case.
+    return @illustrations if defined?(@illustrations)
+
+    @illustrations = begin
       role_ids_by_ordinal = population_role_ids_by_ordinal
-      return {} if role_ids_by_ordinal.empty?
+      return @illustrations = {} if role_ids_by_ordinal.empty?
 
       rows = FrameworkState::RoleIllustration
         .joins(:expectation, :role)

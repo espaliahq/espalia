@@ -6,8 +6,9 @@
 # increments; see docs/architecture/calibration-sessions.md.
 class Views::CalibrationSessions::ShowView < Views::Base
   include Views::CalibrationSessions::ComparisonDrawerChrome
+  include Views::CalibrationSessions::PeopleNames
 
-  MAX_PINS = CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS
+  MAX_PINS = Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS
 
   include Views::CalibrationSessions::Glossary
   include Phlex::Rails::Helpers::TurboFrameTag
@@ -411,7 +412,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
       @drawer_cards.each do |entry|
         render Views::CalibrationSessions::CohortDrawerCard.new(
           session: @session, dot: entry[:dot], why: entry[:why],
-          raters: @stats ? @stats[:raters] : [], people: @people,
+          raters: @stats[:raters], people: @people,
           view: @overview_view, pin_ids: @pin_ids,
           inspector: entry[:person_id] == @drawer_person_id,
           inspector_person_id: @drawer_person_id,

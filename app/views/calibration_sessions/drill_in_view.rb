@@ -14,16 +14,16 @@
 class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Assessments::FrequencyPalette
   include Views::Evidence::Valence
-  include Views::Evidence::ExamplesDisclosure
   include Views::CalibrationSessions::Glossary
   include Views::CalibrationSessions::RaterColours
   include Views::CalibrationSessions::ComparisonDrawerChrome
+  include Views::CalibrationSessions::PeopleNames
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
   RELATION_LABELS = { "self" => "Self", "manager" => "Manager", "peer" => "Peer feedback" }.freeze
 
-  MAX_PINS = CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS
+  MAX_PINS = Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS
 
   # @param session [CalibrationSession]
   # @param stats [Hash] DrillInStats result
@@ -319,7 +319,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             end
             div(class: "flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
               defined_term(:backing, align: :right)
-              plain "· click a dot to discuss"
+              plain "· click a dot to discuss · pin up to #{MAX_PINS} to compare"
             end
           end
 
@@ -548,7 +548,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     turbo_frame_tag("calibration-bottom-pane",
                     class: "block",
                     data: { calibration_pane_target: "frame" }) do
-      tab_bar
+      wall_toggle
       wall_section if @view == "wall"
       comparison_drawer
     end
@@ -562,27 +562,23 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # role="tab" would promise arrow-key navigation and in-place panel swapping
   # that full-page links can't deliver.
   # People live in the comparison drawer now, so the only bottom-pane view
-  # left is the wall — a toggle, not a tab set. Clicking the active toggle
-  # closes it.
-  def tab_bar
-    nav(class: "mt-6 flex flex-wrap items-center gap-2", aria: { label: "Capability views" }) do
-      tab_link("Feedback / Evidence wall",
-               drill_in_path(view: @view == "wall" ? nil : "wall"),
-               active: @view == "wall")
-    end
-  end
-
-  def tab_link(label, href, active:)
+  # left is the wall — one toggle, not a tab set. Clicking the active
+  # toggle closes it.
+  def wall_toggle
+    active = @view == "wall"
     classes = if active
       "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
     else
       "border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white " \
         "hover:bg-gray-50 dark:hover:bg-gray-800"
     end
-    a(
-      href: href, aria: { current: active ? "page" : nil },
-      class: "inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium #{classes}"
-    ) { label }
+    div(class: "mt-6") do
+      a(
+        href: drill_in_path(view: active ? nil : "wall"),
+        aria: { expanded: active.to_s },
+        class: "inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium #{classes}"
+      ) { "Feedback / Evidence wall" }
+    end
   end
 
   # Rebuilds the drill-in URL with the given view, preserving the opened
@@ -1247,6 +1243,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   def rater_name(rater_id)
-    @people[rater_id]&.name || "Unknown"
+    person_name(rater_id)
   end
 end

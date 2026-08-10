@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-# The calibration capability drill-in: expectation text per level beside
-# the rater × level dot grid, with three bottom-pane views — the per-person
-# card (`?person=`), the evidence wall (`?view=wall`), and the compare tray
-# (`?view=compare` + `compare[]=` pins). Facilitator-only, like every
-# session surface (v1) — see docs/architecture/calibration-sessions.md.
+# The calibration capability drill-in: the rater × level dot grid (each
+# level header carrying its expectation + examples in an ⓘ menu), the
+# evidence wall (`?view=wall`), and the comparison drawer — the inspected
+# person (`?person=`) plus pinned people (`pins[]=`) side by side.
+# Facilitator-only, like every session surface (v1) — see
+# docs/architecture/calibration-sessions.md.
 class CalibrationSessions::CapabilitiesController < ApplicationController
   include CalibrationSessions::SessionLogData
 
-  # The tray is a deliberate juxtaposition of 2–3 cards, not a dashboard.
-  MAX_COMPARE_PINS = 3
+  MAX_COMPARE_PINS = Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS
 
   VIEWS = %w[wall].freeze
 
@@ -83,7 +83,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     request.headers["Turbo-Frame"] == "calibration-bottom-pane"
   end
 
-  # @return [String, nil] "wall" / "compare" / nil (person card or nothing)
+  # @return [String, nil] "wall" / nil
   def view_param
     params[:view].presence_in(VIEWS)
   end

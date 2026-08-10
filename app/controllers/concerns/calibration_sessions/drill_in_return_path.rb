@@ -2,13 +2,13 @@
 
 # Rebuilds the drill-in URL an outcome POST (⚑ flag / revisit request) came
 # from, so recording an outcome returns the room to the screen it was
-# reading — which pane, the opened person, the compare pins, the wall's
+# reading — which pane, the opened person, the drawer pins, the wall's
 # filters — rather than resetting it mid-conversation.
 #
 # The forms supply this state as hidden fields
 # (`DrillInView#state_passthrough_fields`); everything here is untrusted
 # query input, so each value is coerced to a scalar before it reaches a
-# route helper (an array/hash `compare` otherwise raises out of the action).
+# route helper (an array/hash `pins` otherwise raises out of the action).
 module CalibrationSessions::DrillInReturnPath
   extend ActiveSupport::Concern
 

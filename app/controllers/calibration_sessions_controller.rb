@@ -101,7 +101,8 @@ class CalibrationSessionsController < ApplicationController
     members = @session.members.to_a
     participant_ids = members.select { |m| m.member_type == "participant" }.map(&:person_id)
     calibrant_ids = members.select { |m| m.member_type == "calibrant" }.map(&:person_id)
-    seed_groups = seed_groups_for(participant_ids)
+    seeds = population_seeds(participant_ids) if participant_ids.any?
+    seed_groups = seeds ? seeds.call : {}
     session_log = session_log_data(@session)
 
     people_ids = (participant_ids + calibrant_ids + [ @session.facilitator_id ] +
@@ -117,12 +118,16 @@ class CalibrationSessionsController < ApplicationController
     requested_person = params[:person].presence || params[:cohort_person].presence
     build_cohorts = !@session.draft? && participant_ids.any? &&
                     (overview_view == "cohort" || requested_person.present? || requested_pins.any?)
-    cohorts = build_cohorts ? CalibrationSessions::CohortScores.new(session: @session) : nil
+    # `seeds` above is the request's ONE PopulationSeeds — the roster,
+    # OverviewStats, and CohortScores all read the same attribution, and
+    # each build costs recorded-manager + delegation + assignment queries
+    # (the drill-in's shared-outcomes rule).
+    cohorts = build_cohorts ? CalibrationSessions::CohortScores.new(session: @session, population_seeds: seeds) : nil
     dots_by_person = cohorts ? cohorts.call[:cohorts].flat_map { |c| c[:people] }.index_by { |d| d[:person_id] } : {}
     # Only people with a dot resolve to a card (a foreign or stale id is
     # dropped, never a phantom slot) — the drill-in's pin rule.
     pin_ids = requested_pins.select { |id| dots_by_person.key?(id) }
-      .first(CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS)
+      .first(Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS)
     drawer_person_id = requested_person&.then { |id| id if dots_by_person.key?(id) }
     drawer_cards = ([ drawer_person_id ] + pin_ids).compact.uniq.map do |person_id|
       { person_id: person_id, dot: dots_by_person[person_id], why: cohorts.why_for(person_id) }
@@ -137,7 +142,7 @@ class CalibrationSessionsController < ApplicationController
       groups: population_groups(seed_groups, calibrant_ids),
       suggestions: suggested_additions(seed_groups, calibrant_ids, participant_ids),
       readiness: readiness_for(calibrant_ids),
-      stats: participant_ids.any? ? CalibrationSessions::OverviewStats.new(session: @session).call : nil,
+      stats: participant_ids.any? ? CalibrationSessions::OverviewStats.new(session: @session, population_seeds: seeds).call : nil,
       overview_view: overview_view,
       cohorts: cohorts&.call&.dig(:cohorts),
       drawer_cards: drawer_cards,
@@ -192,14 +197,12 @@ class CalibrationSessionsController < ApplicationController
 
   # The seed mapping for the CURRENT participants — used to group the
   # population by rater for display and to power "refresh suggestions".
-  def seed_groups_for(participant_ids)
-    return {} if participant_ids.empty?
-
+  def population_seeds(participant_ids)
     CalibrationSessions::PopulationSeeds.new(
       framework_id: @session.framework_id,
       participant_ids: participant_ids,
       facilitator_id: @session.facilitator_id
-    ).call
+    )
   end
 
   # Buckets the current population by rater: [[participant_id, member_ids]],

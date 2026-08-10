@@ -600,7 +600,7 @@ Priya N. · L4 · rated by Raj          Mgr: ◼ Some   Self: ◼ Consistently  
                            requested from T. Okafor · linked by Priya · Jun 3
    ⚠ evidence valence and rating point in different directions
 ─────────────────────────────────────────────────────────────────────────────
- 2 items · 1 proactive, 1 requested          [Request evidence…]  [Pin to compare]
+ 2 items · 1 proactive, 1 requested          [Request evidence…]  [Pin]
 ```
 
 Card contents and rules:
@@ -1007,10 +1007,10 @@ the session log visible throughout. Design decisions:
 - **Three panes everywhere**: main pane · session log (far right,
   unchanged) · the comparison drawer pinned to the bottom of the
   viewport. The drawer renders only when the inspector or ≥1 pin is
-  occupied; max height ~40vh, cards scroll internally, and a Collapse
-  toggle drops it to a slim bar of names + unpin (the main pane keeps
-  bottom padding either way). Mobile is the SAME drawer one card wide —
-  a sticky bar of pinned initials, tap to expand one card.
+  occupied; cards scroll internally, and a Collapse toggle drops it to
+  its header bar (count + Expand — expand to unpin). The host page is
+  padded by the drawer's measured height, so page-end content always
+  scrolls clear. Mobile is the SAME drawer one card wide.
 - **Inspector + pins, max 3 people across** (the compare tray's cap;
   horizontally scrollable if cramped). A pin is a PERSON, not a
   snapshot: the card renders the context's face — cohort face (% of

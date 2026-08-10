@@ -50,8 +50,12 @@ class CalibrationSessions::OverviewStats
   FLAG_MIN_CELLS = 4
 
   # @param session [CalibrationSession]
-  def initialize(session:)
+  # @param population_seeds [CalibrationSessions::PopulationSeeds, nil]
+  #   pass the request's existing instance so the attribution queries run
+  #   once per render, not once per consumer
+  def initialize(session:, population_seeds: nil)
     @session = session
+    @population_seeds = population_seeds
   end
 
   # @return [Hash] `{ org_mean:, raters: [...], capabilities: [...], insufficient_capability_count: }`
@@ -108,11 +112,11 @@ class CalibrationSessions::OverviewStats
     # strip, the drill-in, and the revisit op can never credit the same
     # person to different raters. Attributed calibrants only — reference
     # people without an in-session rater are excluded from tendency stats.
-    @rater_for ||= CalibrationSessions::PopulationSeeds.new(
+    @rater_for ||= (@population_seeds || CalibrationSessions::PopulationSeeds.new(
       framework_id: @session.framework_id,
       participant_ids: participant_ids,
       facilitator_id: @session.facilitator_id
-    ).attribution.slice(*calibrant_ids)
+    )).attribution.slice(*calibrant_ids)
   end
 
   # person_id => assessed level ordinal (cycle enrollment snapshot).

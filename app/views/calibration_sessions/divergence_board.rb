@@ -12,6 +12,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
   AXIS_MAX = 3.0
 
   include Views::CalibrationSessions::RaterColours
+  include Views::CalibrationSessions::PeopleNames
 
   # @param session [CalibrationSession] for drill-in links
   # @param capabilities [Array<Hash>] OverviewStats capability rows (sorted)
@@ -185,7 +186,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
   end
 
   def rater_name(participant_id)
-    @people[participant_id]&.name || "Unknown"
+    person_name(participant_id)
   end
 
   def rater_initials(participant_id)

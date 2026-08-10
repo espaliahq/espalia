@@ -9,8 +9,8 @@
 # is a read-only adaptation of the assessment's capability view: the room
 # reads the whole column, focused initially at the assessed level.
 #
-# Extracted from the drill-in controller so the person card and the compare
-# tray (2–3 cards side by side) assemble through one code path.
+# Extracted from the drill-in controller so the inspector card and the
+# pinned drawer cards (2–3 side by side) assemble through one code path.
 class CalibrationSessions::PersonCard
   # @param session [CalibrationSession]
   # @param stats [Hash] DrillInStats result for the capability
@@ -32,7 +32,7 @@ class CalibrationSessions::PersonCard
   end
 
   # Memoized per person (misses included) so callers can ask freely — the
-  # tray resolves a pin and then renders it, and the opened person is
+  # drawer resolves a pin and then renders it, and the opened person is
   # often also pinned. Each card costs a handful of queries.
   #
   # @param person_id [String, nil]

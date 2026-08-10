@@ -15,6 +15,7 @@
 # a flag, the note it prompted, the revisit it produced — and the old
 # split-by-type sections hid that ordering.
 class Views::CalibrationSessions::SessionLog < Views::Base
+  include Views::CalibrationSessions::PeopleNames
   include Phlex::Rails::Helpers::TimeAgoInWords
 
   # The most recent outcomes to render. SessionOutcomes already caps the
@@ -326,9 +327,5 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   def capability_name(stable_id)
     @log[:capability_names][stable_id] || "Capability"
-  end
-
-  def person_name(person_id)
-    (person_id && @people[person_id]&.name) || "Unknown"
   end
 end

@@ -11,6 +11,10 @@
 # `has-[#calibration-comparison-drawer]:pb-[45vh]` so page-end content can
 # scroll clear of the fixed shelf.
 module Views::CalibrationSessions::ComparisonDrawerChrome
+  # The drawer holds at most this many people (inspector + pins) — the
+  # deliberate juxtaposition is 2–3 cards, not a dashboard.
+  MAX_PINS = 3
+
   # @param pin_count [Integer] occupied pin slots
   # @param max_pins [Integer]
   # @yield renders the card row's contents

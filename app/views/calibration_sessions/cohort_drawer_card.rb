@@ -11,6 +11,7 @@
 # the current screen calls for.
 class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   include Views::CalibrationSessions::Glossary
+  include Views::CalibrationSessions::PeopleNames
 
   # @param session [CalibrationSession]
   # @param dot [Hash] the person's {CalibrationSessions::CohortScores} dot
@@ -206,9 +207,5 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     calibration_session_path(
       @session, { view: @view, person: person, pins: pins.presence }.compact
     )
-  end
-
-  def person_name(person_id)
-    @people[person_id]&.name || "Unknown"
   end
 end

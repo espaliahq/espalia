@@ -16,6 +16,7 @@
 class Views::CalibrationSessions::CohortView < Views::Base
   include Views::CalibrationSessions::Glossary
   include Views::CalibrationSessions::RaterColours
+  include Views::CalibrationSessions::PeopleNames
 
   AXIS_MAX_PCT = 125
   # Dots closer than this (in % points) stack into further lanes instead of
@@ -35,8 +36,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
   # @param session [CalibrationSession]
   # @param cohorts [Array<Hash>] {CalibrationSessions::CohortScores#call}[:cohorts]
-  # @param raters [Array<Hash>] OverviewStats rater rows — colour order + the
-  #   why-panel's tendency context
+  # @param raters [Array<Hash>] OverviewStats rater rows — the dot colour order
   # @param people [Hash{String => Person}]
   # @param selected_person_id [String, nil] the drawer's inspected person
   # @param pin_ids [Array<String>] drawer pins, preserved on every dot link
@@ -290,9 +290,5 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # and get clipped.
   def position_pct(pct)
     ((pct.clamp(0, AXIS_MAX_PCT).to_f / AXIS_MAX_PCT) * 100).clamp(3.0, 97.0).round(1)
-  end
-
-  def person_name(person_id)
-    @people[person_id]&.name || "Unknown"
   end
 end
