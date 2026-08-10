@@ -74,15 +74,22 @@ export default class extends BaseController {
 
   // Capture-phase listener: any scroll (window or a nested pane) moves the
   // trigger out from under a fixed menu, so close rather than float loose.
-  #onAnyScroll() {
+  // Scrolls INSIDE the menu are exempt — a tall panel scrolls its own
+  // content (max-h + overflow on the panel) without dismissing itself.
+  #onAnyScroll(event) {
     if (this.menuTarget.classList.contains("hidden")) return
+    if (event && this.menuTarget.contains(event.target)) return
     this.close()
   }
 
   #positionFixed() {
     const rect = this.triggerTarget.getBoundingClientRect()
     const menu = this.menuTarget
-    const width = 224 // w-56; the post-open clamp handles height
+    // Pre-open guess only — the menu is still hidden so it can't be
+    // measured; #clampFixed re-clamps horizontally with the REAL width
+    // once it has dimensions (a w-96 panel was overhanging the viewport
+    // when this assumed every menu is w-56).
+    const width = 224
     // Honour the component's align: left anchors the menu's left edge to the
     // trigger's left, right anchors its right edge to the trigger's right.
     const anchored = this.alignValue === "right" ? rect.right - width : rect.left
@@ -96,6 +103,12 @@ export default class extends BaseController {
   #clampFixed() {
     const menu = this.menuTarget
     if (menu.classList.contains("hidden")) return
+
+    // Horizontal re-clamp with the menu's REAL width — #positionFixed ran
+    // before the menu was visible and guessed w-56.
+    const width = menu.offsetWidth
+    const left = parseFloat(menu.style.left) || 0
+    menu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`
 
     const rect = menu.getBoundingClientRect()
     if (rect.bottom > window.innerHeight - 8) {

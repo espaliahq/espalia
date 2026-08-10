@@ -539,7 +539,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         if (s.textContent.includes("Flag example")) s.parentElement.open = true
       })
     JS
-    js_set_field "textarea[aria-label='Why this example is unclear']", "Reads as an L5 behaviour"
+    js_set_field "textarea[aria-label^='Why this example is unclear']", "Reads as an L5 behaviour"
     click_button_with_js_fallback "Flag example", expect_text: "Example flagged"
     open_dropdown(scope: "th[data-level-menu='3']")
     assert_text "⚑ Example flagged — clarification open on the framework"

@@ -1,7 +1,9 @@
-// The calibration comparison drawer's collapse toggle. The drawer itself
-// is server-rendered (sticky bottom shelf); this only hides/shows the card
-// row and remembers the choice for the session via a cookie, so a room
-// that tucked the drawer away keeps it tucked across pane swaps.
+// The calibration comparison drawer's collapse toggle + clearance. The
+// drawer is server-rendered and FIXED to the viewport bottom, so this
+// controller keeps the host page padded by the drawer's real height —
+// measured, so it tracks content and collapse, and applied on connect so
+// it survives Turbo Frame swaps (a server-rendered class on the wrapper
+// outside the frame could not). Collapse is remembered via a cookie.
 //
 // Example usage:
 // <div data-controller="comparison-drawer">
@@ -20,6 +22,14 @@ export default class extends BaseController {
   connect() {
     super.connect()
     if (this.#collapsed()) this.#apply(true)
+    this.#pad()
+  }
+
+  disconnect() {
+    // The drawer left with its frame (last card closed/unpinned) — release
+    // the clearance so no dead scroll space remains.
+    this.#host()?.style.removeProperty("padding-bottom")
+    super.disconnect()
   }
 
   toggle() {
@@ -34,6 +44,19 @@ export default class extends BaseController {
     this.bodyTarget.style.display = collapse ? "none" : ""
     this.labelTarget.textContent = collapse ? "Expand" : "Collapse"
     this.labelTarget.setAttribute("aria-expanded", collapse ? "false" : "true")
+    this.#pad()
+  }
+
+  // Clearance = the drawer's measured height (+ breathing room), so page-end
+  // content can always scroll above the fixed shelf — exact whether the
+  // drawer holds one collapsed bar or three tall cards.
+  #pad() {
+    const host = this.#host()
+    if (host) host.style.paddingBottom = `${this.element.offsetHeight + 16}px`
+  }
+
+  #host() {
+    return document.querySelector("[data-drawer-host]")
   }
 
   #collapsed() {

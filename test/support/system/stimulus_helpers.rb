@@ -43,7 +43,9 @@ module StimulusHelpers
     wait_for_stimulus "dropdown", scope: scope
     stimulus_toggle(
       "[data-action='dropdown#toggle']",
-      visible_selector: "[role='menu']",
+      # The menu TARGET, not [role='menu'] — non-menuitem panels (the
+      # drill-in's level ⓘ) correctly carry role="dialog".
+      visible_selector: "[data-dropdown-target='menu']",
       verify_selector: "[data-action='dropdown#toggle'][aria-expanded='true']",
       scope: scope
     )

@@ -237,12 +237,16 @@ class Views::CalibrationSessions::CohortView < Views::Base
     div(class: "mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300") do
       gated.each do |dot|
         # A gated person still opens in the drawer — the card shows the
-        # gate's copy instead of a number.
-        a(href: cohort_path(person: dot[:person_id]),
-          class: "inline-flex items-center gap-1.5 rounded-full border border-dashed " \
-                 "border-gray-300 dark:border-gray-600 px-2.5 py-1 hover:border-gray-500 " \
-                 "dark:hover:border-gray-400 min-h-11") do
-          plain person_name(dot[:person_id])
+        # gate's copy instead of a number. The glossary tip renders OUTSIDE
+        # the link: a <button> inside an <a> is invalid HTML and the click
+        # would navigate instead of defining the term.
+        span(class: "inline-flex items-center gap-1.5 rounded-full border border-dashed " \
+                    "border-gray-300 dark:border-gray-600 px-2.5 py-1 min-h-11") do
+          a(href: cohort_path(person: dot[:person_id]),
+            class: "hover:underline",
+            aria: { label: "Open #{person_name(dot[:person_id])} in the comparison drawer" }) do
+            plain person_name(dot[:person_id])
+          end
           plain " · "
           if dot[:role_missing]
             plain "no role snapshot for this cycle — their assessment still opens from the population list"

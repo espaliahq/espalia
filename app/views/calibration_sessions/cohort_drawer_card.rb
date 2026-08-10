@@ -20,9 +20,11 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   # @param view [String] the active overview tab, preserved on card links
   # @param pin_ids [Array<String>]
   # @param inspector [Boolean] the just-clicked slot (gets Close)
+  # @param inspector_person_id [String, nil] whoever is inspected — card
+  #   links must preserve THEM, not swap in this card's person
   # @param max_pins [Integer]
   def initialize(session:, dot:, why:, raters:, people:, view:, pin_ids:,
-                 inspector:, max_pins:)
+                 inspector:, inspector_person_id: nil, max_pins:)
     @session = session
     @dot = dot
     @why = why
@@ -31,6 +33,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     @view = view
     @pin_ids = pin_ids
     @inspector = inspector
+    @inspector_person_id = inspector_person_id
     @max_pins = max_pins
   end
 
@@ -196,9 +199,10 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     @dot[:rater_id] ? person_name(@dot[:rater_id]) : "someone outside this session"
   end
 
-  # Session-page pane links: preserve the active tab and every other
-  # drawer occupant.
-  def session_path(person: @dot[:person_id], pins: @pin_ids)
+  # Session-page pane links: preserve the active tab, the INSPECTOR (not
+  # this card's person — unpinning a pinned card must never swap who the
+  # room is inspecting), and every other drawer occupant.
+  def session_path(person: @inspector_person_id, pins: @pin_ids)
     calibration_session_path(
       @session, { view: @view, person: person, pins: pins.presence }.compact
     )

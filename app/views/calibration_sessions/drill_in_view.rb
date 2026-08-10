@@ -67,14 +67,16 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(
-        # Bottom padding clears the fixed comparison drawer whenever it
-        # will render, so page-end content can always scroll above it.
+        # data-drawer-host: the comparison-drawer controller pads this by
+        # the drawer's measured height, so page-end content clears the fixed
+        # shelf — applied client-side because the drawer opens/closes via
+        # frame swaps this wrapper (outside the frame) never re-renders for.
         # overflow-anchor: pane swaps insert/remove the wall mid-page and
         # Chrome's scroll anchoring turns that into a scroll jump (the
         # assessment scroll-root's lesson) — anchoring off, swaps hold still.
-        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start [overflow-anchor:none] " \
-               "#{'pb-[45vh]' if drawer_occupied?}",
+        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start [overflow-anchor:none]",
         data: {
+          drawer_host: "true",
           controller: "calibration-pane#{' activity-pane' if @session_log}",
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::DRILL_IN_COOKIE,
           # One delegated handler for every in-page pane link (dots, tabs,
@@ -152,10 +154,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def level_header_menu(ordinal)
     render Components::Kit::Dropdown.new(strategy: :fixed, align: :left) do |dropdown|
       dropdown.trigger(label: "L#{ordinal} — expectation, examples, and flags") do
-        span(class: "inline-flex h-6 w-6 items-center justify-center rounded-md text-[11px] " \
+        # 44px tap target (the visual glyph stays small) — this is the only
+        # route to the level's reference material.
+        span(class: "inline-flex h-11 w-11 items-center justify-center rounded-md text-[11px] " \
                     "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") { "ⓘ" }
       end
-      dropdown.menu(width: "w-96") do
+      dropdown.menu(width: "w-96", role: "dialog",
+                    label: "L#{ordinal} — what good looks like") do
         div(class: "px-3 py-2 text-left") do
           p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
             "L#{ordinal} — what good looks like"
@@ -214,7 +219,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       details(class: "mt-0.5") do
         summary(
           class: "inline-flex min-h-11 cursor-pointer items-center text-[11px] font-medium " \
-                 "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
+                 "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300",
+          # The example text disambiguates — a level can hold several
+          # identical "flag example" affordances (menu AND open cards).
+          aria: { label: "Flag example as unclear — #{item[:text].to_s.truncate(60)}" }
         ) { "⚑ Flag example as unclear" }
         form(
           action: calibration_session_illustration_flags_path(@session),
@@ -233,7 +241,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                    "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
                    "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
             placeholder: "What misleads about this example (optional)",
-            aria: { label: "Why this example is unclear" }
+            aria: { label: "Why this example is unclear — #{item[:text].to_s.truncate(60)}" }
           )
           button(
             type: "submit",
@@ -275,9 +283,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         action: calibration_session_expectation_flags_path(@session),
         method: "post",
         class: "mt-2 max-w-lg space-y-2",
-        # Outside the pane frame, so its carried state is refreshed from the
-        # live URL at submit time rather than page-load time.
-        data: { action: "submit->calibration-pane#stampState" }
+        # stampState refreshes the carried state from the live URL at
+        # submit time; _top because the kebab renders this INSIDE the pane
+        # frame — a frame-scoped submit would swallow the flash (success
+        # AND refusal) exactly like the revisit form's comment warns.
+        data: { action: "submit->calibration-pane#stampState", turbo_frame: "_top" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
@@ -332,6 +342,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                        data: { level_menu: ordinal }) do
                       div(class: "flex items-center gap-1") do
                         span { "L#{ordinal}" }
+                        if @stats[:clarifications][ordinal].to_i.positive?
+                          # Scannable without opening the menu — "which
+                          # cells are already contested" was a one-glance
+                          # read on the old expectations card.
+                          span(class: "text-amber-700 dark:text-amber-300 font-semibold",
+                               title: "#{@stats[:clarifications][ordinal]} open clarification(s) on this level's expectation") do
+                            "⚑#{@stats[:clarifications][ordinal]}"
+                          end
+                        end
                         level_header_menu(ordinal)
                       end
                     end
@@ -754,10 +773,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # the viewport bottom while the room scrolls the grid — and the session
   # log at the page's right edge stays visible throughout. Cards scroll
   # internally; the collapse toggle drops the drawer to its header bar.
-  def drawer_occupied?
-    @person_card || @pinned_cards.any?
-  end
-
   def comparison_drawer
     inspector_pinned = opened_person_id && @pin_ids.include?(opened_person_id)
     cards = []
@@ -821,13 +836,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         href: drill_in_path(view: @view, pins: @pin_ids - [ dot[:person_id] ]),
         class: "inline-flex min-h-11 items-center px-2 text-xs font-medium " \
                "text-violet-700 dark:text-violet-300 hover:underline",
-        aria: { label: "Unpin #{dot[:name]}" }
+        aria: { label: "Unpin #{dot[:name]} from the comparison drawer" }
       ) { "Unpin" }
     elsif @pin_ids.size < MAX_PINS
       a(
         href: drill_in_path(view: @view, pins: @pin_ids + [ dot[:person_id] ]),
         class: "inline-flex min-h-11 items-center px-2 text-sm text-primary hover:underline",
-        aria: { label: "Pin #{dot[:name]}" }
+        aria: { label: "Pin #{dot[:name]} to the comparison drawer" }
       ) { "Pin" }
     end
   end
@@ -943,7 +958,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         end
       end
 
-      card_examples(ordinal)
+      card_examples(ordinal) if inspector
       evidence_section(card_data[:evidence_by_level][ordinal] || [], ordinal)
     end
   end
@@ -951,13 +966,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # The cell's reference examples, on the card so "what does good look
   # like here" never needs a navigation away from the person under
   # discussion. Each example carries its own ⚑ (see #example_flag).
+  # Inspector-only and collapsed: three pinned cards at the same level
+  # would otherwise repeat the identical capability-level list (and its
+  # flag forms) once per card inside 38vh scrollers.
   def card_examples(ordinal)
     groups = @stats[:illustrations]&.dig(ordinal)
     return if groups.blank?
 
-    div(class: "mt-3") do
-      h3(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-        "Examples at L#{ordinal}"
+    details(class: "mt-3") do
+      summary(class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold " \
+                     "uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        "Examples at L#{ordinal} (#{groups.sum { |group| group[:items].size }})"
       end
       example_groups(ordinal)
     end

@@ -110,16 +110,20 @@ class CalibrationSessionsController < ApplicationController
     # Only when something will render from it: the cohort tab, or the
     # comparison drawer (person/pins ride every tab). A draft hit on
     # ?view=cohort must not pay the whole scoring pipeline for nothing.
-    requested_pins = Array.wrap(params[:pins]).grep(String).select(&:present?).uniq
+    # `compare[]` / `cohort_person` are the retired spellings — old
+    # bookmarks keep working instead of silently shedding their state.
+    requested_pins = Array.wrap(params[:pins].presence || params[:compare])
+      .grep(String).select(&:present?).uniq
+    requested_person = params[:person].presence || params[:cohort_person].presence
     build_cohorts = !@session.draft? && participant_ids.any? &&
-                    (overview_view == "cohort" || params[:person].present? || requested_pins.any?)
+                    (overview_view == "cohort" || requested_person.present? || requested_pins.any?)
     cohorts = build_cohorts ? CalibrationSessions::CohortScores.new(session: @session) : nil
     dots_by_person = cohorts ? cohorts.call[:cohorts].flat_map { |c| c[:people] }.index_by { |d| d[:person_id] } : {}
     # Only people with a dot resolve to a card (a foreign or stale id is
     # dropped, never a phantom slot) — the drill-in's pin rule.
     pin_ids = requested_pins.select { |id| dots_by_person.key?(id) }
       .first(CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS)
-    drawer_person_id = params[:person].presence&.then { |id| id if dots_by_person.key?(id) }
+    drawer_person_id = requested_person&.then { |id| id if dots_by_person.key?(id) }
     drawer_cards = ([ drawer_person_id ] + pin_ids).compact.uniq.map do |person_id|
       { person_id: person_id, dot: dots_by_person[person_id], why: cohorts.why_for(person_id) }
     end

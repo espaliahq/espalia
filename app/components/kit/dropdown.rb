@@ -77,17 +77,26 @@ class Components::Kit::Dropdown < Components::Base
   #
   # @param width [String] Tailwind width class for the panel (literal —
   #   the JIT can't see interpolation, so callers pass a whole class)
+  # @param role [String, nil] ARIA role. "menu" (default) is ONLY correct
+  #   when every child is a menuitem; a panel of prose/forms (the level
+  #   ⓘ) passes "dialog" + a label so AT doesn't apply menu semantics to
+  #   content that has none.
+  # @param label [String, nil] accessible name for non-menu roles
   # @yield The menu content (links, buttons, dividers, etc.)
-  def menu(width: "w-56", &block)
+  def menu(width: "w-56", role: "menu", label: nil, &block)
     div(
-      class: "absolute #{ALIGNMENT_CLASSES[@align]} mt-2 #{width} rounded-md shadow-lg " \
+      # max-h + overflow: a tall panel scrolls its own content instead of
+      # overflowing the viewport (fixed-strategy menus close on outside
+      # scroll, so without this their lower content was unreachable).
+      class: "absolute #{ALIGNMENT_CLASSES[@align]} mt-2 #{width} max-h-[70vh] overflow-y-auto " \
+             "rounded-md shadow-lg " \
              "bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 " \
              "z-50 hidden",
       data: { dropdown_target: "menu" },
-      role: "menu",
-      aria: { orientation: "vertical" }
+      role: role,
+      aria: { orientation: (role == "menu" ? "vertical" : nil), label: label }.compact
     ) do
-      div(class: "py-1", role: "none") do
+      div(class: "py-1", role: (role == "menu" ? "none" : nil)) do
         yield
       end
     end

@@ -79,11 +79,12 @@ class Views::CalibrationSessions::ShowView < Views::Base
       # The log rides alongside the page as a side panel, so it stays in
       # view while the room reads the strip, the board, and the rosters.
       div(
-        # Bottom padding clears the fixed comparison drawer whenever it
-        # renders; anchoring off so pane swaps can't scroll-jump the room.
-        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start [overflow-anchor:none] " \
-               "#{'pb-[45vh]' if @drawer_cards.any?}",
+        # data-drawer-host: padded by the drawer's measured height (see
+        # comparison_drawer_controller); anchoring off so pane swaps can't
+        # scroll-jump the room.
+        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start [overflow-anchor:none]",
         data: {
+          drawer_host: "true",
           # calibration-pane swaps the overview frame on same-page links
           # (tabs, cohort dots) with no scroll jump — the drill-in's rule.
           controller: [ ("activity-pane" if @session_log),
@@ -413,6 +414,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
           raters: @stats ? @stats[:raters] : [], people: @people,
           view: @overview_view, pin_ids: @pin_ids,
           inspector: entry[:person_id] == @drawer_person_id,
+          inspector_person_id: @drawer_person_id,
           max_pins: MAX_PINS
         )
       end

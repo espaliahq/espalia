@@ -263,8 +263,9 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       # Ivy: 100%, entirely carried → dashed disclosure on the dot.
       assert_select "a[aria-label*='Ivy IC — 100% of expected']"
       assert_includes response.body, "1 of 1 ratings carried forward"
-      # Pax: no dot, an honest gate chip.
-      assert_select "a[aria-label*='Pax Thistledown']", count: 0
+      # Pax: no DOT (the gate chip's own link is fine — it opens the
+      # drawer, it just must not plot a score).
+      assert_select "a[aria-label*='% of expected'][aria-label*='Pax Thistledown']", count: 0
       assert_includes response.body, "0 of 1 rated"
       assert_includes response.body, "score unlocks at 1"
       # One pane at a time — the strip isn't here.

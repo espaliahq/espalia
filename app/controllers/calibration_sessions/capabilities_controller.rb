@@ -97,7 +97,9 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   #
   # @return [Hash{String => Hash}]
   def resolve_pinned_cards(stats)
-    requested = Array.wrap(params[:pins]).grep(String).select(&:present?).uniq
+    # `compare[]` is the retired spelling — old bookmarks keep their pins.
+    requested = Array.wrap(params[:pins].presence || params[:compare])
+      .grep(String).select(&:present?).uniq
     (requested & grid_person_ids(stats))
       .filter_map { |person_id| @cards.for(person_id)&.then { |card| [ person_id, card ] } }
       .first(MAX_COMPARE_PINS).to_h

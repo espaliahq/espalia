@@ -117,7 +117,14 @@ class Operations::CalibrationSessions::FlagExpectation < Operations::Base
   # the stream; this is the friendly pre-check).
   def ensure_cell_unflagged!
     already = CalibrationSessions::SessionOutcomes.new(session: session).flags
-      .any? { |f| f[:capability_stable_id] == params[:capability_stable_id] && f[:level_ordinal] == params[:level_ordinal] }
+      .any? do |f|
+        f[:capability_stable_id] == params[:capability_stable_id] &&
+          f[:level_ordinal] == params[:level_ordinal] &&
+          # An EXAMPLE flag on this cell is a different outcome — it must
+          # not block the expectation flag (the aggregate keys on the
+          # illustration too; the pre-check has to match its invariant).
+          f[:illustration_id].nil?
+      end
     return unless already
 
     raise Operations::Base::ParameterError,
