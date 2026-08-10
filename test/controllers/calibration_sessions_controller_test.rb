@@ -336,6 +336,17 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
                     { count: 1 }, "pins persist on the other tabs"
     end
 
+    should "keep the inspector on a pinned card's links — unpin never hijacks" do
+      get calibration_session_path(@session_record, view: "cohort",
+                                   person: @gated.id, pins: [ @report.id ])
+
+      assert_response :success
+      # Ivy's Unpin drops HER pin but keeps Pax inspected; her drill-in
+      # rows open HER card there — two different people by design.
+      assert_select "[data-drawer-card='#{@report.id}'] a[aria-label^='Unpin'][href*='person=#{@gated.id}']"
+      assert_select "[data-drawer-card='#{@report.id}'] a[aria-label^='Unpin'][href*='pins']", count: 0
+    end
+
     should "render no drawer card for a foreign person" do
       get calibration_session_path(@session_record, view: "cohort",
                                    person: SecureRandom.uuid_v7)

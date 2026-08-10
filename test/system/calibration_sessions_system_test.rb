@@ -441,8 +441,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_with_retry(expect_text: "1 pinned") do
       find("[data-drawer-card='#{@report_2.id}'] a", text: "Unpin").click
     end
-    assert_selector "[data-drawer-card='#{@report_2.id}']",
-                    text: /Omar IC/ # still open as the inspector, just unpinned
+    # Still open as the inspector — and genuinely unpinned: the violet
+    # ring is gone and Pin is offered again.
+    assert_selector "[data-drawer-card='#{@report_2.id}'] a", text: "Pin"
+    assert_no_selector "[data-drawer-card='#{@report_2.id}'] a", text: "Unpin"
   end
 
   test "facilitator flags an unclear expectation from the drill-in" do
@@ -748,6 +750,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     visit calibration_sessions_path
     assert_text "Wide calibration"
+    # Binary guard: a w-full wrapper measures ~1.0 by construction — this
+    # exists to fail if a max-w-* cap ever comes back.
     assert_operator width_ratio, :>=, 0.95,
                     "the index must not sit in a narrow column on a big screen"
 

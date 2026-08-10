@@ -89,11 +89,17 @@ class Operations::CalibrationSessions::FlagIllustrationTest < ActiveSupport::Tes
     end
 
     should "coexist with the cell's expectation flag, but never double-flag one example" do
+      # Example FIRST — the expectation flag must still be allowed after
+      # (the pre-check has to key on the illustration like the aggregate).
+      flag!
       Operations::CalibrationSessions::FlagExpectation.call(
         context: @facilitator_context,
         params: { session_id: @session_id, capability_stable_id: @cap_stable, level_ordinal: 4 }
       )
-      flag!
+
+      flags = CalibrationSessions::SessionOutcomes.new(session: CalibrationSession.find(@session_id)).flags
+      assert_equal 2, flags.size, "both outcomes recorded — the cell's AND the example's"
+      assert_equal [ @illustration_id, nil ], flags.map { |f| f[:illustration_id] }
 
       error = assert_raises(Operations::Base::ParameterError) { flag! }
       assert_includes error.message, "already flagged"

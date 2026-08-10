@@ -217,8 +217,13 @@ module StimulusHelpers
   def click_selector_with_js_fallback(selector, expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
-    find(selector, match: :first).click
-    return if landed?(expect_text, expect_selector, wait: 8)
+    begin
+      find(selector, match: :first).click
+      return if landed?(expect_text, expect_selector, wait: 8)
+    rescue Selenium::WebDriver::Error::ElementClickInterceptedError
+      # A sticky overlay (the comparison drawer) at the current scroll is
+      # the same drop the JS dispatch below exists for.
+    end
 
     page.execute_script(<<~JS, selector)
       const el = document.querySelector(arguments[0]);
@@ -249,8 +254,12 @@ module StimulusHelpers
       raise ArgumentError, "expect_text, expect_selector, or expect_no_text required"
     end
 
-    click_button locator
-    return if landed?(expect_text, expect_selector, expect_no_text, wait: 8)
+    begin
+      click_button locator
+      return if landed?(expect_text, expect_selector, expect_no_text, wait: 8)
+    rescue Selenium::WebDriver::Error::ElementClickInterceptedError
+      # Same interception-is-a-drop rule as the link/selector helpers.
+    end
 
     # First click dropped — fall back to JS click, which fires synchronously
     # and bypasses Selenium pointer hit-testing.
