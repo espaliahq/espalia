@@ -107,48 +107,33 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   private
 
-  # Sticky: "which capability is the room discussing" never scrolls away.
-  # Full-bleed background so content sliding under it doesn't ghost
-  # through the gap the wrapper padding would leave.
+  # Only must-have context is sticky: the capability's name (the grid's
+  # rater/level heading is sticky inside its own scroll container). The
+  # back link and log toggle scroll away with the flow — they're chrome,
+  # not context.
   def header_row
-    div(class: "sticky top-0 z-30 -mx-4 sm:-mx-6 bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-2 " \
-               "flex flex-wrap items-center gap-3") do
-      div(class: "flex-1 min-w-0") do
-        # The drawer follows the room home: whoever is open and pinned here
-        # is open and pinned on the session page too.
-        a(href: calibration_session_path(
-            @session, { person: opened_person_id, pins: @pin_ids.presence }.compact
-          ),
-          class: "text-sm text-gray-600 dark:text-gray-300 hover:underline") { "← #{@session.name}" }
-        div(class: "mt-1 flex flex-wrap items-baseline gap-x-3") do
-          if @stats[:capability][:category_name]
-            span(class: "text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-              @stats[:capability][:category_name]
-            end
-          end
-          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @stats[:capability][:name] }
-        end
-        focused_expectation_line
-      end
+    div(class: "flex flex-wrap items-center gap-3") do
+      # The drawer follows the room home: whoever is open and pinned here
+      # is open and pinned on the session page too.
+      a(href: calibration_session_path(
+          @session, { person: opened_person_id, pins: @pin_ids.presence }.compact
+        ),
+        class: "flex-1 min-w-0 text-sm text-gray-600 dark:text-gray-300 hover:underline") { "← #{@session.name}" }
       if @session_log
         render Views::CalibrationSessions::LogPaneToggle.new(
           entry_count: @session_log[:entries].size
         )
       end
     end
-  end
-
-  # The open card's focused cell, spelled out in the sticky header — the
-  # "what is being rated here" line that replaced the standalone "What
-  # good looks like" card (per-level text lives in the column-header ⓘ
-  # menus and on every person card).
-  def focused_expectation_line
-    return unless @person_card
-
-    p(class: "mt-1 w-full text-sm text-gray-600 dark:text-gray-300 truncate") do
-      strong(class: "text-gray-900 dark:text-white") { "L#{focus_ordinal} · " }
-      plain @person_card[:expectations_by_level][focus_ordinal] ||
-            "No expectation defined at this level for this capability."
+    div(class: "sticky top-0 z-30 -mx-4 sm:-mx-6 bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-1.5") do
+      div(class: "flex items-baseline gap-x-3 min-w-0") do
+        if @stats[:capability][:category_name]
+          span(class: "shrink-0 text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+            @stats[:capability][:category_name]
+          end
+        end
+        h1(class: "text-xl font-bold text-gray-900 dark:text-white truncate") { @stats[:capability][:name] }
+      end
     end
   end
 
@@ -478,6 +463,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # accessible name.
   def render_dot(dot, ordinal)
     base = dot_description(dot, ordinal)
+    pinned = @pin_ids.include?(dot[:person_id])
+    base += " Pinned to the comparison." if pinned
     a(
       # Opening a dot returns to the person-card view but keeps the pins —
       # the room browses dots mid-comparison without losing the tray. The
@@ -493,11 +480,26 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       aria: { label: "#{dot[:name]} — #{base}. Open to discuss." },
       data: { pane_keep_state: "true", person_id: dot[:person_id] }
     ) do
-      span(
-        class: "inline-flex h-7 w-7 items-center justify-center rounded-full " \
-               "text-[10px] font-semibold #{dot_classes(dot)}"
-      ) { initials(dot[:name]) }
+      span(class: "relative inline-flex") do
+        span(
+          class: "inline-flex h-7 w-7 items-center justify-center rounded-full " \
+                 "text-[10px] font-semibold #{dot_classes(dot)}"
+        ) { initials(dot[:name]) }
+        pin_badge if pinned
+      end
     end
+  end
+
+  # The violet corner disc marking a person held in the comparison drawer —
+  # the main pane's "already pinned" affordance (rendered on the grid dots
+  # here and the cohort dots on the session page). Decorative; the state
+  # rides the accessible name.
+  def pin_badge
+    span(
+      class: "absolute -top-1 -right-1 h-3 w-3 rounded-full bg-violet-600 " \
+             "border border-white dark:border-gray-800",
+      aria: { hidden: "true" }
+    )
   end
 
   # Two letters, uppercased — the divergence board's convention.
@@ -797,8 +799,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def comparison_drawer
     inspector_pinned = opened_person_id && @pin_ids.include?(opened_person_id)
     cards = []
-    cards << [ @person_card, true ] if @person_card && !inspector_pinned
     @pinned_cards.each { |person_id, card| cards << [ card, person_id == opened_person_id ] }
+    # The just-opened person APPENDS — pinned cards keep their positions,
+    # so the row reads oldest-held to newest-opened.
+    cards << [ @person_card, true ] if @person_card && !inspector_pinned
     return if cards.empty?
 
     comparison_drawer_chrome(pin_count: @pin_ids.size, max_pins: MAX_PINS) do
@@ -815,7 +819,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     pinned = @pin_ids.include?(dot[:person_id])
     div(
       class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-white dark:bg-gray-800 " \
-             "p-3 max-h-[38vh] overflow-y-auto " \
+             "p-3 h-full overflow-y-auto " \
              "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-gray-200 dark:border-gray-700'}",
       id: (inspector ? "calibration-person-card" : nil),
       data: { drawer_card: dot[:person_id] }
@@ -831,13 +835,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         div(class: "flex items-center gap-1") do
           person_card_kebab if inspector
           pin_toggle_link(dot, pinned: pinned)
+          # ONE dismiss per card: ✕ unpins a pinned card (below), closes an
+          # unpinned inspector (here) — same gesture, "remove this card".
           if inspector && !pinned
             a(
               href: drill_in_path(view: @view, person: nil),
-              class: "inline-flex h-11 min-w-11 items-center justify-center px-2 text-sm " \
-                     "text-gray-600 dark:text-gray-300 hover:underline",
+              class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
+                     "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md",
               aria: { label: "Close person card" }
-            ) { "Close" }
+            ) { "×" }
           end
         end
       end
@@ -848,17 +854,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # Pin holds a person in the drawer while the next one opens; unpin
-  # releases the slot. Both stay on the current view — pinning is a
-  # drawer gesture, not a navigation.
+  # Pin holds a person in the drawer while the next one opens; the ✕ on a
+  # pinned card releases the slot. Both stay on the current view —
+  # pinning is a drawer gesture, not a navigation.
   def pin_toggle_link(dot, pinned:)
     if pinned
       a(
         href: drill_in_path(view: @view, pins: @pin_ids - [ dot[:person_id] ]),
-        class: "inline-flex min-h-11 items-center px-2 text-xs font-medium " \
-               "text-violet-700 dark:text-violet-300 hover:underline",
+        class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
+               "text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded-md",
         aria: { label: "Unpin #{dot[:name]} from the comparison drawer" }
-      ) { "Unpin" }
+      ) { "×" }
     elsif @pin_ids.size < MAX_PINS
       a(
         href: drill_in_path(view: @view, pins: @pin_ids + [ dot[:person_id] ]),

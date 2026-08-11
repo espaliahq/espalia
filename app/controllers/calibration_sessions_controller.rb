@@ -129,7 +129,9 @@ class CalibrationSessionsController < ApplicationController
     pin_ids = requested_pins.select { |id| dots_by_person.key?(id) }
       .first(Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS)
     drawer_person_id = requested_person&.then { |id| id if dots_by_person.key?(id) }
-    drawer_cards = ([ drawer_person_id ] + pin_ids).compact.uniq.map do |person_id|
+    # Pins keep their positions; the just-opened person APPENDS (a pinned
+    # inspector stays where it was pinned).
+    drawer_cards = (pin_ids + [ drawer_person_id ]).compact.uniq.map do |person_id|
       { person_id: person_id, dot: dots_by_person[person_id], why: cohorts.why_for(person_id) }
     end
 

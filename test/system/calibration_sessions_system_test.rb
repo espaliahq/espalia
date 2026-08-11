@@ -267,7 +267,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # Pin Nia, open another dot — both cards hold side by side, and the
     # pin survives a tab switch (it rides every overview link).
     nia_id = page.find("#calibration-comparison-drawer [data-drawer-card]")["data-drawer-card"]
-    click_link_with_js_fallback("Pin", expect_text: "1 pinned")
+    click_link_with_js_fallback("Pin", expect_selector: "a[aria-label^='Unpin']")
     click_selector_with_js_fallback(
       "a[aria-label*='% of expected']:not([aria-label^='Nia IC'])",
       expect_selector: "[data-drawer-card]:not([data-drawer-card='#{nia_id}'])"
@@ -351,7 +351,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # their people as links, so the person card (and its revisit ask) stays
     # reachable for exactly the unrated cell the room will ask about.
     assert_text "Quinn Alderberry hasn't rated this capability yet"
-    click_selector_with_js_fallback("a[data-person-id='#{@pax_id}']", expect_text: "Close")
+    click_selector_with_js_fallback("a[data-person-id='#{@pax_id}']",
+                                    expect_selector: "#calibration-person-card")
     assert_text "Pax Thistledown"
     # The carried dot wears the dashed edge and says so non-visually.
     carried_dot = find("a[data-person-id='#{@report_3_id}']")
@@ -366,7 +367,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       "the accessible name carries the person, not just their initials"
 
     # Opening a dot shows their card.
-    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
+                                    expect_selector: "#calibration-person-card")
     assert_text "Ivy IC"
     assert_text "Manager: Consistently"
 
@@ -426,7 +428,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # ── Comparison drawer: pinning holds two cards side by side ──
     click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
                                     expect_text: "Manager: Consistently")
-    click_link_with_js_fallback("Pin", expect_text: "1 pinned")
+    click_link_with_js_fallback(
+      "Pin", expect_selector: "[data-drawer-card='#{@report_1.id}'] a[aria-label^='Unpin']"
+    )
     assert_selector "[data-drawer-card='#{@report_1.id}']"
     assert_text "Ran the pricing spike end to end."
 
@@ -436,18 +440,20 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
                                     expect_text: "Omar IC")
     assert_selector "[data-drawer-card='#{@report_1.id}']"
     assert_selector "[data-drawer-card='#{@report_2.id}']"
-    click_link_with_js_fallback("Pin", expect_text: "2 pinned")
+    click_link_with_js_fallback(
+      "Pin", expect_selector: "[data-drawer-card='#{@report_2.id}'] a[aria-label^='Unpin']"
+    )
     assert_text "Ran the billing spike end to end."
 
-    # Unpinning releases the slot.
+    # Unpinning releases the slot (the card re-offers Pin).
     click_selector_with_js_fallback(
       "[data-drawer-card='#{@report_2.id}'] a[aria-label^='Unpin']",
-      expect_text: "1 pinned"
+      expect_selector: "[data-drawer-card='#{@report_2.id}'] a[aria-label^='Pin ']"
     )
     # Still open as the inspector — and genuinely unpinned: the violet
     # ring is gone and Pin is offered again.
     assert_selector "[data-drawer-card='#{@report_2.id}'] a", text: "Pin"
-    assert_no_selector "[data-drawer-card='#{@report_2.id}'] a", text: "Unpin"
+    assert_no_selector "[data-drawer-card='#{@report_2.id}'] a[aria-label^='Unpin']"
   end
 
   test "facilitator flags an unclear expectation from the drill-in" do
@@ -567,7 +573,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # This dot click dropped TWICE through click_with_retry on a starved CI
     # runner (both attempts share Selenium's pointer mechanism) — the
     # JS-fallback guarantees the second attempt fires.
-    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']", expect_text: "Close")
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
+                                    expect_selector: "#calibration-person-card")
     assert_text "Ivy IC"
 
     # ── Mobile: the drawer scrolls its cards internally, never the page ──
@@ -590,6 +597,28 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       "#calibration-person-card a[href*='person_level=3']",
       expect_selector: "#calibration-person-card a[aria-current='true'][href*='person_level=3']"
     )
+
+    # ── The drawer resizes by its top handle; dragging into the bottom
+    # 20px closes it, the slim bar expands it back ──
+    before = page.evaluate_script("document.querySelector(\"[data-comparison-drawer-target='body']\").offsetHeight")
+    page.execute_script(<<~JS)
+      const handle = document.querySelector("[data-comparison-drawer-target='handle']")
+      handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientY: window.innerHeight - 300 }))
+      window.dispatchEvent(new PointerEvent("pointermove", { clientY: window.innerHeight - 700 }))
+      window.dispatchEvent(new PointerEvent("pointerup", {}))
+    JS
+    after = page.evaluate_script("document.querySelector(\"[data-comparison-drawer-target='body']\").offsetHeight")
+    assert_operator after, :>, before + 100, "dragging the handle up grows the card row"
+
+    page.execute_script(<<~JS)
+      const handle = document.querySelector("[data-comparison-drawer-target='handle']")
+      handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientY: window.innerHeight - 400 }))
+      window.dispatchEvent(new PointerEvent("pointermove", { clientY: window.innerHeight - 10 }))
+    JS
+    assert_selector "[data-comparison-drawer-target='expandBar']", visible: true
+    assert_selector "[data-comparison-drawer-target='body']", visible: :hidden
+    page.execute_script("document.querySelector(\"[data-comparison-drawer-target='expandBar']\").click()")
+    assert_selector "#calibration-person-card", visible: true
 
     # The ask lives in the card's kebab; the item swaps the form in via the
     # pane frame (URL-driven, no scroll jump).

@@ -200,20 +200,29 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
   def render_dot(dot, lane)
     name = person_name(dot[:person_id])
+    pinned = @pin_ids.include?(dot[:person_id])
     a(
       href: cohort_path(person: dot[:person_id]),
       class: "absolute inline-flex h-11 w-11 -ml-[22px] items-center justify-center",
       style: "left: #{position_pct(dot[:pct])}%; top: #{DOT_TOP + lane * LANE_HEIGHT}px",
       title: "#{name} · #{dot[:pct]}% of expected",
-      aria: { label: dot_description(dot, name) }
+      aria: { label: dot_description(dot, name) + (pinned ? " Pinned to the comparison." : "") }
     ) do
-      span(
-        class: "inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] " \
-               "font-semibold text-white dark:text-gray-900 border-2 " \
-               "#{dot[:carried_majority] ? 'border-dashed border-gray-900 dark:border-white' : 'border-white dark:border-gray-800'} " \
-               "#{dot_fill(dot)} " \
-               "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if dot[:person_id] == @selected_person_id}"
-      ) { initials(name) }
+      span(class: "relative inline-flex") do
+        span(
+          class: "inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] " \
+                 "font-semibold text-white dark:text-gray-900 border-2 " \
+                 "#{dot[:carried_majority] ? 'border-dashed border-gray-900 dark:border-white' : 'border-white dark:border-gray-800'} " \
+                 "#{dot_fill(dot)} " \
+                 "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if dot[:person_id] == @selected_person_id}"
+        ) { initials(name) }
+        if pinned
+          # The drawer's violet, on the dot — "already held below".
+          span(class: "absolute -top-1 -right-1 h-3 w-3 rounded-full bg-violet-600 " \
+                      "border border-white dark:border-gray-800",
+               aria: { hidden: "true" })
+        end
+      end
     end
   end
 

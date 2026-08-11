@@ -1007,10 +1007,17 @@ the session log visible throughout. Design decisions:
 - **Three panes everywhere**: main pane · session log (far right,
   unchanged) · the comparison drawer pinned to the bottom of the
   viewport. The drawer renders only when the inspector or ≥1 pin is
-  occupied; cards scroll internally, and a Collapse toggle drops it to
-  its header bar (count + Expand — expand to unpin). The host page is
-  padded by the drawer's measured height, so page-end content always
-  scrolls clear. Mobile is the SAME drawer one card wide.
+  occupied. The drawer has NO header row — being the comparison is
+  self-evident, so every vertical pixel goes to the cards; the controls
+  float on the top edge: a drag handle (resize; persists via cookie;
+  dragging within 20px of the viewport bottom collapses) and a ✕ that
+  collapses to a slim expand bar carrying the pin count. Pins keep
+  their positions and the just-opened person APPENDS; each card has ONE
+  dismiss (✕ — unpins a pinned card, closes an unpinned inspector) plus
+  Pin to hold. Pinned people wear a violet corner disc on their grid /
+  cohort dots, so "already held below" reads in the main pane. The host
+  page is padded by the drawer's measured height, so page-end content
+  always scrolls clear. Mobile is the SAME drawer one card wide.
 - **Inspector + pins, max 3 people across** (the compare tray's cap;
   horizontally scrollable if cramped). A pin is a PERSON, not a
   snapshot: the card renders the context's face — cohort face (% of
@@ -1021,10 +1028,10 @@ the session log visible throughout. Design decisions:
   retires the inline why-panel, the bottom person card placement, and
   the separate `?view=compare` tray — one component, three fewer
   surfaces.
-- **Sticky main-pane headers**: the overview tab bar (session page); the
-  capability header + focused-level expectation line and the grid's
-  level-ordinal header row (drill-in) — "what am I looking at" never
-  scrolls away.
+- **Sticky main-pane headers — must-have context only**: the overview
+  tab bar (session page); one compact line of category · capability plus
+  the grid's rater/level header row (drill-in). Back link, log toggle,
+  and expectation text scroll with the flow — chrome, not context.
 - **"What good looks like" folds in** (drill-in): the standalone card is
   replaced by (a) the sticky focused-level expectation line, (b) an ⓘ on
   each level column header — a dialog panel with the expectation, the

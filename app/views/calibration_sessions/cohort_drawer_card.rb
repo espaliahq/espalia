@@ -42,7 +42,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     pinned = @pin_ids.include?(@dot[:person_id])
     div(
       class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-white dark:bg-gray-800 " \
-             "p-3 max-h-[38vh] overflow-y-auto " \
+             "p-3 h-full overflow-y-auto " \
              "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-gray-200 dark:border-gray-700'}",
       data: { drawer_card: @dot[:person_id] }
     ) do
@@ -69,13 +69,15 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
       end
       div(class: "flex items-center gap-1") do
         pin_toggle(pinned)
+        # ONE dismiss per card: ✕ unpins a pinned card, closes an unpinned
+        # inspector — same gesture, "remove this card".
         if @inspector && !pinned
           a(
             href: session_path(person: nil),
-            class: "inline-flex h-11 min-w-11 items-center justify-center px-2 text-sm " \
-                   "text-gray-600 dark:text-gray-300 hover:underline",
+            class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
+                   "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md",
             aria: { label: "Close person card" }
-          ) { "Close" }
+          ) { "×" }
         end
       end
     end
@@ -85,10 +87,10 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     if pinned
       a(
         href: session_path(pins: @pin_ids - [ @dot[:person_id] ]),
-        class: "inline-flex min-h-11 items-center px-2 text-xs font-medium " \
-               "text-violet-700 dark:text-violet-300 hover:underline",
-        aria: { label: "Unpin #{person_name(@dot[:person_id])}" }
-      ) { "Unpin" }
+        class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
+               "text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded-md",
+        aria: { label: "Unpin #{person_name(@dot[:person_id])} from the comparison drawer" }
+      ) { "×" }
     elsif @pin_ids.size < @max_pins
       a(
         href: session_path(pins: @pin_ids + [ @dot[:person_id] ]),
