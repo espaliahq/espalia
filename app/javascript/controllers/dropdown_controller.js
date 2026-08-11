@@ -113,7 +113,17 @@ export default class extends BaseController {
     const rect = menu.getBoundingClientRect()
     if (rect.bottom > window.innerHeight - 8) {
       const trigger = this.triggerTarget.getBoundingClientRect()
-      menu.style.top = `${Math.max(8, trigger.top - rect.height - 4)}px`
+      const roomAbove = trigger.top - 8
+      const roomBelow = window.innerHeight - trigger.bottom - 8
+      if (roomAbove > roomBelow) {
+        // Flip above — but never past the viewport top (a tall panel used
+        // to slide under the page's sticky chrome); the panel's own
+        // max-h/overflow absorbs what doesn't fit.
+        menu.style.top = `${Math.max(8, trigger.top - rect.height - 4)}px`
+        menu.style.maxHeight = `${roomAbove}px`
+      } else {
+        menu.style.maxHeight = `${roomBelow}px`
+      }
     }
   }
 

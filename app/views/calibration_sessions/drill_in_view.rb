@@ -21,6 +21,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
+  # The ⓘ panel previews this many examples (across the level's calibrated
+  # roles) — a reference glance, not a reading surface. The full list lives
+  # on the person cards, where comparing people is the point.
+  EXAMPLE_PREVIEW_LIMIT = 3
+
   RELATION_LABELS = { "self" => "Self", "manager" => "Manager", "peer" => "Peer feedback" }.freeze
 
   MAX_PINS = Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS
@@ -155,9 +160,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     render Components::Kit::Dropdown.new(strategy: :fixed, align: :left) do |dropdown|
       dropdown.trigger(label: "L#{ordinal} — expectation, examples, and flags") do
         # 44px tap target (the visual glyph stays small) — this is the only
-        # route to the level's reference material.
-        span(class: "inline-flex h-11 w-11 items-center justify-center rounded-md text-[11px] " \
-                    "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") { "ⓘ" }
+        # route to the level's reference material. A DRAWN info glyph, not
+        # the ⓘ character: headless/minimal font stacks render that as tofu.
+        span(class: "inline-flex h-11 w-11 items-center justify-center rounded-md " \
+                    "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") do
+          span(class: "inline-flex h-4 w-4 items-center justify-center rounded-full border " \
+                      "border-current text-[10px] font-serif italic leading-none",
+               aria: { hidden: "true" }) { "i" }
+        end
       end
       dropdown.menu(width: "w-96", role: "dialog",
                     label: "L#{ordinal} — what good looks like") do
@@ -168,7 +178,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           p(class: "mt-1 text-sm text-gray-900 dark:text-white whitespace-normal") do
             @stats[:expectations][ordinal] || "No expectation defined at this level."
           end
-          example_groups(ordinal)
+          example_groups(ordinal, limit: EXAMPLE_PREVIEW_LIMIT)
           flag_affordance(ordinal)
         end
       end
@@ -176,21 +186,36 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   # The role illustrations under a level's canonical expectation, grouped
-  # per role. Each example is itself flaggable — "this example is what
-  # misleads raters" is narrower and more actionable than flagging the
-  # whole cell.
-  def example_groups(ordinal)
+  # per role (only roles the calibration population holds at this level —
+  # DrillInStats filters at the source). Each example is itself flaggable —
+  # "this example is what misleads raters" is narrower and more actionable
+  # than flagging the whole cell. `limit:` caps the total across groups
+  # (the ⓘ preview); the person cards render the full list.
+  def example_groups(ordinal, limit: nil)
     groups = @stats[:illustrations]&.dig(ordinal)
     return if groups.blank?
 
+    total = groups.sum { |group| group[:items].size }
+    remaining = limit
     div(class: "mt-2 space-y-1.5") do
       groups.each do |group|
+        break if remaining&.zero?
+
+        items = remaining ? group[:items].first(remaining) : group[:items]
+        remaining -= items.size if remaining
+        next if items.empty?
+
         div do
           span(class: "text-[11px] font-medium uppercase tracking-wide " \
                       "text-gray-600 dark:text-gray-300") { group[:role_name] }
           ul(class: "mt-0.5 space-y-1") do
-            group[:items].each { |item| example_row(item) }
+            items.each { |item| example_row(item) }
           end
+        end
+      end
+      if limit && total > limit
+        p(class: "text-[11px] text-gray-600 dark:text-gray-300") do
+          "+ #{total - limit} more — open a person's card to read them all"
         end
       end
     end
@@ -337,7 +362,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                     # context, so a later column would paint THROUGH this
                     # column's open ⓘ menu unless the host th out-ranks its
                     # siblings while the menu is open.
-                    th(class: "sticky top-0 z-[2] has-[[aria-expanded=true]]:z-30 " \
+                    th(class: "sticky top-0 z-[2] has-[[aria-expanded=true]]:z-40 " \
                               "bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium",
                        data: { level_menu: ordinal }) do
                       div(class: "flex items-center gap-1") do
