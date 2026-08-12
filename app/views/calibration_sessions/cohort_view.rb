@@ -201,20 +201,25 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def render_dot(dot, lane)
     name = person_name(dot[:person_id])
     pinned = @pin_ids.include?(dot[:person_id])
+    selected = dot[:person_id] == @selected_person_id
     a(
       href: cohort_path(person: dot[:person_id]),
       class: "absolute inline-flex h-11 w-11 -ml-[22px] items-center justify-center",
       style: "left: #{position_pct(dot[:pct])}%; top: #{DOT_TOP + lane * LANE_HEIGHT}px",
       title: "#{name} · #{dot[:pct]}% of expected",
-      aria: { label: dot_description(dot, name) + (pinned ? " Pinned to the comparison." : "") }
+      aria: { label: dot_description(dot, name) +
+                     (selected ? " Currently open in the comparison." : "") +
+                     (pinned ? " Pinned to the comparison." : "") }
     ) do
       span(class: "relative inline-flex") do
+        # The inspected person reads by SIZE (1.5×), not a ring — the ring
+        # competed with the carried dash and the pin disc for edge space.
         span(
-          class: "inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] " \
+          class: "inline-flex items-center justify-center rounded-full " \
+                 "#{selected ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
                  "font-semibold text-white dark:text-gray-900 border-2 " \
                  "#{dot[:carried_majority] ? 'border-dashed border-gray-900 dark:border-white' : 'border-white dark:border-gray-800'} " \
-                 "#{dot_fill(dot)} " \
-                 "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if dot[:person_id] == @selected_person_id}"
+                 "#{dot_fill(dot)}"
         ) { initials(name) }
         if pinned
           # The drawer's violet, on the dot — "already held below".

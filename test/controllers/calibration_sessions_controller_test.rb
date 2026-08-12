@@ -304,6 +304,8 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select "#calibration-comparison-drawer [data-drawer-card='#{@report.id}']"
+      # The inspected person's dot reads by size — 1.5× the others.
+      assert_select "a[aria-label*='Currently open in the comparison'] span.h-\\[42px\\]"
       assert_match(/\d+% of expected/, response.body)
       assert_includes response.body, "rated by Mia Manager"
       assert_includes response.body, "vs org mean"

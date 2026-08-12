@@ -476,7 +476,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # accessible name.
   def render_dot(dot, ordinal)
     base = dot_description(dot, ordinal)
+    selected = dot[:person_id] == opened_person_id
     pinned = @pin_ids.include?(dot[:person_id])
+    base += " Currently open in the comparison." if selected
     base += " Pinned to the comparison." if pinned
     a(
       # Opening a dot returns to the person-card view but keeps the pins —
@@ -494,9 +496,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       data: { pane_keep_state: "true", person_id: dot[:person_id] }
     ) do
       span(class: "relative inline-flex") do
+        # The inspected person reads by SIZE (1.5×) — same vocabulary as
+        # the cohort axis.
         span(
-          class: "inline-flex h-7 w-7 items-center justify-center rounded-full " \
-                 "text-[10px] font-semibold #{dot_classes(dot)}"
+          class: "inline-flex items-center justify-center rounded-full " \
+                 "#{selected ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
+                 "font-semibold #{dot_classes(dot)}"
         ) { initials(dot[:name]) }
         pin_badge if pinned
       end
