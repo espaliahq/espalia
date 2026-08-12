@@ -275,6 +275,11 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_selector "#calibration-comparison-drawer [data-drawer-card]", count: 2
     click_link_with_js_fallback("Rater tendency", expect_text: "RATER TENDENCY")
     assert_selector "[data-drawer-card='#{nia_id}']", count: 1
+    # …and the divergence board's drill-in links carry the pins too — a
+    # view switch never discards the comparison.
+    click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
+    assert_selector "[data-drawer-card='#{nia_id}']", count: 1
+    assert_selector "a[href*='capabilities'][href*='pins%5B%5D=#{nia_id}']"
     click_link_with_js_fallback("Score by cohort", expect_text: "SCORE BY COHORT")
 
     # The drawer composes with the drill-in rather than growing a grid —

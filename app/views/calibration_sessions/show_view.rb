@@ -383,7 +383,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
           render Views::CalibrationSessions::DivergenceBoard.new(
             session: @session,
             capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
-            insufficient_count: @stats[:insufficient_capability_count]
+            insufficient_count: @stats[:insufficient_capability_count],
+            pin_ids: @pin_ids, inspector_person_id: @drawer_person_id
           )
         when "cohort"
           render Views::CalibrationSessions::CohortView.new(

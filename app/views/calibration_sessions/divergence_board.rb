@@ -19,12 +19,18 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
   # @param raters [Array<Hash>] OverviewStats rater rows (for the legend/ordering)
   # @param people [Hash{String => Person}]
   # @param insufficient_count [Integer]
-  def initialize(session:, capabilities:, raters:, people:, insufficient_count: 0)
+  # @param pin_ids [Array<String>] drawer pins — the comparison follows the
+  #   room into the drill-in, never discarded by a view switch
+  # @param inspector_person_id [String, nil] the drawer's inspected person
+  def initialize(session:, capabilities:, raters:, people:, insufficient_count: 0,
+                 pin_ids: [], inspector_person_id: nil)
     @session = session
     @capabilities = capabilities
     @raters = raters
     @people = people
     @insufficient_count = insufficient_count
+    @pin_ids = pin_ids
+    @inspector_person_id = inspector_person_id
   end
 
   def view_template
@@ -102,7 +108,12 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
           # Persistently underlined + chevroned: this row is the way into the
           # drill-in, and a hover-only affordance hides that on a projector.
           a(
-            href: calibration_session_capability_path(@session, capability[:stable_id]),
+            # The drawer rides along: whoever is inspected and pinned here
+            # is inspected and pinned on the drill-in too.
+            href: calibration_session_capability_path(
+              @session, capability[:stable_id],
+              { person: @inspector_person_id, pins: @pin_ids.presence }.compact
+            ),
             class: "group/cap inline-flex items-baseline gap-1 text-sm font-medium " \
                    "text-gray-900 dark:text-white underline decoration-gray-400 " \
                    "dark:decoration-gray-500 underline-offset-4 hover:decoration-gray-900 " \

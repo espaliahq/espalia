@@ -210,12 +210,12 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         @category = create(:framework_capability_category, tenant: @tenant,
                            framework_id: @cycle.framework_id)
         @engineer = engineer
-        cap = create(:framework_capability, tenant: @tenant,
-                     category_id: @category.category_id, name: "Strategic Thinking")
+        @cohort_cap = create(:framework_capability, tenant: @tenant,
+                             category_id: @category.category_id, name: "Strategic Thinking")
         create(:framework_capability_role_binding, tenant: @tenant,
-               capability_id: cap.capability_id, role_id: engineer.role_id)
+               capability_id: @cohort_cap.capability_id, role_id: engineer.role_id)
         create(:framework_behavioural_expectation, tenant: @tenant,
-               capability_id: cap.capability_id, level_ordinal: 3)
+               capability_id: @cohort_cap.capability_id, level_ordinal: 3)
 
         @gated = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: @em)
         # In the facilitator's org (a lead who isn't in the room), so the
@@ -238,11 +238,11 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         end
         create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
                person_id: @report.id, framework_id: @cycle.framework_id,
-               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               capability_stable_id: @cohort_cap.stable_id, level_ordinal: 3,
                manager_rated_frequency: "consistent", manager_rating_source: "seeded")
         create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
                person_id: @outsider.id, framework_id: @cycle.framework_id,
-               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               capability_stable_id: @cohort_cap.stable_id, level_ordinal: 3,
                manager_rated_frequency: "consistent")
 
         @session_record = define_session(
@@ -345,6 +345,34 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       # rows open HER card there — two different people by design.
       assert_select "[data-drawer-card='#{@report.id}'] a[aria-label^='Unpin'][href*='person=#{@gated.id}']"
       assert_select "[data-drawer-card='#{@report.id}'] a[aria-label^='Unpin'][href*='pins']", count: 0
+    end
+
+    should "carry the drawer onto the divergence board's drill-in links" do
+      # A board row needs two raters on the same capability.
+      session = ActsAsTenant.with_tenant(@tenant) do
+        em2 = create(:person, tenant: @tenant, name: "Noor Newlead", manager: @facilitator)
+        r2 = create(:person, tenant: @tenant, name: "Remy IC", manager: em2)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: r2.id, framework_id: @cycle.framework_id, role_id: @engineer.role_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: r2.id, level_ordinal: 3, role_id: @engineer.role_id)
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: r2.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cohort_cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "some")
+        record = define_session(participant_ids: [ @em.id, em2.id ],
+                                calibrant_person_ids: [ @report.id, r2.id ])
+        record.update!(status: "started")
+        record
+      end
+
+      get calibration_session_path(session, view: "divergence",
+                                   person: @report.id, pins: [ @report.id ])
+
+      assert_response :success
+      # The capability rows are the way into the drill-in — a view switch
+      # must never discard the comparison.
+      assert_select "a[href*='capabilities'][href*='person=#{@report.id}'][href*='pins%5B%5D=#{@report.id}']"
     end
 
     should "render no drawer card for a foreign person" do
