@@ -210,12 +210,12 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         @category = create(:framework_capability_category, tenant: @tenant,
                            framework_id: @cycle.framework_id)
         @engineer = engineer
-        cap = create(:framework_capability, tenant: @tenant,
-                     category_id: @category.category_id, name: "Strategic Thinking")
+        @cohort_cap = create(:framework_capability, tenant: @tenant,
+                             category_id: @category.category_id, name: "Strategic Thinking")
         create(:framework_capability_role_binding, tenant: @tenant,
-               capability_id: cap.capability_id, role_id: engineer.role_id)
+               capability_id: @cohort_cap.capability_id, role_id: engineer.role_id)
         create(:framework_behavioural_expectation, tenant: @tenant,
-               capability_id: cap.capability_id, level_ordinal: 3)
+               capability_id: @cohort_cap.capability_id, level_ordinal: 3)
 
         @gated = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: @em)
         # In the facilitator's org (a lead who isn't in the room), so the
@@ -238,11 +238,11 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         end
         create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
                person_id: @report.id, framework_id: @cycle.framework_id,
-               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               capability_stable_id: @cohort_cap.stable_id, level_ordinal: 3,
                manager_rated_frequency: "consistent", manager_rating_source: "seeded")
         create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
                person_id: @outsider.id, framework_id: @cycle.framework_id,
-               capability_stable_id: cap.stable_id, level_ordinal: 3,
+               capability_stable_id: @cohort_cap.stable_id, level_ordinal: 3,
                manager_rated_frequency: "consistent")
 
         @session_record = define_session(
@@ -263,8 +263,9 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       # Ivy: 100%, entirely carried → dashed disclosure on the dot.
       assert_select "a[aria-label*='Ivy IC — 100% of expected']"
       assert_includes response.body, "1 of 1 ratings carried forward"
-      # Pax: no dot, an honest gate chip.
-      assert_select "a[aria-label*='Pax Thistledown']", count: 0
+      # Pax: no DOT (the gate chip's own link is fine — it opens the
+      # drawer, it just must not plot a score).
+      assert_select "a[aria-label*='% of expected'][aria-label*='Pax Thistledown']", count: 0
       assert_includes response.body, "0 of 1 rated"
       assert_includes response.body, "score unlocks at 1"
       # One pane at a time — the strip isn't here.
@@ -283,7 +284,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
                       "the legend names the neutral swatch"
     end
 
-    should "open the why-panel for a dot, with the rater-context line" do
+    should "open a dot in the comparison drawer, with the rater-context line" do
       ActsAsTenant.with_tenant(@tenant) do
         # A second behaviour rated "some" so the panel has a genuine
         # pulling-down row to drill into.
@@ -299,11 +300,14 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
                manager_rated_frequency: "some")
       end
 
-      get calibration_session_path(@session_record, view: "cohort", cohort_person: @report.id)
+      get calibration_session_path(@session_record, view: "cohort", person: @report.id)
 
       assert_response :success
+      assert_select "#calibration-comparison-drawer [data-drawer-card='#{@report.id}']"
+      # The inspected person's dot reads by size — 1.5× the others.
+      assert_select "a[aria-label*='Currently open in the comparison'] span.h-\\[42px\\]"
       assert_match(/\d+% of expected/, response.body)
-      assert_includes response.body, "Rated by Mia Manager"
+      assert_includes response.body, "rated by Mia Manager"
       assert_includes response.body, "vs org mean"
       assert_includes response.body, "may be tendency, not Ivy IC"
       assert_select "a[href*='capabilities'][href*='#calibration-person-card']",
@@ -314,14 +318,72 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Nothing above expectations yet."
     end
 
-    should "render no why-panel for a gated or foreign person" do
-      get calibration_session_path(@session_record, view: "cohort", cohort_person: @gated.id)
-      assert_response :success
-      assert_not_includes response.body, "Rated by", "a gated score has no why to show"
-
+    should "hold a pinned person beside the inspected one, across tabs" do
       get calibration_session_path(@session_record, view: "cohort",
-                                   cohort_person: SecureRandom.uuid_v7)
+                                   person: @gated.id, pins: [ @report.id ])
+
       assert_response :success
+      # Both cards, side by side: the gated inspector wears the gate's
+      # copy (never a fake number), the pinned card keeps its score.
+      assert_select "[data-drawer-card='#{@gated.id}']"
+      assert_select "[data-drawer-card='#{@report.id}']"
+      # A pinned person's dot reads by size, same as the inspected one.
+      assert_select "a[aria-label*='Pinned to the comparison'] span.h-\\[42px\\]"
+      assert_includes response.body, "score unlocks at"
+      assert_includes response.body, "1 pinned"
+      # The tab links carry the drawer, so switching views keeps it.
+      assert_select "a[role='tab'][href*='pins%5B%5D=#{@report.id}']", count: 3
+
+      get calibration_session_path(@session_record, view: "tendency", pins: [ @report.id ])
+      assert_response :success
+      assert_select "[data-drawer-card='#{@report.id}']",
+                    { count: 1 }, "pins persist on the other tabs"
+    end
+
+    should "keep the inspector on a pinned card's links — unpin never hijacks" do
+      get calibration_session_path(@session_record, view: "cohort",
+                                   person: @gated.id, pins: [ @report.id ])
+
+      assert_response :success
+      # Ivy's Unpin drops HER pin but keeps Pax inspected; her drill-in
+      # rows open HER card there — two different people by design.
+      assert_select "[data-drawer-card='#{@report.id}'] a[aria-label^='Unpin'][href*='person=#{@gated.id}']"
+      assert_select "[data-drawer-card='#{@report.id}'] a[aria-label^='Unpin'][href*='pins']", count: 0
+    end
+
+    should "carry the drawer onto the divergence board's drill-in links" do
+      # A board row needs two raters on the same capability.
+      session = ActsAsTenant.with_tenant(@tenant) do
+        em2 = create(:person, tenant: @tenant, name: "Noor Newlead", manager: @facilitator)
+        r2 = create(:person, tenant: @tenant, name: "Remy IC", manager: em2)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: r2.id, framework_id: @cycle.framework_id, role_id: @engineer.role_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: r2.id, level_ordinal: 3, role_id: @engineer.role_id)
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: r2.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cohort_cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "some")
+        record = define_session(participant_ids: [ @em.id, em2.id ],
+                                calibrant_person_ids: [ @report.id, r2.id ])
+        record.update!(status: "started")
+        record
+      end
+
+      get calibration_session_path(session, view: "divergence",
+                                   person: @report.id, pins: [ @report.id ])
+
+      assert_response :success
+      # The capability rows are the way into the drill-in — a view switch
+      # must never discard the comparison.
+      assert_select "a[href*='capabilities'][href*='person=#{@report.id}'][href*='pins%5B%5D=#{@report.id}']"
+    end
+
+    should "render no drawer card for a foreign person" do
+      get calibration_session_path(@session_record, view: "cohort",
+                                   person: SecureRandom.uuid_v7)
+      assert_response :success
+      assert_select "#calibration-comparison-drawer", count: 0
     end
 
     should "fall back to the tendency tab on a mangled view param" do

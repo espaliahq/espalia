@@ -43,6 +43,7 @@ class CalibrationSessions::DrillInStats
       expectations: expectations,
       illustrations: illustrations,
       clarifications: clarification_counts,
+      flagged_illustration_ids: flagged_illustration_ids,
       rows: rows
     }
   end
@@ -119,9 +120,13 @@ class CalibrationSessions::DrillInStats
   #
   # @return [Hash{Integer => Array<Hash>}] ordinal => [{ role_name:, items: }]
   def illustrations
-    @illustrations ||= begin
+    # defined? memo — a `return` inside `||= begin` escapes WITHOUT setting
+    # the memo, re-running the whole build on every call for the empty case.
+    return @illustrations if defined?(@illustrations)
+
+    @illustrations = begin
       role_ids_by_ordinal = population_role_ids_by_ordinal
-      return {} if role_ids_by_ordinal.empty?
+      return @illustrations = {} if role_ids_by_ordinal.empty?
 
       rows = FrameworkState::RoleIllustration
         .joins(:expectation, :role)
@@ -133,14 +138,18 @@ class CalibrationSessions::DrillInStats
         .pluck("framework_behavioural_expectations.level_ordinal",
                "framework_roles.role_id",
                "framework_roles.name",
+               "framework_role_illustrations.illustration_id",
                "framework_role_illustrations.description")
 
       rows
-        .select { |ordinal, role_id, _, _| role_ids_by_ordinal[ordinal]&.include?(role_id) }
+        .select { |ordinal, role_id, _, _, _| role_ids_by_ordinal[ordinal]&.include?(role_id) }
         .group_by(&:first)
         .transform_values do |group|
-          group.group_by { |_, _, role_name, _| role_name }
-            .map { |role_name, items| { role_name: role_name, items: items.map(&:last) } }
+          group.group_by { |_, _, role_name, _, _| role_name }
+            .map do |role_name, items|
+              { role_name: role_name,
+                items: items.map { |_, _, _, id, text| { id: id, text: text } } }
+            end
             .sort_by { |group_hash| group_hash[:role_name].to_s }
         end
     end
@@ -226,6 +235,20 @@ class CalibrationSessions::DrillInStats
         end
       counts
     end
+  end
+
+  # Illustration ids under this capability with an OPEN clarification —
+  # framework-wide like the cell counts, so overlapping sessions see each
+  # other's example flags instead of re-flagging.
+  #
+  # @return [Set<String>]
+  def flagged_illustration_ids
+    @flagged_illustration_ids ||= FrameworkState::SuggestedEdit.pending.clarifications
+      .where(framework_id: @session.framework_id, target_entity_type: "role_illustration")
+      .where(target_entity_id: FrameworkState::RoleIllustration.joins(:expectation)
+        .where(framework_behavioural_expectations: { capability_id: capability.capability_id })
+        .select(:illustration_id))
+      .pluck(:target_entity_id).to_set
   end
 
   # (person_id) => { frequency:, self_frequency:, carried: } for this

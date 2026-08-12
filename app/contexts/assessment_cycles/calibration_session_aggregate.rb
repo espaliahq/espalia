@@ -201,16 +201,23 @@ class AssessmentCycles::CalibrationSessionAggregate
   # @param reason [String, nil] the room's note on what is unclear
   # @raise [RuntimeError] unless the session is live, or the cell was
   #   already flagged in this session
+  # `illustration_id` scopes an EXAMPLE flag: the uniqueness key includes
+  # it, so the cell's expectation flag and each example's flag are
+  # independent one-per-session outcomes (historic events carry nil, the
+  # same key shape as an expectation flag).
   def flag_expectation(capability_stable_id:, level_ordinal:, suggestion_id:,
-                       flagged_by_id: nil, reason: nil)
+                       flagged_by_id: nil, reason: nil, illustration_id: nil)
     ensure_started!
-    cell = [ capability_stable_id, level_ordinal ]
-    raise "Cell already flagged in this session" if @flagged_cells.include?(cell)
+    cell = [ capability_stable_id, level_ordinal, illustration_id ]
+    if @flagged_cells.include?(cell)
+      raise(illustration_id ? "Example already flagged in this session" : "Cell already flagged in this session")
+    end
 
     apply(AssessmentCycles::Events::CalibrationExpectationFlagged.new(data: {
       session_id: @session_id,
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
+      illustration_id: illustration_id,
       suggestion_id: suggestion_id,
       flagged_by_id: flagged_by_id,
       reason: reason
@@ -380,7 +387,8 @@ class AssessmentCycles::CalibrationSessionAggregate
   end
 
   on AssessmentCycles::Events::CalibrationExpectationFlagged do |event|
-    @flagged_cells << [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @flagged_cells << [ event.data[:capability_stable_id], event.data[:level_ordinal],
+                        event.data[:illustration_id] ]
   end
 
   on AssessmentCycles::Events::CalibrationRatingRevisitRequested do |event|

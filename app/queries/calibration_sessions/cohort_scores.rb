@@ -32,8 +32,12 @@ class CalibrationSessions::CohortScores
   STRONGEST_LIMIT = 2
 
   # @param session [CalibrationSession]
-  def initialize(session:)
+  # @param population_seeds [CalibrationSessions::PopulationSeeds, nil]
+  #   pass the request's existing instance so the attribution queries run
+  #   once per render, not once per consumer
+  def initialize(session:, population_seeds: nil)
     @session = session
+    @population_seeds = population_seeds
   end
 
   # @return [Hash] `{ cohorts: [ { ordinal:, median_pct:, people: [dot] } ] }`
@@ -55,8 +59,9 @@ class CalibrationSessions::CohortScores
   end
 
   # The drill-into-why for one dot: this person's at-level capability
-  # contributions, lowest and highest. Only built for the selected person —
-  # the page pays one engine walk, not one per dot.
+  # contributions, lowest and highest. Built per drawer occupant (the
+  # inspector + up to MAX_PINS pins) — one engine walk each, never one
+  # per dot.
   #
   # @param person_id [String]
   # @return [Hash, nil] `{ weakest: [...], strongest: [...] }`, entries
@@ -139,11 +144,11 @@ class CalibrationSessions::CohortScores
 
   # The canonical attribution the strip, board, and drill-in all read.
   def rater_for
-    @rater_for ||= CalibrationSessions::PopulationSeeds.new(
+    @rater_for ||= (@population_seeds || CalibrationSessions::PopulationSeeds.new(
       framework_id: @session.framework_id,
       participant_ids: @session.participants.pluck(:person_id),
       facilitator_id: @session.facilitator_id
-    ).attribution
+    )).attribution
   end
 
   # One Scoring engine per person — manager-only, the framework's own

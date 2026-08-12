@@ -12,6 +12,9 @@
 #   @option data [String] :session_id UUID of the calibration session
 #   @option data [String] :capability_stable_id cross-version capability id
 #   @option data [Integer] :level_ordinal the level whose expectation is unclear
+#   @option data [String, nil] :illustration_id set when the flag is about ONE
+#     example (role illustration) under the cell rather than the expectation
+#     text itself — additive; historic events carry no key
 #   @option data [String] :suggestion_id UUID of the framework clarification raised
 #   @option data [String, nil] :flagged_by_id person_id of the actor (the facilitator)
 #   @option data [String, nil] :reason the room's note on what is unclear

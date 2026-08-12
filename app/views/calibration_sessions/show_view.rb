@@ -5,6 +5,11 @@
 # started/closed. The live overview & drill-in surfaces are separate
 # increments; see docs/architecture/calibration-sessions.md.
 class Views::CalibrationSessions::ShowView < Views::Base
+  include Views::CalibrationSessions::ComparisonDrawerChrome
+  include Views::CalibrationSessions::PeopleNames
+
+  MAX_PINS = Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS
+
   include Views::CalibrationSessions::Glossary
   include Phlex::Rails::Helpers::TurboFrameTag
 
@@ -40,7 +45,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
                  add_calibrant_candidates:,
                  can_curate:, can_start:, can_close:,
                  overview_view: "tendency", cohorts: nil,
-                 cohort_person_id: nil, cohort_why: nil,
+                 drawer_cards: [], drawer_person_id: nil, pin_ids: [],
                  session_log: nil, can_note: false,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
@@ -60,8 +65,9 @@ class Views::CalibrationSessions::ShowView < Views::Base
     @can_close = can_close
     @overview_view = overview_view
     @cohorts = cohorts
-    @cohort_person_id = cohort_person_id
-    @cohort_why = cohort_why
+    @drawer_cards = drawer_cards
+    @drawer_person_id = drawer_person_id
+    @pin_ids = pin_ids
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -74,8 +80,12 @@ class Views::CalibrationSessions::ShowView < Views::Base
       # The log rides alongside the page as a side panel, so it stays in
       # view while the room reads the strip, the board, and the rosters.
       div(
-        class: "max-w-[max(72rem,80vw)] mx-auto px-4 py-8 flex gap-6 items-start",
+        # data-drawer-host: padded by the drawer's measured height (see
+        # comparison_drawer_controller); anchoring off so pane swaps can't
+        # scroll-jump the room.
+        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start [overflow-anchor:none]",
         data: {
+          drawer_host: "true",
           # calibration-pane swaps the overview frame on same-page links
           # (tabs, cohort dots) with no scroll jump — the drill-in's rule.
           controller: [ ("activity-pane" if @session_log),
@@ -373,18 +383,42 @@ class Views::CalibrationSessions::ShowView < Views::Base
           render Views::CalibrationSessions::DivergenceBoard.new(
             session: @session,
             capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
-            insufficient_count: @stats[:insufficient_capability_count]
+            insufficient_count: @stats[:insufficient_capability_count],
+            pin_ids: @pin_ids, inspector_person_id: @drawer_person_id
           )
         when "cohort"
           render Views::CalibrationSessions::CohortView.new(
             session: @session, cohorts: @cohorts || [], raters: @stats[:raters],
-            people: @people, selected_person_id: @cohort_person_id, why: @cohort_why
+            people: @people, selected_person_id: @drawer_person_id, pin_ids: @pin_ids
           )
         else
           render Views::CalibrationSessions::TendencyStrip.new(
             raters: @stats[:raters], org_mean: @stats[:org_mean], people: @people
           )
         end
+        comparison_drawer
+      end
+    end
+  end
+
+  # The session page's comparison drawer — cohort faces (%, gate, why,
+  # tendency context), one presentation of a person shared with the
+  # drill-in's capability faces. Inside the overview frame so every pane
+  # swap re-renders it; person/pins ride the URL, so it persists across
+  # tabs and follows the room into the drill-in.
+  def comparison_drawer
+    return if @drawer_cards.empty?
+
+    comparison_drawer_chrome(pin_count: @pin_ids.size, max_pins: MAX_PINS) do
+      @drawer_cards.each do |entry|
+        render Views::CalibrationSessions::CohortDrawerCard.new(
+          session: @session, dot: entry[:dot], why: entry[:why],
+          raters: @stats[:raters], people: @people,
+          view: @overview_view, pin_ids: @pin_ids,
+          inspector: entry[:person_id] == @drawer_person_id,
+          inspector_person_id: @drawer_person_id,
+          max_pins: MAX_PINS
+        )
       end
     end
   end
@@ -394,7 +428,12 @@ class Views::CalibrationSessions::ShowView < Views::Base
       OVERVIEW_TABS.each do |value, label|
         active = @overview_view == value
         a(
-          href: calibration_session_path(@session, view: value),
+          # Tab switches keep the drawer: the inspected person and pins
+          # ride every overview link.
+          href: calibration_session_path(
+            @session,
+            { view: value, person: @drawer_person_id, pins: @pin_ids.presence }.compact
+          ),
           role: "tab",
           class: "inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-semibold " \
                  "#{active ?
@@ -452,9 +491,6 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
-  def person_name(person_id)
-    @people[person_id]&.name || "Unknown person"
-  end
 
   def primary_button_classes
     "inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold " \

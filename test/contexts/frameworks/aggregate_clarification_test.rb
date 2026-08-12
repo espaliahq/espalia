@@ -57,7 +57,7 @@ class Frameworks::AggregateClarificationTest < ActiveSupport::TestCase
           author_id: @author_id, rationale: "?"
         )
       end
-      assert_match(/anchor on an expectation or capability/, err.message)
+      assert_match(/anchor on an expectation, capability, or illustration/, err.message)
     end
 
     should "reject a blank rationale — the question IS the clarification" do

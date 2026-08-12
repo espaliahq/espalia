@@ -1,5 +1,5 @@
 // Drives the calibration drill-in's bottom pane (person card / evidence
-// wall / compare tray) as a Turbo Frame instead of a page navigation.
+// wall / comparison drawer) as a Turbo Frame instead of a page navigation.
 //
 // Why: every pane link — a dot, a tab, a pin, an unpin, the wall's filters
 // — differs from the current URL only by query string. Left as full-page
@@ -66,7 +66,7 @@ export default class extends BaseController {
 
     const current = new URL(window.location.href)
     const carried = [
-      ...current.searchParams.getAll("compare[]").map(value => [ "compare[]", value ]),
+      ...current.searchParams.getAll("pins[]").map(value => [ "pins[]", value ]),
       ...[ "person", "person_level", "view", "wall_level", "wall_valence", "wall_rater" ]
         .filter(key => current.searchParams.get(key))
         .map(key => [ key, current.searchParams.get(key) ])
@@ -98,20 +98,21 @@ export default class extends BaseController {
 
   // private
 
-  // Everything the link does NOT own: the pins and the wall's filters, so
-  // stepping out to a person card and back returns to the wall the room was
-  // reading. `view` and `person` are deliberately excluded — the dot owns
-  // those (opening one IS "show me this person's card").
+  // Everything the link does NOT own: the pins, the open wall and its
+  // filters. `person` (and the focus that belongs to it) is deliberately
+  // excluded — the dot owns it (opening one IS "inspect this person").
+  // `view` IS carried now: the inspector lives in the drawer, so opening
+  // a person must not close the wall the room was reading.
   #keepState(url) {
     const live = new URL(window.location.href).searchParams
 
-    url.searchParams.delete("compare[]")
-    live.getAll("compare[]").forEach(id => url.searchParams.append("compare[]", id))
+    url.searchParams.delete("pins[]")
+    live.getAll("pins[]").forEach(id => url.searchParams.append("pins[]", id))
 
     // `activity` (the log panel's open/closed state) is the pane
     // controller's, not the link's — carry it so a shared drill-in URL
     // keeps the panel as the room left it.
-    for (const key of [ "wall_level", "wall_valence", "wall_rater", "activity" ]) {
+    for (const key of [ "view", "wall_level", "wall_valence", "wall_rater", "activity" ]) {
       url.searchParams.delete(key)
       if (live.get(key)) url.searchParams.set(key, live.get(key))
     }

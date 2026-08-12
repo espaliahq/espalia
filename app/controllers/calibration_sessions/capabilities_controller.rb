@@ -1,20 +1,20 @@
 # frozen_string_literal: true
 
-# The calibration capability drill-in: expectation text per level beside
-# the rater × level dot grid, with three bottom-pane views — the per-person
-# card (`?person=`), the evidence wall (`?view=wall`), and the compare tray
-# (`?view=compare` + `compare[]=` pins). Facilitator-only, like every
-# session surface (v1) — see docs/architecture/calibration-sessions.md.
+# The calibration capability drill-in: the rater × level dot grid (each
+# level header carrying its expectation + examples in an ⓘ menu), the
+# evidence wall (`?view=wall`), and the comparison drawer — the inspected
+# person (`?person=`) plus pinned people (`pins[]=`) side by side.
+# Facilitator-only, like every session surface (v1) — see
+# docs/architecture/calibration-sessions.md.
 class CalibrationSessions::CapabilitiesController < ApplicationController
   include CalibrationSessions::SessionLogData
 
-  # The tray is a deliberate juxtaposition of 2–3 cards, not a dashboard.
-  MAX_COMPARE_PINS = 3
+  MAX_COMPARE_PINS = Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS
 
-  VIEWS = %w[wall compare].freeze
+  VIEWS = %w[wall].freeze
 
   # The person card's kebab actions — which (single) form renders open.
-  PERSON_ACTIONS = %w[request revisit].freeze
+  PERSON_ACTIONS = %w[request revisit flag].freeze
 
   # GET /calibration_sessions/:calibration_session_id/capabilities/:id
   def show
@@ -38,7 +38,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       # and again for the log.
       outcomes: outcomes
     )
-    compare_cards = resolve_compare_cards(stats)
+    pinned_cards = resolve_pinned_cards(stats)
     # The log rides along as a side panel so an outcome raised here lands
     # in view without leaving the capability under discussion. Skipped for
     # a pane-frame request: those re-render the whole page server-side but
@@ -65,8 +65,8 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       view: view_param,
       wall: (evidence_wall(stats) if view_param == "wall"),
       wall_filters: wall_filters,
-      compare_ids: compare_cards.keys,
-      compare_cards: compare_cards,
+      pin_ids: pinned_cards.keys,
+      pinned_cards: pinned_cards,
       can_flag: @session.started? && policy(@session).flag_expectation?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -83,12 +83,12 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     request.headers["Turbo-Frame"] == "calibration-bottom-pane"
   end
 
-  # @return [String, nil] "wall" / "compare" / nil (person card or nothing)
+  # @return [String, nil] "wall" / nil
   def view_param
     params[:view].presence_in(VIEWS)
   end
 
-  # Pinned compare cards, keyed by person_id. A pin only survives if it
+  # Pinned drawer cards, keyed by person_id. A pin only survives if it
   # RESOLVES to a card — an id outside the session, or one for someone who
   # has since left the cycle (so they hold no dot on this grid), is dropped
   # rather than becoming a phantom that shows no card, offers no "Unpin",
@@ -96,8 +96,10 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # last, so stale ids ahead of a live one can't squeeze it out.
   #
   # @return [Hash{String => Hash}]
-  def resolve_compare_cards(stats)
-    requested = Array.wrap(params[:compare]).grep(String).select(&:present?).uniq
+  def resolve_pinned_cards(stats)
+    # `compare[]` is the retired spelling — old bookmarks keep their pins.
+    requested = Array.wrap(params[:pins].presence || params[:compare])
+      .grep(String).select(&:present?).uniq
     (requested & grid_person_ids(stats))
       .filter_map { |person_id| @cards.for(person_id)&.then { |card| [ person_id, card ] } }
       .first(MAX_COMPARE_PINS).to_h

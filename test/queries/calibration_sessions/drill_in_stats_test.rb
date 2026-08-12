@@ -141,7 +141,10 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
       groups = stats[:illustrations][3]
 
       assert_equal [ "Software Engineer" ], groups.map { |g| g[:role_name] }
-      assert_equal [ "Unwinds a circular dependency without help." ], groups.first[:items]
+      # Items carry their illustration_id so each example is flaggable.
+      assert_equal [ "Unwinds a circular dependency without help." ],
+                   groups.first[:items].map { |item| item[:text] }
+      assert groups.first[:items].all? { |item| item[:id].present? }
     end
 
     should "include a role once the population holds it at that level" do

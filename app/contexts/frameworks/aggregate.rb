@@ -887,7 +887,7 @@ class Frameworks::Aggregate
   # capability × level cell; the capability anchor covers a cell with no
   # expectation ("nothing defined here" being the complaint), carrying the
   # level_ordinal explicitly.
-  CLARIFIABLE_ENTITY_TYPES = %w[behavioural_expectation capability].freeze
+  CLARIFIABLE_ENTITY_TYPES = %w[behavioural_expectation capability role_illustration].freeze
 
   # Requests clarification of a behavioural expectation (or an empty
   # capability × level cell) — a NON-PROPOSAL suggestion: it anchors a
@@ -909,7 +909,7 @@ class Frameworks::Aggregate
     ensure_created!
     raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
     unless CLARIFIABLE_ENTITY_TYPES.include?(target_entity_type)
-      raise "Clarifications anchor on an expectation or capability, not #{target_entity_type}"
+      raise "Clarifications anchor on an expectation, capability, or illustration, not #{target_entity_type}"
     end
     raise_unless_entity_exists!(target_entity_type, target_entity_id)
     raise "Clarification rationale cannot be blank" if rationale.to_s.strip.empty?

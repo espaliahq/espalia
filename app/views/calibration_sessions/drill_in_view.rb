@@ -14,31 +14,37 @@
 class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Assessments::FrequencyPalette
   include Views::Evidence::Valence
-  include Views::Evidence::ExamplesDisclosure
   include Views::CalibrationSessions::Glossary
   include Views::CalibrationSessions::RaterColours
+  include Views::CalibrationSessions::ComparisonDrawerChrome
+  include Views::CalibrationSessions::PeopleNames
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
+  # The ⓘ panel previews this many examples (across the level's calibrated
+  # roles) — a reference glance, not a reading surface. The full list lives
+  # on the person cards, where comparing people is the point.
+  EXAMPLE_PREVIEW_LIMIT = 3
+
   RELATION_LABELS = { "self" => "Self", "manager" => "Manager", "peer" => "Peer feedback" }.freeze
 
-  MAX_PINS = CalibrationSessions::CapabilitiesController::MAX_COMPARE_PINS
+  MAX_PINS = Views::CalibrationSessions::ComparisonDrawerChrome::MAX_PINS
 
   # @param session [CalibrationSession]
   # @param stats [Hash] DrillInStats result
   # @param people [Hash{String => Person}] rater people by id
   # @param person_card [Hash, nil] `{ dot:, ordinal:, rater_id:, evidence: }`
-  # @param view [String, nil] bottom-pane view — "wall" / "compare" / nil (person card)
+  # @param view [String, nil] bottom-pane view — "wall" / nil
   # @param wall [Hash, nil] EvidenceWall result when view == "wall"
   # @param wall_filters [Hash] `{ level:, valence:, rater_id: }` echoes
-  # @param compare_ids [Array<String>] pinned compare person_ids (URL-carried)
-  # @param compare_cards [Hash{String => Hash}] person_id => PersonCard data
+  # @param pin_ids [Array<String>] pinned person_ids (URL-carried)
+  # @param pinned_cards [Hash{String => Hash}] person_id => PersonCard data
   # @param can_flag [Boolean] whether the viewer can ⚑ flag an expectation
   #   as unclear (facilitator/admin AND the session is live)
   def initialize(session:, stats:, people:, person_card:, can_flag: false,
                  person_focus_ordinal: nil, person_action: nil,
                  request_candidates: nil,
-                 view: nil, wall: nil, wall_filters: {}, compare_ids: [], compare_cards: {},
+                 view: nil, wall: nil, wall_filters: {}, pin_ids: [], pinned_cards: {},
                  session_log: nil, can_note: false,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
@@ -54,8 +60,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @view = view
     @wall = wall
     @wall_filters = wall_filters
-    @compare_ids = compare_ids
-    @compare_cards = compare_cards
+    @pin_ids = pin_ids
+    @pinned_cards = pinned_cards
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -66,8 +72,21 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(
-        class: "max-w-[max(80rem,80vw)] mx-auto px-4 py-8 flex gap-6 items-start",
+        # ONE vertical scroller (the explorer's single-scroll-pane rule,
+        # framework-explorer.md Hard-Won Lesson 11): the wrapper is
+        # viewport-fixed (100vh minus the h-12 navbar), the header rows sit
+        # OUTSIDE the scroll pane so they're simply always visible — no
+        # nested page-vs-card stickiness to reconcile.
+        # data-drawer-host: the comparison-drawer controller pads this by
+        # the drawer's measured height; with border-box the fixed-height
+        # column shrinks, so the pane always ends above the fixed shelf.
+        # overflow-hidden: the column children (log pane's own max-h) may
+        # overshoot by a few px — the WINDOW must never become a second
+        # vertical scroller, that's the whole point of this layout.
+        # 100vh minus the h-12 navbar and the layout main's p-6 (top+bottom).
+        class: "w-full h-[calc(100vh-6rem)] px-4 sm:px-6 pt-1 pb-2 flex gap-6 items-stretch overflow-hidden",
         data: {
+          drawer_host: "true",
           controller: "calibration-pane#{' activity-pane' if @session_log}",
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::DRILL_IN_COOKIE,
           # One delegated handler for every in-page pane link (dots, tabs,
@@ -76,11 +95,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           action: "click->calibration-pane#navigate"
         }
       ) do
-        div(class: "min-w-0 flex-1") do
+        div(class: "min-w-0 flex-1 flex flex-col") do
           header_row
-          expectations_card
-          grid_card
-          bottom_pane
+          # overflow-anchor off: pane swaps insert/remove the wall and
+          # Chrome's scroll anchoring would turn that into a jump.
+          div(id: "drill-in-scroll",
+              class: "flex-1 min-h-0 overflow-auto mt-2 [overflow-anchor:none]") do
+            grid_card
+            bottom_pane
+          end
         end
         if @session_log
           render Views::CalibrationSessions::LogPane.new(
@@ -94,68 +117,156 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   private
 
+  # The header rows live OUTSIDE the scroll pane, so the capability's name
+  # is always visible without being sticky at all; the grid's rater/level
+  # heading is the one sticky element, anchored to the single scroller.
   def header_row
-    div(class: "flex flex-wrap items-center gap-3") do
-      div(class: "flex-1 min-w-0") do
-        a(href: calibration_session_path(@session),
-          class: "text-sm text-gray-600 dark:text-gray-300 hover:underline") { "← #{@session.name}" }
-        div(class: "mt-1 flex flex-wrap items-baseline gap-x-3") do
-          if @stats[:capability][:category_name]
-            span(class: "text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-              @stats[:capability][:category_name]
-            end
-          end
-          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @stats[:capability][:name] }
-        end
-      end
+    div(class: "flex flex-wrap items-center gap-3 shrink-0") do
+      # The drawer follows the room home: whoever is open and pinned here
+      # is open and pinned on the session page too.
+      a(href: calibration_session_path(
+          @session, { person: opened_person_id, pins: @pin_ids.presence }.compact
+        ),
+        class: "flex-1 min-w-0 text-sm text-gray-600 dark:text-gray-300 hover:underline") { "← #{@session.name}" }
       if @session_log
         render Views::CalibrationSessions::LogPaneToggle.new(
           entry_count: @session_log[:entries].size
         )
       end
     end
+    div(class: "shrink-0 py-1.5") do
+      div(class: "flex items-baseline gap-x-3 min-w-0") do
+        if @stats[:capability][:category_name]
+          span(class: "shrink-0 text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+            @stats[:capability][:category_name]
+          end
+        end
+        h1(class: "text-xl font-bold text-gray-900 dark:text-white truncate") { @stats[:capability][:name] }
+      end
+    end
   end
 
-  def expectations_card
-    div(class: "mt-5") do
-      render Components::Kit::Card.new do |card|
-        card.body do
-          h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-            "What good looks like"
+  # One level's reference material — the column header's ⓘ menu: the
+  # canonical expectation, the role illustrations (each flaggable), and
+  # the cell's ⚑ flag affordance. What the "What good looks like" card
+  # used to show, now anchored to the column it describes.
+  def level_header_menu(ordinal)
+    render Components::Kit::Dropdown.new(strategy: :fixed, align: :left) do |dropdown|
+      dropdown.trigger(label: "L#{ordinal} — expectation, examples, and flags") do
+        # 44px tap target (the visual glyph stays small) — this is the only
+        # route to the level's reference material. A DRAWN info glyph, not
+        # the ⓘ character: headless/minimal font stacks render that as tofu.
+        span(class: "inline-flex h-11 w-11 items-center justify-center rounded-md " \
+                    "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") do
+          span(class: "inline-flex h-4 w-4 items-center justify-center rounded-full border " \
+                      "border-current text-[10px] font-serif italic leading-none",
+               aria: { hidden: "true" }) { "i" }
+        end
+      end
+      dropdown.menu(width: "w-96", role: "dialog",
+                    label: "L#{ordinal} — what good looks like") do
+        div(class: "px-3 py-2 text-left") do
+          p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+            "L#{ordinal} — what good looks like"
           end
-          dl(class: "mt-2 space-y-2") do
-            @stats[:ordinals].each do |ordinal|
-              div(class: "flex gap-3") do
-                dt(class: "shrink-0 w-8 text-sm font-semibold text-gray-900 dark:text-white") { "L#{ordinal}" }
-                dd(class: "flex-1 text-sm text-gray-600 dark:text-gray-300") do
-                  plain @stats[:expectations][ordinal] || "No expectation defined at this level."
-                  illustrations_for(ordinal)
-                  flag_affordance(ordinal)
-                end
-              end
-            end
+          p(class: "mt-1 text-sm text-gray-900 dark:text-white whitespace-normal") do
+            @stats[:expectations][ordinal] || "No expectation defined at this level."
           end
+          example_groups(ordinal, limit: EXAMPLE_PREVIEW_LIMIT)
+          flag_affordance(ordinal)
         end
       end
     end
   end
 
-  # The role illustrations under a level's canonical expectation, one
-  # collapsed disclosure per role — the same "Examples (N)" affordance the
-  # evidence dialog uses beside a behavioural expectation. The expectation
-  # is what people are rated against and stays in view; the examples are
-  # reference material one click away (a disagreement often turns out to be
-  # two raters reading different ones).
-  def illustrations_for(ordinal)
+  # The role illustrations under a level's canonical expectation, grouped
+  # per role (only roles the calibration population holds at this level —
+  # DrillInStats filters at the source). Each example is itself flaggable —
+  # "this example is what misleads raters" is narrower and more actionable
+  # than flagging the whole cell. `limit:` caps the total across groups
+  # (the ⓘ preview); the person cards render the full list.
+  def example_groups(ordinal, limit: nil)
     groups = @stats[:illustrations]&.dig(ordinal)
     return if groups.blank?
 
-    div(class: "mt-1.5 space-y-1") do
+    total = groups.sum { |group| group[:items].size }
+    remaining = limit
+    div(class: "mt-2 space-y-1.5") do
       groups.each do |group|
-        div(class: "flex flex-wrap items-baseline gap-x-2") do
-          span(class: "shrink-0 text-[11px] font-medium uppercase tracking-wide " \
+        break if remaining&.zero?
+
+        items = remaining ? group[:items].first(remaining) : group[:items]
+        remaining -= items.size if remaining
+        next if items.empty?
+
+        div do
+          span(class: "text-[11px] font-medium uppercase tracking-wide " \
                       "text-gray-600 dark:text-gray-300") { group[:role_name] }
-          div(class: "min-w-0 flex-1") { examples_disclosure(group[:items]) }
+          ul(class: "mt-0.5 space-y-1") do
+            items.each { |item| example_row(item) }
+          end
+        end
+      end
+      if limit && total > limit
+        p(class: "text-[11px] text-gray-600 dark:text-gray-300") do
+          "+ #{total - limit} more — open a person's card to read them all"
+        end
+      end
+    end
+  end
+
+  def example_row(item)
+    li(class: "text-xs text-gray-700 dark:text-gray-200") do
+      div(class: "flex gap-2") do
+        span(class: "text-gray-400", aria: { hidden: "true" }) { "•" }
+        div(class: "min-w-0 flex-1") do
+          plain item[:text]
+          example_flag(item)
+        end
+      end
+    end
+  end
+
+  # Per-example ⚑ — an open illustration clarification (any session) shows
+  # as a marker; otherwise a live session's facilitator can raise one.
+  def example_flag(item)
+    if @stats[:flagged_illustration_ids].include?(item[:id])
+      div(class: "mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300") do
+        "⚑ Example flagged — clarification open on the framework"
+      end
+    elsif @can_flag
+      details(class: "mt-0.5") do
+        summary(
+          class: "inline-flex min-h-11 cursor-pointer items-center text-[11px] font-medium " \
+                 "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300",
+          # The example text disambiguates — a level can hold several
+          # identical "flag example" affordances (menu AND open cards).
+          aria: { label: "Flag example as unclear — #{item[:text].to_s.truncate(60)}" }
+        ) { "⚑ Flag example as unclear" }
+        form(
+          action: calibration_session_illustration_flags_path(@session),
+          method: "post",
+          class: "mt-1.5 max-w-lg space-y-2",
+          data: { action: "submit->calibration-pane#stampState", turbo_frame: "_top" }
+        ) do
+          input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+          input(type: "hidden", name: "illustration_id", value: item[:id])
+          # The return path rebuilds THIS drill-in URL from it.
+          input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
+          state_passthrough_fields
+          textarea(
+            name: "reason", rows: "2",
+            class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
+                   "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
+                   "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+            placeholder: "What misleads about this example (optional)",
+            aria: { label: "Why this example is unclear — #{item[:text].to_s.truncate(60)}" }
+          )
+          button(
+            type: "submit",
+            class: "inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-xs " \
+                   "font-semibold text-white hover:bg-amber-700 transition-colors"
+          ) { "Flag example" }
         end
       end
     end
@@ -182,20 +293,27 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
                "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
       ) { "⚑ Flag expectation as unclear" }
-      form(
+      expectation_flag_form(ordinal)
+    end
+  end
+
+  def expectation_flag_form(ordinal, field_id: "flag-reason-#{ordinal}")
+    form(
         action: calibration_session_expectation_flags_path(@session),
         method: "post",
         class: "mt-2 max-w-lg space-y-2",
-        # Outside the pane frame, so its carried state is refreshed from the
-        # live URL at submit time rather than page-load time.
-        data: { action: "submit->calibration-pane#stampState" }
+        # stampState refreshes the carried state from the live URL at
+        # submit time; _top because the kebab renders this INSIDE the pane
+        # frame — a frame-scoped submit would swallow the flash (success
+        # AND refusal) exactly like the revisit form's comment warns.
+        data: { action: "submit->calibration-pane#stampState", turbo_frame: "_top" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "capability_stable_id", value: @stats[:capability][:stable_id])
         input(type: "hidden", name: "level_ordinal", value: ordinal)
         state_passthrough_fields
         textarea(
-          id: "flag-reason-#{ordinal}", name: "reason", rows: "2",
+          id: field_id, name: "reason", rows: "2",
           class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                  "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
                  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
@@ -208,11 +326,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
                  "font-semibold text-white hover:bg-amber-700 transition-colors"
         ) { "Raise clarification" }
       end
-    end
   end
 
   def grid_card
-    div(class: "mt-6") do
+    # min-w-fit: on narrow screens the pane scrolls horizontally and the
+    # card must grow with its table instead of letting rows bleed past
+    # the card edge.
+    div(class: "mt-4 min-w-fit") do
       render Components::Kit::Card.new do |card|
         card.body do
           div(class: "flex flex-wrap items-baseline justify-between gap-2") do
@@ -221,18 +341,43 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             end
             div(class: "flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
               defined_term(:backing, align: :right)
-              plain "· click a dot to discuss"
+              plain "· click a dot to discuss · pin up to #{MAX_PINS} to compare"
             end
           end
 
-          div(class: "mt-3 overflow-x-auto") do
+          # No inner scroll: the surrounding pane is the ONE scroller, and
+          # the level headers stick to it (nesting a second vertical
+          # scroller here made the stickiness read as random).
+          div(class: "mt-3") do
             table(class: "w-full text-sm") do
               thead do
                 tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do
-                  th(class: "sticky left-0 z-[2] bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium") do
+                  th(class: "sticky left-0 top-0 z-[3] bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium") do
                     "Rater"
                   end
-                  @stats[:ordinals].each { |ordinal| th(class: "py-1.5 pr-3 font-medium") { "L#{ordinal}" } }
+                  @stats[:ordinals].each do |ordinal|
+                    # has-[…]:z-30 — sibling sticky headers share a stacking
+                    # context, so a later column would paint THROUGH this
+                    # column's open ⓘ menu unless the host th out-ranks its
+                    # siblings while the menu is open.
+                    th(class: "sticky top-0 z-[2] has-[[aria-expanded=true]]:z-40 " \
+                              "bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium",
+                       data: { level_menu: ordinal }) do
+                      div(class: "flex items-center gap-1") do
+                        span { "L#{ordinal}" }
+                        if @stats[:clarifications][ordinal].to_i.positive?
+                          # Scannable without opening the menu — "which
+                          # cells are already contested" was a one-glance
+                          # read on the old expectations card.
+                          span(class: "text-amber-700 dark:text-amber-300 font-semibold",
+                               title: "#{@stats[:clarifications][ordinal]} open clarification(s) on this level's expectation") do
+                            "⚑#{@stats[:clarifications][ordinal]}"
+                          end
+                        end
+                        level_header_menu(ordinal)
+                      end
+                    end
+                  end
                 end
               end
               tbody do
@@ -296,7 +441,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # the sentence (the in-sentence exception to the 44px target rule).
   def unrated_person_link(dot)
     a(
-      href: drill_in_path(view: nil, person: dot[:person_id], compare: [], filters: {}),
+      href: drill_in_path(view: nil, person: dot[:person_id], pins: [], filters: {}),
       class: "underline underline-offset-2 decoration-gray-400 dark:decoration-gray-500 " \
              "hover:decoration-gray-900 dark:hover:decoration-white",
       aria: { label: "#{dot[:name]} — unrated. Open to discuss." },
@@ -331,13 +476,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # accessible name.
   def render_dot(dot, ordinal)
     base = dot_description(dot, ordinal)
+    selected = dot[:person_id] == opened_person_id
+    pinned = @pin_ids.include?(dot[:person_id])
+    base += " Currently open in the comparison." if selected
+    base += " Pinned to the comparison." if pinned
     a(
       # Opening a dot returns to the person-card view but keeps the pins —
       # the room browses dots mid-comparison without losing the tray. The
       # grid sits OUTSIDE the pane frame, so this href freezes at whatever
       # the pins and filters were on page load; `pane_keep_state` tells the
       # pane controller to merge the live values in at click time.
-      href: drill_in_path(view: nil, person: dot[:person_id], compare: [],
+      href: drill_in_path(view: nil, person: dot[:person_id], pins: [],
                           filters: {}),
       class: "inline-flex h-11 w-11 items-center justify-center",
       title: dot[:name],
@@ -346,9 +495,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       aria: { label: "#{dot[:name]} — #{base}. Open to discuss." },
       data: { pane_keep_state: "true", person_id: dot[:person_id] }
     ) do
+      # ONE affordance for "in the drawer" — anyone held there (inspected
+      # OR pinned) reads by SIZE (1.5×), same vocabulary as the cohort axis.
       span(
-        class: "inline-flex h-7 w-7 items-center justify-center rounded-full " \
-               "text-[10px] font-semibold #{dot_classes(dot)}"
+        class: "inline-flex items-center justify-center rounded-full " \
+               "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
+               "font-semibold #{dot_classes(dot)}"
       ) { initials(dot[:name]) }
     end
   end
@@ -414,7 +566,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # ── Bottom pane: person card / evidence wall / compare tray ──
+  # ── Bottom pane: the evidence wall toggle + the comparison drawer ──
 
   # The pane lives in a Turbo Frame so switching panes, opening a dot, or
   # pinning replaces only this region — a full-page navigation would scroll
@@ -424,13 +576,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # assessment views).
   def bottom_pane
     turbo_frame_tag("calibration-bottom-pane",
+                    class: "block",
                     data: { calibration_pane_target: "frame" }) do
-      tab_bar
-      case @view
-      when "wall" then wall_section
-      when "compare" then compare_section
-      else person_card_section if @person_card
-      end
+      wall_toggle
+      wall_section if @view == "wall"
+      comparison_drawer
     end
   end
 
@@ -441,39 +591,30 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # nav/aria-current semantics rather than the ARIA tabs pattern — declaring
   # role="tab" would promise arrow-key navigation and in-place panel swapping
   # that full-page links can't deliver.
-  def tab_bar
-    nav(class: "mt-6 flex flex-wrap items-center gap-2", aria: { label: "Capability views" }) do
-      if @person_card
-        tab_link("Person: #{@person_card[:dot][:name]}", drill_in_path(view: nil), active: @view.nil?)
-      end
-      tab_link("Feedback / Evidence wall", drill_in_path(view: "wall"), active: @view == "wall")
-      if @compare_cards.any? || @view == "compare"
-        # Count the cards actually rendered, not the requested pins — a pinned
-        # id for someone with no dot on THIS capability renders nothing, and a
-        # count that disagrees with the tray reads as a bug.
-        tab_link("Compare (#{@compare_cards.size})", drill_in_path(view: "compare"),
-                 active: @view == "compare")
-      end
-    end
-  end
-
-  def tab_link(label, href, active:)
+  # People live in the comparison drawer now, so the only bottom-pane view
+  # left is the wall — one toggle, not a tab set. Clicking the active
+  # toggle closes it.
+  def wall_toggle
+    active = @view == "wall"
     classes = if active
       "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
     else
       "border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white " \
         "hover:bg-gray-50 dark:hover:bg-gray-800"
     end
-    a(
-      href: href, aria: { current: active ? "page" : nil },
-      class: "inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium #{classes}"
-    ) { label }
+    div(class: "mt-6") do
+      a(
+        href: drill_in_path(view: active ? nil : "wall"),
+        aria: { expanded: active.to_s },
+        class: "inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium #{classes}"
+      ) { "Feedback / Evidence wall" }
+    end
   end
 
   # Rebuilds the drill-in URL with the given view, preserving the opened
-  # person, the compare pins, and (within the wall) the active filters.
+  # person, the pins, and (within the wall) the active filters.
   def drill_in_path(view:, person: opened_person_id, person_level: :current,
-                    person_action: nil, compare: @compare_ids, filters: @wall_filters)
+                    person_action: nil, pins: @pin_ids, filters: @wall_filters)
     # Focus belongs to the OPEN card: a link that opens a different person
     # (a grid dot, an unrated-sentence name) must start at THEIR assessed
     # level, not inherit this card's focused ordinal.
@@ -486,7 +627,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       query[:person_level] = person_level if person_level
       query[:person_action] = person_action if person_action
     end
-    query[:compare] = compare if compare.any?
+    query[:pins] = pins if pins.any?
     query[:view] = view if view
     # Filters ride every link, not just wall→wall, so stepping out to a
     # person card and back returns to the wall the room was reading.
@@ -522,7 +663,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     if opened_person_id.present? && @person_focus_ordinal
       input(type: "hidden", name: "person_level", value: @person_focus_ordinal, data: tag)
     end
-    @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id, data: tag) }
+    @pin_ids.each { |id| input(type: "hidden", name: "pins[]", value: id, data: tag) }
     input(type: "hidden", name: "view", value: @view, data: tag) if @view
     { wall_level: @wall_filters[:level], wall_valence: @wall_filters[:valence],
       wall_rater: @wall_filters[:rater_id] }.each do |name, value|
@@ -533,7 +674,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # ── Evidence wall (§d — the norming surface) ──
 
   def wall_section
-    div(class: "mt-3") do
+    div(class: "mt-3", id: "calibration-wall") do
       render Components::Kit::Card.new do |card|
         card.body do
           div(class: "flex flex-wrap items-baseline justify-between gap-2") do
@@ -573,7 +714,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
          data: { action: "submit->calibration-pane#submitFilters" }) do
       input(type: "hidden", name: "view", value: "wall")
       input(type: "hidden", name: "person", value: opened_person_id) if opened_person_id.present?
-      @compare_ids.each { |id| input(type: "hidden", name: "compare[]", value: id) }
+      if opened_person_id.present? && @person_focus_ordinal
+        input(type: "hidden", name: "person_level", value: @person_focus_ordinal)
+      end
+      @pin_ids.each { |id| input(type: "hidden", name: "pins[]", value: id) }
 
       wall_filter_select("wall_level", "Level", @wall[:level_ordinals].map { |o| [ "L#{o}", o ] },
                          @wall_filters[:level])
@@ -646,116 +790,90 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # ── Compare tray (§e — the deliberate juxtaposition) ──
+  # ── The comparison drawer (§e — the deliberate juxtaposition, now a
+  # sticky bottom shelf) ──
+  #
+  # One presentation of a person, side by side: the INSPECTOR (the person
+  # the room just clicked) in the left slot, pinned people beside it.
+  # Sticky bottom-0 as the last element of the main column, so it rides
+  # the viewport bottom while the room scrolls the grid — and the session
+  # log at the page's right edge stays visible throughout. Cards scroll
+  # internally; the collapse toggle drops the drawer to its header bar.
+  def comparison_drawer
+    inspector_pinned = opened_person_id && @pin_ids.include?(opened_person_id)
+    cards = []
+    @pinned_cards.each { |person_id, card| cards << [ card, person_id == opened_person_id ] }
+    # The just-opened person APPENDS — pinned cards keep their positions,
+    # so the row reads oldest-held to newest-opened.
+    cards << [ @person_card, true ] if @person_card && !inspector_pinned
+    return if cards.empty?
 
-  def compare_section
-    div(class: "mt-3", id: "calibration-compare") do
-      render Components::Kit::Card.new do |card|
-        card.body do
-          h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-            "Compare"
-          end
-          if @compare_cards.empty?
-            p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
-              "Pin 2–3 person cards (same level, divergent ratings, both backed is the classic) " \
-                "to hold them side by side — open a dot and use “Pin to compare”."
-            end
-          else
-            # Literal class names — Tailwind's scanner can't see interpolation
-            # (framework-explorer.md Hard-Won Lesson 12).
-            cols = { 1 => "md:grid-cols-1", 2 => "md:grid-cols-2", 3 => "md:grid-cols-3" }
-            div(class: "mt-3 grid gap-4 #{cols.fetch([ @compare_cards.size, MAX_PINS ].min)}") do
-              @compare_cards.each { |person_id, card_data| compare_card(person_id, card_data) }
-            end
-          end
-        end
-      end
+    comparison_drawer_chrome(pin_count: @pin_ids.size, max_pins: MAX_PINS) do
+      cards.each { |card_data, inspector| drawer_card(card_data, inspector: inspector) }
     end
   end
 
-  # A pinned mini person card.
-  def compare_card(person_id, card_data)
+  # One person, one card — inspector or pinned, same body. The inspector
+  # carries the focus features (level focus, kebab, open form, Close);
+  # a pinned card renders at its person's assessed level, and any chip
+  # click promotes them to inspector at that level.
+  def drawer_card(card_data, inspector:)
     dot = card_data[:dot]
-    div(class: "rounded-lg border border-gray-200 dark:border-gray-700 p-3",
-        data: { compare_card: person_id }) do
-      div(class: "flex items-start justify-between gap-2") do
+    pinned = @pin_ids.include?(dot[:person_id])
+    div(
+      class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-white dark:bg-gray-800 " \
+             "p-3 h-full overflow-y-auto " \
+             "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-gray-200 dark:border-gray-700'}",
+      id: (inspector ? "calibration-person-card" : nil),
+      data: { drawer_card: dot[:person_id] }
+    ) do
+      div(class: "flex flex-wrap items-start justify-between gap-2") do
         div do
-          h3(class: "text-sm font-semibold text-gray-900 dark:text-white") { dot[:name] }
-          p(class: "text-xs text-gray-600 dark:text-gray-300") do
+          h2(class: "text-base font-semibold text-gray-900 dark:text-white") { dot[:name] }
+          p(class: "mt-0.5 text-xs text-gray-600 dark:text-gray-300") do
             plain "L#{card_data[:ordinal]}"
             plain " · rated by #{rater_name(card_data[:rater_id])}" if card_data[:rater_id]
           end
         end
-        a(
-          href: drill_in_path(view: "compare", compare: @compare_ids - [ person_id ]),
-          class: "inline-flex h-11 min-w-11 items-center justify-center px-1 text-xs " \
-                 "text-gray-600 dark:text-gray-300 hover:underline",
-          aria: { label: "Unpin #{dot[:name]} from compare" }
-        ) { "Unpin" }
-      end
-      div(class: "mt-2 flex flex-wrap gap-1.5") do
-        rating_pill("Mgr", dot[:frequency], carried: dot[:carried])
-        rating_pill("Self", dot[:self_frequency], withheld: dot[:self_withheld])
-      end
-      if card_data[:evidence].empty?
-        p(class: "mt-3 text-xs text-gray-600 dark:text-gray-300") do
-          "No feedback / evidence at this behaviour."
-        end
-      else
-        ul(class: "mt-3 space-y-2") do
-          card_data[:evidence].each { |item| evidence_row(item) }
-        end
-      end
-    end
-  end
-
-  # Pin the opened person into the compare tray (capped at 3; the pinned
-  # marker replaces the link once in). Pinning navigates straight to the
-  # tray — the pin IS the "hold this one" gesture.
-  def pin_to_compare_link(dot)
-    if @compare_ids.include?(dot[:person_id])
-      span(class: "inline-flex min-h-11 items-center px-2 text-xs font-medium " \
-                  "text-gray-600 dark:text-gray-300") { "Pinned" }
-    elsif @compare_ids.size < MAX_PINS
-      a(
-        href: drill_in_path(view: "compare", compare: @compare_ids + [ dot[:person_id] ]),
-        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary hover:underline",
-        aria: { label: "Pin #{dot[:name]} to compare" }
-      ) { "Pin to compare" }
-    end
-  end
-
-  # The opened member's card.
-  def person_card_section
-    dot = @person_card[:dot]
-    div(class: "mt-6", id: "calibration-person-card") do
-      render Components::Kit::Card.new do |card|
-        card.body do
-          div(class: "flex flex-wrap items-start justify-between gap-3") do
-            div do
-              h2(class: "text-lg font-semibold text-gray-900 dark:text-white") { dot[:name] }
-              p(class: "mt-0.5 text-sm text-gray-600 dark:text-gray-300") do
-                plain "L#{@person_card[:ordinal]}"
-                plain " · rated by #{rater_name(@person_card[:rater_id])}" if @person_card[:rater_id]
-              end
-            end
-            div(class: "flex items-center gap-1") do
-              person_card_kebab
-              pin_to_compare_link(dot)
-              a(
-                href: drill_in_path(view: nil, person: nil),
-                class: "inline-flex h-11 min-w-11 items-center justify-center px-2 text-sm " \
-                       "text-gray-600 dark:text-gray-300 hover:underline",
-                aria: { label: "Close person card" }
-              ) { "Close" }
-            end
+        div(class: "flex items-center gap-1") do
+          person_card_kebab if inspector
+          pin_toggle_link(dot, pinned: pinned)
+          # ONE dismiss per card: ✕ unpins a pinned card (below), closes an
+          # unpinned inspector (here) — same gesture, "remove this card".
+          if inspector && !pinned
+            a(
+              href: drill_in_path(view: @view, person: nil),
+              class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
+                     "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md",
+              aria: { label: "Close person card" }
+            ) { "×" }
           end
-
-          person_level_strip
-          person_level_panel
-          person_action_form
         end
       end
+
+      person_level_strip(card_data)
+      person_level_panel(card_data, inspector: inspector)
+      person_action_form if inspector
+    end
+  end
+
+  # Pin holds a person in the drawer while the next one opens; the ✕ on a
+  # pinned card releases the slot. Both stay on the current view —
+  # pinning is a drawer gesture, not a navigation.
+  def pin_toggle_link(dot, pinned:)
+    if pinned
+      a(
+        href: drill_in_path(view: @view, pins: @pin_ids - [ dot[:person_id] ]),
+        class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
+               "text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded-md",
+        aria: { label: "Unpin #{dot[:name]} from the comparison drawer" }
+      ) { "×" }
+    elsif @pin_ids.size < MAX_PINS
+      a(
+        href: drill_in_path(view: @view, pins: @pin_ids + [ dot[:person_id] ]),
+        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary hover:underline",
+        aria: { label: "Pin #{dot[:name]} to the comparison drawer" }
+      ) { "Pin" }
     end
   end
 
@@ -768,30 +886,31 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # calibrated), focused initially at the assessed level. Chips are pane
   # links (`?person_level=`), so switching levels swaps the card in place
   # without scrolling the room.
-  def person_level_strip
-    levels = @person_card[:levels]
+  def person_level_strip(card_data)
+    levels = card_data[:levels]
     return if levels.size <= 1
 
-    div(class: "mt-4 overflow-x-auto") do
+    div(class: "mt-3 overflow-x-auto") do
       # The inner padding keeps the focused chip's offset ring inside the
       # scroll wrapper instead of clipped at its edge.
       div(class: "flex items-start gap-1.5 p-1") do
-        levels.each { |level| person_level_chip(level) }
+        levels.each { |level| person_level_chip(card_data, level) }
       end
     end
   end
 
-  def person_level_chip(level)
+  def person_level_chip(card_data, level)
     ordinal = level[:ordinal]
-    focused = ordinal == focus_ordinal
-    assessed = ordinal == @person_card[:ordinal]
-    fill, border, note = person_chip_appearance(ordinal)
+    focused = ordinal == card_focus_ordinal(card_data)
+    assessed = ordinal == card_data[:ordinal]
+    fill, border, note = person_chip_appearance(card_data, ordinal)
 
     div(class: "flex flex-col items-center gap-0.5") do
       # The 44px tap target is the link; the visual chip is the inner span
-      # (the grid dot's pattern).
+      # (the grid dot's pattern). On a pinned card the click PROMOTES that
+      # person to inspector at the clicked level.
       a(
-        href: drill_in_path(view: nil, person_level: ordinal),
+        href: drill_in_path(view: @view, person: card_data[:dot][:person_id], person_level: ordinal),
         class: "inline-flex h-11 min-w-11 items-center justify-center",
         aria: { label: person_chip_label(level, note, assessed: assessed), current: focused ? "true" : nil }
       ) do
@@ -812,8 +931,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # The assessment chip vocabulary, manager perspective: solid palette fill
   # when rated, the lighter carried tint + dashed edge when inherited,
   # assumed-consistent blue below the assessed level, neutral above.
-  def person_chip_appearance(ordinal)
-    rating = @person_card[:ratings_by_level][ordinal] || {}
+  def person_chip_appearance(card_data, ordinal)
+    rating = card_data[:ratings_by_level][ordinal] || {}
     config = rating[:manager] && CONFIG[rating[:manager]]
     if config && rating[:manager_carried]
       [ "#{config[:chip_carried]} #{config[:chip_txt]}", config[:chip_carried_border],
@@ -821,7 +940,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     elsif config
       [ "#{config[:chip_bg]} #{config[:chip_txt]}", "border-white dark:border-gray-800",
         config[:phrase] ]
-    elsif ordinal < @person_card[:ordinal]
+    elsif ordinal < card_data[:ordinal]
       [ "bg-blue-300 dark:bg-blue-300 text-blue-950", "border-white dark:border-gray-800",
         "unrated — assumed consistent below the assessed level" ]
     else
@@ -839,32 +958,66 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # The focused level's read-only cell: expectation text, both rating
   # pills, the revisit marker when this session already asked, and the
   # feedback / evidence linked at this level.
-  def person_level_panel
-    ordinal = focus_ordinal
-    rating = @person_card[:ratings_by_level][ordinal] || {}
+  def person_level_panel(card_data, inspector:)
+    ordinal = card_focus_ordinal(card_data)
+    rating = card_data[:ratings_by_level][ordinal] || {}
 
-    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+    div(class: "mt-3 border-t border-gray-100 dark:border-gray-800 pt-3") do
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
         "L#{ordinal}"
       end
-      expectation = @person_card[:expectations_by_level][ordinal]
+      expectation = card_data[:expectations_by_level][ordinal]
       p(class: "mt-1 text-sm text-gray-900 dark:text-white") do
         expectation || "No expectation defined at this level for this capability."
       end
 
       div(class: "mt-3 flex flex-wrap gap-2") do
         rating_pill("Manager", rating[:manager], carried: rating[:manager_carried])
-        rating_pill("Self", rating[:self], withheld: @person_card[:self_withheld])
+        rating_pill("Self", rating[:self], withheld: card_data[:self_withheld])
       end
 
-      if @person_card[:revisit_ordinals].include?(ordinal)
+      if card_data[:revisit_ordinals].include?(ordinal)
         p(class: "mt-3 text-xs font-medium text-amber-700 dark:text-amber-300") do
-          plain "Revisit requested — it will appear in #{rater_name(@person_card[:rater_id])}'s assessment activity."
+          plain "Revisit requested — it will appear in #{rater_name(card_data[:rater_id])}'s assessment activity."
+        end
+      end
+      if @stats[:clarifications][ordinal].to_i.positive?
+        div(class: "mt-2 text-xs font-medium text-amber-700 dark:text-amber-300") do
+          "⚑ Flagged — #{@stats[:clarifications][ordinal]} open " \
+            "#{'clarification'.pluralize(@stats[:clarifications][ordinal])} on the framework"
         end
       end
 
-      evidence_section(@person_card[:evidence_by_level][ordinal] || [], ordinal)
+      card_examples(ordinal) if inspector
+      evidence_section(card_data[:evidence_by_level][ordinal] || [], ordinal)
     end
+  end
+
+  # The cell's reference examples, on the card so "what does good look
+  # like here" never needs a navigation away from the person under
+  # discussion. Each example carries its own ⚑ (see #example_flag).
+  # Inspector-only and collapsed: three pinned cards at the same level
+  # would otherwise repeat the identical capability-level list (and its
+  # flag forms) once per card inside 38vh scrollers.
+  def card_examples(ordinal)
+    groups = @stats[:illustrations]&.dig(ordinal)
+    return if groups.blank?
+
+    details(class: "mt-3") do
+      summary(class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold " \
+                     "uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        "Examples at L#{ordinal} (#{groups.sum { |group| group[:items].size }})"
+      end
+      example_groups(ordinal)
+    end
+  end
+
+  # Level focus is inspector state; every other card sits at its person's
+  # assessed level.
+  def card_focus_ordinal(card_data)
+    return focus_ordinal if card_data.equal?(@person_card)
+
+    card_data[:ordinal]
   end
 
   def focus_ordinal
@@ -883,7 +1036,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     request_ok = @can_flag && @request_candidates&.any?
     revisit_ok = @can_flag && @person_card[:rater_id] &&
                  !@person_card[:revisit_ordinals].include?(focus_ordinal)
-    return unless request_ok || revisit_ok
+    flag_ok = @can_flag && @stats[:clarifications][focus_ordinal].to_i.zero?
+    return unless request_ok || revisit_ok || flag_ok
 
     render Components::Kit::Dropdown.new(align: :right) do |dropdown|
       dropdown.trigger(label: "Actions for #{@person_card[:dot][:name]}") do
@@ -895,6 +1049,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       dropdown.menu do
         person_kebab_item("Request feedback / evidence…", "request") if request_ok
         person_kebab_item("Ask #{rater_name(@person_card[:rater_id])} to revisit this rating…", "revisit") if revisit_ok
+        person_kebab_item("⚑ Flag expectation as unclear…", "flag") if flag_ok
       end
     end
   end
@@ -915,6 +1070,21 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     case @person_action
     when "request" then request_evidence_section
     when "revisit" then revisit_section
+    when "flag" then card_flag_section
+    end
+  end
+
+  # The kebab's flag path — the same clarification the column header's ⚑
+  # raises, opened from the card and scoped to the focused level.
+  def card_flag_section
+    return unless @can_flag
+    return if @stats[:clarifications][focus_ordinal].to_i.positive?
+
+    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+      p(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+        "Flag the L#{focus_ordinal} expectation as unclear"
+      end
+      expectation_flag_form(focus_ordinal, field_id: "flag-reason-card")
     end
   end
 
@@ -1107,6 +1277,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   def rater_name(rater_id)
-    @people[rater_id]&.name || "Unknown"
+    person_name(rater_id)
   end
 end
