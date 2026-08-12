@@ -122,6 +122,9 @@ export default class extends BaseController {
     this.collapseTarget.setAttribute("aria-expanded", collapse ? "false" : "true")
     this.expandBarTarget.setAttribute("aria-expanded", collapse ? "false" : "true")
     this.#pad()
+    // Re-sync after expansion — a hidden body measures 0, which would
+    // stamp an aria-valuenow below the minimum (see the guard below).
+    if (!collapse) this.#syncHandleAria()
   }
 
   // Clearance = the drawer's measured height (+ breathing room), so page-end
@@ -139,7 +142,7 @@ export default class extends BaseController {
   // The separator's value semantics, kept honest across pointer, keyboard,
   // and viewport changes.
   #syncHandleAria() {
-    if (!this.hasHandleTarget) return
+    if (!this.hasHandleTarget || this.bodyTarget.style.display === "none") return
 
     this.handleTarget.setAttribute("aria-valuemin", `${MIN_HEIGHT}`)
     this.handleTarget.setAttribute("aria-valuemax", `${Math.round(window.innerHeight * 0.8)}`)
