@@ -36,6 +36,11 @@ export default class extends BaseController {
     this.#apply(this.#cookie(COLLAPSED_COOKIE) === "1")
     this._onMove = this.#resizeMove.bind(this)
     this._onUp = this.#resizeEnd.bind(this)
+    // A vh-sized drawer changes height with the viewport — the host's
+    // clearance has to follow.
+    this._onViewportResize = () => { this.#pad(); this.#syncHandleAria() }
+    window.addEventListener("resize", this._onViewportResize)
+    this.#syncHandleAria()
   }
 
   disconnect() {
@@ -43,6 +48,7 @@ export default class extends BaseController {
     // the clearance so no dead scroll space remains.
     this.#host()?.style.removeProperty("padding-bottom")
     this.#unbindDrag()
+    window.removeEventListener("resize", this._onViewportResize)
     super.disconnect()
   }
 
@@ -50,12 +56,29 @@ export default class extends BaseController {
     const collapse = this.bodyTarget.style.display !== "none"
     this.#apply(collapse)
     this.#writeCookie(COLLAPSED_COOKIE, collapse ? "1" : "")
+    // The activating control just hid itself — hand focus to the one that
+    // replaced it so keyboard users aren't dropped on <body>.
+    ;(collapse ? this.expandBarTarget : this.collapseTarget).focus()
   }
 
   resizeStart(event) {
     event.preventDefault()
     window.addEventListener("pointermove", this._onMove)
     window.addEventListener("pointerup", this._onUp)
+  }
+
+  // Keyboard resize on the separator: arrows nudge the height (the ✕ /
+  // expand bar cover collapse, so no keyboard close-zone needed).
+  resizeKey(event) {
+    const step = { ArrowUp: 24, ArrowDown: -24 }[event.key]
+    if (!step) return
+
+    event.preventDefault()
+    const height = this.#clampHeight(this.bodyTarget.offsetHeight + step)
+    this.bodyTarget.style.height = `${height}px`
+    this.#writeCookie(HEIGHT_COOKIE, `${height}`)
+    this.#pad()
+    this.#syncHandleAria()
   }
 
   // private
@@ -73,6 +96,7 @@ export default class extends BaseController {
     const height = this.#clampHeight(window.innerHeight - event.clientY - chrome)
     this.bodyTarget.style.height = `${height}px`
     this.#pad()
+    this.#syncHandleAria()
   }
 
   #resizeEnd() {
@@ -110,6 +134,16 @@ export default class extends BaseController {
 
   #host() {
     return document.querySelector("[data-drawer-host]")
+  }
+
+  // The separator's value semantics, kept honest across pointer, keyboard,
+  // and viewport changes.
+  #syncHandleAria() {
+    if (!this.hasHandleTarget) return
+
+    this.handleTarget.setAttribute("aria-valuemin", `${MIN_HEIGHT}`)
+    this.handleTarget.setAttribute("aria-valuemax", `${Math.round(window.innerHeight * 0.8)}`)
+    this.handleTarget.setAttribute("aria-valuenow", `${this.bodyTarget.offsetHeight}`)
   }
 
   #cookie(name) {

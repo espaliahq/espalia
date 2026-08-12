@@ -610,6 +610,18 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     after = page.evaluate_script("document.querySelector(\"[data-comparison-drawer-target='body']\").offsetHeight")
     assert_operator after, :>, before + 100, "dragging the handle up grows the card row"
 
+    # The separator resizes from the keyboard too, and reports its value.
+    page.execute_script(<<~JS)
+      const handle = document.querySelector("[data-comparison-drawer-target='handle']")
+      handle.focus()
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }))
+    JS
+    keyed = page.evaluate_script("document.querySelector(\"[data-comparison-drawer-target='body']\").offsetHeight")
+    assert_equal after + 24, keyed, "ArrowUp on the handle grows the row one step"
+    assert_equal keyed.to_s,
+                 page.find("[data-comparison-drawer-target='handle']", visible: :all)["aria-valuenow"],
+                 "the separator reports its size"
+
     page.execute_script(<<~JS)
       const handle = document.querySelector("[data-comparison-drawer-target='handle']")
       handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientY: window.innerHeight - 400 }))

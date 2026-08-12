@@ -37,9 +37,15 @@ module Views::CalibrationSessions::ComparisonDrawerChrome
       # Drag handle: sits ON the border, holds no layout height.
       div(
         class: "absolute inset-x-0 -top-2 h-4 cursor-row-resize touch-none flex items-center justify-center",
-        data: { action: "pointerdown->comparison-drawer#resizeStart",
+        # Focusable separator: arrows resize from the keyboard; the
+        # controller keeps aria-value* honest across pointer/keys/viewport.
+        tabindex: "0",
+        data: { action: "pointerdown->comparison-drawer#resizeStart " \
+                        "keydown->comparison-drawer#resizeKey",
                 comparison_drawer_target: "handle" },
-        role: "separator", aria: { orientation: "horizontal", label: "Resize the comparison drawer" }
+        role: "separator",
+        aria: { orientation: "horizontal", label: "Resize the comparison drawer",
+                controls: "comparison-drawer-body" }
       ) do
         span(class: "h-1 w-12 rounded-full bg-violet-500", aria: { hidden: "true" })
       end
