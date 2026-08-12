@@ -72,14 +72,19 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(
+        # ONE vertical scroller (the explorer's single-scroll-pane rule,
+        # framework-explorer.md Hard-Won Lesson 11): the wrapper is
+        # viewport-fixed (100vh minus the h-12 navbar), the header rows sit
+        # OUTSIDE the scroll pane so they're simply always visible — no
+        # nested page-vs-card stickiness to reconcile.
         # data-drawer-host: the comparison-drawer controller pads this by
-        # the drawer's measured height, so page-end content clears the fixed
-        # shelf — applied client-side because the drawer opens/closes via
-        # frame swaps this wrapper (outside the frame) never re-renders for.
-        # overflow-anchor: pane swaps insert/remove the wall mid-page and
-        # Chrome's scroll anchoring turns that into a scroll jump (the
-        # assessment scroll-root's lesson) — anchoring off, swaps hold still.
-        class: "w-full px-4 sm:px-6 py-8 flex gap-6 items-start [overflow-anchor:none]",
+        # the drawer's measured height; with border-box the fixed-height
+        # column shrinks, so the pane always ends above the fixed shelf.
+        # overflow-hidden: the column children (log pane's own max-h) may
+        # overshoot by a few px — the WINDOW must never become a second
+        # vertical scroller, that's the whole point of this layout.
+        # 100vh minus the h-12 navbar and the layout main's p-6 (top+bottom).
+        class: "w-full h-[calc(100vh-6rem)] px-4 sm:px-6 pt-1 pb-2 flex gap-6 items-stretch overflow-hidden",
         data: {
           drawer_host: "true",
           controller: "calibration-pane#{' activity-pane' if @session_log}",
@@ -90,10 +95,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           action: "click->calibration-pane#navigate"
         }
       ) do
-        div(class: "min-w-0 flex-1") do
+        div(class: "min-w-0 flex-1 flex flex-col") do
           header_row
-          grid_card
-          bottom_pane
+          # overflow-anchor off: pane swaps insert/remove the wall and
+          # Chrome's scroll anchoring would turn that into a jump.
+          div(id: "drill-in-scroll",
+              class: "flex-1 min-h-0 overflow-auto mt-2 [overflow-anchor:none]") do
+            grid_card
+            bottom_pane
+          end
         end
         if @session_log
           render Views::CalibrationSessions::LogPane.new(
@@ -107,12 +117,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   private
 
-  # Only must-have context is sticky: the capability's name (the grid's
-  # rater/level heading is sticky inside its own scroll container). The
-  # back link and log toggle scroll away with the flow — they're chrome,
-  # not context.
+  # The header rows live OUTSIDE the scroll pane, so the capability's name
+  # is always visible without being sticky at all; the grid's rater/level
+  # heading is the one sticky element, anchored to the single scroller.
   def header_row
-    div(class: "flex flex-wrap items-center gap-3") do
+    div(class: "flex flex-wrap items-center gap-3 shrink-0") do
       # The drawer follows the room home: whoever is open and pinned here
       # is open and pinned on the session page too.
       a(href: calibration_session_path(
@@ -125,7 +134,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         )
       end
     end
-    div(class: "sticky top-0 z-30 -mx-4 sm:-mx-6 bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-1.5") do
+    div(class: "shrink-0 py-1.5") do
       div(class: "flex items-baseline gap-x-3 min-w-0") do
         if @stats[:capability][:category_name]
           span(class: "shrink-0 text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
@@ -320,7 +329,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   def grid_card
-    div(class: "mt-6") do
+    # min-w-fit: on narrow screens the pane scrolls horizontally and the
+    # card must grow with its table instead of letting rows bleed past
+    # the card edge.
+    div(class: "mt-4 min-w-fit") do
       render Components::Kit::Card.new do |card|
         card.body do
           div(class: "flex flex-wrap items-baseline justify-between gap-2") do
@@ -333,9 +345,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             end
           end
 
-          # The grid scrolls INSIDE its card (capped height) so the level
-          # headers stay pinned while the room scans a big org's raters.
-          div(class: "mt-3 max-h-[60vh] overflow-auto") do
+          # No inner scroll: the surrounding pane is the ONE scroller, and
+          # the level headers stick to it (nesting a second vertical
+          # scroller here made the stickiness read as random).
+          div(class: "mt-3") do
             table(class: "w-full text-sm") do
               thead do
                 tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do

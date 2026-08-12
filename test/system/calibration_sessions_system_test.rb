@@ -382,14 +382,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # card that was just opened. Shrink the window first so the drill-in
     # actually overflows — on a tall window scrollY is 0 either way and the
     # assertion could never fail.
-    # Anchor mid-page, not at the bottom: the panes differ slightly in
-    # height, and a bottom-anchored scroll gets clamped by that difference.
+    # The drill-in is a single-scroll-pane layout — the PANE is the
+    # scroller the swap must not move (the window never scrolls here).
     page.driver.browser.manage.window.resize_to(1000, 600)
-    page.execute_script("window.scrollTo(0, 300)")
-    scrolled = page.evaluate_script("window.scrollY")
-    # The exact resting point tracks page height (it shrank when the
-    # standalone expectations card folded away) — any real scroll works.
-    assert_operator scrolled, :>, 100, "precondition: the page must be scrollable to test this"
+    page.execute_script("document.getElementById('drill-in-scroll').scrollTop = 300")
+    scrolled = page.evaluate_script("document.getElementById('drill-in-scroll').scrollTop")
+    assert_operator scrolled, :>, 100, "precondition: the pane must be scrollable to test this"
 
     # JS-dispatched on purpose: a pointer click would scroll the link into
     # view first (Selenium mechanics), which is exactly the movement this
@@ -399,8 +397,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         .find((a) => a.textContent.includes("Feedback / Evidence wall")).click()
     JS
     assert_text "2 items"
-    assert_equal scrolled, page.evaluate_script("window.scrollY"),
-      "switching panes must not move the page"
+    assert_equal scrolled,
+                 page.evaluate_script("document.getElementById('drill-in-scroll').scrollTop"),
+                 "switching panes must not move the pane"
     # …and the URL still carries the pane, so the view stays shareable.
     assert_includes page.current_url, "view=wall"
     page.driver.browser.manage.window.resize_to(1400, 1400)
