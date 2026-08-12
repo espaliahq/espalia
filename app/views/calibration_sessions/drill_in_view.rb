@@ -495,29 +495,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       aria: { label: "#{dot[:name]} — #{base}. Open to discuss." },
       data: { pane_keep_state: "true", person_id: dot[:person_id] }
     ) do
-      span(class: "relative inline-flex") do
-        # The inspected person reads by SIZE (1.5×) — same vocabulary as
-        # the cohort axis.
-        span(
-          class: "inline-flex items-center justify-center rounded-full " \
-                 "#{selected ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
-                 "font-semibold #{dot_classes(dot)}"
-        ) { initials(dot[:name]) }
-        pin_badge if pinned
-      end
+      # ONE affordance for "in the drawer" — anyone held there (inspected
+      # OR pinned) reads by SIZE (1.5×), same vocabulary as the cohort axis.
+      span(
+        class: "inline-flex items-center justify-center rounded-full " \
+               "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
+               "font-semibold #{dot_classes(dot)}"
+      ) { initials(dot[:name]) }
     end
-  end
-
-  # The violet corner disc marking a person held in the comparison drawer —
-  # the main pane's "already pinned" affordance (rendered on the grid dots
-  # here and the cohort dots on the session page). Decorative; the state
-  # rides the accessible name.
-  def pin_badge
-    span(
-      class: "absolute -top-1 -right-1 h-3 w-3 rounded-full bg-violet-600 " \
-             "border border-white dark:border-gray-800",
-      aria: { hidden: "true" }
-    )
   end
 
   # Two letters, uppercased — the divergence board's convention.

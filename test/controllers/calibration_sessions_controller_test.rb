@@ -327,6 +327,8 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       # copy (never a fake number), the pinned card keeps its score.
       assert_select "[data-drawer-card='#{@gated.id}']"
       assert_select "[data-drawer-card='#{@report.id}']"
+      # A pinned person's dot reads by size, same as the inspected one.
+      assert_select "a[aria-label*='Pinned to the comparison'] span.h-\\[42px\\]"
       assert_includes response.body, "score unlocks at"
       assert_includes response.body, "1 pinned"
       # The tab links carry the drawer, so switching views keeps it.

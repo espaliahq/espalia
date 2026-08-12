@@ -211,23 +211,16 @@ class Views::CalibrationSessions::CohortView < Views::Base
                      (selected ? " Currently open in the comparison." : "") +
                      (pinned ? " Pinned to the comparison." : "") }
     ) do
-      span(class: "relative inline-flex") do
-        # The inspected person reads by SIZE (1.5×), not a ring — the ring
-        # competed with the carried dash and the pin disc for edge space.
-        span(
-          class: "inline-flex items-center justify-center rounded-full " \
-                 "#{selected ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
-                 "font-semibold text-white dark:text-gray-900 border-2 " \
-                 "#{dot[:carried_majority] ? 'border-dashed border-gray-900 dark:border-white' : 'border-white dark:border-gray-800'} " \
-                 "#{dot_fill(dot)}"
-        ) { initials(name) }
-        if pinned
-          # The drawer's violet, on the dot — "already held below".
-          span(class: "absolute -top-1 -right-1 h-3 w-3 rounded-full bg-violet-600 " \
-                      "border border-white dark:border-gray-800",
-               aria: { hidden: "true" })
-        end
-      end
+      # ONE affordance for "in the drawer" — anyone held there (inspected
+      # OR pinned) reads by SIZE (1.5×). No ring, no corner disc: both
+      # competed with the carried dash for the dot's edge.
+      span(
+        class: "inline-flex items-center justify-center rounded-full " \
+               "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
+               "font-semibold text-white dark:text-gray-900 border-2 " \
+               "#{dot[:carried_majority] ? 'border-dashed border-gray-900 dark:border-white' : 'border-white dark:border-gray-800'} " \
+               "#{dot_fill(dot)}"
+      ) { initials(name) }
     end
   end
 

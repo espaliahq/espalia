@@ -1014,8 +1014,10 @@ the session log visible throughout. Design decisions:
   collapses to a slim expand bar carrying the pin count. Pins keep
   their positions and the just-opened person APPENDS; each card has ONE
   dismiss (✕ — unpins a pinned card, closes an unpinned inspector) plus
-  Pin to hold. Pinned people wear a violet corner disc on their grid /
-  cohort dots, so "already held below" reads in the main pane. The host
+  Pin to hold. Anyone held in the
+  drawer — inspected or pinned — reads by SIZE on the grid / cohort dots
+  (1.5×, no ring or corner disc), so "already held below" is
+  pre-attentive in the main pane. The host
   page is padded by the drawer's measured height, so page-end content
   always scrolls clear. Mobile is the SAME drawer one card wide.
 - **Inspector + pins, max 3 people across** (the compare tray's cap;
