@@ -903,6 +903,8 @@ Mechanics — everything not listed here is inherited untouched:
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
+| Extracting the drawer card SHELL (container/header/✕/Pin) shared by the cohort and capability faces — today duplicated between `CohortDrawerCard` and the drill-in's `drawer_card` | The next change that touches the 38vh cap, pinned ring, or dismiss controls in both places |
+| Batching the drill-in drawer's per-card queries (`PersonCard` ladder/ratings/evidence run per person; a full drawer is ~4×, bounded by the 3-pin cap) | The cap rises, or drawer renders show up in traces |
 
 ### In-surface definitions for the calibration vocabulary — BUILT
 
