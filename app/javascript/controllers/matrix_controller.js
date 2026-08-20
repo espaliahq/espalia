@@ -801,16 +801,34 @@ export default class extends BaseController {
     this.#revealCategoryForRow(row)
     this.#expandRow(resolvedCapabilityId)
 
-    row.scrollIntoView({ behavior: "smooth", block: "center" })
+    // Cell-level navigation is only honoured when the target column is
+    // actually rendered — the current roles/track selection may not include a
+    // role with a level at that ordinal (and a capability-anchored
+    // clarification can carry an ordinal with no expectation cell). Without a
+    // renderable target, downgrade to capability focus rather than pointing
+    // the pane/URL at a cell with no on-screen referent.
+    const targetCell = (level === "cell" && levelOrdinal != null)
+      ? this.expandedRowTargets
+          .find(r => r.dataset.capabilityId === resolvedCapabilityId)
+          ?.querySelector(`td[data-level-ordinal='${levelOrdinal}']`)
+      : null
 
-    if (level === "cell" && levelOrdinal != null) {
+    if (targetCell) {
+      // Land on the cell itself — centers the level column horizontally,
+      // which a row-level scroll can't do on a wide matrix.
+      targetCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+    } else {
+      row.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+
+    if (targetCell) {
       this.#setFocus({
         level: "cell",
         categoryId: categoryId || this.#categoryIdForRow(row),
         capabilityId: resolvedCapabilityId,
         capabilityStableId: resolvedStableId,
         levelOrdinal,
-        expectationId: expectationId || null
+        expectationId: expectationId || targetCell.dataset.expectationId || null
       })
     } else {
       this.#setFocus({
