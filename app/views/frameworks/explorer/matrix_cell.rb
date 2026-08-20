@@ -91,14 +91,14 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   end
 
   def filled_cell
-    td(class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top") do
-      if approvable_pending_edit?
-        div(class: "flex items-start gap-1") do
-          div(class: "min-w-0 flex-1") { expectation_text }
-          expectation_approval_kebab
-        end
-      else
-        expectation_text
+    td(class: "group/cell px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top") do
+      # One layout for both states — the kebab is conditional, the wrapper is
+      # not, so the pending-edit cell can't drift from the plain cell. No
+      # flex-1 on the text: the kebab sits right after it, not at the far edge
+      # of the cell (phlex-views.md, pencil-placement rule).
+      div(class: "flex items-start gap-1") do
+        div(class: "min-w-0") { expectation_text }
+        expectation_approval_kebab if approvable_pending_edit?
       end
       # Open clarification discussion on this expectation — content glyph,
       # never the pending-change vocabulary (nothing is proposed).
@@ -109,7 +109,9 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
   # The expectation's pending edit is approvable from the grid when the viewer
   # clears the expectation tier — same §12 machinery as the row kebab. Rendered
-  # OUTSIDE ExpectationTextFrame so the inline-edit frame swap can't drop it.
+  # OUTSIDE ExpectationTextFrame so the inline-edit frame swap can't drop it
+  # (the trade-off: a pending edit landed via the swap gets its kebab on the
+  # next matrix render — the squiggle click's card covers the interim).
   def approvable_pending_edit?
     @mode == :edit &&
       @cell_data[:pending_edit].present? &&
@@ -125,7 +127,12 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
       entity_label: "expectation",
       preview: @cell_data[:pending_edit][:suggested_value].to_s,
       trigger_label: "Expectation suggestion actions",
-      reveal_classes: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+      # Cell-scoped reveal (not the row group — hovering the capability name
+      # must not pop kebabs across every pending cell), with focus-within so
+      # a keyboard user's focused trigger is visible (the focus lands on the
+      # dropdown's <button>, so focus-visible on this span can never match).
+      reveal_classes: "opacity-0 group-hover/cell:opacity-100 " \
+                      "group-focus-within/cell:opacity-100"
     )
   end
 

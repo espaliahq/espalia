@@ -15,9 +15,36 @@
 # viewer whose precomputed {Frameworks::SuggestionApprovalAuthority} clears the
 # suggestion's tier — the authority gate is server-side, never client-side.
 module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  # Menu-item classes for a kebab dropdown entry.
+  #
+  # @param tone [String] text-colour utilities for the item
+  # @return [String]
   def kebab_item_classes(tone)
     "block w-full text-left px-4 py-2 text-sm #{tone} " \
       "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+  end
+
+  # The hover-revealed ⋮ trigger for a kebab dropdown — one definition of the
+  # glyph/hit-target so the grid's kebabs can't drift apart visually.
+  #
+  # @param dd [Components::Kit::Dropdown] the dropdown being configured
+  # @param label [String] accessible name for the trigger
+  # @param reveal_classes [String] hover/focus reveal utilities — passed as a
+  #   literal at each call site so Tailwind's scanner sees them (group tokens
+  #   can't be interpolated; Hard-Won Lesson 12)
+  # @return [void]
+  def kebab_trigger(dd, label:, reveal_classes:)
+    dd.trigger(label: label) do
+      span(
+        class: "#{reveal_classes} transition-opacity inline-flex items-center justify-center " \
+               "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary"
+      ) do
+        svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
+          s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
+                    "6a2 2 0 100 4 2 2 0 000-4z")
+        end
+      end
+    end
   end
 
   # The two menu items for one pending suggestion.
@@ -55,24 +82,18 @@ module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   # A standalone hover-revealed ⋮ kebab whose menu is just Approve / Reject.
   #
+  # @param framework_id [String]
+  # @param suggestion_id [String]
+  # @param change_label [String] reads inline after the verb — "expectation change"
+  # @param entity_label [String] named in the reject modal — "expectation"
+  # @param preview [String] the proposed value, shown in the reject modal
   # @param trigger_label [String] accessible name for the ⋮ trigger
-  # @param reveal_classes [String] the hover-reveal utilities for the trigger —
-  #   passed as a literal at each call site so Tailwind's scanner sees them
-  #   (group tokens can't be interpolated; Hard-Won Lesson 12)
+  # @param reveal_classes [String] see {#kebab_trigger}
+  # @return [void]
   def render_approval_kebab(framework_id:, suggestion_id:, change_label:, entity_label:,
                             preview:, trigger_label:, reveal_classes:)
     render Components::Kit::Dropdown.new(align: :left) do |dd|
-      dd.trigger(label: trigger_label) do
-        span(
-          class: "#{reveal_classes} transition-opacity inline-flex items-center justify-center " \
-                 "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary"
-        ) do
-          svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
-            s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
-                      "6a2 2 0 100 4 2 2 0 000-4z")
-          end
-        end
-      end
+      kebab_trigger(dd, label: trigger_label, reveal_classes: reveal_classes)
       dd.menu do
         render_approval_kebab_items(
           framework_id: framework_id, suggestion_id: suggestion_id,

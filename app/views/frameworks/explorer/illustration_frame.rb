@@ -63,10 +63,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       class: "flex items-start gap-1.5 pl-2",
       data: { inline_editor_target: "display" }
     ) do
-      # Item marker — several illustrations under one role must read as
-      # discrete examples, not one run-on paragraph.
-      span(class: "mt-1.5 w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600 shrink-0",
-           aria: { hidden: "true" }) { }
+      render_illustration_marker("bg-gray-300 dark:bg-gray-600")
       if @pending_edit
         span(class: "flex-1") do
           render_inline_diff(original: @illustration.description, pending_edit: @pending_edit)
@@ -100,8 +97,10 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       entity_label: "illustration",
       preview: @pending_edit[:suggested_value].to_s,
       trigger_label: "Illustration suggestion actions",
+      # focus-within, not focus-visible: focus lands on the dropdown's
+      # <button>, so focus-visible on this inner span could never match.
       reveal_classes: "opacity-0 group-hover/ill:opacity-100 " \
-                      "group-focus-within/ill:opacity-100 focus-visible:opacity-100"
+                      "group-focus-within/ill:opacity-100"
     )
   end
 

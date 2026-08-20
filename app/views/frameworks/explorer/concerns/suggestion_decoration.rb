@@ -71,11 +71,17 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   #
   # @param original [String] current entity text (from the read model)
   # @param pending_edit [Hash, nil] :suggested_value, :suggestion_id, :created_at
+  # @param interactive [Boolean] wrap in the open-card click affordance. Pass
+  #   false when the diff renders inside another interactive widget (the
+  #   category name sits in the header's role=button focus target — nesting a
+  #   second button-role widget there breaks its accessible name and hijacks
+  #   the focus-category click).
   # @return [Boolean] true if inline content was emitted
-  def render_inline_diff(original:, pending_edit:)
+  def render_inline_diff(original:, pending_edit:, interactive: true)
     return false if pending_edit.nil?
 
-    with_suggestion_click_affordance(pending_edit[:suggestion_id]) do
+    suggestion_id = interactive ? pending_edit[:suggestion_id] : nil
+    with_suggestion_click_affordance(suggestion_id) do
       render_diff_segments(original: original, pending_edit: pending_edit)
     end
 
@@ -109,6 +115,25 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
     )
   end
 
+  # The bullet marking one illustration in an expanded-row list — several
+  # illustrations under one role must read as discrete examples, and pending
+  # ghosts must stay dimensionally identical to settled items so the list
+  # never goes ragged.
+  #
+  # @param color_classes [String] the fill (gray for settled, amber for pending)
+  # @return [void]
+  def render_illustration_marker(color_classes)
+    span(class: "mt-1.5 w-1 h-1 rounded-full shrink-0 #{color_classes}",
+         aria: { hidden: "true" }) { }
+  end
+
+  # Emits the character-level diff spans for a pending edit (or the proposed
+  # text alone past the density fallback). Split out of {#render_inline_diff}
+  # so the click affordance can wrap exactly this content.
+  #
+  # @param original [String]
+  # @param pending_edit [Hash] :suggested_value at minimum
+  # @return [void]
   def render_diff_segments(original:, pending_edit:)
     proposed = pending_edit[:suggested_value].to_s
     diff = Frameworks::SuggestionDiff.call(original: original.to_s, proposed: proposed)

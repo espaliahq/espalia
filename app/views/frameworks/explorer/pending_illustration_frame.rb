@@ -53,10 +53,8 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
       class: "flex items-start gap-1.5 pl-2",
       data: { inline_editor_target: "display" }
     ) do
-      # Item marker matching IllustrationFrame's — amber, since this entry is a
-      # pending proposal.
-      span(class: "mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0",
-           aria: { hidden: "true" }) { }
+      # Amber marker — this entry is a pending proposal.
+      render_illustration_marker("bg-amber-400")
       span(class: "flex-1") do
         with_suggestion_click_affordance(@suggestion.suggestion_id) do
           span(class: decoration) { @attrs[:description] }

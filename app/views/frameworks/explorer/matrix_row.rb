@@ -218,18 +218,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
   def row_actions_kebab
     render Components::Kit::Dropdown.new(align: :left) do |dd|
-      dd.trigger(label: "Capability actions") do
-        span(
-          class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
-                 "inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
-                 "text-gray-400 hover:text-primary"
-        ) do
-          svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
-            s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
-                      "6a2 2 0 100 4 2 2 0 000-4z")
-          end
-        end
-      end
+      kebab_trigger(dd, label: "Capability actions",
+        reveal_classes: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")
       dd.menu do
         capability_edit_actions.each { |action| kebab_edit_items(action) }
         kebab_move_items if show_move_actions?
