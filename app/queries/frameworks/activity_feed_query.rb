@@ -466,6 +466,13 @@ class Frameworks::ActivityFeedQuery
     [ @limit.to_i, STREAM_READ_LIMIT ].max
   end
 
+  # Dual-key read off raw event data — stored key types are not trusted
+  # (string-keyed history must not silently lose context), same hedge as
+  # #actor_id_for.
+  def data_value(event, key)
+    event.data[key] || event.data[key.to_s]
+  end
+
   def event_timestamp(event)
     event.metadata[:timestamp] || (event.respond_to?(:timestamp) ? event.timestamp : nil)
   end
@@ -491,11 +498,7 @@ class Frameworks::ActivityFeedQuery
         next [] unless kind
 
         referenced = [ actor_id_for(event, kind) ]
-        if COLLABORATOR_KINDS.include?(kind)
-          # Dual lookup like #actor_id_for — stored event data key types are
-          # not trusted (string-keyed history would silently drop the name).
-          referenced << (event.data[:person_id] || event.data["person_id"])
-        end
+        referenced << data_value(event, :person_id) if COLLABORATOR_KINDS.include?(kind)
         referenced
       end.compact.uniq.select { |id| id.to_s.match?(UUID_FORMAT) }
       ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
@@ -544,8 +547,9 @@ class Frameworks::ActivityFeedQuery
         when Frameworks::Events::RoleIllustrationAdded
           # An illustration under a draft-deferred expectation has no read-model
           # row (the projection skips it), so its coordinates come from here.
-          acc[:ill_to_exp][event.data[:illustration_id]] ||= event.data[:expectation_id]
-          acc[:ill_to_role][event.data[:illustration_id]] ||= event.data[:role_id]
+          ill_id = data_value(event, :illustration_id)
+          acc[:ill_to_exp][ill_id] ||= data_value(event, :expectation_id)
+          acc[:ill_to_role][ill_id] ||= data_value(event, :role_id)
         end
       end
       acc

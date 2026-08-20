@@ -695,6 +695,29 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal @cap.capability_id, entry.capability_id,
         "the draft-born illustration should still anchor to its capability"
     end
+
+    should "resolve a draft-born illustration from string-keyed event data" do
+      ghost_ill_id = SecureRandom.uuid_v7
+      append(Frameworks::Events::RoleIllustrationAdded,
+        data: { "illustration_id" => ghost_ill_id, "stable_id" => SecureRandom.uuid_v7,
+                "expectation_id" => @exp.expectation_id, "role_id" => @role.role_id,
+                "ordinal" => 9, "description" => "String-keyed history" },
+        actor_id: @actor.id)
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: ghost_ill_id,
+        kind: "edit", field: "description", author_id: @actor.id)
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: sid, target_entity_type: "role_illustration",
+                target_entity_id: ghost_ill_id, field: "description",
+                suggested_value: "Sharper", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+    end
   end
 
   context "collaborator lifecycle" do
