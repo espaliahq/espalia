@@ -11,6 +11,7 @@ require "application_system_test_case"
 # that clicking an anchored entry navigates the matrix.
 class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE  = [ 375, 812 ].freeze
 
   setup do
     @tenant = FactoryBot.create(:tenant)
@@ -302,6 +303,54 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
         assert_text "SUGG_CAP_A"
       end
       assert_match(/focus=suggestion/, page.current_url)
+    end
+  end
+
+  # The two new interactions behave the same at the mobile viewport — the pane
+  # overlays the matrix there, so the squiggle path also proves a collapsed
+  # pane reveals itself (framework-explorer #openContextPane).
+  context "mobile viewport" do
+    setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
+
+    should "open the suggestion card from a squiggle, revealing the collapsed pane" do
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      # Collapse the (default-open) pane so the matrix is interactable AND the
+      # reveal-on-open-card path is exercised. (toggle_context_pane asserts the
+      # OPEN state, so the close path dispatches the click directly.)
+      wait_for_stimulus "framework-explorer"
+      page.execute_script(<<~JS)
+        document.querySelector("[data-action='framework-explorer#toggleContextPane']")?.click();
+      JS
+      assert_no_selector "[data-framework-explorer-target='contextPane']", visible: true
+
+      assert_selector "[data-action*='matrix#openSuggestionCard']"
+      page.execute_script(<<~JS)
+        document.querySelector("tr[data-capability-id='#{@cap_a_id}'] [data-action*='matrix#openSuggestionCard']")?.click();
+      JS
+
+      assert_selector "[data-framework-explorer-target='contextPane']", visible: true
+      within "#suggestion-panel" do
+        assert_text "← Back to activity"
+        assert_text "SUGG_CAP_A"
+      end
+    end
+
+    should "navigate to the specific cell from a level-anchored entry" do
+      visit edit_framework_path(@framework_id)
+      open_context_pane
+
+      within "#suggestion-panel" do
+        assert_selector "[data-nav-level='cell'][data-nav-level-ordinal='2']"
+      end
+      page.execute_script(<<~JS)
+        document.querySelector("#suggestion-panel [data-nav-level='cell'][data-nav-level-ordinal='2']")?.click();
+      JS
+
+      assert_match(/focus=cell/, page.current_url)
+      assert_match(/level_ordinal=2/, page.current_url)
+      assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
+                       visible: :all
     end
   end
 
