@@ -36,11 +36,15 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
 
       @cat_id = SecureRandom.uuid_v7
       @cap_id = SecureRandom.uuid_v7
+      @exp_id = SecureRandom.uuid_v7
+      @ill_id = SecureRandom.uuid_v7
       handler.add_capability_category(@framework_id, @cat_id, "Thinking", ordinal: 1)
       handler.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, @cat_id, "Strategic Thinking")
       handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, role_id)
-      handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+      handler.set_behavioural_expectation(@framework_id, @exp_id, SecureRandom.uuid_v7,
         @cap_id, 1, "Asks clarifying questions")
+      handler.add_role_illustration(@framework_id, @ill_id, SecureRandom.uuid_v7,
+        @exp_id, role_id, 1, "Raises risks in stand-up")
       handler.publish_version(@framework_id, "v1")
 
       handler.add_collaborator(@framework_id, @owner.id.to_s, "owner", added_by: @owner.id.to_s)
@@ -54,16 +58,38 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
   end
 
-  def suggestion
-    FrameworkState::SuggestedEdit.find_by(suggestion_id: @sugg_id)
+  def suggestion(id = @sugg_id)
+    FrameworkState::SuggestedEdit.find_by(suggestion_id: id)
   end
 
   # Polls the read model so an async approve/reject POST has provably persisted
   # before we assert on a freshly-rendered page (race-free, no cable dependence).
-  def wait_for_status(status)
+  def wait_for_status(status, id = @sugg_id)
     Timeout.timeout(Capybara.default_max_wait_time) do
-      sleep 0.1 until suggestion&.status == status
+      sleep 0.1 until suggestion(id)&.status == status
     end
+  end
+
+  # A pending edit on the expectation / illustration, created per-test so the
+  # shared feed assertions (single pending suggestion) stay valid.
+  def suggest_expectation_edit
+    id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      Frameworks::CommandHandler.new.suggest_edit(@framework_id, id,
+        "behavioural_expectation", @exp_id, "description",
+        "Asks sharper clarifying questions", @collaborator.id.to_s, mode: :suggesting)
+    end
+    id
+  end
+
+  def suggest_illustration_edit
+    id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      Frameworks::CommandHandler.new.suggest_edit(@framework_id, id,
+        "role_illustration", @ill_id, "description",
+        "Raises risks early and in writing", @collaborator.id.to_s, mode: :suggesting)
+    end
+    id
   end
 
   context "as a reviewer with tier authority (owner + admin)" do
@@ -123,6 +149,47 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
                    FrameworkState::Capability.find_by(capability_id: @cap_id).description
     end
 
+    should "approve an expectation edit from the cell kebab" do
+      exp_sugg_id = suggest_expectation_edit
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_selector "tr[data-capability-id='#{@cap_id}']"
+
+      # The cell kebab is the row's second dropdown (after the row-actions one).
+      page.execute_script(
+        "document.querySelectorAll(\"tr[data-capability-id='#{@cap_id}'] " \
+        "button[data-dropdown-target='trigger']\")[1].click()"
+      )
+      assert_text "Approve expectation change"
+      page.execute_script(
+        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']\").click()"
+      )
+
+      wait_for_status("approved", exp_sugg_id)
+      assert_equal "Asks sharper clarifying questions",
+                   FrameworkState::BehaviouralExpectation.find_by(expectation_id: @exp_id).description
+    end
+
+    should "approve an illustration edit from the illustration kebab" do
+      ill_sugg_id = suggest_illustration_edit
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
+
+      page.execute_script(
+        "document.querySelector(\"#illustration-#{@ill_id} " \
+        "button[data-dropdown-target='trigger']\").click()"
+      )
+      assert_text "Approve illustration change"
+      page.execute_script(
+        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']\").click()"
+      )
+
+      wait_for_status("approved", ill_sugg_id)
+      assert_equal "Raises risks early and in writing",
+                   FrameworkState::RoleIllustration.find_by(illustration_id: @ill_id).description
+    end
+
     should "reject a suggestion via the modal with an optional reason" do
       visit edit_framework_path(@framework_id)
       toggle_context_pane
@@ -158,6 +225,19 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
         assert_no_selector "button", text: "Approve"
         assert_no_selector "button", text: "Reject"
       end
+    end
+
+    should "get no approval kebab on expectation cells or illustrations" do
+      exp_sugg_id = suggest_expectation_edit
+      ill_sugg_id = suggest_illustration_edit
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_selector "tr[data-capability-id='#{@cap_id}']"
+
+      assert_no_selector "button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']",
+                         visible: :all
+      assert_no_selector "button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']",
+                         visible: :all
     end
   end
 end

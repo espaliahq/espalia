@@ -4,6 +4,7 @@
 #
 class Frameworks::IllustrationsController < ApplicationController
   include FrameworkEditMode
+  include Frameworks::SuggestionAuthority
 
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
@@ -71,9 +72,11 @@ class Frameworks::IllustrationsController < ApplicationController
       mode: :edit,
       pending_edit_count: pending_edits_on_illustration,
       pending_edit: latest_pending_edit,
-      # The frame swap must not drop the ↑/↓ chevrons (Hard-Won Lesson 13/16
-      # class — controller responses re-thread every affordance-gating flag).
-      can_reorder: can_reorder_illustrations?
+      # The frame swap must not drop the ↑/↓ chevrons or the approval kebab
+      # (Hard-Won Lesson 13/16 class — controller responses re-thread every
+      # affordance-gating flag).
+      can_reorder: can_reorder_illustrations?,
+      approval_authority: framework_suggestion_approval_authority
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :not_found
