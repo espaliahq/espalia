@@ -50,10 +50,16 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
     decoration = suggestion_text_classes(pending_edit_count: 1)
 
     div(
-      class: "flex items-start gap-1 pl-2",
+      class: "flex items-start gap-1.5 pl-2",
       data: { inline_editor_target: "display" }
     ) do
-      span(class: "flex-1 #{decoration}") { @attrs[:description] }
+      # Amber marker — this entry is a pending proposal.
+      render_illustration_marker("bg-amber-400")
+      span(class: "flex-1") do
+        with_suggestion_click_affordance(@suggestion.suggestion_id) do
+          span(class: decoration) { @attrs[:description] }
+        end
+      end
       edit_button
     end
   end

@@ -361,6 +361,16 @@ See `app/models/frameworks/suggestion_diff.rb` for the algorithm and `test/model
 
 **Data source invariants** — all pending counts *and* the per-field `latest_by_field` descriptors are pre-aggregated by `FrameworksController#build_suggestions_map` (via `#load_pending_suggestion_maps`) in a single indexed pass over `framework_suggested_edits`. `MatrixDataBuilder` and every view component operate in memory; no view queries the database for suggestion data.
 
+**The squiggle is clickable — it opens the suggestion card.** Every decorated
+pending change (the inline diff, the fallback proposed-text view, and the
+pending-create ghosts) is wrapped in
+`SuggestionDecoration#with_suggestion_click_affordance`: clicking the squiggled
+text dispatches `matrix#openSuggestionCard` → the window `suggestion:open-card`
+event → the context pane swaps to that suggestion's card (approve / reject +
+thread), revealing the pane if it was collapsed. `stopPropagation` keeps the
+click from also toggling the row / focusing the cell. Added-in-draft wiggles
+have no suggestion to open and render undecorated-for-click.
+
 **Inline editor seeds with the pending proposal.** When a field has a pending edit, opening its inline editor pre-fills the textarea with the **proposed** value (not the persisted one), so the user refines the proposal that's already shown as the diff — see the shared `inline_editable.rb#inline_editor_value(current_value, pending_edit)` helper, used by every inline-edit frame (capability name + description, category name, expectation text, illustration). The `inline_editor_controller`'s cancel restores the textarea to this server-rendered `defaultValue`, so cancel returns to the proposal too.
 
 ### 11. Structural editing (add / archive / publish)
@@ -706,20 +716,39 @@ the form at the suggestion's reject endpoint (a `__SID__` path template).
 keyboard) — cheaper and more robust than `stopPropagation` (which would also kill
 the `modal#open` listener that fires during bubbling).
 
-**Two surfaces, one machinery.** The same pattern drives a second surface: the
-**matrix row-actions kebab** (`MatrixRow`, a `Kit::Dropdown`). When a capability
-has a pending name / description edit the viewer can approve, the kebab gains
-**Approve / Reject «field» change** items (alongside **Archive…**, offered to
-any suggest-rights viewer — see §11). They reuse the *exact* same pieces — `suggestion-action`
+**Multiple surfaces, one machinery.** The same pattern drives the grid-side
+kebabs, all backed by the shared
+`Views::Frameworks::Explorer::Concerns::ApprovalKebabItems` concern:
+
+- **Matrix row-actions kebab** (`MatrixRow`, a `Kit::Dropdown`) — when a
+  capability has a pending name / description edit the viewer can approve, the
+  kebab gains **Approve / Reject «field» change** items (alongside
+  **Archive…**, offered to any suggest-rights viewer — see §11).
+- **Expectation cell kebab** (`MatrixCell`) — a hover-revealed ⋮ next to an
+  expectation carrying a pending edit, for viewers who clear the expectation
+  tier. Rendered OUTSIDE `ExpectationTextFrame` so the inline-edit frame swap
+  can't drop it (no controller re-threading needed).
+- **Illustration kebab** (`IllustrationFrame`) — same, inside the expanded
+  row's hover control cluster, gated on the illustration tier. This one lives
+  INSIDE the illustration's Turbo Frame, so `IllustrationsController#update`
+  re-threads `approval_authority` on its frame response (Lesson 13/16 class),
+  via the `Frameworks::SuggestionAuthority` controller concern.
+
+They reuse the *exact* same pieces — `suggestion-action`
 (inline approve, `inline=1` → 204), the root reject modal, and
 `suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
 the feed are the same operation with the same live-update wiring (the feed
-reloads via broadcast either way). The per-viewer authority is threaded into the
+reloads via broadcast either way). Two deliberate boundaries: pending
+**creates** (the ghost frames) get no grid kebab — their squiggle click opens
+the card, which carries Approve/Reject — so don't "fix" the asymmetry by
+adding one; and a pending edit landed via an inline frame swap gets its kebab
+on the next matrix render, not immediately (the kebab lives outside the
+swapped frame; the matrix deliberately isn't live — Lesson 21 — and the
+squiggle→card path covers the interim). The per-viewer authority is threaded into the
 matrix the same way `can_edit_structure` is: controller → `Matrix` →
-`MatrixCategoryGroup` → `MatrixRow`. `matrix#toggleRow` already ignores clicks
-inside `[data-controller~='dropdown']`, so opening the kebab never expands the
-row. Expectation / illustration edits are not (yet) on the grid kebab — the feed
-covers those.
+`MatrixCategoryGroup` → `MatrixRow` → `MatrixCell` / `IllustrationFrame`.
+`matrix#toggleRow` already ignores clicks inside
+`[data-controller~='dropdown']`, so opening a kebab never expands the row.
 
 ### 12a. Suggestions are anchored discussions — the clarification kind
 
@@ -866,6 +895,7 @@ job via `updateSearch`. See §4a.
 - **Category focus** (`focusCategory` on the category name span). Dispatches `matrix:focus-changed` with `level: "category"`. Re-click clears to framework focus.
 - **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header.
 - **Resolution refresh** (`refresh` on `suggestion:resolved`) — re-fetches the matrix frame with the current filter axes so an inline approve/reject in the feed clears the now-resolved inline diff for the acting user (§12, Hard-Won Lesson 21).
+- **Squiggle → suggestion card** (`openSuggestionCard` on a decorated pending change) — stops the row/cell click and dispatches the window `suggestion:open-card` event; the context pane renders the card and a collapsed pane reveals itself (§10).
 - **URL sync** (pushState for shareability — explorer uses role/track params)
 - **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
@@ -874,7 +904,7 @@ job via `updateSearch`. See §4a.
 Lives on the right-hand `<aside>` element. Sole owner of:
 - **Panel frame src** (`#suggestion-panel`). Rebuilds the frame URL whenever focus, role selection, or a fresh suggestion submission occurs. Short-circuits when the computed URL equals the current `src` to prevent duplicate fetches. Forces a reload on `onSuggestionSubmitted` so a just-landed pending row surfaces even if the URL didn't change.
 - **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=`, `?suggestion_id=` via `history.pushState()`; removes them when focus returns to `framework`.
-- **Suggestion focus** (`openSuggestionCard`, from an entry's discussion affordance). Sets `focus=suggestion&suggestion_id=` so the frame renders the suggestion card instead of the feed. Any explicit matrix focus action (`matrix:focus-changed`) exits it — most-specific-wins, like every other level.
+- **Suggestion focus** (`openSuggestionCard`, from an entry's discussion affordance; `onOpenSuggestionCard`, from a matrix squiggle's window-scoped `suggestion:open-card`). Sets `focus=suggestion&suggestion_id=` so the frame renders the suggestion card instead of the feed. Any explicit matrix focus action (`matrix:focus-changed`) exits it — most-specific-wins, like every other level.
 - **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch. Unconditionally primes the frame `src` on connect because the pane is visible from initial render in edit mode (no lazy-until-open grace period — see Hard-Won Lesson 14).
 - **Live reload**. Observes the hidden `#framework-activity-sync-signal` element (a `signal` target). `PublishedState#broadcast_framework_activity` (and `SuggestionThread`'s equivalent for comment events) replaces it on every feed-relevant event via the per-framework `framework_activity` Turbo stream; the observer reloads the feed frame with no self-suppression (the feed frame is the only thing that re-fetches, so there's no matrix flicker, and the actor should see their own entry) — but **skips the reload while a composer textarea is focused or holds text** so a broadcast can't eat a half-written comment (§13). Mirrors `assessment_sync_controller`.
 
@@ -882,6 +912,7 @@ Listens at window scope for:
 - `tree:changed@window->context-pane#onTreeChanged`
 - `matrix:focus-changed@window->context-pane#onFocusChanged`
 - `suggestion:submitted@window->context-pane#onSuggestionSubmitted`
+- `suggestion:open-card@window->context-pane#onOpenSuggestionCard`
 
 Also dispatches:
 - **`suggestion:navigate`** — fired by `focusSuggestion` when the user clicks a suggestion row body. Reads `data-nav-*` attributes from the clicked element and dispatches to window for `matrix_controller` to handle.
@@ -916,6 +947,7 @@ Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `reje
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 | `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null }` — triggers `matrix_controller#navigateToEntity` |
 | `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
+| `suggestion:open-card` | `matrix_controller#openSuggestionCard` (squiggle / ghost click) | `{ suggestionId: string }` — opens that suggestion's card in the pane (`context_pane_controller#onOpenSuggestionCard`) and reveals a collapsed pane (`framework_explorer_controller#openContextPane`). The click's purpose IS to see the card, so this is the one deliberate exception to "focus never auto-opens the pane" (Lesson 8 still governs plain focus changes). |
 | `suggestion:resolved` | `suggestion_action_controller` (approve) / `reject_suggestion_form_controller` (reject) | no detail — fired on a successful inline approve/reject. Triggers `matrix_controller#refresh` so the acting user's grid drops the now-resolved inline diff. The feed reloads separately via the activity broadcast (§12, Hard-Won Lesson 21). |
 
 ## Hard-Won Lessons
@@ -1097,7 +1129,15 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > issues the request; a live broadcast reload resets to the most-recent batch.
 > Role-family / role / **level adds** now surface too (structural group,
 > framework-level anchor; the level entry names its role — "Added L4 to EM ·
-> Engineering Manager"). **Suggestion discussion threads are wired**:
+> Engineering Manager"). Collaborator entries name the person they concern
+> ("Added Cora Puddleduck as editor" — `collaborator_name` resolved from the
+> event's person_id, falling back to the anonymous phrasing for unresolvable
+> history). Illustration entries — suggestions AND direct edits — locate their
+> full (capability × level × role) cell on the context line
+> ("Thinking · Strategic Thinking · L2 · E · Software Engineer"), and any
+> entry that knows its level carries **cell-level** navigation coords
+> (`nav_level="cell"` + `nav_level_ordinal`), so clicking it lands on the
+> specific cell rather than just expanding the capability row. **Suggestion discussion threads are wired**:
 > `suggestion_commented` entries surface under the suggestions chip (thread
 > edits/deletes stay thread-only — the feed shows conversation activity, not
 > comment meta-history), and every suggestion-anchored entry carries a
@@ -1203,7 +1243,9 @@ line (§9).
 | `app/views/frameworks/explorer/binding_editor_frame.rb` | Binding-editor frame body — lists role bindings (weight + Remove) + add-role form; re-renders in place on each action |
 | `app/views/frameworks/publication_review_view.rb` | Publish-review page — validate/override migration mappings, then cut the version |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
-| `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) |
+| `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) + the squiggle's open-card click affordance (§10) |
+| `app/views/frameworks/explorer/concerns/approval_kebab_items.rb` | Shared §12 Approve/Reject kebab machinery — items for the row kebab, standalone kebabs for expectation cells + illustrations |
+| `app/controllers/concerns/frameworks/suggestion_authority.rb` | Resolves the viewer's `SuggestionApprovalAuthority` for controllers whose frame responses carry approval kebabs |
 | `app/views/frameworks/explorer/concerns/search_highlight.rb` | Phlex `<mark>` highlighting of search-match terms (§4a) — safe, token-AND, overlap-merged |
 | `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form; `inline_editor_value` seeds the box with the pending proposal |
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |

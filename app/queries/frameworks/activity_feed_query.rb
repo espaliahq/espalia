@@ -101,10 +101,25 @@ class Frameworks::ActivityFeedQuery
   # (weight / individual tolerance) folded into the payload by #binding_metadata.
   BINDING_KINDS = %w[binding_added binding_updated binding_removed].freeze
 
+  # Collaborator lifecycle kinds — their entries name the collaborator the
+  # action concerns (`collaborator_name`, resolved from the event's person_id),
+  # not just the acting admin in the footer.
+  COLLABORATOR_KINDS = %w[collaborator_added collaborator_role_changed collaborator_removed].freeze
+
   # Directly-authored / edited expectation kinds — their entries carry the level
   # (`expectation_level`) folded in by #structural_expectation_level. (Expectation
   # *suggestions* get the level via #suggestion_meta instead.)
   EXPECTATION_KINDS = %w[expectation_added expectation_updated].freeze
+
+  # Direct illustration edits — their entries carry the level + role the
+  # illustration belongs to (`expectation_level` / `illustration_role_label`),
+  # folded in by #illustration_metadata. (Illustration *suggestions* get the
+  # same context via #suggestion_meta; reorders keep their role-in-summary.)
+  # A removal's read-model row is destroyed, so it resolves only via the
+  # creating event still in the read window — older removals degrade to the
+  # bare capability context, consistent with the recency model (see
+  # #binding_index for the same trade-off).
+  ILLUSTRATION_KINDS = %w[illustration_added illustration_updated illustration_removed].freeze
 
   # Maps each feed kind to the payload key carrying its actor's Person id, when
   # the actor is a first-class payload fact. Kinds absent here fall back to
@@ -249,7 +264,7 @@ class Frameworks::ActivityFeedQuery
       kind: kind,
       occurred_at: event_timestamp(event),
       payload: data.merge(entry_metadata(kind, data, capability_id, category_id)),
-      actor_name: actor_names[actor_id_for(event, kind)],
+      actor_name: person_names[actor_id_for(event, kind)],
       category_id: category_id,
       capability_id: capability_id,
       capability_name: capability_name_for(capability_id),
@@ -275,6 +290,9 @@ class Frameworks::ActivityFeedQuery
       extra.merge!(meta) if meta
     end
     extra.merge!(binding_metadata(kind, data)) if BINDING_KINDS.include?(kind)
+    if COLLABORATOR_KINDS.include?(kind)
+      extra[:collaborator_name] = person_names[data[:person_id]]
+    end
     if kind == "illustration_reordered" && role_labels.key?(data[:role_id])
       extra[:reorder_role_label] = role_labels[data[:role_id]]
     end
@@ -289,7 +307,24 @@ class Frameworks::ActivityFeedQuery
       extra[:body] = active_comment_bodies[data[:comment_id]]
     end
     extra[:expectation_level] = structural_expectation_level(kind, data) if EXPECTATION_KINDS.include?(kind)
+    extra.merge!(illustration_metadata(data)) if ILLUSTRATION_KINDS.include?(kind)
     extra
+  end
+
+  # Level + role for a direct illustration edit — an illustration is a
+  # (capability × level × role) artefact, so its entry locates all three
+  # (the capability rides the anchor's context line). The added event carries
+  # expectation_id + role_id; update/remove carry only the illustration_id and
+  # resolve through the read-model + stream-supplement maps (nil-safe — an old
+  # removal whose creating event left the window resolves nothing).
+  def illustration_metadata(data)
+    expectation_id = data[:expectation_id] || illustration_to_expectation[data[:illustration_id]]
+    role_id = data[:role_id] || illustration_to_role[data[:illustration_id]]
+    meta = {}
+    level = expectation_to_level[expectation_id]
+    meta[:expectation_level] = level if level.present?
+    meta[:illustration_role_label] = role_labels[role_id] if role_id && role_labels.key?(role_id)
+    meta
   end
 
   # Level for a directly-authored / edited expectation entry (the suggestion
@@ -431,6 +466,13 @@ class Frameworks::ActivityFeedQuery
     [ @limit.to_i, STREAM_READ_LIMIT ].max
   end
 
+  # Dual-key read off raw event data — stored key types are not trusted
+  # (string-keyed history must not silently lose context), same hedge as
+  # #actor_id_for.
+  def data_value(event, key)
+    event.data[key] || event.data[key.to_s]
+  end
+
   def event_timestamp(event)
     event.metadata[:timestamp] || (event.respond_to?(:timestamp) ? event.timestamp : nil)
   end
@@ -444,16 +486,21 @@ class Frameworks::ActivityFeedQuery
     payload_actor.presence || event.metadata[:actor_id]
   end
 
-  # {Person id => name} for every actor referenced by a feed entry on this
-  # stream. Loaded in one query and memoised so per-entry resolution never
+  # {Person id => name} for every person a feed entry references — actors
+  # (footer attribution) plus the collaborator a collaborator-lifecycle event
+  # concerns. Loaded in one query and memoised so per-entry resolution never
   # N+1s. Non-UUID sentinels (e.g. the bootstrap draft's `started_by: "system"`)
   # are filtered out so the uuid-typed lookup never raises.
-  def actor_names
-    @actor_names ||= begin
-      ids = stream_events.filter_map do |event|
+  def person_names
+    @person_names ||= begin
+      ids = stream_events.flat_map do |event|
         kind = KINDS[event.class]
-        actor_id_for(event, kind) if kind
-      end.uniq.select { |id| id.to_s.match?(UUID_FORMAT) }
+        next [] unless kind
+
+        referenced = [ actor_id_for(event, kind) ]
+        referenced << data_value(event, :person_id) if COLLABORATOR_KINDS.include?(kind)
+        referenced
+      end.compact.uniq.select { |id| id.to_s.match?(UUID_FORMAT) }
       ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
     end
   end
@@ -481,7 +528,8 @@ class Frameworks::ActivityFeedQuery
   # published read model) shows its current name, not the original.
   def stream_structure
     @stream_structure ||= begin
-      acc = { cap_names: {}, cap_to_cat: {}, cat_names: {}, exp_to_cap: {}, exp_to_level: {} }
+      acc = { cap_names: {}, cap_to_cat: {}, cat_names: {}, exp_to_cap: {}, exp_to_level: {},
+              ill_to_exp: {}, ill_to_role: {} }
       stream_events.each do |event|
         case event
         when Frameworks::Events::CapabilityAdded
@@ -496,6 +544,12 @@ class Frameworks::ActivityFeedQuery
         when Frameworks::Events::BehaviouralExpectationSet
           acc[:exp_to_cap][event.data[:expectation_id]] ||= event.data[:capability_id]
           acc[:exp_to_level][event.data[:expectation_id]] ||= event.data[:level_ordinal]
+        when Frameworks::Events::RoleIllustrationAdded
+          # An illustration under a draft-deferred expectation has no read-model
+          # row (the projection skips it), so its coordinates come from here.
+          ill_id = data_value(event, :illustration_id)
+          acc[:ill_to_exp][ill_id] ||= data_value(event, :expectation_id)
+          acc[:ill_to_role][ill_id] ||= data_value(event, :role_id)
         end
       end
       acc
@@ -528,10 +582,21 @@ class Frameworks::ActivityFeedQuery
       .merge(all_capabilities.flat_map(&:expectations).to_h { |e| [ e.expectation_id, e.level_ordinal ] })
   end
 
+  # One tree walk shared by both illustration maps.
+  def all_illustrations
+    @all_illustrations ||= all_capabilities.flat_map(&:expectations).flat_map(&:illustrations)
+  end
+
   def illustration_to_expectation
-    @illustration_to_expectation ||= all_capabilities
-      .flat_map(&:expectations).flat_map(&:illustrations)
-      .to_h { |i| [ i.illustration_id, i.expectation_id ] }
+    @illustration_to_expectation ||= stream_structure[:ill_to_exp]
+      .merge(all_illustrations.to_h { |i| [ i.illustration_id, i.expectation_id ] })
+  end
+
+  # {illustration_id => role_id} — so illustration entries can name the role
+  # they illustrate for.
+  def illustration_to_role
+    @illustration_to_role ||= stream_structure[:ill_to_role]
+      .merge(all_illustrations.to_h { |i| [ i.illustration_id, i.role_id ] })
   end
 
   # {binding_id => { capability_id:, role_id: }}. Built from the read model
@@ -598,21 +663,53 @@ class Frameworks::ActivityFeedQuery
           suggestion_kind: s.kind,
           suggestion_field: s.field,
           suggestion_status: s.status,
-          expectation_level: suggestion_level(s) } ]
+          expectation_level: suggestion_level(s),
+          suggestion_role_label: suggestion_role_label(s) } ]
     end
   end
 
   # The level a suggestion concerns, so the feed entry can show
   # "Capability · L<n>": proposed_attributes carries it for expectation
   # creates AND capability-anchored clarifications; an expectation-targeting
-  # edit/delete/clarification resolves it from the target expectation. nil
+  # edit/delete/clarification resolves it from the target expectation; an
+  # illustration suggestion resolves it through its parent expectation. nil
   # for everything else.
   def suggestion_level(suggestion)
     from_attrs = suggestion.proposed_attributes&.dig("level_ordinal")
     return from_attrs.to_i if from_attrs.present?
-    return nil unless suggestion.target_entity_type == "behavioural_expectation"
 
-    expectation_to_level[suggestion.target_entity_id]
+    case suggestion.target_entity_type
+    when "behavioural_expectation"
+      expectation_to_level[suggestion.target_entity_id]
+    when "role_illustration"
+      expectation_to_level[illustration_suggestion_expectation_id(suggestion)]
+    end
+  end
+
+  # The role an illustration suggestion concerns ("CODE · Name"), so its feed
+  # entry can locate the (capability × level × role) cell it proposes into.
+  # nil for every other entity type, and for history whose role no longer
+  # resolves.
+  def suggestion_role_label(suggestion)
+    return nil unless suggestion.target_entity_type == "role_illustration"
+
+    role_id =
+      if suggestion.kind == "create"
+        suggestion.proposed_attributes&.dig("role_id")
+      else
+        illustration_to_role[suggestion.target_entity_id]
+      end
+    role_id && role_labels[role_id]
+  end
+
+  # A create's parent IS the expectation; an edit/delete resolves through the
+  # existing illustration.
+  def illustration_suggestion_expectation_id(suggestion)
+    if suggestion.kind == "create"
+      suggestion.parent_id
+    else
+      illustration_to_expectation[suggestion.target_entity_id]
+    end
   end
 
   def suggested_edits

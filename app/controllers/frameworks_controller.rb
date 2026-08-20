@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class FrameworksController < ApplicationController
+  include Frameworks::SuggestionAuthority
+
   before_action :set_framework, only: [ :show, :matrix, :edit, :edit_matrix ]
 
   # GET /frameworks
@@ -102,11 +104,7 @@ class FrameworksController < ApplicationController
   def suggestion_approval_authority(mode)
     return Frameworks::SuggestionApprovalAuthority.none unless mode == :edit
 
-    Frameworks::SuggestionApprovalAuthority.for(
-      framework_id: @framework.framework_id,
-      person: current_person,
-      tenant_admin: current_user&.global_admin? || current_tenant_user&.admin? || false
-    )
+    framework_suggestion_approval_authority
   end
 
   def set_framework

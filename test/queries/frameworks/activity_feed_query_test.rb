@@ -614,6 +614,157 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "illustration role · level context" do
+    setup do
+      @family = create(:framework_role_family, framework_id: @fwid, tenant: @tenant)
+      @role = create(:framework_role, role_family_id: @family.role_family_id, tenant: @tenant,
+                     code: "E", name: "Software Engineer")
+      @ill.update!(role_id: @role.role_id)
+    end
+
+    should "carry level + role on an illustration create suggestion" do
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: SecureRandom.uuid_v7,
+        kind: "create", parent_id: @exp.expectation_id, field: nil, suggested_value: nil,
+        proposed_attributes: { "role_id" => @role.role_id, "description" => "New example" },
+        author_id: @actor.id)
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: sid, entity_type: "role_illustration",
+                parent_id: @exp.expectation_id,
+                proposed_attributes: { role_id: @role.role_id, description: "New example" },
+                author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_create" }
+      assert entry, "expected a suggestion_create entry"
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+      assert_equal @cap.capability_id, entry.capability_id
+    end
+
+    should "carry level + role on an illustration edit suggestion via the existing illustration" do
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: @ill.illustration_id,
+        kind: "edit", field: "description", author_id: @actor.id)
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: sid, target_entity_type: "role_illustration",
+                target_entity_id: @ill.illustration_id, field: "description",
+                suggested_value: "Better example", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+    end
+
+    should "carry level + role on a direct illustration_updated entry" do
+      append(Frameworks::Events::RoleIllustrationUpdated,
+        data: { illustration_id: @ill.illustration_id, new_description: "Direct edit" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "illustration_updated" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:illustration_role_label]
+    end
+
+    should "resolve a draft-born illustration (no read-model row) via its creating event" do
+      ghost_ill_id = SecureRandom.uuid_v7
+      append(Frameworks::Events::RoleIllustrationAdded,
+        data: { illustration_id: ghost_ill_id, stable_id: SecureRandom.uuid_v7,
+                expectation_id: @exp.expectation_id, role_id: @role.role_id,
+                ordinal: 9, description: "Draft-born example" },
+        actor_id: @actor.id)
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: ghost_ill_id,
+        kind: "edit", field: "description", author_id: @actor.id)
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: sid, target_entity_type: "role_illustration",
+                target_entity_id: ghost_ill_id, field: "description",
+                suggested_value: "Sharper draft example", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+      assert_equal @cap.capability_id, entry.capability_id,
+        "the draft-born illustration should still anchor to its capability"
+    end
+
+    should "resolve a draft-born illustration from string-keyed event data" do
+      ghost_ill_id = SecureRandom.uuid_v7
+      append(Frameworks::Events::RoleIllustrationAdded,
+        data: { "illustration_id" => ghost_ill_id, "stable_id" => SecureRandom.uuid_v7,
+                "expectation_id" => @exp.expectation_id, "role_id" => @role.role_id,
+                "ordinal" => 9, "description" => "String-keyed history" },
+        actor_id: @actor.id)
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: ghost_ill_id,
+        kind: "edit", field: "description", author_id: @actor.id)
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: sid, target_entity_type: "role_illustration",
+                target_entity_id: ghost_ill_id, field: "description",
+                suggested_value: "Sharper", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+    end
+  end
+
+  context "collaborator lifecycle" do
+    setup do
+      @collaborator = create(:person, tenant: @tenant, name: "Cora Collaborator")
+    end
+
+    should "name the collaborator on added / role-changed / removed entries" do
+      append(Frameworks::Events::CollaboratorAdded,
+        data: { person_id: @collaborator.id, collaborator_role: "editor", added_by: @actor.id },
+        actor_id: @actor.id)
+      append(Frameworks::Events::CollaboratorRoleChanged,
+        data: { person_id: @collaborator.id, previous_role: "editor", new_role: "owner",
+                changed_by: @actor.id },
+        actor_id: @actor.id)
+      append(Frameworks::Events::CollaboratorRemoved,
+        data: { person_id: @collaborator.id, removed_by: @actor.id }, actor_id: @actor.id)
+
+      %w[collaborator_added collaborator_role_changed collaborator_removed].each do |kind|
+        entry = entries.find { |e| e.kind == kind }
+        assert entry, "expected a #{kind} entry"
+        assert_equal "Cora Collaborator", entry.payload[:collaborator_name],
+          "#{kind} should carry the collaborator's name"
+        assert_equal "Ada Author", entry.actor_name, "#{kind} footer credits the acting admin"
+      end
+    end
+
+    should "resolve the name from string-keyed event data (untrusted history)" do
+      append(Frameworks::Events::CollaboratorAdded,
+        data: { "person_id" => @collaborator.id, "collaborator_role" => "editor",
+                "added_by" => @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "collaborator_added" }
+      assert_equal "Cora Collaborator", entry.payload[:collaborator_name]
+    end
+
+    should "leave collaborator_name nil when the person no longer resolves" do
+      append(Frameworks::Events::CollaboratorAdded,
+        data: { person_id: SecureRandom.uuid_v7, collaborator_role: "viewer", added_by: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "collaborator_added" }
+      assert_nil entry.payload[:collaborator_name]
+    end
+  end
+
   context "focus filtering" do
     setup do
       append(Frameworks::Events::CapabilityUpdated,

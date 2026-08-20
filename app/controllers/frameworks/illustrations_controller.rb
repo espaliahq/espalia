@@ -4,6 +4,7 @@
 #
 class Frameworks::IllustrationsController < ApplicationController
   include FrameworkEditMode
+  include Frameworks::SuggestionAuthority
 
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
@@ -71,9 +72,13 @@ class Frameworks::IllustrationsController < ApplicationController
       mode: :edit,
       pending_edit_count: pending_edits_on_illustration,
       pending_edit: latest_pending_edit,
-      # The frame swap must not drop the ↑/↓ chevrons (Hard-Won Lesson 13/16
-      # class — controller responses re-thread every affordance-gating flag).
-      can_reorder: can_reorder_illustrations?
+      # The frame swap must not drop the ↑/↓ chevrons or the approval kebab
+      # (Hard-Won Lesson 13/16 class — controller responses re-thread every
+      # affordance-gating flag). The authority costs two collaborator queries,
+      # so it's only resolved when a pending edit exists for the kebab to act
+      # on — the common auto-applied edit skips it.
+      can_reorder: can_reorder_illustrations?,
+      approval_authority: pending_edit_approval_authority
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :not_found
@@ -102,12 +107,22 @@ class Frameworks::IllustrationsController < ApplicationController
   end
 
   def latest_pending_edit
-    edit = pending_edits_scope.edits.where(field: "description").order(created_at: :desc).first
-    return nil unless edit
+    return @latest_pending_edit if defined?(@latest_pending_edit)
 
-    { suggested_value: edit.suggested_value,
+    edit = pending_edits_scope.edits.where(field: "description").order(created_at: :desc).first
+    @latest_pending_edit = edit && {
+      suggested_value: edit.suggested_value,
       suggestion_id: edit.suggestion_id,
-      created_at: edit.created_at }
+      created_at: edit.created_at
+    }
+  end
+
+  # The kebab only renders against a pending edit, so the authority (two
+  # collaborator queries) is skipped when there is nothing to approve.
+  def pending_edit_approval_authority
+    return Frameworks::SuggestionApprovalAuthority.none unless latest_pending_edit
+
+    framework_suggestion_approval_authority
   end
 
   def pending_edits_scope

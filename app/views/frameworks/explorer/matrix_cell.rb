@@ -8,6 +8,7 @@
 #
 class Views::Frameworks::Explorer::MatrixCell < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
   # @param ordinal [Integer] the level ordinal for this column
@@ -17,14 +18,18 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   #   expectation text
   # @param current_person_id [String, nil] the viewer's person id — marks their
   #   own pending proposal as amendable vs others' as "suggest alternative"
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
+  #   authority — gates the expectation-edit approve/reject kebab (§12)
   def initialize(cell_data:, ordinal:, framework_id: nil, mode: :view, search_query: nil,
-                 current_person_id: nil)
+                 current_person_id: nil,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @cell_data = cell_data
     @ordinal = ordinal
     @framework_id = framework_id
     @mode = mode
     @search_query = search_query
     @current_person_id = current_person_id
+    @approval_authority = approval_authority
   end
 
   def view_template
@@ -86,13 +91,49 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   end
 
   def filled_cell
-    td(class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top") do
-      expectation_text
+    td(class: "group/cell px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top") do
+      # One layout for both states — the kebab is conditional, the wrapper is
+      # not, so the pending-edit cell can't drift from the plain cell. No
+      # flex-1 on the text: the kebab sits right after it, not at the far edge
+      # of the cell (phlex-views.md, pencil-placement rule).
+      div(class: "flex items-start gap-1") do
+        div(class: "min-w-0") { expectation_text }
+        expectation_approval_kebab if approvable_pending_edit?
+      end
       # Open clarification discussion on this expectation — content glyph,
       # never the pending-change vocabulary (nothing is proposed).
       render_clarification_glyph(@cell_data[:clarification_count])
       illustration_indicator if @cell_data[:illustration_count] > 0
     end
+  end
+
+  # The expectation's pending edit is approvable from the grid when the viewer
+  # clears the expectation tier — same §12 machinery as the row kebab. Rendered
+  # OUTSIDE ExpectationTextFrame so the inline-edit frame swap can't drop it
+  # (the trade-off: a pending edit landed via the swap gets its kebab on the
+  # next matrix render — the squiggle click's card covers the interim).
+  def approvable_pending_edit?
+    @mode == :edit &&
+      @cell_data[:pending_edit].present? &&
+      @cell_data[:pending_edit][:suggestion_id].present? &&
+      @approval_authority.can_approve?("behavioural_expectation")
+  end
+
+  def expectation_approval_kebab
+    render_approval_kebab(
+      framework_id: @framework_id,
+      suggestion_id: @cell_data[:pending_edit][:suggestion_id],
+      change_label: "expectation change",
+      entity_label: "expectation",
+      preview: @cell_data[:pending_edit][:suggested_value].to_s,
+      trigger_label: "Expectation suggestion actions",
+      # Cell-scoped reveal (not the row group — hovering the capability name
+      # must not pop kebabs across every pending cell), with focus-within so
+      # a keyboard user's focused trigger is visible (the focus lands on the
+      # dropdown's <button>, so focus-visible on this span can never match).
+      reveal_classes: "opacity-0 group-hover/cell:opacity-100 " \
+                      "group-focus-within/cell:opacity-100"
+    )
   end
 
   def expectation_text

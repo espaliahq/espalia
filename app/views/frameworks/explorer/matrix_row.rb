@@ -9,6 +9,7 @@
 class Views::Frameworks::Explorer::MatrixRow < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::SearchHighlight
+  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
@@ -129,7 +130,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           framework_id: @framework_id,
           mode: @mode,
           search_query: @search_query,
-          current_person_id: @current_person_id
+          current_person_id: @current_person_id,
+          approval_authority: @approval_authority
         )
       end
     end
@@ -216,18 +218,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
   def row_actions_kebab
     render Components::Kit::Dropdown.new(align: :left) do |dd|
-      dd.trigger(label: "Capability actions") do
-        span(
-          class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
-                 "inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
-                 "text-gray-400 hover:text-primary"
-        ) do
-          svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
-            s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
-                      "6a2 2 0 100 4 2 2 0 000-4z")
-          end
-        end
-      end
+      kebab_trigger(dd, label: "Capability actions",
+        reveal_classes: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")
       dd.menu do
         capability_edit_actions.each { |action| kebab_edit_items(action) }
         kebab_move_items if show_move_actions?
@@ -237,32 +229,16 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     end
   end
 
-  # Approve (inline POST) + Reject (shared modal) for one pending field edit.
-  # Reuses the actionable-feed machinery: suggestion_action#approve and the
-  # reject-suggestion modal, both flagged inline=1 so the controller answers 204
-  # and `suggestion:resolved` refreshes the matrix.
+  # Approve (inline POST) + Reject (shared modal) for one pending field edit —
+  # the shared §12 kebab machinery (ApprovalKebabItems).
   def kebab_edit_items(action)
-    button(
-      type: "button", role: "menuitem", class: kebab_item_classes("text-green-700 dark:text-green-400"),
-      data: {
-        controller: "suggestion-action",
-        suggestion_action_approve_url_value:
-          approve_framework_suggestion_path(@framework_id, action[:suggestion_id], inline: 1),
-        action: "suggestion-action#approve"
-      }
-    ) { "Approve #{action[:field_label]} change" }
-
-    button(
-      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
-      data: {
-        action: "click->modal#open",
-        modal_target_id: "reject-suggestion-modal",
-        reject_suggestion_id: action[:suggestion_id],
-        reject_framework_id: @framework_id,
-        reject_entity_label: "capability #{action[:field_label]}",
-        reject_preview: action[:preview]
-      }
-    ) { "Reject #{action[:field_label]} change" }
+    render_approval_kebab_items(
+      framework_id: @framework_id,
+      suggestion_id: action[:suggestion_id],
+      change_label: "#{action[:field_label]} change",
+      entity_label: "capability #{action[:field_label]}",
+      preview: action[:preview]
+    )
   end
 
   # "Move up / Move down" — reorder within the category, relative to the
@@ -320,11 +296,6 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     ) { "Archive…" }
   end
 
-  def kebab_item_classes(tone)
-    "block w-full text-left px-4 py-2 text-sm #{tone} " \
-      "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-  end
-
   def archive_added_in_draft?
     @capability.respond_to?(:added_in_draft) && @capability.added_in_draft
   end
@@ -368,7 +339,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           render Components::Kit::Badge.new(role.code, variant: :default)
           ul_attrs = {
             id: "illustrations-#{expectation.expectation_id}-#{role_id}",
-            class: "mt-1 space-y-1"
+            class: "mt-1 space-y-1.5"
           }
           # ↑/↓ reordering — edit-rights holders only, and only when there is
           # something to reorder. The controller moves the DOM node on a 204,
@@ -390,7 +361,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 pending_edit_count: ill_pending_edits[ill.illustration_id] || 0,
                 pending_edit: ill_pending_edit_details[ill.illustration_id],
                 mode: @mode,
-                can_reorder: can_reorder
+                can_reorder: can_reorder,
+                approval_authority: @approval_authority
               )
             end
             role_pending_creates.each do |suggestion|

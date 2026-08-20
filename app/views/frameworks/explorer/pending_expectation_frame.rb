@@ -48,8 +48,10 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   # the text (no flex-grow on the text), matching every inline-edit affordance.
   def display
     div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
-      span(class: "text-sm text-gray-700 dark:text-gray-300 " \
-                  "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
+      with_suggestion_click_affordance(@suggestion.suggestion_id) do
+        span(class: "text-sm text-gray-700 dark:text-gray-300 " \
+                    "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
+      end
       render_inline_editor_pencil(aria_label: @is_author ? "Amend suggestion" : "Suggest alternative")
     end
   end

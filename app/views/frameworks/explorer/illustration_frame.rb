@@ -12,6 +12,7 @@
 #
 class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   # @param illustration [FrameworkState::RoleIllustration]
   # @param framework_id [String] UUID of the framework (for the PATCH URL)
@@ -23,14 +24,19 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   # @param can_reorder [Boolean] render the ↑/↓ move chevrons (edit-rights
   #   holders, list has >1 item) — the enclosing UL carries the reorder-list
   #   Stimulus controller these buttons dispatch to
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
+  #   authority — gates the pending-edit approve/reject kebab (§12). Controller
+  #   frame re-renders must re-thread it (Hard-Won Lesson 13/16 class).
   def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view,
-                 can_reorder: false)
+                 can_reorder: false,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
     @mode = mode
     @can_reorder = can_reorder
+    @approval_authority = approval_authority
   end
 
   def view_template
@@ -54,9 +60,10 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
 
   def display_mode
     div(
-      class: "flex items-start gap-1 pl-2",
+      class: "flex items-start gap-1.5 pl-2",
       data: { inline_editor_target: "display" }
     ) do
+      render_illustration_marker("bg-gray-300 dark:bg-gray-600")
       if @pending_edit
         span(class: "flex-1") do
           render_inline_diff(original: @illustration.description, pending_edit: @pending_edit)
@@ -66,11 +73,35 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
         span(class: "flex-1 #{decoration}".strip) { @illustration.description }
       end
       if @mode == :edit
+        approval_kebab if approvable_pending_edit?
         reorder_buttons if @can_reorder
         edit_button
         archive_button
       end
     end
+  end
+
+  # The pending edit is approvable from the grid when the viewer clears the
+  # illustration tier — same §12 kebab machinery as the row and cell kebabs.
+  def approvable_pending_edit?
+    @pending_edit.present? &&
+      @pending_edit[:suggestion_id].present? &&
+      @approval_authority.can_approve?("role_illustration")
+  end
+
+  def approval_kebab
+    render_approval_kebab(
+      framework_id: @framework_id,
+      suggestion_id: @pending_edit[:suggestion_id],
+      change_label: "illustration change",
+      entity_label: "illustration",
+      preview: @pending_edit[:suggested_value].to_s,
+      trigger_label: "Illustration suggestion actions",
+      # focus-within, not focus-visible: focus lands on the dropdown's
+      # <button>, so focus-visible on this inner span could never match.
+      reveal_classes: "opacity-0 group-hover/ill:opacity-100 " \
+                      "group-focus-within/ill:opacity-100"
+    )
   end
 
   # ↑/↓ move-within-list chevrons, hover-revealed like the pencil. The action

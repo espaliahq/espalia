@@ -50,6 +50,15 @@ export default class extends BaseController {
     this.#updateToggleAffordance()
   }
 
+  // Reveals the context pane when a squiggle click asks to show a suggestion
+  // card (`suggestion:open-card` at window scope). Unlike focus changes —
+  // which never auto-open the pane — this click's entire purpose is to see
+  // the card, so a collapsed pane opens.
+  openContextPane() {
+    if (!this.hasContextPaneTarget || this.contextPaneOpen) return
+    this.toggleContextPane()
+  }
+
   toggleContextPane() {
     if (!this.hasContextPaneTarget) return
 

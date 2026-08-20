@@ -45,7 +45,12 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
     base = "text-sm font-semibold text-gray-700 dark:text-gray-300"
     if @pending_edit
       span(class: base) do
-        render_inline_diff(original: @category.name, pending_edit: @pending_edit)
+        # interactive: false — this renders inside the category header's
+        # role=button focus target (MatrixCategoryGroup); a nested open-card
+        # widget would swallow its accessible name and steal the
+        # focus-category click. The pane still reaches this suggestion via
+        # the feed entry / row context.
+        render_inline_diff(original: @category.name, pending_edit: @pending_edit, interactive: false)
       end
     else
       span(class: "#{base} #{decoration}".strip) { render_highlighted(@category.name, @search_query) }

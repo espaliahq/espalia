@@ -8,12 +8,19 @@ require "test_helper"
 class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
   # occurred_at is nil so the footer's time_ago_in_words view helper isn't
   # invoked in this context-free unit render — the summary line is unaffected.
-  def render_entry(kind:, payload:)
+  def render_entry(kind:, payload:, capability_id: nil, category_id: nil)
     entry = Frameworks::ActivityFeedQuery::Entry.new(
       id: SecureRandom.uuid_v7, kind: kind, occurred_at: nil,
-      payload: payload, actor_name: "Ada", superseded: false
+      payload: payload, actor_name: "Ada", superseded: false,
+      capability_id: capability_id, category_id: category_id
     )
     Views::Frameworks::Activity::Entry.new(entry: entry).call
+  end
+
+  # An entry anchored to a capability, for the navigation data-attr assertions.
+  def render_anchored_entry(payload:)
+    render_entry(kind: "suggestion_edit", payload: payload,
+                 capability_id: "cap-1", category_id: "cat-1")
   end
 
   context "org-structure update summaries" do
@@ -49,6 +56,48 @@ class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
 
     should "fall back to a bare summary when no known field changed" do
       assert_includes render_entry(kind: "role_updated", payload: {}), "Updated a role"
+    end
+  end
+
+  context "matrix navigation data attrs" do
+    should "navigate to the cell when the entry knows its level" do
+      html = render_anchored_entry(payload: { expectation_level: 3 })
+      assert_includes html, 'data-nav-level="cell"'
+      assert_includes html, 'data-nav-level-ordinal="3"'
+      assert_includes html, 'data-nav-capability-id="cap-1"'
+    end
+
+    should "fall back to capability navigation without a level" do
+      html = render_anchored_entry(payload: {})
+      assert_includes html, 'data-nav-level="capability"'
+      assert_not_includes html, "data-nav-level-ordinal"
+    end
+  end
+
+  context "collaborator summaries" do
+    should "name the added collaborator and their role" do
+      html = render_entry(kind: "collaborator_added",
+        payload: { collaborator_name: "Cora Collaborator", collaborator_role: "capability_lead" })
+      assert_includes html, "Added Cora Collaborator as capability lead"
+    end
+
+    should "name the collaborator on a role change" do
+      html = render_entry(kind: "collaborator_role_changed",
+        payload: { collaborator_name: "Cora Collaborator", new_role: "owner" })
+      assert_includes html, "Changed Cora Collaborator&#39;s role to Owner"
+    end
+
+    should "name the removed collaborator" do
+      html = render_entry(kind: "collaborator_removed",
+        payload: { collaborator_name: "Cora Collaborator" })
+      assert_includes html, "Removed Cora Collaborator as a collaborator"
+    end
+
+    should "fall back to anonymous phrasing when the name didn't resolve" do
+      assert_includes render_entry(kind: "collaborator_added", payload: { collaborator_role: "editor" }),
+        "Added a collaborator (Editor)"
+      assert_includes render_entry(kind: "collaborator_removed", payload: {}),
+        "Removed a collaborator"
     end
   end
 end
