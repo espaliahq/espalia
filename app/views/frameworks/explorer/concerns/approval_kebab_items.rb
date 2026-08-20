@@ -35,8 +35,11 @@ module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
   # @return [void]
   def kebab_trigger(dd, label:, reveal_classes:)
     dd.trigger(label: label) do
+      # pointer-coarse keeps the trigger permanently visible on touch devices,
+      # where hover-reveal would leave it undiscoverable.
       span(
-        class: "#{reveal_classes} transition-opacity inline-flex items-center justify-center " \
+        class: "#{reveal_classes} pointer-coarse:opacity-100 transition-opacity " \
+               "inline-flex items-center justify-center " \
                "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary"
       ) do
         svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|

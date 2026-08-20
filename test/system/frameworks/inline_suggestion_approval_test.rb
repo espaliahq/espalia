@@ -170,6 +170,29 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
                    FrameworkState::BehaviouralExpectation.find_by(expectation_id: @exp_id).description
     end
 
+    should "approve an expectation edit from the cell kebab at the mobile viewport" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      exp_sugg_id = suggest_expectation_edit
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_selector "tr[data-capability-id='#{@cap_id}']"
+
+      # Touch devices have no hover — the trigger stays visible via
+      # pointer-coarse:opacity-100 and the same JS click path applies.
+      page.execute_script(
+        "document.querySelectorAll(\"tr[data-capability-id='#{@cap_id}'] " \
+        "button[data-dropdown-target='trigger']\")[1].click()"
+      )
+      assert_text "Approve expectation change"
+      page.execute_script(
+        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']\").click()"
+      )
+
+      wait_for_status("approved", exp_sugg_id)
+      assert_equal "Asks sharper clarifying questions",
+                   FrameworkState::BehaviouralExpectation.find_by(expectation_id: @exp_id).description
+    end
+
     should "approve an illustration edit from the illustration kebab" do
       ill_sugg_id = suggest_illustration_edit
       visit edit_framework_path(@framework_id)
