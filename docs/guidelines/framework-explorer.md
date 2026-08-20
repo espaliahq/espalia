@@ -738,7 +738,13 @@ They reuse the *exact* same pieces — `suggestion-action`
 (inline approve, `inline=1` → 204), the root reject modal, and
 `suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
 the feed are the same operation with the same live-update wiring (the feed
-reloads via broadcast either way). The per-viewer authority is threaded into the
+reloads via broadcast either way). Two deliberate boundaries: pending
+**creates** (the ghost frames) get no grid kebab — their squiggle click opens
+the card, which carries Approve/Reject — so don't "fix" the asymmetry by
+adding one; and a pending edit landed via an inline frame swap gets its kebab
+on the next matrix render, not immediately (the kebab lives outside the
+swapped frame; the matrix deliberately isn't live — Lesson 21 — and the
+squiggle→card path covers the interim). The per-viewer authority is threaded into the
 matrix the same way `can_edit_structure` is: controller → `Matrix` →
 `MatrixCategoryGroup` → `MatrixRow` → `MatrixCell` / `IllustrationFrame`.
 `matrix#toggleRow` already ignores clicks inside

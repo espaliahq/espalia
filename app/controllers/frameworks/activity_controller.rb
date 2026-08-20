@@ -7,6 +7,8 @@
 # driven by {Frameworks::ActivityFeedQuery}.
 #
 class Frameworks::ActivityController < ApplicationController
+  include Frameworks::SuggestionAuthority
+
   before_action :set_framework
 
   # GET /frameworks/:framework_id/activity
@@ -121,11 +123,7 @@ class Frameworks::ActivityController < ApplicationController
   # Per-viewer approval authority, computed once so the actionable feed never
   # instantiates a policy per pending-suggestion entry.
   def approval_authority
-    Frameworks::SuggestionApprovalAuthority.for(
-      framework_id: @framework.framework_id,
-      person: current_person,
-      tenant_admin: current_user&.global_admin? || current_tenant_user&.admin? || false
-    )
+    framework_suggestion_approval_authority
   end
 
   def set_framework

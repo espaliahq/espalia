@@ -8,22 +8,19 @@ require "test_helper"
 class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
   # occurred_at is nil so the footer's time_ago_in_words view helper isn't
   # invoked in this context-free unit render — the summary line is unaffected.
-  def render_entry(kind:, payload:)
+  def render_entry(kind:, payload:, capability_id: nil, category_id: nil)
     entry = Frameworks::ActivityFeedQuery::Entry.new(
       id: SecureRandom.uuid_v7, kind: kind, occurred_at: nil,
-      payload: payload, actor_name: "Ada", superseded: false
+      payload: payload, actor_name: "Ada", superseded: false,
+      capability_id: capability_id, category_id: category_id
     )
     Views::Frameworks::Activity::Entry.new(entry: entry).call
   end
 
   # An entry anchored to a capability, for the navigation data-attr assertions.
-  def render_anchored_entry(payload:, capability_id: "cap-1", category_id: "cat-1")
-    entry = Frameworks::ActivityFeedQuery::Entry.new(
-      id: SecureRandom.uuid_v7, kind: "suggestion_edit", occurred_at: nil,
-      payload: payload, actor_name: "Ada", superseded: false,
-      capability_id: capability_id, category_id: category_id
-    )
-    Views::Frameworks::Activity::Entry.new(entry: entry).call
+  def render_anchored_entry(payload:)
+    render_entry(kind: "suggestion_edit", payload: payload,
+                 capability_id: "cap-1", category_id: "cat-1")
   end
 
   context "org-structure update summaries" do
