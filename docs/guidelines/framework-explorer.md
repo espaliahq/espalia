@@ -912,6 +912,7 @@ Listens at window scope for:
 - `tree:changed@window->context-pane#onTreeChanged`
 - `matrix:focus-changed@window->context-pane#onFocusChanged`
 - `suggestion:submitted@window->context-pane#onSuggestionSubmitted`
+- `suggestion:open-card@window->context-pane#onOpenSuggestionCard`
 
 Also dispatches:
 - **`suggestion:navigate`** — fired by `focusSuggestion` when the user clicks a suggestion row body. Reads `data-nav-*` attributes from the clicked element and dispatches to window for `matrix_controller` to handle.
