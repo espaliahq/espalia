@@ -115,6 +115,10 @@ class Frameworks::ActivityFeedQuery
   # illustration belongs to (`expectation_level` / `illustration_role_label`),
   # folded in by #illustration_metadata. (Illustration *suggestions* get the
   # same context via #suggestion_meta; reorders keep their role-in-summary.)
+  # A removal's read-model row is destroyed, so it resolves only via the
+  # creating event still in the read window — older removals degrade to the
+  # bare capability context, consistent with the recency model (see
+  # #binding_index for the same trade-off).
   ILLUSTRATION_KINDS = %w[illustration_added illustration_updated illustration_removed].freeze
 
   # Maps each feed kind to the payload key carrying its actor's Person id, when
@@ -311,7 +315,8 @@ class Frameworks::ActivityFeedQuery
   # (capability × level × role) artefact, so its entry locates all three
   # (the capability rides the anchor's context line). The added event carries
   # expectation_id + role_id; update/remove carry only the illustration_id and
-  # resolve through the read-model maps.
+  # resolve through the read-model + stream-supplement maps (nil-safe — an old
+  # removal whose creating event left the window resolves nothing).
   def illustration_metadata(data)
     expectation_id = data[:expectation_id] || illustration_to_expectation[data[:illustration_id]]
     role_id = data[:role_id] || illustration_to_role[data[:illustration_id]]
@@ -486,7 +491,11 @@ class Frameworks::ActivityFeedQuery
         next [] unless kind
 
         referenced = [ actor_id_for(event, kind) ]
-        referenced << event.data[:person_id] if COLLABORATOR_KINDS.include?(kind)
+        if COLLABORATOR_KINDS.include?(kind)
+          # Dual lookup like #actor_id_for — stored event data key types are
+          # not trusted (string-keyed history would silently drop the name).
+          referenced << (event.data[:person_id] || event.data["person_id"])
+        end
         referenced
       end.compact.uniq.select { |id| id.to_s.match?(UUID_FORMAT) }
       ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
@@ -516,7 +525,8 @@ class Frameworks::ActivityFeedQuery
   # published read model) shows its current name, not the original.
   def stream_structure
     @stream_structure ||= begin
-      acc = { cap_names: {}, cap_to_cat: {}, cat_names: {}, exp_to_cap: {}, exp_to_level: {} }
+      acc = { cap_names: {}, cap_to_cat: {}, cat_names: {}, exp_to_cap: {}, exp_to_level: {},
+              ill_to_exp: {}, ill_to_role: {} }
       stream_events.each do |event|
         case event
         when Frameworks::Events::CapabilityAdded
@@ -531,6 +541,11 @@ class Frameworks::ActivityFeedQuery
         when Frameworks::Events::BehaviouralExpectationSet
           acc[:exp_to_cap][event.data[:expectation_id]] ||= event.data[:capability_id]
           acc[:exp_to_level][event.data[:expectation_id]] ||= event.data[:level_ordinal]
+        when Frameworks::Events::RoleIllustrationAdded
+          # An illustration under a draft-deferred expectation has no read-model
+          # row (the projection skips it), so its coordinates come from here.
+          acc[:ill_to_exp][event.data[:illustration_id]] ||= event.data[:expectation_id]
+          acc[:ill_to_role][event.data[:illustration_id]] ||= event.data[:role_id]
         end
       end
       acc
@@ -563,18 +578,21 @@ class Frameworks::ActivityFeedQuery
       .merge(all_capabilities.flat_map(&:expectations).to_h { |e| [ e.expectation_id, e.level_ordinal ] })
   end
 
+  # One tree walk shared by both illustration maps.
+  def all_illustrations
+    @all_illustrations ||= all_capabilities.flat_map(&:expectations).flat_map(&:illustrations)
+  end
+
   def illustration_to_expectation
-    @illustration_to_expectation ||= all_capabilities
-      .flat_map(&:expectations).flat_map(&:illustrations)
-      .to_h { |i| [ i.illustration_id, i.expectation_id ] }
+    @illustration_to_expectation ||= stream_structure[:ill_to_exp]
+      .merge(all_illustrations.to_h { |i| [ i.illustration_id, i.expectation_id ] })
   end
 
   # {illustration_id => role_id} — so illustration entries can name the role
   # they illustrate for.
   def illustration_to_role
-    @illustration_to_role ||= all_capabilities
-      .flat_map(&:expectations).flat_map(&:illustrations)
-      .to_h { |i| [ i.illustration_id, i.role_id ] }
+    @illustration_to_role ||= stream_structure[:ill_to_role]
+      .merge(all_illustrations.to_h { |i| [ i.illustration_id, i.role_id ] })
   end
 
   # {binding_id => { capability_id:, role_id: }}. Built from the read model

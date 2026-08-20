@@ -670,6 +670,31 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal 2, entry.payload[:expectation_level]
       assert_equal "E · Software Engineer", entry.payload[:illustration_role_label]
     end
+
+    should "resolve a draft-born illustration (no read-model row) via its creating event" do
+      ghost_ill_id = SecureRandom.uuid_v7
+      append(Frameworks::Events::RoleIllustrationAdded,
+        data: { illustration_id: ghost_ill_id, stable_id: SecureRandom.uuid_v7,
+                expectation_id: @exp.expectation_id, role_id: @role.role_id,
+                ordinal: 9, description: "Draft-born example" },
+        actor_id: @actor.id)
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: ghost_ill_id,
+        kind: "edit", field: "description", author_id: @actor.id)
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: sid, target_entity_type: "role_illustration",
+                target_entity_id: ghost_ill_id, field: "description",
+                suggested_value: "Sharper draft example", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+      assert_equal @cap.capability_id, entry.capability_id,
+        "the draft-born illustration should still anchor to its capability"
+    end
   end
 
   context "collaborator lifecycle" do
@@ -695,6 +720,16 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
           "#{kind} should carry the collaborator's name"
         assert_equal "Ada Author", entry.actor_name, "#{kind} footer credits the acting admin"
       end
+    end
+
+    should "resolve the name from string-keyed event data (untrusted history)" do
+      append(Frameworks::Events::CollaboratorAdded,
+        data: { "person_id" => @collaborator.id, "collaborator_role" => "editor",
+                "added_by" => @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "collaborator_added" }
+      assert_equal "Cora Collaborator", entry.payload[:collaborator_name]
     end
 
     should "leave collaborator_name nil when the person no longer resolves" do
