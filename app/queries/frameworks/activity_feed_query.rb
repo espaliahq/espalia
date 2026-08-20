@@ -101,6 +101,11 @@ class Frameworks::ActivityFeedQuery
   # (weight / individual tolerance) folded into the payload by #binding_metadata.
   BINDING_KINDS = %w[binding_added binding_updated binding_removed].freeze
 
+  # Collaborator lifecycle kinds — their entries name the collaborator the
+  # action concerns (`collaborator_name`, resolved from the event's person_id),
+  # not just the acting admin in the footer.
+  COLLABORATOR_KINDS = %w[collaborator_added collaborator_role_changed collaborator_removed].freeze
+
   # Directly-authored / edited expectation kinds — their entries carry the level
   # (`expectation_level`) folded in by #structural_expectation_level. (Expectation
   # *suggestions* get the level via #suggestion_meta instead.)
@@ -249,7 +254,7 @@ class Frameworks::ActivityFeedQuery
       kind: kind,
       occurred_at: event_timestamp(event),
       payload: data.merge(entry_metadata(kind, data, capability_id, category_id)),
-      actor_name: actor_names[actor_id_for(event, kind)],
+      actor_name: person_names[actor_id_for(event, kind)],
       category_id: category_id,
       capability_id: capability_id,
       capability_name: capability_name_for(capability_id),
@@ -275,6 +280,9 @@ class Frameworks::ActivityFeedQuery
       extra.merge!(meta) if meta
     end
     extra.merge!(binding_metadata(kind, data)) if BINDING_KINDS.include?(kind)
+    if COLLABORATOR_KINDS.include?(kind)
+      extra[:collaborator_name] = person_names[data[:person_id]]
+    end
     if kind == "illustration_reordered" && role_labels.key?(data[:role_id])
       extra[:reorder_role_label] = role_labels[data[:role_id]]
     end
@@ -444,16 +452,21 @@ class Frameworks::ActivityFeedQuery
     payload_actor.presence || event.metadata[:actor_id]
   end
 
-  # {Person id => name} for every actor referenced by a feed entry on this
-  # stream. Loaded in one query and memoised so per-entry resolution never
+  # {Person id => name} for every person a feed entry references — actors
+  # (footer attribution) plus the collaborator a collaborator-lifecycle event
+  # concerns. Loaded in one query and memoised so per-entry resolution never
   # N+1s. Non-UUID sentinels (e.g. the bootstrap draft's `started_by: "system"`)
   # are filtered out so the uuid-typed lookup never raises.
-  def actor_names
-    @actor_names ||= begin
-      ids = stream_events.filter_map do |event|
+  def person_names
+    @person_names ||= begin
+      ids = stream_events.flat_map do |event|
         kind = KINDS[event.class]
-        actor_id_for(event, kind) if kind
-      end.uniq.select { |id| id.to_s.match?(UUID_FORMAT) }
+        next [] unless kind
+
+        referenced = [ actor_id_for(event, kind) ]
+        referenced << event.data[:person_id] if COLLABORATOR_KINDS.include?(kind)
+        referenced
+      end.compact.uniq.select { |id| id.to_s.match?(UUID_FORMAT) }
       ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
     end
   end

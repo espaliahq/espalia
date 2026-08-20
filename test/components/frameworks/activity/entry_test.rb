@@ -51,4 +51,31 @@ class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
       assert_includes render_entry(kind: "role_updated", payload: {}), "Updated a role"
     end
   end
+
+  context "collaborator summaries" do
+    should "name the added collaborator and their role" do
+      html = render_entry(kind: "collaborator_added",
+        payload: { collaborator_name: "Cora Collaborator", collaborator_role: "capability_lead" })
+      assert_includes html, "Added Cora Collaborator as capability lead"
+    end
+
+    should "name the collaborator on a role change" do
+      html = render_entry(kind: "collaborator_role_changed",
+        payload: { collaborator_name: "Cora Collaborator", new_role: "owner" })
+      assert_includes html, "Changed Cora Collaborator&#39;s role to Owner"
+    end
+
+    should "name the removed collaborator" do
+      html = render_entry(kind: "collaborator_removed",
+        payload: { collaborator_name: "Cora Collaborator" })
+      assert_includes html, "Removed Cora Collaborator as a collaborator"
+    end
+
+    should "fall back to anonymous phrasing when the name didn't resolve" do
+      assert_includes render_entry(kind: "collaborator_added", payload: { collaborator_role: "editor" }),
+        "Added a collaborator (Editor)"
+      assert_includes render_entry(kind: "collaborator_removed", payload: {}),
+        "Removed a collaborator"
+    end
+  end
 end

@@ -614,6 +614,41 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "collaborator lifecycle" do
+    setup do
+      @collaborator = create(:person, tenant: @tenant, name: "Cora Collaborator")
+    end
+
+    should "name the collaborator on added / role-changed / removed entries" do
+      append(Frameworks::Events::CollaboratorAdded,
+        data: { person_id: @collaborator.id, collaborator_role: "editor", added_by: @actor.id },
+        actor_id: @actor.id)
+      append(Frameworks::Events::CollaboratorRoleChanged,
+        data: { person_id: @collaborator.id, previous_role: "editor", new_role: "owner",
+                changed_by: @actor.id },
+        actor_id: @actor.id)
+      append(Frameworks::Events::CollaboratorRemoved,
+        data: { person_id: @collaborator.id, removed_by: @actor.id }, actor_id: @actor.id)
+
+      %w[collaborator_added collaborator_role_changed collaborator_removed].each do |kind|
+        entry = entries.find { |e| e.kind == kind }
+        assert entry, "expected a #{kind} entry"
+        assert_equal "Cora Collaborator", entry.payload[:collaborator_name],
+          "#{kind} should carry the collaborator's name"
+        assert_equal "Ada Author", entry.actor_name, "#{kind} footer credits the acting admin"
+      end
+    end
+
+    should "leave collaborator_name nil when the person no longer resolves" do
+      append(Frameworks::Events::CollaboratorAdded,
+        data: { person_id: SecureRandom.uuid_v7, collaborator_role: "viewer", added_by: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "collaborator_added" }
+      assert_nil entry.payload[:collaborator_name]
+    end
+  end
+
   context "focus filtering" do
     setup do
       append(Frameworks::Events::CapabilityUpdated,

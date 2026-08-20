@@ -369,9 +369,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "draft_opened"        then draft_opened_summary
     when "version_published"   then "Published v#{payload_value(:version)}"
     when "migration_mapping_defined" then "Defined a migration mapping"
-    when "collaborator_added"  then "Added a collaborator (#{collaborator_role})"
-    when "collaborator_role_changed" then "Changed a collaborator's role to #{payload_value(:new_role)&.humanize}"
-    when "collaborator_removed" then "Removed a collaborator"
+    when "collaborator_added"  then collaborator_added_summary
+    when "collaborator_role_changed" then collaborator_role_changed_summary
+    when "collaborator_removed" then collaborator_removed_summary
     else @entry.kind.humanize
     end
   end
@@ -443,6 +443,35 @@ class Views::Frameworks::Activity::Entry < Views::Base
 
   def collaborator_role
     payload_value(:collaborator_role)&.humanize || "collaborator"
+  end
+
+  # Collaborator summaries name WHO the change concerns, not just the role —
+  # `collaborator_name` is resolved by the query from the event's person_id.
+  # Nil-safe: history whose person no longer resolves falls back to the
+  # anonymous phrasing.
+  def collaborator_name
+    payload_value(:collaborator_name).to_s.strip.presence
+  end
+
+  def collaborator_added_summary
+    if collaborator_name
+      "Added #{collaborator_name} as #{collaborator_role.downcase}"
+    else
+      "Added a collaborator (#{collaborator_role})"
+    end
+  end
+
+  def collaborator_role_changed_summary
+    new_role = payload_value(:new_role)&.humanize
+    if collaborator_name
+      "Changed #{collaborator_name}'s role to #{new_role}"
+    else
+      "Changed a collaborator's role to #{new_role}"
+    end
+  end
+
+  def collaborator_removed_summary
+    collaborator_name ? "Removed #{collaborator_name} as a collaborator" : "Removed a collaborator"
   end
 
   # ── Context line (where in the framework) — never truncated ──
