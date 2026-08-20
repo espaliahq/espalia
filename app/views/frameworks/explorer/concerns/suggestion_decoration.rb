@@ -75,6 +75,41 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   def render_inline_diff(original:, pending_edit:)
     return false if pending_edit.nil?
 
+    with_suggestion_click_affordance(pending_edit[:suggestion_id]) do
+      render_diff_segments(original: original, pending_edit: pending_edit)
+    end
+
+    true
+  end
+
+  # Wraps decorated pending-change text in the "open this suggestion in the
+  # activity pane" affordance: clicking the squiggled text opens the pane's
+  # suggestion card (with its Approve / Reject controls) instead of doing
+  # nothing. Dispatches through matrix#openSuggestionCard, which stops the
+  # click from also toggling the row / focusing the cell. Renders the bare
+  # content when there's no suggestion to open (e.g. added-in-draft wiggles).
+  #
+  # @param suggestion_id [String, nil]
+  def with_suggestion_click_affordance(suggestion_id, &block)
+    return yield if suggestion_id.blank?
+
+    span(
+      role: "button",
+      tabindex: "0",
+      class: "cursor-pointer rounded-xs hover:bg-amber-100/60 dark:hover:bg-amber-900/30 " \
+             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+      title: "View this pending suggestion in the activity pane",
+      data: {
+        action: "click->matrix#openSuggestionCard " \
+                "keydown.enter->matrix#openSuggestionCard " \
+                "keydown.space->matrix#openSuggestionCard",
+        suggestion_id: suggestion_id
+      },
+      &block
+    )
+  end
+
+  def render_diff_segments(original:, pending_edit:)
     proposed = pending_edit[:suggested_value].to_s
     diff = Frameworks::SuggestionDiff.call(original: original.to_s, proposed: proposed)
 
@@ -92,8 +127,6 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
         end
       end
     end
-
-    true
   end
 
   # Small muted speech-bubble marking an open clarification discussion on the

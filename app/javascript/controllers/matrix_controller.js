@@ -732,6 +732,22 @@ export default class extends BaseController {
     this.#scrollCardUnderHeader(capabilityStableId)
   }
 
+  // Clicking a pending-change squiggle (inline diff / ghost entry) opens that
+  // suggestion's card in the activity pane. The pane is a sibling of the
+  // matrix element, so this relays through a window event —
+  // context_pane_controller#onOpenSuggestionCard picks it up (and
+  // framework_explorer_controller reveals the pane if it was collapsed).
+  // stopPropagation keeps the click from also toggling the row / focusing the
+  // cell underneath the decorated text.
+  openSuggestionCard(event) {
+    const suggestionId = event.currentTarget?.dataset?.suggestionId
+    if (!suggestionId) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    window.dispatchEvent(new CustomEvent("suggestion:open-card", { detail: { suggestionId } }))
+  }
+
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
 
   navigateToEntity(event) {

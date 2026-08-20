@@ -263,6 +263,46 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
                        visible: true
     end
+
+    should "navigate to the specific cell for a level-anchored entry" do
+      visit edit_framework_path(@framework_id)
+      open_context_pane
+
+      # The expectation-edit suggestion entry knows its level, so it carries
+      # cell-level navigation coords — clicking it must land on the cell, not
+      # just the capability row.
+      within "#suggestion-panel" do
+        assert_selector "[data-nav-level='cell'][data-nav-level-ordinal='2']"
+      end
+      page.execute_script(<<~JS)
+        document.querySelector("#suggestion-panel [data-nav-level='cell'][data-nav-level-ordinal='2']")?.click();
+      JS
+
+      assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
+                       visible: true
+      assert_match(/focus=cell/, page.current_url)
+      assert_match(/level_ordinal=2/, page.current_url)
+    end
+  end
+
+  context "squiggle click" do
+    should "open the suggestion card in the pane from a pending-change squiggle" do
+      visit edit_framework_path(@framework_id)
+      open_context_pane
+      wait_for_stimulus "matrix"
+
+      # The capability-description inline diff carries the open-card affordance.
+      assert_selector "[data-action*='matrix#openSuggestionCard']"
+      page.execute_script(<<~JS)
+        document.querySelector("tr[data-capability-id='#{@cap_a_id}'] [data-action*='matrix#openSuggestionCard']")?.click();
+      JS
+
+      within "#suggestion-panel" do
+        assert_text "← Back to activity"
+        assert_text "SUGG_CAP_A"
+      end
+      assert_match(/focus=suggestion/, page.current_url)
+    end
   end
 
   private

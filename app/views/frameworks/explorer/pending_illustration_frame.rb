@@ -57,7 +57,11 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
       # pending proposal.
       span(class: "mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0",
            aria: { hidden: "true" }) { }
-      span(class: "flex-1 #{decoration}") { @attrs[:description] }
+      span(class: "flex-1") do
+        with_suggestion_click_affordance(@suggestion.suggestion_id) do
+          span(class: decoration) { @attrs[:description] }
+        end
+      end
       edit_button
     end
   end

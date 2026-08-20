@@ -95,14 +95,16 @@ export default class extends BaseController {
   openSuggestionCard(event) {
     const id = event.currentTarget?.dataset?.suggestionId
     if (!id) return
-    this.state.focus = "suggestion"
-    this.state.suggestionId = id
-    this.state.categoryId = null
-    this.state.capabilityId = null
-    this.state.levelOrdinal = null
-    this.state.expectationId = null
-    this.#rebuildFrameSrc()
-    this.#pushBrowserUrl()
+    this.#showSuggestionCard(id)
+  }
+
+  // Window-event twin of openSuggestionCard, for triggers that live outside
+  // the pane — the matrix's pending-change squiggles dispatch
+  // `suggestion:open-card` with the suggestion id in the event detail.
+  onOpenSuggestionCard(event) {
+    const id = event.detail?.suggestionId
+    if (!id) return
+    this.#showSuggestionCard(id)
   }
 
   // Dispatched by inline_editor_controller after any successful inline
@@ -148,6 +150,17 @@ export default class extends BaseController {
   }
 
   // private
+
+  #showSuggestionCard(id) {
+    this.state.focus = "suggestion"
+    this.state.suggestionId = id
+    this.state.categoryId = null
+    this.state.capabilityId = null
+    this.state.levelOrdinal = null
+    this.state.expectationId = null
+    this.#rebuildFrameSrc()
+    this.#pushBrowserUrl()
+  }
 
   // Reloads the feed frame whenever a framework activity event broadcasts a
   // replacement of the hidden sync-signal element. Mirrors the assessment
