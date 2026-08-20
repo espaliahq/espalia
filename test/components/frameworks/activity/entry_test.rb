@@ -16,6 +16,16 @@ class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
     Views::Frameworks::Activity::Entry.new(entry: entry).call
   end
 
+  # An entry anchored to a capability, for the navigation data-attr assertions.
+  def render_anchored_entry(payload:, capability_id: "cap-1", category_id: "cat-1")
+    entry = Frameworks::ActivityFeedQuery::Entry.new(
+      id: SecureRandom.uuid_v7, kind: "suggestion_edit", occurred_at: nil,
+      payload: payload, actor_name: "Ada", superseded: false,
+      capability_id: capability_id, category_id: category_id
+    )
+    Views::Frameworks::Activity::Entry.new(entry: entry).call
+  end
+
   context "org-structure update summaries" do
     should "name the field for a role-family rename" do
       assert_includes render_entry(kind: "role_family_updated", payload: { name: "Platform" }),
@@ -49,6 +59,21 @@ class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
 
     should "fall back to a bare summary when no known field changed" do
       assert_includes render_entry(kind: "role_updated", payload: {}), "Updated a role"
+    end
+  end
+
+  context "matrix navigation data attrs" do
+    should "navigate to the cell when the entry knows its level" do
+      html = render_anchored_entry(payload: { expectation_level: 3 })
+      assert_includes html, 'data-nav-level="cell"'
+      assert_includes html, 'data-nav-level-ordinal="3"'
+      assert_includes html, 'data-nav-capability-id="cap-1"'
+    end
+
+    should "fall back to capability navigation without a level" do
+      html = render_anchored_entry(payload: {})
+      assert_includes html, 'data-nav-level="capability"'
+      assert_not_includes html, "data-nav-level-ordinal"
     end
   end
 

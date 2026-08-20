@@ -296,7 +296,16 @@ class Views::Frameworks::Activity::Entry < Views::Base
                       "keydown.enter->context-pane#focusSuggestion " \
                       "keydown.space->context-pane#focusSuggestion"
       if @entry.capability_id.present?
-        base[:nav_level] = "capability"
+        # An entry that knows its level (expectation / illustration suggestions
+        # and edits) navigates to the specific cell — expand the row AND focus
+        # capability × level — not just the capability row.
+        level_ordinal = payload_value(:expectation_level)
+        if level_ordinal.present?
+          base[:nav_level] = "cell"
+          base[:nav_level_ordinal] = level_ordinal
+        else
+          base[:nav_level] = "capability"
+        end
         base[:nav_capability_id] = @entry.capability_id
       else
         base[:nav_level] = "category"
