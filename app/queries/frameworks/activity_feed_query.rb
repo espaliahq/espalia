@@ -111,6 +111,12 @@ class Frameworks::ActivityFeedQuery
   # *suggestions* get the level via #suggestion_meta instead.)
   EXPECTATION_KINDS = %w[expectation_added expectation_updated].freeze
 
+  # Direct illustration edits — their entries carry the level + role the
+  # illustration belongs to (`expectation_level` / `illustration_role_label`),
+  # folded in by #illustration_metadata. (Illustration *suggestions* get the
+  # same context via #suggestion_meta; reorders keep their role-in-summary.)
+  ILLUSTRATION_KINDS = %w[illustration_added illustration_updated illustration_removed].freeze
+
   # Maps each feed kind to the payload key carrying its actor's Person id, when
   # the actor is a first-class payload fact. Kinds absent here fall back to
   # `event.metadata[:actor_id]` (the universal provenance stamp) — that covers
@@ -297,7 +303,23 @@ class Frameworks::ActivityFeedQuery
       extra[:body] = active_comment_bodies[data[:comment_id]]
     end
     extra[:expectation_level] = structural_expectation_level(kind, data) if EXPECTATION_KINDS.include?(kind)
+    extra.merge!(illustration_metadata(data)) if ILLUSTRATION_KINDS.include?(kind)
     extra
+  end
+
+  # Level + role for a direct illustration edit — an illustration is a
+  # (capability × level × role) artefact, so its entry locates all three
+  # (the capability rides the anchor's context line). The added event carries
+  # expectation_id + role_id; update/remove carry only the illustration_id and
+  # resolve through the read-model maps.
+  def illustration_metadata(data)
+    expectation_id = data[:expectation_id] || illustration_to_expectation[data[:illustration_id]]
+    role_id = data[:role_id] || illustration_to_role[data[:illustration_id]]
+    meta = {}
+    level = expectation_to_level[expectation_id]
+    meta[:expectation_level] = level if level.present?
+    meta[:illustration_role_label] = role_labels[role_id] if role_id && role_labels.key?(role_id)
+    meta
   end
 
   # Level for a directly-authored / edited expectation entry (the suggestion
@@ -547,6 +569,14 @@ class Frameworks::ActivityFeedQuery
       .to_h { |i| [ i.illustration_id, i.expectation_id ] }
   end
 
+  # {illustration_id => role_id} — so illustration entries can name the role
+  # they illustrate for.
+  def illustration_to_role
+    @illustration_to_role ||= all_capabilities
+      .flat_map(&:expectations).flat_map(&:illustrations)
+      .to_h { |i| [ i.illustration_id, i.role_id ] }
+  end
+
   # {binding_id => { capability_id:, role_id: }}. Built from the read model
   # (covers every binding still present — incl. ones updated live, or
   # removed-but-not-yet-published) and supplemented from CapabilityRoleBindingCreated
@@ -611,21 +641,53 @@ class Frameworks::ActivityFeedQuery
           suggestion_kind: s.kind,
           suggestion_field: s.field,
           suggestion_status: s.status,
-          expectation_level: suggestion_level(s) } ]
+          expectation_level: suggestion_level(s),
+          suggestion_role_label: suggestion_role_label(s) } ]
     end
   end
 
   # The level a suggestion concerns, so the feed entry can show
   # "Capability · L<n>": proposed_attributes carries it for expectation
   # creates AND capability-anchored clarifications; an expectation-targeting
-  # edit/delete/clarification resolves it from the target expectation. nil
+  # edit/delete/clarification resolves it from the target expectation; an
+  # illustration suggestion resolves it through its parent expectation. nil
   # for everything else.
   def suggestion_level(suggestion)
     from_attrs = suggestion.proposed_attributes&.dig("level_ordinal")
     return from_attrs.to_i if from_attrs.present?
-    return nil unless suggestion.target_entity_type == "behavioural_expectation"
 
-    expectation_to_level[suggestion.target_entity_id]
+    case suggestion.target_entity_type
+    when "behavioural_expectation"
+      expectation_to_level[suggestion.target_entity_id]
+    when "role_illustration"
+      expectation_to_level[illustration_suggestion_expectation_id(suggestion)]
+    end
+  end
+
+  # The role an illustration suggestion concerns ("CODE · Name"), so its feed
+  # entry can locate the (capability × level × role) cell it proposes into.
+  # nil for every other entity type, and for history whose role no longer
+  # resolves.
+  def suggestion_role_label(suggestion)
+    return nil unless suggestion.target_entity_type == "role_illustration"
+
+    role_id =
+      if suggestion.kind == "create"
+        suggestion.proposed_attributes&.dig("role_id")
+      else
+        illustration_to_role[suggestion.target_entity_id]
+      end
+    role_id && role_labels[role_id]
+  end
+
+  # A create's parent IS the expectation; an edit/delete resolves through the
+  # existing illustration.
+  def illustration_suggestion_expectation_id(suggestion)
+    if suggestion.kind == "create"
+      suggestion.parent_id
+    else
+      illustration_to_expectation[suggestion.target_entity_id]
+    end
   end
 
   def suggested_edits

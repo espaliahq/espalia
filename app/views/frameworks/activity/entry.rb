@@ -484,9 +484,15 @@ class Views::Frameworks::Activity::Entry < Views::Base
       elsif cap then cap
       elsif cat then cat
       end
-    # Expectation entries pin the level too ("Category · Capability · L2").
+    # Expectation and illustration entries pin the level too
+    # ("Category · Capability · L2"), and illustration entries add the role
+    # ("… · L2 · E · Software Engineer") — an illustration is a
+    # (capability × level × role) artefact, so the entry locates all three.
     level = payload_value(:expectation_level)
-    base && level.present? ? "#{base} · L#{level}" : base
+    base = "#{base} · L#{level}" if base && level.present?
+    role = payload_value(:suggestion_role_label).presence || payload_value(:illustration_role_label)
+    base = "#{base} · #{role}" if base && role.present?
+    base
   end
 
   # ── Secondary line (preview / detail) ──

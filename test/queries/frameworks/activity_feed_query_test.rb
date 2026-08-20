@@ -614,6 +614,64 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "illustration role · level context" do
+    setup do
+      @family = create(:framework_role_family, framework_id: @fwid, tenant: @tenant)
+      @role = create(:framework_role, role_family_id: @family.role_family_id, tenant: @tenant,
+                     code: "E", name: "Software Engineer")
+      @ill.update!(role_id: @role.role_id)
+    end
+
+    should "carry level + role on an illustration create suggestion" do
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: SecureRandom.uuid_v7,
+        kind: "create", parent_id: @exp.expectation_id, field: nil, suggested_value: nil,
+        proposed_attributes: { "role_id" => @role.role_id, "description" => "New example" },
+        author_id: @actor.id)
+      append(Frameworks::Events::EntityCreationSuggested,
+        data: { suggestion_id: sid, entity_type: "role_illustration",
+                parent_id: @exp.expectation_id,
+                proposed_attributes: { role_id: @role.role_id, description: "New example" },
+                author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_create" }
+      assert entry, "expected a suggestion_create entry"
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+      assert_equal @cap.capability_id, entry.capability_id
+    end
+
+    should "carry level + role on an illustration edit suggestion via the existing illustration" do
+      sid = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: sid,
+        target_entity_type: "role_illustration", target_entity_id: @ill.illustration_id,
+        kind: "edit", field: "description", author_id: @actor.id)
+      append(Frameworks::Events::EditSuggested,
+        data: { suggestion_id: sid, target_entity_type: "role_illustration",
+                target_entity_id: @ill.illustration_id, field: "description",
+                suggested_value: "Better example", author_id: @actor.id },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "suggestion_edit" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:suggestion_role_label]
+    end
+
+    should "carry level + role on a direct illustration_updated entry" do
+      append(Frameworks::Events::RoleIllustrationUpdated,
+        data: { illustration_id: @ill.illustration_id, new_description: "Direct edit" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "illustration_updated" }
+      assert_equal 2, entry.payload[:expectation_level]
+      assert_equal "E · Software Engineer", entry.payload[:illustration_role_label]
+    end
+  end
+
   context "collaborator lifecycle" do
     setup do
       @collaborator = create(:person, tenant: @tenant, name: "Cora Collaborator")
