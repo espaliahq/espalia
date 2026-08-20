@@ -213,6 +213,45 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
                    FrameworkState::RoleIllustration.find_by(illustration_id: @ill_id).description
     end
 
+    should "approve an illustration edit from its kebab at the mobile viewport" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      ill_sugg_id = suggest_illustration_edit
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
+
+      page.execute_script(
+        "document.querySelector(\"#illustration-#{@ill_id} " \
+        "button[data-dropdown-target='trigger']\").click()"
+      )
+      assert_text "Approve illustration change"
+      page.execute_script(
+        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']\").click()"
+      )
+
+      wait_for_status("approved", ill_sugg_id)
+      assert_equal "Raises risks early and in writing",
+                   FrameworkState::RoleIllustration.find_by(illustration_id: @ill_id).description
+    end
+
+    should "reject an expectation edit from the cell kebab via the shared modal" do
+      exp_sugg_id = suggest_expectation_edit
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      assert_selector "tr[data-capability-id='#{@cap_id}']"
+
+      page.execute_script(
+        "document.querySelector(\"button[data-reject-suggestion-id='#{exp_sugg_id}']\").click()"
+      )
+      assert_selector "#reject-suggestion-modal", visible: true
+      fill_in "reject_reason", with: "Keep the published phrasing"
+      click_button "Reject suggestion"
+
+      wait_for_status("rejected", exp_sugg_id)
+      assert_equal "Asks clarifying questions",
+                   FrameworkState::BehaviouralExpectation.find_by(expectation_id: @exp_id).description
+    end
+
     should "reject a suggestion via the modal with an optional reason" do
       visit edit_framework_path(@framework_id)
       toggle_context_pane
@@ -257,10 +296,11 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
-      assert_no_selector "button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']",
-                         visible: :all
-      assert_no_selector "button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']",
-                         visible: :all
+      [ exp_sugg_id, ill_sugg_id ].each do |sid|
+        assert_no_selector "button[data-suggestion-action-approve-url-value*='#{sid}']",
+                           visible: :all
+        assert_no_selector "button[data-reject-suggestion-id='#{sid}']", visible: :all
+      end
     end
   end
 end
