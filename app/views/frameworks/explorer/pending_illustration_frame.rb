@@ -50,9 +50,13 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
     decoration = suggestion_text_classes(pending_edit_count: 1)
 
     div(
-      class: "flex items-start gap-1 pl-2",
+      class: "flex items-start gap-1.5 pl-2",
       data: { inline_editor_target: "display" }
     ) do
+      # Item marker matching IllustrationFrame's — amber, since this entry is a
+      # pending proposal.
+      span(class: "mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0",
+           aria: { hidden: "true" }) { }
       span(class: "flex-1 #{decoration}") { @attrs[:description] }
       edit_button
     end

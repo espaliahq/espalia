@@ -368,7 +368,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           render Components::Kit::Badge.new(role.code, variant: :default)
           ul_attrs = {
             id: "illustrations-#{expectation.expectation_id}-#{role_id}",
-            class: "mt-1 space-y-1"
+            class: "mt-1 space-y-1.5"
           }
           # ↑/↓ reordering — edit-rights holders only, and only when there is
           # something to reorder. The controller moves the DOM node on a 204,
