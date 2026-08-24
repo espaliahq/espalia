@@ -345,9 +345,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "suggestion_edit"     then "Suggested an edit to #{entity_word}"
     when "suggestion_create"   then "Proposed a new #{entity_word}"
     when "suggestion_delete"   then "Proposed archiving #{entity_word}"
-    when "suggestion_amended"  then "Amended a #{entity_word} suggestion"
-    when "suggestion_approved" then "Approved a #{entity_word} suggestion"
-    when "suggestion_rejected" then "Rejected a #{entity_word} suggestion"
+    when "suggestion_amended"  then "Amended #{articled_entity_word} suggestion"
+    when "suggestion_approved" then "Approved #{articled_entity_word} suggestion"
+    when "suggestion_rejected" then "Rejected #{articled_entity_word} suggestion"
     when "suggestion_withdrawn" then withdrawn_summary
     when "suggestion_commented" then commented_summary
     when "clarification_requested" then "Asked for clarification"
@@ -393,11 +393,11 @@ class Views::Frameworks::Activity::Entry < Views::Base
   # Withdraw/comment entries read differently when their anchor is a
   # clarification — "a clarification", not "an expectation suggestion".
   def withdrawn_summary
-    clarification_anchored? ? "Withdrew a clarification" : "Withdrew a #{entity_word} suggestion"
+    clarification_anchored? ? "Withdrew a clarification" : "Withdrew #{articled_entity_word} suggestion"
   end
 
   def commented_summary
-    clarification_anchored? ? "Commented on a clarification" : "Commented on a #{entity_word} suggestion"
+    clarification_anchored? ? "Commented on a clarification" : "Commented on #{articled_entity_word} suggestion"
   end
 
   def clarification_anchored?
@@ -448,6 +448,12 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def entity_word
     type = payload_value(:suggestion_entity_type)
     ENTITY_TYPE_LABELS.fetch(type, type.to_s.humanize.presence || "change").downcase
+  end
+
+  # "an illustration suggestion", not "a illustration suggestion".
+  def articled_entity_word
+    word = entity_word
+    "#{word.match?(/\A[aeiou]/) ? 'an' : 'a'} #{word}"
   end
 
   def collaborator_role
