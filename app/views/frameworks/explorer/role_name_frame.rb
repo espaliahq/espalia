@@ -45,7 +45,9 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
     span(
       class: "text-sm text-gray-600 dark:text-gray-400 truncate " \
              "#{suggestion_text_classes(added_in_draft: ghost)}",
-      title: (role_ghost_title if ghost)
+      # Always carry the full name — a narrow pane can still truncate, and the
+      # tooltip is the recovery.
+      title: (ghost ? role_ghost_title : @role.name)
     ) { @role.name }
   end
 
