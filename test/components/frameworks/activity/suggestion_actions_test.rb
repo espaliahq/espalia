@@ -16,6 +16,7 @@ class Views::Frameworks::Activity::SuggestionActionsTest < ActiveSupport::TestCa
     ))
   end
 
+  # @return [ActionView::Base] a request-backed view context for rendering
   def view_context
     @view_context ||= ApplicationController.new
       .tap { |controller| controller.request = ActionDispatch::TestRequest.create }
