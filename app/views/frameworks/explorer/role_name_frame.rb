@@ -43,9 +43,13 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
   def plain_name
     ghost = ghost_role?(@role)
     span(
-      class: "text-sm text-gray-600 dark:text-gray-400 truncate " \
+      # line-clamp, never single-line truncate: after the checkbox + reserved
+      # hover controls the name gets ~100px in the w-72 pane, so `truncate`
+      # clipped most real role names to a few characters. Two lines fit any
+      # sane name; the tooltip is the recovery beyond that.
+      class: "text-sm text-gray-600 dark:text-gray-400 line-clamp-2 break-words " \
              "#{suggestion_text_classes(added_in_draft: ghost)}",
-      title: (role_ghost_title if ghost)
+      title: (ghost ? role_ghost_title : @role.name)
     ) { @role.name }
   end
 

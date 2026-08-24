@@ -369,7 +369,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
               render Views::Frameworks::Explorer::PendingIllustrationFrame.new(
                 suggestion: suggestion,
                 framework_id: @framework_id,
-                is_author: suggestion.author_id.to_s == @current_person_id.to_s
+                is_author: suggestion.author_id.to_s == @current_person_id.to_s,
+                approval_authority: @approval_authority
               )
             end
           end

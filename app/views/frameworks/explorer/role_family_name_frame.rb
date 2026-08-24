@@ -43,9 +43,11 @@ class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
   def plain_name
     ghost = ghost_role_family?(@role_family)
     span(
-      class: "text-sm font-medium text-gray-700 dark:text-gray-300 truncate " \
+      # line-clamp, not single-line truncate — same rationale as RoleNameFrame:
+      # the narrow tree pane clipped real family names to a few characters.
+      class: "text-sm font-medium text-gray-700 dark:text-gray-300 line-clamp-2 break-words " \
              "#{suggestion_text_classes(added_in_draft: ghost)}",
-      title: (role_family_ghost_title if ghost)
+      title: (ghost ? role_family_ghost_title : @role_family.name)
     ) { @role_family.name }
   end
 

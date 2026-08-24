@@ -15,12 +15,14 @@
 # viewer whose precomputed {Frameworks::SuggestionApprovalAuthority} clears the
 # suggestion's tier — the authority gate is server-side, never client-side.
 module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
-  # Menu-item classes for a kebab dropdown entry.
+  # Menu-item classes for a kebab dropdown entry — the ONE definition, shared
+  # by every kebab menu (matrix and tree; the tree passes its denser padding).
   #
   # @param tone [String] text-colour utilities for the item
+  # @param padding [String] item padding — the tree uses "px-3 py-1.5"
   # @return [String]
-  def kebab_item_classes(tone)
-    "block w-full text-left px-4 py-2 text-sm #{tone} " \
+  def kebab_item_classes(tone = "text-gray-700 dark:text-gray-200", padding: "px-4 py-2")
+    "block w-full text-left #{padding} text-sm #{tone} " \
       "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
   end
 

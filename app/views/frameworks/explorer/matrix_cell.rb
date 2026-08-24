@@ -79,7 +79,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
       suggestion: suggestion,
       framework_id: @framework_id,
       level_ordinal: @ordinal,
-      is_author: @current_person_id.present? && suggestion.author_id.to_s == @current_person_id.to_s
+      is_author: @current_person_id.present? && suggestion.author_id.to_s == @current_person_id.to_s,
+      approval_authority: @approval_authority
     )
   end
 

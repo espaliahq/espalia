@@ -12,6 +12,9 @@
 class Views::Frameworks::Explorer::RoleTree < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
   include Views::Frameworks::Explorer::Concerns::GhostEntities
+  # For the shared kebab_trigger + kebab_item_classes (the tree passes its
+  # denser padding).
+  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   TRACK_OPTIONS = [
     { value: "both", label: "All" },
@@ -331,8 +334,6 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         role: role, framework_id: @framework_id, mode: @mode
       )
 
-      add_level_trigger(role) if @mode == :edit && @can_edit_structure
-
       button(
         type: "button",
         class: "opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
@@ -346,29 +347,33 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     end
   end
 
-  # Role-row actions kebab (⋮) — the scalable home for the role's dialogs, so
+  # Role-row actions kebab (⋮) — the scalable home for the role's actions, so
   # the hover row doesn't accumulate one button per action (the MatrixRow
-  # kebab precedent). "+ level" stays a direct affordance (highest-frequency
-  # during construction); dialogs live here.
+  # kebab precedent). "Add level…" lives here too: as a standalone "+ level"
+  # button it permanently reserved row width (opacity-0 still takes layout
+  # space) and crushed role names down to a few characters.
   def role_actions_kebab(role)
     # :fixed — the tree pane is an overflow container (aside overflow-hidden +
     # the scroll list), which clips an absolutely-positioned menu at its edge.
     render Components::Kit::Dropdown.new(align: :left, strategy: :fixed) do |dd|
-      dd.trigger(label: "Role actions") do
-        span(
-          class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity " \
-                 "inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
-                 "text-gray-400 hover:text-primary"
-        ) do
-          svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
-            s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
-                      "6a2 2 0 100 4 2 2 0 000-4z")
-          end
-        end
-      end
+      kebab_trigger(dd, label: "Role actions",
+        reveal_classes: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")
       dd.menu do
         button(
-          type: "button", role: "menuitem", class: kebab_item_classes,
+          type: "button", role: "menuitem", class: kebab_item_classes(padding: "px-3 py-1.5"),
+          data: {
+            action: "click->modal#open",
+            modal_target_id: "add-level-modal",
+            add_level_role_id: role.role_id,
+            add_level_role_name: role.name,
+            add_level_next_ordinal: next_ordinal_for(role),
+            # Draft levels included (graph-sourced) — feeds the modal's instant
+            # duplicate-ordinal validation.
+            add_level_taken_ordinals: role.levels.map(&:ordinal).sort.join(",")
+          }
+        ) { "Add level…" }
+        button(
+          type: "button", role: "menuitem", class: kebab_item_classes(padding: "px-3 py-1.5"),
           data: {
             action: "click->modal#open",
             modal_target_id: "role-edit-modal",
@@ -379,7 +384,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           }
         ) { "Edit role…" }
         button(
-          type: "button", role: "menuitem", class: kebab_item_classes,
+          type: "button", role: "menuitem", class: kebab_item_classes(padding: "px-3 py-1.5"),
           data: {
             action: "click->modal#open",
             modal_target_id: "level-editor-modal",
@@ -388,37 +393,6 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         ) { "Edit levels…" }
       end
     end
-  end
-
-  def kebab_item_classes
-    "w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 " \
-      "hover:bg-gray-100 dark:hover:bg-gray-700"
-  end
-
-  # Hover-revealed "+ level" trigger on the role row — opens the shared
-  # add-level modal, naming this role and its next free ordinal via the trigger
-  # dataset. Lives on the tree (not the matrix header) so it's reachable for a
-  # ghost role, which has no columns yet.
-  def add_level_trigger(role)
-    button(
-      type: "button",
-      class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
-             "focus-visible:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
-             "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-             "hover:bg-primary/20 hover:text-primary transition-opacity",
-      data: {
-        action: "click->modal#open",
-        modal_target_id: "add-level-modal",
-        add_level_role_id: role.role_id,
-        add_level_role_name: role.name,
-        add_level_next_ordinal: next_ordinal_for(role),
-        # Draft levels included (graph-sourced) — feeds the modal's instant
-        # duplicate-ordinal validation.
-        add_level_taken_ordinals: role.levels.map(&:ordinal).sort.join(",")
-      },
-      title: "Add level",
-      aria: { label: "Add level to #{role.name}" }
-    ) { "+ level" }
   end
 
   # Next free ordinal for the role — max across ALL its levels (draft-added

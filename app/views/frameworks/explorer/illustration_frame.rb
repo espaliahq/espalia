@@ -73,10 +73,10 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
         span(class: "flex-1 #{decoration}".strip) { @illustration.description }
       end
       if @mode == :edit
-        approval_kebab if approvable_pending_edit?
         reorder_buttons if @can_reorder
         edit_button
-        archive_button
+        # Kebab last — always the right-most control (phlex-views.md).
+        actions_kebab
       end
     end
   end
@@ -89,19 +89,30 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       @approval_authority.can_approve?("role_illustration")
   end
 
-  def approval_kebab
-    render_approval_kebab(
-      framework_id: @framework_id,
-      suggestion_id: @pending_edit[:suggestion_id],
-      change_label: "illustration change",
-      entity_label: "illustration",
-      preview: @pending_edit[:suggested_value].to_s,
-      trigger_label: "Illustration suggestion actions",
+  # The illustration's ⋮ menu: Approve / Reject for an approvable pending edit,
+  # plus Archive… (any edit-mode viewer — the Operation decides direct vs
+  # suggestion). Archive lives here rather than as a standalone icon so the
+  # hover cluster stays pencil-then-kebab.
+  def actions_kebab
+    render Components::Kit::Dropdown.new(align: :left) do |dd|
       # focus-within, not focus-visible: focus lands on the dropdown's
       # <button>, so focus-visible on this inner span could never match.
-      reveal_classes: "opacity-0 group-hover/ill:opacity-100 " \
-                      "group-focus-within/ill:opacity-100"
-    )
+      kebab_trigger(dd, label: "Illustration actions",
+        reveal_classes: "opacity-0 group-hover/ill:opacity-100 " \
+                        "group-focus-within/ill:opacity-100")
+      dd.menu do
+        if approvable_pending_edit?
+          render_approval_kebab_items(
+            framework_id: @framework_id,
+            suggestion_id: @pending_edit[:suggestion_id],
+            change_label: "illustration change",
+            entity_label: "illustration",
+            preview: @pending_edit[:suggested_value].to_s
+          )
+        end
+        archive_menu_item
+      end
+    end
   end
 
   # ↑/↓ move-within-list chevrons, hover-revealed like the pencil. The action
@@ -128,36 +139,29 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
     end
   end
 
-  # Archive (remove) the illustration. The single removal affordance — the
-  # IllustrationArchivesController + ArchiveIllustration operation decide, from
-  # the edit/suggest toggle + the viewer's authority, whether it removes
+  # Archive (remove) the illustration — a ⋮ menu item, not a standalone icon.
+  # The IllustrationArchivesController + ArchiveIllustration operation decide,
+  # from the edit/suggest toggle + the viewer's authority, whether it removes
   # directly or proposes a suggestion. A small inline form (Turbo handles CSRF +
   # the redirect, same as the edit form); turbo-confirm guards the click.
-  def archive_button
+  def archive_menu_item
     form(
       method: "post",
       action: framework_illustration_archives_path(framework_id: @framework_id),
-      class: "inline shrink-0 mt-0.5",
-      data: { turbo: "true", turbo_confirm: "Archive this illustration?" }
+      # role=none: a <form> interrupting the menuitem's menu ancestry breaks
+      # the ARIA menu contract (Kit::Dropdown's documented rule).
+      # turbo_frame _top: the controller redirects to the full edit page, and
+      # this form lives inside the illustration's Turbo Frame — without _top
+      # the redirect renders "Content missing" in the expanded row and drops
+      # the flash (phlex-views.md, in-frame navigation rule).
+      role: "none",
+      data: { turbo: "true", turbo_frame: "_top", turbo_confirm: "Archive this illustration?" }
     ) do
       input(type: "hidden", name: "archive[illustration_id]", value: @illustration.illustration_id)
       button(
-        type: "submit",
-        class: "opacity-0 group-hover/ill:opacity-100 " \
-               "group-focus-within/ill:opacity-100 focus-visible:opacity-100 " \
-               "transition-opacity text-gray-400 hover:text-red-500 shrink-0",
-        aria_label: "Archive illustration"
-      ) do
-        # Archive-box icon
-        svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
-            stroke: "currentColor", stroke_width: "2") do |s|
-          s.path(stroke_linecap: "round", stroke_linejoin: "round",
-                 d: "M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 " \
-                    "01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 " \
-                    "1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 " \
-                    "1.125v1.5c0 .621.504 1.125 1.125 1.125z")
-        end
-      end
+        type: "submit", role: "menuitem",
+        class: kebab_item_classes("text-gray-700 dark:text-gray-200")
+      ) { "Archive…" }
     end
   end
 
