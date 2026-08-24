@@ -43,7 +43,7 @@ class Views::Frameworks::Activity::SuggestionActions < Views::Base
       p(
         class: "hidden text-[11px] font-medium text-green-700 dark:text-green-400",
         data: { suggestion_action_target: "resolved" }
-      ) { "" }
+      )
     end
   end
 

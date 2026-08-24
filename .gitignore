@@ -43,3 +43,6 @@
 .devcontainer/.env
 
 .claude/scheduled_tasks.lock
+
+# macOS Finder droppings
+.DS_Store

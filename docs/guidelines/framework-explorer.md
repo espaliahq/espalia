@@ -1119,6 +1119,35 @@ Two halves of the "actionable feed entry" wiring that are easy to get wrong:
   viewers pick up the applied edit on their next interaction. Symmetric: a future
   grid-side approve must refresh the feed the same way.
 
+### 22. The pane's scroll container lives INSIDE the reloaded frame — reloads must preserve it, and feedback must not wait for them
+
+Two coupled consequences of the pane's broadcast-reload design, found via field
+feedback ("Approve is super slow… it then takes me to the top"):
+
+- **Scroll**: the feed/card `overflow-y-auto` scroller is part of the frame
+  content, so every `frame.reload()` replaces it and resets `scrollTop` to 0 —
+  a reviewer working down a long list of pending suggestions was thrown to the
+  top after each approval. `context-pane#reloadPreservingScroll` captures the
+  `scroller` target's position before every **same-content** reload
+  (broadcast, post-submit, catch-up) and restores it on `turbo:frame-load`.
+  Focus-driven `src` changes render *different* content and deliberately start
+  at the top — `#rebuildFrameSrc` clears any saved position when it changes
+  `src`, so a scroll saved for an in-flight reload can never land on the
+  wrong content.
+- **Feedback**: the actor's entry only visibly changed when the broadcast
+  round trip re-rendered the feed (1–2s in production) — long enough that
+  users re-clicked, thinking the first click hadn't registered. Resolution
+  feedback is therefore **local first**: "Approving…" during the POST, the
+  action row swaps to "✓ Approved"/"✓ Rejected" on success (via the
+  `suggestion:resolved` detail — one code path for self, the reject modal,
+  and other surfaces), and the broadcast reload merely converges to the
+  canonical state. Never make perceived responsiveness wait on a broadcast.
+
+Known trade-off: a reload discards "load older" batches. Restore is
+exact-or-nothing — a saved position deeper than the fresh (first-batch)
+content starts at the top of the visibly-reset list rather than landing at
+the bottom of an unrelated stretch of feed.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared

@@ -121,8 +121,10 @@ export default class extends BaseController {
   // the src hasn't changed.
   onSuggestionSubmitted() {
     if (!this.hasFrameTarget) return
-    this.#rebuildFrameSrc()
-    this.#reloadPreservingScroll()
+    // A changed src already starts a fresh load of different content (top is
+    // correct there); only a same-src submit needs the forced,
+    // scroll-preserving reload.
+    if (!this.#rebuildFrameSrc()) this.#reloadPreservingScroll()
   }
 
   // Resets the explorer to framework-level focus — collapses any expanded row.
@@ -172,8 +174,10 @@ export default class extends BaseController {
   // Reloads the feed frame whenever a framework activity event broadcasts a
   // replacement of the hidden sync-signal element. Mirrors the assessment
   // sync controller — the reload is unconditional (no self-suppression): the
-  // feed frame is the only thing that re-fetches, so there's no matrix flicker
-  // or scroll reset to guard against, and the actor should see their own entry.
+  // feed frame is the only thing that re-fetches, so there's no matrix
+  // flicker, and the actor should see their own entry. The pane's OWN scroll
+  // does need guarding — the scroller lives inside the reloaded frame, hence
+  // #reloadPreservingScroll (never throw a reviewer back to the top).
   #observeSyncSignal() {
     if (!this.hasSignalTarget) return
 
@@ -216,8 +220,9 @@ export default class extends BaseController {
     this.#rebuildFrameSrc()
   }
 
+  // Returns true when it changed the frame's src (which itself starts a load).
   #rebuildFrameSrc() {
-    if (!this.hasFrameTarget || !this.basePathValue) return
+    if (!this.hasFrameTarget || !this.basePathValue) return false
 
     const url = new URL(this.basePathValue, window.location.origin)
     url.searchParams.set("layout", "panel")
@@ -239,8 +244,12 @@ export default class extends BaseController {
     }
 
     const next = url.toString()
-    if (this.frameTarget.src === next) return
+    if (this.frameTarget.src === next) return false
+    // Different src = different content: a scroll position saved for an
+    // in-flight same-content reload must never land on it.
+    this._savedScrollTop = null
     this.frameTarget.src = next
+    return true
   }
 
   // Whether any textarea in the pane is focused or holds an unsent DRAFT —
@@ -281,9 +290,12 @@ export default class extends BaseController {
     if (this._savedScrollTop == null) return
     const top = this._savedScrollTop
     this._savedScrollTop = null
-    // The fresh content may not carry a scroller (e.g. an empty state) —
-    // and a shorter list clamps naturally when scrollTop exceeds its max.
-    if (this.hasScrollerTarget) this.scrollerTarget.scrollTop = top
+    if (!this.hasScrollerTarget) return
+    // Exact-or-nothing: a reload discards "load older" batches, and clamping
+    // a deep position to the bottom of the shorter first batch is more
+    // disorienting than starting at the top of the visibly-reset list.
+    const max = this.scrollerTarget.scrollHeight - this.scrollerTarget.clientHeight
+    if (top <= max) this.scrollerTarget.scrollTop = top
   }
 
   #pushBrowserUrl() {

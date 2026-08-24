@@ -336,7 +336,10 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
           return s.scrollTop;
         })()
       JS
-      assert_operator scrolled_to, :>, 0, "feed must overflow for this test to mean anything"
+      # ≥200 (not just >0): with a barely-overflowing feed, clamping could
+      # make the restore assertion pass vacuously even after a reset-to-top
+      # regression.
+      assert_operator scrolled_to, :>=, 200, "feed must overflow well past the tolerance band"
 
       page.execute_script(
         "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{@sugg_id}'] " \

@@ -43,12 +43,25 @@ export default class extends Controller {
     const originalLabel = button.textContent
     button.textContent = "Approving…"
 
-    const response = await post(this.approveUrlValue, { responseKind: "turbo-stream" })
+    // request.js rejects (not resolves) on network failure and on 401 —
+    // without the catch the button would sit disabled reading "Approving…"
+    // forever with no retry path.
+    let response
+    try {
+      response = await post(this.approveUrlValue, { responseKind: "turbo-stream" })
+    } catch {
+      response = null
+    }
 
-    if (response.ok) {
-      this.#showResolved("✓ Approved")
+    if (response?.ok) {
+      // Terminal label for the bare kebab mount (no targets there): stays
+      // informative even if the follow-up matrix refresh fails, and never
+      // re-enables a button whose suggestion is already approved.
+      button.textContent = "✓ Approved"
       // Matrix refreshes for the acting user; the feed reloads via broadcast.
-      // The detail lets other surfaces showing this suggestion resolve too.
+      // The detail resolves every surface showing this suggestion in place —
+      // including THIS row (the element listens for the event too), so the
+      // resolved-marker swap has exactly one code path.
       window.dispatchEvent(new CustomEvent("suggestion:resolved", {
         detail: { suggestionId: this.suggestionIdValue, outcome: "approved" }
       }))
