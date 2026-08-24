@@ -123,14 +123,18 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       toggle_context_pane
       assert_selector "#suggestion-panel button", text: "Approve"
 
+      # Neutralise the broadcast-driven frame reload for this test: the point
+      # is that the resolved marker appears WITHOUT it (instant local
+      # feedback), and on a loaded runner the reload can otherwise replace
+      # the marker before the assertion polls it.
+      page.execute_script("document.querySelector('#suggestion-panel').reload = () => {}")
       page.execute_script(
         "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{@sugg_id}'] " \
         "button[data-action='suggestion-action#approve']\").click()"
       )
 
       # Instant local feedback: the action row swaps to its resolved state the
-      # moment the POST succeeds — before the broadcast-driven feed reload
-      # (which replaces it with the canonical resolution entry).
+      # moment the POST succeeds — no feed reload involved (stubbed above).
       assert_text "✓ Approved"
 
       wait_for_status("approved")
@@ -361,11 +365,14 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Not aligned with the level framing"
+      # Neutralise the broadcast reload so the transient local marker can't be
+      # replaced by the canonical feed entry before the assertion polls it.
+      page.execute_script("document.querySelector('#suggestion-panel').reload = () => {}")
       click_button_with_js_fallback "Reject suggestion", expect_no_text: "Reject suggestion"
 
       # The rejected entry's action row swaps to its resolved state in place —
-      # the modal's dispatch carries the suggestion id (instant feedback,
-      # ahead of the broadcast reload).
+      # the modal's dispatch carries the suggestion id (instant feedback, no
+      # feed reload involved).
       assert_text "✓ Rejected"
 
       wait_for_status("rejected")
