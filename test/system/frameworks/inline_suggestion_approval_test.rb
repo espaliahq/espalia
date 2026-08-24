@@ -259,7 +259,7 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Covered by the existing example"
-      click_button "Reject suggestion"
+      click_button_with_js_fallback "Reject suggestion", expect_no_text: "Reject suggestion"
 
       wait_for_status("rejected", create_sugg_id)
       assert_not FrameworkState::RoleIllustration.exists?(description: "Shares a written risk log weekly"),
@@ -298,7 +298,7 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Keep the published phrasing"
-      click_button "Reject suggestion"
+      click_button_with_js_fallback "Reject suggestion", expect_no_text: "Reject suggestion"
 
       wait_for_status("rejected", exp_sugg_id)
       assert_equal "Asks clarifying questions",
@@ -314,7 +314,7 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Not aligned with the level framing"
-      click_button "Reject suggestion"
+      click_button_with_js_fallback "Reject suggestion", expect_no_text: "Reject suggestion"
 
       wait_for_status("rejected")
 
