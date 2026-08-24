@@ -248,6 +248,24 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
              "approving the create should apply the new illustration"
     end
 
+    should "reject a NEW illustration from its ghost kebab via the shared modal" do
+      create_sugg_id = suggest_illustration_create
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
+
+      page.execute_script(
+        "document.querySelector(\"button[data-reject-suggestion-id='#{create_sugg_id}']\").click()"
+      )
+      assert_selector "#reject-suggestion-modal", visible: true
+      fill_in "reject_reason", with: "Covered by the existing example"
+      click_button "Reject suggestion"
+
+      wait_for_status("rejected", create_sugg_id)
+      assert_not FrameworkState::RoleIllustration.exists?(description: "Shares a written risk log weekly"),
+                 "rejecting the create must not apply the illustration"
+    end
+
     should "approve an illustration edit from its kebab at the mobile viewport" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       ill_sugg_id = suggest_illustration_edit
