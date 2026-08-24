@@ -22,7 +22,7 @@ Response-time thresholds (NN/g):
 | ----------------- | ---------------------------------------------------------------------------------------------------- |
 | < 0.1s            | No indicator — one would flicker                                                                     |
 | 0.1–1s            | May pause without an indicator, but must not silently block input                                    |
-| > 1s              | Visible busy indicator required. **Blocker if absent.**                                              |
+| > 1s              | Visible busy indicator required — its absence is a defect, rated per SKILL.md's scale                |
 | > 10s, measurable | Determinate progress (percent or time remaining) plus cancel                                         |
 | Unbounded         | Honest indeterminate status naming the current activity, plus cancel — never a fabricated percentage |
 

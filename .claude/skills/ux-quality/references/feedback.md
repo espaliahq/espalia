@@ -5,7 +5,8 @@
 - Every interactive control has visibly distinct default, hover, active,
   focus-visible, disabled, and (where applicable) loading states. Drive
   hover and keyboard focus separately and screenshot both.
-- **Blocker: no visible keyboard focus indicator** (also WCAG 2.4.7).
+- **Severity 3: no visible keyboard focus indicator** — a failed WCAG 2.4.7
+  (AA) success criterion, rated per SKILL.md's scale.
 - Affordances exist: cursor changes on interactive elements, pressed
   states respond, disabled states are visually distinct.
 
@@ -72,6 +73,7 @@ state change in the page beats both.
   consistency only.
 - No system jargon or raw enums in rendered text — scan for
   `_`-separated uppercase tokens, `undefined`, `null`, `NaN`.
-  **Blocker: `undefined`/`NaN` rendered to users.**
+  `undefined`/`NaN` rendered to users is always a defect — rate it on
+  SKILL.md's scale by its actual task impact.
 - Instructional text is front-loaded and scannable; empty states and
   errors follow the same verb-first plain language.
