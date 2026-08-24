@@ -9,6 +9,8 @@
 # enforced via {FrameworkSuggestionPolicy}.
 #
 class Frameworks::SuggestionsController < ApplicationController
+  include Frameworks::SuggestionAuthority
+
   before_action :set_framework
   before_action :set_suggestion, only: [ :show, :approve, :reject, :resolve, :amend, :destroy ]
 
@@ -248,7 +250,9 @@ class Frameworks::SuggestionsController < ApplicationController
       framework_id: @framework.framework_id,
       # amend? is author-only, so the requester is the author.
       is_author: true,
-      error: error
+      error: error,
+      # The frame swap must not drop the approval kebab (Lesson 13/16 class).
+      approval_authority: framework_suggestion_approval_authority
     ), layout: false, status: status
   end
 

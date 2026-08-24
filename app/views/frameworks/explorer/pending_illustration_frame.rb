@@ -10,6 +10,7 @@
 #
 class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   # @param suggestion [FrameworkState::SuggestedEdit] kind: "create", target: role_illustration
   # @param framework_id [String] UUID of the framework
@@ -17,11 +18,16 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   # @param error [String, nil] a failed inline-amend message, surfaced in the
   #   frame (a bodyless error response would blank the ghost to
   #   "Content missing")
-  def initialize(suggestion:, framework_id:, is_author: false, error: nil)
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] gates
+  #   the inline Approve/Reject kebab (§12). Controller frame re-renders must
+  #   re-thread it (Hard-Won Lesson 13/16 class).
+  def initialize(suggestion:, framework_id:, is_author: false, error: nil,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @suggestion = suggestion
     @framework_id = framework_id
     @is_author = is_author
     @error = error
+    @approval_authority = approval_authority
     @attrs = (suggestion.proposed_attributes || {}).symbolize_keys
   end
 
@@ -61,7 +67,29 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
         end
       end
       edit_button
+      # Kebab last — always the right-most control (phlex-views.md).
+      approval_kebab if approvable?
     end
+  end
+
+  # A pending NEW illustration is approvable from the grid like a pending edit
+  # — same tier, same §12 machinery (approval stages the add; the card remains
+  # the escape hatch for discussion).
+  def approvable?
+    @approval_authority.can_approve?("role_illustration")
+  end
+
+  def approval_kebab
+    render_approval_kebab(
+      framework_id: @framework_id,
+      suggestion_id: @suggestion.suggestion_id,
+      change_label: "new illustration",
+      entity_label: "new illustration",
+      preview: @attrs[:description].to_s,
+      trigger_label: "New-illustration suggestion actions",
+      reveal_classes: "opacity-0 group-hover/ill:opacity-100 " \
+                      "group-focus-within/ill:opacity-100"
+    )
   end
 
   def edit_button

@@ -28,11 +28,11 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
       rfid = SecureRandom.uuid_v7
-      role_id = SecureRandom.uuid_v7
+      @role_id = SecureRandom.uuid_v7
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rfid, "Engineering")
-      handler.add_role(@framework_id, role_id, rfid, "Software Engineer", "E", "ic")
-      handler.add_level(@framework_id, SecureRandom.uuid_v7, role_id, 1, "Engineer I", "E1", is_entry: true)
+      handler.add_role(@framework_id, @role_id, rfid, "Software Engineer", "E", "ic")
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, @role_id, 1, "Engineer I", "E1", is_entry: true)
 
       @cat_id = SecureRandom.uuid_v7
       @cap_id = SecureRandom.uuid_v7
@@ -40,11 +40,11 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       @ill_id = SecureRandom.uuid_v7
       handler.add_capability_category(@framework_id, @cat_id, "Thinking", ordinal: 1)
       handler.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, @cat_id, "Strategic Thinking")
-      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, role_id)
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @role_id)
       handler.set_behavioural_expectation(@framework_id, @exp_id, SecureRandom.uuid_v7,
         @cap_id, 1, "Asks clarifying questions")
       handler.add_role_illustration(@framework_id, @ill_id, SecureRandom.uuid_v7,
-        @exp_id, role_id, 1, "Raises risks in stand-up")
+        @exp_id, @role_id, 1, "Raises risks in stand-up")
       handler.publish_version(@framework_id, "v1")
 
       handler.add_collaborator(@framework_id, @owner.id.to_s, "owner", added_by: @owner.id.to_s)
@@ -88,6 +88,18 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       Frameworks::CommandHandler.new.suggest_edit(@framework_id, id,
         "role_illustration", @ill_id, "description",
         "Raises risks early and in writing", @collaborator.id.to_s, mode: :suggesting)
+    end
+    id
+  end
+
+  # A pending NEW illustration (create suggestion) — renders as a ghost entry.
+  def suggest_illustration_create
+    id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      Frameworks::CommandHandler.new.suggest_create(@framework_id, id,
+        "role_illustration",
+        { "role_id" => @role_id, "description" => "Shares a written risk log weekly" },
+        parent_id: @exp_id, author_id: @collaborator.id.to_s, mode: :suggesting)
     end
     id
   end
@@ -204,6 +216,9 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
         "button[data-dropdown-target='trigger']\").click()"
       )
       assert_text "Approve illustration change"
+      # Archive lives in the same kebab — the menu is the illustration's
+      # single "more actions" home.
+      assert_text "Archive…"
       page.execute_script(
         "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']\").click()"
       )
@@ -211,6 +226,26 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_status("approved", ill_sugg_id)
       assert_equal "Raises risks early and in writing",
                    FrameworkState::RoleIllustration.find_by(illustration_id: @ill_id).description
+    end
+
+    should "approve a NEW illustration from its ghost kebab" do
+      create_sugg_id = suggest_illustration_create
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
+
+      page.execute_script(
+        "document.querySelector(\"turbo-frame[id='pending-suggestion-#{create_sugg_id}'] " \
+        "button[data-dropdown-target='trigger']\").click()"
+      )
+      assert_text "Approve new illustration"
+      page.execute_script(
+        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{create_sugg_id}']\").click()"
+      )
+
+      wait_for_status("approved", create_sugg_id)
+      assert FrameworkState::RoleIllustration.exists?(description: "Shares a written risk log weekly"),
+             "approving the create should apply the new illustration"
     end
 
     should "approve an illustration edit from its kebab at the mobile viewport" do
@@ -289,14 +324,15 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       end
     end
 
-    should "get no approval kebab on expectation cells or illustrations" do
+    should "get no approval kebab on expectation cells, illustrations, or ghosts" do
       exp_sugg_id = suggest_expectation_edit
       ill_sugg_id = suggest_illustration_edit
+      create_sugg_id = suggest_illustration_create
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
-      [ exp_sugg_id, ill_sugg_id ].each do |sid|
+      [ exp_sugg_id, ill_sugg_id, create_sugg_id ].each do |sid|
         assert_no_selector "button[data-suggestion-action-approve-url-value*='#{sid}']",
                            visible: :all
         assert_no_selector "button[data-reject-suggestion-id='#{sid}']", visible: :all

@@ -15,16 +15,22 @@
 class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::InlineEditable
+  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   # @param suggestion [FrameworkState::SuggestedEdit] kind: "create", target: behavioural_expectation
   # @param framework_id [String]
   # @param level_ordinal [Integer] the cell's level ordinal
   # @param is_author [Boolean] whether the viewer authored this proposal
-  def initialize(suggestion:, framework_id:, level_ordinal:, is_author: false)
+  # @param approval_authority [Frameworks::SuggestionApprovalAuthority] gates
+  #   the inline Approve/Reject kebab (§12). Form submits are full navigations
+  #   (`_top`), so no controller re-threading is needed here.
+  def initialize(suggestion:, framework_id:, level_ordinal:, is_author: false,
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @suggestion = suggestion
     @framework_id = framework_id
     @level_ordinal = level_ordinal
     @is_author = is_author
+    @approval_authority = approval_authority
     @attrs = (suggestion.proposed_attributes || {}).symbolize_keys
   end
 
@@ -53,7 +59,29 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
                     "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
       end
       render_inline_editor_pencil(aria_label: @is_author ? "Amend suggestion" : "Suggest alternative")
+      # Kebab last — always the right-most control (phlex-views.md).
+      approval_kebab if approvable?
     end
+  end
+
+  # A pending NEW expectation is approvable from the grid like a pending edit
+  # — expectation tier, same §12 machinery (approval stages the add into a
+  # draft; publish remains the gate).
+  def approvable?
+    @approval_authority.can_approve?("behavioural_expectation")
+  end
+
+  def approval_kebab
+    render_approval_kebab(
+      framework_id: @framework_id,
+      suggestion_id: @suggestion.suggestion_id,
+      change_label: "new expectation",
+      entity_label: "new expectation",
+      preview: proposed_text.to_s,
+      trigger_label: "New-expectation suggestion actions",
+      reveal_classes: "opacity-0 group-hover/ine:opacity-100 " \
+                      "group-focus-within/ine:opacity-100"
+    )
   end
 
   # Submits to the create endpoint; SetBehaviouralExpectation amends the author's

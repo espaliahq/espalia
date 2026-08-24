@@ -178,7 +178,10 @@ class Frameworks::IllustrationsController < ApplicationController
           Views::Frameworks::Explorer::PendingIllustrationFrame.new(
             suggestion: suggestion,
             framework_id: @framework.framework_id,
-            is_author: true
+            is_author: true,
+            # A pending create always exists here, so the kebab gate is live —
+            # re-thread the authority (Hard-Won Lesson 13/16 class).
+            approval_authority: framework_suggestion_approval_authority
           ),
           layout: false
         )
