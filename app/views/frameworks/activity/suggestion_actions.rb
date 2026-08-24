@@ -21,15 +21,29 @@ class Views::Frameworks::Activity::SuggestionActions < Views::Base
 
   def view_template
     div(
-      class: "mt-1.5 flex items-center gap-2",
+      class: "mt-1.5",
       data: {
         controller: "suggestion-action",
         suggestion_action_approve_url_value:
-          approve_framework_suggestion_path(@framework_id, @suggestion_id, inline: 1)
+          approve_framework_suggestion_path(@framework_id, @suggestion_id, inline: 1),
+        suggestion_action_suggestion_id_value: @suggestion_id,
+        # A resolution landed elsewhere (the reject modal, another surface for
+        # the same suggestion) — swap this row to its resolved state too.
+        action: "suggestion:resolved@window->suggestion-action#onResolved"
       }
     ) do
-      approve_button
-      reject_button
+      div(class: "flex items-center gap-2", data: { suggestion_action_target: "actions" }) do
+        approve_button
+        reject_button
+      end
+      # Instant local feedback: shown the moment the approve POST (or the
+      # reject modal) succeeds, ~1-2s before the broadcast-driven feed reload
+      # renders the canonical resolution entry. Text set by the controller
+      # ("✓ Approved" / "✓ Rejected").
+      p(
+        class: "hidden text-[11px] font-medium text-green-700 dark:text-green-400",
+        data: { suggestion_action_target: "resolved" }
+      )
     end
   end
 

@@ -123,10 +123,19 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       toggle_context_pane
       assert_selector "#suggestion-panel button", text: "Approve"
 
+      # Neutralise the broadcast-driven frame reload for this test: the point
+      # is that the resolved marker appears WITHOUT it (instant local
+      # feedback), and on a loaded runner the reload can otherwise replace
+      # the marker before the assertion polls it.
+      page.execute_script("document.querySelector('#suggestion-panel').reload = () => {}")
       page.execute_script(
         "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{@sugg_id}'] " \
         "button[data-action='suggestion-action#approve']\").click()"
       )
+
+      # Instant local feedback: the action row swaps to its resolved state the
+      # moment the POST succeeds — no feed reload involved (stubbed above).
+      assert_text "✓ Approved"
 
       wait_for_status("approved")
 
@@ -305,6 +314,51 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
                    FrameworkState::BehaviouralExpectation.find_by(expectation_id: @exp_id).description
     end
 
+    should "keep the feed's scroll position across the post-approval reload" do
+      # Enough feed entries to make the pane scroll (each category add is one
+      # structural entry).
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        22.times do |i|
+          handler.add_capability_category(@framework_id, SecureRandom.uuid_v7,
+            "Filler Category #{i}", ordinal: 10 + i)
+        end
+      end
+
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      assert_selector "#suggestion-panel button", text: "Approve"
+
+      scrolled_to = page.evaluate_script(<<~JS)
+        (() => {
+          const s = document.querySelector("[data-context-pane-target='scroller']");
+          s.scrollTop = 400;
+          return s.scrollTop;
+        })()
+      JS
+      # ≥200 (not just >0): with a barely-overflowing feed, clamping could
+      # make the restore assertion pass vacuously even after a reset-to-top
+      # regression.
+      assert_operator scrolled_to, :>=, 200, "feed must overflow well past the tolerance band"
+
+      page.execute_script(
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{@sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
+      )
+      wait_for_status("approved")
+      # The broadcast reload has landed once the canonical resolution entry
+      # renders in the feed.
+      within "#suggestion-panel" do
+        assert_text "Approved a capability suggestion"
+      end
+
+      restored = page.evaluate_script(
+        "document.querySelector(\"[data-context-pane-target='scroller']\").scrollTop"
+      )
+      assert_operator restored, :>=, scrolled_to - 100,
+        "the reload must restore the reviewer's scroll position, not reset to the top"
+    end
+
     should "reject a suggestion via the modal with an optional reason" do
       visit edit_framework_path(@framework_id)
       toggle_context_pane
@@ -314,7 +368,15 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Not aligned with the level framing"
+      # Neutralise the broadcast reload so the transient local marker can't be
+      # replaced by the canonical feed entry before the assertion polls it.
+      page.execute_script("document.querySelector('#suggestion-panel').reload = () => {}")
       click_button_with_js_fallback "Reject suggestion", expect_no_text: "Reject suggestion"
+
+      # The rejected entry's action row swaps to its resolved state in place —
+      # the modal's dispatch carries the suggestion id (instant feedback, no
+      # feed reload involved).
+      assert_text "✓ Rejected"
 
       wait_for_status("rejected")
 

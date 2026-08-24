@@ -96,7 +96,11 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
   end
 
   def body
-    div(class: "flex-1 overflow-y-auto p-4") do
+    # scroller target: the context-pane controller preserves this element's
+    # scrollTop across same-content frame reloads (broadcasts, post-submit) —
+    # a reviewer working down a long feed must not be thrown back to the top
+    # after every approval.
+    div(class: "flex-1 overflow-y-auto p-4", data: { context_pane_target: "scroller" }) do
       if @entries.empty?
         empty_state
       else

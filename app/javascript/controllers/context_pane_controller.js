@@ -21,7 +21,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame", "signal"]
+  static targets = ["frame", "signal", "scroller"]
   static values = {
     basePath: String,
     initialRoleIds: { type: Array, default: [] },
@@ -56,6 +56,12 @@ export default class extends BaseController {
     this.onComposerSettle = () => setTimeout(() => this.#catchUpAfterComposer(), 0)
     this.element.addEventListener("focusout", this.onComposerSettle)
     this.element.addEventListener("input", this.onComposerSettle)
+
+    // Restore the feed's scroll position after a same-content reload — the
+    // scroll container lives INSIDE the frame, so every reload replaces it
+    // and would otherwise reset a reviewer to the top of a long feed.
+    this.onFrameLoad = () => this.#restoreScroll()
+    this.element.addEventListener("turbo:frame-load", this.onFrameLoad)
   }
 
   disconnect() {
@@ -63,6 +69,7 @@ export default class extends BaseController {
     window.removeEventListener("popstate", this.onPopState)
     this.element.removeEventListener("focusout", this.onComposerSettle)
     this.element.removeEventListener("input", this.onComposerSettle)
+    this.element.removeEventListener("turbo:frame-load", this.onFrameLoad)
     this._syncObserver?.disconnect()
   }
 
@@ -114,8 +121,10 @@ export default class extends BaseController {
   // the src hasn't changed.
   onSuggestionSubmitted() {
     if (!this.hasFrameTarget) return
-    this.#rebuildFrameSrc()
-    this.frameTarget.reload()
+    // A changed src already starts a fresh load of different content (top is
+    // correct there); only a same-src submit needs the forced,
+    // scroll-preserving reload.
+    if (!this.#rebuildFrameSrc()) this.#reloadPreservingScroll()
   }
 
   // Resets the explorer to framework-level focus — collapses any expanded row.
@@ -165,8 +174,10 @@ export default class extends BaseController {
   // Reloads the feed frame whenever a framework activity event broadcasts a
   // replacement of the hidden sync-signal element. Mirrors the assessment
   // sync controller — the reload is unconditional (no self-suppression): the
-  // feed frame is the only thing that re-fetches, so there's no matrix flicker
-  // or scroll reset to guard against, and the actor should see their own entry.
+  // feed frame is the only thing that re-fetches, so there's no matrix
+  // flicker, and the actor should see their own entry. The pane's OWN scroll
+  // does need guarding — the scroller lives inside the reloaded frame, hence
+  // #reloadPreservingScroll (never throw a reviewer back to the top).
   #observeSyncSignal() {
     if (!this.hasSignalTarget) return
 
@@ -181,7 +192,7 @@ export default class extends BaseController {
         this._missedReload = true
         return
       }
-      this.frameTarget.reload()
+      this.#reloadPreservingScroll()
     })
     this._syncObserver.observe(this.signalTarget.parentElement, {
       childList: true,
@@ -209,8 +220,9 @@ export default class extends BaseController {
     this.#rebuildFrameSrc()
   }
 
+  // Returns true when it changed the frame's src (which itself starts a load).
   #rebuildFrameSrc() {
-    if (!this.hasFrameTarget || !this.basePathValue) return
+    if (!this.hasFrameTarget || !this.basePathValue) return false
 
     const url = new URL(this.basePathValue, window.location.origin)
     url.searchParams.set("layout", "panel")
@@ -232,8 +244,12 @@ export default class extends BaseController {
     }
 
     const next = url.toString()
-    if (this.frameTarget.src === next) return
+    if (this.frameTarget.src === next) return false
+    // Different src = different content: a scroll position saved for an
+    // in-flight same-content reload must never land on it.
+    this._savedScrollTop = null
     this.frameTarget.src = next
+    return true
   }
 
   // Whether any textarea in the pane is focused or holds an unsent DRAFT —
@@ -257,7 +273,29 @@ export default class extends BaseController {
     if (!this._missedReload) return
     if (this.#composerDirty()) return
     this._missedReload = false
-    if (this.hasFrameTarget) this.frameTarget.reload()
+    if (this.hasFrameTarget) this.#reloadPreservingScroll()
+  }
+
+  // Same-content reloads (broadcasts, post-submit, catch-up) must not throw
+  // the reviewer back to the top of the feed: capture the inner scroller's
+  // position before the reload and restore it once the fresh frame lands.
+  // Focus-driven `src` changes render DIFFERENT content and deliberately
+  // don't come through here — starting those at the top is correct.
+  #reloadPreservingScroll() {
+    this._savedScrollTop = this.hasScrollerTarget ? this.scrollerTarget.scrollTop : null
+    this.frameTarget.reload()
+  }
+
+  #restoreScroll() {
+    if (this._savedScrollTop == null) return
+    const top = this._savedScrollTop
+    this._savedScrollTop = null
+    if (!this.hasScrollerTarget) return
+    // Exact-or-nothing: a reload discards "load older" batches, and clamping
+    // a deep position to the bottom of the shorter first batch is more
+    // disorienting than starting at the top of the visibly-reset list.
+    const max = this.scrollerTarget.scrollHeight - this.scrollerTarget.clientHeight
+    if (top <= max) this.scrollerTarget.scrollTop = top
   }
 
   #pushBrowserUrl() {

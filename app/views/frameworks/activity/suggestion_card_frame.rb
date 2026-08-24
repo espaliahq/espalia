@@ -42,7 +42,10 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     turbo_frame_tag("suggestion-panel") do
       div(class: "h-full flex flex-col") do
         header
-        div(class: "flex-1 overflow-y-auto p-4") do
+        # scroller target: broadcast reloads of the card (e.g. a fresh thread
+        # comment) preserve the reader's position in a long discussion, same
+        # as the feed (see PanelFrame#body).
+        div(class: "flex-1 overflow-y-auto p-4", data: { context_pane_target: "scroller" }) do
           alert_banner if @alert.present?
           proposal_block
           action_row if actionable?

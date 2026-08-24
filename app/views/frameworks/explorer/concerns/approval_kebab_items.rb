@@ -67,6 +67,9 @@ module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
         controller: "suggestion-action",
         suggestion_action_approve_url_value:
           approve_framework_suggestion_path(framework_id, suggestion_id, inline: 1),
+        # Rides the suggestion:resolved detail so a feed entry showing the
+        # same suggestion resolves in place when approved from the grid.
+        suggestion_action_suggestion_id_value: suggestion_id,
         action: "suggestion-action#approve"
       }
     ) { "Approve #{change_label}" }
