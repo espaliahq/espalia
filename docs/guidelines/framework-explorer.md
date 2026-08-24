@@ -431,9 +431,10 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   `MatrixRow::STRIKETHROUGH_CLASSES`, applied per-cell via `[&>td]:` because
   `text-decoration` doesn't propagate reliably from a `<tr>` to its cells). View
   mode shows the capability un-struck (it's still in the published version until
-  publish). *(Illustrations get the same unified, toggle-driven Archive — a
-  hover-revealed archive control on each illustration in the expanded row
-  (`IllustrationFrame`) → `Operations::Frameworks::ArchiveIllustration`: direct
+  publish). *(Illustrations get the same unified, toggle-driven Archive — an
+  **Archive… item in each illustration's ⋮ kebab** in the expanded row
+  (`IllustrationFrame#actions_kebab`, per the kebab-right-most rule in
+  phlex-views.md) → `Operations::Frameworks::ArchiveIllustration`: direct
   `remove_role_illustration` vs `suggest_delete("role_illustration")`, no
   migration mapping since illustrations carry no ratings.)*
 - **Illustration ↑/↓ reorder chevrons** — hover-revealed on each illustration
@@ -521,10 +522,12 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   from the view-mode tree, wiggled in the edit-mode tree (see *Ghost
   org-structure entities* below). An empty family shows an explicit "No roles
   yet" line where its "+ Add role" affordance sits.
-- **"+ level" (add a level)** — hover-revealed on each tree **role row** (edit +
-  `can_edit_structure`), NOT the matrix header: a ghost role has no columns
-  yet, so the tree is the only surface that can always reach it. Opens the
-  `AddLevelModal` prefilled with the role and its next free ordinal (computed
+- **"Add level…" (role-row kebab item)** — on each tree **role row**'s ⋮ menu
+  (edit + `can_edit_structure`), NOT the matrix header: a ghost role has no
+  columns yet, so the tree is the only surface that can always reach it. (It
+  was a standalone hover "+ level" button once — the reserved cluster width
+  crushed role names to a few characters, so it moved into the kebab.) Opens
+  the `AddLevelModal` prefilled with the role and its next free ordinal (computed
   against the graph, draft levels included); captures ordinal + title + code +
   the entry flag. Dispatches `Operations::Frameworks::AddLevel` (web + MCP) —
   **shape-changing**: the aggregate auto-opens a draft and the level is
@@ -535,9 +538,9 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   at three layers: inline in the modal as you type (taken ordinals ride the
   trigger dataset), in the Operation (ParameterError → -32602 for MCP), and in
   the aggregate (serialized against the stream).
-- **Role-row kebab (⋮) → Edit role… / Edit levels…** — the scalable home for
-  the role's dialogs (edit + `can_edit_structure`; the MatrixRow-kebab
-  precedent — "+ level" stays a direct affordance). **Edit role…** opens the
+- **Role-row kebab (⋮) → Add level… / Edit role… / Edit levels…** — the
+  scalable home for the role's actions (edit + `can_edit_structure`; the
+  MatrixRow-kebab precedent). **Edit role…** opens the
   `AddRoleModal` in `:edit` mode (name + code + track — one form with create,
   so they can't drift; code/track are dialog-only by design: track is an enum,
   a code edit ripples through the matrix header). **Edit levels…** opens the
@@ -738,13 +741,19 @@ They reuse the *exact* same pieces — `suggestion-action`
 (inline approve, `inline=1` → 204), the root reject modal, and
 `suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
 the feed are the same operation with the same live-update wiring (the feed
-reloads via broadcast either way). Two deliberate boundaries: pending
-**creates** (the ghost frames) get no grid kebab — their squiggle click opens
-the card, which carries Approve/Reject — so don't "fix" the asymmetry by
-adding one; and a pending edit landed via an inline frame swap gets its kebab
-on the next matrix render, not immediately (the kebab lives outside the
-swapped frame; the matrix deliberately isn't live — Lesson 21 — and the
-squiggle→card path covers the interim). The per-viewer authority is threaded into the
+reloads via broadcast either way). Pending **creates** (the ghost frames)
+carry the same kebab — "Approve/Reject new illustration/expectation" — so a
+proposed entity is as one-click to action from the grid as a proposed edit
+(the squiggle click's card remains the discussion path; the ghost frame
+re-renders — `IllustrationsController#render_pending_turbo_stream`,
+`SuggestionsController#render_pending_ghost_frame` — re-thread the authority).
+One deliberate boundary remains: a pending edit landed via an inline frame
+swap gets its EXPECTATION kebab on the next matrix render, not immediately
+(that kebab lives outside the swapped frame; the matrix deliberately isn't
+live — Lesson 21 — and the squiggle→card path covers the interim). Kebab
+composition follows the phlex-views.md rule: the kebab is the right-most
+control and absorbs secondary actions — the illustration kebab also holds
+Archive…, the role-tree kebab also holds Add level…. The per-viewer authority is threaded into the
 matrix the same way `can_edit_structure` is: controller → `Matrix` →
 `MatrixCategoryGroup` → `MatrixRow` → `MatrixCell` / `IllustrationFrame`.
 `matrix#toggleRow` already ignores clicks inside
@@ -1211,8 +1220,8 @@ line (§9).
 | `app/javascript/controllers/add_role_form_controller.js` | Prefills the role modal from its trigger (`:new` — family id + clears; `:edit` — action template + name/code/track); fires `org-structure:updated` after an edit; selection rides along via `tree-scope-fields` |
 | `app/operations/operations/frameworks/{add_role_family,add_role}.rb` | Shared web + MCP operations — org-structure adds (shape-preserving, live; new entity is a ghost until publish) |
 | `app/operations/operations/frameworks/add_level.rb` | Shared web + MCP operation — add a level (shape-changing: auto-opens a draft, deferred until publish; guards duplicate ordinals against the graph) |
-| `app/views/frameworks/explorer/add_level_modal.rb` | Shared "new level" modal (ordinal + title + code + entry flag; role implied by the role-row "+ level" trigger) → `Frameworks::LevelsController#create` |
-| `app/javascript/controllers/add_level_form_controller.js` | Prefills the add-level modal from the "+ level" trigger (role id/name + next free ordinal); selection rides along via `tree-scope-fields` |
+| `app/views/frameworks/explorer/add_level_modal.rb` | Shared "new level" modal (ordinal + title + code + entry flag; role implied by the role-row kebab's "Add level…" trigger) → `Frameworks::LevelsController#create` |
+| `app/javascript/controllers/add_level_form_controller.js` | Prefills the add-level modal from the role kebab's "Add level…" trigger (role id/name + next free ordinal); selection rides along via `tree-scope-fields` |
 | `app/views/frameworks/explorer/department_name_frame.rb` | Department group header; inline-renameable in edit mode → bulk relabel of every family in the group |
 | `app/javascript/controllers/role_family_edit_form_controller.js` | Prefills the role-family dialog from the trigger dataset (`:edit` fills, `:new` clears); copies the current `roles[]`/`track` selection from the URL so the re-rendered tree stays checked |
 | `app/javascript/controllers/tree_scope_fields_controller.js` | Injects the current `roles[]`/`track` selection into a form at submit (`formdata` event) — used by the department-rename inline editor |
@@ -1226,8 +1235,8 @@ line (§9).
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Move up/down (reorder) + Edit roles… (binding editor) + Archive (§11, §12) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
-| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell, with pending-edit decoration + edit-mode pencil + ↑/↓ reorder chevrons (edit-structure holders) |
-| `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) |
+| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell — pending-edit decoration, ↑/↓ reorder chevrons (edit-structure holders), pencil, then the ⋮ kebab (Approve/Reject when approvable + Archive…) |
+| `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) — pencil (amend/alternative) + Approve/Reject kebab for tier-authority viewers |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
 | `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
 | `app/views/frameworks/explorer/pending_expectation_frame.rb` | Editable ghost of a pending expectation-create suggestion (amber wavy underline + pencil → amend/alternative), shown instead of "+ Add expectation" while a proposal exists |

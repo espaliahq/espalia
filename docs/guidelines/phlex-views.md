@@ -140,6 +140,26 @@ Rules:
 - The pencil belongs in the same visual line as the value, so the edit target is
   unambiguous — a control floated to the opposite edge reads as unrelated.
 
+## Kebab (⋮) menus — always the right-most control
+
+A kebab reads as "…more" — the overflow home for a row's secondary actions. Two
+rules, both non-negotiable:
+
+- **The kebab is always the right-most control in its cluster.** Primary
+  single-purpose affordances (the inline-edit pencil, reorder chevrons) come
+  before it; nothing renders after it. A kebab followed by more buttons
+  contradicts its own "more" semantics.
+- **Secondary and destructive actions live inside the kebab, not beside it.**
+  Archive/delete, dialogs, and approve/reject controls are menu items; only the
+  highest-frequency direct affordance (typically the pencil) earns a standalone
+  spot. A hover cluster that accumulates one standalone button per action also
+  permanently reserves row width (`opacity-0` still occupies layout) and
+  crushes the text it decorates — the role tree learned this the hard way.
+
+Use the shared trigger (`Views::Frameworks::Explorer::Concerns::ApprovalKebabItems#kebab_trigger`)
+rather than hand-rolling the ⋮ glyph, and include `pointer-coarse` visibility so
+touch devices aren't left with an invisible control.
+
 ## Controller Rendering
 
 ```ruby
