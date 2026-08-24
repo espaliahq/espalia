@@ -35,7 +35,11 @@ export default class extends Controller {
 
   submitted(event) {
     if (event.detail?.success) {
-      window.dispatchEvent(new CustomEvent("suggestion:resolved"))
+      // The detail lets the rejected entry's suggestion-action controller
+      // swap to its "✓ Rejected" state immediately (before the feed reload).
+      window.dispatchEvent(new CustomEvent("suggestion:resolved", {
+        detail: { suggestionId: this._suggestionId, outcome: "rejected" }
+      }))
     }
   }
 
@@ -46,6 +50,7 @@ export default class extends Controller {
     // Only respond to reject triggers (other modals share the modal:open bus).
     if (data.rejectSuggestionId === undefined) return
 
+    this._suggestionId = data.rejectSuggestionId
     this.element.action = this.actionTemplateValue.replace("__SID__", data.rejectSuggestionId)
 
     if (this.hasTitleTarget) {

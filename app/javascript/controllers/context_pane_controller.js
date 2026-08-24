@@ -21,7 +21,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame", "signal"]
+  static targets = ["frame", "signal", "scroller"]
   static values = {
     basePath: String,
     initialRoleIds: { type: Array, default: [] },
@@ -56,6 +56,12 @@ export default class extends BaseController {
     this.onComposerSettle = () => setTimeout(() => this.#catchUpAfterComposer(), 0)
     this.element.addEventListener("focusout", this.onComposerSettle)
     this.element.addEventListener("input", this.onComposerSettle)
+
+    // Restore the feed's scroll position after a same-content reload — the
+    // scroll container lives INSIDE the frame, so every reload replaces it
+    // and would otherwise reset a reviewer to the top of a long feed.
+    this.onFrameLoad = () => this.#restoreScroll()
+    this.element.addEventListener("turbo:frame-load", this.onFrameLoad)
   }
 
   disconnect() {
@@ -63,6 +69,7 @@ export default class extends BaseController {
     window.removeEventListener("popstate", this.onPopState)
     this.element.removeEventListener("focusout", this.onComposerSettle)
     this.element.removeEventListener("input", this.onComposerSettle)
+    this.element.removeEventListener("turbo:frame-load", this.onFrameLoad)
     this._syncObserver?.disconnect()
   }
 
@@ -115,7 +122,7 @@ export default class extends BaseController {
   onSuggestionSubmitted() {
     if (!this.hasFrameTarget) return
     this.#rebuildFrameSrc()
-    this.frameTarget.reload()
+    this.#reloadPreservingScroll()
   }
 
   // Resets the explorer to framework-level focus — collapses any expanded row.
@@ -181,7 +188,7 @@ export default class extends BaseController {
         this._missedReload = true
         return
       }
-      this.frameTarget.reload()
+      this.#reloadPreservingScroll()
     })
     this._syncObserver.observe(this.signalTarget.parentElement, {
       childList: true,
@@ -257,7 +264,26 @@ export default class extends BaseController {
     if (!this._missedReload) return
     if (this.#composerDirty()) return
     this._missedReload = false
-    if (this.hasFrameTarget) this.frameTarget.reload()
+    if (this.hasFrameTarget) this.#reloadPreservingScroll()
+  }
+
+  // Same-content reloads (broadcasts, post-submit, catch-up) must not throw
+  // the reviewer back to the top of the feed: capture the inner scroller's
+  // position before the reload and restore it once the fresh frame lands.
+  // Focus-driven `src` changes render DIFFERENT content and deliberately
+  // don't come through here — starting those at the top is correct.
+  #reloadPreservingScroll() {
+    this._savedScrollTop = this.hasScrollerTarget ? this.scrollerTarget.scrollTop : null
+    this.frameTarget.reload()
+  }
+
+  #restoreScroll() {
+    if (this._savedScrollTop == null) return
+    const top = this._savedScrollTop
+    this._savedScrollTop = null
+    // The fresh content may not carry a scroller (e.g. an empty state) —
+    // and a shorter list clamps naturally when scrollTop exceeds its max.
+    if (this.hasScrollerTarget) this.scrollerTarget.scrollTop = top
   }
 
   #pushBrowserUrl() {
