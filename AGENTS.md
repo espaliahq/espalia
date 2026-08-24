@@ -270,7 +270,9 @@ skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
 - **Screenshot home**: `tmp/visual/<task>/` (gitignored).
 
 Re-vendor from `mr-yum/connect` `.claude/skills/ux-quality/` to pick up upstream
-improvements (last synced: `31914b8`); never edit the vendored files with
+improvements (last synced: `31914b8`, plus local generic fixes — see
+`git log .claude/skills/ux-quality` — which should be contributed upstream and
+folded into the next sync); never edit the vendored files with
 GrowthOS-specific facts — put those here or in `docs/guidelines/`.
 
 ## Core Principles
