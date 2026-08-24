@@ -43,6 +43,15 @@
     return r.width > 0 && r.height > 0
   }
 
+  /** Operable-but-possibly-transparent: opacity-0 styled-input overlays are
+   *  real hit targets and must reach the target-size check. */
+  const operable = (el) => {
+    if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true }))
+      return false
+    const r = el.getBoundingClientRect()
+    return r.width > 0 && r.height > 0
+  }
+
   const tally = (map, key) => {
     map[key] = (map[key] || 0) + 1
   }
@@ -100,9 +109,9 @@
         const cs = getComputedStyle(el)
         for (const p of props) {
           const v = px(cs[p])
-          if (!v || Number.isNaN(v) || v < 0) continue
+          if (!v || Number.isNaN(v)) continue
           tally(values, v)
-          if (opts.spacingScale?.length && !onScale(v, opts.spacingScale))
+          if (opts.spacingScale?.length && !onScale(Math.abs(v), opts.spacingScale))
             push(offScale, { description: describe(el), prop: p, value: v })
         }
       }
@@ -116,7 +125,7 @@
         'a[href], button, input, select, textarea, details > summary:first-of-type, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="menuitem"], [tabindex]:not([tabindex="-1"])',
       )
       for (const el of targets) {
-        if (!visible(el)) continue
+        if (!operable(el)) continue
         const r = el.getBoundingClientRect()
         /** ≤2px both ways is a visually-hidden proxy input, not a real target. */
         if (r.width <= 2 && r.height <= 2) continue
@@ -133,18 +142,23 @@
     check('overflow', () => {
       const doc = document.documentElement
       const wide = []
+      const sx = window.scrollX
+      let overflowCount = 0
       for (const el of all) {
         const r = el.getBoundingClientRect()
-        if (r.right > doc.clientWidth + 1 || r.left < -1)
+        if (r.right + sx > doc.clientWidth + 1) {
+          overflowCount++
           push(wide, {
             description: describe(el),
-            left: Math.round(r.left),
-            right: Math.round(r.right),
+            left: Math.round(r.left + sx),
+            right: Math.round(r.right + sx),
           })
+        }
       }
       return {
         horizontalPageScroll: doc.scrollWidth > doc.clientWidth,
         viewportWidth: doc.clientWidth,
+        overflowCount,
         elementsPastViewport: wide,
       }
     })
@@ -160,7 +174,8 @@
 
     check('duplicateIds', () => {
       const seen = Object.create(null)
-      for (const el of document.querySelectorAll('[id]')) tally(seen, el.id)
+      for (const el of document.querySelectorAll('[id]'))
+        if (el.id) tally(seen, el.id)
       return Object.keys(seen)
         .filter((id) => seen[id] > 1)
         .slice(0, MAX_EXAMPLES)

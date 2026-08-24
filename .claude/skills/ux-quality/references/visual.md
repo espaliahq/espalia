@@ -5,10 +5,13 @@ discovery. Without one, apply only the generic craft rules — do not invent
 a system to enforce.
 
 The deterministic checks in this file (off-scale spacing and sizes, small
-targets, overflow, radius spread) run through `scripts/audit-page.js`:
+targets, overflow, radius spread, duplicate ids) run through `scripts/audit-page.js`:
 inject once, then call `__uxAudit(...)` after **every** state and
 viewport change — the injection guard survives, results come from the
-call (see tooling.md). Judgment criteria stay judged.
+call (see tooling.md). Judgment criteria stay judged. The batch's
+`duplicateIds` output is association-risk evidence only — chase it into a
+real label/ARIA/fragment breakage (accessibility.md: 4.1.1 is removed;
+duplicate ids are never a finding in themselves).
 
 ## Typography
 
