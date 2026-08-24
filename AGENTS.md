@@ -248,6 +248,31 @@ browser (dev URL, login, viewports, screenshot paths, gotchas). The
 `SCREENSHOTS=1` + `/screenshot-test` path remains available for a repeatable,
 suite-level artefact.
 
+### UX quality skill (`/ux-quality`)
+
+The vendored [`ux-quality` skill](.claude/skills/ux-quality/SKILL.md) carries the
+UX/WCAG 2.2 AA criteria for three lifecycle points: `build` (defaults while
+writing UI), `spec-review` (UX gaps in a spec/plan before code exists), and
+`assess` (adversarial browser-driven review — deeper than, and additional to,
+the mandatory Chrome MCP pass above; use it for UX/accessibility sign-off of a
+whole surface, not per-change verification). The skill is host-agnostic and
+resolves this repo via its discovery contract — answers live here, not in the
+skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
+
+- **Design system**: Phlex Kit components (`app/components/kit/`) +
+  [phlex-views.md](docs/guidelines/phlex-views.md) and
+  [tailwindcss.md](docs/guidelines/tailwindcss.md).
+- **App URL / login / seeded-data control**:
+  [chrome-mcp.md](docs/guidelines/chrome-mcp.md) (`http://rails-app:6600`,
+  Rails-credentials admin, seeded-tenant reset caveats).
+- **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
+  — use it, not the skill's bundled dormant `ux-driver`.
+- **Screenshot home**: `tmp/visual/<task>/` (gitignored).
+
+Re-vendor from `mr-yum/connect` `.claude/skills/ux-quality/` to pick up upstream
+improvements (last synced: `31914b8`); never edit the vendored files with
+GrowthOS-specific facts — put those here or in `docs/guidelines/`.
+
 ## Core Principles
 
 ### The Rails Way
