@@ -16,7 +16,9 @@ if [ ! -f "$local_copy" ]; then
   local_copy="$(find . -maxdepth 4 -path '*/node_modules/axe-core/axe.min.js' -print -quit 2>/dev/null || true)"
 fi
 if [ -n "$local_copy" ] && [ -f "$local_copy" ]; then
-  echo "$local_copy"
+  # Absolute path — consumers (e.g. a driver agent) may read it from a
+  # different working directory than the one this script ran in.
+  echo "$(cd "$(dirname "$local_copy")" && pwd)/$(basename "$local_copy")"
   exit 0
 fi
 
