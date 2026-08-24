@@ -29,7 +29,11 @@ if [ ! -s "$cached" ]; then
   tmp="$(mktemp "$cache_dir/.axe-$AXE_VERSION.XXXXXX")"
   trap 'rm -f "$tmp"' EXIT
   curl -fsSL --connect-timeout 10 --max-time 60 "https://cdn.jsdelivr.net/npm/axe-core@$AXE_VERSION/axe.min.js" -o "$tmp"
-  grep -q 'axe' "$tmp" || { echo "downloaded file does not look like axe-core" >&2; exit 1; }
+  # Reject 200-status intercept pages (TLS-inspecting proxies, portals): a JS
+  # payload never starts with '<', and real axe-core carries its own marker —
+  # the URL alone (echoed by block pages) must not satisfy the check.
+  case "$(head -c 1 "$tmp")" in "<") echo "downloaded file looks like HTML, not axe-core" >&2; exit 1;; esac
+  grep -q 'axe-core' "$tmp" || { echo "downloaded file does not look like axe-core" >&2; exit 1; }
   mv "$tmp" "$cached"
   trap - EXIT
 fi
