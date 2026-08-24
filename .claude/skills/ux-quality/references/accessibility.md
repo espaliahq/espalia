@@ -68,7 +68,7 @@ no ARIA is better than bad ARIA.
 | 2.4.11 | Focus Not Obscured (AA, new)  | Focused element never entirely hidden by sticky chrome    | MANUAL — intersect rects              |
 | 2.5.1  | Pointer Gestures (A)          | Multipoint/path gestures have single-pointer alternatives | MANUAL                                |
 | 2.5.2  | Pointer Cancellation (A)      | Actions fire on up-event                                  | MANUAL                                |
-| 2.5.3  | Label in Name (A)             | Accessible name contains the visible label                | AUTO                                  |
+| 2.5.3  | Label in Name (A)             | Accessible name contains the visible label                | SEMI — axe's only rule is experimental, off by default; verify manually |
 | 2.5.4  | Motion Actuation (A)          | Shake/tilt has UI alternatives                            | MANUAL                                |
 | 2.5.7  | Dragging Movements (AA, new)  | Every drag has a non-drag alternative                     | MANUAL                                |
 | 2.5.8  | Target Size Minimum (AA, new) | Targets ≥24×24 CSS px, with exceptions                    | SEMI — measure, then judge exceptions |

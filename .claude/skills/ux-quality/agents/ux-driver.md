@@ -43,7 +43,9 @@ For each state or viewport the caller asks for:
 3. Run any measurements the caller specifies (script evaluation:
    computed styles, bounding rects, focus traces, axe runs injected from
    the locally resolved file the caller names — the skill's
-   `fetch-axe.sh` output — never from any other source).
+   `fetch-axe.sh` output — or, when the caller names no local file, the
+   same pinned version fetched in-page from the CDN per the skill's
+   tooling reference; never any other source or version).
 4. Note console errors/warnings and failed or slow network requests
    observed during the step — these are evidence even when unrequested.
 
