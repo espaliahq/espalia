@@ -12,9 +12,8 @@
 class Views::Frameworks::Explorer::RoleTree < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
   include Views::Frameworks::Explorer::Concerns::GhostEntities
-  # For the shared kebab_trigger. NOTE: this view keeps its own zero-arg
-  # kebab_item_classes (tree menus are denser than the matrix's), which
-  # deliberately shadows the concern's one-arg version.
+  # For the shared kebab_trigger + kebab_item_classes (the tree passes its
+  # denser padding).
   include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
 
   TRACK_OPTIONS = [
@@ -361,7 +360,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         reveal_classes: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")
       dd.menu do
         button(
-          type: "button", role: "menuitem", class: kebab_item_classes,
+          type: "button", role: "menuitem", class: kebab_item_classes(padding: "px-3 py-1.5"),
           data: {
             action: "click->modal#open",
             modal_target_id: "add-level-modal",
@@ -374,7 +373,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           }
         ) { "Add level…" }
         button(
-          type: "button", role: "menuitem", class: kebab_item_classes,
+          type: "button", role: "menuitem", class: kebab_item_classes(padding: "px-3 py-1.5"),
           data: {
             action: "click->modal#open",
             modal_target_id: "role-edit-modal",
@@ -385,7 +384,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           }
         ) { "Edit role…" }
         button(
-          type: "button", role: "menuitem", class: kebab_item_classes,
+          type: "button", role: "menuitem", class: kebab_item_classes(padding: "px-3 py-1.5"),
           data: {
             action: "click->modal#open",
             modal_target_id: "level-editor-modal",
@@ -394,11 +393,6 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         ) { "Edit levels…" }
       end
     end
-  end
-
-  def kebab_item_classes
-    "w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 " \
-      "hover:bg-gray-100 dark:hover:bg-gray-700"
   end
 
   # Next free ordinal for the role — max across ALL its levels (draft-added

@@ -148,7 +148,14 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
     form(
       method: "post",
       action: framework_illustration_archives_path(framework_id: @framework_id),
-      data: { turbo: "true", turbo_confirm: "Archive this illustration?" }
+      # role=none: a <form> interrupting the menuitem's menu ancestry breaks
+      # the ARIA menu contract (Kit::Dropdown's documented rule).
+      # turbo_frame _top: the controller redirects to the full edit page, and
+      # this form lives inside the illustration's Turbo Frame — without _top
+      # the redirect renders "Content missing" in the expanded row and drops
+      # the flash (phlex-views.md, in-frame navigation rule).
+      role: "none",
+      data: { turbo: "true", turbo_frame: "_top", turbo_confirm: "Archive this illustration?" }
     ) do
       input(type: "hidden", name: "archive[illustration_id]", value: @illustration.illustration_id)
       button(
