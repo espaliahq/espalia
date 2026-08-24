@@ -26,6 +26,8 @@ class Views::Frameworks::Explorer::PendingExpectationFrameTest < ActiveSupport::
       .view_context
   end
 
+  # @param authority [Frameworks::SuggestionApprovalAuthority]
+  # @return [String] the rendered frame HTML
   def render_frame(authority)
     view_context.render(Views::Frameworks::Explorer::PendingExpectationFrame.new(
       suggestion: @suggestion, framework_id: SecureRandom.uuid_v7,
