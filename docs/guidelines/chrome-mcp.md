@@ -185,6 +185,13 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
   catch it (they build fresh CSS). Start the server with `bin/dev` (runs the
   watcher), or run `bin/rails tailwindcss:build` after adding/editing views
   before judging screenshots.
+- **`resize_page` alone never activates `pointer-coarse:`.** Resizing to a
+  phone-sized viewport changes only CSS dimensions — the `pointer`/`hover`
+  media features stay "fine/hover", so Tailwind `pointer-coarse:` affordances
+  (e.g. always-visible kebab triggers) won't show. To verify touch-only
+  behaviour, use `emulate` with a touch viewport string
+  (`viewport: "375x812x2,mobile,touch"`), which flips
+  `matchMedia('(pointer: coarse)')` to true.
 - **Seeded tenant state persists across sessions.** The `me&u` seed tenant
   accumulates assessment state (cycles, ratings, evidence, alignment) as you
   drive flows. A verification run that assumes a clean slate (an unrated
