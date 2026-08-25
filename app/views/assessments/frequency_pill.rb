@@ -63,13 +63,31 @@ class Views::Assessments::FrequencyPill < Views::Base
     div(
       class: "relative inline-block",
       data: {
-        controller: "dropdown",
-        action: "keydown.esc@window->dropdown#close"
+        controller: "dropdown submit-fallback",
+        submit_fallback_text_value: "Couldn't save this rating — check your connection and try again.",
+        action: "keydown.esc@window->dropdown#close " \
+                "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
+                "turbo:submit-start->submit-fallback#submitStart " \
+                "turbo:submit-end->submit-fallback#submitEnd"
       }
     ) do
       pill_trigger
       popover
+      transport_error_region
     end
+  end
+
+  # Pre-existing empty live region for transport-level submit failures
+  # (submit-fallback controller, audit issue #316). Positioned below the
+  # pill; empty and hidden until a failure injects the message.
+  def transport_error_region
+    div(
+      role: "alert", hidden: true,
+      class: "absolute left-0 top-full mt-1 z-20 w-max max-w-64 p-2 rounded-md " \
+             "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 " \
+             "text-xs text-red-700 dark:text-red-300",
+      data: { submit_fallback_target: "message" }
+    ) { }
   end
 
   # Frozen variant — same colour treatment, no chevron, no interaction.
