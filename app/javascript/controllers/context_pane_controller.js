@@ -71,6 +71,7 @@ export default class extends BaseController {
     this.element.removeEventListener("input", this.onComposerSettle)
     this.element.removeEventListener("turbo:frame-load", this.onFrameLoad)
     this._syncObserver?.disconnect()
+    clearTimeout(this._syncReloadTimer)
   }
 
   onTreeChanged(event) {
@@ -183,6 +184,23 @@ export default class extends BaseController {
 
     this._syncObserver = new MutationObserver(() => {
       if (!this.hasFrameTarget) return
+      this.#scheduleSyncReload()
+    })
+    this._syncObserver.observe(this.signalTarget.parentElement, {
+      childList: true,
+      subtree: false
+    })
+  }
+
+  // One user action can broadcast several feed-relevant events (an approval
+  // publishes the approval AND the applied change, each replacing the sync
+  // signal) — coalesce the burst into a single frame reload instead of
+  // re-fetching the feed once per event.
+  #scheduleSyncReload() {
+    clearTimeout(this._syncReloadTimer)
+    this._syncReloadTimer = setTimeout(() => {
+      this._syncReloadTimer = null
+      if (!this.hasFrameTarget) return
       // Never reload over a half-written comment: a broadcast landing while
       // the suggestion card's composer (or an inline reply/edit form) is
       // focused or holds an edited draft would destroy it. The skipped
@@ -193,11 +211,7 @@ export default class extends BaseController {
         return
       }
       this.#reloadPreservingScroll()
-    })
-    this._syncObserver.observe(this.signalTarget.parentElement, {
-      childList: true,
-      subtree: false
-    })
+    }, 300)
   }
 
   // Reads focus params from the browser URL into state. Called on connect

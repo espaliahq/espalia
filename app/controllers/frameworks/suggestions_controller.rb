@@ -10,6 +10,7 @@
 #
 class Frameworks::SuggestionsController < ApplicationController
   include Frameworks::SuggestionAuthority
+  include Frameworks::SuggestionResolutionStreams
 
   before_action :set_framework
   before_action :set_suggestion, only: [ :show, :approve, :reject, :resolve, :amend, :destroy ]
@@ -101,9 +102,11 @@ class Frameworks::SuggestionsController < ApplicationController
 
   # POST /frameworks/:framework_id/suggestions/:id/approve
   #
-  # HTML (detail page) → redirect; Turbo/JSON (inline feed / grid) → head :ok.
-  # The feed reloads itself off the activity broadcast; the grid refreshes
-  # client-side on the response — see framework-explorer.md (actionable feed).
+  # HTML (detail page) → redirect. Inline (feed / grid, `inline=1`) → a
+  # surgical Turbo Stream replacing just the affected entity's frame when the
+  # suggestion's shape supports it, else 204 (the client falls back to a full
+  # matrix refresh). The feed reloads itself off the activity broadcast — see
+  # framework-explorer.md (actionable feed).
   def approve
     authorize @suggestion, :approve?
 
@@ -116,7 +119,7 @@ class Frameworks::SuggestionsController < ApplicationController
       }
     )
 
-    respond_to_resolution(notice: "Suggestion approved.")
+    respond_to_resolution(notice: "Suggestion approved.", outcome: :approved)
   rescue Operations::Base::ParameterError, RuntimeError => e
     respond_to_failure(e)
   end
@@ -134,7 +137,7 @@ class Frameworks::SuggestionsController < ApplicationController
       }
     )
 
-    respond_to_resolution(notice: "Suggestion rejected.")
+    respond_to_resolution(notice: "Suggestion rejected.", outcome: :rejected)
   rescue Operations::Base::ParameterError, RuntimeError => e
     respond_to_failure(e)
   end
@@ -228,12 +231,14 @@ class Frameworks::SuggestionsController < ApplicationController
   private
 
   # Approve/reject are reachable both from the suggestion detail page (wants a
-  # redirect + flash) and from the inline activity feed / matrix grid (wants a
-  # quiet no-op response — the feed reloads off the activity broadcast and the
-  # grid refreshes client-side on the `suggestion:resolved` event). The inline
-  # surfaces flag themselves with `inline=1`; everything else (incl. the
-  # Turbo-driven detail page) redirects. 204 keeps Turbo from navigating or
-  # blanking the modal/page on the inline path.
+  # redirect + flash) and from the inline activity feed / matrix grid. The
+  # inline surfaces flag themselves with `inline=1`; everything else (incl.
+  # the Turbo-driven detail page) redirects. An inline resolution answers a
+  # surgical Turbo Stream replacing the affected entity's frame when the shape
+  # supports it (see {Frameworks::SuggestionResolutionStreams}); otherwise 204
+  # — which keeps Turbo from navigating or blanking the modal/page, and tells
+  # the client to fall back to a full matrix refresh. The feed always reloads
+  # off the activity broadcast.
   # The pending-illustration ghost's amend form — the one inline surface
   # whose response contract is "re-render my frame". Guarded by shape so a
   # different suggestion kind carrying inline=1 never gets an
@@ -260,11 +265,16 @@ class Frameworks::SuggestionsController < ApplicationController
     params[:inline].present?
   end
 
-  def respond_to_resolution(notice:)
-    if inline_request?
-      head :no_content
+  def respond_to_resolution(notice:, outcome: nil)
+    unless inline_request?
+      return redirect_to framework_suggestions_path(@framework.framework_id), notice: notice
+    end
+
+    streams = outcome ? resolution_streams(outcome: outcome) : nil
+    if streams.present?
+      render turbo_stream: streams
     else
-      redirect_to framework_suggestions_path(@framework.framework_id), notice: notice
+      head :no_content
     end
   end
 

@@ -184,7 +184,14 @@ export default class extends BaseController {
   // acting user's grid drops the stale inline diff and shows the applied value.
   // Acting-user-only by design — the feed live-reloads for everyone, the matrix
   // does not (see framework-explorer.md: feed-live/matrix-not).
-  refresh() {
+  //
+  // Skipped when the resolution was surgical: the response already replaced
+  // the affected entity's frame in place, and the full matrix re-fetch is
+  // several MB of HTML + thousands of controller mounts — the freeze Sophie
+  // reported. This is the FALLBACK path, not the default.
+  refresh(event) {
+    if (event?.detail?.surgical) return
+
     this.#rebuildMatrixFrame()
   }
 
