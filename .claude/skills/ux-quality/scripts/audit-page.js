@@ -133,7 +133,14 @@
         /** ≤2px native inputs are visually-hidden proxies (styled
          *  checkbox/radio/file pattern) — their styled control is the real
          *  target. Anything else that tiny is reportable evidence. */
-        if (r.width <= 2 && r.height <= 2 && el.matches('input')) continue
+        if (
+          r.width <= 2 &&
+          r.height <= 2 &&
+          el.matches(
+            'input[type="checkbox"], input[type="radio"], input[type="file"]',
+          )
+        )
+          continue
         if (r.width < min || r.height < min)
           push(result, {
             description: describe(el),
