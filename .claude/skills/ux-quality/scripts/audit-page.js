@@ -159,11 +159,14 @@
       for (const el of all) {
         const r = el.getBoundingClientRect()
         if (r.right + sx <= doc.clientWidth + 1) continue
-        /** A fixed element is viewport-anchored, so its rect is already the
-         *  position that matters — adding scrollX would report a stationary
-         *  control as overflowing on any horizontally scrolled page. Only
-         *  candidates pay for the computed style. */
-        const ox = sx && getComputedStyle(el).position === 'fixed' ? 0 : sx
+        /** Fixed — and possibly-stuck sticky — elements are viewport-anchored,
+         *  so their rects are already the position that matters; adding scrollX
+         *  would report a stationary control as overflowing on any horizontally
+         *  scrolled page. Sticky is treated as viewport-anchored wholesale (a
+         *  rare under-report beats false overflow evidence). Only candidates
+         *  pay for the computed style. */
+        const pos = sx ? getComputedStyle(el).position : ''
+        const ox = pos === 'fixed' || pos === 'sticky' ? 0 : sx
         if (r.right + ox <= doc.clientWidth + 1) continue
         overflowCount++
         push(wide, {
