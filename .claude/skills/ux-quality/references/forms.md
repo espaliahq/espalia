@@ -5,8 +5,10 @@
 - Every input has a visible label in a predictable, conventional position
   — above or start-aligned per the host's design system —
   programmatically associated: clicking the label focuses the input (test
-  it literally). **Unlabeled input rates at least 3** — a failed WCAG
-  3.3.2/1.3.1 success criterion — and higher when frequency × impact ×
+  it literally). **Unlabeled input rates at least 3** — a failed success
+  criterion: WCAG 3.3.2 when nothing identifies the input, WCAG 1.3.1 when
+  the label relationship isn't programmatically determinable (an input can
+  fail one without the other) — and higher when frequency × impact ×
   persistence earns it, per SKILL.md's scale.
 - Placeholder-as-label is a defect: placeholders vanish on entry, defeat
   review-before-submit, and screen readers handle them inconsistently.
