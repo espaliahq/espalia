@@ -25,9 +25,10 @@ fi
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ux-quality"
 cached="$cache_dir/axe-$AXE_VERSION.min.js"
 
-# A JS payload never starts with '<', and real axe-core carries its own
-# marker — the URL alone (echoed by proxy block pages) must not satisfy it.
-looks_like_axe() { [ "$(head -c 1 "$1")" != "<" ] && grep -q 'axe-core' "$1"; }
+# The published bundle opens with a version banner ("/*! axe v<version>"),
+# giving a version-specific signature without a checksum table — proxy block
+# pages and JSON error bodies (which may echo "axe-core") both fail it.
+looks_like_axe() { grep -q "axe v$AXE_VERSION" "$1" && grep -q 'axe.version' "$1"; }
 
 if [ -s "$cached" ] && ! looks_like_axe "$cached"; then
   rm -f "$cached"
