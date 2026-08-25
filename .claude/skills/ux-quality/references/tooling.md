@@ -125,6 +125,7 @@ the batch doesn't cover:
   controlled-input flips) predict flicker and state bugs. A clean pass:
   zero errors, no new warnings across the whole interaction script.
 - Network: 4xx/5xx the UI never surfaces (a failed save with no error
-  message is severity-high); requests pending >1s with no loading state;
+  message typically rates 3+ on SKILL.md's scale); requests pending >1s
+  with no loading state;
   duplicate identical requests on one interaction; oversized payloads;
   refetch-per-keystroke without debounce.
