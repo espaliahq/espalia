@@ -45,12 +45,13 @@
 
   /** Operable-but-possibly-transparent: opacity-0 styled-input overlays are
    *  real hit targets and must reach the target-size check. `pointer-events:
-   *  none` is the one exclusion — it cannot receive pointer input at all, so
-   *  its size is not a target size (the styled control taking the click is). */
+   *  none` does NOT exclude — it inherits (one modal veil would silently
+   *  empty the whole sweep), CSS-"disabled" controls stay focusable, and the
+   *  exception judgment belongs to the reviewer. Sub-minimum results carry a
+   *  pointerEvents annotation instead (see smallTargets). */
   const operable = (el) => {
     if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true }))
       return false
-    if (getComputedStyle(el).pointerEvents === 'none') return false
     const r = el.getBoundingClientRect()
     return r.width > 0 && r.height > 0
   }
@@ -144,12 +145,19 @@
           )
         )
           continue
-        if (r.width < min || r.height < min)
-          push(result, {
+        if (r.width < min || r.height < min) {
+          const item = {
             description: describe(el),
             width: Math.round(r.width),
             height: Math.round(r.height),
-          })
+          }
+          /** Evidence, not a verdict: the reviewer decides whether a
+           *  no-pointer-input element is a 2.5.8 target (label-activated
+           *  proxy inputs and CSS-"disabled" links usually still are). */
+          if (getComputedStyle(el).pointerEvents === 'none')
+            item.pointerEvents = 'none'
+          push(result, item)
+        }
       }
       return result
     })
