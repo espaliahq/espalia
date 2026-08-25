@@ -44,10 +44,13 @@
   }
 
   /** Operable-but-possibly-transparent: opacity-0 styled-input overlays are
-   *  real hit targets and must reach the target-size check. */
+   *  real hit targets and must reach the target-size check. `pointer-events:
+   *  none` is the one exclusion — it cannot receive pointer input at all, so
+   *  its size is not a target size (the styled control taking the click is). */
   const operable = (el) => {
     if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true }))
       return false
+    if (getComputedStyle(el).pointerEvents === 'none') return false
     const r = el.getBoundingClientRect()
     return r.width > 0 && r.height > 0
   }
