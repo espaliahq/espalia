@@ -68,7 +68,9 @@
 ## Submit
 
 - Prefer an enabled submit that validates over disabled-until-valid:
-  disabled submits explain nothing, aren't focusable, and fail contrast.
+  disabled submits explain nothing, aren't focusable, and — being exempt
+  from WCAG contrast minimums as inactive controls — are often barely
+  perceivable.
   If the host's convention is a disabled submit, it must sit beside
   visible guidance on what's missing, and the disabled state must be
   perceivable.
