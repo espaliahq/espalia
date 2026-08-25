@@ -11,7 +11,9 @@
 # window (no full-matrix reload).
 class Views::Evidence::ModalShell < Views::Base
   def view_template
-    div(id: "evidence-modal-overlay", data: { modal_target: "overlay" },
+    div(id: "evidence-modal-overlay",
+        data: { modal_target: "overlay",
+                modal_dirty_guard: "Discard your unsaved feedback / evidence?" },
         class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
         role: "dialog", aria: { modal: "true" }) do
       div(class: "w-full max-w-xl lg:max-w-2xl xl:max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",

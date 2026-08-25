@@ -13,8 +13,14 @@
 // submit. Set it true only for purely informational modals where an outside
 // click is a safe, expected dismissal.
 //
+// Esc is bound to `modal#escape`, which adds one more protection layer: an
+// overlay carrying `data-modal-dirty-guard="<message>"` asks that question
+// via confirm() before an Esc discards typed input (value differing from the
+// server-rendered default in a textarea or text-like input). × and Cancel
+// remain immediate — they are explicit dismissals; Esc is the accidental one.
+//
 // Standalone usage (co-located trigger):
-//   <div data-controller="modal" data-action="keydown.esc@window->modal#close">
+//   <div data-controller="modal" data-action="keydown.esc@window->modal#escape">
 //     <button data-action="modal#open">Open</button>
 //     <div data-modal-target="overlay">…<div data-modal-target="panel">…</div></div>
 //   </div>
@@ -59,6 +65,14 @@ export default class extends BaseController {
     this.hide()
   }
 
+  // Esc-to-close, guarded: when the active overlay opts in via
+  // `data-modal-dirty-guard`, typed-but-unsaved input must be confirmed away
+  // before the modal closes (protect users' work — audit issue #315).
+  escape() {
+    if (this.#dirtyGuardBlocks()) return
+    this.hide()
+  }
+
   // turbo:submit-end fires after a Turbo-handled submit settles; close only on
   // success so validation errors keep the form visible to fix and retry.
   submitted(event) {
@@ -77,6 +91,23 @@ export default class extends BaseController {
 
   #activePanel() {
     return this.activeOverlay?.querySelector("[data-modal-target='panel']")
+  }
+
+  // True when the active overlay opted into the dirty guard, holds input the
+  // user typed (differs from the server-rendered default), and the user
+  // declines to discard it. Selects and JS-prefilled hidden fields are
+  // deliberately out of scope — retyping prose is the loss worth guarding.
+  #dirtyGuardBlocks() {
+    const overlay = this.activeOverlay
+    if (!overlay || overlay.classList.contains("hidden")) return false
+    const message = overlay.dataset.modalDirtyGuard
+    if (!message) return false
+    const dirty = [
+      ...overlay.querySelectorAll(
+        "textarea, input[type='text'], input[type='url'], input[type='search'], input[type='email']",
+      ),
+    ].some((el) => el.value !== el.defaultValue && el.value.trim() !== "")
+    return dirty && !window.confirm(message)
   }
 
   show() {

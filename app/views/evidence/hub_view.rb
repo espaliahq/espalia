@@ -42,7 +42,7 @@ class Views::Evidence::HubView < Views::Base
 
   def view_template
     render Components::Kit::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(data: { controller: "modal evidence-modal", action: "keydown.esc@window->modal#close" }) do
+      div(data: { controller: "modal evidence-modal", action: "keydown.esc@window->modal#escape" }) do
         div(class: "max-w-3xl mx-auto space-y-10") do
           header
           open_requests_group
