@@ -248,6 +248,33 @@ browser (dev URL, login, viewports, screenshot paths, gotchas). The
 `SCREENSHOTS=1` + `/screenshot-test` path remains available for a repeatable,
 suite-level artefact.
 
+### UX quality skill (`/ux-quality`)
+
+The vendored [`ux-quality` skill](.claude/skills/ux-quality/SKILL.md) carries the
+UX/WCAG 2.2 AA criteria for three lifecycle points: `build` (defaults while
+writing UI), `spec-review` (UX gaps in a spec/plan before code exists), and
+`assess` (adversarial browser-driven review — deeper than, and additional to,
+the mandatory Chrome MCP pass above; use it for UX/accessibility sign-off of a
+whole surface, not per-change verification). The skill is host-agnostic and
+resolves this repo via its discovery contract — answers live here, not in the
+skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
+
+- **Design system**: Phlex Kit components (`app/components/kit/`) +
+  [phlex-views.md](docs/guidelines/phlex-views.md) and
+  [tailwindcss.md](docs/guidelines/tailwindcss.md).
+- **App URL / login / seeded-data control**:
+  [chrome-mcp.md](docs/guidelines/chrome-mcp.md) (`http://rails-app:6600`,
+  Rails-credentials admin, seeded-tenant reset caveats).
+- **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
+  — use it, not the skill's bundled dormant `ux-driver`.
+- **Screenshot home**: `tmp/visual/<task>/` (gitignored).
+
+Re-vendor from `mr-yum/connect` `.claude/skills/ux-quality/` to pick up upstream
+improvements (last synced: `31914b8`, plus local generic fixes — see
+`git log .claude/skills/ux-quality` — which should be contributed upstream and
+folded into the next sync); never edit the vendored files with
+GrowthOS-specific facts — put those here or in `docs/guidelines/`.
+
 ## Core Principles
 
 ### The Rails Way
@@ -360,6 +387,7 @@ test/
 - When referring to a PR, always link to it to reduce having to scroll back to find link
 - **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
 - When referencing a PR, always link to it so to avoid having to scroll up to find the link
+- **Never publish online Artifacts (claude.ai-hosted pages) for project deliverables — reports, audits, plans, or any work product.** Generate the HTML (or Markdown) locally instead — write it under `tmp/` (gitignored) or another agreed location and present the file path so it can be opened from the IDE. Project content stays in the repo/workspace, not on an external host.
 
 ## Learnings
 
