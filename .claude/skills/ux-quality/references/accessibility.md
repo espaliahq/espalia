@@ -50,28 +50,28 @@ no ARIA is better than bad ARIA.
 
 ### Operable
 
-| SC     | Name (level)                  | Meaning                                                   | Test                                                                    |
-| ------ | ----------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 2.1.1  | Keyboard (A)                  | Everything operable by keyboard alone                     | MANUAL                                                                  |
-| 2.1.2  | No Keyboard Trap (A)          | Focus never stuck                                         | MANUAL                                                                  |
-| 2.1.4  | Character Key Shortcuts (A)   | Single-char shortcuts remappable or focus-scoped          | MANUAL                                                                  |
-| 2.2.1  | Timing Adjustable (A)         | Limits off / ≥10× / 20s-warned extension (20h exempt)     | MANUAL                                                                  |
-| 2.2.2  | Pause, Stop, Hide (A)         | Auto-moving content >5s pausable                          | MANUAL                                                                  |
-| 2.3.1  | Three Flashes (A)             | Nothing flashes >3×/s                                     | MANUAL/SEMI                                                             |
-| 2.4.1  | Bypass Blocks (A)             | Skip link or landmarks                                    | AUTO presence; working is MANUAL                                        |
-| 2.4.2  | Page Titled (A)               | Descriptive `document.title`, updated on SPA route change | SEMI                                                                    |
-| 2.4.3  | Focus Order (A)               | Tab order preserves meaning                               | MANUAL                                                                  |
-| 2.4.4  | Link Purpose (A)              | Link text says where it goes                              | SEMI                                                                    |
-| 2.4.5  | Multiple Ways (AA)            | ≥2 ways to find pages                                     | MANUAL                                                                  |
-| 2.4.6  | Headings and Labels (AA)      | Describe topic or purpose                                 | MANUAL                                                                  |
-| 2.4.7  | Focus Visible (AA)            | Visible indicator on every focusable element              | MANUAL/SEMI — screenshot-diff                                           |
-| 2.4.11 | Focus Not Obscured (AA, new)  | Focused element never entirely hidden by sticky chrome    | MANUAL — intersect rects                                                |
-| 2.5.1  | Pointer Gestures (A)          | Multipoint/path gestures have single-pointer alternatives | MANUAL                                                                  |
-| 2.5.2  | Pointer Cancellation (A)      | Down-event alone never completes: up-event fire, abort/undo, reversal, or essential | MANUAL                                                    |
-| 2.5.3  | Label in Name (A)             | Accessible name contains the visible label                | SEMI — axe's only rule is experimental, off by default; verify manually |
-| 2.5.4  | Motion Actuation (A)          | Shake/tilt has UI alternatives                            | MANUAL                                                                  |
-| 2.5.7  | Dragging Movements (AA, new)  | Every drag has a non-drag alternative                     | MANUAL                                                                  |
-| 2.5.8  | Target Size Minimum (AA, new) | Targets ≥24×24 CSS px, with exceptions                    | SEMI — measure, then judge exceptions                                   |
+| SC     | Name (level)                  | Meaning                                                                                               | Test                                                                    |
+| ------ | ----------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 2.1.1  | Keyboard (A)                  | Everything operable by keyboard alone                                                                 | MANUAL                                                                  |
+| 2.1.2  | No Keyboard Trap (A)          | Focus never stuck                                                                                     | MANUAL                                                                  |
+| 2.1.4  | Character Key Shortcuts (A)   | Single-char shortcuts remappable or focus-scoped                                                      | MANUAL                                                                  |
+| 2.2.1  | Timing Adjustable (A)         | Limits off / ≥10× / 20s-warned extension (20h exempt)                                                 | MANUAL                                                                  |
+| 2.2.2  | Pause, Stop, Hide (A)         | Auto-moving content >5s pausable                                                                      | MANUAL                                                                  |
+| 2.3.1  | Three Flashes (A)             | Nothing flashes >3×/s                                                                                 | MANUAL/SEMI                                                             |
+| 2.4.1  | Bypass Blocks (A)             | Skip link or landmarks                                                                                | AUTO presence; working is MANUAL                                        |
+| 2.4.2  | Page Titled (A)               | Descriptive `document.title`, updated on SPA route change                                             | SEMI                                                                    |
+| 2.4.3  | Focus Order (A)               | Tab order preserves meaning                                                                           | MANUAL                                                                  |
+| 2.4.4  | Link Purpose (A)              | Link text says where it goes                                                                          | SEMI                                                                    |
+| 2.4.5  | Multiple Ways (AA)            | ≥2 ways to find pages                                                                                 | MANUAL                                                                  |
+| 2.4.6  | Headings and Labels (AA)      | Describe topic or purpose                                                                             | MANUAL                                                                  |
+| 2.4.7  | Focus Visible (AA)            | Visible indicator on every focusable element                                                          | MANUAL/SEMI — screenshot-diff                                           |
+| 2.4.11 | Focus Not Obscured (AA, new)  | Focused element never entirely hidden by sticky chrome                                                | MANUAL — intersect rects                                                |
+| 2.5.1  | Pointer Gestures (A)          | Multipoint/path gestures have single-pointer alternatives                                             | MANUAL                                                                  |
+| 2.5.2  | Pointer Cancellation (A)      | One of: no down-event, up-event completion with abort/undo, up reverses down, or down-event essential | MANUAL                                                                  |
+| 2.5.3  | Label in Name (A)             | Accessible name contains the visible label                                                            | SEMI — axe's only rule is experimental, off by default; verify manually |
+| 2.5.4  | Motion Actuation (A)          | Shake/tilt has UI alternatives                                                                        | MANUAL                                                                  |
+| 2.5.7  | Dragging Movements (AA, new)  | Every drag has a non-drag alternative                                                                 | MANUAL                                                                  |
+| 2.5.8  | Target Size Minimum (AA, new) | Targets ≥24×24 CSS px, with exceptions                                                                | SEMI — measure, then judge exceptions                                   |
 
 ### Understandable
 
