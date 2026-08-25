@@ -145,8 +145,10 @@ no ARIA is better than bad ARIA.
   often target size. First question for any interactive element: is it a
   native `button`/`a`/`input`? If custom: role, `tabindex="0"`, accessible
   name, Enter _and_ Space handlers, state attributes that actually update.
-- **ARIA misuse:** `aria-hidden` on focusable content; `aria-label`
-  overriding visible text (breaks 2.5.3); `role="menu"` on plain
+- **ARIA misuse:** `aria-hidden` on focusable content; an `aria-label`
+  that drops the visible label text (2.5.3 requires the accessible name
+  to *contain* the visible label — adding context around it conforms);
+  `role="menu"` on plain
   navigation (imposes an arrow-key contract nobody implemented);
   `aria-expanded` that never flips; role parent/child violations.
 - **Endemic:** scroll not reset on route change; focus dropped to
