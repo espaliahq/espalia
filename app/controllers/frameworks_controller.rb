@@ -8,6 +8,7 @@ class FrameworksController < ApplicationController
   # GET /frameworks
   def index
     authorize FrameworkState::Framework, :index?
+    @page_title = "Frameworks"
     @frameworks = FrameworkState::Framework.all
     tenants = ActsAsTenant.without_tenant { current_user.tenants.to_a }
 
@@ -22,6 +23,7 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id
   def show
     authorize @framework
+    @page_title = @framework.name
     render_explorer(mode: :view)
   end
 
@@ -39,6 +41,7 @@ class FrameworksController < ApplicationController
   # entities and pending archives become visible.
   def edit
     authorize @framework, :edit?
+    @page_title = "#{@framework.name} · Edit"
     render_explorer(mode: :edit)
   end
 

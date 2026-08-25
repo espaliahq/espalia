@@ -15,6 +15,7 @@ class AssessmentCyclesController < ApplicationController
   # GET /assessment_cycles
   def index
     authorize AssessmentCycle, :index?
+    @page_title = "Cycles"
 
     open_cycles = AssessmentCycle.open_cycles.includes(:framework).order(opened_at: :desc)
     closed_cycles = AssessmentCycle.closed_cycles.includes(:framework).order(opened_at: :desc)

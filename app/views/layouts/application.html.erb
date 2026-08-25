@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="<%= I18n.locale %>">
   <head>
-    <title><%= content_for(:title) || (defined?(current_tenant) && current_tenant ? current_tenant.name + " - " : "" ) + " GrowthOS" %></title>
+    <title><%= [@page_title, (current_tenant&.name if defined?(current_tenant)), "GrowthOS"].compact.join(" · ") %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="application-name" content="Growth Os">

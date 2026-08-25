@@ -17,6 +17,7 @@ class CalibrationSessionsController < ApplicationController
   # GET /calibration_sessions
   def index
     authorize CalibrationSession, :index?
+    @page_title = "Calibration"
 
     sessions = visible_sessions.order(created_at: :desc).to_a
     cycles = AssessmentCycle.where(cycle_id: sessions.map(&:cycle_id)).index_by(&:cycle_id)

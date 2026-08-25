@@ -18,6 +18,7 @@ class NotificationsController < ApplicationController
   # GET /notifications
   def index
     authorize Noticed::Notification, :index?, policy_class: NotificationPolicy
+    @page_title = "Notifications"
     surfaced = surfaced_notifications
     mark_seen(surfaced)
 
