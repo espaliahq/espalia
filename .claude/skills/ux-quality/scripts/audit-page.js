@@ -158,14 +158,19 @@
       let overflowCount = 0
       for (const el of all) {
         const r = el.getBoundingClientRect()
-        if (r.right + sx > doc.clientWidth + 1) {
-          overflowCount++
-          push(wide, {
-            description: describe(el),
-            left: Math.round(r.left + sx),
-            right: Math.round(r.right + sx),
-          })
-        }
+        if (r.right + sx <= doc.clientWidth + 1) continue
+        /** A fixed element is viewport-anchored, so its rect is already the
+         *  position that matters — adding scrollX would report a stationary
+         *  control as overflowing on any horizontally scrolled page. Only
+         *  candidates pay for the computed style. */
+        const ox = sx && getComputedStyle(el).position === 'fixed' ? 0 : sx
+        if (r.right + ox <= doc.clientWidth + 1) continue
+        overflowCount++
+        push(wide, {
+          description: describe(el),
+          left: Math.round(r.left + ox),
+          right: Math.round(r.right + ox),
+        })
       }
       return {
         horizontalPageScroll: doc.scrollWidth > doc.clientWidth,
