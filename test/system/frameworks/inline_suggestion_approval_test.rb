@@ -359,6 +359,48 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
         "the reload must restore the reviewer's scroll position, not reset to the top"
     end
 
+    should "land on the exact pending example when its feed entry is clicked" do
+      create_sugg_id = suggest_illustration_create
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      within "#suggestion-panel" do
+        assert_text "Proposed a new illustration"
+      end
+
+      # Click the entry body (not its action buttons) — dispatches
+      # suggestion:navigate with the suggestion id.
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel li[data-nav-suggestion-id='#{create_sugg_id}']\").click()"
+      )
+
+      # The row expands AND the ghost's decorated element itself is flagged as
+      # the navigation target — not just the cell's vicinity.
+      assert_selector "turbo-frame#pending-suggestion-#{create_sugg_id} .suggestion-nav-highlight",
+                      visible: :all
+    end
+
+    should "fall back to the cell when the entry's suggestion has no on-grid anchor" do
+      exp_sugg_id = suggest_expectation_edit
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      within "#suggestion-panel" do
+        assert_text "Suggested an edit to expectation"
+      end
+
+      # Remove the squiggle anchor to simulate a decoration that isn't
+      # rendered (e.g. the suggestion's role filtered out of the view).
+      page.execute_script(
+        "document.querySelectorAll(\"#framework-matrix [data-suggestion-id='#{exp_sugg_id}']\")" \
+        ".forEach(el => el.removeAttribute('data-suggestion-id'))"
+      )
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel li[data-nav-suggestion-id='#{exp_sugg_id}']\").click()"
+      )
+
+      # The cell itself carries the highlight instead.
+      assert_selector "td.suggestion-nav-highlight", visible: :all
+    end
+
     should "reject a suggestion via the modal with an optional reason" do
       visit edit_framework_path(@framework_id)
       toggle_context_pane

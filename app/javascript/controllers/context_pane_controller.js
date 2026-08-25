@@ -153,7 +153,10 @@ export default class extends BaseController {
       level: el.dataset.navLevel || "framework",
       categoryId: el.dataset.navCategoryId || null,
       capabilityId: el.dataset.navCapabilityId || null,
-      levelOrdinal: el.dataset.navLevelOrdinal ? parseInt(el.dataset.navLevelOrdinal, 10) : null
+      levelOrdinal: el.dataset.navLevelOrdinal ? parseInt(el.dataset.navLevelOrdinal, 10) : null,
+      // Present for pending suggestions — lets the matrix land on the exact
+      // decorated element (squiggle / ghost) instead of the cell's vicinity.
+      suggestionId: el.dataset.navSuggestionId || null
     }
 
     window.dispatchEvent(new CustomEvent("suggestion:navigate", { detail }))

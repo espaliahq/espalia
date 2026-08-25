@@ -295,6 +295,14 @@ class Views::Frameworks::Activity::Entry < Views::Base
       base[:action] = "click->context-pane#focusSuggestion " \
                       "keydown.enter->context-pane#focusSuggestion " \
                       "keydown.space->context-pane#focusSuggestion"
+      # A pending suggestion's grid decoration (squiggle / ghost) carries a
+      # matching [data-suggestion-id] — navigation scrolls to THAT element,
+      # not just the cell's vicinity, so the reviewer lands on the exact
+      # example they're actioning. Only pending suggestions have a rendered
+      # decoration to anchor to.
+      if @entry.suggestion_id.present? && @entry.suggestion_status == "pending"
+        base[:nav_suggestion_id] = @entry.suggestion_id
+      end
       if @entry.capability_id.present?
         # An entry that knows its level (expectation / illustration suggestions
         # and edits) navigates to the specific cell — expand the row AND focus

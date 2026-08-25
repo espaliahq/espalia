@@ -161,6 +161,7 @@ export default class extends BaseController {
       window.removeEventListener("matrix:focus-changed", this._onExternalFocusChange)
       this._onExternalFocusChange = null
     }
+    clearTimeout(this._navHighlightTimer)
     super.disconnect()
   }
 
@@ -759,7 +760,7 @@ export default class extends BaseController {
 
   navigateToEntity(event) {
     const {
-      level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId
+      level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId, suggestionId
     } = event.detail || {}
     if (!level) return
 
@@ -820,10 +821,24 @@ export default class extends BaseController {
           ?.querySelector(`td[data-level-ordinal='${levelOrdinal}']`)
       : null
 
-    if (targetCell) {
+    // Land on the exact decorated element when the entry named a pending
+    // suggestion — an expanded cell can be taller than the viewport (several
+    // roles × several examples), so centering the CELL routinely leaves the
+    // actual example off-screen ("it takes me to the vicinity… I have to
+    // scroll up or down"). Every rendered pending decoration (squiggle /
+    // ghost) carries [data-suggestion-id], so the anchor is already in the
+    // DOM; a suggestion whose role isn't in the current selection has no
+    // anchor and falls back to the cell.
+    const anchor = suggestionId ? this.#suggestionAnchor(suggestionId) : null
+
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+      this.#flashNavigationTarget(anchor)
+    } else if (targetCell) {
       // Land on the cell itself — centers the level column horizontally,
       // which a row-level scroll can't do on a wide matrix.
       targetCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+      this.#flashNavigationTarget(targetCell)
     } else {
       row.scrollIntoView({ behavior: "smooth", block: "center" })
     }
@@ -1623,6 +1638,25 @@ export default class extends BaseController {
     if (chevron) chevron.classList.add("rotate-90")
 
     this.#updateRowDimming(capId)
+  }
+
+  // The grid element decorated for a pending suggestion (inline-diff
+  // squiggle, ghost entry). Scoped to the matrix frame — the feed's
+  // discussion affordances carry the same data attribute and must not match.
+  #suggestionAnchor(suggestionId) {
+    const scope = this.hasFrameTarget ? this.frameTarget : this.element
+    return scope.querySelector(`[data-suggestion-id="${CSS.escape(suggestionId)}"]`)
+  }
+
+  // Brief pulse on the navigation target so the reviewer's eye lands on the
+  // exact element the feed entry concerns. Class defined in application.css;
+  // the reflow between remove/add restarts the animation on repeat clicks.
+  #flashNavigationTarget(el) {
+    el.classList.remove("suggestion-nav-highlight")
+    void el.offsetWidth
+    el.classList.add("suggestion-nav-highlight")
+    clearTimeout(this._navHighlightTimer)
+    this._navHighlightTimer = setTimeout(() => el.classList.remove("suggestion-nav-highlight"), 2400)
   }
 
   #scrollToCategoryHeader(categoryId) {
