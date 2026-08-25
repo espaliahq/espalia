@@ -5,8 +5,9 @@
 - Every interactive control has visibly distinct default, hover, active,
   focus-visible, disabled, and (where applicable) loading states. Drive
   hover and keyboard focus separately and screenshot both.
-- **Severity 3: no visible keyboard focus indicator** — a failed WCAG 2.4.7
-  (AA) success criterion, rated per SKILL.md's scale.
+- **No visible keyboard focus indicator rates at least 3** — a failed WCAG
+  2.4.7 (AA) success criterion — and higher when frequency × impact ×
+  persistence earns it, per SKILL.md's scale.
 - Affordances exist: cursor changes on interactive elements, pressed
   states respond, disabled states are visually distinct.
 

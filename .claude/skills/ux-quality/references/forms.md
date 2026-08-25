@@ -5,8 +5,9 @@
 - Every input has a visible label in a predictable, conventional position
   — above or start-aligned per the host's design system —
   programmatically associated: clicking the label focuses the input (test
-  it literally). **Severity 3: unlabeled input** — a failed WCAG 3.3.2/1.3.1
-  success criterion, rated per SKILL.md's scale.
+  it literally). **Unlabeled input rates at least 3** — a failed WCAG
+  3.3.2/1.3.1 success criterion — and higher when frequency × impact ×
+  persistence earns it, per SKILL.md's scale.
 - Placeholder-as-label is a defect: placeholders vanish on entry, defeat
   review-before-submit, and screen readers handle them inconsistently.
 - With the form filled, you can still tell what every field is.
