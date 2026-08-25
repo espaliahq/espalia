@@ -112,12 +112,12 @@ Assert per screen:
 Severity is SKILL.md's scale — a visual finding earns 3–4 only by meeting the
 same triggers as any other finding, and every 3–4 names the task consequence.
 
-| Severity | Visual trigger                                                                            |
-| -------- | ------------------------------------------------------------------------------------------ |
-| Blocker  | Layout so broken the task cannot be completed; data obscured beyond recovery               |
-| Major    | Missing designed state or broken layout that severely impairs completion; a failed WCAG AA criterion |
+| Severity | Visual trigger                                                                                                             |
+| -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Blocker  | Layout so broken the task cannot be completed; data obscured beyond recovery                                               |
+| Major    | Missing designed state or broken layout that severely impairs completion; a failed WCAG AA criterion                       |
 | Minor    | Wrong component used, off-system color/type, spacing off the token scale, inconsistent radius/shadow, visible misalignment |
-| Cosmetic | 1px optical issues, copy tweaks                                                            |
+| Cosmetic | 1px optical issues, copy tweaks                                                                                            |
 
 Rate function separately from looks — polish does not buy leniency on
 usability, and vice versa.

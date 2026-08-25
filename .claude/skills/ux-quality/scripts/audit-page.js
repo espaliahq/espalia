@@ -111,7 +111,10 @@
           const v = px(cs[p])
           if (!v || Number.isNaN(v)) continue
           tally(values, v)
-          if (opts.spacingScale?.length && !onScale(Math.abs(v), opts.spacingScale))
+          if (
+            opts.spacingScale?.length &&
+            !onScale(Math.abs(v), opts.spacingScale)
+          )
             push(offScale, { description: describe(el), prop: p, value: v })
         }
       }
