@@ -6,12 +6,14 @@
   — above or start-aligned per the host's design system —
   programmatically associated: clicking the label focuses the input (test
   it literally). **Unlabeled input rates at least 3** — a failed success
-  criterion: 3.3.2 when no label or instruction is provided at all; 1.3.1
-  and 4.1.2 when a visible label isn't programmatically associated (axe's
-  `label` rule reports under 4.1.2). A fully bare input fails all of them
-  at once — cite every criterion that applies, not the first match — and
-  the finding rates higher when frequency × impact × persistence earns
-  it, per SKILL.md's scale.
+  criterion; cite each one that actually applies: 3.3.2 when no label or
+  instruction is provided; 1.3.1 when a visible label's relationship
+  isn't programmatically determinable; 4.1.2 when the control ends up
+  with no accessible name at all (axe's `label` rule reports here — an
+  `aria-label` satisfies it while still failing the visible-label rule
+  above); 2.5.3 when a visible label's text is missing from the
+  accessible name. The finding rates higher when frequency × impact ×
+  persistence earns it, per SKILL.md's scale.
 - Placeholder-as-label is a defect: placeholders vanish on entry, defeat
   review-before-submit, and screen readers handle them inconsistently.
 - With the form filled, you can still tell what every field is.
