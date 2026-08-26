@@ -21,6 +21,7 @@ class AssessmentsController < ApplicationController
   # GET /assessments
   def index
     authorize PersonFrameworkAssignment, :index?
+    @page_title = "My Assessments"
     @own_assignments = PersonFrameworkAssignment.for_person(current_person.id)
       .includes(:framework, :role, :level)
     reviewable = Assessments::ReviewableAssignments.new(current_person)
@@ -55,6 +56,7 @@ class AssessmentsController < ApplicationController
   def show
     authorize @assignment
     load_assessment_data
+    @page_title = manager_viewing? ? "#{@assessee.name} · Assessment" : "My Assessment"
     active_category_id = resolve_active_category_id
     context = assessment_context
     policy = assignment_policy

@@ -10,6 +10,7 @@ class HomeController < ApplicationController
   # GET /
   def show
     authorize :home, :show?
+    @page_title = "Home"
 
     render Views::Home::DashboardView.new(
       card_instances: Home::Registry.instances_for(pundit_user),

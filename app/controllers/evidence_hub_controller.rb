@@ -9,6 +9,7 @@ class EvidenceHubController < ApplicationController
   # GET /evidence
   def show
     authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
+    @page_title = "Feedback / Evidence"
 
     incoming = EvidenceRequest.incoming_for(current_person.id).includes(:requester, :assessee)
     outgoing = EvidenceRequest.outgoing_for(current_person.id).includes(:requestee, :assessee)

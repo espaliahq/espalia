@@ -15,6 +15,7 @@ class AssessmentCyclesController < ApplicationController
   # GET /assessment_cycles
   def index
     authorize AssessmentCycle, :index?
+    @page_title = "Cycles"
 
     open_cycles = AssessmentCycle.open_cycles.includes(:framework).order(opened_at: :desc)
     closed_cycles = AssessmentCycle.closed_cycles.includes(:framework).order(opened_at: :desc)
@@ -39,6 +40,7 @@ class AssessmentCyclesController < ApplicationController
   # GET /assessment_cycles/:id
   def show
     authorize @cycle
+    @page_title = @cycle.name
 
     # Eager-load people for the enrollment join used by `#participations`.
     @cycle.enrollments.includes(:person).load

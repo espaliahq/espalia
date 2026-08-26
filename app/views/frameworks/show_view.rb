@@ -144,7 +144,7 @@ class Views::Frameworks::ShowView < Views::Base
     actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
     if @mode == :edit
       controllers << "modal"
-      actions << "keydown.esc@window->modal#close"
+      actions << "keydown.esc@window->modal#escape"
       # A squiggle click opens a suggestion card — reveal the pane if collapsed.
       actions << "suggestion:open-card@window->framework-explorer#openContextPane"
     end

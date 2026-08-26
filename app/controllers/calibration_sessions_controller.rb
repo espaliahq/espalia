@@ -17,6 +17,7 @@ class CalibrationSessionsController < ApplicationController
   # GET /calibration_sessions
   def index
     authorize CalibrationSession, :index?
+    @page_title = "Calibration"
 
     sessions = visible_sessions.order(created_at: :desc).to_a
     cycles = AssessmentCycle.where(cycle_id: sessions.map(&:cycle_id)).index_by(&:cycle_id)
@@ -97,6 +98,7 @@ class CalibrationSessionsController < ApplicationController
   # GET /calibration_sessions/:id
   def show
     authorize @session
+    @page_title = "#{@session.name} · Calibration"
 
     members = @session.members.to_a
     participant_ids = members.select { |m| m.member_type == "participant" }.map(&:person_id)

@@ -76,7 +76,7 @@ class Views::Assessments::ShowView < Views::Base
     # matrix updates in place instead of fully reloading.
     div(class: "assessment-scroll-root",
         data: { controller: "assessment-sync modal evidence-modal request-evidence",
-                action: "keydown.esc@window->modal#close" }) do
+                action: "keydown.esc@window->modal#escape" }) do
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
           data: { assessment_sync_target: "signal" }) { }
