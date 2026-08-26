@@ -109,7 +109,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
       end
       # Open clarification discussion on this expectation — content glyph,
       # never the pending-change vocabulary (nothing is proposed).
-      render_clarification_glyph(@cell_data[:clarification_count])
+      render_clarification_glyph(@cell_data[:clarification_count],
+                                 suggestion_id: @cell_data[:clarification_suggestion_id])
       illustration_indicator if @cell_data[:illustration_count] > 0
     end
   end

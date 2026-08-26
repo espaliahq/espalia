@@ -79,7 +79,8 @@ class Frameworks::IllustrationsController < ApplicationController
       # on — the common auto-applied edit skips it.
       can_reorder: can_reorder_illustrations?,
       approval_authority: pending_edit_approval_authority,
-      discuss_context_label: discuss_context_label(@illustration)
+      discuss_context_label: discuss_context_label(@illustration),
+      clarification: illustration_clarification(@illustration)
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :not_found
@@ -214,6 +215,21 @@ class Frameworks::IllustrationsController < ApplicationController
     return nil unless expectation
 
     "#{expectation.capability&.name} · L#{expectation.level_ordinal} · #{illustration.role&.name} example"
+  end
+
+  # Open discussions on this example, so the frame swap keeps its comment glyph
+  # (Hard-Won Lesson 13/16 class — the matrix render supplies the same from its
+  # in-memory suggestions map).
+  #
+  # @param illustration [FrameworkState::RoleIllustration]
+  # @return [Hash] { count:, suggestion_id: }
+  def illustration_clarification(illustration)
+    open = FrameworkState::SuggestedEdit
+      .where(framework_id: @framework.framework_id, target_entity_type: "role_illustration",
+             target_entity_id: illustration.illustration_id)
+      .clarifications.pending.order(:created_at, :id)
+
+    { count: open.count, suggestion_id: open.last&.suggestion_id }
   end
 
   # initial render gates on can_edit_structure (plus list size, which the

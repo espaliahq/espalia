@@ -1362,6 +1362,19 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "#resolve-clarification-modal", visible: true
     end
 
+    should "open the discussion card by clicking the cell glyph" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # The glyph is the way into the discussion from the grid — click it and
+      # the pane swaps to that clarification's card.
+      click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
+                                      expect_text: "Quinn Questioner"
+      assert_text "Raters read 'clarifying questions' three different ways"
+    end
+
     should "resolve a clarification from the feed via the modal" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       sign_in_as(@admin_user)

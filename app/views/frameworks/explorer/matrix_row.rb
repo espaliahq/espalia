@@ -104,7 +104,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
             draft_state_badge if @mode == :edit
             # Capability-anchored clarifications (a cell with no expectation
             # to hang on) glyph the capability row.
-            render_clarification_glyph(@capability_data[:clarification_count])
+            render_clarification_glyph(@capability_data[:clarification_count],
+                                       suggestion_id: @capability_data[:clarification_suggestion_id])
             # Description: inline-editable in edit mode (also shown when blank,
             # as an "Add a description…" affordance). View mode renders it only
             # when present.
@@ -341,6 +342,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     ) do
       ill_pending_edits = cell_data[:illustration_pending_edits] || {}
       ill_pending_edit_details = cell_data[:illustration_pending_edit_details] || {}
+      ill_clarifications = cell_data[:illustration_clarifications] || {}
       pending_creates = cell_data[:pending_illustration_creates] || []
 
       cell_data[:bound_selected_role_ids].each do |role_id|
@@ -378,7 +380,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 mode: @mode,
                 can_reorder: can_reorder,
                 approval_authority: @approval_authority,
-                discuss_context_label: "#{@capability.name} · L#{ordinal} · #{role.name} example"
+                discuss_context_label: "#{@capability.name} · L#{ordinal} · #{role.name} example",
+                clarification: ill_clarifications[ill.illustration_id]
               )
             end
             role_pending_creates.each do |suggestion|

@@ -811,12 +811,22 @@ rediscovering it. Mechanics:
   `resolve_clarification_form` controller mirror the reject modal exactly).
 - **Grid decoration is the content language, never the pending-change
   vocabulary**: an open clarification renders a muted **speech-bubble glyph**
-  on the affected cell (capability row when the anchor is the capability) —
+  on the affected cell (the capability row when the anchor is the capability;
+  the expanded row's example when it's an illustration) —
   `SuggestionDecoration#render_clarification_glyph`, edit mode only. It is
   deliberately NOT the wiggle: a clarification proposes no change, so
   `build_suggestions_map` routes it to a separate `clarification_count`
   (never `:count`/`latest_by_field`, so no wiggle, no diff, no "N pending"
   pill). Same glyph vocabulary as the assessment level chips.
+  **The glyph is clickable** — it opens that discussion's card via the same
+  `suggestion:open-card` path the squiggle uses, so the grid is a way *into*
+  the conversation, not just a marker of one. `build_suggestions_map` keeps
+  the latest open clarification's id per entity (`latest_clarification`)
+  alongside the count, threaded by `MatrixDataBuilder` as
+  `clarification_suggestion_id` (cell + capability) and
+  `illustration_clarifications` (`{ count:, suggestion_id: }` per illustration).
+  With several open, the glyph opens the most recent; the card's feed context
+  carries the rest.
 - **Asking is a grid affordance — "Discuss…"** (edit mode). Three triggers,
   all plain `click->modal#open` buttons carrying a `discuss_*` dataset (no
   per-trigger Stimulus mount — one per cell is exactly the direction Lesson 23

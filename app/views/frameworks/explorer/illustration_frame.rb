@@ -28,6 +28,8 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
   #   authority — gates the pending-edit approve/reject kebab (§12). Controller
   #   frame re-renders must re-thread it (Hard-Won Lesson 13/16 class).
+  # @param clarification [Hash, nil] `{ count:, suggestion_id: }` for open
+  #   discussions on this example — renders the clickable comment glyph
   # @param discuss_context_label [String, nil] where this example sits, shown in
   #   the "Discuss…" modal ("Strategic Thinking · L4 · Software Engineer
   #   example"). The frame knows only the illustration, so the caller supplies
@@ -35,7 +37,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view,
                  can_reorder: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 discuss_context_label: nil)
+                 discuss_context_label: nil, clarification: nil)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
@@ -44,6 +46,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
     @can_reorder = can_reorder
     @approval_authority = approval_authority
     @discuss_context_label = discuss_context_label
+    @clarification = clarification || { count: 0, suggestion_id: nil }
   end
 
   def view_template
@@ -80,6 +83,9 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
         span(class: "flex-1 #{decoration}".strip) { @illustration.description }
       end
       if @mode == :edit
+        # Open discussion on this example — content glyph, never the
+        # pending-change vocabulary (nothing is proposed).
+        render_clarification_glyph(@clarification[:count], suggestion_id: @clarification[:suggestion_id])
         reorder_buttons if @can_reorder
         edit_button
         # Kebab last — always the right-most control (phlex-views.md).
