@@ -170,14 +170,16 @@ module Frameworks::SuggestionResolutionStreams
   # the approve, so it exists by response time. The creating event's id never
   # reaches this layer, so resolve it by content: the proposal's final text
   # (an amend folds into suggested_value) within the target expectation × role,
-  # newest first in case of duplicates.
+  # newest first in case of duplicates. No text match = we can't prove which
+  # row the projection created — return nil (→ 204 + full refresh) rather
+  # than render a sibling row into the ghost's place, which would duplicate it.
   def created_illustration_for_suggestion
     attrs = (@suggestion.proposed_attributes || {}).stringify_keys
     scope = FrameworkState::RoleIllustration.where(
       expectation_id: @suggestion.parent_id, role_id: attrs["role_id"]
     ).order(created_at: :desc)
     final_text = @suggestion.suggested_value.presence || attrs["description"]
-    scope.find_by(description: final_text) || scope.first
+    scope.find_by(description: final_text)
   end
 
   # ── Pending-state re-queries (Hard-Won Lesson 16) ──

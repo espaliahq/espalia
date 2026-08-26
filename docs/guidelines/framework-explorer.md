@@ -753,8 +753,9 @@ kebabs, all backed by the shared
   via the `Frameworks::SuggestionAuthority` controller concern.
 
 They reuse the *exact* same pieces — `suggestion-action`
-(inline approve, `inline=1` → 204), the root reject modal, and
-`suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
+(inline approve, `inline=1` → surgical Turbo Stream, else 204), the root
+reject modal, and `suggestion:resolved` → `matrix#refresh` — so approving
+from the grid and from
 the feed are the same operation with the same live-update wiring (the feed
 reloads via broadcast either way). Pending **creates** (the ghost frames)
 carry the same kebab — "Approve/Reject new illustration/expectation" — so a
@@ -1388,7 +1389,7 @@ line (§9).
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
-| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; create/approve/reject/amend/withdraw all dispatch `Operations::Frameworks::*` (create → `SuggestCreate`/`SuggestDelete`, always pending). approve/reject are format-aware — `inline=1` (feed/grid) → 204, else redirect (§12) |
+| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; create/approve/reject/amend/withdraw all dispatch `Operations::Frameworks::*` (create → `SuggestCreate`/`SuggestDelete`, always pending). approve/reject are inline-aware — `inline=1` (feed/grid) → surgical Turbo Stream, else 204; non-inline → redirect (§12) |
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH → `SuggestEdit`, POST → `SuggestCreate` with the edit/suggest toggle) |
 | `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name **or** description (PATCH → `SuggestEdit`); add a capability (POST → `AddCapability`). Resolves the capability from the graph (incl. draft-added — Lesson 17) |
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name **or** description (PATCH → `SuggestEdit`); add a category (POST → `AddCategory`) |

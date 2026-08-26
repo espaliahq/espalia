@@ -183,10 +183,12 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       # The row kebab lives OUTSIDE the surgically-replaced frame and survives
       # the resolution — its items must go terminal (approve relabelled, both
       # disabled), never linger actionable against a resolved suggestion.
-      page.execute_script(
-        "document.querySelector(\"tr[data-capability-id='#{@cap_id}'] " \
-        "button[data-dropdown-target='trigger']\").click()"
-      )
+      # DOM-level wait first: wait_for_status polls the read model, which
+      # flips mid-POST — before the response reaches the client and
+      # suggestion:resolved marks the (still-hidden) menu items.
+      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
+                      text: "✓ Approved", visible: :all
+      open_dropdown(scope: "tr[data-capability-id='#{@cap_id}']")
       assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
                       text: "✓ Approved"
       assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",

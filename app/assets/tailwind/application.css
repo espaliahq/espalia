@@ -197,6 +197,15 @@ input[type="week"] {
   animation: suggestion-nav-pulse 2.2s ease-out 1 both;
 }
 
+/* Decorative motion — reduced-motion users get a static "here" ring for the
+ * class's lifetime (the controller removes it after ~2.4s) instead of a pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .suggestion-nav-highlight {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-amber-400) 70%, transparent);
+  }
+}
+
 @keyframes suggestion-nav-pulse {
   0% {
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-amber-400) 90%, transparent);
