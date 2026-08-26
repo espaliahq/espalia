@@ -180,29 +180,28 @@ export default class extends BaseController {
     document.removeEventListener("keydown", this.boundTrapKeydown, true)
     overlay.removeEventListener("turbo:frame-load", this.boundFocusOnFrameLoad)
     // APG dialog contract: focus returns to the invoker on close. Deferred
-    // two frames so Turbo Streams riding the same response (a saved evidence
-    // cell re-render, a resolved suggestion refresh) settle first — then the
-    // invoker is re-resolved: the original node if it survived, its
-    // same-id replacement if the stream swapped it, or the ancestor
-    // dropdown's kebab when the invoking menu item hid with its menu. An
-    // anonymous invoker replaced by a refresh has nothing durable to return
-    // to; focus is left alone rather than guessed.
+    // on a short timer so Turbo Streams riding the same response (a saved
+    // evidence cell re-render, a resolved suggestion refresh) settle first —
+    // a timer, not requestAnimationFrame, because rAF stalls in occluded or
+    // headless pages. The invoker is then re-resolved: the original node if
+    // it survived, its same-id replacement if a stream swapped it, or the
+    // ancestor dropdown's kebab when the invoking menu item hid with its
+    // menu. An anonymous invoker replaced by a refresh has nothing durable
+    // to return to; focus is left alone rather than guessed.
     const trigger = this.triggerElement
     this.triggerElement = null
     if (!trigger) return
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const candidate =
-          (document.contains(trigger) && trigger.offsetParent !== null && trigger) ||
-          (trigger.id && document.getElementById(trigger.id)) ||
-          trigger
-            .closest("[data-controller~='dropdown']")
-            ?.querySelector("[data-dropdown-target='trigger']")
-        if (candidate && document.contains(candidate) && candidate.offsetParent !== null) {
-          candidate.focus()
-        }
-      })
-    })
+    setTimeout(() => {
+      const candidate =
+        (document.contains(trigger) && trigger.offsetParent !== null && trigger) ||
+        (trigger.id && document.getElementById(trigger.id)) ||
+        trigger
+          .closest("[data-controller~='dropdown']")
+          ?.querySelector("[data-dropdown-target='trigger']")
+      if (candidate && document.contains(candidate) && candidate.offsetParent !== null) {
+        candidate.focus()
+      }
+    }, 60)
   }
 
   // Wrap Tab / Shift+Tab within the open overlay; focus that has escaped
