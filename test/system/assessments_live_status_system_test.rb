@@ -125,7 +125,10 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
       # announce NOTHING. The popover correctly drops its Clear item once
       # cleared, so replay the raw POST and assert the response carries no
       # live-region update stream.
-      body_has_announcement = page.evaluate_script(<<~JS)
+      # evaluate_async_script: Selenium's synchronous evaluate_script would
+      # serialize the pending Promise, passing the assertion vacuously.
+      result = page.evaluate_async_script(<<~JS)
+        const done = arguments[0];
         (async () => {
           const fd = new FormData();
           fd.set("rating[capability_stable_id]", #{@cap_stable.to_json});
@@ -143,10 +146,13 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
             },
             body: fd
           });
-          return (await res.text()).includes("assessment-live-status");
-        })()
+          const text = await res.text();
+          done({ ok: res.ok, announced: text.includes("assessment-live-status") });
+        })().catch(e => done({ error: String(e) }));
       JS
-      assert_not body_has_announcement,
+      assert_nil result["error"], "duplicate-clear POST failed: #{result['error']}"
+      assert result["ok"], "the duplicate clear should still answer 200"
+      assert_not result["announced"],
         "a no-op clear must not include the live-region update stream"
     end
 

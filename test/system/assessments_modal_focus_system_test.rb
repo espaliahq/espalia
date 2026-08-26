@@ -225,7 +225,9 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
       JS
       assert_selector "#evidence-request-modal-overlay", visible: true
       assert_selector "#evr-message", visible: true
-      sleep 0.3 # outlive the 60ms corrective-restore window
+      # Wait in the BROWSER's event loop past the 300ms late corrective pass
+      # (a Ruby sleep is not synchronized with the page's timers).
+      page.evaluate_async_script("const done = arguments[0]; window.setTimeout(done, 350);")
       assert page.evaluate_script(
         "document.getElementById('evidence-request-modal-overlay').contains(document.activeElement)"
       ), "focus must stay inside the newer dialog"
