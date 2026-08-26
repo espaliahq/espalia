@@ -1295,6 +1295,22 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       end
     end
 
+    # The kebab menu (z-50) outranks the modal overlay (z-40), and clicking a
+    # menu item isn't an "outside" click — so without an explicit close the
+    # menu renders over the dialog it just launched.
+    should "close the kebab menu when it opens the modal" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      open_row_kebab
+      click_menu_item "Discuss…", expect_text: "Start a discussion"
+      assert_selector "#request-clarification-modal", visible: true
+
+      assert_no_selector "[role='menuitem']", visible: true
+    end
+
     should "reach the modal on a narrow viewport" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       sign_in_as(@admin_user)
