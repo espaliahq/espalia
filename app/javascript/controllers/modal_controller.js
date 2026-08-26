@@ -65,6 +65,7 @@ export default class extends BaseController {
     // just closed — restoring the old trigger would drop focus outside the
     // new dialog.
     clearTimeout(this.pendingFocusReturn)
+    clearTimeout(this.pendingFocusReturnLate)
     const trigger = event.currentTarget
     this.triggerElement = trigger instanceof Element ? trigger : null
     this.activeOverlay = this.#resolveOverlay(trigger)
@@ -196,6 +197,12 @@ export default class extends BaseController {
     const trigger = this.triggerElement
     this.triggerElement = null
     if (!trigger) return
+    // A late frame re-render (a saved evidence cell, a refreshed matrix) can
+    // replace the invoker's whole section with identical content AFTER we
+    // focus it — every captured node reference then points at a detached
+    // tree. Capture a durable re-resolution path up front: the nearest
+    // [id] ancestor plus the kebab selector within it.
+    const anchorId = trigger.closest("[id]")?.id || null
     const restore = () => {
       // Another dialog opened meanwhile — its own focus management owns the
       // keyboard now.
@@ -203,21 +210,33 @@ export default class extends BaseController {
       const candidate =
         (document.contains(trigger) && trigger.offsetParent !== null && trigger) ||
         (trigger.id && document.getElementById(trigger.id)) ||
-        trigger
-          .closest("[data-controller~='dropdown']")
-          ?.querySelector("[data-dropdown-target='trigger']")
+        [
+          trigger
+            .closest("[data-controller~='dropdown']")
+            ?.querySelector("[data-dropdown-target='trigger']"),
+          anchorId
+            ? document
+                .getElementById(anchorId)
+                ?.querySelector("[data-dropdown-target='trigger']")
+            : null,
+        ].find((el) => el && document.contains(el) && el.offsetParent !== null)
       if (candidate && document.contains(candidate) && candidate.offsetParent !== null) {
         candidate.focus()
       }
     }
     restore()
-    clearTimeout(this.pendingFocusReturn)
-    this.pendingFocusReturn = setTimeout(() => {
-      // Only correct — never steal: re-restore solely when the immediate
-      // return was undone (the focused node detached, dropping focus).
+    // Only correct — never steal: the passes re-restore solely when the
+    // return was undone (the focused node detached, dropping focus to
+    // body). Two staggered passes because the replacing re-render's timing
+    // varies with load.
+    const correct = () => {
       const active = document.activeElement
       if (!active || active === document.body) restore()
-    }, 60)
+    }
+    clearTimeout(this.pendingFocusReturn)
+    clearTimeout(this.pendingFocusReturnLate)
+    this.pendingFocusReturn = setTimeout(correct, 60)
+    this.pendingFocusReturnLate = setTimeout(correct, 300)
   }
 
   // Wrap Tab / Shift+Tab within the open overlay; focus that has escaped
