@@ -11,7 +11,9 @@
 # `evidence-request-modal-overlay`.
 class Views::Evidence::RequestModalShell < Views::Base
   def view_template
-    div(id: "evidence-request-modal-overlay", data: { modal_target: "overlay" },
+    div(id: "evidence-request-modal-overlay",
+        data: { modal_target: "overlay",
+                modal_dirty_guard: "Discard your unsaved request?" },
         class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
         role: "dialog", aria: { modal: "true" }) do
       div(class: "w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",
