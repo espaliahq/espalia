@@ -17,6 +17,7 @@ class Views::Evidence::RequestModalShell < Views::Base
         class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
         role: "dialog", aria: { modal: "true" }) do
       div(class: "w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",
+          tabindex: "-1",
           data: { modal_target: "panel" }) do
         turbo_frame_tag("evidence-request-modal", loading: "lazy", data: { request_evidence_target: "frame" }) do
           div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
