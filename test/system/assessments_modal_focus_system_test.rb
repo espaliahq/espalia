@@ -152,7 +152,25 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
         )
         sleep 0.1 unless returned
       end
-      assert returned, "focus should return to the kebab that opened the menu"
+      unless returned
+        # CI-only failure — capture where focus actually went so the log is
+        # diagnosable (this has never reproduced locally).
+        diag = page.evaluate_script(<<~JS)
+          (() => {
+            const a = document.activeElement;
+            const k = document.querySelector("[aria-label='Feedback / evidence actions']");
+            return JSON.stringify({
+              activeTag: a?.tagName, activeId: a?.id || null,
+              activeAria: a?.getAttribute?.("aria-label") || null,
+              activeText: (a?.textContent || "").trim().slice(0, 40),
+              kebabExists: !!k, kebabVisible: k ? k.offsetParent !== null : null,
+              kebabCount: document.querySelectorAll("[aria-label='Feedback / evidence actions']").length,
+              overlayHidden: document.getElementById("evidence-modal-overlay")?.classList?.contains("hidden")
+            });
+          })()
+        JS
+        flunk "focus should return to the kebab that opened the menu — #{diag}"
+      end
     end
 
     should "return focus to a standalone trigger that survives the close" do
