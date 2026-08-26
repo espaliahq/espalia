@@ -11,6 +11,7 @@
 class Frameworks::SuggestionsController < ApplicationController
   include Frameworks::SuggestionAuthority
   include Frameworks::SuggestionResolutionStreams
+  include Frameworks::IllustrationFrameContext
 
   before_action :set_framework
   before_action :set_suggestion, only: [ :show, :approve, :reject, :resolve, :amend, :destroy ]

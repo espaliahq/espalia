@@ -5,6 +5,7 @@
 class Frameworks::IllustrationsController < ApplicationController
   include FrameworkEditMode
   include Frameworks::SuggestionAuthority
+  include Frameworks::IllustrationFrameContext
 
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
@@ -79,7 +80,7 @@ class Frameworks::IllustrationsController < ApplicationController
       # on — the common auto-applied edit skips it.
       can_reorder: can_reorder_illustrations?,
       approval_authority: pending_edit_approval_authority,
-      discuss_context_label: discuss_context_label(@illustration),
+      discuss_context_label: illustration_discuss_context_label(@illustration),
       clarification: illustration_clarification(@illustration)
     ), layout: false
   rescue ActiveRecord::RecordNotFound
@@ -153,7 +154,7 @@ class Frameworks::IllustrationsController < ApplicationController
             framework_id: @framework.framework_id,
             mode: :edit,
             can_reorder: can_reorder_illustrations?,
-            discuss_context_label: discuss_context_label(illustration)
+            discuss_context_label: illustration_discuss_context_label(illustration)
           ),
           layout: false
         )
@@ -204,34 +205,6 @@ class Frameworks::IllustrationsController < ApplicationController
   end
 
   # Whether the re-rendered frame should carry the ↑/↓ move chevrons — the
-  # Where this example sits, for the frame's "Discuss…" kebab item — the matrix
-  # render builds the same label from its own in-memory data, so a frame swap
-  # doesn't lose it (Hard-Won Lesson 13/16 class).
-  #
-  # @param illustration [FrameworkState::RoleIllustration]
-  # @return [String, nil]
-  def discuss_context_label(illustration)
-    expectation = illustration.expectation
-    return nil unless expectation
-
-    "#{expectation.capability&.name} · L#{expectation.level_ordinal} · #{illustration.role&.name} example"
-  end
-
-  # Open discussions on this example, so the frame swap keeps its comment glyph
-  # (Hard-Won Lesson 13/16 class — the matrix render supplies the same from its
-  # in-memory suggestions map).
-  #
-  # @param illustration [FrameworkState::RoleIllustration]
-  # @return [Hash] { count:, suggestion_id: }
-  def illustration_clarification(illustration)
-    open = FrameworkState::SuggestedEdit
-      .where(framework_id: @framework.framework_id, target_entity_type: "role_illustration",
-             target_entity_id: illustration.illustration_id)
-      .clarifications.pending.order(:created_at, :id)
-
-    { count: open.count, suggestion_id: open.last&.suggestion_id }
-  end
-
   # initial render gates on can_edit_structure (plus list size, which the
   # UL-level controller makes moot for a lone item: moving first-up / last-down
   # no-ops), so the swap mirrors the policy half of that gate.
