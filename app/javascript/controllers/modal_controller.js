@@ -183,20 +183,20 @@ export default class extends BaseController {
     document.removeEventListener("click", this.boundClickOutside, true)
     document.removeEventListener("keydown", this.boundTrapKeydown, true)
     overlay.removeEventListener("turbo:frame-load", this.boundFocusOnFrameLoad)
-    // APG dialog contract: focus returns to the invoker on close. Deferred
-    // on a short timer so Turbo Streams riding the same response (a saved
-    // evidence cell re-render, a resolved suggestion refresh) settle first —
-    // a timer, not requestAnimationFrame, because rAF stalls in occluded or
-    // headless pages. The invoker is then re-resolved: the original node if
-    // it survived, its same-id replacement if a stream swapped it, or the
+    // APG dialog contract: focus returns to the invoker on close —
+    // immediately, so the plain-close path is deterministic in any
+    // environment, then re-asserted once on a short timer for the case
+    // where Turbo Streams riding the same response (a saved evidence cell
+    // re-render, a resolved suggestion refresh) detach the just-focused
+    // node. The invoker is re-resolved each time: the original node if it
+    // survived, its same-id replacement if a stream swapped it, or the
     // ancestor dropdown's kebab when the invoking menu item hid with its
     // menu. An anonymous invoker replaced by a refresh has nothing durable
     // to return to; focus is left alone rather than guessed.
     const trigger = this.triggerElement
     this.triggerElement = null
     if (!trigger) return
-    clearTimeout(this.pendingFocusReturn)
-    this.pendingFocusReturn = setTimeout(() => {
+    const restore = () => {
       // Another dialog opened meanwhile — its own focus management owns the
       // keyboard now.
       if (document.querySelector("[data-modal-target='overlay']:not(.hidden)")) return
@@ -209,6 +209,14 @@ export default class extends BaseController {
       if (candidate && document.contains(candidate) && candidate.offsetParent !== null) {
         candidate.focus()
       }
+    }
+    restore()
+    clearTimeout(this.pendingFocusReturn)
+    this.pendingFocusReturn = setTimeout(() => {
+      // Only correct — never steal: re-restore solely when the immediate
+      // return was undone (the focused node detached, dropping focus).
+      const active = document.activeElement
+      if (!active || active === document.body) restore()
     }, 60)
   }
 

@@ -120,6 +120,34 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
       click_rating_option("Clear rating")
       assert_selector "#assessment-live-status",
         text: "Rating cleared — Critical Thinking, E1", visible: :all
+
+      # A duplicate clear (stale tab, double submit) is a no-op and must
+      # announce NOTHING. The popover correctly drops its Clear item once
+      # cleared, so replay the raw POST and assert the response carries no
+      # live-region update stream.
+      body_has_announcement = page.evaluate_script(<<~JS)
+        (async () => {
+          const fd = new FormData();
+          fd.set("rating[capability_stable_id]", #{@cap_stable.to_json});
+          fd.set("rating[level_ordinal]", "1");
+          fd.set("rating[frequency]", "occasional");
+          fd.set("rating[clear]", "1");
+          const res = await fetch(window.location.pathname + "/ratings", {
+            method: "POST",
+            headers: {
+              // absent in the test env (forgery protection is off)
+              ...(document.querySelector("[name='csrf-token']")
+                ? { "X-CSRF-Token": document.querySelector("[name='csrf-token']").content }
+                : {}),
+              "Accept": "text/vnd.turbo-stream.html"
+            },
+            body: fd
+          });
+          return (await res.text()).includes("assessment-live-status");
+        })()
+      JS
+      assert_not body_has_announcement,
+        "a no-op clear must not include the live-region update stream"
     end
 
     should "render a hostile capability name as literal text, never as markup" do

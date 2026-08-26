@@ -184,5 +184,23 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
       end
       assert returned, "focus should return to the surviving Delegates trigger"
     end
+
+    should "leave focus in a modal opened right after another closed" do
+      open_evidence_modal
+      # Close the evidence modal and immediately open the request modal —
+      # the deferred corrective restore must not pull focus back out.
+      page.execute_script(<<~JS)
+        const overlay = document.getElementById("evidence-modal-overlay");
+        ([...overlay.querySelectorAll("button")].find(b => b.textContent.trim() === "Cancel")
+          || overlay.querySelector("[data-action*='modal#close']")).click();
+        document.querySelector("[data-modal-target-id='evidence-request-modal-overlay']").click();
+      JS
+      assert_selector "#evidence-request-modal-overlay", visible: true
+      assert_selector "#evr-message", visible: true
+      sleep 0.3 # outlive the 60ms corrective-restore window
+      assert page.evaluate_script(
+        "document.getElementById('evidence-request-modal-overlay').contains(document.activeElement)"
+      ), "focus must stay inside the newer dialog"
+    end
   end
 end
