@@ -70,6 +70,26 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
     end
   end
 
+  # Scroll restore runs on turbo:frame-load, which fires a beat AFTER the
+  # fresh frame content becomes visible — an immediate read can catch the
+  # pre-restore scrollTop of 0. Poll until the restore lands (or time out and
+  # return the last value for the failure message).
+  def wait_for_scroll_restore(minimum)
+    scroll_top = 0
+    Timeout.timeout(Capybara.default_max_wait_time) do
+      loop do
+        scroll_top = page.evaluate_script(
+          "document.querySelector(\"[data-context-pane-target='scroller']\").scrollTop"
+        )
+        return scroll_top if scroll_top >= minimum
+
+        sleep 0.1
+      end
+    end
+  rescue Timeout::Error
+    scroll_top
+  end
+
   # A pending edit on the expectation / illustration, created per-test so the
   # shared feed assertions (single pending suggestion) stay valid.
   def suggest_expectation_edit
@@ -352,9 +372,7 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
         assert_text "Approved a capability suggestion"
       end
 
-      restored = page.evaluate_script(
-        "document.querySelector(\"[data-context-pane-target='scroller']\").scrollTop"
-      )
+      restored = wait_for_scroll_restore(scrolled_to - 100)
       assert_operator restored, :>=, scrolled_to - 100,
         "the reload must restore the reviewer's scroll position, not reset to the top"
     end
@@ -399,6 +417,53 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
 
       # The cell itself carries the highlight instead.
       assert_selector "td.suggestion-nav-highlight", visible: :all
+    end
+
+    should "return to the reviewer's place in the feed after a click-through detour" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        22.times do |i|
+          handler.add_capability_category(@framework_id, SecureRandom.uuid_v7,
+            "Filler Category #{i}", ordinal: 10 + i)
+        end
+      end
+
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      within "#suggestion-panel" do
+        assert_text "Suggested an edit to capability"
+      end
+
+      scrolled_to = page.evaluate_script(<<~JS)
+        (() => {
+          const s = document.querySelector("[data-context-pane-target='scroller']");
+          s.scrollTop = 400;
+          return s.scrollTop;
+        })()
+      JS
+      assert_operator scrolled_to, :>=, 200, "feed must overflow well past the tolerance band"
+
+      # Click-through: navigate to the suggestion's entity — the feed narrows
+      # to that capability's activity.
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel li[data-nav-suggestion-id='#{@sugg_id}']\").click()"
+      )
+      within "#suggestion-panel" do
+        assert_text "← Show all framework activity"
+      end
+
+      # Return to the full feed — the reviewer lands back at the entry they
+      # left from, not at the top.
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel a[data-action*='clearFocus']\").click()"
+      )
+      within "#suggestion-panel" do
+        assert_no_text "← Show all framework activity"
+      end
+
+      restored = wait_for_scroll_restore(scrolled_to - 100)
+      assert_operator restored, :>=, scrolled_to - 100,
+        "returning to the feed must restore the reviewer's place, not reset to the top"
     end
 
     should "reject a suggestion via the modal with an optional reason" do

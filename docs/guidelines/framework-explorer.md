@@ -1136,13 +1136,21 @@ feedback ("Approve is super slow… it then takes me to the top"):
 - **Scroll**: the feed/card `overflow-y-auto` scroller is part of the frame
   content, so every `frame.reload()` replaces it and resets `scrollTop` to 0 —
   a reviewer working down a long list of pending suggestions was thrown to the
-  top after each approval. `context-pane#reloadPreservingScroll` captures the
-  `scroller` target's position before every **same-content** reload
-  (broadcast, post-submit, catch-up) and restores it on `turbo:frame-load`.
-  Focus-driven `src` changes render *different* content and deliberately start
-  at the top — `#rebuildFrameSrc` clears any saved position when it changes
-  `src`, so a scroll saved for an in-flight reload can never land on the
-  wrong content.
+  top after each approval. `context-pane#reloadPreservingScroll` captures
+  **which entry** the reviewer is on (topmost visible `li` + its offset)
+  before every **same-content** reload (broadcast, post-submit, catch-up) and
+  scrolls back to that entry on `turbo:frame-load` — entry-anchored, because a
+  pixel offset drifts one entry per action (the resolution being reloaded
+  prepends 2+ fresh entries above the reviewer's position, compounding over a
+  session). The pixel position is the fallback when the anchor entry isn't in
+  the fresh content (it lived in a discarded "load older" batch), still
+  exact-or-nothing. Focus-driven `src` changes render *different* content and
+  start at the top — with one deliberate exception: **leaving the full feed
+  for a review detour** (entry click-through narrows the feed; opening a
+  suggestion card swaps it) remembers the departure entry, and returning to
+  framework focus (the "Show all" link, collapsing the row) restores it — the
+  click-through → verify → act → return loop is exactly how a reviewer works
+  down a long list, and it used to dump them at the top on every return.
 - **Feedback**: the actor's entry only visibly changed when the broadcast
   round trip re-rendered the feed (1–2s in production) — long enough that
   users re-clicked, thinking the first click hadn't registered. Resolution
@@ -1152,7 +1160,8 @@ feedback ("Approve is super slow… it then takes me to the top"):
   and other surfaces), and the broadcast reload merely converges to the
   canonical state. Never make perceived responsiveness wait on a broadcast.
 
-Known trade-off: a reload discards "load older" batches. Restore is
+Known trade-off: a reload discards "load older" batches. When the anchor
+entry itself came from a discarded batch, the pixel fallback is
 exact-or-nothing — a saved position deeper than the fresh (first-batch)
 content starts at the top of the visibly-reset list rather than landing at
 the bottom of an unrelated stretch of feed.
