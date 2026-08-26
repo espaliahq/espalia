@@ -169,6 +169,30 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       end
     end
 
+    should "mark the grid kebab terminal when the suggestion resolves from the feed" do
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      assert_selector "#suggestion-panel button", text: "Approve"
+
+      page.execute_script(
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{@sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
+      )
+      wait_for_status("approved")
+
+      # The row kebab lives OUTSIDE the surgically-replaced frame and survives
+      # the resolution — its items must go terminal (approve relabelled, both
+      # disabled), never linger actionable against a resolved suggestion.
+      page.execute_script(
+        "document.querySelector(\"tr[data-capability-id='#{@cap_id}'] " \
+        "button[data-dropdown-target='trigger']\").click()"
+      )
+      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
+                      text: "✓ Approved"
+      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
+                      text: "Reject description change"
+    end
+
     should "approve a capability edit from the matrix row kebab" do
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
@@ -203,7 +227,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve expectation change"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{exp_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", exp_sugg_id)
@@ -226,7 +251,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve expectation change"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{exp_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", exp_sugg_id)
@@ -249,7 +275,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       # single "more actions" home.
       assert_text "Archive…"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{ill_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", ill_sugg_id)
@@ -269,7 +296,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve new illustration"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{create_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{create_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", create_sugg_id)
@@ -308,7 +336,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve illustration change"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{ill_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", ill_sugg_id)
@@ -523,7 +552,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
       [ exp_sugg_id, ill_sugg_id, create_sugg_id ].each do |sid|
-        assert_no_selector "button[data-suggestion-action-approve-url-value*='#{sid}']",
+        # The approve URL rides the kebab items' wrapper mount, not the button.
+        assert_no_selector "[data-suggestion-action-approve-url-value*='#{sid}']",
                            visible: :all
         assert_no_selector "button[data-reject-suggestion-id='#{sid}']", visible: :all
       end

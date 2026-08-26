@@ -60,9 +60,15 @@ module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
   # @param entity_label [String] named in the reject modal — "capability name"
   # @param preview [String] the proposed value, shown in the reject modal
   def render_approval_kebab_items(framework_id:, suggestion_id:, change_label:, entity_label:, preview:)
-    button(
-      type: "button", role: "menuitem",
-      class: kebab_item_classes("text-green-700 dark:text-green-400"),
+    # The wrapper (role=none — a div interrupting the menuitem ancestry would
+    # break the ARIA menu contract) mounts the controller AND listens for
+    # suggestion:resolved: a kebab that lives OUTSIDE the surgically-replaced
+    # frame (row/cell kebabs) survives the resolution, so when this suggestion
+    # resolves on ANY surface, onResolved marks the approve item terminal and
+    # disables both items — a stale menu must never offer an actionable
+    # Approve/Reject for an already-resolved suggestion (Hard-Won Lesson 23).
+    div(
+      role: "none",
       data: {
         controller: "suggestion-action",
         suggestion_action_approve_url_value:
@@ -70,22 +76,28 @@ module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
         # Rides the suggestion:resolved detail so a feed entry showing the
         # same suggestion resolves in place when approved from the grid.
         suggestion_action_suggestion_id_value: suggestion_id,
-        action: "suggestion-action#approve"
+        action: "suggestion:resolved@window->suggestion-action#onResolved"
       }
-    ) { "Approve #{change_label}" }
+    ) do
+      button(
+        type: "button", role: "menuitem",
+        class: kebab_item_classes("text-green-700 dark:text-green-400"),
+        data: { action: "suggestion-action#approve" }
+      ) { "Approve #{change_label}" }
 
-    button(
-      type: "button", role: "menuitem",
-      class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
-      data: {
-        action: "click->modal#open",
-        modal_target_id: "reject-suggestion-modal",
-        reject_suggestion_id: suggestion_id,
-        reject_framework_id: framework_id,
-        reject_entity_label: entity_label,
-        reject_preview: preview
-      }
-    ) { "Reject #{change_label}" }
+      button(
+        type: "button", role: "menuitem",
+        class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
+        data: {
+          action: "click->modal#open",
+          modal_target_id: "reject-suggestion-modal",
+          reject_suggestion_id: suggestion_id,
+          reject_framework_id: framework_id,
+          reject_entity_label: entity_label,
+          reject_preview: preview
+        }
+      ) { "Reject #{change_label}" }
+    end
   end
 
   # A standalone hover-revealed ⋮ kebab whose menu is just Approve / Reject.

@@ -288,6 +288,41 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Pairs with juniors weekly"
     end
 
+    should "answer a surgical Turbo Stream for an inline capability-name-edit approve" do
+      sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_edit(
+          @framework_id, sid, "capability", @cap_id, "name",
+          "Strategic Systems Thinking", @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @admin_user
+      post approve_framework_suggestion_path(framework_id: @framework_id, id: sid, inline: 1)
+
+      assert_response :success
+      assert_select "turbo-stream[action='replace'][target='capability-name-#{@cap_id}']"
+      assert_includes response.body, "Strategic Systems Thinking"
+    end
+
+    should "answer a surgical Turbo Stream for an inline category-description-edit reject" do
+      sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_edit(
+          @framework_id, sid, "capability_category", @cat_id, "description",
+          "How we reason about problems", @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @admin_user
+      post reject_framework_suggestion_path(framework_id: @framework_id, id: sid, inline: 1)
+
+      assert_response :success
+      assert_select "turbo-stream[action='replace'][target='category-description-#{@cat_id}']"
+      # Rejected — the proposed text must NOT survive into the re-rendered frame.
+      refute_includes response.body, "How we reason about problems"
+    end
+
     should "fall back to 204 for an inline approve of a non-surgical shape" do
       delete_sid = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do

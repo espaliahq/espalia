@@ -280,7 +280,11 @@ class Frameworks::SuggestionsController < ApplicationController
 
   def respond_to_failure(error)
     if inline_request?
-      render plain: error.message, status: :unprocessable_content
+      # Bodyless: neither inline client renders the message (the approve
+      # button restores itself; the reject modal stays open), and a text/plain
+      # body would be rendered AS the document by a Turbo form submit —
+      # blanking the page (Hard-Won Lesson 21's failure class).
+      head :unprocessable_content
     else
       redirect_to framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
                   alert: error.message

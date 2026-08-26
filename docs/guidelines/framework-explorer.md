@@ -1182,7 +1182,14 @@ page-unresponsive dialog. Two rules fell out:
   the full refresh survives only as the fallback for shapes with off-frame
   side-effects (draft pill, row strikethrough). A stale approval kebab that
   lives OUTSIDE the swapped frame (row/cell kebabs) is marked terminal
-  client-side by `suggestion-action#onResolved` rather than re-rendered.
+  client-side — `render_approval_kebab_items` wraps its items in a
+  `suggestion-action` mount listening for `suggestion:resolved`, and
+  `onResolved` relabels + disables them — rather than re-rendered. Accepted
+  staleness boundary (same class as the "kebab appears on next render" rule in
+  §12): passive off-frame counters — the ≥2 "N pending" pill and the compact
+  cell's "N examples" badge — keep their pre-resolution values for the acting
+  user until the next matrix render. They're informational, converge on any
+  interaction, and the alternative is re-fetching megabytes per approval.
 - **Broadcast bursts coalesce.** One approval publishes multiple feed-relevant
   events (the approval + the applied change), each nudging the sync signal —
   `context-pane` debounces the signal into a single feed reload (~300ms)

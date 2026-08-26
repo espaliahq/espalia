@@ -93,17 +93,15 @@ export default class extends Controller {
 
   #showResolved(label) {
     if (!this.hasActionsTarget || !this.hasResolvedTarget) {
-      // The grid kebab items mount this controller on a bare button. With
-      // surgical updates, a kebab OUTSIDE the swapped frame (row/cell kebabs)
-      // survives the resolution — mark it terminal so a stale menu item can't
-      // look re-approvable.
-      const button = this.element.matches("button")
-        ? this.element
-        : this.element.querySelector("[data-action*='suggestion-action#approve']")
-      if (button) {
-        button.disabled = true
-        button.textContent = label
-      }
+      // The grid kebab mount (a wrapper around the Approve + Reject menu
+      // items). With surgical updates, a kebab OUTSIDE the swapped frame
+      // (row/cell kebabs) survives the resolution — mark the approve item
+      // terminal and disable both so a stale menu can't re-action an
+      // already-resolved suggestion (approve would 422; reject would open
+      // the modal against it).
+      const approve = this.element.querySelector("[data-action*='suggestion-action#approve']")
+      if (approve) approve.textContent = label
+      this.element.querySelectorAll("button").forEach(button => { button.disabled = true })
       return
     }
 
