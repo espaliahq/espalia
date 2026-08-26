@@ -22,13 +22,9 @@ class Views::Evidence::ModalShell < Views::Base
                   submit_fallback_text_value: "Couldn't save your feedback — check your connection and try again. Your text is still here.",
                   action: "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
                           "turbo:submit-start->submit-fallback#submitStart " \
-                          "turbo:submit-end->submit-fallback#submitEnd" }) do
-        div(
-          role: "alert", hidden: true,
-          class: "mx-5 mt-4 p-2 rounded-md bg-red-50 dark:bg-red-900/20 " \
-                 "border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300",
-          data: { submit_fallback_target: "message" }
-        ) { }
+                          "turbo:submit-end->submit-fallback#submitEnd " \
+                          "modal:open@window->submit-fallback#submitStart" }) do
+        render Components::Kit::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-modal", loading: "lazy", data: { evidence_modal_target: "frame" }) do
           div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
         end

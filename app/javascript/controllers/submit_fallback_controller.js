@@ -28,7 +28,11 @@ import BaseController from "controllers/base_controller"
 export default class extends BaseController {
   static targets = ["message"]
   static values = {
-    text: { type: String, default: "Couldn't save — check your connection and try again." }
+    text: { type: String, default: "Couldn't save — check your connection and try again." },
+    rejectedText: {
+      type: String,
+      default: "Couldn't save — the page may be out of date. Reload and try again."
+    }
   }
 
   submitStart() {
@@ -40,12 +44,17 @@ export default class extends BaseController {
   // Turbo — the server rendered its own error UI (e.g. the rating
   // domain-error partial).
   beforeFetchResponse(event) {
+    // Only claim FORM submissions — a failed turbo-frame LOAD (e.g. the lazy
+    // modal frame's GET erroring) must keep Turbo's own frame error handling,
+    // and "couldn't save" would be a wrong message for a page that never
+    // loaded.
+    if (!(event.target instanceof HTMLFormElement)) return
     const response = event.detail?.fetchResponse
     if (!response || response.succeeded) return
     const contentType = response.contentType || ""
     if (contentType.includes("vnd.turbo-stream")) return
     event.preventDefault()
-    this.#showMessage()
+    this.#showMessage(response)
   }
 
   submitEnd(event) {
@@ -57,14 +66,19 @@ export default class extends BaseController {
     // (e.g. the rating domain-error partial) — don't double-report.
     const contentType = event.detail?.fetchResponse?.contentType || ""
     if (contentType.includes("vnd.turbo-stream")) return
-    this.#showMessage()
+    this.#showMessage(event.detail?.fetchResponse)
   }
 
   // private
 
-  #showMessage() {
+  // The connection copy is only honest for transport failures (no response
+  // at all, or a 5xx). A 4xx is the app REJECTING the write — stale
+  // permissions or state — where "try again" alone would invite retries
+  // that can never succeed; "reload" is the recovery that actually works.
+  #showMessage(response = null) {
     if (!this.hasMessageTarget) return
-    this.messageTarget.textContent = this.textValue
+    const rejected = response && response.statusCode < 500
+    this.messageTarget.textContent = rejected ? this.rejectedTextValue : this.textValue
     this.messageTarget.hidden = false
   }
 

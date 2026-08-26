@@ -146,9 +146,29 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
       assert_equal "Feedback worth keeping",
         page.evaluate_script("document.querySelector('#evm-content').value")
 
+      # Closing and reopening must not resurrect the stale error banner.
+      page.execute_script(
+        "document.querySelector(\"#evidence-modal-overlay [data-action*='modal#close']\")?.click()" \
+          " || document.querySelector(\"#evidence-modal-overlay button[aria-label='Close']\").click();"
+      )
+      assert_no_selector "#evidence-modal-overlay", visible: true
+      page.execute_script(
+        "document.querySelector(\"[data-evidence-modal-mode-param='new']\").click();"
+      )
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_no_selector "#evidence-modal-overlay [data-submit-fallback-target='message']",
+        text: "Couldn't save", visible: true
+
       # Retry with the network back: saved, modal closed, item on the card.
       page.execute_script("window.__unpatchFetch();")
-      page.execute_script("document.querySelector('#evidence-modal-overlay form').requestSubmit();")
+      page.execute_script(<<~JS)
+        const ta = document.querySelector("#evm-content");
+        ta.value = "Feedback worth keeping";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        const v = document.querySelector("#evm-valence");
+        if (v) { v.value = "demonstrated"; v.dispatchEvent(new Event("change", { bubbles: true })); }
+        document.querySelector("#evidence-modal-overlay form").requestSubmit();
+      JS
 
       assert_text "Feedback worth keeping"
       assert_no_selector "#evidence-modal-overlay", visible: true
