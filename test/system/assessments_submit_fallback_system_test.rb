@@ -202,6 +202,12 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         text: "Couldn't save", visible: true
 
       # Retry with the network back: saved, modal closed, item on the card.
+      # The reopen reloads the lazy frame — wait for the FRESH (empty) form,
+      # or on a starved runner the fill lands on the old form the frame is
+      # about to replace.
+      assert_selector "textarea#evm-content", visible: true
+      assert page.has_field?("evm-content", with: "", wait: 10),
+        "reopened evidence form should start empty"
       page.execute_script("window.__unpatchFetch();")
       page.execute_script(<<~JS)
         const ta = document.querySelector("#evm-content");

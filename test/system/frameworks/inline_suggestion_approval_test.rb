@@ -363,6 +363,9 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       toggle_context_pane
 
+      # The feed frame renders asynchronously — the button must exist before
+      # the JS click, or querySelector returns null on a starved runner.
+      assert_selector "#suggestion-panel button[data-modal-target-id='reject-suggestion-modal']", visible: :all
       page.execute_script(
         "document.querySelector(\"#suggestion-panel button[data-modal-target-id='reject-suggestion-modal']\").click()"
       )
