@@ -114,6 +114,15 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
       find("body").send_keys([ :shift, :tab ])
       assert page.evaluate_script("document.activeElement === window.__last"),
         "Shift+Tab from the first element should wrap to the last"
+
+      # From a non-tabbable in-dialog stop (the tabindex=-1 panel) default
+      # traversal would exit backwards — the trap must catch that too.
+      page.execute_script(
+        "document.querySelector(\"#evidence-modal-overlay [data-modal-target='panel']\").focus();"
+      )
+      find("body").send_keys([ :shift, :tab ])
+      assert page.evaluate_script("document.activeElement === window.__last"),
+        "Shift+Tab from the panel should wrap to the last element"
       assert active_in_overlay?, "focus never leaves the open dialog"
     end
   end
@@ -127,9 +136,17 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
           || overlay.querySelector("[data-action*='modal#close']")).click();
       JS
       assert_no_selector "#evidence-modal-overlay", visible: true
-      assert page.evaluate_script(
-        "document.activeElement === document.querySelector(\"[aria-label='Feedback / evidence actions']\")"
-      ), "focus should return to the kebab that opened the menu"
+      # The return is deferred two animation frames (it must outlive the
+      # response's Turbo Streams) — poll briefly rather than racing it.
+      returned = false
+      deadline = Time.zone.now + 5
+      until returned || Time.zone.now > deadline
+        returned = page.evaluate_script(
+          "document.activeElement === document.querySelector(\"[aria-label='Feedback / evidence actions']\")"
+        )
+        sleep 0.1 unless returned
+      end
+      assert returned, "focus should return to the kebab that opened the menu"
     end
   end
 end

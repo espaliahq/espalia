@@ -104,9 +104,11 @@ export default class extends BaseController {
   }
 
   #focusFirstField() {
-    const field = this.activeOverlay?.querySelector(
-      "textarea, input:not([type='hidden']), select",
-    )
+    const field = [
+      ...(this.activeOverlay?.querySelectorAll(
+        "textarea:not(:disabled), input:not([type='hidden']):not(:disabled), select:not(:disabled)",
+      ) || []),
+    ].find((el) => el.offsetParent !== null)
     if (!field) return false
     field.focus()
     return true
@@ -161,7 +163,11 @@ export default class extends BaseController {
     // the frame lands (the original open-time-only focus raced that load and
     // left focus on <body>).
     this.#focusFirstField() || this.#activePanel()?.focus()
-    overlay.addEventListener("turbo:frame-load", this.boundFocusOnFrameLoad)
+    // Once only: overlays like the delegations list and binding/level editors
+    // re-render their frames in place repeatedly — the first-field focus is
+    // for the INITIAL lazy load, never for later in-place updates (which
+    // would teleport a keyboard user back to the top after every action).
+    overlay.addEventListener("turbo:frame-load", this.boundFocusOnFrameLoad, { once: true })
   }
 
   hide() {
@@ -173,21 +179,30 @@ export default class extends BaseController {
     document.removeEventListener("click", this.boundClickOutside, true)
     document.removeEventListener("keydown", this.boundTrapKeydown, true)
     overlay.removeEventListener("turbo:frame-load", this.boundFocusOnFrameLoad)
-    // APG dialog contract: focus returns to the invoker on close. A trigger
-    // living inside a now-closed dropdown menu is hidden and unfocusable —
-    // fall back to the dropdown's own trigger (the kebab), the visible
-    // control the keyboard user actually came through.
+    // APG dialog contract: focus returns to the invoker on close. Deferred
+    // two frames so Turbo Streams riding the same response (a saved evidence
+    // cell re-render, a resolved suggestion refresh) settle first — then the
+    // invoker is re-resolved: the original node if it survived, its
+    // same-id replacement if the stream swapped it, or the ancestor
+    // dropdown's kebab when the invoking menu item hid with its menu. An
+    // anonymous invoker replaced by a refresh has nothing durable to return
+    // to; focus is left alone rather than guessed.
     const trigger = this.triggerElement
     this.triggerElement = null
-    if (!trigger || !document.contains(trigger)) return
-    if (trigger.offsetParent !== null) {
-      trigger.focus()
-      return
-    }
-    const dropdownTrigger = trigger
-      .closest("[data-controller~='dropdown']")
-      ?.querySelector("[data-dropdown-target='trigger']")
-    if (dropdownTrigger && dropdownTrigger.offsetParent !== null) dropdownTrigger.focus()
+    if (!trigger) return
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const candidate =
+          (document.contains(trigger) && trigger.offsetParent !== null && trigger) ||
+          (trigger.id && document.getElementById(trigger.id)) ||
+          trigger
+            .closest("[data-controller~='dropdown']")
+            ?.querySelector("[data-dropdown-target='trigger']")
+        if (candidate && document.contains(candidate) && candidate.offsetParent !== null) {
+          candidate.focus()
+        }
+      })
+    })
   }
 
   // Wrap Tab / Shift+Tab within the open overlay; focus that has escaped
@@ -205,13 +220,16 @@ export default class extends BaseController {
     const first = focusables[0]
     const last = focusables[focusables.length - 1]
     const active = document.activeElement
-    const inside = overlay.contains(active)
+    // "At an edge" includes any element that is not in the focusables list —
+    // outside the overlay entirely, or inside on a non-tabbable stop like the
+    // tabindex=-1 panel; default traversal from there would exit the dialog.
+    const offList = !focusables.includes(active)
     if (event.shiftKey) {
-      if (!inside || active === first) {
+      if (offList || active === first) {
         event.preventDefault()
         last.focus()
       }
-    } else if (!inside || active === last) {
+    } else if (offList || active === last) {
       event.preventDefault()
       first.focus()
     }
