@@ -52,6 +52,12 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
       pd_handler.assign_to_framework(@person.id, @framework_id, @role_id, level.level_id)
 
       @assignment = PersonFrameworkAssignment.for_person(@person.id).first
+
+      @manager_user = FactoryBot.create(:user, password: "password123")
+      @manager = FactoryBot.create(:person, tenant: @tenant, email: @manager_user.email,
+        name: "Morgan Manager")
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @manager_user, person: @manager)
+      @person.update!(manager: @manager)
     end
 
     sign_in_as(@user)
@@ -147,6 +153,36 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
         sleep 0.1 unless returned
       end
       assert returned, "focus should return to the kebab that opened the menu"
+    end
+
+    should "return focus to a standalone trigger that survives the close" do
+      sign_in_as(@manager_user)
+      visit assessment_path(@assignment)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      assert_selector "button", text: "Delegates", visible: true
+
+      page.execute_script(
+        "[...document.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('Delegates')).click();"
+      )
+      # Wait for the modal's rendered content (the intro copy) — asserting on
+      # a dialog-role selector can match a still-hidden overlay.
+      assert_text "Delegates can record manager ratings"
+      # Close via the × — the Delegates button survives in the header.
+      page.execute_script(<<~JS)
+        const overlay = [...document.querySelectorAll("[data-modal-target='overlay']")]
+          .find(o => !o.classList.contains("hidden"));
+        overlay.querySelector("[aria-label='Close']").click();
+      JS
+
+      returned = false
+      deadline = Time.zone.now + 5
+      until returned || Time.zone.now > deadline
+        returned = page.evaluate_script(
+          "document.activeElement === [...document.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('Delegates'))"
+        )
+        sleep 0.1 unless returned
+      end
+      assert returned, "focus should return to the surviving Delegates trigger"
     end
   end
 end

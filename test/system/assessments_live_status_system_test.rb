@@ -71,13 +71,33 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
       cycle_handler.enroll(@cycle_id, @person.id, enrolled_by: @person.id)
 
       @assignment = PersonFrameworkAssignment.for_person(@person.id).first
+
+      @manager_user = FactoryBot.create(:user, password: "password123")
+      @manager = FactoryBot.create(:person, tenant: @tenant, email: @manager_user.email,
+        name: "Morgan Manager")
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @manager_user, person: @manager)
+      @person.update!(manager: @manager)
     end
 
     sign_in_as(@user)
   end
 
+  # JS expression locating the seeded cell's rating-pill dropdown wrapper —
+  # the popover options and Clear item are clicked within it.
+  # @return [String]
   def rating_wrapper_js
     "document.querySelector(\"#rating-#{@cap_stable}-1 [data-controller~='dropdown']\")"
+  end
+
+  # Opens the popover in the seeded cell and clicks the option whose label
+  # contains +label+.
+  # @return [void]
+  def click_rating_option(label)
+    page.execute_script("#{rating_wrapper_js}.querySelector(\"[data-dropdown-target='trigger']\").click();")
+    page.execute_script(<<~JS)
+      [...#{rating_wrapper_js}.querySelectorAll("button[type=submit]")]
+        .find(b => b.textContent.includes(#{label.to_json})).click();
+    JS
   end
 
   context "the live status region" do
@@ -92,20 +112,12 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
       )
 
       wait_for_stimulus "submit-fallback", scope: "#rating-#{@cap_stable}-1"
-      page.execute_script("#{rating_wrapper_js}.querySelector(\"[data-dropdown-target='trigger']\").click();")
-      page.execute_script(<<~JS)
-        [...#{rating_wrapper_js}.querySelectorAll("button[type=submit]")]
-          .find(b => b.textContent.includes("Most of the time")).click();
-      JS
+      click_rating_option("Most of the time")
       assert_selector "#assessment-live-status",
         text: "Rated most of the time — Critical Thinking, E1", visible: :all
 
       # Clear via the popover's explicit item announces too.
-      page.execute_script("#{rating_wrapper_js}.querySelector(\"[data-dropdown-target='trigger']\").click();")
-      page.execute_script(<<~JS)
-        [...#{rating_wrapper_js}.querySelectorAll("button[type=submit]")]
-          .find(b => b.textContent.includes("Clear rating")).click();
-      JS
+      click_rating_option("Clear rating")
       assert_selector "#assessment-live-status",
         text: "Rating cleared — Critical Thinking, E1", visible: :all
     end
@@ -132,6 +144,44 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
       assert_includes region_state["text"], "<img src=x onerror=window.__xss=1> & Co"
       assert_not region_state["injected"], "hostile name must not become an element"
       assert_not region_state["xss"], "hostile name must not execute"
+    end
+  end
+
+  context "as the manager" do
+    setup { sign_in_as(@manager_user) }
+
+    should "announce manager rating and clearing" do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "submit-fallback", scope: "#rating-#{@cap_stable}-1"
+
+      click_rating_option("Most of the time")
+      assert_selector "#assessment-live-status",
+        text: "Rated most of the time — Critical Thinking, E1", visible: :all
+
+      click_rating_option("Clear rating")
+      assert_selector "#assessment-live-status",
+        text: "Rating cleared — Critical Thinking, E1", visible: :all
+    end
+
+    should "announce agreement and agreement clearing during alignment" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.start_alignment(
+          @person.id, @framework_id, @cycle_id, started_by_id: @manager.id
+        )
+      end
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "submit-fallback", scope: "#rating-#{@cap_stable}-1"
+
+      click_rating_option("Most of the time")
+      assert_selector "#assessment-live-status",
+        text: "Agreed most of the time — Critical Thinking, E1", visible: :all
+
+      # Untoggling the agreed value clears the AGREEMENT, not a rating.
+      click_rating_option("Most of the time")
+      assert_selector "#assessment-live-status",
+        text: "Agreement cleared — Critical Thinking, E1", visible: :all
     end
   end
 end

@@ -218,6 +218,9 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       open_context_pane
 
+      # The feed frame renders asynchronously — the anchored entry must exist
+      # before the JS click, or querySelector no-ops on a starved runner.
+      assert_selector "#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']", visible: :all
       page.execute_script(<<~JS)
         document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
       JS
@@ -257,6 +260,9 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       open_context_pane
 
+      # The feed frame renders asynchronously — the anchored entry must exist
+      # before the JS click, or querySelector no-ops on a starved runner.
+      assert_selector "#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']", visible: :all
       page.execute_script(<<~JS)
         document.querySelector("#suggestion-panel [data-nav-capability-id='#{@cap_a_id}']")?.click();
       JS
