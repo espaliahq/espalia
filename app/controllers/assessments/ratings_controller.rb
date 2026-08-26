@@ -34,6 +34,7 @@ class Assessments::RatingsController < ApplicationController
     end
 
     handler = PersonDevelopment::CommandHandler.new
+    mutated = true
 
     existing = AssessmentLevelRating.find_by(
       cycle_id: cycle.cycle_id,
@@ -55,6 +56,10 @@ class Assessments::RatingsController < ApplicationController
           current_person.id, @assignment.framework_id, capability_stable_id,
           level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
         )
+      else
+        # Duplicate clear (double click, second tab): nothing changed, so
+        # nothing must be announced either.
+        mutated = false
       end
     elsif existing&.self_rated_frequency == frequency && existing&.self_rating_carried?
       # Confirming a carried-forward (seeded) value: clicking the shown
@@ -89,7 +94,8 @@ class Assessments::RatingsController < ApplicationController
       )
     end
 
-    respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id])
+    respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id],
+      announce: mutated)
   rescue RuntimeError => e
     render_rating_error(capability_stable_id, level_ordinal, e.message)
   end
@@ -122,7 +128,7 @@ class Assessments::RatingsController < ApplicationController
     head :forbidden
   end
 
-  def respond_with_turbo_stream(capability_stable_id, level_ordinal, active_category_id = nil)
+  def respond_with_turbo_stream(capability_stable_id, level_ordinal, active_category_id = nil, announce: true)
     # Reload fresh data for the turbo stream response
     framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
     role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
@@ -160,8 +166,8 @@ class Assessments::RatingsController < ApplicationController
     block_reason = primary.dig(:block_reasons, capability_stable_id)
 
     render turbo_stream: [
-      live_status_stream(cap_data: cap_data, cell_data: cell_data, level_code: level_code,
-        frequency: cell_data&.dig(:current_frequency)),
+      (live_status_stream(cap_data: cap_data, cell_data: cell_data, level_code: level_code,
+        frequency: cell_data&.dig(:current_frequency)) if announce),
       turbo_stream.replace(
         Views::Assessments::StatusPill::WRAPPER_ID,
         render_to_string(
