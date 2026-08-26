@@ -122,7 +122,14 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
         "Shift+Tab from the first element should wrap to the last"
 
       # From a non-tabbable in-dialog stop (the tabindex=-1 panel) default
-      # traversal would exit backwards — the trap must catch that too.
+      # traversal would exit the dialog — the trap must catch both directions.
+      page.execute_script(
+        "document.querySelector(\"#evidence-modal-overlay [data-modal-target='panel']\").focus();"
+      )
+      find("body").send_keys(:tab)
+      assert page.evaluate_script("document.activeElement === window.__first"),
+        "Tab from the panel should wrap to the first element"
+
       page.execute_script(
         "document.querySelector(\"#evidence-modal-overlay [data-modal-target='panel']\").focus();"
       )
@@ -201,6 +208,8 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
           .find(o => !o.classList.contains("hidden"));
         overlay.querySelector("[aria-label='Close']").click();
       JS
+      # Capybara-wait on the close before reading focus (path-instruction race).
+      assert_no_selector "[data-modal-target='overlay']:not(.hidden)", visible: :all
 
       returned = false
       deadline = Time.zone.now + 5
