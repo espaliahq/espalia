@@ -83,6 +83,25 @@ class Frameworks::ClarificationsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    # The operation takes an illustration's level from its owning expectation,
+    # so a stray ordinal on the wire is ignored, not grounds for a 422.
+    should "ignore a malformed level alongside an illustration anchor" do
+      post framework_clarifications_path(@framework_id), params: {
+        clarification: { illustration_id: @ill_id, level_ordinal: "L4",
+                         rationale: "Is this the right example?" }
+      }
+
+      assert_response :no_content
+      ActsAsTenant.with_tenant(@tenant) do
+        row = FrameworkState::SuggestedEdit.find_by!(
+          suggestion_id: response.headers[Frameworks::ClarificationsController::SUGGESTION_ID_HEADER]
+        )
+        assert_equal @ill_id, row.target_entity_id
+        assert_equal 4, row.proposed_attributes["level_ordinal"],
+                     "the level must come from the owning expectation, not the wire"
+      end
+    end
+
     should "open a capability-wide discussion when no level is chosen" do
       post framework_clarifications_path(@framework_id), params: {
         clarification: { capability_id: @cap_id, level_ordinal: "",

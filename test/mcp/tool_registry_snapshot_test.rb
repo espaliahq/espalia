@@ -1527,8 +1527,18 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "type" => "object",
           "properties" => {
             "framework_id"    => { "type" => "string" },
-            "capability_id"   => { "type" => "string" },
-            "illustration_id" => { "type" => "string" },
+            # Exactly one anchor is required — a choice JSON Schema `required`
+            # can't express, so each param's description carries the obligation
+            # (the Operation enforces it).
+            "capability_id"   => {
+              "type" => "string",
+              "description" => "The capability to anchor on. Required unless illustration_id is given."
+            },
+            "illustration_id" => {
+              "type" => "string",
+              "description" => "A role illustration to anchor on — the most specific target, and its " \
+                               "level is taken from the owning expectation. Required unless capability_id is given."
+            },
             "level_ordinal"   => { "type" => "integer" },
             "rationale"       => { "type" => "string" }
           },

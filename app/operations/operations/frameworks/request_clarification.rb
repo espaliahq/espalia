@@ -23,10 +23,19 @@ class Operations::Frameworks::RequestClarification < Operations::Base
   approval :mcp_client
 
   parameter :framework_id,    String,  required: true
-  # Either capability_id or illustration_id identifies the anchor. When both are
-  # given the illustration wins (it is the more specific target).
-  parameter :capability_id,   String,  required: false
-  parameter :illustration_id, String,  required: false
+  # Either capability_id or illustration_id identifies the anchor — exactly one
+  # is required, which JSON Schema `required` can't express for a choice, so the
+  # obligation is stated in each param's description (and enforced in #perform).
+  # When both are given the illustration wins (it is the more specific target).
+  parameter :capability_id,   String,  required: false, schema: {
+    type: "string",
+    description: "The capability to anchor on. Required unless illustration_id is given."
+  }
+  parameter :illustration_id, String,  required: false, schema: {
+    type: "string",
+    description: "A role illustration to anchor on — the most specific target, and its " \
+                 "level is taken from the owning expectation. Required unless capability_id is given."
+  }
   # Optional for a capability-wide question; ignored for an illustration anchor
   # (the owning expectation's level is authoritative).
   parameter :level_ordinal,   Integer, required: false

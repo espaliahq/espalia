@@ -48,7 +48,13 @@ class Frameworks::ClarificationsController < ApplicationController
   # Blank means "the whole capability" (the row kebab's level select offers
   # that), so nil through rather than defaulting to a level the user didn't pick.
   # A non-numeric ordinal is a malformed submission, not a capability-wide ask.
+  #
+  # An illustration anchor takes its level from the owning expectation, so the
+  # operation ignores any ordinal — don't reject the request over a field that
+  # was never going to be read.
   def level_ordinal
+    return nil if clarification_params[:illustration_id].present?
+
     raw = clarification_params[:level_ordinal].presence
     return nil if raw.nil?
 
