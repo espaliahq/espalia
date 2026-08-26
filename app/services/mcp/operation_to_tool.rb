@@ -60,12 +60,37 @@ class Mcp::OperationToTool
     properties = @operation_class.parameters.transform_values { |p| property_for(p) }
     required = @operation_class.parameters.values.select(&:required).map { |p| p.name.to_s }
 
-    {
+    schema = {
       type: "object",
       properties: properties.transform_keys(&:to_s),
       required: required,
       additionalProperties: false
     }
+    schema.merge(constraint_schema)
+  end
+
+  # `requires_any_of` groups → JSON Schema, the only way to advertise a choice
+  # between parameters (the flat `required` array above is an "all of").
+  #
+  # One group is a bare `anyOf`. Several groups must ALL hold, so they nest
+  # under `allOf` — flattening their branches into one `anyOf` would say
+  # "satisfy any one group", which is weaker than declared.
+  #
+  # Each branch carries ONLY `required`. `additionalProperties: false` doesn't
+  # see into subschemas, so a branch that also declared `properties` would have
+  # them rejected as additional — keep branches to `required` alone.
+  #
+  # @return [Hash] merged into the input schema (empty when unconstrained)
+  def constraint_schema
+    groups = @operation_class.parameter_constraints.map do |names|
+      { anyOf: names.map { |name| { required: [ name.to_s ] } } }
+    end
+
+    case groups.size
+    when 0 then {}
+    when 1 then groups.first
+    else { allOf: groups }
+    end
   end
 
   def property_for(parameter)

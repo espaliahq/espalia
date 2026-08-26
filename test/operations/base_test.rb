@@ -69,6 +69,62 @@ class Operations::BaseTest < ActiveSupport::TestCase
     def perform = params
   end
 
+  AnyOfFixture = Class.new(Operations::Base) do
+    parameter :framework_id, String, required: true
+    parameter :name, String
+    parameter :description, String
+    parameter :is_entry, :boolean
+    requires_any_of :name, :description, :is_entry
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "requires_any_of DSL" do
+    should "accept a call supplying one of the group" do
+      out = AnyOfFixture.call(context: build_context, params: { framework_id: "fw_1", name: "Engineer" })
+      assert_equal "Engineer", out[:name]
+    end
+
+    should "raise when none of the group is supplied" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        AnyOfFixture.new(context: build_context, params: { framework_id: "fw_1" })
+      end
+      assert_match(/at least one of: name, description, is_entry/, err.message)
+    end
+
+    # "Supplied" means the key arrived, not that it carries a meaty value —
+    # clearing a field is a legitimate partial update, and matches what the
+    # emitted JSON Schema `required` asks.
+    should "count a blank string as supplied" do
+      out = AnyOfFixture.call(context: build_context, params: { framework_id: "fw_1", description: "" })
+      assert_equal "", out[:description]
+    end
+
+    should "count false as supplied" do
+      out = AnyOfFixture.call(context: build_context, params: { framework_id: "fw_1", is_entry: false })
+      assert_equal false, out[:is_entry]
+    end
+
+    should "reject an undeclared parameter name at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :name, String
+          requires_any_of :name, :nope
+        end
+      end
+      assert_match(/undeclared parameter/, err.message)
+    end
+
+    should "reject a group of fewer than two parameters" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :name, String
+          requires_any_of :name
+        end
+      end
+    end
+  end
+
   context "parameter validation" do
     should "raise when a required parameter is missing" do
       err = assert_raises(Operations::Base::ParameterError) do

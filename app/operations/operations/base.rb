@@ -161,6 +161,37 @@ class Operations::Base
       @parameters ||= {}
     end
 
+    # Declares that the caller must supply AT LEAST ONE of `names` — a
+    # constraint between parameters, which the per-parameter `required:` flag
+    # can't express (it yields a flat "all of these" list).
+    #
+    # "Supplied" means **the key was sent at all** (non-nil), deliberately NOT
+    # `present?`. That is exactly what the emitted JSON Schema means
+    # (`anyOf: [{required: [a]}, {required: [b]}]` asks whether the key is
+    # there, not whether its value is meaty), so the advertised contract and
+    # the runtime check say the same thing — the whole point of declaring it.
+    # It is also the semantics partial updates need: `department: ""` is a
+    # meaningful clear, and `is_entry: false` / `weight: 0` are real values.
+    # An operation wanting a stricter non-blank rule keeps its own check —
+    # JSON Schema `required` cannot express that either way.
+    #
+    # @param names [Array<Symbol>] at least two declared parameter names
+    # @raise [ArgumentError] at load time for an unknown or too-short set
+    def requires_any_of(*names)
+      names = names.map(&:to_sym)
+      raise ArgumentError, "requires_any_of needs at least two parameters" if names.size < 2
+
+      unknown = names - parameters.keys
+      raise ArgumentError, "requires_any_of names undeclared parameter(s): #{unknown.join(', ')}" if unknown.any?
+
+      parameter_constraints << names
+    end
+
+    # @return [Array<Array<Symbol>>] one entry per `requires_any_of` group
+    def parameter_constraints
+      @parameter_constraints ||= []
+    end
+
     # Convenience entry point. Forwards to a new instance's `#call`.
     def call(context:, params: {})
       new(context: context, params: params).call
@@ -255,8 +286,24 @@ class Operations::Base
     raw = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw.to_h
     symbolised = raw.transform_keys(&:to_sym)
 
-    self.class.parameters.each_with_object({}) do |(name, parameter), out|
+    validated = self.class.parameters.each_with_object({}) do |(name, parameter), out|
       out[name] = parameter.validate!(symbolised[name])
+    end
+    validate_parameter_constraints!(validated)
+    validated
+  end
+
+  # Enforce each `requires_any_of` group. Runs with the per-parameter checks
+  # (before policy_check), so a malformed call is rejected the same way whether
+  # it breaks a single parameter's rule or a cross-parameter one.
+  #
+  # @param validated [Hash{Symbol=>Object}]
+  # @raise [ParameterError] when a group has no parameter supplied
+  def validate_parameter_constraints!(validated)
+    self.class.parameter_constraints.each do |names|
+      next if names.any? { |name| !validated[name].nil? }
+
+      raise ParameterError, "provide at least one of: #{names.join(', ')}"
     end
   end
 end
