@@ -38,6 +38,29 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     Mcp::OperationToTool.call(operation_class)[:inputSchema]
   end
 
+  BlankFixture = Class.new(Operations::Base) do
+    parameter :name, String, allow_blank: false
+    parameter :description, String
+    parameter :level, Integer, allow_blank: false
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "allow_blank" do
+    should "advertise minLength on a non-blankable string" do
+      assert_equal({ type: "string", minLength: 1 }, schema_for(BlankFixture)[:properties]["name"])
+    end
+
+    should "leave a clearable string unconstrained" do
+      assert_equal({ type: "string" }, schema_for(BlankFixture)[:properties]["description"])
+    end
+
+    # minLength is meaningless for a non-string — don't emit it.
+    should "not emit minLength for a non-string parameter" do
+      assert_equal({ type: "integer" }, schema_for(BlankFixture)[:properties]["level"])
+    end
+  end
+
   context "cross-parameter constraints" do
     should "emit no anyOf when the operation declares none" do
       schema = schema_for(UnconstrainedFixture)

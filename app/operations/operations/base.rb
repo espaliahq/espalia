@@ -58,7 +58,7 @@ class Operations::Base
   # Runtime validation still uses `type`/`allowed` — `schema` documents
   # the wire shape, it does not enforce it; the Operation validates a
   # complex param's contents in `perform`.
-  Parameter = Struct.new(:name, :type, :required, :allowed, :schema, keyword_init: true) do
+  Parameter = Struct.new(:name, :type, :required, :allowed, :schema, :allow_blank, keyword_init: true) do
     # Boolean-ish strings accepted for a `:boolean` parameter. MCP clients send
     # JSON true/false; web forms submit strings ("1"/"0" from checkboxes,
     # "true"/"false" from selects) — both surfaces share one Operation, so the
@@ -84,6 +84,13 @@ class Operations::Base
 
       unless value.is_a?(type)
         raise ParameterError, "#{name} must be a #{type}, got #{value.class}"
+      end
+
+      # A supplied-but-blank string, for a field where blank means nothing.
+      # Distinct from `required`: the key may be omitted entirely (a partial
+      # update), but sending "" is a mistake, not a request to clear.
+      if allow_blank == false && value.respond_to?(:blank?) && value.blank?
+        raise ParameterError, "#{name} can't be blank"
       end
 
       if allowed && !allowed.include?(value)
@@ -150,9 +157,13 @@ class Operations::Base
     # @param schema [Hash, nil] explicit JSON Schema fragment for the
     #   advertised MCP tool schema (overrides the default type mapping —
     #   use for complex Hash/Array params whose shape clients need to see)
-    def parameter(name, type, required: false, allowed: nil, schema: nil)
+    # @param allow_blank [Boolean] when false, a supplied "" is rejected.
+    #   Use for a field where blank carries no meaning (a name, an id) —
+    #   NOT for one where "" is a legitimate clear (a description).
+    def parameter(name, type, required: false, allowed: nil, schema: nil, allow_blank: true)
       parameters[name.to_sym] = Parameter.new(
-        name: name.to_sym, type: type, required: required, allowed: allowed, schema: schema
+        name: name.to_sym, type: type, required: required, allowed: allowed, schema: schema,
+        allow_blank: allow_blank
       )
     end
 

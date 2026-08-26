@@ -101,6 +101,10 @@ class Mcp::OperationToTool
 
     schema = { type: TYPE_MAPPING.fetch(parameter.type, "string") }
     schema[:enum] = parameter.allowed if parameter.allowed
+    # `allow_blank: false` → the empty string is invalid. minLength is the
+    # closest standard expression; the runtime is marginally stricter still
+    # (it also rejects whitespace-only), which no keyword captures as simply.
+    schema[:minLength] = 1 if parameter.allow_blank == false && schema[:type] == "string"
     schema
   end
 

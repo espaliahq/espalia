@@ -1531,11 +1531,11 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             # can't express, so each param's description carries the obligation
             # (the Operation enforces it).
             "capability_id"   => {
-              "type" => "string",
+              "type" => "string", "minLength" => 1,
               "description" => "The capability to anchor on. Required unless illustration_id is given."
             },
             "illustration_id" => {
-              "type" => "string",
+              "type" => "string", "minLength" => 1,
               "description" => "A role illustration to anchor on — the most specific target, and its " \
                                "level is taken from the owning expectation. Required unless capability_id is given."
             },
@@ -1543,7 +1543,11 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "rationale"       => { "type" => "string" }
           },
           "required" => %w[framework_id rationale],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "anyOf" => [
+            { "required" => [ "capability_id" ] },
+            { "required" => [ "illustration_id" ] }
+          ]
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -1711,7 +1715,11 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "individual_tolerance" => { "type" => "number" }
           },
           "required" => %w[framework_id binding_id],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "anyOf" => [
+            { "required" => [ "weight" ] },
+            { "required" => [ "individual_tolerance" ] }
+          ]
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -1727,12 +1735,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "properties" => {
             "framework_id" => { "type" => "string" },
             "level_id"     => { "type" => "string" },
-            "title"        => { "type" => "string" },
-            "code"         => { "type" => "string" },
+            "title"        => { "type" => "string", "minLength" => 1 },
+            "code"         => { "type" => "string", "minLength" => 1 },
             "is_entry"     => { "type" => "boolean" }
           },
           "required" => %w[framework_id level_id],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "anyOf" => [
+            { "required" => [ "title" ] },
+            { "required" => [ "code" ] },
+            { "required" => [ "is_entry" ] }
+          ]
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -1748,12 +1761,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "properties" => {
             "framework_id" => { "type" => "string" },
             "role_id"      => { "type" => "string" },
-            "name"         => { "type" => "string" },
-            "code"         => { "type" => "string" },
+            "name"         => { "type" => "string", "minLength" => 1 },
+            "code"         => { "type" => "string", "minLength" => 1 },
             "track"        => { "type" => "string", "enum" => %w[ic management] }
           },
           "required" => %w[framework_id role_id],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "anyOf" => [
+            { "required" => [ "name" ] },
+            { "required" => [ "code" ] },
+            { "required" => [ "track" ] }
+          ]
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -1769,12 +1787,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "properties" => {
             "framework_id"   => { "type" => "string" },
             "role_family_id" => { "type" => "string" },
-            "name"           => { "type" => "string" },
+            "name"           => { "type" => "string", "minLength" => 1 },
             "description"    => { "type" => "string" },
             "department"     => { "type" => "string" }
           },
           "required" => %w[framework_id role_family_id],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          "anyOf" => [
+            { "required" => [ "name" ] },
+            { "required" => [ "description" ] },
+            { "required" => [ "department" ] }
+          ]
         },
         "annotations" => {
           "readOnlyHint"    => false,

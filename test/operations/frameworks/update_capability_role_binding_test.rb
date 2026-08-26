@@ -82,7 +82,7 @@ class Operations::Frameworks::UpdateCapabilityRoleBindingTest < ActiveSupport::T
         error = assert_raises(Operations::Base::ParameterError) do
           update(@admin_ctx, { framework_id: @framework_id, binding_id: @binding_id })
         end
-        assert_match(/provide weight/i, error.message)
+        assert_match(/at least one of: weight, individual_tolerance/i, error.message)
       end
     end
 

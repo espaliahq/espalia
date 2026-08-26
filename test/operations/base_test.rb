@@ -125,6 +125,40 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  BlankFixture = Class.new(Operations::Base) do
+    parameter :name, String, allow_blank: false
+    parameter :description, String
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "allow_blank" do
+    should "reject a supplied blank string" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        BlankFixture.new(context: build_context, params: { name: "" })
+      end
+      assert_match(/name can't be blank/, err.message)
+    end
+
+    should "reject a whitespace-only string" do
+      assert_raises(Operations::Base::ParameterError) do
+        BlankFixture.new(context: build_context, params: { name: "   " })
+      end
+    end
+
+    # Distinct from `required:` — omitting the key entirely is fine (that's a
+    # partial update); only sending an empty value is the mistake.
+    should "accept the parameter being omitted" do
+      out = BlankFixture.call(context: build_context, params: {})
+      assert_nil out[:name]
+    end
+
+    should "leave other parameters clearable" do
+      out = BlankFixture.call(context: build_context, params: { description: "" })
+      assert_equal "", out[:description]
+    end
+  end
+
   context "parameter validation" do
     should "raise when a required parameter is missing" do
       err = assert_raises(Operations::Base::ParameterError) do

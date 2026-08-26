@@ -18,9 +18,10 @@ class Operations::Frameworks::UpdateLevel < Operations::Base
 
   parameter :framework_id, String, required: true
   parameter :level_id,     String, required: true
-  parameter :title,        String
-  parameter :code,         String
+  parameter :title,        String, allow_blank: false
+  parameter :code,         String, allow_blank: false
   parameter :is_entry,     :boolean
+  requires_any_of :title, :code, :is_entry
 
   def policy_check
     authorize framework, :update_level?
@@ -28,8 +29,6 @@ class Operations::Frameworks::UpdateLevel < Operations::Base
 
   # @return [Hash] { framework_id:, level_id:, title: }
   def perform
-    require_update_field!
-
     Frameworks::CommandHandler.new.update_level_details(
       framework.framework_id, params[:level_id],
       title: params[:title].presence, code: params[:code].presence, is_entry: params[:is_entry]
@@ -41,12 +40,6 @@ class Operations::Frameworks::UpdateLevel < Operations::Base
 
   # A supplied is_entry — true OR false — counts as an update (nil means "not
   # supplied"; the aggregate compacts nils away).
-  def require_update_field!
-    return if [ params[:title], params[:code] ].any?(&:present?) || !params[:is_entry].nil?
-
-    raise Operations::Base::ParameterError, "provide a title, code, or is_entry to update"
-  end
-
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
   end
