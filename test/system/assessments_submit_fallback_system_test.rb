@@ -116,6 +116,48 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "rating submit failing at the network layer (fetch rejects)" do
+    should "surface the connection error and recover on retry" do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "submit-fallback", scope: "#rating-#{@cap_stable}-1"
+
+      page.execute_script(<<~JS)
+        const of = window.fetch;
+        window.__unpatchFetch = () => { window.fetch = of; };
+        window.fetch = (url, ...a) => String(url).includes("/ratings")
+          ? Promise.reject(new TypeError("Failed to fetch"))
+          : of(url, ...a);
+      JS
+      page.execute_script(<<~JS)
+        const wrapper = document.querySelector("#rating-#{@cap_stable}-1 [data-controller~='submit-fallback']");
+        wrapper.querySelector("[data-dropdown-target='trigger']").click();
+      JS
+      page.execute_script(<<~JS)
+        const wrapper = document.querySelector("#rating-#{@cap_stable}-1 [data-controller~='submit-fallback']");
+        [...wrapper.querySelectorAll("button[type=submit]")]
+          .find(b => b.textContent.includes("Consistently")).click();
+      JS
+
+      assert_selector "#rating-#{@cap_stable}-1 [data-submit-fallback-target='message']",
+        text: "check your connection", visible: true
+      assert_selector "#rating-#{@cap_stable}-1 [aria-label='Rated not rated — change']", visible: :all
+
+      page.execute_script("window.__unpatchFetch();")
+      page.execute_script(<<~JS)
+        const wrapper = document.querySelector("#rating-#{@cap_stable}-1 [data-controller~='submit-fallback']");
+        wrapper.querySelector("[data-dropdown-target='trigger']").click();
+      JS
+      page.execute_script(<<~JS)
+        const wrapper = document.querySelector("#rating-#{@cap_stable}-1 [data-controller~='submit-fallback']");
+        [...wrapper.querySelectorAll("button[type=submit]")]
+          .find(b => b.textContent.includes("Consistently")).click();
+      JS
+
+      assert_selector "#rating-#{@cap_stable}-1 [aria-label='Rated consistently — change']", visible: :all
+    end
+  end
+
   context "evidence submit failing at the transport layer" do
     should "keep the page and typed text, show the error, and recover on retry" do
       visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)

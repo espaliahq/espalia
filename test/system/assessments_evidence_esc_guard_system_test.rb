@@ -103,6 +103,31 @@ class AssessmentsEvidenceEscGuardSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "Esc on the request-evidence modal with typed input" do
+    should "keep the modal open and the reason intact when the user declines" do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      wait_for_stimulus "evidence-modal"
+      assert_selector "[data-modal-target-id='evidence-request-modal-overlay']", visible: :all
+      page.execute_script(
+        "document.querySelector(\"[data-modal-target-id='evidence-request-modal-overlay']\").click();"
+      )
+      assert_selector "#evidence-request-modal-overlay", visible: true
+      assert_selector "#evr-message", visible: true
+      page.execute_script(<<~JS)
+        const ta = document.querySelector("#evr-message");
+        ta.value = "Could you speak to the Q3 incident response?";
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+      JS
+      stub_confirm(false)
+      find("body").send_keys(:escape)
+
+      assert_selector "#evidence-request-modal-overlay", visible: true
+      assert_equal 1, page.evaluate_script("window.__confirmCalls")
+      assert_equal "Could you speak to the Q3 incident response?",
+        page.evaluate_script("document.querySelector('#evr-message').value")
+    end
+  end
+
   context "Esc with no typed input" do
     should "close immediately without asking" do
       visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)

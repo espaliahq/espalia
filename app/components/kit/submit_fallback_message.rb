@@ -15,6 +15,8 @@ class Components::Kit::SubmitFallbackMessage < Components::Base
     @classes = classes
   end
 
+  # Renders the empty, hidden alert region the controller targets.
+  # @return [void]
   def view_template
     div(
       role: "alert", hidden: true,
