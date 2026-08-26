@@ -9,8 +9,10 @@ ENV BINDING="0.0.0.0"
 # Install CodeRabbit CLI so the Claude plugin (`/coderabbit` review) works inside the devcontainer.
 # Installer drops the binary in /home/vscode/.local/bin, which isn't on PATH during the build shell,
 # so put it on PATH before verifying — this also makes `coderabbit` usable in the running container.
+# CI=1 skips the installer's interactive post-install sign-in (added in v0.7.5), which exits
+# non-zero in a TTY-less docker build even after a successful install.
 ENV PATH="/home/vscode/.local/bin:${PATH}"
-RUN curl -fsSL https://cli.coderabbit.ai/install.sh | sh \
+RUN curl -fsSL https://cli.coderabbit.ai/install.sh | CI=1 sh \
     && coderabbit --version
 
 # Render CLI for managing deploys, logs, and the projection-rebuild predeploy gate.
