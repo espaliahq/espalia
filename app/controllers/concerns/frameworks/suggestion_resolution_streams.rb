@@ -60,7 +60,9 @@ module Frameworks::SuggestionResolutionStreams
           pending_edit_count: pending_proposal_count("role_illustration", illustration.illustration_id),
           pending_edit: pending_edit,
           can_reorder: policy(@framework).reorder_illustrations?,
-          approval_authority: pending_edit ? framework_suggestion_approval_authority : Frameworks::SuggestionApprovalAuthority.none
+          approval_authority: pending_edit ? framework_suggestion_approval_authority : Frameworks::SuggestionApprovalAuthority.none,
+          discuss_context_label: illustration_discuss_context_label(illustration),
+          clarification: illustration_clarification(illustration)
         ),
         layout: false
       )
@@ -159,7 +161,9 @@ module Frameworks::SuggestionResolutionStreams
           illustration: illustration,
           framework_id: @framework.framework_id,
           mode: :edit,
-          can_reorder: policy(@framework).reorder_illustrations?
+          can_reorder: policy(@framework).reorder_illustrations?,
+          discuss_context_label: illustration_discuss_context_label(illustration),
+          clarification: illustration_clarification(illustration)
         ),
         layout: false
       )

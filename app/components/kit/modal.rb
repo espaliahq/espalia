@@ -39,12 +39,16 @@ class Components::Kit::Modal < Components::Base
   #   button, Cancel, Esc, or a successful submit. Set true only for purely
   #   informational modals. (Embedded modals — `standalone: false` — read this
   #   value from the host element carrying `data-controller="modal"` instead.)
-  def initialize(id:, title:, size: :md, standalone: true, dismiss_on_outside_click: false)
+  # @param dirty_guard [String, nil] confirm message shown before Esc discards
+  #   typed-but-unsaved input; nil leaves Esc immediate (audit issue #315).
+  def initialize(id:, title:, size: :md, standalone: true, dismiss_on_outside_click: false,
+                 dirty_guard: nil)
     @id = id
     @title = title
     @size = size
     @standalone = standalone
     @dismiss_on_outside_click = dismiss_on_outside_click
+    @dirty_guard = dirty_guard
   end
 
   def view_template(&block)
@@ -87,7 +91,7 @@ class Components::Kit::Modal < Components::Base
   def dialog
     div(
       id: @id,
-      data: { modal_target: "overlay" },
+      data: { modal_target: "overlay", modal_dirty_guard: @dirty_guard }.compact,
       class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
       role: "dialog",
       aria_modal: "true",

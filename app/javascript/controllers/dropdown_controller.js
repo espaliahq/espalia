@@ -31,10 +31,16 @@ export default class extends BaseController {
     useClickOutside(this)
     useTransition(this, { element: this.menuTarget })
     this._onAnyScroll = this.#onAnyScroll.bind(this)
+    // A menu item that opens a modal leaves this menu open behind it — and the
+    // menu (z-50) outranks the overlay (z-40), so it renders over the dialog it
+    // just launched. Clicking the item isn't an "outside" click, so close here.
+    this._onModalOpen = this.#onModalOpen.bind(this)
+    window.addEventListener("modal:open", this._onModalOpen)
   }
 
   disconnect() {
     window.removeEventListener("scroll", this._onAnyScroll, true)
+    window.removeEventListener("modal:open", this._onModalOpen)
     super.disconnect()
   }
 
@@ -71,6 +77,12 @@ export default class extends BaseController {
   }
 
   // private
+
+  #onModalOpen() {
+    if (this.menuTarget.classList.contains("hidden")) return
+
+    this.close()
+  }
 
   // Capture-phase listener: any scroll (window or a nested pane) moves the
   // trigger out from under a fixed menu, so close rather than float loose.

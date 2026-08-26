@@ -226,9 +226,11 @@ class FrameworksController < ApplicationController
 
       # Clarifications are discussions, not pending changes — they feed the
       # comment glyph, never the wiggle/diff/"N pending" pending-change
-      # vocabulary, so they stay out of :count and :latest_by_field.
+      # vocabulary, so they stay out of :count and :latest_by_field. The glyph
+      # is clickable, so keep the latest one's id for it to open.
       if edit.kind == "clarification"
         entry[:clarification_count] += 1
+        entry[:latest_clarification] = latest_of(entry[:latest_clarification], edit)
         next
       end
 
@@ -250,5 +252,20 @@ class FrameworksController < ApplicationController
       }
     end
     suggestions
+  end
+
+  # The later of two suggestions. `find_each` ignores any scoped order, so
+  # recency is decided here — id breaks a created_at tie.
+  #
+  # @param current [Hash, nil] the incumbent `{ id:, suggestion_id:, created_at: }`
+  # @param edit [FrameworkState::SuggestedEdit]
+  # @return [Hash]
+  def latest_of(current, edit)
+    if current
+      return current if current[:created_at] > edit.created_at
+      return current if current[:created_at] == edit.created_at && current[:id] >= edit.id
+    end
+
+    { id: edit.id, suggestion_id: edit.suggestion_id, created_at: edit.created_at }
   end
 end

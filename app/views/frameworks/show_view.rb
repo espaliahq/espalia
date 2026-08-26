@@ -59,6 +59,7 @@ class Views::Frameworks::ShowView < Views::Base
         if @mode == :edit
           reject_suggestion_modal
           resolve_clarification_modal
+          request_clarification_modal
         end
       end
     end
@@ -79,6 +80,16 @@ class Views::Frameworks::ShowView < Views::Base
   # "Resolve…" (feed entry / pane card) opens it with a required note.
   def resolve_clarification_modal
     render Views::Frameworks::Explorer::ResolveClarificationModal.new(
+      framework_id: @framework.framework_id
+    )
+  end
+
+  # The other end of the clarification lifecycle — the grid's "Discuss…"
+  # triggers (expectation cell, capability row kebab, illustration kebab) open
+  # it to ask the question. Available to every edit-mode viewer: edit mode
+  # already requires the suggest rights a clarification needs.
+  def request_clarification_modal
+    render Views::Frameworks::Explorer::RequestClarificationModal.new(
       framework_id: @framework.framework_id
     )
   end

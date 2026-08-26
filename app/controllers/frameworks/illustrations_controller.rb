@@ -5,6 +5,7 @@
 class Frameworks::IllustrationsController < ApplicationController
   include FrameworkEditMode
   include Frameworks::SuggestionAuthority
+  include Frameworks::IllustrationFrameContext
 
   before_action :set_framework
   before_action :set_illustration, only: [ :update ]
@@ -78,7 +79,9 @@ class Frameworks::IllustrationsController < ApplicationController
       # so it's only resolved when a pending edit exists for the kebab to act
       # on — the common auto-applied edit skips it.
       can_reorder: can_reorder_illustrations?,
-      approval_authority: pending_edit_approval_authority
+      approval_authority: pending_edit_approval_authority,
+      discuss_context_label: illustration_discuss_context_label(@illustration),
+      clarification: illustration_clarification(@illustration)
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :not_found
@@ -150,7 +153,8 @@ class Frameworks::IllustrationsController < ApplicationController
             illustration: illustration,
             framework_id: @framework.framework_id,
             mode: :edit,
-            can_reorder: can_reorder_illustrations?
+            can_reorder: can_reorder_illustrations?,
+            discuss_context_label: illustration_discuss_context_label(illustration)
           ),
           layout: false
         )

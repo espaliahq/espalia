@@ -158,24 +158,45 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   # entity (edit mode only — the suggestions map is empty in view mode, so
   # callers never see a positive count there). This is the CONTENT language
   # (glyphs — same vocabulary as the assessment level chips), deliberately NOT
-  # the pending-change wiggle: a clarification proposes no change; it says
-  # "there's a relevant discussion — zoom in" (cell focus / the activity pane
-  # reaches the clarification card).
+  # the pending-change wiggle: a clarification proposes no change.
+  #
+  # Given a `suggestion_id` the glyph is a button that opens that discussion's
+  # card in the context pane — the same `suggestion:open-card` path the squiggle
+  # uses (`matrix#openSuggestionCard` stops the row/cell click itself). With
+  # several open, the caller passes the most recent; the card's feed context
+  # carries the rest.
   #
   # @param count [Integer] open clarifications on the entity
+  # @param suggestion_id [String, nil] the discussion the glyph opens
   # @return [void] renders nothing when count is zero
-  def render_clarification_glyph(count)
+  def render_clarification_glyph(count, suggestion_id: nil)
     return unless count.to_i.positive?
 
-    title = "#{count} open #{'clarification'.pluralize(count)} — see the activity pane"
-    span(
+    noun = "open #{'discussion'.pluralize(count)}"
+    title = suggestion_id ? "#{count} #{noun} — view" : "#{count} #{noun} — see the activity pane"
+    attrs = {
       class: "inline-flex items-center gap-0.5 ml-1 align-middle rounded-full " \
              "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-gray-600 dark:text-gray-300 shrink-0",
       title: title,
-      role: "img",
       aria: { label: title },
       data: { glyph: "clarification" }
-    ) do
+    }
+
+    if suggestion_id
+      attrs[:class] += " cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 " \
+                       "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60"
+      attrs[:role] = "button"
+      attrs[:tabindex] = "0"
+      attrs[:data] = attrs[:data].merge(
+        suggestion_id: suggestion_id,
+        action: "click->matrix#openSuggestionCard keydown.enter->matrix#openSuggestionCard " \
+                "keydown.space->matrix#openSuggestionCard"
+      )
+    else
+      attrs[:role] = "img"
+    end
+
+    span(**attrs) do
       svg(
         xmlns: "http://www.w3.org/2000/svg",
         class: "w-2.5 h-2.5",

@@ -253,7 +253,8 @@ class Frameworks::MatrixDataBuilder
         description_pending_edit: pending_latest_edit("capability", capability.capability_id, "description"),
         # Capability-anchored clarifications (a cell with no expectation) glyph
         # the capability row — there is no cell to hang them on.
-        clarification_count: clarification_count("capability", capability.capability_id)
+        clarification_count: clarification_count("capability", capability.capability_id),
+        clarification_suggestion_id: clarification_suggestion_id("capability", capability.capability_id)
       }
     end
   end
@@ -316,8 +317,11 @@ class Frameworks::MatrixDataBuilder
         pending_suggestion_count: pending_count("behavioural_expectation", expectation.expectation_id),
         pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id, "description"),
         clarification_count: clarification_count("behavioural_expectation", expectation.expectation_id),
+        clarification_suggestion_id:
+          clarification_suggestion_id("behavioural_expectation", expectation.expectation_id),
         illustration_pending_edits: illustration_pending_edits(illustrations),
         illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
+        illustration_clarifications: illustration_clarifications(illustrations),
         pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
       }
     end
@@ -344,6 +348,23 @@ class Frameworks::MatrixDataBuilder
     illustrations.each_with_object({}) do |ill, h|
       latest = pending_latest_edit("role_illustration", ill.illustration_id, "description")
       h[ill.illustration_id] = latest if latest
+    end
+  end
+
+  # illustration_id => { count:, suggestion_id: } for illustrations carrying an
+  # open discussion — the expanded row's clickable comment glyph.
+  #
+  # @param illustrations [Array<FrameworkState::RoleIllustration>]
+  # @return [Hash<String, Hash>]
+  def illustration_clarifications(illustrations)
+    illustrations.each_with_object({}) do |ill, h|
+      count = clarification_count("role_illustration", ill.illustration_id)
+      next unless count > 0
+
+      h[ill.illustration_id] = {
+        count: count,
+        suggestion_id: clarification_suggestion_id("role_illustration", ill.illustration_id)
+      }
     end
   end
 
@@ -410,6 +431,16 @@ class Frameworks::MatrixDataBuilder
   def clarification_count(entity_type, entity_id)
     entry = @pending_suggestions[[ entity_type, entity_id ]]
     entry ? entry[:clarification_count].to_i : 0
+  end
+
+  # The most recent open clarification on an entity — the glyph is clickable
+  # and opens this one's card. With several open, the card's feed context
+  # carries the rest.
+  #
+  # @return [String, nil] suggestion_id
+  def clarification_suggestion_id(entity_type, entity_id)
+    entry = @pending_suggestions[[ entity_type, entity_id ]]
+    entry && entry[:latest_clarification] && entry[:latest_clarification][:suggestion_id]
   end
 
   # Latest pending edit on a specific text field of an entity (used to render

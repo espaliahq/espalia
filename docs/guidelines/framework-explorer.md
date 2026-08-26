@@ -811,12 +811,45 @@ rediscovering it. Mechanics:
   `resolve_clarification_form` controller mirror the reject modal exactly).
 - **Grid decoration is the content language, never the pending-change
   vocabulary**: an open clarification renders a muted **speech-bubble glyph**
-  on the affected cell (capability row when the anchor is the capability) —
+  on the affected cell (the capability row when the anchor is the capability;
+  the expanded row's example when it's an illustration) —
   `SuggestionDecoration#render_clarification_glyph`, edit mode only. It is
   deliberately NOT the wiggle: a clarification proposes no change, so
   `build_suggestions_map` routes it to a separate `clarification_count`
   (never `:count`/`latest_by_field`, so no wiggle, no diff, no "N pending"
   pill). Same glyph vocabulary as the assessment level chips.
+  **The glyph is clickable** — it opens that discussion's card via the same
+  `suggestion:open-card` path the squiggle uses, so the grid is a way *into*
+  the conversation, not just a marker of one. `build_suggestions_map` keeps
+  the latest open clarification's id per entity (`latest_clarification`)
+  alongside the count, threaded by `MatrixDataBuilder` as
+  `clarification_suggestion_id` (cell + capability) and
+  `illustration_clarifications` (`{ count:, suggestion_id: }` per illustration).
+  With several open, the glyph opens the most recent; the card's feed context
+  carries the rest. A **just-asked** question's glyph lands on the next matrix
+  render, not immediately — the matrix deliberately isn't live (Lesson 21) and
+  re-fetching it per write is exactly what Lesson 23 forbids; the pane opening
+  the new discussion's card is the author's feedback.
+- **Asking is a grid affordance — "Discuss…"** (edit mode). Three triggers,
+  all plain `click->modal#open` buttons carrying a `discuss_*` dataset (no
+  per-trigger Stimulus mount — one per cell is exactly the direction Lesson 23
+  forbids), all opening the root-mounted `request-clarification-modal`:
+  a hover-revealed **speech-bubble button on each expectation cell** (before
+  the kebab, which stays right-most), a **"Discuss…" item in the capability
+  row kebab** (no single cell in mind, so the modal offers that row's levels
+  plus "the capability as a whole"), and a **"Discuss…" item in each
+  illustration's kebab** (the case that prompted this: an example that reads
+  wrong for its level). All are offered to **any edit-mode viewer** — edit mode
+  already requires the suggest rights a clarification needs — so the row kebab
+  is now unconditional in edit mode. `Concerns::DiscussTrigger` owns the
+  markup; `request_clarification_form_controller` prefills the modal from the
+  trigger dataset. POST → `Frameworks::ClarificationsController` → 204 +
+  `X-Suggestion-Id`, and the form controller dispatches `suggestion:open-card`
+  with that id, so the author lands in the discussion they just opened.
+- **Anchors, most specific first**: an illustration when one is named (its
+  level comes from the owning expectation), else the cell's expectation, else
+  the capability — with `level_ordinal` when the question is cell-scoped and
+  **without** it when it's about the capability as a whole.
 - **Writers**: `frameworks_request_clarification` /
   `frameworks_resolve_clarification` (web + MCP, `:mcp_client`), plus the
   calibration flag (`Operations::CalibrationSessions::FlagExpectation` —
@@ -959,6 +992,9 @@ the latest state). All add/remove/weight actions then re-render the frame in pla
 
 ### suggestion_action_controller.js (edit mode only)
 Wraps the action row on an actionable feed entry (and mounts bare on the grid kebabs' Approve items). `approve` POSTs to the suggestion's approve endpoint (`inline=1`) via `@rails/request.js`, showing "Approving…" during the round trip and swapping the row to a local "✓ Approved" state on success — instant feedback, ~1-2s ahead of the broadcast-driven feed reload. The response is either a surgical Turbo Stream (request.js renders it — the affected entity's frame swaps in place) or a 204 fallback. Dispatches the window `suggestion:resolved` event with `{ suggestionId, outcome, surgical }` (→ `matrix#refresh` for the non-surgical fallback only, and → other surfaces showing the same suggestion resolving in place via `onResolved` — a bare kebab mount outside the swapped frame marks itself terminal); the reject modal's dispatch carries the same detail so a rejection swaps the entry to "✓ Rejected" too. Reject is *not* handled here — it always opens the shared modal (§12).
+
+### request_clarification_form_controller.js (edit mode only)
+Backs the shared "Start a discussion" modal (§12a). On `modal:open` it self-gates on a `discuss*` dataset key, copies the anchor (capability / illustration / level) into the form's hidden fields, fills the context line, and — when the trigger supplies `discussLevelOptions` (the capability row, which names no cell) — populates and reveals the level select. On a successful submit it reads the new suggestion id from the response's `X-Suggestion-Id` header and dispatches `suggestion:open-card`, so the author lands on the discussion they just opened; with no id it falls back to `suggestion:submitted` so the feed still refreshes.
 
 ### reject_suggestion_form_controller.js (edit mode only)
 Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `rejectSuggestionId`, points the form at that suggestion's reject endpoint (a `__SID__` path template), fills the entity label + proposed-value preview, and clears the reason. On a successful submit it dispatches `suggestion:resolved`. The modal closes via `modal#submitted`; the feed reloads via broadcast (§12).
@@ -1323,9 +1359,9 @@ line (§9).
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles; renders `LevelTitleFrame` per role in full-title (≤3 roles) edit mode |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
-| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`) — inline Approve/Reject of pending name/description edits + Move up/down (reorder) + Edit roles… (binding editor) + Archive (§11, §12) |
-| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
-| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell — pending-edit decoration, ↑/↓ reorder chevrons (edit-structure holders), pencil, then the ⋮ kebab (Approve/Reject when approvable + Archive…) |
+| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`, unconditional in edit mode) — inline Approve/Reject of pending name/description edits + Discuss… + Move up/down (reorder) + Edit roles… (binding editor) + Archive (§11, §12, §12a) |
+| `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + hover "Discuss…" button (§12a) + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
+| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell — pending-edit decoration, ↑/↓ reorder chevrons (edit-structure holders), pencil, then the ⋮ kebab (Approve/Reject when approvable + Discuss… + Archive…) |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) — pencil (amend/alternative) + Approve/Reject kebab for tier-authority viewers |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
 | `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
@@ -1365,6 +1401,10 @@ line (§9).
 | `app/views/frameworks/activity/clarification_actions.rb` | The "Resolve…" affordance on a pending clarification (feed entry + pane card) — opens the resolve modal (§12a) |
 | `app/views/frameworks/explorer/resolve_clarification_modal.rb` | Shared resolve-clarification modal (required note) — explorer root, edit mode (§12a) |
 | `app/javascript/controllers/resolve_clarification_form_controller.js` | Prefills the resolve modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12a) |
+| `app/views/frameworks/explorer/concerns/discuss_trigger.rb` | Shared "Discuss…" affordances — the hover button (cells) + menu item (kebabs) and their `discuss_*` anchor dataset (§12a) |
+| `app/views/frameworks/explorer/request_clarification_modal.rb` | Shared "Start a discussion" modal (question + optional level) — explorer root, edit mode (§12a) |
+| `app/javascript/controllers/request_clarification_form_controller.js` | Prefills the discuss modal from the trigger dataset; on success dispatches `suggestion:open-card` with the new suggestion id (§12a) |
+| `app/controllers/frameworks/clarifications_controller.rb` | `POST /frameworks/:id/clarifications` — dispatch `RequestClarification`, answer 204 + `X-Suggestion-Id` (§12a) |
 | `app/operations/operations/frameworks/{comment_on_suggestion,edit_suggestion_comment,delete_suggestion_comment}.rb` | Shared web + MCP suggestion-thread write operations (§13) |
 | `app/operations/operations/frameworks/suggestion_get.rb` | MCP read drill-in — full suggestion (proposal + resolution + nested thread) |
 | `app/contexts/frameworks/projections/suggestion_thread.rb` | Projects the three comment events into `framework_suggestion_comments`; broadcasts the activity signal (§13) |

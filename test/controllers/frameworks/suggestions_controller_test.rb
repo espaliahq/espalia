@@ -257,6 +257,29 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    # The surgical stream replaces the whole illustration frame, so it must
+    # re-thread everything the matrix render supplies — including an open
+    # discussion's glyph (Hard-Won Lesson 13/16 class).
+    should "keep an open discussion's glyph when approving an illustration edit inline" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, SecureRandom.uuid_v7, "role_illustration", @ill_id,
+          author_id: @author_person.id.to_s, level_ordinal: 1,
+          rationale: "Is this the right example here?"
+        )
+      end
+
+      sign_in @admin_user
+      post approve_framework_suggestion_path(
+        framework_id: @framework_id, id: @illustration_suggestion_id, inline: 1
+      )
+
+      assert_response :success
+      assert_select "turbo-stream[action='replace'][target='illustration-#{@ill_id}']"
+      assert_includes response.body, "data-glyph=\"clarification\"",
+                      "the frame swap must not drop the example's discussion glyph"
+    end
+
     should "answer a surgical Turbo Stream for an inline expectation-edit approve" do
       sign_in @admin_user
       post approve_framework_suggestion_path(
