@@ -61,6 +61,10 @@ export default class extends BaseController {
   }
 
   open(event) {
+    // A modal opening supersedes any pending focus-return from the one that
+    // just closed — restoring the old trigger would drop focus outside the
+    // new dialog.
+    clearTimeout(this.pendingFocusReturn)
     const trigger = event.currentTarget
     this.triggerElement = trigger instanceof Element ? trigger : null
     this.activeOverlay = this.#resolveOverlay(trigger)
@@ -191,7 +195,11 @@ export default class extends BaseController {
     const trigger = this.triggerElement
     this.triggerElement = null
     if (!trigger) return
-    setTimeout(() => {
+    clearTimeout(this.pendingFocusReturn)
+    this.pendingFocusReturn = setTimeout(() => {
+      // Another dialog opened meanwhile — its own focus management owns the
+      // keyboard now.
+      if (document.querySelector("[data-modal-target='overlay']:not(.hidden)")) return
       const candidate =
         (document.contains(trigger) && trigger.offsetParent !== null && trigger) ||
         (trigger.id && document.getElementById(trigger.id)) ||
