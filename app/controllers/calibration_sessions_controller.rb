@@ -98,6 +98,7 @@ class CalibrationSessionsController < ApplicationController
   # GET /calibration_sessions/:id
   def show
     authorize @session
+    @page_title = "#{@session.name} · Calibration"
 
     members = @session.members.to_a
     participant_ids = members.select { |m| m.member_type == "participant" }.map(&:person_id)

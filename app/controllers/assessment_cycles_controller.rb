@@ -40,6 +40,7 @@ class AssessmentCyclesController < ApplicationController
   # GET /assessment_cycles/:id
   def show
     authorize @cycle
+    @page_title = @cycle.name
 
     # Eager-load people for the enrollment join used by `#participations`.
     @cycle.enrollments.includes(:person).load
