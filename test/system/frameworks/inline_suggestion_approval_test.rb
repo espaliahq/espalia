@@ -70,6 +70,26 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
     end
   end
 
+  # Scroll restore runs on turbo:frame-load, which fires a beat AFTER the
+  # fresh frame content becomes visible — an immediate read can catch the
+  # pre-restore scrollTop of 0. Poll until the restore lands (or time out and
+  # return the last value for the failure message).
+  def wait_for_scroll_restore(minimum)
+    scroll_top = 0
+    Timeout.timeout(Capybara.default_max_wait_time) do
+      loop do
+        scroll_top = page.evaluate_script(
+          "document.querySelector(\"[data-context-pane-target='scroller']\").scrollTop"
+        )
+        return scroll_top if scroll_top >= minimum
+
+        sleep 0.1
+      end
+    end
+  rescue Timeout::Error
+    scroll_top
+  end
+
   # A pending edit on the expectation / illustration, created per-test so the
   # shared feed assertions (single pending suggestion) stay valid.
   def suggest_expectation_edit
@@ -149,6 +169,32 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       end
     end
 
+    should "mark the grid kebab terminal when the suggestion resolves from the feed" do
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      assert_selector "#suggestion-panel button", text: "Approve"
+
+      page.execute_script(
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{@sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
+      )
+      wait_for_status("approved")
+
+      # The row kebab lives OUTSIDE the surgically-replaced frame and survives
+      # the resolution — its items must go terminal (approve relabelled, both
+      # disabled), never linger actionable against a resolved suggestion.
+      # DOM-level wait first: wait_for_status polls the read model, which
+      # flips mid-POST — before the response reaches the client and
+      # suggestion:resolved marks the (still-hidden) menu items.
+      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
+                      text: "✓ Approved", visible: :all
+      open_dropdown(scope: "tr[data-capability-id='#{@cap_id}']")
+      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
+                      text: "✓ Approved"
+      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
+                      text: "Reject description change"
+    end
+
     should "approve a capability edit from the matrix row kebab" do
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
@@ -183,7 +229,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve expectation change"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{exp_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", exp_sugg_id)
@@ -206,7 +253,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve expectation change"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{exp_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{exp_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", exp_sugg_id)
@@ -229,7 +277,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       # single "more actions" home.
       assert_text "Archive…"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{ill_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", ill_sugg_id)
@@ -249,7 +298,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve new illustration"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{create_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{create_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", create_sugg_id)
@@ -288,7 +338,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       )
       assert_text "Approve illustration change"
       page.execute_script(
-        "document.querySelector(\"button[data-suggestion-action-approve-url-value*='#{ill_sugg_id}']\").click()"
+        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{ill_sugg_id}'] " \
+        "button[data-action='suggestion-action#approve']\").click()"
       )
 
       wait_for_status("approved", ill_sugg_id)
@@ -352,11 +403,98 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
         assert_text "Approved a capability suggestion"
       end
 
-      restored = page.evaluate_script(
-        "document.querySelector(\"[data-context-pane-target='scroller']\").scrollTop"
-      )
+      restored = wait_for_scroll_restore(scrolled_to - 100)
       assert_operator restored, :>=, scrolled_to - 100,
         "the reload must restore the reviewer's scroll position, not reset to the top"
+    end
+
+    should "land on the exact pending example when its feed entry is clicked" do
+      create_sugg_id = suggest_illustration_create
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      within "#suggestion-panel" do
+        assert_text "Proposed a new illustration"
+      end
+
+      # Click the entry body (not its action buttons) — dispatches
+      # suggestion:navigate with the suggestion id.
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel li[data-nav-suggestion-id='#{create_sugg_id}']\").click()"
+      )
+
+      # The row expands AND the ghost's decorated element itself is flagged as
+      # the navigation target — not just the cell's vicinity.
+      assert_selector "turbo-frame#pending-suggestion-#{create_sugg_id} .suggestion-nav-highlight",
+                      visible: :all
+    end
+
+    should "fall back to the cell when the entry's suggestion has no on-grid anchor" do
+      exp_sugg_id = suggest_expectation_edit
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      within "#suggestion-panel" do
+        assert_text "Suggested an edit to expectation"
+      end
+
+      # Remove the squiggle anchor to simulate a decoration that isn't
+      # rendered (e.g. the suggestion's role filtered out of the view).
+      page.execute_script(
+        "document.querySelectorAll(\"#framework-matrix [data-suggestion-id='#{exp_sugg_id}']\")" \
+        ".forEach(el => el.removeAttribute('data-suggestion-id'))"
+      )
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel li[data-nav-suggestion-id='#{exp_sugg_id}']\").click()"
+      )
+
+      # The cell itself carries the highlight instead.
+      assert_selector "td.suggestion-nav-highlight", visible: :all
+    end
+
+    should "return to the reviewer's place in the feed after a click-through detour" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        22.times do |i|
+          handler.add_capability_category(@framework_id, SecureRandom.uuid_v7,
+            "Filler Category #{i}", ordinal: 10 + i)
+        end
+      end
+
+      visit edit_framework_path(@framework_id)
+      toggle_context_pane
+      within "#suggestion-panel" do
+        assert_text "Suggested an edit to capability"
+      end
+
+      scrolled_to = page.evaluate_script(<<~JS)
+        (() => {
+          const s = document.querySelector("[data-context-pane-target='scroller']");
+          s.scrollTop = 400;
+          return s.scrollTop;
+        })()
+      JS
+      assert_operator scrolled_to, :>=, 200, "feed must overflow well past the tolerance band"
+
+      # Click-through: navigate to the suggestion's entity — the feed narrows
+      # to that capability's activity.
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel li[data-nav-suggestion-id='#{@sugg_id}']\").click()"
+      )
+      within "#suggestion-panel" do
+        assert_text "← Show all framework activity"
+      end
+
+      # Return to the full feed — the reviewer lands back at the entry they
+      # left from, not at the top.
+      page.execute_script(
+        "document.querySelector(\"#suggestion-panel a[data-action*='clearFocus']\").click()"
+      )
+      within "#suggestion-panel" do
+        assert_no_text "← Show all framework activity"
+      end
+
+      restored = wait_for_scroll_restore(scrolled_to - 100)
+      assert_operator restored, :>=, scrolled_to - 100,
+        "returning to the feed must restore the reviewer's place, not reset to the top"
     end
 
     should "reject a suggestion via the modal with an optional reason" do
@@ -416,7 +554,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
       [ exp_sugg_id, ill_sugg_id, create_sugg_id ].each do |sid|
-        assert_no_selector "button[data-suggestion-action-approve-url-value*='#{sid}']",
+        # The approve URL rides the kebab items' wrapper mount, not the button.
+        assert_no_selector "[data-suggestion-action-approve-url-value*='#{sid}']",
                            visible: :all
         assert_no_selector "button[data-reject-suggestion-id='#{sid}']", visible: :all
       end

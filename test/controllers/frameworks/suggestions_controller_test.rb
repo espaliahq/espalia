@@ -241,16 +241,103 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
 
-    should "answer 204 (no redirect) for an inline approve from the feed/grid" do
+    should "answer a surgical Turbo Stream for an inline illustration-edit approve" do
       sign_in @admin_user
       post approve_framework_suggestion_path(
         framework_id: @framework_id, id: @illustration_suggestion_id, inline: 1
       )
 
-      assert_response :no_content
+      assert_response :success
+      assert_match "text/vnd.turbo-stream.html", response.media_type
+      assert_select "turbo-stream[action='replace'][target='illustration-#{@ill_id}']"
+      assert_includes response.body, "Proactively seeks clarification"
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal "approved",
                      FrameworkState::SuggestedEdit.find_by(suggestion_id: @illustration_suggestion_id).status
+      end
+    end
+
+    should "answer a surgical Turbo Stream for an inline expectation-edit approve" do
+      sign_in @admin_user
+      post approve_framework_suggestion_path(
+        framework_id: @framework_id, id: @expectation_suggestion_id, inline: 1
+      )
+
+      assert_response :success
+      assert_select "turbo-stream[action='replace'][target='expectation-text-#{@eid}']"
+      assert_includes response.body, "Asks open-ended questions to surface assumptions"
+    end
+
+    should "replace the ghost with the real illustration for an inline new-illustration approve" do
+      create_sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_create(
+          @framework_id, create_sid, "role_illustration",
+          { "role_id" => @rid, "description" => "Pairs with juniors weekly" },
+          parent_id: @eid, author_id: @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @admin_user
+      post approve_framework_suggestion_path(framework_id: @framework_id, id: create_sid, inline: 1)
+
+      assert_response :success
+      assert_select "turbo-stream[action='replace'][target='pending-suggestion-#{create_sid}']" do
+        assert_select "turbo-frame[id^='illustration-']"
+      end
+      assert_includes response.body, "Pairs with juniors weekly"
+    end
+
+    should "answer a surgical Turbo Stream for an inline capability-name-edit approve" do
+      sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_edit(
+          @framework_id, sid, "capability", @cap_id, "name",
+          "Strategic Systems Thinking", @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @admin_user
+      post approve_framework_suggestion_path(framework_id: @framework_id, id: sid, inline: 1)
+
+      assert_response :success
+      assert_select "turbo-stream[action='replace'][target='capability-name-#{@cap_id}']"
+      assert_includes response.body, "Strategic Systems Thinking"
+    end
+
+    should "answer a surgical Turbo Stream for an inline category-description-edit reject" do
+      sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_edit(
+          @framework_id, sid, "capability_category", @cat_id, "description",
+          "How we reason about problems", @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @admin_user
+      post reject_framework_suggestion_path(framework_id: @framework_id, id: sid, inline: 1)
+
+      assert_response :success
+      assert_select "turbo-stream[action='replace'][target='category-description-#{@cat_id}']"
+      # Rejected — the proposed text must NOT survive into the re-rendered frame.
+      refute_includes response.body, "How we reason about problems"
+    end
+
+    should "fall back to 204 for an inline approve of a non-surgical shape" do
+      delete_sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_delete(
+          @framework_id, delete_sid, "capability", @cap_id,
+          author_id: @author_person.id.to_s
+        )
+      end
+
+      sign_in @admin_user
+      post approve_framework_suggestion_path(framework_id: @framework_id, id: delete_sid, inline: 1)
+
+      assert_response :no_content
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "approved", FrameworkState::SuggestedEdit.find_by(suggestion_id: delete_sid).status
       end
     end
   end
@@ -283,17 +370,39 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
 
-    should "answer 204 (no redirect) for an inline reject with a reason" do
+    should "answer a surgical Turbo Stream for an inline reject with a reason" do
       sign_in @admin_user
       post reject_framework_suggestion_path(
         framework_id: @framework_id, id: @illustration_suggestion_id, inline: 1
       ), params: { comment: "off-strategy" }
 
-      assert_response :no_content
+      assert_response :success
+      # The re-rendered frame shows the ORIGINAL text — the rejected proposal's
+      # inline diff is gone.
+      assert_select "turbo-stream[action='replace'][target='illustration-#{@ill_id}']"
+      assert_includes response.body, "Seeks guidance"
+      refute_includes response.body, "Proactively seeks clarification"
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal "rejected",
                      FrameworkState::SuggestedEdit.find_by(suggestion_id: @illustration_suggestion_id).status
       end
+    end
+
+    should "remove the ghost for an inline new-illustration reject" do
+      create_sid = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_create(
+          @framework_id, create_sid, "role_illustration",
+          { "role_id" => @rid, "description" => "Ghost to remove" },
+          parent_id: @eid, author_id: @author_person.id.to_s, mode: :suggesting
+        )
+      end
+
+      sign_in @admin_user
+      post reject_framework_suggestion_path(framework_id: @framework_id, id: create_sid, inline: 1)
+
+      assert_response :success
+      assert_select "turbo-stream[action='remove'][target='pending-suggestion-#{create_sid}']"
     end
   end
 

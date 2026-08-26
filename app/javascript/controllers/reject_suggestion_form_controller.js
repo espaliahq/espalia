@@ -35,10 +35,18 @@ export default class extends Controller {
 
   submitted(event) {
     if (event.detail?.success) {
+      // A turbo-stream response is the surgical in-place update (Turbo
+      // already rendered it) — the matrix skips its full-frame fallback
+      // refresh. A 204 means not surgically addressable.
+      const contentType = event.detail?.fetchResponse?.contentType || ""
       // The detail lets the rejected entry's suggestion-action controller
       // swap to its "✓ Rejected" state immediately (before the feed reload).
       window.dispatchEvent(new CustomEvent("suggestion:resolved", {
-        detail: { suggestionId: this._suggestionId, outcome: "rejected" }
+        detail: {
+          suggestionId: this._suggestionId,
+          outcome: "rejected",
+          surgical: contentType.includes("turbo-stream")
+        }
       }))
     }
   }

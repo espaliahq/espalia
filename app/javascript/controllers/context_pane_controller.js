@@ -71,6 +71,7 @@ export default class extends BaseController {
     this.element.removeEventListener("input", this.onComposerSettle)
     this.element.removeEventListener("turbo:frame-load", this.onFrameLoad)
     this._syncObserver?.disconnect()
+    clearTimeout(this._syncReloadTimer)
   }
 
   onTreeChanged(event) {
@@ -83,6 +84,7 @@ export default class extends BaseController {
 
   onFocusChanged(event) {
     const { level, categoryId, capabilityId, levelOrdinal, expectationId } = event.detail || {}
+    this.#trackFeedDeparture(level || "framework")
     this.state.focus = level || "framework"
     this.state.categoryId = categoryId || null
     this.state.capabilityId = capabilityId || null
@@ -152,7 +154,10 @@ export default class extends BaseController {
       level: el.dataset.navLevel || "framework",
       categoryId: el.dataset.navCategoryId || null,
       capabilityId: el.dataset.navCapabilityId || null,
-      levelOrdinal: el.dataset.navLevelOrdinal ? parseInt(el.dataset.navLevelOrdinal, 10) : null
+      levelOrdinal: el.dataset.navLevelOrdinal ? parseInt(el.dataset.navLevelOrdinal, 10) : null,
+      // Present for pending suggestions — lets the matrix land on the exact
+      // decorated element (squiggle / ghost) instead of the cell's vicinity.
+      suggestionId: el.dataset.navSuggestionId || null
     }
 
     window.dispatchEvent(new CustomEvent("suggestion:navigate", { detail }))
@@ -161,6 +166,7 @@ export default class extends BaseController {
   // private
 
   #showSuggestionCard(id) {
+    this.#trackFeedDeparture("suggestion")
     this.state.focus = "suggestion"
     this.state.suggestionId = id
     this.state.categoryId = null
@@ -183,6 +189,23 @@ export default class extends BaseController {
 
     this._syncObserver = new MutationObserver(() => {
       if (!this.hasFrameTarget) return
+      this.#scheduleSyncReload()
+    })
+    this._syncObserver.observe(this.signalTarget.parentElement, {
+      childList: true,
+      subtree: false
+    })
+  }
+
+  // One user action can broadcast several feed-relevant events (an approval
+  // publishes the approval AND the applied change, each replacing the sync
+  // signal) — coalesce the burst into a single frame reload instead of
+  // re-fetching the feed once per event.
+  #scheduleSyncReload() {
+    clearTimeout(this._syncReloadTimer)
+    this._syncReloadTimer = setTimeout(() => {
+      this._syncReloadTimer = null
+      if (!this.hasFrameTarget) return
       // Never reload over a half-written comment: a broadcast landing while
       // the suggestion card's composer (or an inline reply/edit form) is
       // focused or holds an edited draft would destroy it. The skipped
@@ -193,11 +216,7 @@ export default class extends BaseController {
         return
       }
       this.#reloadPreservingScroll()
-    })
-    this._syncObserver.observe(this.signalTarget.parentElement, {
-      childList: true,
-      subtree: false
-    })
+    }, 300)
   }
 
   // Reads focus params from the browser URL into state. Called on connect
@@ -244,10 +263,22 @@ export default class extends BaseController {
     }
 
     const next = url.toString()
-    if (this.frameTarget.src === next) return false
+    // Returning to the full feed after a review detour (narrowed focus /
+    // suggestion card) restores the reviewer's place via the entry they left
+    // from — consumed exactly once, whichever load serves the return.
+    const returnAnchor = this._pendingReturnAnchor
+    this._pendingReturnAnchor = null
+
+    if (this.frameTarget.src === next) {
+      // A frame-link navigation (the "Show all" clear link) may have already
+      // set the identical src — its in-flight load still gets the anchor.
+      if (returnAnchor) this._savedAnchor = returnAnchor
+      return false
+    }
     // Different src = different content: a scroll position saved for an
     // in-flight same-content reload must never land on it.
     this._savedScrollTop = null
+    this._savedAnchor = returnAnchor || null
     this.frameTarget.src = next
     return true
   }
@@ -277,25 +308,76 @@ export default class extends BaseController {
   }
 
   // Same-content reloads (broadcasts, post-submit, catch-up) must not throw
-  // the reviewer back to the top of the feed: capture the inner scroller's
-  // position before the reload and restore it once the fresh frame lands.
+  // the reviewer back to the top of the feed: remember WHERE the reviewer is
+  // before the reload and restore it once the fresh frame lands.
   // Focus-driven `src` changes render DIFFERENT content and deliberately
-  // don't come through here — starting those at the top is correct.
+  // don't come through here — those start at the top (except the
+  // return-to-feed anchor, see #rebuildFrameSrc).
   #reloadPreservingScroll() {
+    this._savedAnchor = this.#captureScrollAnchor()
     this._savedScrollTop = this.hasScrollerTarget ? this.scrollerTarget.scrollTop : null
     this.frameTarget.reload()
   }
 
+  // The topmost visible feed entry + its offset within the scroller viewport.
+  // Entry-anchored restore survives what a pixel offset can't: fresh entries
+  // prepended by the very resolution being reloaded (every approval publishes
+  // 2+ events) would otherwise shift the reviewer's view down one entry per
+  // action, compounding over a review session.
+  #captureScrollAnchor() {
+    if (!this.hasScrollerTarget) return null
+
+    const scrollerTop = this.scrollerTarget.getBoundingClientRect().top
+    const entries = this.scrollerTarget.querySelectorAll("li[id^='framework-activity-']")
+    for (const el of entries) {
+      const rect = el.getBoundingClientRect()
+      // Skip chip-filtered (display:none) entries — their rects are all zero.
+      if (rect.height > 0 && rect.bottom > scrollerTop + 1) {
+        return { entryId: el.id, delta: rect.top - scrollerTop }
+      }
+    }
+    return null
+  }
+
   #restoreScroll() {
-    if (this._savedScrollTop == null) return
+    const anchor = this._savedAnchor
     const top = this._savedScrollTop
+    this._savedAnchor = null
     this._savedScrollTop = null
     if (!this.hasScrollerTarget) return
-    // Exact-or-nothing: a reload discards "load older" batches, and clamping
-    // a deep position to the bottom of the shorter first batch is more
-    // disorienting than starting at the top of the visibly-reset list.
+    if (anchor && this.#scrollToAnchor(anchor)) return
+    if (top == null) return
+
+    // Pixel fallback (anchor entry not in the fresh content — e.g. it lived
+    // in a discarded "load older" batch). Exact-or-nothing: clamping a deep
+    // position to the bottom of the shorter first batch is more disorienting
+    // than starting at the top of the visibly-reset list.
     const max = this.scrollerTarget.scrollHeight - this.scrollerTarget.clientHeight
     if (top <= max) this.scrollerTarget.scrollTop = top
+  }
+
+  // @return [Boolean] whether the anchor entry exists in the fresh content
+  #scrollToAnchor({ entryId, delta }) {
+    const el = this.scrollerTarget.querySelector(`#${CSS.escape(entryId)}`)
+    if (!el) return false
+
+    const scrollerTop = this.scrollerTarget.getBoundingClientRect().top
+    this.scrollerTarget.scrollTop += (el.getBoundingClientRect().top - scrollerTop) - delta
+    return true
+  }
+
+  // Leaving the full feed for a review detour (a narrowed focus or the
+  // suggestion card) remembers the entry the reviewer was on, so coming back
+  // to the feed returns them to it instead of the top — the click-through →
+  // verify → act → "Show all" loop is exactly how a reviewer works down a
+  // long list.
+  #trackFeedDeparture(nextFocus) {
+    if (this.state.focus === "framework" && nextFocus !== "framework") {
+      this._returnAnchor = this.#captureScrollAnchor()
+    } else if (this.state.focus !== "framework" && nextFocus === "framework" && this._returnAnchor) {
+      this._pendingReturnAnchor = this._returnAnchor
+      this._returnAnchor = null
+    }
   }
 
   #pushBrowserUrl() {

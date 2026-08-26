@@ -696,22 +696,28 @@ types — they inherit it for free.
    four lifecycle ops are `:mcp_client`; the web's inline-vs-modal split is pure
    UX, decoupled from the MCP approval category.
 4. **Resolution updates every affected frame and broadcasts live — with
-   instant local feedback first.** Approve/reject answer **204** (flagged
-   `inline=1`) so Turbo neither navigates nor blanks the modal. Because the
-   broadcast round trip takes 1–2s in production, the actor never waits on it
-   for feedback: the approve button reads "Approving…" during the POST and the
-   entry's action row swaps in place to "✓ Approved" / "✓ Rejected" the moment
-   the request succeeds (`suggestion-action`'s targets; the reject modal
-   reaches the entry via the `suggestion:resolved` detail's `suggestionId` +
-   `outcome`). The **feed** then reloads off the existing activity broadcast
-   (`broadcast_framework_activity`, replay-guarded; the actor sees their own
-   resolution) — **preserving the pane's scroll position** (the scroll
-   container lives inside the reloaded frame, so `context-pane` captures and
-   restores it; a reviewer working down a long feed is never thrown back to
-   the top). The acting user's **matrix** refreshes client-side: the action
-   dispatches a window `suggestion:resolved` → `matrix#refresh` (re-fetches the
-   frame with the current filter axes) so the inline diff clears. Matrix refresh
-   is acting-user-only by design — feed-live / matrix-not (Hard-Won Lesson 21).
+   instant local feedback first, and a surgical grid update by default.**
+   Because the broadcast round trip takes 1–2s in production, the actor never
+   waits on it for feedback: the approve button reads "Approving…" during the
+   POST and the entry's action row swaps in place to "✓ Approved" /
+   "✓ Rejected" the moment the request succeeds (`suggestion-action`'s
+   targets; the reject modal reaches the entry via the `suggestion:resolved`
+   detail's `suggestionId` + `outcome`). The inline (`inline=1`) response is a
+   **surgical Turbo Stream** replacing just the affected entity's frame
+   (`Frameworks::SuggestionResolutionStreams` — illustration / expectation /
+   capability / category edits, illustration creates+rejects); shapes it can't
+   address (shape-changing creates/archives, org-structure) answer **204** and
+   the client falls back to the full matrix refresh. Never widen the fallback
+   casually: the full edit-mode matrix is several MB of HTML with thousands of
+   Stimulus mounts, and re-fetching it per approval froze the tab (Hard-Won
+   Lesson 23). The `suggestion:resolved` detail carries `surgical: true|false`
+   so `matrix#refresh` knows whether to skip. The **feed** then reloads off
+   the existing activity broadcast (`broadcast_framework_activity`,
+   replay-guarded; the actor sees their own resolution) — **preserving the
+   pane's scroll position** (the scroll container lives inside the reloaded
+   frame, so `context-pane` captures and restores it; a reviewer working down
+   a long feed is never thrown back to the top). Matrix updates are
+   acting-user-only by design — feed-live / matrix-not (Hard-Won Lesson 21).
 5. **No internal categorisations surfaced** — review tiers stay invisible (§9).
 
 **Modal placement (load-bearing):** the reject modal lives on the **explorer
@@ -747,8 +753,9 @@ kebabs, all backed by the shared
   via the `Frameworks::SuggestionAuthority` controller concern.
 
 They reuse the *exact* same pieces — `suggestion-action`
-(inline approve, `inline=1` → 204), the root reject modal, and
-`suggestion:resolved` → `matrix#refresh` — so approving from the grid and from
+(inline approve, `inline=1` → surgical Turbo Stream, else 204), the root
+reject modal, and `suggestion:resolved` → `matrix#refresh` — so approving
+from the grid and from
 the feed are the same operation with the same live-update wiring (the feed
 reloads via broadcast either way). Pending **creates** (the ghost frames)
 carry the same kebab — "Approve/Reject new illustration/expectation" — so a
@@ -911,7 +918,7 @@ job via `updateSearch`. See §4a.
 - **Row expansion** (toggle hidden expanded row by capability ID). Dispatches `matrix:focus-changed` with `level: "capability"` on expand, `level: "framework"` on collapse.
 - **Cell focus** (`focusCell` on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"`. Ignores clicks that land on interactive children (buttons, links, inputs, forms, `[contenteditable]`) so inline editors inside the cell don't accidentally toggle focus.
 - **Category focus** (`focusCategory` on the category name span). Dispatches `matrix:focus-changed` with `level: "category"`. Re-click clears to framework focus.
-- **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header.
+- **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header. When the entry names a **pending suggestion**, scrolls to that suggestion's decorated element (`[data-suggestion-id]` anchor) and pulses `.suggestion-nav-highlight` on it — an expanded cell can be taller than the viewport, so cell-centering alone leaves the example off-screen; the cell/row scroll is the anchor-less fallback (the cell gets the same pulse).
 - **Resolution refresh** (`refresh` on `suggestion:resolved`) — re-fetches the matrix frame with the current filter axes so an inline approve/reject in the feed clears the now-resolved inline diff for the acting user (§12, Hard-Won Lesson 21).
 - **Squiggle → suggestion card** (`openSuggestionCard` on a decorated pending change) — stops the row/cell click and dispatches the window `suggestion:open-card` event; the context pane renders the card and a collapsed pane reveals itself (§10).
 - **URL sync** (pushState for shareability — explorer uses role/track params)
@@ -924,7 +931,7 @@ Lives on the right-hand `<aside>` element. Sole owner of:
 - **Focus portion of the browser URL**. Pushes `?focus=`, `?category_id=`, `?capability_id=`, `?level_ordinal=`, `?suggestion_id=` via `history.pushState()`; removes them when focus returns to `framework`.
 - **Suggestion focus** (`openSuggestionCard`, from an entry's discussion affordance; `onOpenSuggestionCard`, from a matrix squiggle's window-scoped `suggestion:open-card`). Sets `focus=suggestion&suggestion_id=` so the frame renders the suggestion card instead of the feed. Any explicit matrix focus action (`matrix:focus-changed`) exits it — most-specific-wins, like every other level.
 - **Initial hydration**. Reads focus params from the browser URL on connect so deep-link reloads render the filtered panel on first frame fetch. Unconditionally primes the frame `src` on connect because the pane is visible from initial render in edit mode (no lazy-until-open grace period — see Hard-Won Lesson 14).
-- **Live reload**. Observes the hidden `#framework-activity-sync-signal` element (a `signal` target). `PublishedState#broadcast_framework_activity` (and `SuggestionThread`'s equivalent for comment events) replaces it on every feed-relevant event via the per-framework `framework_activity` Turbo stream; the observer reloads the feed frame with no self-suppression (the feed frame is the only thing that re-fetches, so there's no matrix flicker, and the actor should see their own entry) — but **skips the reload while a composer textarea is focused or holds text** so a broadcast can't eat a half-written comment (§13), and **preserves the feed's scroll position across the reload** (the `overflow-y-auto` scroller lives inside the frame — a `scroller` target whose scrollTop is captured before every same-content reload and restored on `turbo:frame-load`; focus-driven `src` changes render different content and deliberately start at the top). Mirrors `assessment_sync_controller`.
+- **Live reload**. Observes the hidden `#framework-activity-sync-signal` element (a `signal` target). `PublishedState#broadcast_framework_activity` (and `SuggestionThread`'s equivalent for comment events) replaces it on every feed-relevant event via the per-framework `framework_activity` Turbo stream; the observer reloads the feed frame with no self-suppression (the feed frame is the only thing that re-fetches, so there's no matrix flicker, and the actor should see their own entry) — but **coalesces signal bursts into one reload** (~300ms debounce — one approval publishes the approval AND the applied change, each nudging the signal; Hard-Won Lesson 23), **skips the reload while a composer textarea is focused or holds text** so a broadcast can't eat a half-written comment (§13), and **preserves the feed's scroll position across the reload** (the `overflow-y-auto` scroller lives inside the frame — a `scroller` target whose scrollTop is captured before every same-content reload and restored on `turbo:frame-load`; focus-driven `src` changes render different content and deliberately start at the top). Mirrors `assessment_sync_controller`.
 
 Listens at window scope for:
 - `tree:changed@window->context-pane#onTreeChanged`
@@ -951,7 +958,7 @@ for that capability (with a cache-buster so reopening the same capability refetc
 the latest state). All add/remove/weight actions then re-render the frame in place.
 
 ### suggestion_action_controller.js (edit mode only)
-Wraps the action row on an actionable feed entry (and mounts bare on the grid kebabs' Approve items). `approve` POSTs to the suggestion's approve endpoint (`inline=1` → 204) via `@rails/request.js`, showing "Approving…" during the round trip and swapping the row to a local "✓ Approved" state on success — instant feedback, ~1-2s ahead of the broadcast-driven feed reload. Dispatches the window `suggestion:resolved` event with `{ suggestionId, outcome }` (→ `matrix#refresh`, and → other surfaces showing the same suggestion resolving in place via `onResolved`); the reject modal's dispatch carries the same detail so a rejection swaps the entry to "✓ Rejected" too. Reject is *not* handled here — it always opens the shared modal (§12).
+Wraps the action row on an actionable feed entry (and mounts bare on the grid kebabs' Approve items). `approve` POSTs to the suggestion's approve endpoint (`inline=1`) via `@rails/request.js`, showing "Approving…" during the round trip and swapping the row to a local "✓ Approved" state on success — instant feedback, ~1-2s ahead of the broadcast-driven feed reload. The response is either a surgical Turbo Stream (request.js renders it — the affected entity's frame swaps in place) or a 204 fallback. Dispatches the window `suggestion:resolved` event with `{ suggestionId, outcome, surgical }` (→ `matrix#refresh` for the non-surgical fallback only, and → other surfaces showing the same suggestion resolving in place via `onResolved` — a bare kebab mount outside the swapped frame marks itself terminal); the reject modal's dispatch carries the same detail so a rejection swaps the entry to "✓ Rejected" too. Reject is *not* handled here — it always opens the shared modal (§12).
 
 ### reject_suggestion_form_controller.js (edit mode only)
 Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `rejectSuggestionId`, points the form at that suggestion's reject endpoint (a `__SID__` path template), fills the entity label + proposed-value preview, and clears the reason. On a successful submit it dispatches `suggestion:resolved`. The modal closes via `modal#submitted`; the feed reloads via broadcast (§12).
@@ -963,10 +970,10 @@ Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `reje
 | `tree:changed` | `tree_controller` | `{ roleIds: string[], track: "ic" \| "management" \| "both" }` |
 | `framework-search:changed` | `framework_search_controller` | `{ query: string }` — trimmed text filter; triggers `matrix_controller#updateSearch` (window-scoped, since the search box sits outside the matrix element). See §4a. |
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
-| `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null }` — triggers `matrix_controller#navigateToEntity` |
+| `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, suggestionId: string \| null }` — triggers `matrix_controller#navigateToEntity`. `suggestionId` (pending suggestions only) makes navigation land on the exact decorated element — the squiggle/ghost's `[data-suggestion-id]` inside the matrix frame — with a brief `.suggestion-nav-highlight` pulse; without an anchor (resolved, or the suggestion's role filtered out) it falls back to centering the cell (which gets the same pulse) or row. |
 | `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
 | `suggestion:open-card` | `matrix_controller#openSuggestionCard` (squiggle / ghost click) | `{ suggestionId: string }` — opens that suggestion's card in the pane (`context_pane_controller#onOpenSuggestionCard`) and reveals a collapsed pane (`framework_explorer_controller#openContextPane`). The click's purpose IS to see the card, so this is the one deliberate exception to "focus never auto-opens the pane" (Lesson 8 still governs plain focus changes). |
-| `suggestion:resolved` | `suggestion_action_controller` (approve) / `reject_suggestion_form_controller` (reject) | `{ suggestionId: string, outcome: "approved" \| "rejected" }` — fired on a successful inline approve/reject (the clarification-resolve dispatch carries no detail; consumers must tolerate its absence). Triggers `matrix_controller#refresh` so the acting user's grid drops the now-resolved inline diff. The feed reloads separately via the activity broadcast (§12, Hard-Won Lesson 21). |
+| `suggestion:resolved` | `suggestion_action_controller` (approve) / `reject_suggestion_form_controller` (reject) | `{ suggestionId: string, outcome: "approved" \| "rejected", surgical: boolean }` — fired on a successful inline approve/reject (the clarification-resolve dispatch carries no detail; consumers must tolerate its absence). `surgical: true` means the response's Turbo Stream already replaced the affected frame — `matrix_controller#refresh` skips the full re-fetch and only runs as the fallback for non-surgical shapes (Hard-Won Lesson 23). The feed reloads separately via the activity broadcast (§12, Hard-Won Lesson 21). |
 
 ## Hard-Won Lessons
 
@@ -1101,23 +1108,26 @@ re-renders the ghost frame in place (errors included: a bodyless 4xx would
 blank the frame the same way, so failures re-render the frame with the
 message surfaced).
 
-### 21. Inline resolution must answer 204, and the matrix refreshes client-side
+### 21. Inline resolution answers a Turbo Stream or 204 — never a bare 200
 
 Two halves of the "actionable feed entry" wiring that are easy to get wrong:
 
-- **204, not 200.** A Turbo form submit (the reject modal) that gets a `200` with
-  an empty body makes Turbo Drive render the empty body — **blanking the page**.
-  `head :no_content` (204) makes Turbo do nothing: the modal closes via
-  `turbo:submit-end` and the page is untouched. (The approve path uses
-  `@rails/request.js`, which doesn't navigate regardless, but 204 is correct there
-  too.)
+- **A stream or a 204, never an empty 200.** A Turbo form submit (the reject
+  modal) that gets a `200` with an empty body makes Turbo Drive render the
+  empty body — **blanking the page**. The inline resolution response is either
+  a turbo-stream (processed in place, no navigation) or `head :no_content`
+  (Turbo does nothing: the modal closes via `turbo:submit-end` and the page is
+  untouched). (The approve path uses `@rails/request.js`, which doesn't
+  navigate regardless.)
 - **Feed-live, matrix-not.** The feed reloads for everyone via the activity
   broadcast, but the matrix deliberately does **not** live-reload (it would flicker
-  / reset scroll for other viewers mid-edit). So an inline approve must refresh the
-  **acting user's** matrix itself — a window `suggestion:resolved` event →
-  `matrix#refresh` (re-fetch with the current `roles[]`/`track`/`q` axes). Other
-  viewers pick up the applied edit on their next interaction. Symmetric: a future
-  grid-side approve must refresh the feed the same way.
+  / reset scroll for other viewers mid-edit). So an inline approve must update the
+  **acting user's** matrix itself — the surgical stream in the response, or, for
+  non-surgical shapes, a window `suggestion:resolved` → `matrix#refresh`
+  (re-fetch with the current `roles[]`/`track`/`q` axes; skipped when
+  `detail.surgical` — Lesson 23). Other viewers pick up the applied edit on
+  their next interaction. Symmetric: a grid-side approve refreshes the feed the
+  same way (via the broadcast).
 
 ### 22. The pane's scroll container lives INSIDE the reloaded frame — reloads must preserve it, and feedback must not wait for them
 
@@ -1127,13 +1137,21 @@ feedback ("Approve is super slow… it then takes me to the top"):
 - **Scroll**: the feed/card `overflow-y-auto` scroller is part of the frame
   content, so every `frame.reload()` replaces it and resets `scrollTop` to 0 —
   a reviewer working down a long list of pending suggestions was thrown to the
-  top after each approval. `context-pane#reloadPreservingScroll` captures the
-  `scroller` target's position before every **same-content** reload
-  (broadcast, post-submit, catch-up) and restores it on `turbo:frame-load`.
-  Focus-driven `src` changes render *different* content and deliberately start
-  at the top — `#rebuildFrameSrc` clears any saved position when it changes
-  `src`, so a scroll saved for an in-flight reload can never land on the
-  wrong content.
+  top after each approval. `context-pane#reloadPreservingScroll` captures
+  **which entry** the reviewer is on (topmost visible `li` + its offset)
+  before every **same-content** reload (broadcast, post-submit, catch-up) and
+  scrolls back to that entry on `turbo:frame-load` — entry-anchored, because a
+  pixel offset drifts one entry per action (the resolution being reloaded
+  prepends 2+ fresh entries above the reviewer's position, compounding over a
+  session). The pixel position is the fallback when the anchor entry isn't in
+  the fresh content (it lived in a discarded "load older" batch), still
+  exact-or-nothing. Focus-driven `src` changes render *different* content and
+  start at the top — with one deliberate exception: **leaving the full feed
+  for a review detour** (entry click-through narrows the feed; opening a
+  suggestion card swaps it) remembers the departure entry, and returning to
+  framework focus (the "Show all" link, collapsing the row) restores it — the
+  click-through → verify → act → return loop is exactly how a reviewer works
+  down a long list, and it used to dump them at the top on every return.
 - **Feedback**: the actor's entry only visibly changed when the broadcast
   round trip re-rendered the feed (1–2s in production) — long enough that
   users re-clicked, thinking the first click hadn't registered. Resolution
@@ -1143,10 +1161,44 @@ feedback ("Approve is super slow… it then takes me to the top"):
   and other surfaces), and the broadcast reload merely converges to the
   canonical state. Never make perceived responsiveness wait on a broadcast.
 
-Known trade-off: a reload discards "load older" batches. Restore is
+Known trade-off: a reload discards "load older" batches. When the anchor
+entry itself came from a discarded batch, the pixel fallback is
 exact-or-nothing — a saved position deeper than the fresh (first-batch)
 content starts at the top of the visibly-reset list rather than landing at
 the bottom of an unrelated stretch of feed.
+
+### 23. Never re-fetch the whole matrix per approval — the edit-mode frame is megabytes
+
+Field report ("a few times I have had an error — quit or wait for growthOS to
+respond"): every inline approve/reject dispatched `suggestion:resolved` →
+`matrix#refresh`, a full re-fetch of the edit-mode matrix frame. On the real
+me&u framework that frame measures **~6.7 MB of HTML with ~3,300 Stimulus
+controller mounts, ~3,200 forms and ~2,400 textareas** (every cell pre-renders
+its hidden inline-edit form) — each swap costs seconds of main-thread parse +
+controller teardown/connect, and consecutive approvals overlap into Chrome's
+page-unresponsive dialog. Two rules fell out:
+
+- **Resolutions update surgically.** The approve/reject response replaces just
+  the affected entity's Turbo Frame (`Frameworks::SuggestionResolutionStreams`);
+  the full refresh survives only as the fallback for shapes with off-frame
+  side-effects (draft pill, row strikethrough). A stale approval kebab that
+  lives OUTSIDE the swapped frame (row/cell kebabs) is marked terminal
+  client-side — `render_approval_kebab_items` wraps its items in a
+  `suggestion-action` mount listening for `suggestion:resolved`, and
+  `onResolved` relabels + disables them — rather than re-rendered. Accepted
+  staleness boundary (same class as the "kebab appears on next render" rule in
+  §12): passive off-frame counters — the ≥2 "N pending" pill and the compact
+  cell's "N examples" badge — keep their pre-resolution values for the acting
+  user until the next matrix render. They're informational, converge on any
+  interaction, and the alternative is re-fetching megabytes per approval.
+- **Broadcast bursts coalesce.** One approval publishes multiple feed-relevant
+  events (the approval + the applied change), each nudging the sync signal —
+  `context-pane` debounces the signal into a single feed reload (~300ms)
+  instead of re-fetching the 300KB+ feed once per event.
+
+The deeper fix (rendering the inline-edit forms lazily so the matrix frame
+itself shrinks) is tracked separately; until then, treat "re-fetch the matrix"
+as a last resort in any new explorer feature.
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 
@@ -1293,6 +1345,7 @@ line (§9).
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) + the squiggle's open-card click affordance (§10) |
 | `app/views/frameworks/explorer/concerns/approval_kebab_items.rb` | Shared §12 Approve/Reject kebab machinery — items for the row kebab, standalone kebabs for expectation cells + illustrations |
 | `app/controllers/concerns/frameworks/suggestion_authority.rb` | Resolves the viewer's `SuggestionApprovalAuthority` for controllers whose frame responses carry approval kebabs |
+| `app/controllers/concerns/frameworks/suggestion_resolution_streams.rb` | Surgical inline approve/reject responses — Turbo Streams replacing just the affected entity's frame; nil → 204 → client full-refresh fallback (Hard-Won Lesson 23) |
 | `app/views/frameworks/explorer/concerns/search_highlight.rb` | Phlex `<mark>` highlighting of search-match terms (§4a) — safe, token-AND, overlap-merged |
 | `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form; `inline_editor_value` seeds the box with the pending proposal |
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
@@ -1336,7 +1389,7 @@ line (§9).
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
-| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; create/approve/reject/amend/withdraw all dispatch `Operations::Frameworks::*` (create → `SuggestCreate`/`SuggestDelete`, always pending). approve/reject are format-aware — `inline=1` (feed/grid) → 204, else redirect (§12) |
+| `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; create/approve/reject/amend/withdraw all dispatch `Operations::Frameworks::*` (create → `SuggestCreate`/`SuggestDelete`, always pending). approve/reject are inline-aware — `inline=1` (feed/grid) → surgical Turbo Stream, else 204; non-inline → redirect (§12) |
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH → `SuggestEdit`, POST → `SuggestCreate` with the edit/suggest toggle) |
 | `app/controllers/frameworks/capabilities_controller.rb` | Inline edit on capability name **or** description (PATCH → `SuggestEdit`); add a capability (POST → `AddCapability`). Resolves the capability from the graph (incl. draft-added — Lesson 17) |
 | `app/controllers/frameworks/categories_controller.rb` | Inline edit on category name **or** description (PATCH → `SuggestEdit`); add a category (POST → `AddCategory`) |
