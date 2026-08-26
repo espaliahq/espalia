@@ -13,6 +13,7 @@
 class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::DiscussTrigger
 
   # @param illustration [FrameworkState::RoleIllustration]
   # @param framework_id [String] UUID of the framework (for the PATCH URL)
@@ -27,9 +28,14 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority] per-viewer
   #   authority — gates the pending-edit approve/reject kebab (§12). Controller
   #   frame re-renders must re-thread it (Hard-Won Lesson 13/16 class).
+  # @param discuss_context_label [String, nil] where this example sits, shown in
+  #   the "Discuss…" modal ("Strategic Thinking · L4 · Software Engineer
+  #   example"). The frame knows only the illustration, so the caller supplies
+  #   it; absent, the modal simply omits the context line.
   def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view,
                  can_reorder: false,
-                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none,
+                 discuss_context_label: nil)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
@@ -37,6 +43,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
     @mode = mode
     @can_reorder = can_reorder
     @approval_authority = approval_authority
+    @discuss_context_label = discuss_context_label
   end
 
   def view_template
@@ -110,9 +117,20 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
             preview: @pending_edit[:suggested_value].to_s
           )
         end
+        discuss_menu_item
         archive_menu_item
       end
     end
+  end
+
+  # "Discuss…" — ask about this example (the case Sophie's feedback named: an
+  # example that reads wrong for its level). Anchors the discussion on the
+  # illustration itself; the level comes from its expectation.
+  def discuss_menu_item
+    render_discuss_menu_item(
+      illustration_id: @illustration.illustration_id,
+      context_label: @discuss_context_label
+    )
   end
 
   # ↑/↓ move-within-list chevrons, hover-revealed like the pencil. The action

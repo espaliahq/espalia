@@ -78,7 +78,8 @@ class Frameworks::IllustrationsController < ApplicationController
       # so it's only resolved when a pending edit exists for the kebab to act
       # on — the common auto-applied edit skips it.
       can_reorder: can_reorder_illustrations?,
-      approval_authority: pending_edit_approval_authority
+      approval_authority: pending_edit_approval_authority,
+      discuss_context_label: discuss_context_label(@illustration)
     ), layout: false
   rescue ActiveRecord::RecordNotFound
     head :not_found
@@ -150,7 +151,8 @@ class Frameworks::IllustrationsController < ApplicationController
             illustration: illustration,
             framework_id: @framework.framework_id,
             mode: :edit,
-            can_reorder: can_reorder_illustrations?
+            can_reorder: can_reorder_illustrations?,
+            discuss_context_label: discuss_context_label(illustration)
           ),
           layout: false
         )
@@ -201,6 +203,19 @@ class Frameworks::IllustrationsController < ApplicationController
   end
 
   # Whether the re-rendered frame should carry the ↑/↓ move chevrons — the
+  # Where this example sits, for the frame's "Discuss…" kebab item — the matrix
+  # render builds the same label from its own in-memory data, so a frame swap
+  # doesn't lose it (Hard-Won Lesson 13/16 class).
+  #
+  # @param illustration [FrameworkState::RoleIllustration]
+  # @return [String, nil]
+  def discuss_context_label(illustration)
+    expectation = illustration.expectation
+    return nil unless expectation
+
+    "#{expectation.capability&.name} · L#{expectation.level_ordinal} · #{illustration.role&.name} example"
+  end
+
   # initial render gates on can_edit_structure (plus list size, which the
   # UL-level controller makes moot for a lone item: moving first-up / last-down
   # no-ops), so the swap mirrors the policy half of that gate.

@@ -21,8 +21,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       @rfid = rfid = SecureRandom.uuid_v7
       @rid = rid = SecureRandom.uuid_v7
       cat_id = SecureRandom.uuid_v7
-      cap_id = SecureRandom.uuid_v7
+      @cap_id = cap_id = SecureRandom.uuid_v7
       @eid = eid = SecureRandom.uuid_v7
+      @ill_id = SecureRandom.uuid_v7
 
       handler.create_framework(@framework_id, "Test Framework")
       handler.add_role_family(@framework_id, rfid, "Engineering")
@@ -32,7 +33,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
       handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
       handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1, "Asks clarifying questions")
-      handler.add_role_illustration(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+      handler.add_role_illustration(@framework_id, @ill_id, SecureRandom.uuid_v7,
                                     eid, rid, 1, "Seeks guidance from tech lead")
       handler.publish_version(@framework_id, "test")
     end
@@ -1013,6 +1014,34 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
   private
 
+  # Clicks a hover-revealed control by its accessible name. Selenium reports an
+  # opacity-0 control as not displayed, and pointer clicks on one flake on
+  # starved CI — so assert it exists and dispatch the click via JS (the
+  # archive-kebab precedent).
+  def js_click_by_label(label)
+    assert_selector "button[aria-label='#{label}']", visible: :all
+    page.execute_script(<<~JS, label)
+      document.querySelector(`button[aria-label='${arguments[0]}']`).click();
+    JS
+  end
+
+  def open_kebab(label) = js_click_by_label(label)
+  def open_row_kebab = open_kebab("Capability actions")
+
+  # Clicks the OPEN kebab's menu item by its leading text, then waits for the
+  # result so the click is committed before the next step. Every kebab's menu is
+  # in the DOM at once (only the open one is displayed), so filter on visibility
+  # — matching on text alone hits whichever menu rendered first.
+  def click_menu_item(label, expect_text:)
+    assert_text label
+    page.execute_script(<<~JS, label)
+      [...document.querySelectorAll("[role='menuitem']")]
+        .filter((b) => b.offsetParent !== null)
+        .find((b) => b.textContent.trim().startsWith(arguments[0])).click();
+    JS
+    assert_text expect_text
+  end
+
   # JS-sets a form field's value + dispatches input/change events — the
   # deterministic alternative to fill_in for assertion-critical values
   # (Selenium send_keys drops characters on starved CI runners).
@@ -1183,6 +1212,109 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Beta second illustration"
       assert_no_selector "button[aria-label='Move illustration up']"
+    end
+  end
+
+  # Starting a discussion from the grid — the "Discuss…" affordances (§12a).
+  # The admin is a tenant admin, which clears the suggest bar.
+  context "starting a discussion" do
+    should "ask about an expectation from the cell and land on its card" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      js_click_by_label "Discuss this expectation"
+      assert_selector "#request-clarification-modal", visible: true
+      assert_text "Strategic Thinking · L1"
+
+      within "#request-clarification-modal" do
+        js_set_field "#clarification_rationale", "Does this mean asking in writing or in the room?"
+        page.execute_script("arguments[0].requestSubmit();", find("form", match: :first))
+      end
+
+      # The pane swaps to the new discussion's card (suggestion:open-card).
+      assert_text "Does this mean asking in writing or in the room?"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        row = FrameworkState::SuggestedEdit.clarifications.pending.last
+        assert_equal "behavioural_expectation", row.target_entity_type
+        assert_equal @eid, row.target_entity_id
+      end
+    end
+
+    should "ask about a capability from the row kebab, choosing the level" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      open_row_kebab
+      click_menu_item "Discuss…", expect_text: "Start a discussion"
+      assert_selector "#request-clarification-modal", visible: true
+
+      within "#request-clarification-modal" do
+        # The row names no cell, so the level is chosen here.
+        assert_selector "#clarification_level_ordinal", visible: true
+        js_set_field "#clarification_rationale", "How does this differ from Judgement?"
+        page.execute_script("arguments[0].requestSubmit();", find("form", match: :first))
+      end
+
+      assert_text "How does this differ from Judgement?"
+      ActsAsTenant.with_tenant(@tenant) do
+        row = FrameworkState::SuggestedEdit.clarifications.pending.last
+        assert_equal "capability", row.target_entity_type
+        assert_equal @cap_id, row.target_entity_id
+      end
+    end
+
+    should "ask about one example from the illustration kebab" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Seeks guidance from tech lead"
+
+      open_kebab "Illustration actions"
+      click_menu_item "Discuss…", expect_text: "Start a discussion"
+      assert_selector "#request-clarification-modal", visible: true
+      assert_text "Strategic Thinking · L1 · Software Engineer example"
+
+      within "#request-clarification-modal" do
+        js_set_field "#clarification_rationale", "Is tech-lead guidance the right E1 example?"
+        page.execute_script("arguments[0].requestSubmit();", find("form", match: :first))
+      end
+
+      assert_text "Is tech-lead guidance the right E1 example?"
+      ActsAsTenant.with_tenant(@tenant) do
+        row = FrameworkState::SuggestedEdit.clarifications.pending.last
+        assert_equal "role_illustration", row.target_entity_type
+        assert_equal @ill_id, row.target_entity_id
+        assert_equal 1, row.proposed_attributes["level_ordinal"]
+      end
+    end
+
+    should "reach the modal on a narrow viewport" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      open_row_kebab
+      click_menu_item "Discuss…", expect_text: "Start a discussion"
+      assert_selector "#request-clarification-modal", visible: true
+    end
+
+    should "offer no Discuss affordance in view mode" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_text "Strategic Thinking"
+
+      assert_no_selector "button[aria-label='Discuss this expectation']", visible: :all
+      assert_no_selector "#request-clarification-modal", visible: :all
+      assert_no_selector "button[aria-label='Capability actions']", visible: :all
     end
   end
 

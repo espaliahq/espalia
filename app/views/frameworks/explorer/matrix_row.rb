@@ -10,6 +10,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::SearchHighlight
   include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::DiscussTrigger
 
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
@@ -131,7 +132,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
           mode: @mode,
           search_query: @search_query,
           current_person_id: @current_person_id,
-          approval_authority: @approval_authority
+          approval_authority: @approval_authority,
+          capability_name: @capability.name
         )
       end
     end
@@ -177,9 +179,10 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   #
   # toggleRow ignores clicks inside `[data-controller~='dropdown']`, so opening
   # the menu never also expands the row.
+  # Every edit-mode row has at least "Discuss…" (edit mode already carries the
+  # suggest rights a clarification needs), so the kebab is unconditional there.
   def show_row_kebab?
-    @mode == :edit && (show_archive_action? || capability_edit_actions.any? || show_binding_action? ||
-      show_move_actions?)
+    @mode == :edit
   end
 
   # "Edit roles…" — manage this capability's role bindings. A direct structural
@@ -222,11 +225,23 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
         reveal_classes: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")
       dd.menu do
         capability_edit_actions.each { |action| kebab_edit_items(action) }
+        kebab_discuss_item
         kebab_move_items if show_move_actions?
         kebab_binding_item if show_binding_action?
         kebab_archive_item if show_archive_action?
       end
     end
+  end
+
+  # "Discuss…" — ask about the capability. Unlike the cell trigger it names no
+  # level, so the modal offers this row's levels (plus "the capability as a
+  # whole") rather than assuming one.
+  def kebab_discuss_item
+    render_discuss_menu_item(
+      capability_id: @capability.capability_id,
+      context_label: @capability.name,
+      level_options: @merged_levels.map { |level| { ordinal: level[:ordinal], label: "L#{level[:ordinal]}" } }
+    )
   end
 
   # Approve (inline POST) + Reject (shared modal) for one pending field edit —
@@ -362,7 +377,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 pending_edit: ill_pending_edit_details[ill.illustration_id],
                 mode: @mode,
                 can_reorder: can_reorder,
-                approval_authority: @approval_authority
+                approval_authority: @approval_authority,
+                discuss_context_label: "#{@capability.name} · L#{ordinal} · #{role.name} example"
               )
             end
             role_pending_creates.each do |suggestion|
