@@ -19,6 +19,12 @@
 // server-rendered default in a textarea or text-like input). × and Cancel
 // remain immediate — they are explicit dismissals; Esc is the accidental one.
 //
+// Keyboard focus is managed per the APG dialog contract (audit issue #317):
+// on open, focus moves into the dialog (the first field, or the panel itself
+// while a lazy frame is still loading — with a retry once the frame lands);
+// Tab and Shift+Tab wrap within the open overlay so the background is
+// unreachable; on close, focus returns to the element that opened the modal.
+//
 // Standalone usage (co-located trigger):
 //   <div data-controller="modal" data-action="keydown.esc@window->modal#escape">
 //     <button data-action="modal#open">Open</button>
@@ -43,16 +49,25 @@ export default class extends BaseController {
   connect() {
     super.connect()
     this.boundClickOutside = this.clickOutside.bind(this)
+    this.boundTrapKeydown = this.trapKeydown.bind(this)
+    this.boundFocusOnFrameLoad = this.focusOnFrameLoad.bind(this)
   }
 
   disconnect() {
     document.removeEventListener("click", this.boundClickOutside, true)
+    document.removeEventListener("keydown", this.boundTrapKeydown, true)
     document.body.style.overflow = ""
     super.disconnect()
   }
 
   open(event) {
+    // A modal opening supersedes any pending focus-return from the one that
+    // just closed — restoring the old trigger would drop focus outside the
+    // new dialog.
+    clearTimeout(this.pendingFocusReturn)
+    clearTimeout(this.pendingFocusReturnLate)
     const trigger = event.currentTarget
+    this.triggerElement = trigger instanceof Element ? trigger : null
     this.activeOverlay = this.#resolveOverlay(trigger)
     if (!this.activeOverlay) return
     window.dispatchEvent(new CustomEvent("modal:open", {
@@ -93,6 +108,26 @@ export default class extends BaseController {
     return this.activeOverlay?.querySelector("[data-modal-target='panel']")
   }
 
+  #focusFirstField() {
+    const field = [
+      ...(this.activeOverlay?.querySelectorAll(
+        "textarea:not(:disabled), input:not([type='hidden']):not(:disabled), select:not(:disabled)",
+      ) || []),
+    ].find((el) => el.offsetParent !== null)
+    if (!field) return false
+    field.focus()
+    return true
+  }
+
+  #focusablesIn(overlay) {
+    return [
+      ...overlay.querySelectorAll(
+        "a[href], button:not(:disabled), input:not([type='hidden']):not(:disabled), " +
+          "select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])",
+      ),
+    ].filter((el) => el.offsetParent !== null)
+  }
+
   // True when the active overlay opted into the dirty guard, holds input the
   // user typed (differs from the server-rendered default), and the user
   // declines to discard it. Selects and JS-prefilled hidden fields are
@@ -127,8 +162,17 @@ export default class extends BaseController {
         document.addEventListener("click", this.boundClickOutside, true)
       })
     }
-    const focusable = overlay.querySelector("textarea, input:not([type='hidden']), select")
-    focusable && focusable.focus()
+    document.addEventListener("keydown", this.boundTrapKeydown, true)
+    // Focus moves INTO the dialog immediately — the panel itself when the
+    // content is a still-loading lazy frame — and onto the first field once
+    // the frame lands (the original open-time-only focus raced that load and
+    // left focus on <body>).
+    this.#focusFirstField() || this.#activePanel()?.focus()
+    // Once only: overlays like the delegations list and binding/level editors
+    // re-render their frames in place repeatedly — the first-field focus is
+    // for the INITIAL lazy load, never for later in-place updates (which
+    // would teleport a keyboard user back to the top after every action).
+    overlay.addEventListener("turbo:frame-load", this.boundFocusOnFrameLoad, { once: true })
   }
 
   hide() {
@@ -138,6 +182,102 @@ export default class extends BaseController {
     overlay.classList.remove("flex")
     document.body.style.overflow = ""
     document.removeEventListener("click", this.boundClickOutside, true)
+    document.removeEventListener("keydown", this.boundTrapKeydown, true)
+    overlay.removeEventListener("turbo:frame-load", this.boundFocusOnFrameLoad)
+    // APG dialog contract: focus returns to the invoker on close —
+    // immediately, so the plain-close path is deterministic in any
+    // environment, then re-asserted once on a short timer for the case
+    // where Turbo Streams riding the same response (a saved evidence cell
+    // re-render, a resolved suggestion refresh) detach the just-focused
+    // node. The invoker is re-resolved each time: the original node if it
+    // survived, its same-id replacement if a stream swapped it, or the
+    // ancestor dropdown's kebab when the invoking menu item hid with its
+    // menu. An anonymous invoker replaced by a refresh has nothing durable
+    // to return to; focus is left alone rather than guessed.
+    const trigger = this.triggerElement
+    this.triggerElement = null
+    if (!trigger) return
+    // A late frame re-render (a saved evidence cell, a refreshed matrix) can
+    // replace the invoker's whole section with identical content AFTER we
+    // focus it — every captured node reference then points at a detached
+    // tree. Capture a durable re-resolution path up front: the nearest
+    // [id] ancestor plus the kebab selector within it.
+    const anchorId = trigger.closest("[id]")?.id || null
+    const restore = () => {
+      // Another dialog opened meanwhile — its own focus management owns the
+      // keyboard now.
+      if (document.querySelector("[data-modal-target='overlay']:not(.hidden)")) return
+      const candidate =
+        (document.contains(trigger) && trigger.offsetParent !== null && trigger) ||
+        (trigger.id && document.getElementById(trigger.id)) ||
+        [
+          trigger
+            .closest("[data-controller~='dropdown']")
+            ?.querySelector("[data-dropdown-target='trigger']"),
+          anchorId
+            ? document
+                .getElementById(anchorId)
+                ?.querySelector("[data-dropdown-target='trigger']")
+            : null,
+        ].find((el) => el && document.contains(el) && el.offsetParent !== null)
+      if (candidate && document.contains(candidate) && candidate.offsetParent !== null) {
+        candidate.focus()
+      }
+    }
+    restore()
+    // Only correct — never steal: the passes re-restore solely when the
+    // return was undone (the focused node detached, dropping focus to
+    // body). Two staggered passes because the replacing re-render's timing
+    // varies with load.
+    const correct = () => {
+      const active = document.activeElement
+      if (!active || active === document.body) restore()
+    }
+    clearTimeout(this.pendingFocusReturn)
+    clearTimeout(this.pendingFocusReturnLate)
+    this.pendingFocusReturn = setTimeout(correct, 60)
+    this.pendingFocusReturnLate = setTimeout(correct, 300)
+  }
+
+  // Wrap Tab / Shift+Tab within the open overlay; focus that has escaped
+  // (or started) outside is redirected to the dialog's edge element.
+  trapKeydown(event) {
+    if (event.key !== "Tab") return
+    const overlay = this.activeOverlay
+    if (!overlay || overlay.classList.contains("hidden")) return
+    const focusables = this.#focusablesIn(overlay)
+    if (focusables.length === 0) {
+      event.preventDefault()
+      this.#activePanel()?.focus()
+      return
+    }
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    const active = document.activeElement
+    // "At an edge" includes any element that is not in the focusables list —
+    // outside the overlay entirely, or inside on a non-tabbable stop like the
+    // tabindex=-1 panel; default traversal from there would exit the dialog.
+    const offList = !focusables.includes(active)
+    if (event.shiftKey) {
+      if (offList || active === first) {
+        event.preventDefault()
+        last.focus()
+      }
+    } else if (offList || active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  // One lazy frame load after open (the evidence modal) — move focus onto
+  // the freshly-rendered first field, but never steal it back from a field
+  // the user has already reached inside the dialog.
+  focusOnFrameLoad() {
+    const overlay = this.activeOverlay
+    if (!overlay || overlay.classList.contains("hidden")) return
+    const active = document.activeElement
+    if (overlay.contains(active) && active !== this.#activePanel()) return
+    this.#focusFirstField()
   }
 
   clickOutside(event) {

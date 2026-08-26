@@ -17,6 +17,7 @@ class Views::Evidence::ModalShell < Views::Base
         class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
         role: "dialog", aria: { modal: "true" }) do
       div(class: "w-full max-w-xl lg:max-w-2xl xl:max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",
+          tabindex: "-1",
           data: { modal_target: "panel",
                   controller: "submit-fallback",
                   submit_fallback_text_value: "Couldn't save your feedback — check your connection and try again. Your text is still here.",

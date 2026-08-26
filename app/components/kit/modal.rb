@@ -95,6 +95,7 @@ class Components::Kit::Modal < Components::Base
     ) do
       div(
         class: "w-full #{SIZES[@size]} rounded-lg bg-white dark:bg-gray-900 p-5 shadow-xl",
+        tabindex: "-1",
         data: { modal_target: "panel" }
       ) do
         header
