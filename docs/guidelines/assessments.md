@@ -857,6 +857,15 @@ ActionCable broadcast → Turbo Stream replaces #assessment-sync-signal
     → turbo:frame-load → update performance pct badge
 ```
 
+**The acting user's rating changes are announced non-visually** (WCAG
+4.1.3, audit issue #318): both show views render a pre-existing polite
+live region (`#assessment-live-status`, `role="status"`, sr-only, outside
+every frame), and each rating Turbo Stream response — self / manager /
+alignment, rate or clear — updates it with server-rendered copy via
+`Assessments::TurboStreamHelpers#live_status_stream` ("Rated most of the
+time — Critical Thinking, E1"). Broadcasts never touch the region, so
+only the actor hears their own confirmation.
+
 **The rater's own broadcast echo is suppressed.** `assessment_sync_controller#listenForOwnSubmits` arms a 5-second `_suppressReloadUntil` window on the EARLIEST signal of a user-initiated form submit — `pointerdown` / `mousedown` / `click` (capture phase) against any real submit control (`button[type='submit']`, default-type `<button>` inside a form, `input[type='submit']`), plus `turbo:submit-start` as a backstop for programmatic submits. The MutationObserver bails when within the window so the rater's own broadcast doesn't trigger a redundant frame reload (flicker + scroll reset).
 
 **Focus-param merge on reload.** `#mergeFocusParams` reads `?capability=` + `?level_ordinal=` **and the whole `levels[<stable_id>]` map** from the BROWSER URL and stamps them onto the matrix frame's `src` before reload, so both the focused cell AND every card's per-capability selected level survive broadcast-driven frame reloads (the map is replaced wholesale from the browser URL, the source of truth kept current by `matrix_controller` on every chip click).

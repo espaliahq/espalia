@@ -132,6 +132,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
     contribution = primary.dig(:capability_contributions, capability_stable_id) || cap_data[:contribution]
 
     render turbo_stream: [
+      live_status_stream(cap_data: cap_data, level_code: level_code,
+        frequency: cell_data&.dig(:aligned_frequency), verb: "Agreed"),
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(

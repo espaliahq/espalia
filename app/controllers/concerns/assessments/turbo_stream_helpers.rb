@@ -18,6 +18,30 @@ module Assessments::TurboStreamHelpers
 
   private
 
+  # Announces the acting user's rating change into the page's pre-existing
+  # polite live region (WCAG 4.1.3 — audit issue #318). Reads the POST-write
+  # frequency off the fresh cell data, so the announcement is authoritative
+  # for whichever branch ran (rate / revise / confirm / clear). Rides the
+  # per-request Turbo Stream response only — broadcasts never touch the
+  # region, so other viewers hear nothing.
+  #
+  # @param cap_data [Hash] capability data from MatrixDataBuilder
+  # @param level_code [String] e.g. "E3"
+  # @param frequency [String, nil] the post-write frequency (nil = cleared)
+  # @param verb [String] "Rated" or "Agreed"
+  # @return [Turbo::Streams::TagBuilder] stream updating the live region
+  def live_status_stream(cap_data:, level_code:, frequency:, verb: "Rated")
+    capability_name = cap_data[:capability].name
+    text =
+      if frequency.present?
+        phrase = Views::Assessments::FrequencyPalette.config_for(frequency)[:phrase]
+        "#{verb} #{phrase.downcase} — #{capability_name}, #{level_code}"
+      else
+        "Rating cleared — #{capability_name}, #{level_code}"
+      end
+    turbo_stream.update("assessment-live-status", text)
+  end
+
   # @param cap_data [Hash] capability data from MatrixDataBuilder
   # @param blocked [Boolean]
   # @param block_reason [String, nil]

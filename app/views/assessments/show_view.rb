@@ -80,6 +80,10 @@ class Views::Assessments::ShowView < Views::Base
       turbo_stream_from "assessment_updates", @assignment.framework_id, @assignment.person_id
       div(id: "assessment-sync-signal", class: "hidden",
           data: { assessment_sync_target: "signal" }) { }
+      # Pre-existing polite live region for the acting user's own rating
+      # confirmations (WCAG 4.1.3 — audit issue #318). The rating Turbo
+      # Stream responses update it; broadcasts never do.
+      div(id: "assessment-live-status", role: "status", class: "sr-only") { }
 
       sticky_header
       # Main + activity sit side-by-side. When the activity sidebar
