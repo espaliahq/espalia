@@ -46,6 +46,20 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
         "Synthesises information"
       )
 
+      # Capability names are user-authored — the announcement must escape them
+      # (turbo_stream.update marks string content html_safe).
+      xss_cap_id = SecureRandom.uuid_v7
+      @xss_cap_stable = SecureRandom.uuid_v7
+      handler.add_capability(@framework_id, xss_cap_id, @xss_cap_stable, cat_id,
+        "<img src=x onerror=window.__xss=1> & Co")
+      handler.create_capability_role_binding(
+        @framework_id, SecureRandom.uuid_v7, xss_cap_id, @role_id, weight: 1.0
+      )
+      handler.set_behavioural_expectation(
+        @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7, xss_cap_id, 1,
+        "Does things"
+      )
+
       handler.publish_version(@framework_id, "test")
 
       level = FrameworkState::Level.find_by!(level_id: @level_id)
@@ -94,6 +108,30 @@ class AssessmentsLiveStatusSystemTest < ApplicationSystemTestCase
       JS
       assert_selector "#assessment-live-status",
         text: "Rating cleared — Critical Thinking, E1", visible: :all
+    end
+
+    should "render a hostile capability name as literal text, never as markup" do
+      visit assessment_path(@assignment, capability: @xss_cap_stable, level_ordinal: 1)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "submit-fallback", scope: "#rating-#{@xss_cap_stable}-1"
+
+      wrapper = "document.querySelector(\"#rating-#{@xss_cap_stable}-1 [data-controller~='dropdown']\")"
+      page.execute_script("#{wrapper}.querySelector(\"[data-dropdown-target='trigger']\").click();")
+      page.execute_script(<<~JS)
+        [...#{wrapper}.querySelectorAll("button[type=submit]")]
+          .find(b => b.textContent.includes("Consistently")).click();
+      JS
+
+      assert_selector "#assessment-live-status", text: "Rated consistently", visible: :all
+      region_state = page.evaluate_script(<<~JS)
+        (() => {
+          const r = document.getElementById("assessment-live-status");
+          return { text: r.textContent, injected: !!r.querySelector("img"), xss: !!window.__xss };
+        })()
+      JS
+      assert_includes region_state["text"], "<img src=x onerror=window.__xss=1> & Co"
+      assert_not region_state["injected"], "hostile name must not become an element"
+      assert_not region_state["xss"], "hostile name must not execute"
     end
   end
 end

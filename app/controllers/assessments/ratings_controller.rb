@@ -160,7 +160,7 @@ class Assessments::RatingsController < ApplicationController
     block_reason = primary.dig(:block_reasons, capability_stable_id)
 
     render turbo_stream: [
-      live_status_stream(cap_data: cap_data, level_code: level_code,
+      live_status_stream(cap_data: cap_data, cell_data: cell_data, level_code: level_code,
         frequency: cell_data&.dig(:current_frequency)),
       turbo_stream.replace(
         Views::Assessments::StatusPill::WRAPPER_ID,

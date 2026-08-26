@@ -26,18 +26,26 @@ module Assessments::TurboStreamHelpers
   # region, so other viewers hear nothing.
   #
   # @param cap_data [Hash] capability data from MatrixDataBuilder
+  # @param cell_data [Hash, nil] the post-write cell (nil = no cell at this
+  #   ordinal — nothing is announced rather than announcing the wrong thing)
   # @param level_code [String] e.g. "E3"
   # @param frequency [String, nil] the post-write frequency (nil = cleared)
   # @param verb [String] "Rated" or "Agreed"
-  # @return [Turbo::Streams::TagBuilder] stream updating the live region
-  def live_status_stream(cap_data:, level_code:, frequency:, verb: "Rated")
-    capability_name = cap_data[:capability].name
+  # @return [Turbo::Streams::TagBuilder, nil] stream updating the live region
+  def live_status_stream(cap_data:, cell_data:, level_code:, frequency:, verb: "Rated")
+    return nil if cell_data.nil?
+
+    # Capability names are user-authored and turbo_stream.update marks string
+    # content html_safe — escape, as every other helper in this concern does.
+    capability_name = ERB::Util.html_escape(cap_data[:capability].name)
     text =
       if frequency.present?
-        phrase = Views::Assessments::FrequencyPalette.config_for(frequency)[:phrase]
+        phrase = Views::Assessments::FrequencyPalette.phrase_for(frequency) ||
+          frequency.to_s.humanize
         "#{verb} #{phrase.downcase} — #{capability_name}, #{level_code}"
       else
-        "Rating cleared — #{capability_name}, #{level_code}"
+        cleared = verb == "Agreed" ? "Agreement" : "Rating"
+        "#{cleared} cleared — #{capability_name}, #{level_code}"
       end
     turbo_stream.update("assessment-live-status", text)
   end
