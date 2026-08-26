@@ -165,7 +165,17 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
               activeText: (a?.textContent || "").trim().slice(0, 40),
               kebabExists: !!k, kebabVisible: k ? k.offsetParent !== null : null,
               kebabCount: document.querySelectorAll("[aria-label='Feedback / evidence actions']").length,
-              overlayHidden: document.getElementById("evidence-modal-overlay")?.classList?.contains("hidden")
+              overlayHidden: document.getElementById("evidence-modal-overlay")?.classList?.contains("hidden"),
+              guardWouldBail: !!document.querySelector("[data-modal-target='overlay']:not(.hidden)"),
+              overlays: [...document.querySelectorAll("[data-modal-target='overlay']")]
+                .map(o => (o.id || "anon") + ":" + (o.classList.contains("hidden") ? "hidden" : "VISIBLE")),
+              triggerStillInDom: !!document.querySelector("[data-evidence-modal-mode-param='new']"),
+              dropdownOfTrigger: (() => {
+                const t = document.querySelector("[data-evidence-modal-mode-param='new']");
+                const d = t?.closest("[data-controller~='dropdown']");
+                const k = d?.querySelector("[data-dropdown-target='trigger']");
+                return { hasDropdown: !!d, hasKebab: !!k, kebabVisible: k ? k.offsetParent !== null : null };
+              })()
             });
           })()
         JS
