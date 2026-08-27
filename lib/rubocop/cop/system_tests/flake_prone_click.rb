@@ -49,13 +49,27 @@ module RuboCop
           (send nil? :accept_confirm ...)
         PATTERN
 
+        MSG_ESCAPE_KEY =
+          "Selenium key dispatch needs a focused, interactable target — once a " \
+          "modal opens, focus has moved into the dialog and Esc aimed at `body` " \
+          "is swallowed, so the `keydown.esc@window` handler never runs. Use " \
+          "`press_escape`. See docs/guidelines/testing.md."
+
         # Matches `.click` whose receiver is `find(<str>)` / `first(<str>)`
         # where the selector literal references a Stimulus `data-action`.
+        # The receiver is deliberately unconstrained: a SCOPED find
+        # (`row.find("[data-action=…]")`) drops its click exactly like a
+        # top-level one, and only matching `nil?` let those through.
         def_node_matcher :stimulus_action_click?, <<~PATTERN
           (send
-            (send nil? {:find :first}
+            (send _ {:find :first}
               ${str dstr} ...)
             :click ...)
+        PATTERN
+
+        # Matches `send_keys(:escape)` / `send_keys([:shift, :escape])`.
+        def_node_matcher :escape_send_keys?, <<~PATTERN
+          (send _ :send_keys ...)
         PATTERN
 
         def on_send(node)
@@ -64,6 +78,8 @@ module RuboCop
           stimulus_action_click?(node) do |selector_node|
             add_offense(node, message: MSG_STIMULUS_CLICK) if stimulus_selector?(selector_node)
           end
+
+          add_offense(node, message: MSG_ESCAPE_KEY) if escape_send_keys?(node) && escape_arg?(node)
         end
 
         private
@@ -71,6 +87,15 @@ module RuboCop
         # True when the selector literal mentions a Stimulus action binding.
         def stimulus_selector?(selector_node)
           selector_text(selector_node).include?("data-action")
+        end
+
+        # True when any argument is the :escape symbol (bare or in an array,
+        # e.g. `send_keys([:shift, :escape])`).
+        def escape_arg?(node)
+          node.arguments.any? do |arg|
+            (arg.sym_type? && arg.value == :escape) ||
+              (arg.array_type? && arg.values.any? { |v| v.sym_type? && v.value == :escape })
+          end
         end
 
         # Flattens a str or dstr (interpolated string) node to its literal text.

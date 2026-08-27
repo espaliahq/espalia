@@ -284,7 +284,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 The dropped-click flake class (Selenium's synthetic pointer click / modal-handler registration silently lost on starved CI) recurs often enough that two automated guards now steer new tests toward the JS-dispatch remedies documented in the sections below:
 
-- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the two highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), and `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
+- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it) — **including a scoped `row.find(...)`, which drops its click exactly like a top-level one** — and `send_keys(:escape)` (use `press_escape`). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
 - **CodeRabbit path instructions** (`.coderabbit.yaml`) catch the fuzzier cases a static cop can't reliably detect without false positives: navigation `click_button`/`click_link` without a retry/JS-fallback wrapper, `data-turbo-confirm` form submits via click, `fill_in` of an assertion-critical field, and read-after-click races.
 
 If you add a new JS-dispatch helper, update both the cop (if it introduces a new safe form) and the table in *Stimulus Toggle Helpers*.
@@ -407,6 +407,23 @@ assert_text "Proactively seeks guidance"
 ```
 
 This is the same primitive the suite already uses for the inline-editor display↔form toggle.
+
+## Esc Needs a Dispatched `KeyboardEvent` — `press_escape`
+
+**Use `press_escape` rather than `find("body").send_keys(:escape)`.** Stimulus binds Esc as `keydown.esc@window`, but Selenium's key dispatch needs a focused, interactable target — and once a modal opens, focus has moved *into* the dialog (the APG focus management), so keys aimed at `body` can be swallowed and the handler never runs.
+
+The failure is silent and reads as "the modal didn't close" or "confirm was never called" — indistinguishable from a real bug, which is how two of these sat on `main` being written off as CI noise.
+
+```ruby
+# WRONG — the keydown may never reach the window listener
+find("body").send_keys(:escape)
+
+# CORRECT — construct the event and dispatch it where the listener is
+press_escape
+press_escape(scope: "#evm-content")   # dispatch from an element; it bubbles
+```
+
+Same principle as the `MouseEvent` rule below: dispatch the event where the listener actually is.
 
 ## Click-Outside Listeners Need a Real `MouseEvent`
 

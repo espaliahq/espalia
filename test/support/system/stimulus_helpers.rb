@@ -334,6 +334,29 @@ module StimulusHelpers
   # +data-turbo-confirm+ dialogs, and a full-page navigation loads a fresh
   # document that resets +window.confirm+ to native on its own.
   #
+  # Dispatches an Escape keydown on the window, rather than
+  # +find("body").send_keys(:escape)+.
+  #
+  # Stimulus binds Esc as +keydown.esc@window+, but Selenium's key dispatch
+  # needs a focused, interactable target — and once a modal opens, focus has
+  # moved into the dialog (the APG focus management), so keys aimed at +body+
+  # can be swallowed and the handler never runs. The failure is silent and
+  # reads as "the modal didn't close" or "confirm was never called", which is
+  # indistinguishable from a real bug. This is the same remedy the suite
+  # already uses for click-outside listeners: construct the event and dispatch
+  # it where the listener actually is.
+  #
+  # @param scope [String, nil] CSS selector to dispatch from (bubbles to
+  #   window); defaults to the window itself
+  def press_escape(scope: nil)
+    page.execute_script(<<~JS, scope)
+      const target = arguments[0] ? document.querySelector(arguments[0]) : window;
+      (target || window).dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
+      );
+    JS
+  end
+
   # @yield the block performing the click that triggers the confirm dialog
   def auto_confirm
     page.execute_script("window.confirm = () => true;")

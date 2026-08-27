@@ -150,7 +150,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = ill_li.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "This should not be saved"
 
-      ill_li.find("button[data-action='inline-editor#cancel']", match: :first).click
+      page.execute_script(
+        "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", ill_li
+      )
 
       # Edit form hidden, display mode restored — original text visible
       assert_text "Seeks guidance from tech lead"
@@ -256,7 +258,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       textarea = add_div.find("textarea[name='illustration[description]']")
       textarea.fill_in with: "Should not be saved"
 
-      add_div.find("button[data-action='inline-editor#cancel']").click
+      page.execute_script(
+        "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", add_div
+      )
 
       assert_no_text "Should not be saved"
       assert_selector "button", text: "Add illustration"

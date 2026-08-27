@@ -128,9 +128,7 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_selector "li.pl-5", text: /I think it is/
 
     # Back to the feed — the entry now advertises the discussion.
-    click_with_retry(expect_text: "All framework activity") do
-      click_on "← Back to activity"
-    end
+    click_link_with_js_fallback("← Back to activity", expect_text: "All framework activity")
     assert_text "2 · I think it is"
   end
 

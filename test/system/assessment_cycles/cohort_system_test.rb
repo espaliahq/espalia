@@ -57,7 +57,7 @@ class AssessmentCycles::CohortSystemTest < ApplicationSystemTestCase
 
     # The cohort card lazy-loads; wait for its CTA, then follow it.
     assert_text "View progress"
-    click_link "View progress →"
+    click_link_with_js_fallback("View progress →", expect_text: "Breakdown")
 
     # The CTA must break out of the lazy card frame (data-turbo-frame=_top),
     # otherwise Turbo renders "Content missing" into the card.
@@ -90,7 +90,7 @@ class AssessmentCycles::CohortSystemTest < ApplicationSystemTestCase
     visit cohort_assessment_cycle_path(@cycle)
     assert_text "Breakdown"
 
-    click_link "By role"
+    click_link_with_js_fallback("By role", expect_text: "Engineer")
 
     assert_text "Engineer"
   end

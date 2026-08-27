@@ -285,9 +285,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # The drawer composes with the drill-in rather than growing a grid —
     # and the pins ride along into it.
     assert_selector "a[href*='capabilities'][href*='person=']", minimum: 1
-    click_with_retry(expect_text: "AT-LEVEL RATINGS BY RATER") do
-      find("a[href*='capabilities'][href*='person=']", match: :first).click
-    end
+    click_selector_with_js_fallback(
+      "a[href*='capabilities'][href*='person=']",
+      expect_text: "AT-LEVEL RATINGS BY RATER"
+    )
     assert_includes page.current_url, "pins%5B%5D=#{nia_id}"
     assert_selector "[data-drawer-card='#{nia_id}']"
 

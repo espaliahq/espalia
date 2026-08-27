@@ -85,7 +85,7 @@ class AssessmentsEvidenceEscGuardSystemTest < ApplicationSystemTestCase
     should "keep the modal open and the text intact when the user declines" do
       open_modal_and_type("A paragraph of carefully-worded feedback")
       stub_confirm(false)
-      find("body").send_keys(:escape)
+      press_escape
 
       assert_selector "#evidence-modal-overlay", visible: true
       assert_equal 1, page.evaluate_script("window.__confirmCalls")
@@ -96,7 +96,7 @@ class AssessmentsEvidenceEscGuardSystemTest < ApplicationSystemTestCase
     should "close when the user confirms the discard" do
       open_modal_and_type("Text I am willing to lose")
       stub_confirm(true)
-      find("body").send_keys(:escape)
+      press_escape
 
       assert_no_selector "#evidence-modal-overlay", visible: true
       assert_equal 1, page.evaluate_script("window.__confirmCalls")
@@ -119,7 +119,7 @@ class AssessmentsEvidenceEscGuardSystemTest < ApplicationSystemTestCase
         ta.dispatchEvent(new Event("input", { bubbles: true }));
       JS
       stub_confirm(false)
-      find("body").send_keys(:escape)
+      press_escape
 
       assert_selector "#evidence-request-modal-overlay", visible: true
       assert_equal 1, page.evaluate_script("window.__confirmCalls")
@@ -138,7 +138,7 @@ class AssessmentsEvidenceEscGuardSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-modal-overlay", visible: true
       assert_selector "#evm-content", visible: true
       stub_confirm(false)
-      find("body").send_keys(:escape)
+      press_escape
 
       assert_no_selector "#evidence-modal-overlay", visible: true
       assert_equal 0, page.evaluate_script("window.__confirmCalls")
