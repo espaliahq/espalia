@@ -84,20 +84,23 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_text "Weighs long-term impact"
   end
 
-  # A Stimulus value read off a child element is silently ignored, so the
-  # button's rest label used to degrade to the controller default ("Copy") the
-  # first time it restored — permanently, until a reload.
-  should "restore the Copy link label after the copied flash" do
+  # The clipboard controller's default feedback rewrites the button's
+  # textContent — which would erase the inline SVG on the first copy. The icon
+  # form swaps two glyphs instead.
+  should "flash the copied glyph without destroying the link icon" do
     open_suggestion_card
 
-    button = find("[data-clipboard-target='button']")
-    assert_equal "Copy link", button.text.strip
+    assert_selector "[data-clipboard-target='idle']", visible: true
+    assert_no_selector "[data-clipboard-target='copied']", visible: true
 
-    page.execute_script("arguments[0].click()", button)
-    assert_selector "[data-clipboard-target='button']", text: "Copied!"
+    page.execute_script("document.querySelector(\"[aria-label='Copy a link to this discussion']\").click()")
 
-    # The controller restores after 2s — assert the label it restores TO.
-    assert_selector "[data-clipboard-target='button']", text: "Copy link"
+    assert_selector "[data-clipboard-target='copied']", visible: true
+    assert_no_selector "[data-clipboard-target='idle']", visible: true
+
+    # Restores after the flash — with the link icon still present, not wiped.
+    assert_selector "[data-clipboard-target='idle']", visible: true
+    assert_no_selector "[data-clipboard-target='copied']", visible: true
   end
 
   should "post and reply from the pane's suggestion card with one-indent display" do

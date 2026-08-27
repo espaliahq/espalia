@@ -97,21 +97,22 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     end
   end
 
-  # "Copy link" — the discussion's shareable URL. Sharing the link is how a
-  # question reaches the person who should answer it (there are no
-  # notifications for discussions yet), so the link needs to be visible rather
-  # than something you know to lift out of the address bar.
+  # The permalink glyph — the conventional "link to this" affordance (GitHub,
+  # Linear, Notion all use it), so it reads without a label and leaves the
+  # card's title its full width.
+  #
+  # Sharing the link is how a question reaches the person who should answer it
+  # (there are no notifications for discussions yet), so it needs to be visible
+  # rather than something you know to lift out of the address bar.
   #
   # The URL rides in a visually-hidden span because the shared `clipboard`
-  # controller copies its source target's text.
+  # controller copies its source target's text; the two glyphs are its `idle` /
+  # `copied` targets, which it swaps instead of rewriting the label (rewriting
+  # would erase the inline SVG).
   def copy_link_control
     return if @permalink.blank?
 
-    # label_value belongs on the controller ROOT — a Stimulus value read off a
-    # child is silently ignored, and the button's rest label would degrade to
-    # the class default ("Copy") the first time it restores.
-    div(class: "flex items-center",
-        data: { controller: "clipboard", clipboard_label_value: "Copy link" }) do
+    div(class: "flex items-center", data: { controller: "clipboard" }) do
       # aria-hidden: this span exists only to carry the URL for the clipboard
       # controller to read; without it a screen reader announces the whole
       # UUID link before reaching the button. Copy is unaffected — it reads
@@ -120,12 +121,43 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
            data: { clipboard_target: "source" }) { @permalink }
       button(
         type: "button",
-        class: "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium " \
-               "text-gray-600 dark:text-gray-300 hover:text-primary hover:bg-primary/10 " \
+        # p-3/-m-3 around a 20px glyph gives a 44px hit target (WCAG 2.5.5)
+        # without the button claiming 44px of header height.
+        class: "inline-flex items-center justify-center p-3 -m-3 rounded " \
+               "text-gray-600 dark:text-gray-300 hover:text-primary " \
                "transition-colors cursor-pointer",
         title: "Copy a link to this discussion",
-        data: { action: "clipboard#copy", clipboard_target: "button" }
-      ) { "Copy link" }
+        aria: { label: "Copy a link to this discussion" },
+        data: { action: "clipboard#copy" }
+      ) do
+        link_glyph
+        copied_glyph
+      end
+    end
+  end
+
+  def link_glyph
+    svg(
+      xmlns: "http://www.w3.org/2000/svg", class: "w-5 h-5",
+      fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
+      aria: { hidden: "true" }, data: { clipboard_target: "idle" }
+    ) do |s|
+      s.path(
+        stroke_linecap: "round", stroke_linejoin: "round",
+        d: "M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5" \
+           "M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"
+      )
+    end
+  end
+
+  # Swapped in for two seconds on copy — the icon form of the "Copied!" flash.
+  def copied_glyph
+    svg(
+      xmlns: "http://www.w3.org/2000/svg", class: "w-5 h-5 hidden text-green-700 dark:text-green-400",
+      fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
+      aria: { hidden: "true" }, data: { clipboard_target: "copied" }
+    ) do |s|
+      s.path(stroke_linecap: "round", stroke_linejoin: "round", d: "M5 13l4 4L19 7")
     end
   end
 
