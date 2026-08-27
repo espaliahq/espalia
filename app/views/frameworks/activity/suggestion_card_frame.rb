@@ -108,7 +108,8 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # Sourced from the read model, so it is complete regardless of how old a
   # discussion is; the feed alone is recency-capped.
   def siblings_block
-    div(class: "mt-4 rounded-md border border-gray-200 dark:border-gray-700 p-3") do
+    div(id: "discussion-siblings",
+        class: "mt-4 rounded-md border border-gray-200 dark:border-gray-700 p-3") do
       h3(class: "text-[11px] font-semibold uppercase tracking-wide " \
                 "text-gray-600 dark:text-gray-300 mb-2") do
         "#{@siblings.size} other #{'discussion'.pluralize(@siblings.size)} here"
@@ -123,8 +124,10 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
         type: "button",
         class: "w-full text-left rounded px-1.5 py-1 text-xs text-gray-700 dark:text-gray-200 " \
                "hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer",
-        data: { action: "click->context-pane#openSuggestionCard", suggestion_id: sibling.suggestion_id },
-        aria: { label: "Open this discussion" }
+        # No aria-label: a fixed one would override the visible question and
+        # announce every row identically, so the rationale below IS the
+        # accessible name (the glyph is aria-hidden).
+        data: { action: "click->context-pane#openSuggestionCard", suggestion_id: sibling.suggestion_id }
       ) do
         # A speech bubble per row: signals these are clickable (plain text rows
         # read as a static list) and reuses the discussion glyph vocabulary.

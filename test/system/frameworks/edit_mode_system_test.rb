@@ -1416,7 +1416,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       # …and its sibling opens its own card, which the URL must follow.
       click_selector_with_js_fallback(
-        "button[aria-label='Open this discussion']", expect_text: "Back to activity"
+        "#discussion-siblings button", expect_text: "Back to activity"
       )
       assert_no_current_path(/suggestion_id=#{second_id}/, url: true)
       assert_includes current_url, "suggestion_id=#{@clarification_id}"
