@@ -129,7 +129,7 @@ GEM
       responders
       warden (~> 1.2.3)
     diff-lcs (2.0.0)
-    doorkeeper (5.9.3)
+    doorkeeper (5.9.6)
       railties (>= 5)
     dotenv (3.2.0)
     drb (2.2.3)
