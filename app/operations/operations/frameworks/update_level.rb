@@ -21,6 +21,7 @@ class Operations::Frameworks::UpdateLevel < Operations::Base
   parameter :title,        String, allow_blank: false
   parameter :code,         String, allow_blank: false
   parameter :is_entry,     :boolean
+  # is_entry counts as supplied when false — it's a real value, not an absence.
   requires_any_of :title, :code, :is_entry
 
   def policy_check
@@ -38,8 +39,6 @@ class Operations::Frameworks::UpdateLevel < Operations::Base
 
   private
 
-  # A supplied is_entry — true OR false — counts as an update (nil means "not
-  # supplied"; the aggregate compacts nils away).
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
   end

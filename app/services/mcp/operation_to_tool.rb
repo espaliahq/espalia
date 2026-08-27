@@ -93,19 +93,37 @@ class Mcp::OperationToTool
     end
   end
 
+  # An explicit `schema:` fragment describes the param's SHAPE — it's how a
+  # complex Hash/Array advertises its real structure instead of a bare
+  # `{ type: "object" }`. It layers ON TOP of the constraints derived from the
+  # other flags rather than replacing them: an early return here silently drops
+  # `enum` and the blank guard, shipping a schema that accepts input the
+  # operation rejects (which is the whole class of bug this file guards).
   def property_for(parameter)
-    # An explicit schema fragment (declared via `parameter ..., schema:`)
-    # wins verbatim — it's how a complex Hash/Array param advertises its
-    # real shape instead of a bare `{ type: "object" }`.
-    return parameter.schema if parameter.schema
+    derived_property(parameter).merge(parameter.schema || {})
+  end
 
-    schema = { type: TYPE_MAPPING.fetch(parameter.type, "string") }
+  def derived_property(parameter)
+    type = TYPE_MAPPING.fetch(parameter.type, "string")
+    schema = { type: type }
     schema[:enum] = parameter.allowed if parameter.allowed
-    # `allow_blank: false` → the empty string is invalid. minLength is the
-    # closest standard expression; the runtime is marginally stricter still
-    # (it also rejects whitespace-only), which no keyword captures as simply.
-    schema[:minLength] = 1 if parameter.allow_blank == false && schema[:type] == "string"
-    schema
+    schema.merge(blank_constraint(parameter, type))
+  end
+
+  # `allow_blank: false` → an empty value is invalid, expressed with whichever
+  # keyword the type uses. The runtime is marginally stricter for strings (it
+  # also rejects whitespace-only), which no keyword captures as simply.
+  #
+  # @return [Hash] empty when the parameter permits blank
+  def blank_constraint(parameter, type)
+    return {} unless parameter.allow_blank == false
+
+    case type
+    when "string" then { minLength: 1 }
+    when "array"  then { minItems: 1 }
+    when "object" then { minProperties: 1 }
+    else {}
+    end
   end
 
   # Per the MCP tool annotations spec — clients use these to decide

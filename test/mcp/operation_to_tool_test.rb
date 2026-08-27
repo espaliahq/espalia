@@ -61,6 +61,41 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     end
   end
 
+  ExplicitSchemaFixture = Class.new(Operations::Base) do
+    parameter :anchor_id, String, allow_blank: false,
+                                  schema: { type: "string", description: "Which one." }
+    parameter :kind, String, allowed: %w[a b], schema: { description: "Which kind." }
+    parameter :payload, Hash, allow_blank: false, schema: { type: "object", properties: {} }
+    def policy_check = nil
+    def perform = nil
+  end
+
+  # An explicit `schema:` describes shape; it must not silently discard the
+  # constraints the other flags imply, or the published schema accepts input
+  # the operation then rejects.
+  context "an explicit schema fragment" do
+    should "layer over the derived blank constraint, not replace it" do
+      assert_equal(
+        { type: "string", minLength: 1, description: "Which one." },
+        schema_for(ExplicitSchemaFixture)[:properties]["anchor_id"]
+      )
+    end
+
+    should "keep a derived enum" do
+      assert_equal(
+        { type: "string", enum: %w[a b], description: "Which kind." },
+        schema_for(ExplicitSchemaFixture)[:properties]["kind"]
+      )
+    end
+
+    should "use the type's own emptiness keyword" do
+      assert_equal(
+        { type: "object", minProperties: 1, properties: {} },
+        schema_for(ExplicitSchemaFixture)[:properties]["payload"]
+      )
+    end
+  end
+
   context "cross-parameter constraints" do
     should "emit no anyOf when the operation declares none" do
       schema = schema_for(UnconstrainedFixture)

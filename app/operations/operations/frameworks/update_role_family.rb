@@ -19,6 +19,8 @@ class Operations::Frameworks::UpdateRoleFamily < Operations::Base
 
   parameter :framework_id,   String, required: true
   parameter :role_family_id, String, required: true
+  # A family can't be renamed to nothing, but description and department are
+  # legitimately cleared with "" — hence allow_blank only on the name.
   parameter :name,           String, allow_blank: false
   parameter :description,    String
   parameter :department,     String
@@ -44,9 +46,6 @@ class Operations::Frameworks::UpdateRoleFamily < Operations::Base
 
   private
 
-  # At least one updatable field must be supplied. A blank name is treated as
-  # "not supplied" (a role family can't be renamed to nothing); a supplied
-  # description or department — including "" to clear it — counts.
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
   end

@@ -28,11 +28,11 @@ class Operations::Frameworks::RequestClarification < Operations::Base
   # more specific target). `requires_any_of` declares that, so it's advertised
   # in the tool schema rather than only enforced on arrival.
   parameter :capability_id,   String,  required: false, allow_blank: false, schema: {
-    type: "string", minLength: 1,
+    type: "string",
     description: "The capability to anchor on. Required unless illustration_id is given."
   }
   parameter :illustration_id, String,  required: false, allow_blank: false, schema: {
-    type: "string", minLength: 1,
+    type: "string",
     description: "A role illustration to anchor on — the most specific target, and its " \
                  "level is taken from the owning expectation. Required unless capability_id is given."
   }

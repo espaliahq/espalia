@@ -36,8 +36,6 @@ class Operations::Frameworks::UpdateRole < Operations::Base
 
   private
 
-  # At least one updatable field must be supplied (blank values are ignored —
-  # the aggregate compacts nils, so a blank field is a no-op for that attribute).
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
   end

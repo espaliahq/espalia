@@ -183,8 +183,12 @@ class Operations::Base
     # the runtime check say the same thing — the whole point of declaring it.
     # It is also the semantics partial updates need: `department: ""` is a
     # meaningful clear, and `is_entry: false` / `weight: 0` are real values.
-    # An operation wanting a stricter non-blank rule keeps its own check —
-    # JSON Schema `required` cannot express that either way.
+    # A stricter non-blank rule is `allow_blank: false` on the parameter.
+    #
+    # A present-but-null key (`{"weight": null}`) counts as NOT supplied here,
+    # while `required` inside an `anyOf` branch would call it present — but the
+    # two don't actually diverge: the property's own declared type rejects null
+    # first, so a validating client and this check agree.
     #
     # @param names [Array<Symbol>] at least two declared parameter names
     # @raise [ArgumentError] at load time for an unknown or too-short set
