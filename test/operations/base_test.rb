@@ -115,6 +115,17 @@ class Operations::BaseTest < ActiveSupport::TestCase
       assert_match(/undeclared parameter/, err.message)
     end
 
+    # A repeated name describes a group of one — i.e. a mandatory parameter,
+    # not a choice — so it must not slip past the cardinality check.
+    should "reject a group naming the same parameter twice" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :name, String
+          requires_any_of :name, :name
+        end
+      end
+    end
+
     should "reject a group of fewer than two parameters" do
       assert_raises(ArgumentError) do
         Class.new(Operations::Base) do

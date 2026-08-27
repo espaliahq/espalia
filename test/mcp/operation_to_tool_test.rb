@@ -34,10 +34,6 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     def perform = nil
   end
 
-  def schema_for(operation_class)
-    Mcp::OperationToTool.call(operation_class)[:inputSchema]
-  end
-
   BlankFixture = Class.new(Operations::Base) do
     parameter :name, String, allow_blank: false
     parameter :description, String
@@ -47,16 +43,21 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
   end
 
   context "allow_blank" do
-    should "advertise minLength on a non-blankable string" do
-      assert_equal({ type: "string", minLength: 1 }, schema_for(BlankFixture)[:properties]["name"])
+    # `\S` is the exact complement of String#blank?, so the advertised rule and
+    # the enforced one agree on whitespace-only input rather than approximating.
+    should "advertise a non-blank string precisely" do
+      assert_equal(
+        { type: "string", minLength: 1, pattern: "\\S" },
+        schema_for(BlankFixture)[:properties]["name"]
+      )
     end
 
     should "leave a clearable string unconstrained" do
       assert_equal({ type: "string" }, schema_for(BlankFixture)[:properties]["description"])
     end
 
-    # minLength is meaningless for a non-string — don't emit it.
-    should "not emit minLength for a non-string parameter" do
+    # minLength/pattern are meaningless for a non-string — don't emit them.
+    should "not emit a string constraint for a non-string parameter" do
       assert_equal({ type: "integer" }, schema_for(BlankFixture)[:properties]["level"])
     end
   end
@@ -76,7 +77,7 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
   context "an explicit schema fragment" do
     should "layer over the derived blank constraint, not replace it" do
       assert_equal(
-        { type: "string", minLength: 1, description: "Which one." },
+        { type: "string", minLength: 1, pattern: "\\S", description: "Which one." },
         schema_for(ExplicitSchemaFixture)[:properties]["anchor_id"]
       )
     end
@@ -139,5 +140,13 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
 
       branches.each { |branch| assert_equal [ :required ], branch.keys }
     end
+  end
+
+  private
+
+  # @param operation_class [Class<Operations::Base>]
+  # @return [Hash] the tool descriptor's inputSchema
+  def schema_for(operation_class)
+    Mcp::OperationToTool.call(operation_class)[:inputSchema]
   end
 end

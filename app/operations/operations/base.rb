@@ -193,7 +193,10 @@ class Operations::Base
     # @param names [Array<Symbol>] at least two declared parameter names
     # @raise [ArgumentError] at load time for an unknown or too-short set
     def requires_any_of(*names)
-      names = names.map(&:to_sym)
+      # uniq before counting: `requires_any_of :name, :name` would otherwise
+      # clear the size check while describing a group of one, quietly making
+      # `name` mandatory instead of one of several alternatives.
+      names = names.map(&:to_sym).uniq
       raise ArgumentError, "requires_any_of needs at least two parameters" if names.size < 2
 
       unknown = names - parameters.keys
