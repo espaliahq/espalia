@@ -104,14 +104,20 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       open_dropdown(scope: "#user-menu")
       screenshot("before_tenant_switch")
 
-      # Click the switch button for Beta Inc
-      within("[role='menu']") do
-        click_button "Beta Inc"
-      end
+      # Click the switch button for Beta Inc. The open menu's "SWITCH
+      # WORKSPACE" heading going invisible is the signal the POST landed and
+      # the page re-rendered — we start ON root_path, so the path alone can
+      # never tell a dropped click from a successful switch.
+      click_button_with_js_fallback("Beta Inc", expect_no_text: "SWITCH WORKSPACE")
       screenshot("after_tenant_switch")
 
-      # Switching tenants returns to the Home dashboard.
+      # Switching tenants returns to the Home dashboard...
       assert_current_path root_path
+
+      # ...and Beta Inc is now the active workspace: the switcher renders the
+      # current tenant as a plain checkmarked row, not a submit button.
+      open_dropdown(scope: "#user-menu")
+      assert_selector "div[role='menuitem']", text: "Beta Inc"
     end
   end
 end

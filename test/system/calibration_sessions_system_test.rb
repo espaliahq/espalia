@@ -215,7 +215,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # whole point of the pane frame is that a tab click doesn't reload (or
     # scroll) the page.
     page.execute_script("window.__staying = true")
-    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
+    click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
     assert_text "Strategic Thinking"
     assert_text "spread 3.0"
     assert_text "raters disagree"
@@ -318,7 +318,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # then over to the strip for the vocabulary check.
     visit calibration_session_path(@live_session_id, view: "cohort")
     assert_text "SCORE BY COHORT"
-    click_with_retry(expect_text: "RATER TENDENCY") { click_link "Rater tendency" }
+    click_link_with_js_fallback("Rater tendency", expect_text: "RATER TENDENCY")
 
     # ── The vocabulary defines itself, by KEYBOARD ──
     # The room is on a projector and the facilitator may be driving by
@@ -349,7 +349,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # is worse than none; the flip is verified visually instead.
 
     # ── Drill-in: divergence row → rater × level grid ──
-    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
+    click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
     click_link_with_js_fallback("Strategic Thinking", expect_text: "AT-LEVEL RATINGS BY RATER")
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-person-id]", minimum: 4

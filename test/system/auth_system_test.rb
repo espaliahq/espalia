@@ -35,7 +35,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       fill_in "Password", with: "password123"
       screenshot("credentials_filled")
 
-      click_button "Log in"
+      click_button_with_js_fallback("Log in", expect_selector: "#user-menu")
       screenshot("post_login_dashboard")
 
       # Sign-in lands on the Home dashboard.
@@ -50,7 +50,7 @@ class AuthSystemTest < ApplicationSystemTestCase
 
       fill_in "Email", with: "wrong@example.com"
       fill_in "Password", with: "wrongpassword"
-      click_button "Log in"
+      click_button_with_js_fallback("Log in", expect_selector: "[role='alert']")
 
       # Wait for the Turbo response to render the flash alert before asserting.
       # The URL doesn't change (POST and GET share the same path), so
