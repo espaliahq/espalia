@@ -116,6 +116,15 @@ export default class extends BaseController {
     this.#showSuggestionCard(id)
   }
 
+  // Window-event twin of openSuggestionCard, for triggers that live outside
+  // the pane — the matrix's pending-change squiggles dispatch
+  // `suggestion:open-card` with the suggestion id in the event detail.
+  onOpenSuggestionCard(event) {
+    const id = event.detail?.suggestionId
+    if (!id) return
+    this.#showSuggestionCard(id)
+  }
+
   // Dispatched by inline_editor_controller after any successful inline
   // edit or add (illustration / capability / category / expectation).
   // Reloads the panel so a freshly-landed pending suggestion appears in

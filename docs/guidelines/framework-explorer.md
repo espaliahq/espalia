@@ -825,11 +825,18 @@ rediscovering it. Mechanics:
   alongside the count, threaded by `MatrixDataBuilder` as
   `clarification_suggestion_id` (cell + capability) and
   `illustration_clarifications` (`{ count:, suggestion_id: }` per illustration).
-  With several open, the glyph opens the most recent; the card's feed context
-  carries the rest. A **just-asked** question's glyph lands on the next matrix
-  render, not immediately — the matrix deliberately isn't live (Lesson 21) and
-  re-fetching it per write is exactly what Lesson 23 forbids; the pane opening
-  the new discussion's card is the author's feedback.
+  **The glyph must reach everything it counts.** The cell's count includes
+  discussions on its *examples* (an illustration-anchored one is otherwise
+  invisible on a collapsed row). The glyph opens the **most recent**, and the
+  card lists its siblings — `SuggestionCardFrame#siblings_block`, fed by
+  `ActivityController#sibling_discussions`, which reads the other open
+  clarifications on the same cell (the expectation plus its illustrations)
+  **straight from `FrameworkState::SuggestedEdit`**. Deliberately not via the
+  activity feed: that is capped at the newest `STREAM_READ_LIMIT` events and
+  can't page older while focused, so routing "show me the rest" through it
+  would silently lose old discussions. Threading a lone id with no sibling list
+  was a real reported dead end — a cell showing "2" that could only ever reach
+  one.
 - **Asking is a grid affordance — "Discuss…"** (edit mode). Three triggers,
   all plain `click->modal#open` buttons carrying a `discuss_*` dataset (no
   per-trigger Stimulus mount — one per cell is exactly the direction Lesson 23

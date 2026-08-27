@@ -136,6 +136,30 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    # Several discussions share one grid glyph, which opens the newest — the
+    # card must list the rest or they're reachable only by hunting the feed.
+    # Sourced from the read model, so age can't hide one (the feed is capped).
+    should "list the other open discussions on the same entity" do
+      first_id = SecureRandom.uuid_v7
+      sibling_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.request_clarification(@framework_id, first_id, "capability", @cap_id,
+          author_id: @admin_person.id.to_s, rationale: "What does this capability cover?")
+        handler.request_clarification(@framework_id, sibling_id, "capability", @cap_id,
+          author_id: @admin_person.id.to_s, rationale: "A second question on this very entity")
+      end
+
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel",
+                                  focus: "suggestion", suggestion_id: first_id)
+
+      assert_response :success
+      assert_match "1 other discussion here", response.body
+      assert_match "A second question on this very entity", response.body
+      assert_select "[data-suggestion-id='#{sibling_id}']"
+    end
+
     should "fall back to the feed for an unknown suggestion" do
       sign_in @admin_user
       get framework_activity_path(@framework_id, layout: "panel",

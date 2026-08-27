@@ -94,11 +94,56 @@ class Frameworks::ActivityController < ApplicationController
       author_name: Person.find_by(id: suggestion.author_id)&.name,
       clear_path: framework_activity_path(@framework.framework_id, layout: "panel"),
       permalink: discussion_permalink(suggestion),
+      siblings: sibling_discussions(suggestion),
       approval_authority: approval_authority,
       viewer_person_id: current_person&.id,
       can_comment: current_person.present? && policy(@framework).comment_on_suggestion?,
       tenant_admin: policy(@framework).admin?
     ), layout: false
+  end
+
+  # The other open discussions anchored on the same cell, so a card is never a
+  # dead end when several share one glyph.
+  #
+  # Read straight from the read model rather than the activity feed: the feed is
+  # capped at the newest STREAM_READ_LIMIT events (and can't page older while
+  # focused), so routing "show me the rest" through it would silently lose
+  # discussions older than that window. There is no such cap here.
+  #
+  # @param suggestion [FrameworkState::SuggestedEdit]
+  # @return [Array<FrameworkState::SuggestedEdit>] oldest first, never the
+  #   suggestion itself
+  def sibling_discussions(suggestion)
+    return [] unless suggestion.clarification?
+
+    entity_ids = cell_entity_ids(suggestion)
+    return [] if entity_ids.empty?
+
+    FrameworkState::SuggestedEdit
+      .where(framework_id: @framework.framework_id, target_entity_id: entity_ids)
+      .clarifications.pending
+      .where.not(suggestion_id: suggestion.suggestion_id)
+      .order(:created_at, :id)
+      .to_a
+  end
+
+  # Every entity whose discussions belong to the same cell as this suggestion —
+  # the expectation plus its illustrations, mirroring how the cell glyph counts
+  # them. A capability-anchored question (no expectation) stands alone.
+  #
+  # @return [Array<String>]
+  def cell_entity_ids(suggestion)
+    expectation_id =
+      case suggestion.target_entity_type
+      when "behavioural_expectation" then suggestion.target_entity_id
+      when "role_illustration"
+        FrameworkState::RoleIllustration
+          .find_by(illustration_id: suggestion.target_entity_id)&.expectation_id
+      end
+    return [ suggestion.target_entity_id ] if expectation_id.nil?
+
+    [ expectation_id ] + FrameworkState::RoleIllustration
+      .where(expectation_id: expectation_id).pluck(:illustration_id)
   end
 
   # A shareable link straight to this discussion — the explorer deep link, not

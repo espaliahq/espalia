@@ -309,6 +309,8 @@ class Frameworks::MatrixDataBuilder
         .group_by(&:role_id)
         .transform_values { |ills| ills.sort_by(&:ordinal) }
 
+      discussions = cell_clarifications(expectation, illustrations)
+
       cells[ordinal] = {
         expectation: expectation,
         illustration_count: illustrations.size,
@@ -316,12 +318,14 @@ class Frameworks::MatrixDataBuilder
         bound_selected_role_ids: bound_selected_role_ids,
         pending_suggestion_count: pending_count("behavioural_expectation", expectation.expectation_id),
         pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id, "description"),
-        clarification_count: clarification_count("behavioural_expectation", expectation.expectation_id),
-        clarification_suggestion_id:
-          clarification_suggestion_id("behavioural_expectation", expectation.expectation_id),
+        # The compact cell counts discussions on the expectation AND on its
+        # examples — an illustration-anchored discussion is otherwise invisible
+        # until someone happens to expand the row.
+        clarification_count: discussions[:count],
+        clarification_suggestion_id: discussions[:open_id],
         illustration_pending_edits: illustration_pending_edits(illustrations),
         illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
-        illustration_clarifications: illustration_clarifications(illustrations),
+        illustration_clarifications: discussions[:by_illustration],
         pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
       }
     end
@@ -349,6 +353,32 @@ class Frameworks::MatrixDataBuilder
       latest = pending_latest_edit("role_illustration", ill.illustration_id, "description")
       h[ill.illustration_id] = latest if latest
     end
+  end
+
+  # Every open discussion reachable from this cell — the expectation's own plus
+  # any on its examples — resolved in ONE pass (the map is rebuilt per call, so
+  # recomputing it for the count and again for the id walked it 3-4× per cell).
+  #
+  # `open_id` is the most recent discussion — the one the glyph opens. It is
+  # safe to open "the newest" at any count because the card lists its siblings
+  # (SuggestionCardFrame#siblings_block), so the rest are one click away rather
+  # than stranded.
+  #
+  # @return [Hash] { count:, open_id:, by_illustration: }
+  def cell_clarifications(expectation, illustrations)
+    by_illustration = illustration_clarifications(illustrations)
+    own = clarification_count("behavioural_expectation", expectation.expectation_id)
+    total = own + by_illustration.values.sum { |c| c[:count] }
+
+    # Genuinely the newest across the whole cell: preferring the expectation's
+    # (or an arbitrary illustration's) would open an older card than the one the
+    # glyph claims — and "most recent" is the promise the card's sibling list is
+    # built around.
+    newest = ([ clarification_descriptor("behavioural_expectation", expectation.expectation_id) ] +
+      illustrations.map { |ill| clarification_descriptor("role_illustration", ill.illustration_id) })
+      .compact.max_by { |d| [ d[:created_at], d[:id] ] }
+
+    { count: total, open_id: newest&.dig(:suggestion_id), by_illustration: by_illustration }
   end
 
   # illustration_id => { count:, suggestion_id: } for illustrations carrying an
@@ -439,8 +469,17 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [String, nil] suggestion_id
   def clarification_suggestion_id(entity_type, entity_id)
+    clarification_descriptor(entity_type, entity_id)&.dig(:suggestion_id)
+  end
+
+  # The newest open clarification on an entity as `{ id:, suggestion_id:,
+  # created_at: }` — the full descriptor, so callers spanning several entities
+  # can compare recency rather than guessing an order.
+  #
+  # @return [Hash, nil]
+  def clarification_descriptor(entity_type, entity_id)
     entry = @pending_suggestions[[ entity_type, entity_id ]]
-    entry && entry[:latest_clarification] && entry[:latest_clarification][:suggestion_id]
+    entry && entry[:latest_clarification]
   end
 
   # Latest pending edit on a specific text field of an entity (used to render

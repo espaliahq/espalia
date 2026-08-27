@@ -1391,6 +1391,61 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "Raters read 'clarifying questions' three different ways"
     end
 
+    # The glyph opens the newest discussion; the card lists its siblings, so
+    # the second one is one click away rather than only in the feed.
+    should "reach both discussions on a cell from the glyph" do
+      second_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, second_id, "behavioural_expectation", @eid,
+          author_id: @author.id.to_s, rationale: "And does 'clarifying' mean challenging?"
+        )
+      end
+
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # Both questions are already on screen in the feed, so assert on state
+      # only the click can produce — the card, and the URL it focuses.
+      click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
+                                      expect_text: "Back to activity"
+      assert_includes current_url, "suggestion_id=#{second_id}"
+      assert_text "1 OTHER DISCUSSION HERE"
+
+      # …and its sibling opens its own card, which the URL must follow.
+      click_selector_with_js_fallback(
+        "#discussion-siblings button", expect_text: "Back to activity"
+      )
+      assert_no_current_path(/suggestion_id=#{second_id}/, url: true)
+      assert_includes current_url, "suggestion_id=#{@clarification_id}"
+    end
+
+    # An illustration-anchored discussion is invisible on a collapsed row
+    # unless the compact cell counts it.
+    should "surface a discussion on an example from the collapsed cell" do
+      question = "Is tech-lead guidance the right E1 example?"
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, SecureRandom.uuid_v7, "role_illustration", @ill_id,
+          author_id: @author.id.to_s, level_ordinal: 1, rationale: question
+        )
+      end
+
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # Row is collapsed — the cell's glyph is the only signal it exists.
+      assert_no_selector "tr[data-matrix-target='expandedRow']", visible: true
+      # The question is already in the feed, so sync on card-only text.
+      click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
+                                      expect_text: "Back to activity"
+      assert_text question
+    end
+
     should "resolve a clarification from the feed via the modal" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       sign_in_as(@admin_user)

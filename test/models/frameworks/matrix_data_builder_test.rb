@@ -342,7 +342,7 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         eid = @expectations[0].expectation_id
         pending_map = {
           [ "behavioural_expectation", eid ] => {
-            count: 0, clarification_count: 2, latest_by_field: {},
+            count: 0, clarification_count: 1, latest_by_field: {},
             latest_clarification: { id: 9, suggestion_id: "sug-newest", created_at: Time.current }
           },
           [ "capability", @capability.capability_id ] => {
@@ -357,6 +357,87 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_equal "sug-newest", cap[:cells][1][:clarification_suggestion_id]
         assert_equal "sug-cap", cap[:clarification_suggestion_id]
         assert_nil cap[:cells][2][:clarification_suggestion_id]
+      end
+
+      # The glyph opens the newest at any count — the card lists its siblings,
+      # so nothing is stranded. (This used to withhold the id above 1, which
+      # made the glyph inert.)
+      should "still open the newest discussion when several share an entity" do
+        pending_map = {
+          [ "capability", @capability.capability_id ] => {
+            count: 0, clarification_count: 2, latest_by_field: {},
+            latest_clarification: { id: 1, suggestion_id: "sug-cap", created_at: Time.current }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        cap = find_capability(result, "Strategic Thinking")
+
+        assert_equal 2, cap[:clarification_count]
+        assert_equal "sug-cap", cap[:clarification_suggestion_id]
+      end
+
+      # An illustration-anchored discussion is invisible on a collapsed row
+      # unless the compact cell counts it — the cell is the only thing on
+      # screen when the row isn't expanded.
+      should "count discussions on a cell's examples in the cell's own glyph" do
+        illustration = @expectations[0].illustrations.first
+        pending_map = {
+          [ "behavioural_expectation", @expectations[0].expectation_id ] => {
+            count: 0, clarification_count: 1, latest_by_field: {},
+            latest_clarification: { id: 2, suggestion_id: "sug-exp", created_at: 1.hour.ago }
+          },
+          [ "role_illustration", illustration.illustration_id ] => {
+            count: 0, clarification_count: 1, latest_by_field: {},
+            latest_clarification: { id: 1, suggestion_id: "sug-ill", created_at: 2.hours.ago }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        cell = find_capability(result, "Strategic Thinking")[:cells][1]
+
+        assert_equal 2, cell[:clarification_count],
+          "the cell must count its examples' discussions, not just the expectation's"
+        assert_equal "sug-exp", cell[:clarification_suggestion_id],
+          "the glyph opens the newest; the card lists the rest"
+      end
+
+      # The newest must win across the WHOLE cell — preferring the expectation's
+      # would open an older card than the glyph promises.
+      should "open an example's discussion when it is newer than the expectation's" do
+        illustration = @expectations[0].illustrations.first
+        pending_map = {
+          [ "behavioural_expectation", @expectations[0].expectation_id ] => {
+            count: 0, clarification_count: 1, latest_by_field: {},
+            latest_clarification: { id: 9, suggestion_id: "sug-exp", created_at: 2.hours.ago }
+          },
+          [ "role_illustration", illustration.illustration_id ] => {
+            count: 0, clarification_count: 1, latest_by_field: {},
+            latest_clarification: { id: 1, suggestion_id: "sug-ill", created_at: 1.hour.ago }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        cell = find_capability(result, "Strategic Thinking")[:cells][1]
+
+        assert_equal "sug-ill", cell[:clarification_suggestion_id],
+          "the example's discussion is newer, so the glyph must open it"
+      end
+
+      should "carry a single discussion's id even when it sits on an example" do
+        illustration = @expectations[0].illustrations.first
+        pending_map = {
+          [ "role_illustration", illustration.illustration_id ] => {
+            count: 0, clarification_count: 1, latest_by_field: {},
+            latest_clarification: { id: 1, suggestion_id: "sug-ill", created_at: Time.current }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        cell = find_capability(result, "Strategic Thinking")[:cells][1]
+
+        assert_equal 1, cell[:clarification_count]
+        assert_equal "sug-ill", cell[:clarification_suggestion_id]
       end
 
       should "thread illustration clarifications for the expanded row's glyph" do

@@ -160,11 +160,11 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   # (glyphs — same vocabulary as the assessment level chips), deliberately NOT
   # the pending-change wiggle: a clarification proposes no change.
   #
-  # Given a `suggestion_id` the glyph is a button that opens that discussion's
-  # card in the context pane — the same `suggestion:open-card` path the squiggle
-  # uses (`matrix#openSuggestionCard` stops the row/cell click itself). With
-  # several open, the caller passes the most recent; the card's feed context
-  # carries the rest.
+  # The glyph opens the most recent discussion's card (the same
+  # `suggestion:open-card` path the squiggle uses; `matrix#openSuggestionCard`
+  # stops the row/cell click itself). Opening "the newest" is safe at any count
+  # because the card lists its siblings — the rest are one click away rather
+  # than stranded, which was a real reported dead end.
   #
   # @param count [Integer] open clarifications on the entity
   # @param suggestion_id [String, nil] the discussion the glyph opens
@@ -189,7 +189,8 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
       attrs[:tabindex] = "0"
       attrs[:data] = attrs[:data].merge(
         suggestion_id: suggestion_id,
-        action: "click->matrix#openSuggestionCard keydown.enter->matrix#openSuggestionCard " \
+        action: "click->matrix#openSuggestionCard " \
+                "keydown.enter->matrix#openSuggestionCard " \
                 "keydown.space->matrix#openSuggestionCard"
       )
     else

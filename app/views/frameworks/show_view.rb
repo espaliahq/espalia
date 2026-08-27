@@ -559,7 +559,7 @@ class Views::Frameworks::ShowView < Views::Base
         action: "tree:changed@window->context-pane#onTreeChanged " \
                 "matrix:focus-changed@window->context-pane#onFocusChanged " \
                 "suggestion:submitted@window->context-pane#onSuggestionSubmitted " \
-                "suggestion:open-card@window->context-pane#onOpenSuggestionCard"
+                "suggestion:open-card@window->context-pane#onOpenSuggestionCard "
       }
     ) do
       # Live sync: any framework activity event broadcasts a replace of the
