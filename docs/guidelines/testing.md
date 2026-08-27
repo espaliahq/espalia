@@ -408,6 +408,18 @@ assert_text "Proactively seeks guidance"
 
 This is the same primitive the suite already uses for the inline-editor display↔form toggle.
 
+## An Assertion a Dropped Click Would Also Satisfy Is Not a Test
+
+**After a click, assert something that was NOT already true before it.** This is the failure mode behind three separate "flaky" tests on this branch, and in each case the test had never been testing its own subject:
+
+- the tenant switcher clicked "Beta Inc" then asserted `current_path == root_path` — but the test *starts* on `root_path`;
+- the theming test asserted the *absence* of the old tenant's `<style>` — absent both before the switch landed and if it never landed;
+- a JS-fallback call passed `expect_selector: "body"`, so the landed-check succeeded instantly and the fallback could never arm.
+
+All three pass when the click is silently dropped, so they only fail when something *else* drifts — which is exactly what "flaky" looks like from the outside. The fix is the same each time: pick a signal that only exists on the far side of the click (a flash, a destination-only element, a row that changed shape), and prove it bites by neutering the click and watching the assertion fail.
+
+This applies doubly to the `expect_text:` / `expect_selector:` you hand a JS-fallback helper — a signal already on the page disarms the very fallback you added.
+
 ## Esc Needs a Dispatched `KeyboardEvent` — `press_escape`
 
 **Use `press_escape` rather than `find("body").send_keys(:escape)`.** Stimulus binds Esc as `keydown.esc@window`, but Selenium's key dispatch needs a focused, interactable target — and once a modal opens, focus has moved *into* the dialog (the APG focus management), so keys aimed at `body` can be swallowed and the handler never runs.
