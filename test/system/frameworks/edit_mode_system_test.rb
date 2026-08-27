@@ -1394,11 +1394,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     # The glyph opens the newest discussion; the card lists its siblings, so
     # the second one is one click away rather than only in the feed.
     should "reach both discussions on a cell from the glyph" do
-      second_question = "And does 'clarifying' mean challenging?"
+      second_id = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do
         Frameworks::CommandHandler.new.request_clarification(
-          @framework_id, SecureRandom.uuid_v7, "behavioural_expectation", @eid,
-          author_id: @author.id.to_s, rationale: second_question
+          @framework_id, second_id, "behavioural_expectation", @eid,
+          author_id: @author.id.to_s, rationale: "And does 'clarifying' mean challenging?"
         )
       end
 
@@ -1407,17 +1407,19 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       assert_text "Edit mode"
 
-      # The glyph opens one of them…
+      # Both questions are already on screen in the feed, so assert on state
+      # only the click can produce — the card, and the URL it focuses.
       click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
                                       expect_text: "Back to activity"
+      assert_includes current_url, "suggestion_id=#{second_id}"
       assert_text "1 OTHER DISCUSSION HERE"
 
-      # …and its sibling is listed right there, opening its own card.
+      # …and its sibling opens its own card, which the URL must follow.
       click_selector_with_js_fallback(
-        "button[aria-label='Open this discussion']",
-        expect_text: "Raters read 'clarifying questions' three different ways"
+        "button[aria-label='Open this discussion']", expect_text: "Back to activity"
       )
-      assert_text "Raters read 'clarifying questions' three different ways"
+      assert_no_current_path(/suggestion_id=#{second_id}/, url: true)
+      assert_includes current_url, "suggestion_id=#{@clarification_id}"
     end
 
     # An illustration-anchored discussion is invisible on a collapsed row
@@ -1438,8 +1440,10 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       # Row is collapsed — the cell's glyph is the only signal it exists.
       assert_no_selector "tr[data-matrix-target='expandedRow']", visible: true
+      # The question is already in the feed, so sync on card-only text.
       click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
-                                      expect_text: question
+                                      expect_text: "Back to activity"
+      assert_text question
     end
 
     should "resolve a clarification from the feed via the modal" do
