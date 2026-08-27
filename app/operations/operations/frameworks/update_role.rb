@@ -16,9 +16,10 @@ class Operations::Frameworks::UpdateRole < Operations::Base
 
   parameter :framework_id, String, required: true
   parameter :role_id,      String, required: true
-  parameter :name,         String
-  parameter :code,         String
+  parameter :name,         String, allow_blank: false
+  parameter :code,         String, allow_blank: false
   parameter :track,        String, allowed: %w[ic management]
+  requires_any_of :name, :code, :track
 
   def policy_check
     authorize framework, :update_role?
@@ -26,8 +27,6 @@ class Operations::Frameworks::UpdateRole < Operations::Base
 
   # @return [Hash] { framework_id:, role_id:, name: }
   def perform
-    require_update_field!
-
     Frameworks::CommandHandler.new.update_role(
       framework.framework_id, params[:role_id],
       name: params[:name].presence, code: params[:code].presence, track: params[:track].presence
@@ -36,14 +35,6 @@ class Operations::Frameworks::UpdateRole < Operations::Base
   end
 
   private
-
-  # At least one updatable field must be supplied (blank values are ignored —
-  # the aggregate compacts nils, so a blank field is a no-op for that attribute).
-  def require_update_field!
-    return if [ params[:name], params[:code], params[:track] ].any?(&:present?)
-
-    raise Operations::Base::ParameterError, "provide a name, code, or track to update"
-  end
 
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])

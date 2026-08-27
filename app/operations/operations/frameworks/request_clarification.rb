@@ -23,19 +23,20 @@ class Operations::Frameworks::RequestClarification < Operations::Base
   approval :mcp_client
 
   parameter :framework_id,    String,  required: true
-  # Either capability_id or illustration_id identifies the anchor — exactly one
-  # is required, which JSON Schema `required` can't express for a choice, so the
-  # obligation is stated in each param's description (and enforced in #perform).
-  # When both are given the illustration wins (it is the more specific target).
-  parameter :capability_id,   String,  required: false, schema: {
+  # capability_id or illustration_id identifies the anchor — AT LEAST one, not
+  # exactly one: supplying both is legal and the illustration wins (it is the
+  # more specific target). `requires_any_of` declares that, so it's advertised
+  # in the tool schema rather than only enforced on arrival.
+  parameter :capability_id,   String,  required: false, allow_blank: false, schema: {
     type: "string",
     description: "The capability to anchor on. Required unless illustration_id is given."
   }
-  parameter :illustration_id, String,  required: false, schema: {
+  parameter :illustration_id, String,  required: false, allow_blank: false, schema: {
     type: "string",
     description: "A role illustration to anchor on — the most specific target, and its " \
                  "level is taken from the owning expectation. Required unless capability_id is given."
   }
+  requires_any_of :capability_id, :illustration_id
   # Optional for a capability-wide question; ignored for an illustration anchor
   # (the owning expectation's level is authoritative).
   parameter :level_ordinal,   Integer, required: false
@@ -49,7 +50,6 @@ class Operations::Frameworks::RequestClarification < Operations::Base
   # @return [Hash] { framework_id:, suggestion_id:, capability_id:, illustration_id:,
   #   level_ordinal:, target_entity_type: }
   def perform
-    validate_target!
     validate_rationale!
     require_author!
 
@@ -119,12 +119,6 @@ class Operations::Frameworks::RequestClarification < Operations::Base
 
   def graph_expectations
     @graph_expectations ||= graph_capabilities.flat_map(&:expectations)
-  end
-
-  def validate_target!
-    return if params[:capability_id].present? || params[:illustration_id].present?
-
-    raise Operations::Base::ParameterError, "capability_id or illustration_id is required"
   end
 
   def author_id

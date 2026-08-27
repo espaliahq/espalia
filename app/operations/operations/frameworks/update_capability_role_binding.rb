@@ -26,6 +26,7 @@ class Operations::Frameworks::UpdateCapabilityRoleBinding < Operations::Base
   parameter :binding_id,           String,  required: true
   parameter :weight,               Numeric
   parameter :individual_tolerance, Numeric
+  requires_any_of :weight, :individual_tolerance
 
   def policy_check
     authorize framework, :update_binding?
@@ -52,13 +53,11 @@ class Operations::Frameworks::UpdateCapabilityRoleBinding < Operations::Base
 
   private
 
-  # At least one lever must change, and the values must be in range, so the
-  # caller gets a clean ParameterError rather than a no-op or a downstream
-  # validation failure from the read model.
+  # Values must be in range, so the caller gets a clean ParameterError rather
+  # than a downstream validation failure from the read model. ("At least one
+  # lever supplied" is declared as `requires_any_of` above — a range is not
+  # something JSON Schema `required` can carry, so it stays here.)
   def validate_changes!
-    if params[:weight].nil? && params[:individual_tolerance].nil?
-      raise Operations::Base::ParameterError, "provide weight and/or individual_tolerance to update"
-    end
     if params[:weight] && params[:weight] <= 0
       raise Operations::Base::ParameterError, "weight must be greater than 0"
     end

@@ -69,6 +69,107 @@ class Operations::BaseTest < ActiveSupport::TestCase
     def perform = params
   end
 
+  AnyOfFixture = Class.new(Operations::Base) do
+    parameter :framework_id, String, required: true
+    parameter :name, String
+    parameter :description, String
+    parameter :is_entry, :boolean
+    requires_any_of :name, :description, :is_entry
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "requires_any_of DSL" do
+    should "accept a call supplying one of the group" do
+      out = AnyOfFixture.call(context: build_context, params: { framework_id: "fw_1", name: "Engineer" })
+      assert_equal "Engineer", out[:name]
+    end
+
+    should "raise when none of the group is supplied" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        AnyOfFixture.new(context: build_context, params: { framework_id: "fw_1" })
+      end
+      assert_match(/at least one of: name, description, is_entry/, err.message)
+    end
+
+    # "Supplied" means the key arrived, not that it carries a meaty value —
+    # clearing a field is a legitimate partial update, and matches what the
+    # emitted JSON Schema `required` asks.
+    should "count a blank string as supplied" do
+      out = AnyOfFixture.call(context: build_context, params: { framework_id: "fw_1", description: "" })
+      assert_equal "", out[:description]
+    end
+
+    should "count false as supplied" do
+      out = AnyOfFixture.call(context: build_context, params: { framework_id: "fw_1", is_entry: false })
+      assert_equal false, out[:is_entry]
+    end
+
+    should "reject an undeclared parameter name at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :name, String
+          requires_any_of :name, :nope
+        end
+      end
+      assert_match(/undeclared parameter/, err.message)
+    end
+
+    # A repeated name describes a group of one — i.e. a mandatory parameter,
+    # not a choice — so it must not slip past the cardinality check.
+    should "reject a group naming the same parameter twice" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :name, String
+          requires_any_of :name, :name
+        end
+      end
+    end
+
+    should "reject a group of fewer than two parameters" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :name, String
+          requires_any_of :name
+        end
+      end
+    end
+  end
+
+  BlankFixture = Class.new(Operations::Base) do
+    parameter :name, String, allow_blank: false
+    parameter :description, String
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "allow_blank" do
+    should "reject a supplied blank string" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        BlankFixture.new(context: build_context, params: { name: "" })
+      end
+      assert_match(/name can't be blank/, err.message)
+    end
+
+    should "reject a whitespace-only string" do
+      assert_raises(Operations::Base::ParameterError) do
+        BlankFixture.new(context: build_context, params: { name: "   " })
+      end
+    end
+
+    # Distinct from `required:` — omitting the key entirely is fine (that's a
+    # partial update); only sending an empty value is the mistake.
+    should "accept the parameter being omitted" do
+      out = BlankFixture.call(context: build_context, params: {})
+      assert_nil out[:name]
+    end
+
+    should "leave other parameters clearable" do
+      out = BlankFixture.call(context: build_context, params: { description: "" })
+      assert_equal "", out[:description]
+    end
+  end
+
   context "parameter validation" do
     should "raise when a required parameter is missing" do
       err = assert_raises(Operations::Base::ParameterError) do

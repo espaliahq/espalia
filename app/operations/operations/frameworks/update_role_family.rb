@@ -19,9 +19,12 @@ class Operations::Frameworks::UpdateRoleFamily < Operations::Base
 
   parameter :framework_id,   String, required: true
   parameter :role_family_id, String, required: true
-  parameter :name,           String
+  # A family can't be renamed to nothing, but description and department are
+  # legitimately cleared with "" — hence allow_blank only on the name.
+  parameter :name,           String, allow_blank: false
   parameter :description,    String
   parameter :department,     String
+  requires_any_of :name, :description, :department
 
   def policy_check
     authorize framework, :update_role_family?
@@ -29,8 +32,6 @@ class Operations::Frameworks::UpdateRoleFamily < Operations::Base
 
   # @return [Hash] { framework_id:, role_family_id:, name:, department: }
   def perform
-    require_update_field!
-
     Frameworks::CommandHandler.new.update_role_family(
       framework.framework_id, params[:role_family_id],
       name: params[:name].presence, description: params[:description], department: params[:department]
@@ -44,15 +45,6 @@ class Operations::Frameworks::UpdateRoleFamily < Operations::Base
   end
 
   private
-
-  # At least one updatable field must be supplied. A blank name is treated as
-  # "not supplied" (a role family can't be renamed to nothing); a supplied
-  # description or department — including "" to clear it — counts.
-  def require_update_field!
-    return if params[:name].present? || !params[:description].nil? || !params[:department].nil?
-
-    raise Operations::Base::ParameterError, "provide a name, description, or department to update"
-  end
 
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])

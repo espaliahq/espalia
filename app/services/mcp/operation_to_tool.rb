@@ -60,23 +60,76 @@ class Mcp::OperationToTool
     properties = @operation_class.parameters.transform_values { |p| property_for(p) }
     required = @operation_class.parameters.values.select(&:required).map { |p| p.name.to_s }
 
-    {
+    schema = {
       type: "object",
       properties: properties.transform_keys(&:to_s),
       required: required,
       additionalProperties: false
     }
+    schema.merge(constraint_schema)
   end
 
-  def property_for(parameter)
-    # An explicit schema fragment (declared via `parameter ..., schema:`)
-    # wins verbatim — it's how a complex Hash/Array param advertises its
-    # real shape instead of a bare `{ type: "object" }`.
-    return parameter.schema if parameter.schema
+  # `requires_any_of` groups → JSON Schema, the only way to advertise a choice
+  # between parameters (the flat `required` array above is an "all of").
+  #
+  # One group is a bare `anyOf`. Several groups must ALL hold, so they nest
+  # under `allOf` — flattening their branches into one `anyOf` would say
+  # "satisfy any one group", which is weaker than declared.
+  #
+  # Each branch carries ONLY `required`. `additionalProperties: false` doesn't
+  # see into subschemas, so a branch that also declared `properties` would have
+  # them rejected as additional — keep branches to `required` alone.
+  #
+  # @return [Hash] merged into the input schema (empty when unconstrained)
+  def constraint_schema
+    groups = @operation_class.parameter_constraints.map do |names|
+      { anyOf: names.map { |name| { required: [ name.to_s ] } } }
+    end
 
-    schema = { type: TYPE_MAPPING.fetch(parameter.type, "string") }
+    case groups.size
+    when 0 then {}
+    when 1 then groups.first
+    else { allOf: groups }
+    end
+  end
+
+  # An explicit `schema:` fragment describes the param's SHAPE — it's how a
+  # complex Hash/Array advertises its real structure instead of a bare
+  # `{ type: "object" }`. It layers ON TOP of the constraints derived from the
+  # other flags rather than replacing them: an early return here silently drops
+  # `enum` and the blank guard, shipping a schema that accepts input the
+  # operation rejects (which is the whole class of bug this file guards).
+  def property_for(parameter)
+    derived_property(parameter).merge(parameter.schema || {})
+  end
+
+  def derived_property(parameter)
+    type = TYPE_MAPPING.fetch(parameter.type, "string")
+    schema = { type: type }
     schema[:enum] = parameter.allowed if parameter.allowed
-    schema
+    schema.merge(blank_constraint(parameter, type))
+  end
+
+  # `allow_blank: false` → an empty value is invalid, expressed with whichever
+  # keyword the type uses.
+  #
+  # Strings carry `pattern` as well as `minLength`, because the runtime rejects
+  # whitespace-only too: `\S` ("contains a non-whitespace character") is the
+  # exact complement of Ruby's `String#blank?`, so the published rule and the
+  # enforced one match rather than merely approximate each other. `minLength`
+  # stays alongside it as the legible statement of intent — `\S` already
+  # implies it, but a reader (or an LLM) shouldn't have to derive that.
+  #
+  # @return [Hash] empty when the parameter permits blank
+  def blank_constraint(parameter, type)
+    return {} unless parameter.allow_blank == false
+
+    case type
+    when "string" then { minLength: 1, pattern: "\\S" }
+    when "array"  then { minItems: 1 }
+    when "object" then { minProperties: 1 }
+    else {}
+    end
   end
 
   # Per the MCP tool annotations spec — clients use these to decide

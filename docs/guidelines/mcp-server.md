@@ -443,6 +443,39 @@ precommit run. `--strict-mcp-config` restricts the session to the servers in
 `--mcp-config`, making the test hermetic regardless of the developer's own
 MCP configuration.
 
+### 15. A rule the schema can't express is a rule the client can't obey
+
+`required:` is per-parameter, so `input_schema` can only ever emit a flat
+"all of these" list. Fourteen operations enforced something richer in
+`perform` — and the advertised schema therefore told clients a call was valid
+that the operation then rejected. The gap is invisible until an MCP client
+trusts the schema.
+
+Two declarations close the common shapes; both enforce at the parameter
+boundary AND emit the matching JSON Schema, which is the point — a constraint
+that lives in only one of those two places is the bug:
+
+- **`requires_any_of :a, :b`** — at least one of a group was supplied → `anyOf`
+  (several groups nest under `allOf`; flattening them into one `anyOf` would
+  only ask that any single group hold). **"Supplied" means the key arrived,
+  not that its value is meaty**, because that is exactly what `required` asks
+  inside an `anyOf` branch. It is also what partial updates need: `""` is a
+  meaningful clear, and `false` / `0` are real values.
+- **`allow_blank: false`** — a supplied `""` is a mistake, not a clear →
+  `minLength: 1`. Distinct from `required:`: omitting the key is still fine.
+  Reach for it on names and ids; never on a description, which callers
+  legitimately clear. Adopting `requires_any_of` without it silently turns
+  "you must supply a name" into a no-op success.
+
+Branches under `anyOf`/`allOf` must carry **only** `required`.
+`additionalProperties: false` doesn't see into subschemas, so a branch that
+also declared `properties` would have them rejected as additional.
+
+Still unexpressed, and the next thing worth declaring: *conditionally*
+required params (`custom_type_label` required when `evidence_type == "other"`
+— duplicated verbatim across four evidence operations), which want
+`dependentRequired` / `if`-`then`.
+
 ## Approval declaration cheat sheet
 
 When declaring `approval` on a new Operation, consult this table:
@@ -467,7 +500,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 |------|---------|
 | **Operations layer (shared with web)** | |
 | `app/operations/operations.rb` | Module declaration |
-| `app/operations/operations/base.rb` | DSL + `#call` pipeline + `authorize` helper |
+| `app/operations/operations/base.rb` | DSL (`parameter`, `requires_any_of`, `allow_blank:`) + `#call` pipeline + `authorize` helper |
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
@@ -502,6 +535,8 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `config/routes.rb` | `/mcp`, `/oauth/*`, `/.well-known/*`, `/mcp/approvals/*` |
 | **Tests** | |
 | `test/operations/registry_test.rb` | Registry hygiene |
+| `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `allow_blank` |
+| `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf` and `minLength` |
 | `test/mcp/tool_registry_snapshot_test.rb` | Tool surface snapshot (drift guard) |
 | `test/integration/mcp_server_test.rb` | JSON-RPC unit coverage of tools/* and resources/* |
 | `test/integration/mcp_discovery_test.rb` | Well-known docs + DCR + WWW-Authenticate header |
