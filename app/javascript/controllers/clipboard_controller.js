@@ -9,11 +9,22 @@
 //             data-clipboard-target="button"
 //             data-clipboard-label-value="Copy">Copy</button>
 //   </div>
+//
+// Icon buttons swap two glyphs instead of rewriting a label — the text path
+// would destroy an inline <svg>, since it assigns textContent:
+//
+//   <div data-controller="clipboard">
+//     <span class="sr-only" data-clipboard-target="source">https://app/mcp</span>
+//     <button type="button" data-action="clipboard#copy" aria-label="Copy link">
+//       <svg data-clipboard-target="idle">…link…</svg>
+//       <svg data-clipboard-target="copied" class="hidden">…check…</svg>
+//     </button>
+//   </div>
 
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["source", "button"]
+  static targets = ["source", "button", "idle", "copied"]
   static values = {
     label: { type: String, default: "Copy" },
     copied: { type: String, default: "Copied!" }
@@ -62,12 +73,29 @@ export default class extends BaseController {
   }
 
   flashCopied() {
+    // Icon form: swap glyphs. Assigning textContent (the label form below)
+    // would wipe the button's inline <svg> on the first copy.
+    if (this.hasIdleTarget && this.hasCopiedTarget) {
+      this.#showCopiedIcon(true)
+      this.#restoreAfterFlash(() => this.#showCopiedIcon(false))
+      return
+    }
+
     if (!this.hasButtonTarget) return
 
     this.buttonTarget.textContent = this.copiedValue
+    this.#restoreAfterFlash(() => { this.buttonTarget.textContent = this.labelValue })
+  }
+
+  #showCopiedIcon(copied) {
+    this.idleTarget.classList.toggle("hidden", copied)
+    this.copiedTarget.classList.toggle("hidden", !copied)
+  }
+
+  #restoreAfterFlash(restore) {
     if (this._timer) clearTimeout(this._timer)
     this._timer = setTimeout(() => {
-      this.buttonTarget.textContent = this.labelValue
+      restore()
       this._timer = null
     }, 2000)
   }

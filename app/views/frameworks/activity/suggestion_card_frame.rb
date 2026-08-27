@@ -19,19 +19,21 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # @param comments [Array<FrameworkState::SuggestionComment>]
   # @param author_name [String, nil]
   # @param clear_path [String] URL back to the framework-wide feed
+  # @param permalink [String, nil] absolute, shareable link to this discussion
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority]
   # @param viewer_person_id [String, nil]
   # @param can_comment [Boolean]
   # @param tenant_admin [Boolean]
   def initialize(framework:, suggestion:, comments:, author_name:, clear_path:,
                  approval_authority:, viewer_person_id:, can_comment:, tenant_admin: false,
-                 alert: nil)
+                 alert: nil, permalink: nil)
     @framework = framework
     @suggestion = suggestion
     @comments = comments
     @alert = alert
     @author_name = author_name
     @clear_path = clear_path
+    @permalink = permalink
     @approval_authority = approval_authority
     @viewer_person_id = viewer_person_id
     @can_comment = can_comment
@@ -72,20 +74,90 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
 
   def header
     div(class: "px-4 py-3 border-b border-gray-200 dark:border-gray-700") do
-      a(
-        href: @clear_path,
-        class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary inline-block",
-        data: {
-          turbo_frame: "suggestion-panel",
-          action: "click->context-pane#clearFocus"
-        }
-      ) { "← Back to activity" }
+      # Copy link rides the back-link row, which is otherwise empty — putting it
+      # beside the title stole enough width to truncate the card's own identity
+      # ("Clarify · Expect…"), and a utility control shouldn't cost the heading.
+      div(class: "flex items-center justify-between gap-2") do
+        a(
+          href: @clear_path,
+          class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary inline-block",
+          data: {
+            turbo_frame: "suggestion-panel",
+            action: "click->context-pane#clearFocus"
+          }
+        ) { "← Back to activity" }
+        copy_link_control
+      end
       div(class: "mt-1 flex items-center justify-between gap-2") do
         h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") do
           "#{kind_label} · #{entity_label}"
         end
         status_pill
       end
+    end
+  end
+
+  # The permalink glyph — the conventional "link to this" affordance (GitHub,
+  # Linear, Notion all use it), so it reads without a label and leaves the
+  # card's title its full width.
+  #
+  # Sharing the link is how a question reaches the person who should answer it
+  # (there are no notifications for discussions yet), so it needs to be visible
+  # rather than something you know to lift out of the address bar.
+  #
+  # The URL rides in a visually-hidden span because the shared `clipboard`
+  # controller copies its source target's text; the two glyphs are its `idle` /
+  # `copied` targets, which it swaps instead of rewriting the label (rewriting
+  # would erase the inline SVG).
+  def copy_link_control
+    return if @permalink.blank?
+
+    div(class: "flex items-center", data: { controller: "clipboard" }) do
+      # aria-hidden: this span exists only to carry the URL for the clipboard
+      # controller to read; without it a screen reader announces the whole
+      # UUID link before reaching the button. Copy is unaffected — it reads
+      # textContent, not the accessibility tree.
+      span(class: "sr-only", aria: { hidden: "true" },
+           data: { clipboard_target: "source" }) { @permalink }
+      button(
+        type: "button",
+        # p-3/-m-3 around a 20px glyph gives a 44px hit target (WCAG 2.5.5)
+        # without the button claiming 44px of header height.
+        class: "inline-flex items-center justify-center p-3 -m-3 rounded " \
+               "text-gray-600 dark:text-gray-300 hover:text-primary " \
+               "transition-colors cursor-pointer",
+        title: "Copy a link to this discussion",
+        aria: { label: "Copy a link to this discussion" },
+        data: { action: "clipboard#copy" }
+      ) do
+        link_glyph
+        copied_glyph
+      end
+    end
+  end
+
+  def link_glyph
+    svg(
+      xmlns: "http://www.w3.org/2000/svg", class: "w-5 h-5",
+      fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
+      aria: { hidden: "true" }, data: { clipboard_target: "idle" }
+    ) do |s|
+      s.path(
+        stroke_linecap: "round", stroke_linejoin: "round",
+        d: "M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5" \
+           "M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"
+      )
+    end
+  end
+
+  # Swapped in for two seconds on copy — the icon form of the "Copied!" flash.
+  def copied_glyph
+    svg(
+      xmlns: "http://www.w3.org/2000/svg", class: "w-5 h-5 hidden text-green-700 dark:text-green-400",
+      fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
+      aria: { hidden: "true" }, data: { clipboard_target: "copied" }
+    ) do |s|
+      s.path(stroke_linecap: "round", stroke_linejoin: "round", d: "M5 13l4 4L19 7")
     end
   end
 

@@ -93,11 +93,29 @@ class Frameworks::ActivityController < ApplicationController
       alert: flash[:alert],
       author_name: Person.find_by(id: suggestion.author_id)&.name,
       clear_path: framework_activity_path(@framework.framework_id, layout: "panel"),
+      permalink: discussion_permalink(suggestion),
       approval_authority: approval_authority,
       viewer_person_id: current_person&.id,
       can_comment: current_person.present? && policy(@framework).comment_on_suggestion?,
       tenant_admin: policy(@framework).admin?
     ), layout: false
+  end
+
+  # A shareable link straight to this discussion — the explorer deep link, not
+  # the standalone suggestion page, so whoever opens it lands on the discussion
+  # WITH the framework loaded around it (the grid context is usually the point
+  # of sharing an anchored question). `context_pane_controller#hydrateFromUrl`
+  # reads these params on connect and opens the card.
+  #
+  # Built from `request.base_url` so the link carries whichever host the sharer
+  # is actually on, rather than a configured canonical that may not match.
+  #
+  # @param suggestion [FrameworkState::SuggestedEdit]
+  # @return [String]
+  def discussion_permalink(suggestion)
+    request.base_url + edit_framework_path(
+      @framework.framework_id, focus: "suggestion", suggestion_id: suggestion.suggestion_id
+    )
   end
 
   # URL for the next (older) batch — preserves the active focus/role scope so

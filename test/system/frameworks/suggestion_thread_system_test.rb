@@ -66,6 +66,43 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_text "Weighs long-term impact"
   end
 
+  # The permalink is how a question reaches the person who should answer it —
+  # there are no notifications for discussions yet. So the link the card hands
+  # you has to survive a cold visit, not just look right.
+  should "reopen the discussion for someone arriving cold on the copied link" do
+    open_suggestion_card
+
+    permalink = find("[data-clipboard-target='source']", visible: :all).text.strip
+    assert_includes permalink, "focus=suggestion"
+
+    # Leave the explorer entirely, then arrive on the link as a recipient would.
+    visit frameworks_path
+    assert_no_text "Back to activity"
+
+    visit permalink
+    assert_text "Back to activity"
+    assert_text "Weighs long-term impact"
+  end
+
+  # The clipboard controller's default feedback rewrites the button's
+  # textContent — which would erase the inline SVG on the first copy. The icon
+  # form swaps two glyphs instead.
+  should "flash the copied glyph without destroying the link icon" do
+    open_suggestion_card
+
+    assert_selector "[data-clipboard-target='idle']", visible: true
+    assert_no_selector "[data-clipboard-target='copied']", visible: true
+
+    page.execute_script("document.querySelector(\"[aria-label='Copy a link to this discussion']\").click()")
+
+    assert_selector "[data-clipboard-target='copied']", visible: true
+    assert_no_selector "[data-clipboard-target='idle']", visible: true
+
+    # Restores after the flash — with the link icon still present, not wiped.
+    assert_selector "[data-clipboard-target='idle']", visible: true
+    assert_no_selector "[data-clipboard-target='copied']", visible: true
+  end
+
   should "post and reply from the pane's suggestion card with one-indent display" do
     open_suggestion_card
 
