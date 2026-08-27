@@ -316,9 +316,11 @@ class Frameworks::MatrixDataBuilder
         bound_selected_role_ids: bound_selected_role_ids,
         pending_suggestion_count: pending_count("behavioural_expectation", expectation.expectation_id),
         pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id, "description"),
-        clarification_count: clarification_count("behavioural_expectation", expectation.expectation_id),
-        clarification_suggestion_id:
-          clarification_suggestion_id("behavioural_expectation", expectation.expectation_id),
+        # The compact cell counts discussions on the expectation AND on its
+        # examples — an illustration-anchored discussion is otherwise invisible
+        # until someone happens to expand the row.
+        clarification_count: cell_clarification_count(expectation, illustrations),
+        clarification_suggestion_id: cell_clarification_suggestion_id(expectation, illustrations),
         illustration_pending_edits: illustration_pending_edits(illustrations),
         illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
         illustration_clarifications: illustration_clarifications(illustrations),
@@ -349,6 +351,27 @@ class Frameworks::MatrixDataBuilder
       latest = pending_latest_edit("role_illustration", ill.illustration_id, "description")
       h[ill.illustration_id] = latest if latest
     end
+  end
+
+  # Every open discussion reachable from this cell — the expectation's own plus
+  # any on its examples.
+  #
+  # @return [Integer]
+  def cell_clarification_count(expectation, illustrations)
+    clarification_count("behavioural_expectation", expectation.expectation_id) +
+      illustration_clarifications(illustrations).values.sum { |c| c[:count] }
+  end
+
+  # The single discussion to open on click — only meaningful when the cell holds
+  # exactly one. With several, the glyph opens the cell-focused feed instead, so
+  # every discussion it counts is reachable (a lone id would strand the rest).
+  #
+  # @return [String, nil]
+  def cell_clarification_suggestion_id(expectation, illustrations)
+    return nil unless cell_clarification_count(expectation, illustrations) == 1
+
+    clarification_suggestion_id("behavioural_expectation", expectation.expectation_id) ||
+      illustration_clarifications(illustrations).values.first&.dig(:suggestion_id)
   end
 
   # illustration_id => { count:, suggestion_id: } for illustrations carrying an

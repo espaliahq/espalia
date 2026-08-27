@@ -158,6 +158,8 @@ class Views::Frameworks::ShowView < Views::Base
       actions << "keydown.esc@window->modal#escape"
       # A squiggle click opens a suggestion card — reveal the pane if collapsed.
       actions << "suggestion:open-card@window->framework-explorer#openContextPane"
+      # Same deliberate reveal exception — the click's purpose IS to see them.
+      actions << "discussion:open-list@window->framework-explorer#openContextPane"
     end
     { controller: controllers.join(" "), action: actions.join(" ") }
   end
@@ -559,7 +561,8 @@ class Views::Frameworks::ShowView < Views::Base
         action: "tree:changed@window->context-pane#onTreeChanged " \
                 "matrix:focus-changed@window->context-pane#onFocusChanged " \
                 "suggestion:submitted@window->context-pane#onSuggestionSubmitted " \
-                "suggestion:open-card@window->context-pane#onOpenSuggestionCard"
+                "suggestion:open-card@window->context-pane#onOpenSuggestionCard " \
+                "discussion:open-list@window->context-pane#onOpenDiscussionList"
       }
     ) do
       # Live sync: any framework activity event broadcasts a replace of the

@@ -169,11 +169,15 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   # @param count [Integer] open clarifications on the entity
   # @param suggestion_id [String, nil] the discussion the glyph opens
   # @return [void] renders nothing when count is zero
-  def render_clarification_glyph(count, suggestion_id: nil)
+  def render_clarification_glyph(count, suggestion_id: nil, cell: nil)
     return unless count.to_i.positive?
 
     noun = "open #{'discussion'.pluralize(count)}"
-    title = suggestion_id ? "#{count} #{noun} — view" : "#{count} #{noun} — see the activity pane"
+    title =
+      if suggestion_id then "#{count} #{noun} — view"
+      elsif cell then "#{count} #{noun} here — view them"
+      else "#{count} #{noun} — see the activity pane"
+      end
     attrs = {
       class: "inline-flex items-center gap-0.5 ml-1 align-middle rounded-full " \
              "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-gray-600 dark:text-gray-300 shrink-0",
@@ -182,16 +186,21 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
       data: { glyph: "clarification" }
     }
 
-    if suggestion_id
+    if suggestion_id || cell
       attrs[:class] += " cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 " \
                        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60"
       attrs[:role] = "button"
       attrs[:tabindex] = "0"
+      # One discussion opens straight into its card. Several open the pane
+      # focused on the cell, which lists them all — a single id would strand
+      # every discussion the count advertises but the click can't reach.
+      action = suggestion_id ? "matrix#openSuggestionCard" : "matrix#openCellDiscussions"
       attrs[:data] = attrs[:data].merge(
         suggestion_id: suggestion_id,
-        action: "click->matrix#openSuggestionCard keydown.enter->matrix#openSuggestionCard " \
-                "keydown.space->matrix#openSuggestionCard"
-      )
+        capability_id: cell && cell[:capability_id],
+        level_ordinal: cell && cell[:level_ordinal],
+        action: "click->#{action} keydown.enter->#{action} keydown.space->#{action}"
+      ).compact
     else
       attrs[:role] = "img"
     end

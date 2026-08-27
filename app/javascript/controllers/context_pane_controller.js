@@ -110,6 +110,22 @@ export default class extends BaseController {
   // Window-event twin of openSuggestionCard, for triggers that live outside
   // the pane — the matrix's pending-change squiggles dispatch
   // `suggestion:open-card` with the suggestion id in the event detail.
+  // A cell's glyph with several discussions: narrow the feed to that cell so
+  // every discussion anchored there is listed (each row opens its own card).
+  onOpenDiscussionList(event) {
+    const { capabilityId, levelOrdinal } = event.detail || {}
+    if (!capabilityId) return
+
+    this.#trackFeedDeparture("cell")
+    this.state.focus = "cell"
+    this.state.capabilityId = capabilityId
+    this.state.levelOrdinal = levelOrdinal ?? null
+    this.state.suggestionId = null
+    this.state.categoryId = null
+    this.#rebuildFrameSrc()
+    this.#pushBrowserUrl()
+  }
+
   onOpenSuggestionCard(event) {
     const id = event.detail?.suggestionId
     if (!id) return

@@ -1391,6 +1391,53 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "Raters read 'clarifying questions' three different ways"
     end
 
+    # The glyph counts every discussion on the cell — clicking it must reach
+    # all of them, not just the newest. A second discussion used to be
+    # unreachable from the grid entirely.
+    should "reach both discussions on a cell from the glyph" do
+      second_question = "And does 'clarifying' mean challenging?"
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, SecureRandom.uuid_v7, "behavioural_expectation", @eid,
+          author_id: @author.id.to_s, rationale: second_question
+        )
+      end
+
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      click_selector_with_js_fallback "[data-glyph='clarification'][data-capability-id]",
+                                      expect_text: second_question
+
+      # Both are listed, so either can be opened — not just the newest.
+      assert_text "Raters read 'clarifying questions' three different ways"
+      assert_text second_question
+    end
+
+    # An illustration-anchored discussion is invisible on a collapsed row
+    # unless the compact cell counts it.
+    should "surface a discussion on an example from the collapsed cell" do
+      question = "Is tech-lead guidance the right E1 example?"
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.request_clarification(
+          @framework_id, SecureRandom.uuid_v7, "role_illustration", @ill_id,
+          author_id: @author.id.to_s, level_ordinal: 1, rationale: question
+        )
+      end
+
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+
+      # Row is collapsed — the cell's glyph is the only signal it exists.
+      assert_no_selector "tr[data-matrix-target='expandedRow']", visible: true
+      click_selector_with_js_fallback "[data-glyph='clarification'][data-capability-id]",
+                                      expect_text: question
+    end
+
     should "resolve a clarification from the feed via the modal" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       sign_in_as(@admin_user)

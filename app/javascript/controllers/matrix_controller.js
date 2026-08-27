@@ -747,6 +747,21 @@ export default class extends BaseController {
   // framework_explorer_controller reveals the pane if it was collapsed).
   // stopPropagation keeps the click from also toggling the row / focusing the
   // cell underneath the decorated text.
+  // A cell with SEVERAL open discussions can't open "the" card — focus the
+  // pane on that cell instead, where the feed lists every discussion anchored
+  // there. Same deliberate pane-reveal exception as openSuggestionCard: the
+  // click's whole purpose is to see them.
+  openCellDiscussions(event) {
+    const { capabilityId, levelOrdinal } = event.currentTarget?.dataset || {}
+    if (!capabilityId) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    window.dispatchEvent(new CustomEvent("discussion:open-list", {
+      detail: { capabilityId, levelOrdinal: levelOrdinal ? parseInt(levelOrdinal, 10) : null }
+    }))
+  }
+
   openSuggestionCard(event) {
     const suggestionId = event.currentTarget?.dataset?.suggestionId
     if (!suggestionId) return
