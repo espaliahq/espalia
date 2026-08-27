@@ -370,10 +370,15 @@ class Frameworks::MatrixDataBuilder
     own = clarification_count("behavioural_expectation", expectation.expectation_id)
     total = own + by_illustration.values.sum { |c| c[:count] }
 
-    open_id = clarification_suggestion_id("behavioural_expectation", expectation.expectation_id) ||
-      by_illustration.values.first&.dig(:suggestion_id)
+    # Genuinely the newest across the whole cell: preferring the expectation's
+    # (or an arbitrary illustration's) would open an older card than the one the
+    # glyph claims — and "most recent" is the promise the card's sibling list is
+    # built around.
+    newest = ([ clarification_descriptor("behavioural_expectation", expectation.expectation_id) ] +
+      illustrations.map { |ill| clarification_descriptor("role_illustration", ill.illustration_id) })
+      .compact.max_by { |d| [ d[:created_at], d[:id] ] }
 
-    { count: total, open_id: open_id, by_illustration: by_illustration }
+    { count: total, open_id: newest&.dig(:suggestion_id), by_illustration: by_illustration }
   end
 
   # illustration_id => { count:, suggestion_id: } for illustrations carrying an
@@ -464,8 +469,17 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [String, nil] suggestion_id
   def clarification_suggestion_id(entity_type, entity_id)
+    clarification_descriptor(entity_type, entity_id)&.dig(:suggestion_id)
+  end
+
+  # The newest open clarification on an entity as `{ id:, suggestion_id:,
+  # created_at: }` — the full descriptor, so callers spanning several entities
+  # can compare recency rather than guessing an order.
+  #
+  # @return [Hash, nil]
+  def clarification_descriptor(entity_type, entity_id)
     entry = @pending_suggestions[[ entity_type, entity_id ]]
-    entry && entry[:latest_clarification] && entry[:latest_clarification][:suggestion_id]
+    entry && entry[:latest_clarification]
   end
 
   # Latest pending edit on a specific text field of an entity (used to render

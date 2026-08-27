@@ -385,11 +385,11 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         pending_map = {
           [ "behavioural_expectation", @expectations[0].expectation_id ] => {
             count: 0, clarification_count: 1, latest_by_field: {},
-            latest_clarification: { id: 2, suggestion_id: "sug-exp", created_at: Time.current }
+            latest_clarification: { id: 2, suggestion_id: "sug-exp", created_at: 1.hour.ago }
           },
           [ "role_illustration", illustration.illustration_id ] => {
             count: 0, clarification_count: 1, latest_by_field: {},
-            latest_clarification: { id: 1, suggestion_id: "sug-ill", created_at: Time.current }
+            latest_clarification: { id: 1, suggestion_id: "sug-ill", created_at: 2.hours.ago }
           }
         }
 
@@ -400,6 +400,28 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
           "the cell must count its examples' discussions, not just the expectation's"
         assert_equal "sug-exp", cell[:clarification_suggestion_id],
           "the glyph opens the newest; the card lists the rest"
+      end
+
+      # The newest must win across the WHOLE cell — preferring the expectation's
+      # would open an older card than the glyph promises.
+      should "open an example's discussion when it is newer than the expectation's" do
+        illustration = @expectations[0].illustrations.first
+        pending_map = {
+          [ "behavioural_expectation", @expectations[0].expectation_id ] => {
+            count: 0, clarification_count: 1, latest_by_field: {},
+            latest_clarification: { id: 9, suggestion_id: "sug-exp", created_at: 2.hours.ago }
+          },
+          [ "role_illustration", illustration.illustration_id ] => {
+            count: 0, clarification_count: 1, latest_by_field: {},
+            latest_clarification: { id: 1, suggestion_id: "sug-ill", created_at: 1.hour.ago }
+          }
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        cell = find_capability(result, "Strategic Thinking")[:cells][1]
+
+        assert_equal "sug-ill", cell[:clarification_suggestion_id],
+          "the example's discussion is newer, so the glyph must open it"
       end
 
       should "carry a single discussion's id even when it sits on an example" do
