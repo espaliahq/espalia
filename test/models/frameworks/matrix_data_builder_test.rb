@@ -362,6 +362,27 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_nil cap[:cells][2][:clarification_suggestion_id]
       end
 
+      # The same "reach everything you count" rule applies to the capability-row
+      # and per-illustration glyphs, not just the cell.
+      should "withhold a lone id from the capability and illustration glyphs when several exist" do
+        illustration = @expectations[0].illustrations.first
+        several = ->(sid) { { count: 0, clarification_count: 2, latest_by_field: {},
+                              latest_clarification: { id: 1, suggestion_id: sid, created_at: Time.current } } }
+        pending_map = {
+          [ "capability", @capability.capability_id ] => several.call("sug-cap"),
+          [ "role_illustration", illustration.illustration_id ] => several.call("sug-ill")
+        }
+
+        result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
+        cap = find_capability(result, "Strategic Thinking")
+
+        assert_equal 2, cap[:clarification_count]
+        assert_nil cap[:clarification_suggestion_id],
+          "the row glyph must open the list, not strand one of two discussions"
+        assert_nil cap[:cells][1][:illustration_clarifications][illustration.illustration_id][:suggestion_id],
+          "the illustration glyph must do the same"
+      end
+
       # An illustration-anchored discussion is invisible on a collapsed row
       # unless the compact cell counts it — the cell is the only thing on
       # screen when the row isn't expanded.

@@ -160,14 +160,18 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   # (glyphs — same vocabulary as the assessment level chips), deliberately NOT
   # the pending-change wiggle: a clarification proposes no change.
   #
-  # Given a `suggestion_id` the glyph is a button that opens that discussion's
-  # card in the context pane — the same `suggestion:open-card` path the squiggle
-  # uses (`matrix#openSuggestionCard` stops the row/cell click itself). With
-  # several open, the caller passes the most recent; the card's feed context
-  # carries the rest.
+  # The glyph must reach EVERYTHING it counts. With exactly one discussion the
+  # caller passes its `suggestion_id` and the glyph opens that card (the same
+  # `suggestion:open-card` path the squiggle uses). With several there is no
+  # "the" discussion, so the caller passes `cell:` instead and the glyph opens
+  # the capability-focused feed, which lists them all — passing a lone "latest"
+  # id at any count strands the rest, which was a real reported dead end.
+  # Either way `matrix#…` stops the row/cell click itself.
   #
   # @param count [Integer] open clarifications on the entity
-  # @param suggestion_id [String, nil] the discussion the glyph opens
+  # @param suggestion_id [String, nil] the sole discussion, when there is one
+  # @param cell [Hash, nil] `{ capability_id:, level_ordinal: }` — the fallback
+  #   target when several discussions share the entity
   # @return [void] renders nothing when count is zero
   def render_clarification_glyph(count, suggestion_id: nil, cell: nil)
     return unless count.to_i.positive?

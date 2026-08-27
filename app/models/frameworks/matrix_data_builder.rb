@@ -254,7 +254,7 @@ class Frameworks::MatrixDataBuilder
         # Capability-anchored clarifications (a cell with no expectation) glyph
         # the capability row — there is no cell to hang them on.
         clarification_count: clarification_count("capability", capability.capability_id),
-        clarification_suggestion_id: clarification_suggestion_id("capability", capability.capability_id)
+        clarification_suggestion_id: lone_clarification_id("capability", capability.capability_id)
       }
     end
   end
@@ -309,6 +309,8 @@ class Frameworks::MatrixDataBuilder
         .group_by(&:role_id)
         .transform_values { |ills| ills.sort_by(&:ordinal) }
 
+      discussions = cell_clarifications(expectation, illustrations)
+
       cells[ordinal] = {
         expectation: expectation,
         illustration_count: illustrations.size,
@@ -319,11 +321,11 @@ class Frameworks::MatrixDataBuilder
         # The compact cell counts discussions on the expectation AND on its
         # examples — an illustration-anchored discussion is otherwise invisible
         # until someone happens to expand the row.
-        clarification_count: cell_clarification_count(expectation, illustrations),
-        clarification_suggestion_id: cell_clarification_suggestion_id(expectation, illustrations),
+        clarification_count: discussions[:count],
+        clarification_suggestion_id: discussions[:lone_id],
         illustration_pending_edits: illustration_pending_edits(illustrations),
         illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
-        illustration_clarifications: illustration_clarifications(illustrations),
+        illustration_clarifications: discussions[:by_illustration],
         pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
       }
     end
@@ -354,24 +356,36 @@ class Frameworks::MatrixDataBuilder
   end
 
   # Every open discussion reachable from this cell — the expectation's own plus
-  # any on its examples.
+  # any on its examples — resolved in ONE pass (the map is rebuilt per call, so
+  # recomputing it for the count and again for the id walked it 3-4× per cell).
   #
-  # @return [Integer]
-  def cell_clarification_count(expectation, illustrations)
-    clarification_count("behavioural_expectation", expectation.expectation_id) +
-      illustration_clarifications(illustrations).values.sum { |c| c[:count] }
+  # `lone_id` is set only when the cell holds exactly one discussion: that opens
+  # its card directly. With several there is no "the" discussion, so the glyph
+  # opens the list instead — a single id would strand the rest.
+  #
+  # @return [Hash] { count:, lone_id:, by_illustration: }
+  def cell_clarifications(expectation, illustrations)
+    by_illustration = illustration_clarifications(illustrations)
+    own = clarification_count("behavioural_expectation", expectation.expectation_id)
+    total = own + by_illustration.values.sum { |c| c[:count] }
+
+    lone_id =
+      if total == 1
+        clarification_suggestion_id("behavioural_expectation", expectation.expectation_id) ||
+          by_illustration.values.first&.dig(:suggestion_id)
+      end
+
+    { count: total, lone_id: lone_id, by_illustration: by_illustration }
   end
 
-  # The single discussion to open on click — only meaningful when the cell holds
-  # exactly one. With several, the glyph opens the cell-focused feed instead, so
-  # every discussion it counts is reachable (a lone id would strand the rest).
+  # The one open discussion on an entity, or nil when it holds several — the
+  # click then opens the list rather than stranding every discussion but one.
   #
   # @return [String, nil]
-  def cell_clarification_suggestion_id(expectation, illustrations)
-    return nil unless cell_clarification_count(expectation, illustrations) == 1
+  def lone_clarification_id(entity_type, entity_id)
+    return nil unless clarification_count(entity_type, entity_id) == 1
 
-    clarification_suggestion_id("behavioural_expectation", expectation.expectation_id) ||
-      illustration_clarifications(illustrations).values.first&.dig(:suggestion_id)
+    clarification_suggestion_id(entity_type, entity_id)
   end
 
   # illustration_id => { count:, suggestion_id: } for illustrations carrying an
@@ -386,7 +400,7 @@ class Frameworks::MatrixDataBuilder
 
       h[ill.illustration_id] = {
         count: count,
-        suggestion_id: clarification_suggestion_id("role_illustration", ill.illustration_id)
+        suggestion_id: lone_clarification_id("role_illustration", ill.illustration_id)
       }
     end
   end

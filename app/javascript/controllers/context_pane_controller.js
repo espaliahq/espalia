@@ -110,6 +110,12 @@ export default class extends BaseController {
   // Window-event twin of openSuggestionCard, for triggers that live outside
   // the pane — the matrix's pending-change squiggles dispatch
   // `suggestion:open-card` with the suggestion id in the event detail.
+  onOpenSuggestionCard(event) {
+    const id = event.detail?.suggestionId
+    if (!id) return
+    this.#showSuggestionCard(id)
+  }
+
   // A cell's glyph with several discussions: narrow the feed so every
   // discussion anchored there is listed (each row opens its own card).
   //
@@ -131,12 +137,6 @@ export default class extends BaseController {
     this.state.categoryId = null
     this.#rebuildFrameSrc()
     this.#pushBrowserUrl()
-  }
-
-  onOpenSuggestionCard(event) {
-    const id = event.detail?.suggestionId
-    if (!id) return
-    this.#showSuggestionCard(id)
   }
 
   // Dispatched by inline_editor_controller after any successful inline

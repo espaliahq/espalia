@@ -37,7 +37,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view,
                  can_reorder: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 discuss_context_label: nil, clarification: nil)
+                 discuss_context_label: nil, clarification: nil, capability_id: nil)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
@@ -47,6 +47,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
     @approval_authority = approval_authority
     @discuss_context_label = discuss_context_label
     @clarification = clarification || { count: 0, suggestion_id: nil }
+    @capability_id = capability_id
   end
 
   def view_template
@@ -85,7 +86,13 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       if @mode == :edit
         # Open discussion on this example — content glyph, never the
         # pending-change vocabulary (nothing is proposed).
-        render_clarification_glyph(@clarification[:count], suggestion_id: @clarification[:suggestion_id])
+        # cell: several discussions on one example open the list rather than
+        # stranding all but one (same rule as the cell and row glyphs).
+        render_clarification_glyph(
+          @clarification[:count],
+          suggestion_id: @clarification[:suggestion_id],
+          cell: @capability_id ? { capability_id: @capability_id } : nil
+        )
         reorder_buttons if @can_reorder
         edit_button
         # Kebab last — always the right-most control (phlex-views.md).
