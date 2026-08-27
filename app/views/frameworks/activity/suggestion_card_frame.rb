@@ -126,7 +126,22 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
         data: { action: "click->context-pane#openSuggestionCard", suggestion_id: sibling.suggestion_id },
         aria: { label: "Open this discussion" }
       ) do
-        span(class: "line-clamp-2") { sibling.rationale.to_s }
+        # A speech bubble per row: signals these are clickable (plain text rows
+        # read as a static list) and reuses the discussion glyph vocabulary.
+        span(class: "flex items-start gap-1.5") do
+          svg(
+            xmlns: "http://www.w3.org/2000/svg", class: "w-3 h-3 mt-0.5 shrink-0",
+            fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
+            aria: { hidden: "true" }
+          ) do |g|
+            g.path(
+              stroke_linecap: "round", stroke_linejoin: "round",
+              d: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 " \
+                 "8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+            )
+          end
+          span(class: "line-clamp-2") { sibling.rationale.to_s }
+        end
       end
     end
   end
