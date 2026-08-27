@@ -20,13 +20,15 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # @param author_name [String, nil]
   # @param clear_path [String] URL back to the framework-wide feed
   # @param permalink [String, nil] absolute, shareable link to this discussion
+  # @param siblings [Array<FrameworkState::SuggestedEdit>] other open discussions
+  #   on the same cell — so a card is never a dead end when several share a glyph
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority]
   # @param viewer_person_id [String, nil]
   # @param can_comment [Boolean]
   # @param tenant_admin [Boolean]
   def initialize(framework:, suggestion:, comments:, author_name:, clear_path:,
                  approval_authority:, viewer_person_id:, can_comment:, tenant_admin: false,
-                 alert: nil, permalink: nil)
+                 alert: nil, permalink: nil, siblings: [])
     @framework = framework
     @suggestion = suggestion
     @comments = comments
@@ -34,6 +36,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     @author_name = author_name
     @clear_path = clear_path
     @permalink = permalink
+    @siblings = siblings || []
     @approval_authority = approval_authority
     @viewer_person_id = viewer_person_id
     @can_comment = can_comment
@@ -53,6 +56,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
           action_row if actionable?
           resolve_action_row if resolvable?
           resolution_block if resolved?
+          siblings_block if @siblings.any?
           thread
         end
       end
@@ -93,6 +97,36 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
           "#{kind_label} · #{entity_label}"
         end
         status_pill
+      end
+    end
+  end
+
+  # The other open discussions on this cell. Several discussions share one grid
+  # glyph, which opens the most recent — without this the rest would be
+  # reachable only by hunting the activity feed (the reported dead end).
+  #
+  # Sourced from the read model, so it is complete regardless of how old a
+  # discussion is; the feed alone is recency-capped.
+  def siblings_block
+    div(class: "mt-4 rounded-md border border-gray-200 dark:border-gray-700 p-3") do
+      h3(class: "text-[11px] font-semibold uppercase tracking-wide " \
+                "text-gray-600 dark:text-gray-300 mb-2") do
+        "#{@siblings.size} other #{'discussion'.pluralize(@siblings.size)} here"
+      end
+      ul(class: "space-y-1") { @siblings.each { |sibling| sibling_row(sibling) } }
+    end
+  end
+
+  def sibling_row(sibling)
+    li do
+      button(
+        type: "button",
+        class: "w-full text-left rounded px-1.5 py-1 text-xs text-gray-700 dark:text-gray-200 " \
+               "hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer",
+        data: { action: "click->context-pane#openSuggestionCard", suggestion_id: sibling.suggestion_id },
+        aria: { label: "Open this discussion" }
+      ) do
+        span(class: "line-clamp-2") { sibling.rationale.to_s }
       end
     end
   end

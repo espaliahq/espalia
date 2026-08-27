@@ -160,28 +160,20 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   # (glyphs — same vocabulary as the assessment level chips), deliberately NOT
   # the pending-change wiggle: a clarification proposes no change.
   #
-  # The glyph must reach EVERYTHING it counts. With exactly one discussion the
-  # caller passes its `suggestion_id` and the glyph opens that card (the same
-  # `suggestion:open-card` path the squiggle uses). With several there is no
-  # "the" discussion, so the caller passes `cell:` instead and the glyph opens
-  # the capability-focused feed, which lists them all — passing a lone "latest"
-  # id at any count strands the rest, which was a real reported dead end.
-  # Either way `matrix#…` stops the row/cell click itself.
+  # The glyph opens the most recent discussion's card (the same
+  # `suggestion:open-card` path the squiggle uses; `matrix#openSuggestionCard`
+  # stops the row/cell click itself). Opening "the newest" is safe at any count
+  # because the card lists its siblings — the rest are one click away rather
+  # than stranded, which was a real reported dead end.
   #
   # @param count [Integer] open clarifications on the entity
-  # @param suggestion_id [String, nil] the sole discussion, when there is one
-  # @param cell [Hash, nil] `{ capability_id:, level_ordinal: }` — the fallback
-  #   target when several discussions share the entity
+  # @param suggestion_id [String, nil] the discussion the glyph opens
   # @return [void] renders nothing when count is zero
-  def render_clarification_glyph(count, suggestion_id: nil, cell: nil)
+  def render_clarification_glyph(count, suggestion_id: nil)
     return unless count.to_i.positive?
 
     noun = "open #{'discussion'.pluralize(count)}"
-    title =
-      if suggestion_id then "#{count} #{noun} — view"
-      elsif cell then "#{count} #{noun} here — view them"
-      else "#{count} #{noun} — see the activity pane"
-      end
+    title = suggestion_id ? "#{count} #{noun} — view" : "#{count} #{noun} — see the activity pane"
     attrs = {
       class: "inline-flex items-center gap-0.5 ml-1 align-middle rounded-full " \
              "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-gray-600 dark:text-gray-300 shrink-0",
@@ -190,21 +182,17 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
       data: { glyph: "clarification" }
     }
 
-    if suggestion_id || cell
+    if suggestion_id
       attrs[:class] += " cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 " \
                        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60"
       attrs[:role] = "button"
       attrs[:tabindex] = "0"
-      # One discussion opens straight into its card. Several open the pane
-      # focused on the cell, which lists them all — a single id would strand
-      # every discussion the count advertises but the click can't reach.
-      action = suggestion_id ? "matrix#openSuggestionCard" : "matrix#openCellDiscussions"
       attrs[:data] = attrs[:data].merge(
         suggestion_id: suggestion_id,
-        capability_id: cell && cell[:capability_id],
-        level_ordinal: cell && cell[:level_ordinal],
-        action: "click->#{action} keydown.enter->#{action} keydown.space->#{action}"
-      ).compact
+        action: "click->matrix#openSuggestionCard " \
+                "keydown.enter->matrix#openSuggestionCard " \
+                "keydown.space->matrix#openSuggestionCard"
+      )
     else
       attrs[:role] = "img"
     end

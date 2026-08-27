@@ -1391,9 +1391,8 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "Raters read 'clarifying questions' three different ways"
     end
 
-    # The glyph counts every discussion on the cell — clicking it must reach
-    # all of them, not just the newest. A second discussion used to be
-    # unreachable from the grid entirely.
+    # The glyph opens the newest discussion; the card lists its siblings, so
+    # the second one is one click away rather than only in the feed.
     should "reach both discussions on a cell from the glyph" do
       second_question = "And does 'clarifying' mean challenging?"
       ActsAsTenant.with_tenant(@tenant) do
@@ -1408,12 +1407,17 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       assert_text "Edit mode"
 
-      click_selector_with_js_fallback "[data-glyph='clarification'][data-capability-id]",
-                                      expect_text: second_question
+      # The glyph opens one of them…
+      click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
+                                      expect_text: "Back to activity"
+      assert_text "1 OTHER DISCUSSION HERE"
 
-      # Both are listed, so either can be opened — not just the newest.
+      # …and its sibling is listed right there, opening its own card.
+      click_selector_with_js_fallback(
+        "button[aria-label='Open this discussion']",
+        expect_text: "Raters read 'clarifying questions' three different ways"
+      )
       assert_text "Raters read 'clarifying questions' three different ways"
-      assert_text second_question
     end
 
     # An illustration-anchored discussion is invisible on a collapsed row
@@ -1434,7 +1438,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       # Row is collapsed — the cell's glyph is the only signal it exists.
       assert_no_selector "tr[data-matrix-target='expandedRow']", visible: true
-      click_selector_with_js_fallback "[data-glyph='clarification'][data-capability-id]",
+      click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
                                       expect_text: question
     end
 

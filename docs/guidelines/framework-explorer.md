@@ -827,18 +827,16 @@ rediscovering it. Mechanics:
   `illustration_clarifications` (`{ count:, suggestion_id: }` per illustration).
   **The glyph must reach everything it counts.** The cell's count includes
   discussions on its *examples* (an illustration-anchored one is otherwise
-  invisible on a collapsed row), and the click target follows the count: exactly
-  one → that discussion's card; several → `matrix#openCellDiscussions` fires
-  `discussion:open-list`, focusing the pane on the **capability** so the feed
-  lists them all. Capability, not cell, deliberately: `ActivityFeedQuery`
-  anchors at capability granularity by design (its `Entry` carries no level;
-  `level_ordinal` is accepted "for URL parity"), so cell focus would return the
-  same entries under a `Capability × L<n>` header claiming a precision the
-  filter doesn't deliver. Threading a single "latest" id at any count strands the rest — that was
-  a real dead end, reported from the floor. A **just-asked** question's glyph lands on the next matrix
-  render, not immediately — the matrix deliberately isn't live (Lesson 21) and
-  re-fetching it per write is exactly what Lesson 23 forbids; the pane opening
-  the new discussion's card is the author's feedback.
+  invisible on a collapsed row). The glyph opens the **most recent**, and the
+  card lists its siblings — `SuggestionCardFrame#siblings_block`, fed by
+  `ActivityController#sibling_discussions`, which reads the other open
+  clarifications on the same cell (the expectation plus its illustrations)
+  **straight from `FrameworkState::SuggestedEdit`**. Deliberately not via the
+  activity feed: that is capped at the newest `STREAM_READ_LIMIT` events and
+  can't page older while focused, so routing "show me the rest" through it
+  would silently lose old discussions. Threading a lone id with no sibling list
+  was a real reported dead end — a cell showing "2" that could only ever reach
+  one.
 - **Asking is a grid affordance — "Discuss…"** (edit mode). Three triggers,
   all plain `click->modal#open` buttons carrying a `discuss_*` dataset (no
   per-trigger Stimulus mount — one per cell is exactly the direction Lesson 23
@@ -1032,7 +1030,6 @@ Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `reje
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 | `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, suggestionId: string \| null }` — triggers `matrix_controller#navigateToEntity`. `suggestionId` (pending suggestions only) makes navigation land on the exact decorated element — the squiggle/ghost's `[data-suggestion-id]` inside the matrix frame — with a brief `.suggestion-nav-highlight` pulse; without an anchor (resolved, or the suggestion's role filtered out) it falls back to centering the cell (which gets the same pulse) or row. |
 | `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
-| `discussion:open-list` | `matrix_controller#openCellDiscussions` (a cell glyph counting several discussions) | `{ capabilityId: string, levelOrdinal: number \| null }` — focuses the pane on that **capability** (`context-pane#onOpenDiscussionList`) so its feed lists every discussion anchored there (the feed is capability-granular; `levelOrdinal` rides along for callers, unused for filtering), and reveals a collapsed pane (`framework-explorer#openContextPane`). The same deliberate reveal exception as `suggestion:open-card`: the click's purpose IS to see them. |
 | `suggestion:open-card` | `matrix_controller#openSuggestionCard` (squiggle / ghost click) | `{ suggestionId: string }` — opens that suggestion's card in the pane (`context_pane_controller#onOpenSuggestionCard`) and reveals a collapsed pane (`framework_explorer_controller#openContextPane`). The click's purpose IS to see the card, so this is the one deliberate exception to "focus never auto-opens the pane" (Lesson 8 still governs plain focus changes). |
 | `suggestion:resolved` | `suggestion_action_controller` (approve) / `reject_suggestion_form_controller` (reject) | `{ suggestionId: string, outcome: "approved" \| "rejected", surgical: boolean }` — fired on a successful inline approve/reject (the clarification-resolve dispatch carries no detail; consumers must tolerate its absence). `surgical: true` means the response's Turbo Stream already replaced the affected frame — `matrix_controller#refresh` skips the full re-fetch and only runs as the fallback for non-surgical shapes (Hard-Won Lesson 23). The feed reloads separately via the activity broadcast (§12, Hard-Won Lesson 21). |
 

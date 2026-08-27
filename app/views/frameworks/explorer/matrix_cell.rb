@@ -109,13 +109,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
       end
       # Open clarification discussion on this expectation — content glyph,
       # never the pending-change vocabulary (nothing is proposed).
-      # cell: lets the glyph open the cell-focused feed when it counts several
-      # discussions (a single id can only reach one of them).
-      render_clarification_glyph(
-        @cell_data[:clarification_count],
-        suggestion_id: @cell_data[:clarification_suggestion_id],
-        cell: { capability_id: @cell_data[:expectation].capability_id, level_ordinal: @ordinal }
-      )
+      render_clarification_glyph(@cell_data[:clarification_count],
+                                 suggestion_id: @cell_data[:clarification_suggestion_id])
       illustration_indicator if @cell_data[:illustration_count] > 0
     end
   end

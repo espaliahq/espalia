@@ -338,10 +338,7 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_equal 0, cap[:cells][2][:clarification_count]
       end
 
-      # A cell with several discussions carries NO single id — the glyph opens
-      # the cell-focused list instead, so every discussion it counts is
-      # reachable. Threading the newest id here used to strand the others.
-      should "thread a lone clarification's id so the glyph can open its card" do
+      should "thread the latest clarification's id so the glyph can open its card" do
         eid = @expectations[0].expectation_id
         pending_map = {
           [ "behavioural_expectation", eid ] => {
@@ -362,25 +359,22 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
         assert_nil cap[:cells][2][:clarification_suggestion_id]
       end
 
-      # The same "reach everything you count" rule applies to the capability-row
-      # and per-illustration glyphs, not just the cell.
-      should "withhold a lone id from the capability and illustration glyphs when several exist" do
-        illustration = @expectations[0].illustrations.first
-        several = ->(sid) { { count: 0, clarification_count: 2, latest_by_field: {},
-                              latest_clarification: { id: 1, suggestion_id: sid, created_at: Time.current } } }
+      # The glyph opens the newest at any count — the card lists its siblings,
+      # so nothing is stranded. (This used to withhold the id above 1, which
+      # made the glyph inert.)
+      should "still open the newest discussion when several share an entity" do
         pending_map = {
-          [ "capability", @capability.capability_id ] => several.call("sug-cap"),
-          [ "role_illustration", illustration.illustration_id ] => several.call("sug-ill")
+          [ "capability", @capability.capability_id ] => {
+            count: 0, clarification_count: 2, latest_by_field: {},
+            latest_clarification: { id: 1, suggestion_id: "sug-cap", created_at: Time.current }
+          }
         }
 
         result = build_matrix(selected_role_ids: [ @ic_role.role_id ], pending_suggestions: pending_map)
         cap = find_capability(result, "Strategic Thinking")
 
         assert_equal 2, cap[:clarification_count]
-        assert_nil cap[:clarification_suggestion_id],
-          "the row glyph must open the list, not strand one of two discussions"
-        assert_nil cap[:cells][1][:illustration_clarifications][illustration.illustration_id][:suggestion_id],
-          "the illustration glyph must do the same"
+        assert_equal "sug-cap", cap[:clarification_suggestion_id]
       end
 
       # An illustration-anchored discussion is invisible on a collapsed row
@@ -404,8 +398,8 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
 
         assert_equal 2, cell[:clarification_count],
           "the cell must count its examples' discussions, not just the expectation's"
-        assert_nil cell[:clarification_suggestion_id],
-          "with several, no single id — the glyph opens the cell-focused list instead"
+        assert_equal "sug-exp", cell[:clarification_suggestion_id],
+          "the glyph opens the newest; the card lists the rest"
       end
 
       should "carry a single discussion's id even when it sits on an example" do

@@ -756,22 +756,6 @@ export default class extends BaseController {
     window.dispatchEvent(new CustomEvent("suggestion:open-card", { detail: { suggestionId } }))
   }
 
-  // A glyph counting SEVERAL open discussions can't open "the" card — focus
-  // the pane on the capability instead, where the feed lists them all (the
-  // feed is capability-granular; see context-pane#onOpenDiscussionList). Same
-  // deliberate pane-reveal exception as openSuggestionCard: the click's whole
-  // purpose is to see them.
-  openCellDiscussions(event) {
-    const { capabilityId, levelOrdinal } = event.currentTarget?.dataset || {}
-    if (!capabilityId) return
-
-    event.preventDefault()
-    event.stopPropagation()
-    window.dispatchEvent(new CustomEvent("discussion:open-list", {
-      detail: { capabilityId, levelOrdinal: levelOrdinal ? parseInt(levelOrdinal, 10) : null }
-    }))
-  }
-
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
 
   navigateToEntity(event) {
