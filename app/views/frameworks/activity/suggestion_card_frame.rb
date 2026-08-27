@@ -112,7 +112,12 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     # the class default ("Copy") the first time it restores.
     div(class: "flex items-center",
         data: { controller: "clipboard", clipboard_label_value: "Copy link" }) do
-      span(class: "sr-only", data: { clipboard_target: "source" }) { @permalink }
+      # aria-hidden: this span exists only to carry the URL for the clipboard
+      # controller to read; without it a screen reader announces the whole
+      # UUID link before reaching the button. Copy is unaffected — it reads
+      # textContent, not the accessibility tree.
+      span(class: "sr-only", aria: { hidden: "true" },
+           data: { clipboard_target: "source" }) { @permalink }
       button(
         type: "button",
         class: "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium " \
