@@ -110,16 +110,23 @@ export default class extends BaseController {
   // Window-event twin of openSuggestionCard, for triggers that live outside
   // the pane — the matrix's pending-change squiggles dispatch
   // `suggestion:open-card` with the suggestion id in the event detail.
-  // A cell's glyph with several discussions: narrow the feed to that cell so
-  // every discussion anchored there is listed (each row opens its own card).
+  // A cell's glyph with several discussions: narrow the feed so every
+  // discussion anchored there is listed (each row opens its own card).
+  //
+  // CAPABILITY focus, not cell: ActivityFeedQuery anchors the feed at
+  // capability granularity by design (its Entry carries no level, and
+  // level_ordinal is accepted "for URL parity" only). Asking for cell focus
+  // would return exactly these same entries under a "Capability × L3" header —
+  // a precision the filter doesn't deliver. Better an honest header than a
+  // narrower-looking one.
   onOpenDiscussionList(event) {
-    const { capabilityId, levelOrdinal } = event.detail || {}
+    const { capabilityId } = event.detail || {}
     if (!capabilityId) return
 
-    this.#trackFeedDeparture("cell")
-    this.state.focus = "cell"
+    this.#trackFeedDeparture("capability")
+    this.state.focus = "capability"
     this.state.capabilityId = capabilityId
-    this.state.levelOrdinal = levelOrdinal ?? null
+    this.state.levelOrdinal = null
     this.state.suggestionId = null
     this.state.categoryId = null
     this.#rebuildFrameSrc()
