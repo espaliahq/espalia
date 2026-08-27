@@ -66,6 +66,24 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_text "Weighs long-term impact"
   end
 
+  # The permalink is how a question reaches the person who should answer it —
+  # there are no notifications for discussions yet. So the link the card hands
+  # you has to survive a cold visit, not just look right.
+  should "reopen the discussion for someone arriving cold on the copied link" do
+    open_suggestion_card
+
+    permalink = find("[data-clipboard-target='source']", visible: :all).text.strip
+    assert_includes permalink, "focus=suggestion"
+
+    # Leave the explorer entirely, then arrive on the link as a recipient would.
+    visit frameworks_path
+    assert_no_text "Back to activity"
+
+    visit permalink
+    assert_text "Back to activity"
+    assert_text "Weighs long-term impact"
+  end
+
   should "post and reply from the pane's suggestion card with one-indent display" do
     open_suggestion_card
 

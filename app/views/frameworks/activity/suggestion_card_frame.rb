@@ -19,19 +19,21 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # @param comments [Array<FrameworkState::SuggestionComment>]
   # @param author_name [String, nil]
   # @param clear_path [String] URL back to the framework-wide feed
+  # @param permalink [String, nil] absolute, shareable link to this discussion
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority]
   # @param viewer_person_id [String, nil]
   # @param can_comment [Boolean]
   # @param tenant_admin [Boolean]
   def initialize(framework:, suggestion:, comments:, author_name:, clear_path:,
                  approval_authority:, viewer_person_id:, can_comment:, tenant_admin: false,
-                 alert: nil)
+                 alert: nil, permalink: nil)
     @framework = framework
     @suggestion = suggestion
     @comments = comments
     @alert = alert
     @author_name = author_name
     @clear_path = clear_path
+    @permalink = permalink
     @approval_authority = approval_authority
     @viewer_person_id = viewer_person_id
     @can_comment = can_comment
@@ -84,8 +86,38 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
         h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") do
           "#{kind_label} · #{entity_label}"
         end
-        status_pill
+        div(class: "flex items-center gap-1.5 shrink-0") do
+          copy_link_control
+          status_pill
+        end
       end
+    end
+  end
+
+  # "Copy link" — the discussion's shareable URL. Sharing the link is how a
+  # question reaches the person who should answer it (there are no
+  # notifications for discussions yet), so the link needs to be visible rather
+  # than something you know to lift out of the address bar.
+  #
+  # The URL rides in a visually-hidden span because the shared `clipboard`
+  # controller copies its source target's text.
+  def copy_link_control
+    return if @permalink.blank?
+
+    div(class: "flex items-center", data: { controller: "clipboard" }) do
+      span(class: "sr-only", data: { clipboard_target: "source" }) { @permalink }
+      button(
+        type: "button",
+        class: "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium " \
+               "text-gray-600 dark:text-gray-300 hover:text-primary hover:bg-primary/10 " \
+               "transition-colors cursor-pointer",
+        title: "Copy a link to this discussion",
+        data: {
+          action: "clipboard#copy",
+          clipboard_target: "button",
+          clipboard_label_value: "Copy link"
+        }
+      ) { "Copy link" }
     end
   end
 

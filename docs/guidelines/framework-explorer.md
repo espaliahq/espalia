@@ -891,6 +891,17 @@ the detail page render the same `Views::Frameworks::Suggestions::Thread`.
   **discussion affordance** — comment count + latest excerpt (or "Discuss") —
   fed by `ActivityFeedQuery`'s one-pass `comment_stats` overlay; clicking it
   opens the suggestion card.
+- **Shareable by link**: the card carries a **"Copy link"** control handing over
+  an absolute deep link (`/frameworks/:id/edit?focus=suggestion&suggestion_id=…`)
+  — the explorer URL, not the standalone suggestion page, so the recipient lands
+  on the discussion *with the grid around it*. Built in
+  `Frameworks::ActivityController#discussion_permalink` from `request.base_url`
+  (whichever host the sharer is on, not a configured canonical) and copied via
+  the shared `clipboard` controller. **This is currently the only way a question
+  reaches a specific person** — there are no notifications for framework events
+  and no @-mentions in threads, so sharing the link IS the delivery mechanism;
+  treat it as load-bearing, and note both surfaces sit behind the suggest bar
+  (`framework_collaborator_can_suggest?`), so a viewer-role recipient is bounced.
 - **Draft protection (NON-NEGOTIABLE)**: broadcast reloads of the pane are
   **suppressed while any composer textarea is focused or holds text**
   (`context_pane_controller#composerDirty`) — the same failure class that

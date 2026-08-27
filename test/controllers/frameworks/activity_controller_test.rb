@@ -114,6 +114,28 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
       assert_select "textarea[name='comment[body]']"
     end
 
+    # Sharing the link is how a question reaches the person who should answer
+    # it, so the card has to offer one — and it has to be a link that actually
+    # reopens the discussion, not just a plausible-looking URL.
+    should "offer a copy-able permalink that reopens this discussion" do
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel",
+                                  focus: "suggestion", suggestion_id: @suggestion_id)
+
+      assert_response :success
+      assert_select "[data-controller='clipboard']"
+      assert_select "[data-clipboard-target='source']" do |elements|
+        permalink = elements.first.text.strip
+        assert permalink.start_with?("http"), "the link must be absolute so it can be pasted elsewhere"
+
+        # Round-trip: the params the link carries are the ones that reopen the card.
+        query = Rack::Utils.parse_query(URI.parse(permalink).query)
+        assert_equal "suggestion", query["focus"]
+        assert_equal @suggestion_id, query["suggestion_id"]
+        assert_equal edit_framework_path(@framework_id), URI.parse(permalink).path
+      end
+    end
+
     should "fall back to the feed for an unknown suggestion" do
       sign_in @admin_user
       get framework_activity_path(@framework_id, layout: "panel",
