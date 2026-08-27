@@ -84,6 +84,22 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_text "Weighs long-term impact"
   end
 
+  # A Stimulus value read off a child element is silently ignored, so the
+  # button's rest label used to degrade to the controller default ("Copy") the
+  # first time it restored — permanently, until a reload.
+  should "restore the Copy link label after the copied flash" do
+    open_suggestion_card
+
+    button = find("[data-clipboard-target='button']")
+    assert_equal "Copy link", button.text.strip
+
+    page.execute_script("arguments[0].click()", button)
+    assert_selector "[data-clipboard-target='button']", text: "Copied!"
+
+    # The controller restores after 2s — assert the label it restores TO.
+    assert_selector "[data-clipboard-target='button']", text: "Copy link"
+  end
+
   should "post and reply from the pane's suggestion card with one-indent display" do
     open_suggestion_card
 

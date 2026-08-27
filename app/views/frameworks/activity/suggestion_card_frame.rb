@@ -74,22 +74,25 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
 
   def header
     div(class: "px-4 py-3 border-b border-gray-200 dark:border-gray-700") do
-      a(
-        href: @clear_path,
-        class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary inline-block",
-        data: {
-          turbo_frame: "suggestion-panel",
-          action: "click->context-pane#clearFocus"
-        }
-      ) { "← Back to activity" }
+      # Copy link rides the back-link row, which is otherwise empty — putting it
+      # beside the title stole enough width to truncate the card's own identity
+      # ("Clarify · Expect…"), and a utility control shouldn't cost the heading.
+      div(class: "flex items-center justify-between gap-2") do
+        a(
+          href: @clear_path,
+          class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary inline-block",
+          data: {
+            turbo_frame: "suggestion-panel",
+            action: "click->context-pane#clearFocus"
+          }
+        ) { "← Back to activity" }
+        copy_link_control
+      end
       div(class: "mt-1 flex items-center justify-between gap-2") do
         h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") do
           "#{kind_label} · #{entity_label}"
         end
-        div(class: "flex items-center gap-1.5 shrink-0") do
-          copy_link_control
-          status_pill
-        end
+        status_pill
       end
     end
   end
@@ -104,7 +107,11 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   def copy_link_control
     return if @permalink.blank?
 
-    div(class: "flex items-center", data: { controller: "clipboard" }) do
+    # label_value belongs on the controller ROOT — a Stimulus value read off a
+    # child is silently ignored, and the button's rest label would degrade to
+    # the class default ("Copy") the first time it restores.
+    div(class: "flex items-center",
+        data: { controller: "clipboard", clipboard_label_value: "Copy link" }) do
       span(class: "sr-only", data: { clipboard_target: "source" }) { @permalink }
       button(
         type: "button",
@@ -112,11 +119,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
                "text-gray-600 dark:text-gray-300 hover:text-primary hover:bg-primary/10 " \
                "transition-colors cursor-pointer",
         title: "Copy a link to this discussion",
-        data: {
-          action: "clipboard#copy",
-          clipboard_target: "button",
-          clipboard_label_value: "Copy link"
-        }
+        data: { action: "clipboard#copy", clipboard_target: "button" }
       ) { "Copy link" }
     end
   end
