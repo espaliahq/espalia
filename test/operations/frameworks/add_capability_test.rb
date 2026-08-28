@@ -80,6 +80,18 @@ class Operations::Frameworks::AddCapabilityTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         error = assert_raises(Operations::Base::ParameterError) do
           add(@admin_ctx, {
+            framework_id: @framework_id, category_id: @cat_id, name: "Unbound", role_ids: []
+          })
+        end
+        assert_match(/at least one role/i, error.message)
+        assert_not framework.draft_in_progress
+      end
+    end
+
+    should "reject adding a capability with only blank role ids" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          add(@admin_ctx, {
             framework_id: @framework_id, category_id: @cat_id, name: "Unbound", role_ids: [ "" ]
           })
         end
