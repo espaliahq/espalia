@@ -389,27 +389,6 @@ module StimulusHelpers
     false
   end
 
-  # Stubs +window.confirm+ to always return true, then runs the block.
-  # Use for clicks that submit forms with +data-turbo-confirm+ when the
-  # action under test is the form submission, not the dialog itself.
-  #
-  # On slow CI runners, Capybara's +accept_confirm+ has a race window
-  # between the click and the dialog appearing — when the JS event loop
-  # is starved, the click can fire before Capybara's modal handler is
-  # registered, so the dialog appears, fires confirm() instantly with no
-  # handler, and is gone before Capybara polls. Stubbing +window.confirm+
-  # eliminates that race: Turbo's submit-listener calls confirm() and our
-  # stub returns true with no dialog ever showing.
-  #
-  # We deliberately DO NOT restore +window.confirm+ afterwards. For a
-  # +data-turbo-method+ LINK (vs. a form-submit button), Turbo invokes
-  # confirm() asynchronously — after the synchronous +.click+ returns — so an
-  # +ensure+ that restored the native confirm raced the click and let a real
-  # dialog open on starved CI (+UnexpectedAlertOpenError+, which then poisons
-  # every later command). Leaving the stub in place is safe: it only suppresses
-  # +data-turbo-confirm+ dialogs, and a full-page navigation loads a fresh
-  # document that resets +window.confirm+ to native on its own.
-  #
   # Dispatches an Escape keydown on the window, rather than
   # +find("body").send_keys(:escape)+.
   #
@@ -433,6 +412,27 @@ module StimulusHelpers
     JS
   end
 
+  # Stubs +window.confirm+ to always return true, then runs the block.
+  # Use for clicks that submit forms with +data-turbo-confirm+ when the
+  # action under test is the form submission, not the dialog itself.
+  #
+  # On slow CI runners, Capybara's +accept_confirm+ has a race window
+  # between the click and the dialog appearing — when the JS event loop
+  # is starved, the click can fire before Capybara's modal handler is
+  # registered, so the dialog appears, fires confirm() instantly with no
+  # handler, and is gone before Capybara polls. Stubbing +window.confirm+
+  # eliminates that race: Turbo's submit-listener calls confirm() and our
+  # stub returns true with no dialog ever showing.
+  #
+  # We deliberately DO NOT restore +window.confirm+ afterwards. For a
+  # +data-turbo-method+ LINK (vs. a form-submit button), Turbo invokes
+  # confirm() asynchronously — after the synchronous +.click+ returns — so an
+  # +ensure+ that restored the native confirm raced the click and let a real
+  # dialog open on starved CI (+UnexpectedAlertOpenError+, which then poisons
+  # every later command). Leaving the stub in place is safe: it only suppresses
+  # +data-turbo-confirm+ dialogs, and a full-page navigation loads a fresh
+  # document that resets +window.confirm+ to native on its own.
+  #
   # @yield the block performing the click that triggers the confirm dialog
   def auto_confirm
     page.execute_script("window.confirm = () => true;")
