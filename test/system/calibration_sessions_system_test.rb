@@ -373,8 +373,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       "the accessible name carries the person, not just their initials"
 
     # Opening a dot shows their card.
+    # The card container is already in the DOM as an empty frame, so it can't
+    # be the signal — assert on content only the opened card renders.
     click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
-                                    expect_selector: "#calibration-person-card")
+                                    expect_text: "Manager: Consistently")
     assert_text "Ivy IC"
     assert_text "Manager: Consistently"
 
@@ -431,8 +433,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "2 items"
 
     # ── Comparison drawer: pinning holds two cards side by side ──
-    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
-                                    expect_text: "Manager: Consistently")
+    # Deliberately unguarded: this re-opens a card that is already showing, so
+    # there is no transition a fallback could detect. A dropped click surfaces
+    # immediately on the guarded Pin click below, which needs the open card.
+    find("a[data-person-id='#{@report_1.id}']").click
     click_link_with_js_fallback(
       "Pin", expect_selector: "[data-drawer-card='#{@report_1.id}'] a[aria-label^='Unpin']"
     )
@@ -441,8 +445,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     # Open the second person — the pinned card stays put beside the
     # inspector, so the room reads both at once.
+    # Their name is already on the grid dot — their drawer card appearing is
+    # what the click actually produces.
     click_selector_with_js_fallback("a[data-person-id='#{@report_2.id}']",
-                                    expect_text: "Omar IC")
+                                    expect_selector: "[data-drawer-card='#{@report_2.id}']")
     assert_selector "[data-drawer-card='#{@report_1.id}']"
     assert_selector "[data-drawer-card='#{@report_2.id}']"
     click_link_with_js_fallback(

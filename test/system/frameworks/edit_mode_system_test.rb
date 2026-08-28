@@ -453,7 +453,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         fill_in "add_capability_name", with: "Systems Design"
         check "Software Engineer"
       end
-      click_button_with_js_fallback("Add capability", expect_text: "Added")
+      # "Added" is all over the activity feed — the new capability landing in
+      # the matrix is the signal.
+      click_button_with_js_fallback("Add capability", expect_text: "Systems Design")
       assert_text "Added"
     end
   end
@@ -1386,8 +1388,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       # The glyph is the way into the discussion from the grid — click it and
       # the pane swaps to that clarification's card.
+      # The author's name is already in the feed; the card's back link is not.
       click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
-                                      expect_text: "Quinn Questioner"
+                                      expect_text: "Back to activity"
       assert_text "Raters read 'clarifying questions' three different ways"
     end
 
@@ -1415,8 +1418,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "1 OTHER DISCUSSION HERE"
 
       # …and its sibling opens its own card, which the URL must follow.
+      # A card is already open, so its back link can't be the signal — the
+      # siblings list flipping to name the OTHER discussion is.
       click_selector_with_js_fallback(
-        "#discussion-siblings button", expect_text: "Back to activity"
+        "#discussion-siblings button",
+        expect_selector: "#discussion-siblings button[data-suggestion-id='#{second_id}']"
       )
       assert_no_current_path(/suggestion_id=#{second_id}/, url: true)
       assert_includes current_url, "suggestion_id=#{@clarification_id}"

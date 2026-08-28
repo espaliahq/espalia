@@ -420,6 +420,8 @@ All three pass when the click is silently dropped, so they only fail when someth
 
 This applies doubly to the `expect_text:` / `expect_selector:` you hand a JS-fallback helper — a signal already on the page disarms the very fallback you added.
 
+**The helpers now enforce this.** `assert_signal_is_a_transition!` runs before every guarded click and raises if `expect_text` / `expect_selector` is already true (or `expect_no_text` already absent), so a disarmed fallback fails loudly at authoring time instead of silently passing until CI. Arming it against the existing suite found thirteen such calls. If a click genuinely produces no visible transition, don't fake a signal — use a plain click and say in a comment why it's safe (usually: the next guarded step depends on it).
+
 ## Esc Needs a Dispatched `KeyboardEvent` — `press_escape`
 
 **Use `press_escape` rather than `find("body").send_keys(:escape)`.** Stimulus binds Esc as `keydown.esc@window`, but Selenium's key dispatch needs a focused, interactable target — and once a modal opens, focus has moved *into* the dialog (the APG focus management), so keys aimed at `body` can be swallowed and the handler never runs.

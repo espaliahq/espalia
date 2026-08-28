@@ -95,12 +95,12 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     visit root_path
 
     open_dropdown(scope: "turbo-frame#notification-bell")
-    # h1 is unique to the notifications index — "Notifications" alone also
-    # appears in the bell panel, and an expectation the current page already
-    # satisfies can never arm the fallback.
+    # "Notifications" appears in the bell panel too, and every page has an
+    # h1. The bell's own mark-all reads "Mark all read", so the index's
+    # longer "Mark all as read" is the one phrase only the destination has.
     click_selector_with_js_fallback(
       "turbo-frame#notification-bell a[href='#{notifications_path}']",
-      expect_selector: "h1"
+      expect_text: "Mark all as read"
     )
 
     assert_current_path notifications_path

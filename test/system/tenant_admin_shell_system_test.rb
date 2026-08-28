@@ -35,7 +35,9 @@ class TenantAdminShellSystemTest < ApplicationSystemTestCase
     visit tenant_root_path
     assert_text "Tenant administration"
 
-    click_link_with_js_fallback "Theme", expect_text: "Brand colors"
+    # NOT "Brand colors" — the dashboard tile already reads "Brand colors and
+    # typography for this tenant.", which would disarm the fallback.
+    click_link_with_js_fallback "Theme", expect_text: "Changes preview live"
     assert_current_path tenant_theme_path
 
     click_link_with_js_fallback "Users", expect_text: "Tenant users"

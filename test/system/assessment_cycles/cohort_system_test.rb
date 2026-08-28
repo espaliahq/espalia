@@ -90,7 +90,10 @@ class AssessmentCycles::CohortSystemTest < ApplicationSystemTestCase
     visit cohort_assessment_cycle_path(@cycle)
     assert_text "Breakdown"
 
-    click_link_with_js_fallback("By role", expect_text: "Engineer")
+    # Role names are already on the default (by-manager) pivot; the active
+    # tab moving is what this click actually does.
+    click_link_with_js_fallback("By role",
+                                expect_selector: "a[aria-current='page'][href*='pivot=role']")
 
     assert_text "Engineer"
   end

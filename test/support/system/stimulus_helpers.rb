@@ -140,6 +140,8 @@ module StimulusHelpers
   def click_with_retry(expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
+    assert_signal_is_a_transition!(expect_text, expect_selector)
+
     yield
 
     # Wait long enough for a slow CI Turbo Frame round-trip before deciding
@@ -179,6 +181,8 @@ module StimulusHelpers
   def click_link_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
+    assert_signal_is_a_transition!(expect_text, expect_selector)
+
     # An intercepted click (a sticky overlay — the comparison drawer, a
     # sticky header — sitting over the link at the current scroll) is the
     # same failure the JS dispatch below exists for; don't let it raise.
@@ -217,6 +221,8 @@ module StimulusHelpers
   def click_selector_with_js_fallback(selector, expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
+    assert_signal_is_a_transition!(expect_text, expect_selector)
+
     begin
       find(selector, match: :first).click
       return if landed?(expect_text, expect_selector, wait: 8)
@@ -253,6 +259,8 @@ module StimulusHelpers
     unless expect_text || expect_selector || expect_no_text
       raise ArgumentError, "expect_text, expect_selector, or expect_no_text required"
     end
+
+    assert_signal_is_a_transition!(expect_text, expect_selector, expect_no_text)
 
     begin
       click_button locator
@@ -294,6 +302,35 @@ module StimulusHelpers
       assert_selector expect_selector, wait: Capybara.default_max_wait_time
     else
       assert_no_text expect_no_text, wait: Capybara.default_max_wait_time
+    end
+  end
+
+  # Refuses a success signal that is ALREADY true before the click.
+  #
+  # A JS-fallback helper decides "the click was dropped" by checking whether
+  # its signal appeared. If the signal was on the page all along, that check
+  # succeeds instantly, the fallback never arms, and a dropped click sails
+  # through to the caller's real assertions — which is how a guarded test can
+  # still fail on CI (`expect_text: "Brand colors"` on a dashboard whose tile
+  # already read "Brand colors and typography for this tenant."). Same shape
+  # as `expect_selector: "body"`.
+  #
+  # Fails loudly at authoring time instead: pick a signal that only exists on
+  # the far side of the click. See testing.md, "An Assertion a Dropped Click
+  # Would Also Satisfy Is Not a Test".
+  def assert_signal_is_a_transition!(expect_text, expect_selector, expect_no_text = nil)
+    if expect_text && page.has_text?(expect_text, wait: 0)
+      raise ArgumentError,
+            "expect_text #{expect_text.inspect} is already on the page before the click, " \
+            "so the JS fallback can never arm. Pick text that only the destination renders."
+    elsif expect_selector && page.has_css?(expect_selector, wait: 0)
+      raise ArgumentError,
+            "expect_selector #{expect_selector.inspect} already matches before the click, " \
+            "so the JS fallback can never arm. Pick a selector only the destination renders."
+    elsif expect_no_text && page.has_no_text?(expect_no_text, wait: 0)
+      raise ArgumentError,
+            "expect_no_text #{expect_no_text.inspect} is already absent before the click, " \
+            "so the JS fallback can never arm. Pick text that is visible until the click lands."
     end
   end
 
