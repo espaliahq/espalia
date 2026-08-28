@@ -19,7 +19,7 @@ class Operations::Frameworks::AddCapability < Operations::Base
   parameter :name,         String, required: true
   parameter :description,  String
   parameter :role_ids,     Array, required: true,
-                           schema: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1,
+                           schema: { type: "array", items: { type: "string", minLength: 1, pattern: "\\S" }, minItems: 1,
                                      description: "At least one role id to bind the capability to — " \
                                                   "a capability bound to no role is hidden from the role-filtered matrix" }
 

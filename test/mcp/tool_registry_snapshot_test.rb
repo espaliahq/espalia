@@ -907,7 +907,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "description" => { "type" => "string" },
             "role_ids" => {
               "type" => "array",
-              "items" => { "type" => "string", "minLength" => 1 },
+              "items" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
               "minItems" => 1,
               "description" => "At least one role id to bind the capability to — " \
                                "a capability bound to no role is hidden from the role-filtered matrix"
