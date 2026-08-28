@@ -148,7 +148,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", ill_li)
 
       textarea = ill_li.find("textarea[name='illustration[description]']")
-      textarea.fill_in with: "This should not be saved"
+      js_fill_in textarea, with: "This should not be saved"
 
       page.execute_script(
         "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", ill_li
@@ -229,7 +229,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
 
       textarea = add_div.find("textarea[name='illustration[description]']")
-      textarea.fill_in with: "Drives cross-functional alignment"
+      js_fill_in textarea, with: "Drives cross-functional alignment"
 
       # Submit via requestSubmit (see comment above for rationale)
       page.execute_script("arguments[0].querySelector('form').requestSubmit();", add_div)
@@ -256,7 +256,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
 
       textarea = add_div.find("textarea[name='illustration[description]']")
-      textarea.fill_in with: "Should not be saved"
+      js_fill_in textarea, with: "Should not be saved"
 
       page.execute_script(
         "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", add_div

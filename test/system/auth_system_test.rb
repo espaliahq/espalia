@@ -31,8 +31,8 @@ class AuthSystemTest < ApplicationSystemTestCase
     should "redirect to dashboard after valid login" do
       visit new_user_session_path
 
-      fill_in "Email", with: @user.email
-      fill_in "Password", with: "password123"
+      js_fill_in "Email", with: @user.email
+      js_fill_in "Password", with: "password123"
       screenshot("credentials_filled")
 
       click_button_with_js_fallback("Log in", expect_selector: "#user-menu")
@@ -48,8 +48,8 @@ class AuthSystemTest < ApplicationSystemTestCase
     should "show an error alert for invalid credentials" do
       visit new_user_session_path
 
-      fill_in "Email", with: "wrong@example.com"
-      fill_in "Password", with: "wrongpassword"
+      js_fill_in "Email", with: "wrong@example.com"
+      js_fill_in "Password", with: "wrongpassword"
       click_button_with_js_fallback("Log in", expect_selector: "[role='alert']")
 
       # Wait for the Turbo response to render the flash alert before asserting.

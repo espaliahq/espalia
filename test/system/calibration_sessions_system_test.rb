@@ -55,7 +55,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback("Calibration", expect_text: "Define calibration session")
     click_link_with_js_fallback("Define calibration session", expect_text: "Participants (raters)")
 
-    fill_in "Session name", with: "Engineering calibration"
+    js_fill_in "Session name", with: "Engineering calibration"
     select "H1 2026 Review", from: "Assessment cycle"
 
     # Pick raters via the shared person picker: one from the quick-add
@@ -67,7 +67,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     )
     assert_selector "[data-person-picker-target='selected'] span[data-person-id='#{@em_1.id}']", text: "Mia Manager"
 
-    fill_in "Participants (raters)", with: "Raj"
+    # The debounced typeahead searches for this exact string — a dropped
+    # keystroke queries "Ra" and the candidate frame comes back empty.
+    js_fill_in "Participants (raters)", with: "Raj"
     assert_selector "turbo-frame#participant-candidates button", text: "Raj Rater"
     page.execute_script(
       %{document.querySelector("turbo-frame#participant-candidates [data-person-picker-person-id-param='#{@em_2.id}']").click()}

@@ -408,6 +408,23 @@ assert_text "Proactively seeks guidance"
 
 This is the same primitive the suite already uses for the inline-editor display↔form toggle.
 
+## Typing Drops Characters Too — `js_fill_in` for Assertion-Critical Values
+
+**`fill_in` types one character at a time, and starved CI runners drop keystrokes.** This is nastier than a dropped click: the field looks filled, but a debounced typeahead runs against `"Ra"` instead of `"Raj"` and the failure surfaces much later as "no matches" — nothing points back at the typing. That is exactly how the calibration participant picker failed.
+
+`js_fill_in` assigns the value and dispatches `input` + `change`, so Stimulus controllers still fire:
+
+```ruby
+# WRONG — a dropped keystroke silently changes the query
+fill_in "Participants (raters)", with: "Raj"
+assert_selector "turbo-frame#participant-candidates button", text: "Raj Rater"
+
+# CORRECT — the exact value lands
+js_fill_in "Participants (raters)", with: "Raj"
+```
+
+It accepts a Capybara element, a CSS selector, or a field locator. Use it wherever the exact value is assertion-critical — typeahead queries, names asserted verbatim after save, anything a controller reads. Fields that are only submitted and never asserted (a reject reason, say) can stay on `fill_in`, which also keeps real typing exercised somewhere in the suite.
+
 ## An Assertion a Dropped Click Would Also Satisfy Is Not a Test
 
 **After a click, assert something that was NOT already true before it.** This is the failure mode behind three separate "flaky" tests on this branch, and in each case the test had never been testing its own subject:

@@ -305,6 +305,45 @@ module StimulusHelpers
     end
   end
 
+  # Sets a field's value via a JS assignment + dispatched input/change events,
+  # instead of Selenium's per-character +send_keys+.
+  #
+  # `fill_in` types one character at a time, and on a starved CI runner those
+  # keystrokes drop. That is nastier than a dropped click: the field looks
+  # filled, but a debounced typeahead runs against "Ra" instead of "Raj" and
+  # the failure surfaces much later as "no matches" — nothing points back at
+  # the typing. (This is how the calibration participant picker failed.)
+  #
+  # Use it wherever the exact value is assertion-critical: typeahead queries,
+  # names asserted after save, anything a Stimulus controller reads. Fields
+  # that are only submitted can stay on +fill_in+.
+  #
+  # Accepts a Capybara element, a CSS selector, or a field locator
+  # (label / name / id).
+  #
+  # @param target [Capybara::Node::Element, String]
+  # @param with [String] the value to set
+  def js_fill_in(target, with:)
+    el =
+      case target
+      when Capybara::Node::Element then target
+      else
+        begin
+          find_field(target, match: :first)
+        rescue Capybara::ElementNotFound
+          find(target, match: :first)
+        end
+      end
+
+    page.execute_script(<<~JS, el, with)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
+    el
+  end
+
   # Refuses a success signal that is ALREADY true before the click.
   #
   # A JS-fallback helper decides "the click was dropped" by checking whether
