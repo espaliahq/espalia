@@ -324,16 +324,7 @@ module StimulusHelpers
   # @param target [Capybara::Node::Element, String]
   # @param with [String] the value to set
   def js_fill_in(target, with:)
-    el =
-      case target
-      when Capybara::Node::Element then target
-      else
-        begin
-          find_field(target, match: :first)
-        rescue Capybara::ElementNotFound
-          find(target, match: :first)
-        end
-      end
+    el = target.is_a?(Capybara::Node::Element) ? target : find_fillable(target)
 
     page.execute_script(<<~JS, el, with)
       const el = arguments[0];
@@ -342,6 +333,33 @@ module StimulusHelpers
       el.dispatchEvent(new Event("change", { bubbles: true }));
     JS
     el
+  end
+
+  # Resolves a field locator (label / name / id) or CSS selector to an element.
+  #
+  # Zero-wait probes run first: the element is almost always already on the
+  # page (callers assert page state before filling), and probing +find_field+
+  # at the default wait meant every CSS-selector target burned the full 10s
+  # before the +find+ fallback ever ran — ~10s of dead wait per call, minutes
+  # across the suite. Only when nothing matches instantly does it fall back to
+  # the original waiting lookups (an element still being rendered).
+  #
+  # @param target [String] field locator or CSS selector
+  # @return [Capybara::Node::Element]
+  def find_fillable(target)
+    find_field(target, match: :first, wait: 0)
+  rescue Capybara::ElementNotFound
+    begin
+      # A label-style locator ("Participants (raters)") is not valid CSS —
+      # treat the driver's invalid-selector error like a miss.
+      find(target, match: :first, wait: 0)
+    rescue Capybara::ElementNotFound, Selenium::WebDriver::Error::InvalidSelectorError
+      begin
+        find_field(target, match: :first)
+      rescue Capybara::ElementNotFound
+        find(target, match: :first)
+      end
+    end
   end
 
   # Refuses a success signal that is ALREADY true before the click.
