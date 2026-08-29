@@ -326,6 +326,15 @@ module StimulusHelpers
   def js_fill_in(target, with:)
     el = target.is_a?(Capybara::Node::Element) ? target : find_fillable(target)
 
+    # A CSS-selector target can resolve to ANY element; `.value =` on a div
+    # is a silent no-op expando and the failure surfaces assertions later,
+    # pointing anywhere but here.
+    tag = el.tag_name
+    unless %w[input textarea select].include?(tag)
+      raise ArgumentError,
+            "js_fill_in resolved #{target.inspect} to a <#{tag}> — not a fillable control"
+    end
+
     page.execute_script(<<~JS, el, with)
       const el = arguments[0];
       el.value = arguments[1];
@@ -350,10 +359,14 @@ module StimulusHelpers
     find_field(target, match: :first, wait: 0)
   rescue Capybara::ElementNotFound
     begin
-      # A label-style locator ("Participants (raters)") is not valid CSS —
-      # treat the driver's invalid-selector error like a miss.
       find(target, match: :first, wait: 0)
-    rescue Capybara::ElementNotFound, Selenium::WebDriver::Error::InvalidSelectorError
+    rescue Selenium::WebDriver::Error::InvalidSelectorError
+      # A label-style locator ("Participants (raters)") is not valid CSS, so
+      # it can only ever be a field locator — wait on that alone and let its
+      # informative ElementNotFound propagate (re-running `find` would bury
+      # the miss under a cryptic invalid-selector error).
+      find_field(target, match: :first)
+    rescue Capybara::ElementNotFound
       begin
         find_field(target, match: :first)
       rescue Capybara::ElementNotFound
