@@ -69,7 +69,10 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
     assert_no_selector "nav a", text: "Cycles"
 
     # Stopping restores the admin's own navbar.
-    click_button_with_js_fallback "Stop impersonating", expect_text: "Your next actions across GrowthOS."
+    # Stopping lands back on root, which the impersonated view also showed —
+    # the admin-only nav link returning is what proves it took effect.
+    click_button_with_js_fallback "Stop impersonating",
+                                  expect_selector: "nav a[href='/tenant']"
     assert_selector "nav a", text: "Admin"
     assert_selector "nav a", text: "Cycles"
   end

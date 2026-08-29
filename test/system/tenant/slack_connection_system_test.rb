@@ -31,7 +31,15 @@ class Tenant::SlackConnectionSystemTest < ApplicationSystemTestCase
     visit tenant_integrations_path
     assert_text "Connected to Acme HQ"
 
-    auto_confirm { find("a", text: "Disconnect").click }
+    # JS-dispatch the click: a Selenium pointer click on this data-turbo-method
+    # link is droppable on a starved runner, and the failure reads as "no links
+    # on the page" rather than anything about Disconnect.
+    auto_confirm do
+      page.execute_script(<<~JS)
+        [...document.querySelectorAll("a")]
+          .find(a => a.textContent.trim() === "Disconnect")?.click();
+      JS
+    end
     assert_selector "a", text: "Connect Slack"
     assert_not @tenant.reload.slack_connected?
   end

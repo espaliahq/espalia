@@ -288,7 +288,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
         editor
       )
-      editor.find("textarea[name='capability[name]']").fill_in with: "Proposed Name"
+      js_fill_in editor.find("textarea[name='capability[name]']"), with: "Proposed Name"
       page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
 
       # Wait for the Turbo frame to swap — pending-edit decoration is the
@@ -430,7 +430,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       )
       assert_selector "#add-category-modal", visible: true
       within "#add-category-modal" do
-        fill_in "add_category_name", with: "Delivery & Craft"
+        js_fill_in "add_category_name", with: "Delivery & Craft"
       end
       click_button_with_js_fallback("Add category", expect_text: "Added category")
       assert_text "Added category"
@@ -450,10 +450,12 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "#add-capability-modal", visible: true
       within "#add-capability-modal" do
         assert_text "Thinking" # category name prefilled from the trigger
-        fill_in "add_capability_name", with: "Systems Design"
+        js_fill_in "add_capability_name", with: "Systems Design"
         check "Software Engineer"
       end
-      click_button_with_js_fallback("Add capability", expect_text: "Added")
+      # "Added" is all over the activity feed — the new capability landing in
+      # the matrix is the signal.
+      click_button_with_js_fallback("Add capability", expect_text: "Systems Design")
       assert_text "Added"
     end
   end
@@ -1042,32 +1044,16 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
     assert_text expect_text
   end
 
-  # JS-sets a form field's value + dispatches input/change events — the
-  # deterministic alternative to fill_in for assertion-critical values
-  # (Selenium send_keys drops characters on starved CI runners).
+  # Both of these are now thin aliases over the shared +js_fill_in+ helper,
+  # which this file's local versions predated.
   def js_set_field(selector, value)
-    el = find(selector)
-    page.execute_script(<<~JS, el, value)
-      const el = arguments[0];
-      el.value = arguments[1];
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    JS
+    js_fill_in(selector, with: value)
   end
 
-  # Sets the framework-explorer capability search box to `query` via a JS
-  # value assignment + input/change events. Selenium's send_keys drops
-  # characters on starved CI runners, and the debounced filter assertions
-  # depend on the exact query landing — JS assignment is deterministic and
-  # the dispatched `input` event still drives `framework_search_controller`.
+  # The debounced framework-explorer capability filter reads the exact query,
+  # so it must not be typed character by character.
   def set_search_query(query)
-    input = find("[data-framework-search-target='input']")
-    page.execute_script(<<~JS, input, query)
-      const el = arguments[0];
-      el.value = arguments[1];
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    JS
+    js_fill_in("[data-framework-search-target='input']", with: query)
   end
   context "reordering capabilities" do
     setup do
@@ -1386,8 +1372,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       # The glyph is the way into the discussion from the grid — click it and
       # the pane swaps to that clarification's card.
+      # The author's name is already in the feed; the card's back link is not.
       click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
-                                      expect_text: "Quinn Questioner"
+                                      expect_text: "Back to activity"
       assert_text "Raters read 'clarifying questions' three different ways"
     end
 
@@ -1415,8 +1402,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text "1 OTHER DISCUSSION HERE"
 
       # …and its sibling opens its own card, which the URL must follow.
+      # A card is already open, so its back link can't be the signal — the
+      # siblings list flipping to name the OTHER discussion is.
       click_selector_with_js_fallback(
-        "#discussion-siblings button", expect_text: "Back to activity"
+        "#discussion-siblings button",
+        expect_selector: "#discussion-siblings button[data-suggestion-id='#{second_id}']"
       )
       assert_no_current_path(/suggestion_id=#{second_id}/, url: true)
       assert_includes current_url, "suggestion_id=#{@clarification_id}"

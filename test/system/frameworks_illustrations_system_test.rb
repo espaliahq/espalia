@@ -148,9 +148,11 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", ill_li)
 
       textarea = ill_li.find("textarea[name='illustration[description]']")
-      textarea.fill_in with: "This should not be saved"
+      js_fill_in textarea, with: "This should not be saved"
 
-      ill_li.find("button[data-action='inline-editor#cancel']", match: :first).click
+      page.execute_script(
+        "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", ill_li
+      )
 
       # Edit form hidden, display mode restored — original text visible
       assert_text "Seeks guidance from tech lead"
@@ -227,7 +229,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
 
       textarea = add_div.find("textarea[name='illustration[description]']")
-      textarea.fill_in with: "Drives cross-functional alignment"
+      js_fill_in textarea, with: "Drives cross-functional alignment"
 
       # Submit via requestSubmit (see comment above for rationale)
       page.execute_script("arguments[0].querySelector('form').requestSubmit();", add_div)
@@ -254,9 +256,11 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
 
       textarea = add_div.find("textarea[name='illustration[description]']")
-      textarea.fill_in with: "Should not be saved"
+      js_fill_in textarea, with: "Should not be saved"
 
-      add_div.find("button[data-action='inline-editor#cancel']").click
+      page.execute_script(
+        "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", add_div
+      )
 
       assert_no_text "Should not be saved"
       assert_selector "button", text: "Add illustration"

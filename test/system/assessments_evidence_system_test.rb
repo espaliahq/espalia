@@ -192,7 +192,7 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
       JS
       assert_selector "#evidence-modal-overlay", visible: true, wait: 1
 
-      find("#evm-content").send_keys(:escape)
+      press_escape(scope: "#evm-content")
       assert_no_selector "#evidence-modal-overlay", visible: true
     end
   end

@@ -55,7 +55,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback("Calibration", expect_text: "Define calibration session")
     click_link_with_js_fallback("Define calibration session", expect_text: "Participants (raters)")
 
-    fill_in "Session name", with: "Engineering calibration"
+    js_fill_in "Session name", with: "Engineering calibration"
     select "H1 2026 Review", from: "Assessment cycle"
 
     # Pick raters via the shared person picker: one from the quick-add
@@ -67,7 +67,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     )
     assert_selector "[data-person-picker-target='selected'] span[data-person-id='#{@em_1.id}']", text: "Mia Manager"
 
-    fill_in "Participants (raters)", with: "Raj"
+    # The debounced typeahead searches for this exact string — a dropped
+    # keystroke queries "Ra" and the candidate frame comes back empty.
+    js_fill_in "Participants (raters)", with: "Raj"
     assert_selector "turbo-frame#participant-candidates button", text: "Raj Rater"
     page.execute_script(
       %{document.querySelector("turbo-frame#participant-candidates [data-person-picker-person-id-param='#{@em_2.id}']").click()}
@@ -215,7 +217,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # whole point of the pane frame is that a tab click doesn't reload (or
     # scroll) the page.
     page.execute_script("window.__staying = true")
-    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
+    click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
     assert_text "Strategic Thinking"
     assert_text "spread 3.0"
     assert_text "raters disagree"
@@ -285,9 +287,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # The drawer composes with the drill-in rather than growing a grid —
     # and the pins ride along into it.
     assert_selector "a[href*='capabilities'][href*='person=']", minimum: 1
-    click_with_retry(expect_text: "AT-LEVEL RATINGS BY RATER") do
-      find("a[href*='capabilities'][href*='person=']", match: :first).click
-    end
+    click_selector_with_js_fallback(
+      "a[href*='capabilities'][href*='person=']",
+      expect_text: "AT-LEVEL RATINGS BY RATER"
+    )
     assert_includes page.current_url, "pins%5B%5D=#{nia_id}"
     assert_selector "[data-drawer-card='#{nia_id}']"
 
@@ -317,7 +320,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # then over to the strip for the vocabulary check.
     visit calibration_session_path(@live_session_id, view: "cohort")
     assert_text "SCORE BY COHORT"
-    click_with_retry(expect_text: "RATER TENDENCY") { click_link "Rater tendency" }
+    click_link_with_js_fallback("Rater tendency", expect_text: "RATER TENDENCY")
 
     # ── The vocabulary defines itself, by KEYBOARD ──
     # The room is on a projector and the facilitator may be driving by
@@ -348,7 +351,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # is worse than none; the flip is verified visually instead.
 
     # ── Drill-in: divergence row → rater × level grid ──
-    click_with_retry(expect_text: "CAPABILITY DIVERGENCE") { click_link "Capability divergence" }
+    click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
     click_link_with_js_fallback("Strategic Thinking", expect_text: "AT-LEVEL RATINGS BY RATER")
     assert_text "AT-LEVEL RATINGS BY RATER"
     assert_selector "a[data-person-id]", minimum: 4
@@ -372,8 +375,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       "the accessible name carries the person, not just their initials"
 
     # Opening a dot shows their card.
+    # The card container is already in the DOM as an empty frame, so it can't
+    # be the signal — assert on content only the opened card renders.
     click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
-                                    expect_selector: "#calibration-person-card")
+                                    expect_text: "Manager: Consistently")
     assert_text "Ivy IC"
     assert_text "Manager: Consistently"
 
@@ -430,8 +435,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "2 items"
 
     # ── Comparison drawer: pinning holds two cards side by side ──
-    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
-                                    expect_text: "Manager: Consistently")
+    # Deliberately unguarded: this re-opens a card that is already showing, so
+    # there is no transition a fallback could detect. A dropped click surfaces
+    # immediately on the guarded Pin click below, which needs the open card.
+    find("a[data-person-id='#{@report_1.id}']").click
     click_link_with_js_fallback(
       "Pin", expect_selector: "[data-drawer-card='#{@report_1.id}'] a[aria-label^='Unpin']"
     )
@@ -440,8 +447,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     # Open the second person — the pinned card stays put beside the
     # inspector, so the room reads both at once.
+    # Their name is already on the grid dot — their drawer card appearing is
+    # what the click actually produces.
     click_selector_with_js_fallback("a[data-person-id='#{@report_2.id}']",
-                                    expect_text: "Omar IC")
+                                    expect_selector: "[data-drawer-card='#{@report_2.id}']")
     assert_selector "[data-drawer-card='#{@report_1.id}']"
     assert_selector "[data-drawer-card='#{@report_2.id}']"
     click_link_with_js_fallback(

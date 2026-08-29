@@ -228,6 +228,12 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}']",
                        visible: true
 
+      # Wait for the pane to actually narrow before clearing it. Without this
+      # the show-all click can fire while the pane still reads "All framework
+      # activity", which is also its post-click signal — so a dropped click
+      # would look like a successful clear.
+      within("#suggestion-panel") { assert_text "Strategic Thinking" }
+
       # Show-all clears focus via a Turbo Frame navigation — JS-fallback the
       # click so a starved-CI pointer drop doesn't leave the pane focused.
       click_link_with_js_fallback("Show all framework activity", expect_text: "All framework activity")

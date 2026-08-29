@@ -58,11 +58,20 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
       # theme variables. On a starved runner the fetch itself has been
       # observed to drop — re-submit (B-targeted, so undo-safe) if the style
       # hasn't changed.
-      changed_xpath = "//style[@id='tenant-theme'][text()=#{initial_style.inspect}]"
-      submit_switch_to_b.call unless page.has_no_xpath?(changed_xpath, wait: 8)
+      # Wait for tenant B's colour to be PRESENT, not for tenant A's style to be
+      # absent: Turbo replaces the <style> tag on re-render, and during that gap
+      # the element is missing entirely — which satisfied an absence check on a
+      # render that had switched nothing, and the old value then came back.
+      switched_xpath =
+        "//style[@id='tenant-theme'][contains(text(), #{@tenant_b.primary_color.inspect})]"
+      submit_switch_to_b.call unless page.has_xpath?(switched_xpath, visible: :all, wait: 8)
 
-      assert page.has_no_xpath?(
-        changed_xpath,
+      assert page.has_xpath?(
+        switched_xpath,
+        # visible: :all is load-bearing — a <style> tag is never "visible", so
+        # without it these matchers answer instantly regardless of the DOM and
+        # the wait they exist to provide never happens.
+        visible: :all,
         wait: Capybara.default_max_wait_time
       ), "CSS variables should change after tenant switch"
 

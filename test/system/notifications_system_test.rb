@@ -38,7 +38,10 @@ class NotificationsSystemTest < ApplicationSystemTestCase
 
     # Reading the notification (click navigates to its target) clears the badge.
     visit notifications_path
-    find("button", text: "Test: Peer feedback").click
+    click_button_with_js_fallback(
+      "Test: Peer feedback",
+      expect_selector: "turbo-frame#notification-bell button[aria-label='Notifications']"
+    )
     assert_selector "turbo-frame#notification-bell button[aria-label='Notifications']"
     assert_no_selector "turbo-frame#notification-bell span", text: /\d/
   end
@@ -79,9 +82,10 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     open_dropdown(scope: "turbo-frame#notification-bell")
     # Icon-only control — locate by aria-label; sync on text unique to the
     # preferences page (the panel header also says "Notifications").
-    click_with_retry(expect_text: "Feedback requested from you") do
-      find("turbo-frame#notification-bell a[aria-label='Notification preferences']").click
-    end
+    click_selector_with_js_fallback(
+      "turbo-frame#notification-bell a[aria-label='Notification preferences']",
+      expect_text: "Feedback requested from you"
+    )
 
     assert_current_path settings_notifications_path
   end
@@ -91,7 +95,13 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     visit root_path
 
     open_dropdown(scope: "turbo-frame#notification-bell")
-    within("turbo-frame#notification-bell") { click_link "View all notifications" }
+    # "Notifications" appears in the bell panel too, and every page has an
+    # h1. The bell's own mark-all reads "Mark all read", so the index's
+    # longer "Mark all as read" is the one phrase only the destination has.
+    click_selector_with_js_fallback(
+      "turbo-frame#notification-bell a[href='#{notifications_path}']",
+      expect_text: "Mark all as read"
+    )
 
     assert_current_path notifications_path
     assert_text "Test: Full list"
@@ -110,9 +120,10 @@ class NotificationsSystemTest < ApplicationSystemTestCase
     visit root_path
 
     open_dropdown(scope: "turbo-frame#notification-bell")
-    click_with_retry(expect_text: "Feedback requested from you") do
-      find("turbo-frame#notification-bell a[aria-label='Notification preferences']").click
-    end
+    click_selector_with_js_fallback(
+      "turbo-frame#notification-bell a[aria-label='Notification preferences']",
+      expect_text: "Feedback requested from you"
+    )
 
     assert_current_path settings_notifications_path
   end

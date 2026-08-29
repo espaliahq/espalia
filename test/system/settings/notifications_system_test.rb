@@ -18,8 +18,7 @@ class Settings::NotificationsSystemTest < ApplicationSystemTestCase
     assert page.has_checked_field?("notif-evidence_requested-slack", visible: :all)
     uncheck "notif-evidence_requested-slack", allow_label_click: true, visible: :all
 
-    click_button "Save preferences"
-    assert_text "Notification preferences saved"
+    click_button_with_js_fallback("Save preferences", expect_text: "Notification preferences saved")
 
     assert_not @user.reload.notifies_via?(:evidence_requested, :slack)
     assert @user.notifies_via?(:evidence_requested, :in_app)

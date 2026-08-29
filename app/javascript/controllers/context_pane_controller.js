@@ -20,6 +20,14 @@
 
 import BaseController from "controllers/base_controller"
 
+// Frames to give layout before accepting that a saved scroll position can't
+// be restored — `turbo:frame-load` precedes layout on a starved renderer.
+const RESTORE_SCROLL_ATTEMPTS = 3
+// Frame loads to keep a return anchor alive: the "Show all" link's own
+// navigation and the controller's rebuild can each fire one, and the feed the
+// anchor belongs to may only arrive on the later.
+const ANCHOR_RESTORE_LOADS = 4
+
 export default class extends BaseController {
   static targets = ["frame", "signal", "scroller"]
   static values = {
@@ -280,8 +288,15 @@ export default class extends BaseController {
 
     if (this.frameTarget.src === next) {
       // A frame-link navigation (the "Show all" clear link) may have already
-      // set the identical src — its in-flight load still gets the anchor.
-      if (returnAnchor) this._savedAnchor = returnAnchor
+      // set the identical src. Its load races this assignment: the link
+      // navigates the frame directly, while the anchor only arrives here via
+      // matrix:focus-changed. If the load won, `turbo:frame-load` already ran
+      // #restoreScroll with nothing saved — so restore again now rather than
+      // leaving the reviewer at the top holding an anchor nobody will use.
+      if (returnAnchor) {
+        this._savedAnchor = returnAnchor
+        this.#restoreScroll()
+      }
       return false
     }
     // Different src = different content: a scroll position saved for an
@@ -348,21 +363,65 @@ export default class extends BaseController {
     return null
   }
 
-  #restoreScroll() {
-    const anchor = this._savedAnchor
-    const top = this._savedScrollTop
+  // `turbo:frame-load` can fire before the fresh content has been laid out,
+  // so measuring straight away reads the OLD (short) scrollHeight: the anchor
+  // isn't found yet, the pixel fallback looks "too deep", and the reviewer's
+  // place is silently dropped — on a loaded machine, precisely when a long
+  // feed makes losing it most costly. Measure after a frame, and give layout
+  // one more before giving up.
+  #restoreScroll(attempt = 0) {
+    if (!this.hasScrollerTarget) return this.#clearSavedScroll()
+
+    requestAnimationFrame(() => {
+      if (!this.hasScrollerTarget) return this.#clearSavedScroll()
+
+      const anchor = this._savedAnchor
+      const top = this._savedScrollTop
+
+      if (anchor) {
+        if (this.#scrollToAnchor(anchor)) return this.#clearSavedScroll()
+
+        // Not in this content. Returning to the feed can take TWO loads — the
+        // "Show all" frame link navigates on its own, and the controller's own
+        // rebuild follows — so the anchor is routinely absent from the first
+        // one. Consuming it there is what dropped the reviewer at the top, and
+        // a returning reviewer has no pixel fallback (a different src nulls
+        // it), so there is nothing else to fall back to.
+        //
+        // Keep it for the next load instead, bounded so a genuinely absent
+        // entry (discarded "load older" batch) can't linger and hijack an
+        // unrelated later load. A different src clears it outright — see
+        // #rebuildFrameSrc.
+        this._anchorLoads = (this._anchorLoads || 0) + 1
+        if (this._anchorLoads < ANCHOR_RESTORE_LOADS) return
+
+        return this.#clearSavedScroll()
+      }
+
+      if (top == null) return this.#clearSavedScroll()
+
+      // Pixel fallback (anchor entry not in the fresh content — e.g. it lived
+      // in a discarded "load older" batch). Exact-or-nothing: clamping a deep
+      // position to the bottom of the shorter first batch is more disorienting
+      // than starting at the top of the visibly-reset list.
+      const max = this.scrollerTarget.scrollHeight - this.scrollerTarget.clientHeight
+      if (top <= max) {
+        this.scrollerTarget.scrollTop = top
+        return this.#clearSavedScroll()
+      }
+
+      // Too deep for the height we can see — which may just mean the content
+      // hasn't landed. Retry a bounded number of frames before accepting it.
+      if (attempt < RESTORE_SCROLL_ATTEMPTS) return this.#restoreScroll(attempt + 1)
+
+      this.#clearSavedScroll()
+    })
+  }
+
+  #clearSavedScroll() {
     this._savedAnchor = null
     this._savedScrollTop = null
-    if (!this.hasScrollerTarget) return
-    if (anchor && this.#scrollToAnchor(anchor)) return
-    if (top == null) return
-
-    // Pixel fallback (anchor entry not in the fresh content — e.g. it lived
-    // in a discarded "load older" batch). Exact-or-nothing: clamping a deep
-    // position to the bottom of the shorter first batch is more disorienting
-    // than starting at the top of the visibly-reset list.
-    const max = this.scrollerTarget.scrollHeight - this.scrollerTarget.clientHeight
-    if (top <= max) this.scrollerTarget.scrollTop = top
+    this._anchorLoads = 0
   }
 
   // @return [Boolean] whether the anchor entry exists in the fresh content

@@ -116,7 +116,8 @@ class AssessmentCycles::AttainmentSystemTest < ApplicationSystemTestCase
     # No manager ratings exist → unassessed coverage under that perspective.
     click_link_with_js_fallback "Manager", expect_text: "0/1 assessed"
 
-    click_link_with_js_fallback "By role family", expect_text: "Engineering"
+    click_link_with_js_fallback "By role family",
+                                expect_selector: "a[aria-current='true'][href*='by=family']"
   end
 
   should "reach the report from the cycle page" do

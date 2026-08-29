@@ -284,7 +284,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 The dropped-click flake class (Selenium's synthetic pointer click / modal-handler registration silently lost on starved CI) recurs often enough that two automated guards now steer new tests toward the JS-dispatch remedies documented in the sections below:
 
-- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the two highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), and `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
+- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it) — **including a scoped `row.find(...)`, which drops its click exactly like a top-level one** — and `send_keys(:escape)` (use `press_escape`). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
 - **CodeRabbit path instructions** (`.coderabbit.yaml`) catch the fuzzier cases a static cop can't reliably detect without false positives: navigation `click_button`/`click_link` without a retry/JS-fallback wrapper, `data-turbo-confirm` form submits via click, `fill_in` of an assertion-critical field, and read-after-click races.
 
 If you add a new JS-dispatch helper, update both the cop (if it introduces a new safe form) and the table in *Stimulus Toggle Helpers*.
@@ -407,6 +407,54 @@ assert_text "Proactively seeks guidance"
 ```
 
 This is the same primitive the suite already uses for the inline-editor display↔form toggle.
+
+## Typing Drops Characters Too — `js_fill_in` for Assertion-Critical Values
+
+**`fill_in` types one character at a time, and starved CI runners drop keystrokes.** This is nastier than a dropped click: the field looks filled, but a debounced typeahead runs against `"Ra"` instead of `"Raj"` and the failure surfaces much later as "no matches" — nothing points back at the typing. That is exactly how the calibration participant picker failed.
+
+`js_fill_in` assigns the value and dispatches `input` + `change`, so Stimulus controllers still fire:
+
+```ruby
+# WRONG — a dropped keystroke silently changes the query
+fill_in "Participants (raters)", with: "Raj"
+assert_selector "turbo-frame#participant-candidates button", text: "Raj Rater"
+
+# CORRECT — the exact value lands
+js_fill_in "Participants (raters)", with: "Raj"
+```
+
+It accepts a Capybara element, a CSS selector, or a field locator. Use it wherever the exact value is assertion-critical — typeahead queries, names asserted verbatim after save, anything a controller reads. Fields that are only submitted and never asserted (a reject reason, say) can stay on `fill_in`, which also keeps real typing exercised somewhere in the suite.
+
+## An Assertion a Dropped Click Would Also Satisfy Is Not a Test
+
+**After a click, assert something that was NOT already true before it.** This is the failure mode behind three separate "flaky" tests on this branch, and in each case the test had never been testing its own subject:
+
+- the tenant switcher clicked "Beta Inc" then asserted `current_path == root_path` — but the test *starts* on `root_path`;
+- the theming test asserted the *absence* of the old tenant's `<style>` — absent both before the switch landed and if it never landed;
+- a JS-fallback call passed `expect_selector: "body"`, so the landed-check succeeded instantly and the fallback could never arm.
+
+All three pass when the click is silently dropped, so they only fail when something *else* drifts — which is exactly what "flaky" looks like from the outside. The fix is the same each time: pick a signal that only exists on the far side of the click (a flash, a destination-only element, a row that changed shape), and prove it bites by neutering the click and watching the assertion fail.
+
+This applies doubly to the `expect_text:` / `expect_selector:` you hand a JS-fallback helper — a signal already on the page disarms the very fallback you added.
+
+**The helpers now enforce this.** `assert_signal_is_a_transition!` runs before every guarded click and raises if `expect_text` / `expect_selector` is already true (or `expect_no_text` already absent), so a disarmed fallback fails loudly at authoring time instead of silently passing until CI. Arming it against the existing suite found thirteen such calls. If a click genuinely produces no visible transition, don't fake a signal — use a plain click and say in a comment why it's safe (usually: the next guarded step depends on it).
+
+## Esc Needs a Dispatched `KeyboardEvent` — `press_escape`
+
+**Use `press_escape` rather than `find("body").send_keys(:escape)`.** Stimulus binds Esc as `keydown.esc@window`, but Selenium's key dispatch needs a focused, interactable target — and once a modal opens, focus has moved *into* the dialog (the APG focus management), so keys aimed at `body` can be swallowed and the handler never runs.
+
+The failure is silent and reads as "the modal didn't close" or "confirm was never called" — indistinguishable from a real bug, which is how two of these sat on `main` being written off as CI noise.
+
+```ruby
+# WRONG — the keydown may never reach the window listener
+find("body").send_keys(:escape)
+
+# CORRECT — construct the event and dispatch it where the listener is
+press_escape
+press_escape(scope: "#evm-content")   # dispatch from an element; it bubbles
+```
+
+Same principle as the `MouseEvent` rule below: dispatch the event where the listener actually is.
 
 ## Click-Outside Listeners Need a Real `MouseEvent`
 

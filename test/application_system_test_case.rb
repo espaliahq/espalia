@@ -172,12 +172,27 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   def submit_sign_in_form_via_js(email, password)
     ensure_sign_in_form_loaded
 
-    fill_in "Email", with: email
-    fill_in "Password", with: password
-    page.execute_script(<<~JS)
-      const btn = Array.from(document.querySelectorAll("button, input[type='submit']"))
-        .find(el => (el.textContent.trim() || el.value) === "Log in");
-      btn?.closest("form")?.requestSubmit(btn);
+    # Set the credentials via JS rather than fill_in: send_keys drops
+    # characters on a starved runner (see docs/guidelines/testing.md), so a
+    # fallback that re-types them can submit a TRUNCATED password, fail
+    # authentication, and land back on the sign-in form — indistinguishable
+    # from the dropped click it exists to recover from. Assigning the values
+    # makes this attempt genuinely different from the first, not a retry of
+    # the same fragile input path.
+    page.execute_script(<<~JS, email, password)
+      const form = document.querySelector("form[action*='sign_in'], form#new_user");
+      if (form) {
+        const set = (sel, value) => {
+          const el = form.querySelector(sel);
+          if (!el) return;
+          el.value = value;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        set("input[type='email'], input[name*='email']", arguments[0]);
+        set("input[type='password']", arguments[1]);
+        form.requestSubmit();
+      }
     JS
   end
 

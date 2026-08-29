@@ -140,6 +140,8 @@ module StimulusHelpers
   def click_with_retry(expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
+    assert_signal_is_a_transition!(expect_text, expect_selector)
+
     yield
 
     # Wait long enough for a slow CI Turbo Frame round-trip before deciding
@@ -179,6 +181,8 @@ module StimulusHelpers
   def click_link_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
+    assert_signal_is_a_transition!(expect_text, expect_selector)
+
     # An intercepted click (a sticky overlay — the comparison drawer, a
     # sticky header — sitting over the link at the current scroll) is the
     # same failure the JS dispatch below exists for; don't let it raise.
@@ -217,6 +221,8 @@ module StimulusHelpers
   def click_selector_with_js_fallback(selector, expect_text: nil, expect_selector: nil)
     raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
 
+    assert_signal_is_a_transition!(expect_text, expect_selector)
+
     begin
       find(selector, match: :first).click
       return if landed?(expect_text, expect_selector, wait: 8)
@@ -253,6 +259,8 @@ module StimulusHelpers
     unless expect_text || expect_selector || expect_no_text
       raise ArgumentError, "expect_text, expect_selector, or expect_no_text required"
     end
+
+    assert_signal_is_a_transition!(expect_text, expect_selector, expect_no_text)
 
     begin
       click_button locator
@@ -297,6 +305,74 @@ module StimulusHelpers
     end
   end
 
+  # Sets a field's value via a JS assignment + dispatched input/change events,
+  # instead of Selenium's per-character +send_keys+.
+  #
+  # `fill_in` types one character at a time, and on a starved CI runner those
+  # keystrokes drop. That is nastier than a dropped click: the field looks
+  # filled, but a debounced typeahead runs against "Ra" instead of "Raj" and
+  # the failure surfaces much later as "no matches" — nothing points back at
+  # the typing. (This is how the calibration participant picker failed.)
+  #
+  # Use it wherever the exact value is assertion-critical: typeahead queries,
+  # names asserted after save, anything a Stimulus controller reads. Fields
+  # that are only submitted can stay on +fill_in+.
+  #
+  # Accepts a Capybara element, a CSS selector, or a field locator
+  # (label / name / id).
+  #
+  # @param target [Capybara::Node::Element, String]
+  # @param with [String] the value to set
+  def js_fill_in(target, with:)
+    el =
+      case target
+      when Capybara::Node::Element then target
+      else
+        begin
+          find_field(target, match: :first)
+        rescue Capybara::ElementNotFound
+          find(target, match: :first)
+        end
+      end
+
+    page.execute_script(<<~JS, el, with)
+      const el = arguments[0];
+      el.value = arguments[1];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    JS
+    el
+  end
+
+  # Refuses a success signal that is ALREADY true before the click.
+  #
+  # A JS-fallback helper decides "the click was dropped" by checking whether
+  # its signal appeared. If the signal was on the page all along, that check
+  # succeeds instantly, the fallback never arms, and a dropped click sails
+  # through to the caller's real assertions — which is how a guarded test can
+  # still fail on CI (`expect_text: "Brand colors"` on a dashboard whose tile
+  # already read "Brand colors and typography for this tenant."). Same shape
+  # as `expect_selector: "body"`.
+  #
+  # Fails loudly at authoring time instead: pick a signal that only exists on
+  # the far side of the click. See testing.md, "An Assertion a Dropped Click
+  # Would Also Satisfy Is Not a Test".
+  def assert_signal_is_a_transition!(expect_text, expect_selector, expect_no_text = nil)
+    if expect_text && page.has_text?(expect_text, wait: 0)
+      raise ArgumentError,
+            "expect_text #{expect_text.inspect} is already on the page before the click, " \
+            "so the JS fallback can never arm. Pick text that only the destination renders."
+    elsif expect_selector && page.has_css?(expect_selector, wait: 0)
+      raise ArgumentError,
+            "expect_selector #{expect_selector.inspect} already matches before the click, " \
+            "so the JS fallback can never arm. Pick a selector only the destination renders."
+    elsif expect_no_text && page.has_no_text?(expect_no_text, wait: 0)
+      raise ArgumentError,
+            "expect_no_text #{expect_no_text.inspect} is already absent before the click, " \
+            "so the JS fallback can never arm. Pick text that is visible until the click lands."
+    end
+  end
+
   def landed?(expect_text, expect_selector, expect_no_text = nil, wait:)
     if expect_text
       page.has_text?(expect_text, wait: wait)
@@ -311,6 +387,29 @@ module StimulusHelpers
     # That's "not landed yet", not a test failure — report false so the
     # caller's JS fallback / final assertion takes over.
     false
+  end
+
+  # Dispatches an Escape keydown on the window, rather than
+  # +find("body").send_keys(:escape)+.
+  #
+  # Stimulus binds Esc as +keydown.esc@window+, but Selenium's key dispatch
+  # needs a focused, interactable target — and once a modal opens, focus has
+  # moved into the dialog (the APG focus management), so keys aimed at +body+
+  # can be swallowed and the handler never runs. The failure is silent and
+  # reads as "the modal didn't close" or "confirm was never called", which is
+  # indistinguishable from a real bug. This is the same remedy the suite
+  # already uses for click-outside listeners: construct the event and dispatch
+  # it where the listener actually is.
+  #
+  # @param scope [String, nil] CSS selector to dispatch from (bubbles to
+  #   window); defaults to the window itself
+  def press_escape(scope: nil)
+    page.execute_script(<<~JS, scope)
+      const target = arguments[0] ? document.querySelector(arguments[0]) : window;
+      (target || window).dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
+      );
+    JS
   end
 
   # Stubs +window.confirm+ to always return true, then runs the block.

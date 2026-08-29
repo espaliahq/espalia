@@ -87,7 +87,7 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
       # Added recipients drop out of the suggestion list, and the button counts.
       assert_no_selector "[data-request-evidence-target='suggestions'] button", text: "Pat Peer", visible: true
       assert_selector "button[type='submit']", text: "Send 1 request"
-      fill_in "evr-message", with: "Saw you pair on the incident"
+      js_fill_in "evr-message", with: "Saw you pair on the incident"
     end
 
     # Submit via requestSubmit() — the pointer click on the modal's Send
