@@ -441,7 +441,11 @@ export default class extends BaseController {
         // fall THROUGH to the pixel fallback below: same-content reloads also
         // saved a pixel position, and it may still land within the fresh
         // content (return anchors saved no pixel position, so they clear).
-        this.#installAnchor(null)
+        // Cleared inline rather than via #installAnchor — its generation bump
+        // would mark THIS pass stale and kill the pixel retry it is falling
+        // through to.
+        this._savedAnchor = null
+        this._anchorLoads = 0
       }
 
       if (top == null) return this.#clearSavedScroll()
