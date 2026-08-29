@@ -64,7 +64,16 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
       href: href,
       data: { turbo_frame: "_top" },
       class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline"
-    ) { "Continue self-assessment →" }
+    ) { "#{cta_verb} self-assessment →" }
+  end
+
+  # "Start" until the person themselves records a rating this cycle. Keyed off
+  # the self side, not the row-level progress status — that status also flips
+  # on the manager's first rating — so the verb always agrees with the
+  # assessments index's own-card CTA.
+  # @return [String]
+  def cta_verb
+    @state[:self_started] ? "Continue" : "Start"
   end
 
   def empty

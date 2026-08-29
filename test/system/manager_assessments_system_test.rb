@@ -92,7 +92,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # using the team-list's "Report Alex" as the wait target leads to a
       # false-positive landed check, because that name is visible on both
       # the index (team list) and the show (h1) pages.
-      click_link_with_js_fallback("Review Assessment", expect_text: "Critical Thinking")
+      click_link_with_js_fallback("Review assessment", expect_text: "Critical Thinking")
       assert_selector "h1", text: "Report Alex"
       assert_text "Critical Thinking"
 
@@ -373,7 +373,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
       assert_text "Team Assessments"
       assert_text "Report Alex"
-      assert_link "Review Assessment"
+      assert_link "Review assessment"
     end
 
     should "show manager review on mobile with header elements visible" do
@@ -445,7 +445,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Report Alex"
 
       click_link_with_js_fallback(
-        "Review Assessment", expect_text: "Synthesises information from multiple sources"
+        "Review assessment", expect_text: "Synthesises information from multiple sources"
       )
       assert_selector "h1", text: "Report Alex"
       wait_for_stimulus "matrix"

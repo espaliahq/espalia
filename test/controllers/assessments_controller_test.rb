@@ -50,6 +50,20 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Engineering Growth"
       assert_includes response.body, "My Assessments"
+      # Untouched enrollment → the CTA invites a start, agreeing with the
+      # "Not started" Self chip (issue #332).
+      assert_includes response.body, "Start self-assessment"
+    end
+
+    should "flip the own-card CTA to Continue once a self rating lands" do
+      rate(@cap, "consistent")
+
+      sign_in @user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Continue self-assessment"
+      assert_not_includes response.body, "Start self-assessment"
     end
 
     should "redirect unauthenticated users to sign in" do
