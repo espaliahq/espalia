@@ -290,21 +290,36 @@ export default class extends BaseController {
       // A frame-link navigation (the "Show all" clear link) may have already
       // set the identical src. Its load races this assignment: the link
       // navigates the frame directly, while the anchor only arrives here via
-      // matrix:focus-changed. If the load won, `turbo:frame-load` already ran
+      // matrix:focus-changed. If the load already won, `turbo:frame-load` ran
       // #restoreScroll with nothing saved — so restore again now rather than
       // leaving the reviewer at the top holding an anchor nobody will use.
+      // If the load is still IN FLIGHT (frame `busy`), restoring now would
+      // measure the OUTGOING content — the narrowed feed renders the same
+      // entry ids, so the anchor can false-match, scroll stale content, and
+      // be consumed before the full feed lands. Install it and let that
+      // load's own `turbo:frame-load` restore instead.
       if (returnAnchor) {
-        this._savedAnchor = returnAnchor
-        this.#restoreScroll()
+        this.#installAnchor(returnAnchor)
+        if (!this.frameTarget.hasAttribute("busy")) this.#restoreScroll()
       }
       return false
     }
     // Different src = different content: a scroll position saved for an
     // in-flight same-content reload must never land on it.
     this._savedScrollTop = null
-    this._savedAnchor = returnAnchor || null
+    this.#installAnchor(returnAnchor || null)
     this.frameTarget.src = next
     return true
+  }
+
+  // Every fresh anchor starts with a zeroed keep-alive budget — a prior
+  // anchor that died mid-budget (its entry lived in a discarded "load older"
+  // batch) must not bequeath its attempt count, or the new anchor gets
+  // cleared on its first miss instead of surviving the loads the budget was
+  // sized for.
+  #installAnchor(anchor) {
+    this._savedAnchor = anchor
+    this._anchorLoads = 0
   }
 
   // Whether any textarea in the pane is focused or holds an unsent DRAFT —
@@ -338,7 +353,7 @@ export default class extends BaseController {
   // don't come through here — those start at the top (except the
   // return-to-feed anchor, see #rebuildFrameSrc).
   #reloadPreservingScroll() {
-    this._savedAnchor = this.#captureScrollAnchor()
+    this.#installAnchor(this.#captureScrollAnchor())
     this._savedScrollTop = this.hasScrollerTarget ? this.scrollerTarget.scrollTop : null
     this.frameTarget.reload()
   }
@@ -395,7 +410,11 @@ export default class extends BaseController {
         this._anchorLoads = (this._anchorLoads || 0) + 1
         if (this._anchorLoads < ANCHOR_RESTORE_LOADS) return
 
-        return this.#clearSavedScroll()
+        // Budget exhausted — the entry is genuinely gone. Drop the anchor but
+        // fall THROUGH to the pixel fallback below: same-content reloads also
+        // saved a pixel position, and it may still land within the fresh
+        // content (return anchors saved no pixel position, so they clear).
+        this.#installAnchor(null)
       }
 
       if (top == null) return this.#clearSavedScroll()
