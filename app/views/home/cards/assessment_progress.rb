@@ -67,12 +67,13 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
     ) { "#{cta_verb} self-assessment →" }
   end
 
-  # "Start" until the person's first human rating flips the projected status
-  # past "in_progress" — seeded/carried ratings don't count as started, so the
-  # CTA agrees with the "Not started" badge.
+  # "Start" until the person themselves records a rating this cycle. Keyed off
+  # the self side, not the row-level progress status — that status also flips
+  # on the manager's first rating — so the verb always agrees with the
+  # assessments index's own-card CTA.
   # @return [String]
   def cta_verb
-    @state[:status] == "in_progress" ? "Start" : "Continue"
+    @state[:self_started] ? "Continue" : "Start"
   end
 
   def empty

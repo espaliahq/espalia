@@ -51,18 +51,27 @@ class Home::AssessmentProgressCard < Home::Card
       .for_person(person.id)
       .find_by(framework_id: cycle.framework_id)
     progress = AssessmentCycleProgress.find_by(cycle_id: cycle.cycle_id, person_id: person.id)
-    rated = AssessmentLevelRating
+    self_rated = AssessmentLevelRating
       .for_cycle(cycle.cycle_id)
       .for_person(person.id)
       .self_rated
-      .count
+    # The self side counts as started only on a human touch — the row-level
+    # progress status also flips on the MANAGER's first rating, and carried
+    # (seeded) values don't count either. Mirrors the index's self_human
+    # predicate (AssessmentsController#build_card_statuses) so the two
+    # surfaces' Start/Continue verbs can't disagree. Legacy rows with nil
+    # provenance count as human.
+    self_started = self_rated
+      .where("self_rating_source = 'human' OR self_rating_source IS NULL")
+      .exists?
 
     Views::Home::Cards::AssessmentProgress.new(
       state: {
         cycle: cycle,
         assignment: assignment,
         status: progress&.status || "in_progress",
-        self_rated_count: rated
+        self_rated_count: self_rated.count,
+        self_started: self_started
       }
     )
   end

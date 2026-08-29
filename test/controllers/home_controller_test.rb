@@ -54,6 +54,13 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
 
   context "GET /home/cards/:card (card content)" do
     should "render the assessment-progress card frame without layout" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating,
+          tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
+          framework_id: @cycle.framework_id,
+          self_rated_frequency: "consistent", self_rating_source: "human")
+      end
+
       sign_in @user
       get home_card_path(card: "assessment_progress", key: @cycle.cycle_id)
 
@@ -65,13 +72,19 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, 'data-turbo-frame="_top"'
     end
 
-    should "invite a start on the assessment-progress card before any human rating" do
-      # "in_progress" is the pre-first-rating status — the card badge reads
-      # "Not started", so the CTA must say Start, not Continue (issue #332).
+    should "invite a start until the person themselves has rated" do
+      # A manager rating flips the row-level progress status to "started",
+      # and a carried (seeded) self value isn't a human touch — neither makes
+      # the self side started, so the CTA must still say Start (issue #332).
       ActsAsTenant.with_tenant(@tenant) do
-        AssessmentCycleProgress
-          .where(cycle_id: @cycle.cycle_id, person_id: @person.id)
-          .update_all(status: "in_progress")
+        create(:assessment_level_rating,
+          tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
+          framework_id: @cycle.framework_id,
+          manager_rated_frequency: "consistent", manager_rating_source: "human")
+        create(:assessment_level_rating,
+          tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
+          framework_id: @cycle.framework_id,
+          self_rated_frequency: "some", self_rating_source: "seeded")
       end
 
       sign_in @user
