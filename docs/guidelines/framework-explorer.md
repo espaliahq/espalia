@@ -1225,6 +1225,22 @@ exact-or-nothing — a saved position deeper than the fresh (first-batch)
 content starts at the top of the visibly-reset list rather than landing at
 the bottom of an unrelated stretch of feed.
 
+Two Turbo timing facts the restore machinery leans on (verified against the
+turbo-rails source, not assumed — both bit in review):
+
+- **A frame's `busy` attribute is set a microtask AFTER a navigation starts
+  and cleared only after `turbo:frame-load`** (`requestFinished` runs after
+  the awaited `loadResponse` that dispatches the event). So `busy` is blind
+  in the same task as a `src` assignment and still present during the
+  frame-load handler — any decision hung on it must be deferred past a
+  macrotask, never read inline.
+- **A pass measuring the DOM across rAF retries can outlive its content.**
+  The narrowed feed renders the same `li` ids as the full feed, so a retry
+  queued against the old content can false-match a newer anchor. The
+  controller guards this with a restore-generation counter (bumped per load
+  and per anchor install); clears within the current pass deliberately do
+  NOT bump it, or they'd mark their own retry stale.
+
 ### 23. Never re-fetch the whole matrix per approval — the edit-mode frame is megabytes
 
 Field report ("a few times I have had an error — quit or wait for growthOS to
