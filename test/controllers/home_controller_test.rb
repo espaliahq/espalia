@@ -65,6 +65,23 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, 'data-turbo-frame="_top"'
     end
 
+    should "invite a start on the assessment-progress card before any human rating" do
+      # "in_progress" is the pre-first-rating status — the card badge reads
+      # "Not started", so the CTA must say Start, not Continue (issue #332).
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress
+          .where(cycle_id: @cycle.cycle_id, person_id: @person.id)
+          .update_all(status: "in_progress")
+      end
+
+      sign_in @user
+      get home_card_path(card: "assessment_progress", key: @cycle.cycle_id)
+
+      assert_response :success
+      assert_includes response.body, "Start self-assessment"
+      assert_not_includes response.body, "Continue self-assessment"
+    end
+
     should "render the awaiting-you card frame for a manager with a pending report" do
       ActsAsTenant.with_tenant(@tenant) do
         report = create(:person, tenant: @tenant, name: "Report One", manager: @person)

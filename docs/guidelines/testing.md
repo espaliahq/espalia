@@ -221,24 +221,24 @@ end
 ```ruby
 # WRONG — second click can be silently dropped before the index commits
 visit assessments_path
-click_link "Review Assessment"
+click_link "Review assessment"
 assert_text "Manager Review"  # may fail: page is still the index
 
 # WRONG — back-to-back clicks with no sync between them
 click_link "Assessments"
-click_link "Review Assessment"
+click_link "Review assessment"
 assert_text "Manager Review"
 
 # CORRECT — assertion on the destination page commits the navigation first
 visit assessments_path
 assert_text "Team Assessments"
-click_link "Review Assessment"
+click_link "Review assessment"
 assert_text "Manager Review"
 
 # CORRECT — same pattern between two click_link calls
 click_link "Assessments"
 assert_text "Team Assessments"
-click_link "Review Assessment"
+click_link "Review assessment"
 ```
 
 **Key principles:**
@@ -363,7 +363,7 @@ end
 
 **When NOT needed:** When the click is on a Stimulus-controlled toggle (use the toggle helpers above) or when the click is a form submission already followed by an `assert_text` on the response (the form submit already round-trips).
 
-**Both attempts dropped — use the JS-fallback helpers.** `click_with_retry` retries the same Capybara mechanism, so when Chrome's event loop stays starved across both yields, both attempts can be lost on the same run. For the highest-traffic navigation links (sign-in flows, "Define new cycle", "Test Framework", "Review Assessment", "Save settings", etc.) prefer:
+**Both attempts dropped — use the JS-fallback helpers.** `click_with_retry` retries the same Capybara mechanism, so when Chrome's event loop stays starved across both yields, both attempts can be lost on the same run. For the highest-traffic navigation links (sign-in flows, "Define new cycle", "Test Framework", "Review assessment", "Save settings", etc.) prefer:
 
 | Helper | Replaces |
 |--------|----------|

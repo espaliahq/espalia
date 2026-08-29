@@ -168,7 +168,7 @@ class Views::Assessments::IndexView < Views::Base
                  "dark:border-gray-600 px-3 py-1.5 text-sm font-medium " \
                  "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 " \
                  "transition-colors"
-        ) { "Review Assessment" }
+        ) { "Review assessment" }
       end
     end
   end
@@ -205,7 +205,7 @@ class Views::Assessments::IndexView < Views::Base
             href: assessment_path(assignment),
             class: "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 " \
                    "text-sm font-medium text-white hover:bg-primary/90 transition-colors"
-          ) { "Continue Assessment" }
+          ) { "#{self_cta_verb(assignment)} self-assessment" }
         else
           a(
             href: assessment_path(assignment),
@@ -213,7 +213,7 @@ class Views::Assessments::IndexView < Views::Base
                    "dark:border-gray-600 px-3 py-1.5 text-sm font-medium " \
                    "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 " \
                    "transition-colors"
-          ) { "View Assessment" }
+          ) { "View self-assessment" }
         end
       end
     end
@@ -244,6 +244,19 @@ class Views::Assessments::IndexView < Views::Base
         end
       end
     end
+  end
+
+  # "Start" until the viewer has touched a rating this cycle — carried
+  # (seeded) values don't count, so the verb agrees with the Self chip's
+  # :not_started / :to_confirm work states.
+  # @param assignment [PersonFrameworkAssignment]
+  # @return [String]
+  def self_cta_verb(assignment)
+    status = @card_statuses[[ assignment.framework_id, assignment.person_id ]]
+    return "Start" if status.nil?
+
+    state = side_state(status[:self_complete], status[:self_human], status[:self_any])
+    %i[not_started to_confirm].include?(state) ? "Start" : "Continue"
   end
 
   # Complete = every current-level cell vetted (human-owned) this cycle.

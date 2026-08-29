@@ -64,7 +64,15 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
       href: href,
       data: { turbo_frame: "_top" },
       class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline"
-    ) { "Continue self-assessment →" }
+    ) { "#{cta_verb} self-assessment →" }
+  end
+
+  # "Start" until the person's first human rating flips the projected status
+  # past "in_progress" — seeded/carried ratings don't count as started, so the
+  # CTA agrees with the "Not started" badge.
+  # @return [String]
+  def cta_verb
+    @state[:status] == "in_progress" ? "Start" : "Continue"
   end
 
   def empty
