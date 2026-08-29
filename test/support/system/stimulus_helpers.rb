@@ -327,12 +327,16 @@ module StimulusHelpers
     el = target.is_a?(Capybara::Node::Element) ? target : find_fillable(target)
 
     # A CSS-selector target can resolve to ANY element; `.value =` on a div
-    # is a silent no-op expando and the failure surfaces assertions later,
-    # pointing anywhere but here.
+    # is a silent no-op expando, and on a checkbox/radio it changes the
+    # submitted value rather than toggling checked — either way the failure
+    # surfaces assertions later, pointing anywhere but here.
     tag = el.tag_name
-    unless %w[input textarea select].include?(tag)
+    type = tag == "input" ? el[:type].to_s : nil
+    if !%w[input textarea select].include?(tag) ||
+       %w[checkbox radio file submit reset button].include?(type)
+      resolved = type ? "an <input type=#{type}>" : "a <#{tag}>"
       raise ArgumentError,
-            "js_fill_in resolved #{target.inspect} to a <#{tag}> — not a fillable control"
+            "js_fill_in resolved #{target.inspect} to #{resolved} — not a text-fillable control"
     end
 
     page.execute_script(<<~JS, el, with)
