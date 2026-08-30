@@ -76,12 +76,36 @@ class Operations::Frameworks::AddCapabilityTest < ActiveSupport::TestCase
       end
     end
 
-    should "reject adding a capability with no roles" do
+    should "reject adding a capability with an empty role list" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          add(@admin_ctx, {
+            framework_id: @framework_id, category_id: @cat_id, name: "Unbound", role_ids: []
+          })
+        end
+        assert_match(/at least one role/i, error.message)
+        assert_not framework.draft_in_progress
+      end
+    end
+
+    should "reject adding a capability with only blank role ids" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          add(@admin_ctx, {
+            framework_id: @framework_id, category_id: @cat_id, name: "Unbound", role_ids: [ "", " \t" ]
+          })
+        end
+        assert_match(/at least one role/i, error.message)
+        assert_not framework.draft_in_progress
+      end
+    end
+
+    should "reject adding a capability with no role_ids at all" do
       ActsAsTenant.with_tenant(@tenant) do
         error = assert_raises(Operations::Base::ParameterError) do
           add(@admin_ctx, { framework_id: @framework_id, category_id: @cat_id, name: "Unbound" })
         end
-        assert_match(/at least one role/i, error.message)
+        assert_match(/role_ids/, error.message)
         assert_not framework.draft_in_progress
       end
     end
@@ -89,7 +113,9 @@ class Operations::Frameworks::AddCapabilityTest < ActiveSupport::TestCase
     should "reject an unknown category" do
       ActsAsTenant.with_tenant(@tenant) do
         assert_raises(Operations::Base::ParameterError) do
-          add(@admin_ctx, { framework_id: @framework_id, category_id: SecureRandom.uuid_v7, name: "X" })
+          add(@admin_ctx, {
+            framework_id: @framework_id, category_id: SecureRandom.uuid_v7, name: "X", role_ids: [ @role_id ]
+          })
         end
       end
     end
@@ -99,7 +125,9 @@ class Operations::Frameworks::AddCapabilityTest < ActiveSupport::TestCase
     should "be denied" do
       ActsAsTenant.with_tenant(@tenant) do
         assert_raises(Pundit::NotAuthorizedError) do
-          add(@member_ctx, { framework_id: @framework_id, category_id: @cat_id, name: "X" })
+          add(@member_ctx, {
+            framework_id: @framework_id, category_id: @cat_id, name: "X", role_ids: [ @role_id ]
+          })
         end
       end
     end
