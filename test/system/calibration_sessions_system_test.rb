@@ -549,7 +549,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         if (s.textContent.includes("Flag expectation")) s.parentElement.open = true
       })
     JS
-    js_set_field "#flag-reason-3", "Scope or altitude?"
+    js_fill_in "#flag-reason-3", with: "Scope or altitude?"
     click_button_with_js_fallback "Raise clarification", expect_text: "clarification discussion is now open"
 
     # One flag per cell per session: the marker replaces the affordance.
@@ -563,7 +563,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
         if (s.textContent.includes("Flag example")) s.parentElement.open = true
       })
     JS
-    js_set_field "textarea[aria-label^='Why this example is unclear']", "Reads as an L5 behaviour"
+    js_fill_in "textarea[aria-label^='Why this example is unclear']", with: "Reads as an L5 behaviour"
     click_button_with_js_fallback "Flag example", expect_text: "Example flagged"
     open_dropdown(scope: "th[data-level-menu='3']")
     assert_text "⚑ Example flagged — clarification open on the framework"
@@ -650,7 +650,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     open_dropdown(scope: "#calibration-person-card")
     click_link_with_js_fallback "revisit this rating…",
                                 expect_text: "to revisit this rating at L"
-    js_set_field "#revisit-note", "Compare against the two peers we just discussed"
+    js_fill_in "#revisit-note", with: "Compare against the two peers we just discussed"
     click_button_with_js_fallback "Request revisit", expect_text: "Revisit requested"
 
     # One ask per cell per session — the marker replaces the kebab item.
@@ -679,7 +679,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       const select = document.querySelector("#evidence-request-requestee")
       select.value = [...select.options].find((o) => o.text.includes("Mia Manager")).value
     JS
-    js_set_field "#evidence-request-message", "Nobody could answer what good looks like here"
+    js_fill_in "#evidence-request-message", with: "Nobody could answer what good looks like here"
     click_button_with_js_fallback "Send request", expect_text: "Feedback / evidence requested"
 
     ActsAsTenant.with_tenant(@tenant) do
@@ -742,7 +742,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_match(/revisit a rating/, entries[1])
     assert_match(/Flagged an expectation/, entries.last)
 
-    js_set_field "#session-note", "Add the two reference ICs to the org-wide session"
+    js_fill_in "#session-note", with: "Add the two reference ICs to the org-wide session"
     click_button_with_js_fallback "Record note", expect_text: "Note recorded."
     assert_text "Add the two reference ICs to the org-wide session"
 
@@ -753,7 +753,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # whatever state the toggling above left behind.
     visit calibration_session_capability_path(@flag_session_id, @flag_cap_stable, activity: "open")
     assert_selector "#calibration-log-pane[data-pane-state='open']"
-    js_set_field "#session-note", "Ratings here look a level high"
+    js_fill_in "#session-note", with: "Ratings here look a level high"
     click_button_with_js_fallback "Record note", expect_text: "Note recorded."
     assert_current_path(/capabilities/)
     assert_text "Ratings here look a level high"
@@ -767,19 +767,6 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     )
     assert_text "Add the two reference ICs to the org-wide session"
     assert_no_text "⚑ Flagged an expectation as unclear"
-  end
-
-  # Sets a field's value via JS + input/change events — these values feed
-  # exact-match assertions, and Selenium send_keys drops characters on
-  # starved CI runners (see docs/guidelines/testing.md).
-  def js_set_field(selector, value)
-    el = find(selector)
-    page.execute_script(<<~JS, el, value)
-      const el = arguments[0];
-      el.value = arguments[1];
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    JS
   end
 
   test "calibration screens use the full width of a large desktop" do

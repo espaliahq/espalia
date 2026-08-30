@@ -68,7 +68,14 @@ export default class extends BaseController {
     // Restore the feed's scroll position after a same-content reload — the
     // scroll container lives INSIDE the frame, so every reload replaces it
     // and would otherwise reset a reviewer to the top of a long feed.
-    this.onFrameLoad = () => this.#restoreScroll()
+    // Each load starts a fresh restore generation so retry passes queued
+    // against the PREVIOUS content bail instead of consuming saved state
+    // that now belongs to this load.
+    this._restoreGen = 0
+    this.onFrameLoad = () => {
+      this._restoreGen++
+      this.#restoreScroll()
+    }
     this.element.addEventListener("turbo:frame-load", this.onFrameLoad)
   }
 
@@ -111,15 +118,6 @@ export default class extends BaseController {
   // body click remains the way to jump the grid to the entity).
   openSuggestionCard(event) {
     const id = event.currentTarget?.dataset?.suggestionId
-    if (!id) return
-    this.#showSuggestionCard(id)
-  }
-
-  // Window-event twin of openSuggestionCard, for triggers that live outside
-  // the pane — the matrix's pending-change squiggles dispatch
-  // `suggestion:open-card` with the suggestion id in the event detail.
-  onOpenSuggestionCard(event) {
-    const id = event.detail?.suggestionId
     if (!id) return
     this.#showSuggestionCard(id)
   }
@@ -258,6 +256,12 @@ export default class extends BaseController {
 
   // Returns true when it changed the frame's src (which itself starts a load).
   #rebuildFrameSrc() {
+    // Consume the return anchor before any early return — left pending, a
+    // later unrelated rebuild would pick it up and scroll a fresh feed to a
+    // stale entry.
+    const returnAnchor = this._pendingReturnAnchor
+    this._pendingReturnAnchor = null
+
     if (!this.hasFrameTarget || !this.basePathValue) return false
 
     const url = new URL(this.basePathValue, window.location.origin)
@@ -280,31 +284,53 @@ export default class extends BaseController {
     }
 
     const next = url.toString()
-    // Returning to the full feed after a review detour (narrowed focus /
-    // suggestion card) restores the reviewer's place via the entry they left
-    // from — consumed exactly once, whichever load serves the return.
-    const returnAnchor = this._pendingReturnAnchor
-    this._pendingReturnAnchor = null
 
     if (this.frameTarget.src === next) {
       // A frame-link navigation (the "Show all" clear link) may have already
       // set the identical src. Its load races this assignment: the link
       // navigates the frame directly, while the anchor only arrives here via
-      // matrix:focus-changed. If the load won, `turbo:frame-load` already ran
+      // matrix:focus-changed. If the load already won, `turbo:frame-load` ran
       // #restoreScroll with nothing saved — so restore again now rather than
       // leaving the reviewer at the top holding an anchor nobody will use.
+      // If that load is still IN FLIGHT, restoring now would measure the
+      // OUTGOING content — the narrowed feed renders the same entry ids, so
+      // the anchor can false-match, scroll stale content, and be consumed
+      // before the full feed lands. Turbo only marks the frame `busy` a
+      // microtask after the navigation starts (and clears it after
+      // `turbo:frame-load`), so the attribute can't be read in this same
+      // task — decide after a macrotask, by which point it is accurate.
       if (returnAnchor) {
-        this._savedAnchor = returnAnchor
-        this.#restoreScroll()
+        this.#installAnchor(returnAnchor)
+        setTimeout(() => {
+          // Already consumed — the in-flight load's frame-load beat us to it.
+          if (this._savedAnchor !== returnAnchor) return
+          // Load in flight — its own turbo:frame-load will restore.
+          if (this.hasFrameTarget && this.frameTarget.hasAttribute("busy")) return
+          this.#restoreScroll()
+        }, 0)
       }
       return false
     }
     // Different src = different content: a scroll position saved for an
     // in-flight same-content reload must never land on it.
     this._savedScrollTop = null
-    this._savedAnchor = returnAnchor || null
+    this.#installAnchor(returnAnchor || null)
     this.frameTarget.src = next
     return true
+  }
+
+  // Every fresh anchor starts with a zeroed keep-alive budget — a prior
+  // anchor that died mid-budget (its entry lived in a discarded "load older"
+  // batch) must not bequeath its attempt count, or the new anchor gets
+  // cleared on its first miss instead of surviving the loads the budget was
+  // sized for. Bumping the restore generation invalidates any retry pass
+  // still queued against earlier content, which would otherwise read THIS
+  // anchor at callback time and consume it against content it wasn't saved
+  // for.
+  #installAnchor(anchor) {
+    this._savedAnchor = anchor
+    this._anchorLoads = 0
+    this._restoreGen++
   }
 
   // Whether any textarea in the pane is focused or holds an unsent DRAFT —
@@ -338,7 +364,7 @@ export default class extends BaseController {
   // don't come through here — those start at the top (except the
   // return-to-feed anchor, see #rebuildFrameSrc).
   #reloadPreservingScroll() {
-    this._savedAnchor = this.#captureScrollAnchor()
+    this.#installAnchor(this.#captureScrollAnchor())
     this._savedScrollTop = this.hasScrollerTarget ? this.scrollerTarget.scrollTop : null
     this.frameTarget.reload()
   }
@@ -369,17 +395,33 @@ export default class extends BaseController {
   // place is silently dropped — on a loaded machine, precisely when a long
   // feed makes losing it most costly. Measure after a frame, and give layout
   // one more before giving up.
-  #restoreScroll(attempt = 0) {
+  #restoreScroll(attempt = 0, gen = this._restoreGen) {
     if (!this.hasScrollerTarget) return this.#clearSavedScroll()
 
     requestAnimationFrame(() => {
+      // The content changed underneath this pass (a newer load or anchor
+      // install bumped the generation) — bail and leave the saved state for
+      // the newer pass; measuring here would run against the wrong content.
+      if (gen !== this._restoreGen) return
       if (!this.hasScrollerTarget) return this.#clearSavedScroll()
 
       const anchor = this._savedAnchor
       const top = this._savedScrollTop
 
       if (anchor) {
-        if (this.#scrollToAnchor(anchor)) return this.#clearSavedScroll()
+        const result = this.#scrollToAnchor(anchor)
+        if (result === "landed") return this.#clearSavedScroll()
+
+        if (result === "short") {
+          // The entry is present but the scroll clamped short — the fresh
+          // list may not have its final height yet (frame-load precedes
+          // layout). Give layout a few frames, then accept the clamped
+          // position rather than leave an anchor lingering to hijack a
+          // later load.
+          if (attempt < RESTORE_SCROLL_ATTEMPTS) return this.#restoreScroll(attempt + 1, gen)
+
+          return this.#clearSavedScroll()
+        }
 
         // Not in this content. Returning to the feed can take TWO loads — the
         // "Show all" frame link navigates on its own, and the controller's own
@@ -395,7 +437,15 @@ export default class extends BaseController {
         this._anchorLoads = (this._anchorLoads || 0) + 1
         if (this._anchorLoads < ANCHOR_RESTORE_LOADS) return
 
-        return this.#clearSavedScroll()
+        // Budget exhausted — the entry is genuinely gone. Drop the anchor but
+        // fall THROUGH to the pixel fallback below: same-content reloads also
+        // saved a pixel position, and it may still land within the fresh
+        // content (return anchors saved no pixel position, so they clear).
+        // Cleared inline rather than via #installAnchor — its generation bump
+        // would mark THIS pass stale and kill the pixel retry it is falling
+        // through to.
+        this._savedAnchor = null
+        this._anchorLoads = 0
       }
 
       if (top == null) return this.#clearSavedScroll()
@@ -412,7 +462,7 @@ export default class extends BaseController {
 
       // Too deep for the height we can see — which may just mean the content
       // hasn't landed. Retry a bounded number of frames before accepting it.
-      if (attempt < RESTORE_SCROLL_ATTEMPTS) return this.#restoreScroll(attempt + 1)
+      if (attempt < RESTORE_SCROLL_ATTEMPTS) return this.#restoreScroll(attempt + 1, gen)
 
       this.#clearSavedScroll()
     })
@@ -424,14 +474,18 @@ export default class extends BaseController {
     this._anchorLoads = 0
   }
 
-  // @return [Boolean] whether the anchor entry exists in the fresh content
+  // @return [String] "landed" (entry found, offset applied), "short" (entry
+  //   found but the scroll clamped — the content isn't at its final height
+  //   yet, so treating it as landed would consume the anchor hundreds of px
+  //   early), or "absent" (entry not in this content)
   #scrollToAnchor({ entryId, delta }) {
     const el = this.scrollerTarget.querySelector(`#${CSS.escape(entryId)}`)
-    if (!el) return false
+    if (!el) return "absent"
 
     const scrollerTop = this.scrollerTarget.getBoundingClientRect().top
     this.scrollerTarget.scrollTop += (el.getBoundingClientRect().top - scrollerTop) - delta
-    return true
+    const residual = Math.abs((el.getBoundingClientRect().top - scrollerTop) - delta)
+    return residual <= 1 ? "landed" : "short"
   }
 
   // Leaving the full feed for a review detour (a narrowed focus or the
