@@ -3,10 +3,15 @@
 require "test_helper"
 require Rails.root.join("test/support/system/stimulus_helpers")
 
-# Unit tests for the "exactly one success signal" contract on the guarded
-# click helpers. A call passing two signals used to have all but the first
-# silently ignored (never armed, never asserted) — the disarmed-fallback bug
-# the helpers exist to catch, reintroduced through the ignored argument.
+# Unit tests for the "exactly one success signal" contract that
+# +guard_click_signal!+ enforces for every guarded click helper. A call
+# passing two signals used to have all but the first silently ignored (never
+# armed, never asserted) — the disarmed-fallback bug the helpers exist to
+# catch, reintroduced through the ignored argument.
+#
+# The helper name in each message comes from +__method__+, so these
+# assertions also pin that a rename can't leave the error blaming the wrong
+# method.
 #
 # No browser here: the guard must run BEFORE any page interaction, so the
 # host below raises if `page` is touched. A test that reached the browser

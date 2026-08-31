@@ -140,11 +140,7 @@ module StimulusHelpers
   #     within("#scoring-panel") { click_on "Delivering" }
   #   end
   def click_with_retry(expect_text: nil, expect_selector: nil)
-    assert_exactly_one_signal!(
-      "click_with_retry", expect_text: expect_text, expect_selector: expect_selector
-    )
-
-    assert_signal_is_a_transition!(expect_text, expect_selector)
+    guard_click_signal!(__method__, expect_text: expect_text, expect_selector: expect_selector)
 
     yield
 
@@ -185,11 +181,7 @@ module StimulusHelpers
   # @param expect_text [String, nil] text expected on destination
   # @param expect_selector [String, nil] selector expected on destination
   def click_link_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
-    assert_exactly_one_signal!(
-      "click_link_with_js_fallback", expect_text: expect_text, expect_selector: expect_selector
-    )
-
-    assert_signal_is_a_transition!(expect_text, expect_selector)
+    guard_click_signal!(__method__, expect_text: expect_text, expect_selector: expect_selector)
 
     # An intercepted click (a sticky overlay — the comparison drawer, a
     # sticky header — sitting over the link at the current scroll) is the
@@ -229,11 +221,7 @@ module StimulusHelpers
   # @param expect_text [String, nil] text expected after the click
   # @param expect_selector [String, nil] selector expected after the click
   def click_selector_with_js_fallback(selector, expect_text: nil, expect_selector: nil)
-    assert_exactly_one_signal!(
-      "click_selector_with_js_fallback", expect_text: expect_text, expect_selector: expect_selector
-    )
-
-    assert_signal_is_a_transition!(expect_text, expect_selector)
+    guard_click_signal!(__method__, expect_text: expect_text, expect_selector: expect_selector)
 
     begin
       find(selector, match: :first).click
@@ -270,12 +258,10 @@ module StimulusHelpers
   # @param expect_selector [String, nil] selector expected after the click
   # @param expect_no_text [String, nil] text expected to DISAPPEAR after the click
   def click_button_with_js_fallback(locator, expect_text: nil, expect_selector: nil, expect_no_text: nil)
-    assert_exactly_one_signal!(
-      "click_button_with_js_fallback",
+    guard_click_signal!(
+      __method__,
       expect_text: expect_text, expect_selector: expect_selector, expect_no_text: expect_no_text
     )
-
-    assert_signal_is_a_transition!(expect_text, expect_selector, expect_no_text)
 
     begin
       click_button locator
@@ -394,23 +380,33 @@ module StimulusHelpers
     end
   end
 
-  # Refuses a call that supplies zero, or more than one, success signal.
+  # The single entry point every guarded click helper calls first: exactly
+  # one success signal, and that signal must be a real transition.
   #
-  # The guarded click helpers pick their signal by strict precedence
+  # One choke point rather than two calls per helper — the two checks share
+  # their inputs, and the helper's name comes from +__method__+ so a rename
+  # can't leave a hand-typed string blaming the wrong method.
+  #
+  # Exactly-one: the helpers pick their signal by strict precedence
   # (text > selector > no_text) in the landed-check AND in the final
-  # assertion, so a call passing two signals has all but the first
-  # SILENTLY IGNORED — never armed, never asserted. An author writing
-  # `expect_text: "Saved", expect_selector: "#draft-badge"` believing both
-  # are checked gets exactly the disarmed-fallback bug this machinery
-  # exists to catch, reintroduced through the ignored argument.
+  # assertion, so without this a call passing two signals would have all but
+  # the first SILENTLY IGNORED — never armed, never asserted. An author
+  # writing `expect_text: "Saved", expect_selector: "#draft-badge"` believing
+  # both are checked would get exactly the disarmed-fallback bug this
+  # machinery exists to catch, reintroduced through the ignored argument.
+  # When a click genuinely needs two assertions, assert the second yourself
+  # after the helper returns.
   #
-  # Fails loudly at authoring time instead: one signal per call. When a
-  # click genuinely needs two assertions, assert the second yourself after
-  # the helper returns.
-  #
-  # @param helper [String] the calling helper's name (for the message)
+  # @param helper [Symbol] the calling helper — pass +__method__+
   # @param signals [Hash{Symbol=>String,nil}] only the signal kwargs that
   #   helper accepts, in precedence order
+  def guard_click_signal!(helper, **signals)
+    assert_exactly_one_signal!(helper, **signals)
+    assert_signal_is_a_transition!(
+      signals[:expect_text], signals[:expect_selector], signals[:expect_no_text]
+    )
+  end
+
   def assert_exactly_one_signal!(helper, **signals)
     supplied = signals.compact.keys
     return if supplied.size == 1
@@ -420,8 +416,8 @@ module StimulusHelpers
 
     raise ArgumentError,
           "#{helper}: pass exactly one of #{accepted} (given: #{given}). " \
-          "The helper checks a single signal by precedence, so any extra one " \
-          "is silently ignored — never armed, never asserted."
+          "The helper checks a single signal by precedence, so a second one " \
+          "would be silently ignored — never armed, never asserted."
   end
 
   # Refuses a success signal that is ALREADY true before the click.
