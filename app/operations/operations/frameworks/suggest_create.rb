@@ -36,6 +36,13 @@ class Operations::Frameworks::SuggestCreate < Operations::Base
     "level"                   => %i[ordinal title code is_entry]
   }.freeze
 
+  # Entity types that hang off a parent — each needs a `parent_id`, and each
+  # has a matching branch in {#expected_parent_ids}.
+  PARENTED_ENTITY_TYPES = %w[role_illustration behavioural_expectation capability role level].freeze
+  # The rest are framework-level and take no parent. Derived from the same list
+  # of entity types so a new type can't quietly fall outside both halves.
+  FRAMEWORK_LEVEL_ENTITY_TYPES = (ALLOWED_CREATION_KEYS.keys - PARENTED_ENTITY_TYPES).freeze
+
   parameter :framework_id, String, required: true
   parameter :entity_type,  String, required: true, allowed: ALLOWED_CREATION_KEYS.keys
   parameter :proposed_attributes, Hash, required: true, schema: {
@@ -60,6 +67,14 @@ class Operations::Frameworks::SuggestCreate < Operations::Base
   parameter :parent_id, String
   parameter :rationale, String
   parameter :mode,      String, allowed: %w[editing suggesting]
+
+  PARENT_REQUIRED_MESSAGE = ->(type) { "#{type} needs a parent_id — the entity it is created under" }
+  PARENT_FORBIDDEN_MESSAGE = ->(type) { "#{type} is framework-level and takes no parent_id" }
+
+  requires_when :parent_id, if: :entity_type, in: PARENTED_ENTITY_TYPES,
+                            message: PARENT_REQUIRED_MESSAGE
+  forbids_when :parent_id, if: :entity_type, in: FRAMEWORK_LEVEL_ENTITY_TYPES,
+                           message: PARENT_FORBIDDEN_MESSAGE
 
   def policy_check
     authorize framework, :submit_suggestion?
@@ -118,20 +133,16 @@ class Operations::Frameworks::SuggestCreate < Operations::Base
           "(accepted: #{allowed.join(', ')})"
   end
 
-  # Framework-level entities (capability_category, role_family) take no
-  # parent; everything else nests under one. Resolve from the explorer graph
-  # so draft-added parents count (Lesson 17) and the id is scoped to the
-  # authorized framework.
+  # Existence validation only — whether a parent_id is required or forbidden
+  # for this entity_type is declared (and advertised) via requires_when /
+  # forbids_when above. Resolve from the explorer graph so draft-added parents
+  # count (Lesson 17) and the id is scoped to the authorized framework.
+  #
+  # `.to_a` keeps a parented type whose {#expected_parent_ids} branch is
+  # missing from silently accepting anything — it reports a missing parent.
   def ensure_parent_exists!
-    parent_ids = expected_parent_ids
-    if parent_ids.nil?
-      return if params[:parent_id].blank?
-
-      raise Operations::Base::ParameterError,
-            "#{params[:entity_type]} is framework-level and takes no parent_id"
-    end
-
-    return if parent_ids.include?(params[:parent_id])
+    return unless PARENTED_ENTITY_TYPES.include?(params[:entity_type])
+    return if expected_parent_ids.to_a.include?(params[:parent_id])
 
     raise ActiveRecord::RecordNotFound,
           "parent #{params[:parent_id]} for #{params[:entity_type]} not found in this framework"

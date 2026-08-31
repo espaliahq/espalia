@@ -169,7 +169,19 @@ class Mcp::RequestHandler
   # Persists a PendingApproval row instead of running the operation. The
   # MCP client gets back a URL the user can open to confirm — execution
   # happens in the web controller, never inside the MCP request.
+  #
+  # The input shape is validated BEFORE the row is minted: otherwise a
+  # malformed `:in_app` call is accepted here and only fails when the user
+  # opens the review page, a dead end for both of them (and the client is told
+  # nothing, since the deferral response looks like a success). Instantiating
+  # runs the declared parameter rules and NOTHING else — policy checks and
+  # entity lookups stay in `#call`, so deferral semantics are unchanged — and a
+  # bad payload raises ParameterError, which `#call`'s rescue maps to -32602
+  # like every other tool. The instance is discarded; approval executes from
+  # the persisted arguments under a freshly-rebuilt context.
   def defer_to_in_app_approval(operation_class, arguments)
+    operation_class.new(context: @context, params: arguments)
+
     approval = Mcp::PendingApproval.create!(
       user: @context.user,
       tenant: @context.tenant_user&.tenant,

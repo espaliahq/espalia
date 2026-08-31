@@ -149,6 +149,24 @@ class McpInAppApprovalTest < ActionDispatch::IntegrationTest
       assert @approval.result_payload["value"].is_a?(Hash), "result not captured"
     end
 
+    # A row minted before the operation's input rules tightened: the arguments
+    # were valid when submitted and aren't now. The blanket rescue would say
+    # "Could not execute operation", leaving the user with no idea why.
+    should "surface a ParameterError's own message rather than the generic alert" do
+      stale = Mcp::PendingApproval.create!(
+        user: @user, tenant: @tenant, client_application: @application,
+        operation_class: "Operations::Frameworks::AddCollaborator",
+        arguments: { framework_id: "fw_1", person_id: "p_1", role: "editor", scope_id: "cap_1" },
+        expires_at: Time.current + 1.hour
+      )
+
+      post approve_mcp_approval_path(stale)
+
+      assert_redirected_to mcp_approval_path(stale)
+      assert_match(/editor is framework-wide/, flash[:alert])
+      assert_equal "pending", stale.reload.status
+    end
+
     should "refuse re-approval after it has already been resolved" do
       @approval.update!(status: :rejected)
       post approve_mcp_approval_path(@approval)

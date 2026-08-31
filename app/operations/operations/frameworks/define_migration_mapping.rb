@@ -17,26 +17,34 @@ class Operations::Frameworks::DefineMigrationMapping < Operations::Base
   category :write
   approval :mcp_client
 
+  # Every mapping_type a retiring capability can be given.
+  MAPPING_TYPES = %w[same evolved split archived new].freeze
   # mapping_types whose ratings warrant a reassessment flag downstream.
   REASSESS_TYPES = %w[evolved split].freeze
-  # mapping_types that carry ratings to a surviving capability — they require
-  # a `to_stable_id`; `archived` / `new` / `same` must not (it is ignored).
+  # mapping_types that carry ratings to a surviving capability — they require a
+  # `to_stable_id`. Derived from the same list, so the two halves of the rule
+  # can never drift apart or leave a type unaccounted for.
   SURVIVOR_TYPES = %w[evolved split].freeze
+  # The rest carry no ratings anywhere, so a survivor is meaningless for them
+  # and supplying one is rejected rather than silently dropped.
+  NON_SURVIVOR_TYPES = (MAPPING_TYPES - SURVIVOR_TYPES).freeze
 
   parameter :framework_id,   String, required: true
   parameter :from_stable_id, String, required: true
-  parameter :mapping_type,   String, required: true,
-                                     allowed: %w[same evolved split archived new]
+  parameter :mapping_type,   String, required: true, allowed: MAPPING_TYPES
   parameter :to_stable_id,   String
   parameter :mapping_id,     String
   parameter :reason,         String
 
-  # The message reaches the publish-review page as a flash, so it keeps the
+  # Both messages reach the publish-review page as a flash, so they keep the
   # domain wording rather than the generic parameter-speak.
   SURVIVOR_REQUIRED_MESSAGE = ->(type) { "#{type} mapping requires a surviving capability (to_stable_id)" }
+  SURVIVOR_FORBIDDEN_MESSAGE = ->(type) { "#{type} mapping does not take a surviving capability (to_stable_id)" }
 
   requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES,
                                message: SURVIVOR_REQUIRED_MESSAGE
+  forbids_when :to_stable_id, if: :mapping_type, in: NON_SURVIVOR_TYPES,
+                              message: SURVIVOR_FORBIDDEN_MESSAGE
 
   def policy_check
     authorize framework, :define_migration_mapping?

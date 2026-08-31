@@ -23,6 +23,8 @@ class Operations::Frameworks::AddCollaborator < Operations::Base
   parameter :scope_type,   String, allowed: SCOPE_BY_ROLE.values
   parameter :scope_id,     String
 
+  declare_collaborator_scope_rules :role
+
   # Tenant admins and framework owners may curate collaborators.
   # @raise [Pundit::NotAuthorizedError]
   def policy_check
@@ -31,7 +33,6 @@ class Operations::Frameworks::AddCollaborator < Operations::Base
 
   # @return [Hash] { framework_id:, person_id:, role:, scope_type:, scope_id:, added: }
   def perform
-    validate_scope_pair!(params[:role])
     ensure_scope_entity_exists!
     ensure_not_already_held!
 

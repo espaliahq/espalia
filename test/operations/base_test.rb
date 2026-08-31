@@ -393,7 +393,7 @@ class Operations::BaseTest < ActiveSupport::TestCase
           requires_when :label, if: :kind, equals: "otehr"
         end
       end
-      assert_match(/outside its allowed set/, err.message)
+      assert_match(/outside kind.s allowed set/, err.message)
     end
 
     should "reject a parameter depending on itself" do
@@ -403,6 +403,459 @@ class Operations::BaseTest < ActiveSupport::TestCase
           requires_when :kind, if: :kind, equals: "x"
         end
       end
+    end
+  end
+
+  MustBeFixture = Class.new(Operations::Base) do
+    parameter :role, String, allowed: %w[role_lead viewer]
+    parameter :scope_type, String, allowed: %w[role capability]
+    requires_when :scope_type, if: :role, equals: "role_lead", must_be: "role"
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "requires_when must_be:" do
+    should "accept the pinned value" do
+      out = MustBeFixture.call(context: build_context, params: { role: "role_lead", scope_type: "role" })
+      assert_equal "role", out[:scope_type]
+    end
+
+    should "raise when the dependent carries a different allowed value" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        MustBeFixture.new(context: build_context, params: { role: "role_lead", scope_type: "capability" })
+      end
+      assert_match(/scope_type must be "role" when role is "role_lead"/, err.message)
+    end
+
+    should "still raise when the dependent is missing" do
+      assert_raises(Operations::Base::ParameterError) do
+        MustBeFixture.new(context: build_context, params: { role: "role_lead" })
+      end
+    end
+
+    should "leave the dependent unconstrained when the trigger doesn't match" do
+      out = MustBeFixture.call(context: build_context, params: { role: "viewer", scope_type: "capability" })
+      assert_equal "capability", out[:scope_type]
+    end
+
+    should "reject a pin outside the dependent's allowed set at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :scope_type, String, allowed: %w[role capability]
+          requires_when :scope_type, if: :role, equals: "role_lead", must_be: "nope"
+        end
+      end
+      assert_match(/outside scope_type's allowed set/, err.message)
+    end
+
+    # A pin the dependent can never hold publishes `{type: "integer", const:
+    # "5"}` — a schema that contradicts itself.
+    should "reject a pin the dependent's declared type can't hold" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :level_ordinal, Integer
+          requires_when :level_ordinal, if: :role, equals: "role_lead", must_be: "5"
+        end
+      end
+      assert_match(/is not a Integer/, err.message)
+    end
+
+    should "accept an Integer pin on a Numeric parameter" do
+      op = Class.new(Operations::Base) do
+        parameter :role, String
+        parameter :weight, Numeric
+        requires_when :weight, if: :role, equals: "role_lead", must_be: 1
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_equal 1, op.call(context: build_context, params: { role: "role_lead", weight: 1 })[:weight]
+    end
+
+    should "accept a boolean pin on a :boolean parameter" do
+      op = Class.new(Operations::Base) do
+        parameter :role, String
+        parameter :is_entry, :boolean
+        requires_when :is_entry, if: :role, equals: "role_lead", must_be: true
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { role: "role_lead", is_entry: false })
+      end
+      assert_equal true, op.call(
+        context: build_context, params: { role: "role_lead", is_entry: "1" }
+      )[:is_entry]
+    end
+
+    # `false` must not be mistaken for "no pin declared" — every consumer
+    # nil-checks, and this pins that it stays so.
+    should "enforce a false pin, not discard it" do
+      op = Class.new(Operations::Base) do
+        parameter :role, String
+        parameter :is_entry, :boolean
+        requires_when :is_entry, if: :role, equals: "role_lead", must_be: false
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_equal false, op.conditional_requirements.first.must_be
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { role: "role_lead", is_entry: true })
+      end
+      assert_equal false, op.call(
+        context: build_context, params: { role: "role_lead", is_entry: false }
+      )[:is_entry]
+    end
+
+    should "reject a non-boolean pin on a :boolean parameter" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :is_entry, :boolean
+          requires_when :is_entry, if: :role, equals: "role_lead", must_be: "yes"
+        end
+      end
+    end
+
+    should "reject a non-JSON-primitive pin at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :scope_type, String
+          requires_when :scope_type, if: :role, equals: "role_lead", must_be: :role
+        end
+      end
+      assert_match(/must_be value must be JSON primitives/, err.message)
+    end
+
+    # A pin is meaningless on a rule that forbids the dependent outright, so it
+    # must not be silently swallowed.
+    should "reject must_be: on forbids_when at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :scope_type, String
+          forbids_when :scope_type, if: :role, equals: "viewer", must_be: "role"
+        end
+      end
+      assert_match(/forbids_when got unknown option\(s\): must_be/, err.message)
+    end
+  end
+
+  ForbidsWhenFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved split archived]
+    parameter :to_stable_id, String
+    parameter :kind, String, allowed: %w[a b]
+    parameter :note, String
+    forbids_when :to_stable_id, if: :mapping_type, in: %w[same archived]
+    forbids_when :note, if: :kind, equals: "a"
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "forbids_when DSL" do
+    should "accept a call whose trigger doesn't match" do
+      out = ForbidsWhenFixture.call(
+        context: build_context, params: { mapping_type: "evolved", to_stable_id: "cap_1" }
+      )
+      assert_equal "cap_1", out[:to_stable_id]
+    end
+
+    should "accept a matching trigger with the dependent omitted" do
+      out = ForbidsWhenFixture.call(context: build_context, params: { mapping_type: "same" })
+      assert_nil out[:to_stable_id]
+    end
+
+    # An explicit nil is how a controller compacts an inapplicable field, so it
+    # must read as "not supplied" — the same reading `requires_any_of` uses.
+    should "accept a matching trigger with the dependent explicitly nil" do
+      out = ForbidsWhenFixture.call(
+        context: build_context, params: { mapping_type: "archived", to_stable_id: nil }
+      )
+      assert_nil out[:to_stable_id]
+    end
+
+    should "raise when an in: trigger matches and the dependent is supplied" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidsWhenFixture.new(
+          context: build_context, params: { mapping_type: "same", to_stable_id: "cap_1" }
+        )
+      end
+      assert_match(/to_stable_id is not accepted when mapping_type is "same"/, err.message)
+    end
+
+    should "raise when an equals trigger matches and the dependent is supplied" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidsWhenFixture.new(context: build_context, params: { kind: "a", note: "why" })
+      end
+      assert_match(/note is not accepted when kind is "a"/, err.message)
+    end
+
+    # The emitted `not: { required: [dep] }` objects to the key EXISTING, so a
+    # blank value violates it too — an inapplicable field is one the caller
+    # should not send at all.
+    should "raise when the dependent is supplied blank" do
+      assert_raises(Operations::Base::ParameterError) do
+        ForbidsWhenFixture.new(
+          context: build_context, params: { mapping_type: "same", to_stable_id: "" }
+        )
+      end
+    end
+
+    ForbidMessageFixture = Class.new(Operations::Base) do
+      parameter :mapping_type, String, allowed: %w[same evolved]
+      parameter :to_stable_id, String
+      parameter :kind, String, allowed: %w[a b]
+      parameter :note, String
+      forbids_when :to_stable_id, if: :mapping_type, in: %w[same],
+                                  message: ->(type) { "a #{type} mapping takes no survivor" }
+      forbids_when :note, if: :kind, equals: "a", message: "No note for a"
+      def policy_check = nil
+      def perform = params
+    end
+
+    should "use a callable message override, passing the matched value" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidMessageFixture.new(
+          context: build_context, params: { mapping_type: "same", to_stable_id: "cap_1" }
+        )
+      end
+      assert_equal "a same mapping takes no survivor", err.message
+    end
+
+    should "use a String message override" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidMessageFixture.new(context: build_context, params: { kind: "a", note: "why" })
+      end
+      assert_equal "No note for a", err.message
+    end
+
+    should "reject an undeclared dependent at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          forbids_when :nope, if: :kind, equals: "x"
+        end
+      end
+      assert_match(/forbids_when names undeclared parameter/, err.message)
+    end
+
+    should "reject an undeclared trigger at load time" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :label, String
+          forbids_when :label, if: :nope, equals: "x"
+        end
+      end
+    end
+
+    should "reject a parameter forbidding itself" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          forbids_when :kind, if: :kind, equals: "x"
+        end
+      end
+    end
+
+    should "reject declaring both equals: and in:" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, equals: "x", in: %w[x y]
+        end
+      end
+      assert_match(/forbids_when needs exactly one of equals: or in:/, err.message)
+    end
+
+    should "reject declaring neither equals: nor in:" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind
+        end
+      end
+    end
+
+    should "reject a non-Array in:" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, in: { a: 1 }
+        end
+      end
+      assert_match(/forbids_when in: needs an Array/, err.message)
+    end
+
+    should "reject an empty in: set" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, in: []
+        end
+      end
+    end
+
+    should "reject a non-JSON-primitive match value" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, equals: :other
+        end
+      end
+      assert_match(/JSON primitives/, err.message)
+    end
+
+    should "reject a non-finite Float match value" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :weight, Numeric
+          parameter :label, String
+          forbids_when :label, if: :weight, equals: Float::INFINITY
+        end
+      end
+    end
+
+    should "reject a matched value outside the trigger's allowed set" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String, allowed: %w[a b]
+          parameter :label, String
+          forbids_when :label, if: :kind, equals: "c"
+        end
+      end
+      assert_match(/outside kind.s allowed set/, err.message)
+    end
+
+    should "snapshot the in: set against later mutation" do
+      types = %w[same]
+      op = Class.new(Operations::Base) do
+        parameter :mapping_type, String
+        parameter :to_stable_id, String
+        forbids_when :to_stable_id, if: :mapping_type, in: types
+        def policy_check = nil
+        def perform = params
+      end
+      types << "archived"
+
+      assert_equal %w[same], op.conditional_prohibitions.first.values
+      out = op.call(context: build_context, params: { mapping_type: "archived", to_stable_id: "x" })
+      assert_equal "x", out[:to_stable_id]
+    end
+
+    # The two declarations are independent rules on one parameter: requiring it
+    # for one trigger value must not weaken forbidding it for another.
+    should "compose with requires_when on the same parameter" do
+      op = Class.new(Operations::Base) do
+        parameter :mapping_type, String, allowed: %w[same evolved]
+        parameter :to_stable_id, String
+        requires_when :to_stable_id, if: :mapping_type, equals: "evolved"
+        forbids_when :to_stable_id, if: :mapping_type, equals: "same"
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { mapping_type: "evolved" })
+      end
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { mapping_type: "same", to_stable_id: "x" })
+      end
+      assert_equal "x", op.call(
+        context: build_context, params: { mapping_type: "evolved", to_stable_id: "x" }
+      )[:to_stable_id]
+    end
+  end
+
+  DependentRequiredFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved]
+    parameter :to_stable_id, String
+    dependent_required :to_stable_id, requires: :mapping_type
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "dependent_required DSL" do
+    should "accept both supplied" do
+      out = DependentRequiredFixture.call(
+        context: build_context, params: { mapping_type: "evolved", to_stable_id: "cap_1" }
+      )
+      assert_equal "cap_1", out[:to_stable_id]
+    end
+
+    should "accept neither supplied" do
+      out = DependentRequiredFixture.call(context: build_context, params: {})
+      assert_nil out[:to_stable_id]
+    end
+
+    # The gap requires_when/forbids_when leave: both arm on the trigger's
+    # VALUE, so an absent trigger fires neither and the dependent is dropped.
+    should "raise when the dependent is supplied without its obligation" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        DependentRequiredFixture.new(context: build_context, params: { to_stable_id: "cap_1" })
+      end
+      assert_match(/mapping_type is required when to_stable_id is supplied/, err.message)
+    end
+
+    should "accept a nil dependent as not supplied" do
+      out = DependentRequiredFixture.call(context: build_context, params: { to_stable_id: nil })
+      assert_nil out[:to_stable_id]
+    end
+
+    should "use a String message override" do
+      op = Class.new(Operations::Base) do
+        parameter :a, String
+        parameter :b, String
+        dependent_required :a, requires: :b, message: "b goes with a"
+        def policy_check = nil
+        def perform = params
+      end
+
+      err = assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { a: "x" })
+      end
+      assert_equal "b goes with a", err.message
+    end
+
+    should "reject an undeclared parameter at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :a, String
+          dependent_required :a, requires: :nope
+        end
+      end
+      assert_match(/dependent_required names undeclared parameter/, err.message)
+    end
+
+    should "reject a parameter depending on itself" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :a, String
+          dependent_required :a, requires: :a
+        end
+      end
+    end
+
+    # An always-present obligation makes the rule dead — the same class of
+    # mistake as a match value outside its trigger's enum.
+    should "reject an obligation that is already unconditionally required" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :a, String
+          parameter :b, String, required: true
+          dependent_required :a, requires: :b
+        end
+      end
+      assert_match(/already required — the rule can never fire/, err.message)
     end
   end
 
@@ -437,6 +890,36 @@ class Operations::BaseTest < ActiveSupport::TestCase
     should "leave other parameters clearable" do
       out = BlankFixture.call(context: build_context, params: { description: "" })
       assert_equal "", out[:description]
+    end
+  end
+
+  context "an explicit schema: fragment" do
+    # Normalised at declaration time so the descriptor's merge is plain — a
+    # String-keyed "type" must override the derived :type, not sit beside it.
+    should "symbolise a string-keyed fragment" do
+      op = Class.new(Operations::Base) do
+        parameter :payload, Hash, schema: {
+          "type" => "object", "properties" => { "name" => { "type" => "string" } }
+        }
+      end
+
+      assert_equal(
+        { type: "object", properties: { name: { type: "string" } } },
+        op.parameters[:payload].schema
+      )
+    end
+
+    # Fragments are often shared constants; a later mutation must not change
+    # what is already advertised.
+    should "deep-freeze the fragment's containers" do
+      op = Class.new(Operations::Base) do
+        parameter :payload, Hash, schema: { type: "object", properties: { name: { type: "string" } } }
+      end
+      fragment = op.parameters[:payload].schema
+
+      assert fragment.frozen?
+      assert fragment[:properties].frozen?
+      assert fragment[:properties][:name].frozen?
     end
   end
 

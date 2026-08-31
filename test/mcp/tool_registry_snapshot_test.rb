@@ -985,7 +985,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "scope_id" => { "type" => "string" }
           },
           "required" => %w[framework_id person_id role],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **collaborator_scope_conditional("role")
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1097,7 +1098,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_archive_capability",
-        "description" => "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion.",
+        "description" => "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion. A supplied migration mapping is staged only if you may define one (owner/editor); the response's mapping_recorded says whether it was, otherwise it is deferred to the publish-review gate.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1110,7 +1111,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           },
           "required" => %w[framework_id capability_id],
           "additionalProperties" => false,
-          **survivor_mapping_conditional
+          **survivor_mapping_conditional(mapping_type_optional: true)
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1177,20 +1178,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_change_collaborator_role",
-        "description" => "Change a collaborator's role on a framework within the same scope (e.g. viewer → editor). Moving between differently-scoped roles requires remove + add.",
+        "description" => "Change a collaborator's framework-wide role on a framework (e.g. viewer → editor). Only the framework-wide roles (owner/editor/collaborator/viewer) can be changed in place: to move a person to or from a scoped lead role, call frameworks_remove_collaborator for the old role then frameworks_add_collaborator for the new one.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "framework_id" => { "type" => "string" },
             "person_id" => { "type" => "string" },
-            "old_role" => {
-              "type" => "string",
-              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
-            },
-            "new_role" => {
-              "type" => "string",
-              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
-            },
+            # Framework-wide only: a scoped lead role can never be changed in
+            # place, since each has its own entity type and the scope pair is
+            # fixed across the change. Moving to/from one is remove + add.
+            "old_role" => { "type" => "string", "enum" => %w[owner editor collaborator viewer] },
+            "new_role" => { "type" => "string", "enum" => %w[owner editor collaborator viewer] },
             "scope_type" => {
               "type" => "string",
               "enum" => %w[role_family role capability_category capability]
@@ -1198,7 +1196,19 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "scope_id" => { "type" => "string" }
           },
           "required" => %w[framework_id person_id old_role new_role],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          # Every accepted role is framework-wide, so the forbid covers the
+          # whole enum — the params stay declared so a supplied scope is
+          # rejected rather than silently dropped.
+          "allOf" => %w[scope_type scope_id].map do |dependent|
+            {
+              "if" => {
+                "properties" => { "new_role" => { "enum" => %w[owner editor collaborator viewer] } },
+                "required" => [ "new_role" ]
+              },
+              "then" => { "not" => { "required" => [ dependent ] } }
+            }
+          end
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1642,7 +1652,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "mode"      => { "type" => "string", "enum" => %w[editing suggesting] }
           },
           "required" => %w[framework_id entity_type proposed_attributes],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **parent_id_conditional
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -1979,21 +1990,112 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
     }
   end
 
-  # `requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES` —
-  # shared by the two tools that stage a capability migration mapping. The
-  # matched set is spelled out rather than read from the constant: widening
-  # SURVIVOR_TYPES changes what these two tools advertise, and this snapshot
-  # exists to make that land in review.
-  def survivor_mapping_conditional
-    {
-      "if" => {
-        "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
-        "required" => [ "mapping_type" ]
-      },
-      "then" => {
-        "required" => [ "to_stable_id" ],
-        "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
-      }
+  # The collaborator scope pair: each lead role pins scope_type to its own
+  # entity type and demands a scope_id; the four framework-wide roles accept
+  # neither. Only add_collaborator carries the full rule — change_collaborator_role
+  # accepts framework-wide roles alone, so it spells out its two forbids inline.
+  #
+  # @param role_param [String] the parameter naming the role being granted
+  def collaborator_scope_conditional(role_param)
+    scoped = {
+      "role_family_lead"         => "role_family",
+      "role_lead"                => "role",
+      "capability_category_lead" => "capability_category",
+      "capability_lead"          => "capability"
     }
+    pins = scoped.map do |role, scope_type|
+      {
+        "if" => { "properties" => { role_param => { "const" => role } }, "required" => [ role_param ] },
+        "then" => { "required" => [ "scope_type" ],
+                    "properties" => { "scope_type" => { "const" => scope_type } } }
+      }
+    end
+    # scope_id carries no per-role value, so one rule covers all four.
+    scope_id_required = {
+      "if" => {
+        "properties" => { role_param => { "enum" => scoped.keys } },
+        "required" => [ role_param ]
+      },
+      "then" => { "required" => [ "scope_id" ],
+                  "properties" => { "scope_id" => { "minLength" => 1, "pattern" => "\\S" } } }
+    }
+    exclusions = %w[scope_type scope_id].map do |dependent|
+      {
+        "if" => {
+          "properties" => { role_param => { "enum" => %w[owner editor collaborator viewer] } },
+          "required" => [ role_param ]
+        },
+        "then" => { "not" => { "required" => [ dependent ] } }
+      }
+    end
+
+    { "allOf" => pins + [ scope_id_required ] + exclusions }
+  end
+
+  # A parent is required for the entity types that hang off one and forbidden
+  # for the framework-level ones, so both `if`s nest under one `allOf`.
+  def parent_id_conditional
+    {
+      "allOf" => [
+        {
+          "if" => {
+            "properties" => {
+              "entity_type" => {
+                "enum" => %w[role_illustration behavioural_expectation capability role level]
+              }
+            },
+            "required" => [ "entity_type" ]
+          },
+          "then" => {
+            "required" => [ "parent_id" ],
+            "properties" => { "parent_id" => { "minLength" => 1, "pattern" => "\\S" } }
+          }
+        },
+        {
+          "if" => {
+            "properties" => { "entity_type" => { "enum" => %w[capability_category role_family] } },
+            "required" => [ "entity_type" ]
+          },
+          "then" => { "not" => { "required" => [ "parent_id" ] } }
+        }
+      ]
+    }
+  end
+
+  # The survivor rule has two halves — required for the mapping types that
+  # carry ratings forward, forbidden for the ones that don't — so both `if`s
+  # nest under one `allOf`. The matched sets are spelled out rather than read
+  # from SURVIVOR_TYPES / NON_SURVIVOR_TYPES: widening either changes what
+  # these two tools advertise, and this snapshot exists to make that land in
+  # review.
+  #
+  # @param mapping_type_optional [Boolean] true for archive_capability, whose
+  #   mapping_type may be omitted — so it alone also declares the presence
+  #   pairing that stops a survivor arriving with no mapping type at all
+  def survivor_mapping_conditional(mapping_type_optional: false)
+    branches = [
+      {
+        "if" => {
+          "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
+          "required" => [ "mapping_type" ]
+        },
+        "then" => {
+          "required" => [ "to_stable_id" ],
+          "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
+        }
+      },
+      {
+        "if" => {
+          "properties" => { "mapping_type" => { "enum" => %w[same archived new] } },
+          "required" => [ "mapping_type" ]
+        },
+        "then" => { "not" => { "required" => [ "to_stable_id" ] } }
+      }
+    ]
+    if mapping_type_optional
+      branches << { "dependentRequired" => { "to_stable_id" => [ "mapping_type" ] } }
+    end
+
+    { "allOf" => branches }
   end
 end

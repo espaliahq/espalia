@@ -114,16 +114,17 @@ class Operations::Base
     end
   end
 
-  # One `requires_when` declaration: `dependent` is required whenever the
-  # `trigger` parameter's validated value is in `values`. How it was declared
+  # Behaviour shared by the two conditional rules (`requires_when` /
+  # `forbids_when`): `dependent`'s presence is governed by the `trigger`
+  # parameter's validated value landing in `values`. How the rule was declared
   # (`equals:` / `in:`) isn't recorded — a one-value set advertises as `const`
   # and a longer one as `enum`, which say the same thing in JSON Schema.
   #
   # `message` optionally replaces the generic wording — a String, or a callable
   # taking the matched trigger value.
-  ConditionalRequirement = Struct.new(:dependent, :trigger, :values, :message, keyword_init: true) do
+  module ConditionalRule
     # @param value [Object] the trigger parameter's validated value
-    # @return [Boolean] whether this requirement is armed
+    # @return [Boolean] whether this rule is armed
     def triggered_by?(value)
       values.include?(value)
     end
@@ -134,7 +135,58 @@ class Operations::Base
       return message.call(value) if message.respond_to?(:call)
       return message if message
 
+      default_message(value)
+    end
+  end
+
+  # One `requires_when` declaration — `dependent` is mandatory while armed,
+  # and pinned to `must_be` when one was declared.
+  ConditionalRequirement = Struct.new(:dependent, :trigger, :values, :message, :must_be, keyword_init: true) do
+    include ConditionalRule
+
+    # Whether the dependent's validated value satisfies the armed requirement.
+    # `must_be` pins it exactly; otherwise it must merely be supplied and
+    # non-blank (`false` is a supplied boolean value, not an absence).
+    #
+    # @param value [Object] the dependent parameter's validated value
+    # @return [Boolean]
+    def satisfied_by?(value)
+      return value == must_be unless must_be.nil?
+
+      value == false || value.present?
+    end
+
+    # @param value [Object] the matched trigger value
+    # @return [String]
+    def default_message(value)
+      return "#{dependent} must be #{must_be.inspect} when #{trigger} is #{value.inspect}" unless must_be.nil?
+
       "#{dependent} is required when #{trigger} is #{value.inspect}"
+    end
+  end
+
+  # One `forbids_when` declaration — `dependent` must not be supplied while
+  # armed. The mirror image of {ConditionalRequirement}.
+  ConditionalProhibition = Struct.new(:dependent, :trigger, :values, :message, keyword_init: true) do
+    include ConditionalRule
+
+    # @param value [Object] the matched trigger value
+    # @return [String]
+    def default_message(value)
+      "#{dependent} is not accepted when #{trigger} is #{value.inspect}"
+    end
+  end
+
+  # One `dependent_required` declaration: supplying `dependent` obliges the
+  # caller to supply `requires` too. No trigger VALUE is involved, which is why
+  # this is a plain pair rather than a {ConditionalRule}.
+  DependentRequirement = Struct.new(:dependent, :requires, :message, keyword_init: true) do
+    # @return [String] the ParameterError message
+    def message_for
+      return message.call(dependent) if message.respond_to?(:call)
+      return message if message
+
+      "#{requires} is required when #{dependent} is supplied"
     end
   end
 
@@ -189,8 +241,8 @@ class Operations::Base
     #   NOT for one where "" is a legitimate clear (a description).
     def parameter(name, type, required: false, allowed: nil, schema: nil, allow_blank: true)
       parameters[name.to_sym] = Parameter.new(
-        name: name.to_sym, type: type, required: required, allowed: allowed, schema: schema,
-        allow_blank: allow_blank
+        name: name.to_sym, type: type, required: required, allowed: allowed,
+        schema: normalize_schema_fragment(schema), allow_blank: allow_blank
       )
     end
 
@@ -254,31 +306,123 @@ class Operations::Base
     # the same thing: the `then` branch carries `required` PLUS the type's
     # non-blank keywords, so a validating client and this check agree.
     #
+    # `must_be:` additionally PINS the dependent's value, for the discriminated
+    # pairs where one parameter dictates the other's exact value rather than
+    # merely its presence:
+    #
+    #   requires_when :scope_type, if: :role, equals: "role_lead", must_be: "role"
+    #
+    # The pin replaces the non-blank keywords with `const` (strictly stronger),
+    # and the runtime compares for equality — so, again, one declaration governs
+    # both the advertised contract and the boundary check.
+    #
     # @param name [Symbol] the conditionally-required (dependent) parameter
     # @param if [Symbol] the trigger parameter whose value decides
     # @param equals [Object, nil] trigger value that makes `name` required
     # @param in [Array, nil] trigger values that make `name` required
+    # @param must_be [Object, nil] the exact value `name` must then carry
     # @param message [String, #call, nil] replaces the generic parameter-speak
     #   wording — pass a callable to vary it by trigger value. Worth it wherever
     #   the message reaches a user: the web controllers flash `e.message`
     #   verbatim, so a rule with established domain copy keeps it.
     # @raise [ArgumentError] at load time for undeclared parameters, a missing
     #   or doubled match clause, or a value outside the trigger's `allowed:` set
-    def requires_when(name, message: nil, **options)
-      trigger = options.fetch(:if) { raise ArgumentError, "requires_when needs if: <parameter>" }
-      values  = requires_when_values(**options)
-      name    = name.to_sym
-      trigger = trigger.to_sym
-
-      validate_requires_when!(name, trigger, values)
+    def requires_when(name, message: nil, must_be: nil, **options)
+      parts = conditional_rule_parts("requires_when", name, **options)
       conditional_requirements << ConditionalRequirement.new(
-        dependent: name, trigger: trigger, values: values, message: message
-      )
+        **parts, message: message,
+        must_be: pinned_value("requires_when", parts[:dependent], must_be)
+      ).freeze
     end
 
     # @return [Array<ConditionalRequirement>] one entry per `requires_when`
     def conditional_requirements
       @conditional_requirements ||= []
+    end
+
+    # Declares that `name` must NOT be supplied when another parameter carries a
+    # particular value — the mirror of `requires_when`, and the shape behind
+    # every "X is ignored / not accepted for this Y" rule.
+    #
+    #   forbids_when :to_stable_id, if: :mapping_type, in: %w[same archived new]
+    #
+    # **"Supplied" means the key arrived carrying a non-nil value** — the key's
+    # mere presence is the violation, not whether its value is meaty. That is
+    # exactly what the emitted `then: { not: { required: [name] } }` asks, so the
+    # advertised contract and the runtime check say the same thing. It also means
+    # a supplied `""` IS rejected: an inapplicable field is one the caller should
+    # not send at all, so a web form whose control stays in the DOM must drop the
+    # value before dispatching (a normal controller responsibility) rather than
+    # submit an empty one. A present-but-null key is the single case where the
+    # two could differ — JSON Schema counts it as present — but the property's
+    # own declared type rejects null first, so a validating client and this check
+    # never actually disagree.
+    #
+    # @param name [Symbol] the conditionally-forbidden (dependent) parameter
+    # @param if [Symbol] the trigger parameter whose value decides
+    # @param equals [Object, nil] trigger value that forbids `name`
+    # @param in [Array, nil] trigger values that forbid `name`
+    # @param message [String, #call, nil] replaces the generic parameter-speak
+    #   wording — pass a callable to vary it by trigger value. Worth it wherever
+    #   the message reaches a user: the web controllers flash `e.message`
+    #   verbatim.
+    # @raise [ArgumentError] at load time for undeclared parameters, a missing
+    #   or doubled match clause, or a value outside the trigger's `allowed:` set
+    def forbids_when(name, message: nil, **options)
+      parts = conditional_rule_parts("forbids_when", name, **options)
+      conditional_prohibitions << ConditionalProhibition.new(**parts, message: message).freeze
+    end
+
+    # @return [Array<ConditionalProhibition>] one entry per `forbids_when`
+    def conditional_prohibitions
+      @conditional_prohibitions ||= []
+    end
+
+    # Declares that supplying `name` obliges the caller to supply `requires`
+    # too — a *presence* dependency with no trigger value, which is exactly
+    # JSON Schema's `dependentRequired`.
+    #
+    #   dependent_required :to_stable_id, requires: :mapping_type
+    #
+    # This closes the hole `requires_when` / `forbids_when` leave open: both arm
+    # on the trigger's VALUE, so neither fires when the trigger is ABSENT — and
+    # an operation that then ignores the orphaned dependent drops it silently,
+    # the very bug those two exist to stop.
+    #
+    # "Supplied" means the key arrived with a non-nil value, on both sides,
+    # matching what `dependentRequired` asks of a JSON instance.
+    #
+    # @param name [Symbol] the parameter whose presence creates the obligation
+    # @param requires [Symbol] the parameter it then obliges
+    # @param message [String, #call, nil] replaces the generic wording — a
+    #   callable receives the dependent's name
+    # @raise [ArgumentError] at load time for undeclared or identical
+    #   parameters, or when `requires` is already unconditionally `required:`
+    #   (the rule could never bite — a dead constraint, like a match value
+    #   outside its trigger's enum)
+    def dependent_required(name, requires:, message: nil)
+      name = name.to_sym
+      requires = requires.to_sym
+
+      unknown = [ name, requires ] - parameters.keys
+      if unknown.any?
+        raise ArgumentError, "dependent_required names undeclared parameter(s): #{unknown.join(', ')}"
+      end
+      raise ArgumentError, "dependent_required cannot make a parameter depend on itself" if name == requires
+
+      if parameters[requires].required
+        raise ArgumentError,
+              "dependent_required requires: #{requires} is already required — the rule can never fire"
+      end
+
+      dependent_requirements << DependentRequirement.new(
+        dependent: name, requires: requires, message: message
+      ).freeze
+    end
+
+    # @return [Array<DependentRequirement>] one entry per `dependent_required`
+    def dependent_requirements
+      @dependent_requirements ||= []
     end
 
     # Convenience entry point. Forwards to a new instance's `#call`.
@@ -295,77 +439,174 @@ class Operations::Base
       category == :destructive ? :in_app : :none
     end
 
+    # Shared parsing + guards for `requires_when` / `forbids_when`. The two take
+    # the same `if:` + `equals:`/`in:` clause and answer to the same load-time
+    # guards; only the rule they build differs (and with it the default message
+    # and the emitted `then` branch), so each constructs its own struct in one
+    # shot from these parts.
+    #
+    # @param declaration [String] the DSL name, for error messages
+    # @return [Hash] { dependent:, trigger:, values: }
+    def conditional_rule_parts(declaration, name, **options)
+      trigger = options.fetch(:if) { raise ArgumentError, "#{declaration} needs if: <parameter>" }
+      unknown_options = options.keys - %i[if equals in]
+      if unknown_options.any?
+        raise ArgumentError, "#{declaration} got unknown option(s): #{unknown_options.join(', ')}"
+      end
+
+      values  = conditional_match_values(declaration, **options)
+      name    = name.to_sym
+      trigger = trigger.to_sym
+
+      validate_conditional_rule!(declaration, name, trigger, values)
+      { dependent: name, trigger: trigger, values: values }
+    end
+
     # `in:` must be a literal Array — `Array(hash)` would quietly turn it into
     # `[[key, value]]`, a constraint that can never match. The result is
     # deep-frozen (each String as well as the array — a shared string mutated
     # later would change enforcement just like a mutated array) so nothing the
     # caller keeps a reference to can change what is enforced and advertised.
     #
-    # @return [Array] the trigger values that arm the requirement
-    def requires_when_values(**options)
+    # @return [Array] the trigger values that arm the rule
+    def conditional_match_values(declaration, **options)
       has_equals = options.key?(:equals)
       has_in     = options.key?(:in)
       unless has_equals ^ has_in
-        raise ArgumentError, "requires_when needs exactly one of equals: or in:"
+        raise ArgumentError, "#{declaration} needs exactly one of equals: or in:"
       end
 
-      return freeze_requires_when_values([ options[:equals] ]) if has_equals
+      return freeze_match_values([ options[:equals] ]) if has_equals
 
       values = options[:in]
-      raise ArgumentError, "requires_when in: needs an Array of values" unless values.is_a?(Array)
-      raise ArgumentError, "requires_when in: needs at least one value" if values.empty?
+      raise ArgumentError, "#{declaration} in: needs an Array of values" unless values.is_a?(Array)
+      raise ArgumentError, "#{declaration} in: needs at least one value" if values.empty?
 
-      freeze_requires_when_values(values)
+      freeze_match_values(values)
     end
 
-    def freeze_requires_when_values(values)
-      values.map { |value| value.is_a?(String) ? value.dup.freeze : value }.freeze
+    # A `schema:` fragment may be authored with String or Symbol keys — both
+    # are ordinary JSON Schema — so it is symbolised HERE, at declaration time,
+    # leaving the descriptor's merge a plain one. Skip it and a String-keyed
+    # `"type"` lands ALONGSIDE the derived Symbol-keyed `:type`, serialising as
+    # a duplicate JSON key.
+    #
+    # `deep_symbolize_keys` returns fresh containers, so freezing them can't
+    # reach anything the caller still holds — worth doing because a fragment is
+    # often a shared constant (`ExternalReference.json_schema`) and a later
+    # mutation would silently change what is advertised. Strings inside ARE
+    # shared, so they are deliberately left alone.
+    #
+    # @return [Hash, nil]
+    def normalize_schema_fragment(fragment)
+      return nil if fragment.nil?
+
+      deep_freeze_containers(fragment.deep_symbolize_keys)
+    end
+
+    def deep_freeze_containers(value)
+      case value
+      when Hash  then value.each_value { |nested| deep_freeze_containers(nested) }.freeze
+      when Array then value.each { |nested| deep_freeze_containers(nested) }.freeze
+      else value
+      end
+    end
+
+    def freeze_match_values(values)
+      values.map { |value| freeze_value(value) }.freeze
+    end
+
+    # A String is duped before freezing: the caller's own reference must stay
+    # mutable, while what is enforced and advertised cannot change after load.
+    def freeze_value(value)
+      value.is_a?(String) ? value.dup.freeze : value
+    end
+
+    # `must_be:` faces the same guards as a trigger match — it is published as
+    # the dependent's `const`, so it must be a JSON primitive and, when the
+    # dependent declares an enum, a value it can actually hold. It additionally
+    # must fit the dependent's declared TYPE, which a trigger match gets for
+    # free from the enum check.
+    #
+    # @return [Object, nil] the frozen pin, or nil when none was declared
+    def pinned_value(declaration, name, must_be)
+      return nil if must_be.nil?
+
+      # Publishability first, so a Symbol pin reports the same "JSON primitives"
+      # problem a Symbol trigger match does rather than a type mismatch.
+      validate_publishable_values!(declaration, "must_be value", name, [ must_be ])
+
+      type = parameters[name].type
+      unless pin_matches_type?(type, must_be)
+        raise ArgumentError,
+              "#{declaration} must_be: #{must_be.inspect} is not a #{type} — #{name} could never carry it"
+      end
+
+      freeze_value(must_be)
+    end
+
+    # A pin the dependent's declared type can never hold is a dead rule that
+    # also publishes a self-contradictory schema (`{type: "integer", const:
+    # "5"}`). `Numeric` covers Integer and Float by `is_a?`; `:boolean` is the
+    # sentinel for Ruby's missing Boolean class.
+    def pin_matches_type?(type, value)
+      return [ true, false ].include?(value) if type == :boolean
+
+      value.is_a?(type)
+    end
+
+    # Expressible as a JSON Schema `const`/`enum` entry AND comparable to a
+    # validated parameter value. Non-finite Floats pass the Float type check but
+    # have no JSON encoding (RFC 8259 forbids NaN/Infinity).
+    def json_primitive?(value)
+      MATCHABLE_TYPES.any? { |type| value.is_a?(type) } &&
+        !(value.is_a?(Float) && !value.finite?)
     end
 
     # Load-time guards: both parameters must exist and differ, every matched
     # value must be a JSON primitive the schema can name, and — when the trigger
     # declares an enum — one it can actually hold (a typo'd value would
     # otherwise declare a rule that can never fire).
-    def validate_requires_when!(name, trigger, values)
+    def validate_conditional_rule!(declaration, name, trigger, values)
       unknown = [ name, trigger ] - parameters.keys
       if unknown.any?
-        raise ArgumentError, "requires_when names undeclared parameter(s): #{unknown.join(', ')}"
+        raise ArgumentError, "#{declaration} names undeclared parameter(s): #{unknown.join(', ')}"
       end
-      raise ArgumentError, "requires_when cannot make a parameter depend on itself" if name == trigger
+      raise ArgumentError, "#{declaration} cannot make a parameter depend on itself" if name == trigger
 
-      validate_requires_when_values!(trigger, values)
+      validate_publishable_values!(declaration, "match values", trigger, values)
     end
 
-    # A match value must be expressible as a JSON Schema `const`/`enum` entry
+    # Shared by trigger matches and `must_be:` pins, so their wording can't
+    # fork. A value must be expressible as a JSON Schema `const`/`enum` entry
     # AND comparable to the validated parameter value. `nil` fails both ways:
-    # it would arm the rule when the trigger is ABSENT, which the emitted `if`
-    # (whose `required` names the trigger) cannot say. A Symbol looks right in
-    # Ruby but desyncs the two — `:other != "other"` at runtime, while the
-    # schema would publish the string.
-    def validate_requires_when_values!(trigger, values)
+    # as a trigger match it would arm the rule when the trigger is ABSENT,
+    # which the emitted `if` (whose `required` names the trigger) cannot say. A
+    # Symbol looks right in Ruby but desyncs the two — `:other != "other"` at
+    # runtime, while the schema would publish the string. And a value outside
+    # the parameter's own enum declares a rule that can never fire.
+    #
+    # @param clause [String] which DSL clause is being validated, for the message
+    # @param name [Symbol] the parameter whose `allowed:` set applies
+    def validate_publishable_values!(declaration, clause, name, values)
       # `unless invalid.empty?`, never `if invalid.any?` — the values this
       # rejects include nil and false, and a blockless `any?` asks for a
       # truthy element (`[nil].any?` is false).
-      # Non-finite Floats pass the Float type check but have no JSON encoding
-      # (RFC 8259 forbids NaN/Infinity), so the schema could never publish them.
-      invalid = values.reject do |value|
-        MATCHABLE_TYPES.any? { |type| value.is_a?(type) } &&
-          !(value.is_a?(Float) && !value.finite?)
-      end
+      invalid = values.reject { |value| json_primitive?(value) }
       unless invalid.empty?
         raise ArgumentError,
-              "requires_when match values must be JSON primitives (String, number, true/false); " \
+              "#{declaration} #{clause} must be JSON primitives (String, number, true/false); " \
               "got #{invalid.inspect}"
       end
 
-      allowed = parameters[trigger].allowed
+      allowed = parameters[name].allowed
       return unless allowed
 
       outside = values - allowed
       return if outside.empty?
 
       raise ArgumentError,
-            "requires_when if: #{trigger} matches #{outside.inspect}, outside its allowed set #{allowed.inspect}"
+            "#{declaration} #{clause} #{outside.inspect} is outside #{name}'s allowed set #{allowed.inspect}"
     end
   end
 
@@ -453,7 +694,24 @@ class Operations::Base
     end
     validate_parameter_constraints!(validated)
     validate_conditional_requirements!(validated)
+    validate_conditional_prohibitions!(validated)
+    validate_dependent_requirements!(validated)
     validated
+  end
+
+  # Enforce each `dependent_required` declaration: supplying one parameter
+  # obliges the other. Runs with the per-parameter checks (before policy_check),
+  # like every other input rule.
+  #
+  # @param validated [Hash{Symbol=>Object}]
+  # @raise [ParameterError] when the obliged parameter is absent
+  def validate_dependent_requirements!(validated)
+    self.class.dependent_requirements.each do |rule|
+      next unless supplied_at_all?(validated[rule.dependent])
+      next if supplied_at_all?(validated[rule.requires])
+
+      raise ParameterError, rule.message_for
+    end
   end
 
   # Enforce each `requires_any_of` group. Runs with the per-parameter checks
@@ -464,31 +722,55 @@ class Operations::Base
   # @raise [ParameterError] when a group has no parameter supplied
   def validate_parameter_constraints!(validated)
     self.class.parameter_constraints.each do |names|
-      next if names.any? { |name| !validated[name].nil? }
+      next if names.any? { |name| supplied_at_all?(validated[name]) }
 
       raise ParameterError, "provide at least one of: #{names.join(', ')}"
     end
   end
 
   # Enforce each `requires_when` declaration: when the trigger holds a matched
-  # value, the dependent must carry a real one. Runs with the per-parameter
-  # checks (before policy_check), like every other input rule.
+  # value, the dependent must carry a real one — the exact `must_be` value when
+  # one was pinned. Runs with the per-parameter checks (before policy_check),
+  # like every other input rule.
   #
   # @param validated [Hash{Symbol=>Object}]
-  # @raise [ParameterError] when an armed requirement's dependent is absent/blank
+  # @raise [ParameterError] when an armed requirement's dependent is absent,
+  #   blank, or off its pinned value
   def validate_conditional_requirements!(validated)
     self.class.conditional_requirements.each do |requirement|
       trigger_value = validated[requirement.trigger]
       next unless requirement.triggered_by?(trigger_value)
-      next if conditionally_supplied?(validated[requirement.dependent])
+      next if requirement.satisfied_by?(validated[requirement.dependent])
 
       raise ParameterError, requirement.message_for(trigger_value)
     end
   end
 
-  # `false` is a supplied boolean value, not an absence — everything else uses
-  # `present?`, matching the emitted `then` branch (required + non-blank).
-  def conditionally_supplied?(value)
-    value == false || value.present?
+  # Enforce each `forbids_when` declaration: when the trigger holds a matched
+  # value, the dependent must be absent. Runs with the per-parameter checks
+  # (before policy_check), like every other input rule.
+  #
+  # @param validated [Hash{Symbol=>Object}]
+  # @raise [ParameterError] when an armed prohibition's dependent was supplied
+  def validate_conditional_prohibitions!(validated)
+    self.class.conditional_prohibitions.each do |prohibition|
+      trigger_value = validated[prohibition.trigger]
+      next unless prohibition.triggered_by?(trigger_value)
+      next unless supplied_at_all?(validated[prohibition.dependent])
+
+      raise ParameterError, prohibition.message_for(trigger_value)
+    end
+  end
+
+  # "Supplied" as JSON Schema's `required` / `dependentRequired` / `not:
+  # required` all read it: the key arrived carrying anything other than nil.
+  # Shared by `requires_any_of`, `forbids_when`, and `dependent_required` —
+  # every declaration whose emitted schema asks about the property EXISTING, so
+  # a blank string counts as supplied for all three. `requires_when` is the odd
+  # one out and asks for a non-blank value instead (see
+  # `ConditionalRequirement#satisfied_by?`), because its `then` branch carries
+  # the non-blank keywords too.
+  def supplied_at_all?(value)
+    !value.nil?
   end
 end

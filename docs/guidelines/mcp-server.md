@@ -451,7 +451,7 @@ MCP configuration.
 that the operation then rejected. The gap is invisible until an MCP client
 trusts the schema.
 
-Three declarations close the common shapes; each enforces at the parameter
+Five declarations close the common shapes; each enforces at the parameter
 boundary AND emits the matching JSON Schema, which is the point — a constraint
 that lives in only one of those two places is the bug:
 
@@ -479,6 +479,33 @@ that lives in only one of those two places is the bug:
   match value outside the trigger's own `allowed:` set — a typo'd enum would
   otherwise declare a rule that can never fire. Five operations shared two such
   rules by copy-paste before this existed.
+  **`must_be:` additionally pins the dependent's VALUE** (`requires_when
+  :scope_type, if: :role, equals: "role_lead", must_be: "role"`) → `const` in
+  place of the non-blank keywords, being strictly stronger than either. That is
+  the discriminated pair — one parameter dictating another's exact value, not
+  merely its presence — and pinning it *inside* the declaration is what keeps
+  schema and check from drifting.
+- **`forbids_when :dependent, if: :trigger, in: [...]`** — the mirror: the
+  dependent must NOT be supplied while the trigger matches → `if`/`then` with
+  `not: { required: [dependent] }`. Here "supplied" is **the key arriving with
+  any non-nil value**, because `not: { required: }` objects to the property
+  *existing*; so `""` is a violation too, and a web form whose control stays in
+  the DOM must drop the value before dispatching rather than submit an empty
+  one (the archive and publish-review forms disable their hidden survivor
+  select for exactly this). A present-but-null key is the one case where schema
+  and runtime could differ — JSON Schema counts it as present — but the
+  property's own declared type rejects null first, so the two never actually
+  disagree.
+- **`dependent_required :a, requires: :b`** — supplying `a` obliges `b`, with no
+  trigger VALUE involved → `dependentRequired: { "a": ["b"] }` (several
+  declarations merge into that one keyword rather than each taking a branch).
+  This closes the hole the two value-armed rules leave open: both fire on the
+  trigger's value, so **neither fires when the trigger is absent** — and an
+  operation that then ignores the orphaned dependent drops it silently, exactly
+  the bug they exist to stop. `archive_capability` shipped with that hole (a
+  `to_stable_id` with no `mapping_type` was discarded) while advertising the
+  combination as valid. Pointless on a `required:` parameter, so that is
+  rejected at load time rather than emitting a rule that can never fire.
 
 A subschema must not introduce a **new** property name:
 `additionalProperties: false` is evaluated against the top-level `properties`
@@ -486,23 +513,64 @@ alone and never sees into subschemas. So an `anyOf` branch carries only
 `required` — while an `if`/`then` legitimately constrains a name the top level
 already declares.
 
+Three rules of thumb when adopting these:
+
+- **Both halves, from one list.** Wherever a trigger enum splits the callers of
+  a dependent, declare the required half AND the forbidden half, deriving the
+  second set by subtraction from the first (`NON_SURVIVOR_TYPES = MAPPING_TYPES
+  - SURVIVOR_TYPES`, `FRAMEWORK_LEVEL_ENTITY_TYPES = ALLOWED_CREATION_KEYS.keys
+  - PARENTED_ENTITY_TYPES`) so a new enum value can't fall outside both.
+- **Adopting is a contract tightening.** Input that was previously accepted and
+  silently dropped starts returning -32602. That is the point, but say so in the
+  PR, and check the web callers: they must compact an inapplicable field to nil
+  rather than send it blank or stale.
+- **Cover the trigger's absence, not just its values.** `requires_when` and
+  `forbids_when` both arm on a value, so a pair of them still says nothing about
+  a call that omits the trigger entirely. If the dependent is meaningless
+  without it, add `dependent_required` — otherwise the silent drop just moves.
+- **An `:in_app` operation is validated at `tools/call` too.** The request
+  handler instantiates it before minting the PendingApproval, so a tightened
+  rule reaches the MCP client as -32602 rather than becoming an approval that
+  fails when the user opens it. Approval-time ParameterErrors (a row whose
+  arguments predate the rule) surface their own message.
+
 Still unexpressed — a ledger, so the next round knows what it is buying:
 
-- **Conditionally *forbidden*, the mirror of `requires_when`.** The collaborator
-  `scope_type`/`scope_id` rules are the hard case: an all-or-nothing pair,
-  mandatory for scoped roles, forbidden for framework-wide ones, with
-  `scope_type`'s value pinned by `role` — wanting `if`/`then`/`not` and per-role
-  branching rather than a flat dependency. The survivor rule has a milder half
-  of the same shape: `to_stable_id` alongside `same`/`archived`/`new` is
-  *silently ignored* today, enforced nowhere and advertised as acceptable, so a
-  client can believe it mapped a survivor when nothing was recorded.
-- **`frameworks_suggest_create`'s `parent_id`** — conditionally required for
-  entity types that hang off a parent, conditionally forbidden for
-  framework-level ones. Both are enforced in `perform`; neither is advertised.
-  The forbidden half at least raises a `ParameterError`; the required half
-  falls through to `RecordNotFound` with a blank-interpolated id ("parent  for
-  capability not found"), so a client is told the parent doesn't exist rather
-  than that it never sent one.
+- **Numeric bounds.** `add_level`'s `ordinal` (positive),
+  `update_capability_role_binding`'s `weight` (> 0) and `individual_tolerance`
+  (>= 0), and the `configure_scoring_thresholds` ranges are all checked in
+  `perform` and advertised as bare `integer`/`number`. JSON Schema says this
+  natively (`minimum` / `exclusiveMinimum`), so this wants a `min:`/`max:`
+  clause on `parameter` — the cheapest remaining item.
+- **Per-discriminator object key sets.** `frameworks_suggest_create`'s
+  `proposed_attributes` advertises the UNION of every entity type's keys with
+  the per-type required/allowed sets only in prose in its `description`;
+  `ALLOWED_CREATION_KEYS` and `REQUIRED_CREATION_KEYS` enforce them. Expressible
+  as `if`/`then` on `entity_type` with a nested `required` + `properties`, but
+  it needs a nested-object variant of the declarations rather than the top-level
+  ones we have.
+- **Hand-rolled blank guards that a declaration already covers.**
+  `resolve_clarification` (`note`), `edit_suggestion_comment` and
+  `edit_comment` (`body`), `set_behavioural_expectation` (`description`) each
+  raise "can't be blank" from `perform` on a `required: true` String instead of
+  declaring `allow_blank: false`. Nothing new is needed — just adoption.
+
+Deliberately out of scope, not a gap: **relationships between two free values**
+(`new_role must differ from old_role`) would need an N×N enumeration to
+express, and **existence lookups** ("no such capability in this framework") are
+database questions a schema can never answer. Both stay as `perform` checks by
+design.
+
+One such rule turned out not to need expressing at all. `change_collaborator_role`
+enforced "old and new role must share a scope shape" in `perform` — but every
+scoped lead role has its OWN entity type, so two different scoped roles never
+share one, and the shape is fixed across a change. Same-shape plus
+roles-must-differ therefore left **only** the framework-wide pairs: the rule was
+an enum in disguise. Restricting both parameters to `FRAMEWORK_WIDE_ROLES` says
+it in the schema, deletes the check, and moves the remove + add guidance into
+the tool description where a client reads it before calling. Worth asking of any
+surviving `perform` check: is it really a relationship, or a narrower enum you
+haven't noticed?
 
 ## Approval declaration cheat sheet
 
@@ -528,13 +596,14 @@ recoverable; an MCP agent loop running unintended writes is not.
 |------|---------|
 | **Operations layer (shared with web)** | |
 | `app/operations/operations.rb` | Module declaration |
-| `app/operations/operations/base.rb` | DSL (`parameter`, `requires_any_of`, `requires_when`, `allow_blank:`) + `#call` pipeline + `authorize` helper |
+| `app/operations/operations/base.rb` | DSL (`parameter`, `requires_any_of`, `requires_when` incl. `must_be:`, `forbids_when`, `dependent_required`, `allow_blank:`) + `#call` pipeline + `authorize` helper |
+| `app/operations/operations/frameworks/collaborator_scope_rules.rb` | `declare_collaborator_scope_rules` — the role/scope pairing as declarations, shared by add + change |
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |
-| `app/services/mcp/request_handler.rb` | JSON-RPC dispatch (initialize, tools/*, resources/*) |
+| `app/services/mcp/request_handler.rb` | JSON-RPC dispatch (initialize, tools/*, resources/*); validates an `:in_app` operation's parameters before deferring it to approval |
 | `app/services/mcp/framework_serializer.rb` | Shared shape source-of-truth |
 | `app/services/mcp/resource_registry.rb` | `framework://` / `assessment://` resource list + read |
 | `app/services/audit_metadata.rb` | Thread-local audit context, shared with web/HRIS |
@@ -563,8 +632,8 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `config/routes.rb` | `/mcp`, `/oauth/*`, `/.well-known/*`, `/mcp/approvals/*` |
 | **Tests** | |
 | `test/operations/registry_test.rb` | Registry hygiene |
-| `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `requires_when`, `allow_blank` |
-| `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf`, `if`/`then`, and `minLength` |
+| `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `requires_when` (+ `must_be:`), `forbids_when`, `dependent_required`, `allow_blank`, `schema:` normalisation |
+| `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf`, `if`/`then`(/`not`), `dependentRequired`, `const`, `minLength`, and string-vs-symbol `schema:` fragments |
 | `test/mcp/tool_registry_snapshot_test.rb` | Tool surface snapshot (drift guard) |
 | `test/integration/mcp_server_test.rb` | JSON-RPC unit coverage of tools/* and resources/* |
 | `test/integration/mcp_discovery_test.rb` | Well-known docs + DCR + WWW-Authenticate header |

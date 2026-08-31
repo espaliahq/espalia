@@ -97,6 +97,32 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     end
   end
 
+  StringKeyedSchemaFixture = Class.new(Operations::Base) do
+    parameter :payload, Hash, schema: {
+      "type" => "object",
+      "properties" => { "name" => { "type" => "string" } },
+      "additionalProperties" => false
+    }
+    def policy_check = nil
+    def perform = nil
+  end
+
+  # A fragment written with String keys must merge exactly like a Symbol-keyed
+  # one. Left un-normalised, `"type"` sits ALONGSIDE the derived `:type` and the
+  # descriptor serialises with a duplicate JSON key.
+  context "a string-keyed schema fragment" do
+    should "override the derived key rather than duplicate it" do
+      assert_equal(
+        { type: "object", properties: { name: { type: "string" } }, additionalProperties: false },
+        schema_for(StringKeyedSchemaFixture)[:properties]["payload"]
+      )
+    end
+
+    should "serialise to JSON without a duplicate-key warning" do
+      assert_silent { Mcp::OperationToTool.call(StringKeyedSchemaFixture).to_json }
+    end
+  end
+
   context "cross-parameter constraints" do
     should "emit no anyOf when the operation declares none" do
       schema = schema_for(UnconstrainedFixture)
@@ -239,6 +265,147 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     # get held to the `then` branch.
     should "require the trigger key inside the if branch" do
       assert_equal [ "evidence_type" ], schema_for(ConditionalFixture)[:if][:required]
+    end
+  end
+
+  DependentRequiredFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String
+    parameter :to_stable_id, String
+    parameter :reason, String
+    parameter :note, String
+    dependent_required :to_stable_id, requires: :mapping_type
+    dependent_required :reason, requires: :note
+    def policy_check = nil
+    def perform = nil
+  end
+
+  OneDependentRequiredFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String
+    parameter :to_stable_id, String
+    dependent_required :to_stable_id, requires: :mapping_type
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "dependent_required" do
+    should "emit a bare dependentRequired for a single declaration" do
+      schema = schema_for(OneDependentRequiredFixture)
+
+      assert_not schema.key?(:allOf)
+      assert_equal({ "to_stable_id" => [ "mapping_type" ] }, schema[:dependentRequired])
+    end
+
+    # The keyword's native shape is a map, so several declarations merge into
+    # one object rather than each claiming its own allOf branch.
+    should "merge several declarations into one dependentRequired object" do
+      schema = schema_for(DependentRequiredFixture)
+
+      assert_not schema.key?(:allOf)
+      assert_equal(
+        { "to_stable_id" => [ "mapping_type" ], "reason" => [ "note" ] },
+        schema[:dependentRequired]
+      )
+    end
+  end
+
+  MustBeFixture = Class.new(Operations::Base) do
+    parameter :role, String, allowed: %w[role_lead viewer]
+    parameter :scope_type, String, allowed: %w[role capability]
+    requires_when :scope_type, if: :role, equals: "role_lead", must_be: "role"
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "requires_when must_be:" do
+    # `const` is strictly stronger than the non-blank keywords, so it replaces
+    # them rather than piling up alongside.
+    should "publish the pin as const instead of the non-blank keywords" do
+      assert_equal(
+        { required: [ "scope_type" ], properties: { "scope_type" => { const: "role" } } },
+        schema_for(MustBeFixture)[:then]
+      )
+    end
+
+    FalsePinFixture = Class.new(Operations::Base) do
+      parameter :role, String
+      parameter :is_entry, :boolean
+      requires_when :is_entry, if: :role, equals: "role_lead", must_be: false
+      def policy_check = nil
+      def perform = nil
+    end
+
+    # `false` is a real pin, not the "no pin declared" nil — a truthiness check
+    # anywhere in the emission would silently downgrade it to non-blank keywords.
+    should "publish a false pin as const false" do
+      assert_equal(
+        { required: [ "is_entry" ], properties: { "is_entry" => { const: false } } },
+        schema_for(FalsePinFixture)[:then]
+      )
+    end
+
+    # The pin lives in the `then` branch only — the property itself still
+    # accepts either enum value, since another role may legitimately use one.
+    should "leave the top-level property's enum intact" do
+      assert_equal(
+        { type: "string", enum: %w[role capability] },
+        schema_for(MustBeFixture)[:properties]["scope_type"]
+      )
+    end
+  end
+
+  ProhibitionFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved archived]
+    parameter :to_stable_id, String
+    forbids_when :to_stable_id, if: :mapping_type, in: %w[same archived]
+    def policy_check = nil
+    def perform = nil
+  end
+
+  PairedConditionalFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved]
+    parameter :to_stable_id, String
+    requires_when :to_stable_id, if: :mapping_type, equals: "evolved"
+    forbids_when :to_stable_id, if: :mapping_type, equals: "same"
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "forbids_when" do
+    should "emit a bare if/then for a single declaration" do
+      schema = schema_for(ProhibitionFixture)
+
+      assert_not schema.key?(:allOf)
+      assert_equal(
+        { properties: { "mapping_type" => { enum: %w[same archived] } }, required: [ "mapping_type" ] },
+        schema[:if]
+      )
+    end
+
+    # `not: { required: [dep] }` objects to the property existing at all, which
+    # is exactly what the runtime rejects — no per-type "must be empty" weakening.
+    should "forbid the dependent outright in the then branch" do
+      assert_equal({ not: { required: [ "to_stable_id" ] } }, schema_for(ProhibitionFixture)[:then])
+    end
+
+    # The two halves of one parameter's rule are independent constraints that
+    # must BOTH hold, so they nest rather than flatten.
+    should "nest a paired requires_when and forbids_when under allOf" do
+      branches = schema_for(PairedConditionalFixture)[:allOf]
+
+      assert_equal 2, branches.size
+      assert_equal(
+        [ { required: [ "to_stable_id" ], properties: { "to_stable_id" => { minLength: 1, pattern: "\\S" } } },
+          { not: { required: [ "to_stable_id" ] } } ],
+        branches.map { |b| b[:then] }
+      )
+      assert_equal(
+        [ { const: "evolved" }, { const: "same" } ],
+        branches.map { |b| b[:if][:properties]["mapping_type"] }
+      )
+    end
+
+    should "require the trigger key inside the if branch" do
+      assert_equal [ "mapping_type" ], schema_for(ProhibitionFixture)[:if][:required]
     end
   end
 
