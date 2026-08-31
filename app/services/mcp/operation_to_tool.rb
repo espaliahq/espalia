@@ -85,7 +85,7 @@ class Mcp::OperationToTool
   #
   # @return [Hash] merged into the input schema (empty when unconstrained)
   def constraint_schema
-    constraints = any_of_groups + conditional_requirements
+    constraints = any_of_groups + if_then_schemas
 
     case constraints.size
     when 0 then {}
@@ -102,7 +102,7 @@ class Mcp::OperationToTool
   end
 
   # @return [Array<Hash>] one `if`/`then` per `requires_when` declaration
-  def conditional_requirements
+  def if_then_schemas
     @operation_class.conditional_requirements.map do |requirement|
       {
         if: {
@@ -116,8 +116,12 @@ class Mcp::OperationToTool
     end
   end
 
+  # `const` and a single-entry `enum` are equivalent in JSON Schema, so the
+  # shape follows the value count rather than how it was declared — `equals: "x"`
+  # and `in: ["x"]` publish identically.
   def trigger_match(requirement)
-    requirement.match == :equals ? { const: requirement.values.first } : { enum: requirement.values }
+    values = requirement.values
+    values.size == 1 ? { const: values.first } : { enum: values }
   end
 
   # The dependent must be present AND non-blank — `requires_when` enforces

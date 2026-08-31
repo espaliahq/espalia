@@ -257,6 +257,71 @@ class Operations::BaseTest < ActiveSupport::TestCase
       end
     end
 
+    # `Array(hash)` would turn this into `[[key, value]]` — a constraint that
+    # can never match anything.
+    should "reject a non-Array in:" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, in: { a: 1 }
+        end
+      end
+      assert_match(/in: needs an Array/, err.message)
+    end
+
+    # nil would arm the rule when the trigger is ABSENT — inexpressible in the
+    # emitted `if`, whose `required` names the trigger.
+    should "reject a nil match value" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, equals: nil
+        end
+      end
+      assert_match(/JSON primitives/, err.message)
+    end
+
+    # A Symbol desyncs runtime (`:other != "other"`) from the published schema.
+    should "reject a Symbol match value" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, in: [ :other ]
+        end
+      end
+    end
+
+    should "reject nil inside an in: set" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, in: [ "a", nil ]
+        end
+      end
+    end
+
+    # The caller's array is often a shared constant — a later mutation must not
+    # change what is already enforced and advertised.
+    should "snapshot the in: set against later mutation" do
+      types = %w[evolved]
+      op = Class.new(Operations::Base) do
+        parameter :mapping_type, String
+        parameter :to_stable_id, String
+        requires_when :to_stable_id, if: :mapping_type, in: types
+        def policy_check = nil
+        def perform = params
+      end
+      types << "split"
+
+      assert_equal %w[evolved], op.conditional_requirements.first.values
+      out = op.call(context: build_context, params: { mapping_type: "split" })
+      assert_nil out[:to_stable_id]
+    end
+
     # A typo'd enum value declares a rule that can never fire — catch it at
     # load time rather than shipping a dead constraint.
     should "reject a matched value outside the trigger's allowed set" do

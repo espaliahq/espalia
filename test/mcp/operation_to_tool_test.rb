@@ -162,6 +162,14 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     def perform = nil
   end
 
+  OneValueInFixture = Class.new(Operations::Base) do
+    parameter :kind, String
+    parameter :label, String
+    requires_when :label, if: :kind, in: %w[b]
+    def policy_check = nil
+    def perform = nil
+  end
+
   MixedConstraintFixture = Class.new(Operations::Base) do
     parameter :kind, String, allowed: %w[a b]
     parameter :label, String
@@ -195,11 +203,17 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
       )
     end
 
-    should "emit enum for an in: declaration and const for an equals: one" do
+    # const and a single-entry enum say the same thing, so the shape follows the
+    # value count — `equals: "x"` and `in: ["x"]` publish identically.
+    should "emit enum for a multi-value match and const for a single-value one" do
       branches = schema_for(InSetConditionalFixture)[:allOf]
 
       assert_equal({ enum: %w[evolved split] }, branches.first[:if][:properties]["mapping_type"])
       assert_equal({ const: "split" }, branches.last[:if][:properties]["mapping_type"])
+    end
+
+    should "publish a one-value in: identically to equals:" do
+      assert_equal({ const: "b" }, schema_for(OneValueInFixture)[:if][:properties]["kind"])
     end
 
     # minLength/pattern are meaningless for a non-string dependent.
