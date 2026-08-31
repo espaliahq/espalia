@@ -492,27 +492,31 @@ module StimulusHelpers
   # miss invisible whether the modal failed to open or the id was renamed.
   # Same fail-loud principle as +js_fill_in+'s non-fillable guard.
   #
+  # The scope is resolved ONCE, by Capybara, and the element itself is passed
+  # to the script — as +js_fill_in+ does. Resolving it twice (assert_selector
+  # then a document-global +querySelector+) used two different lookups: inside
+  # a +within+ block Capybara scopes to the current node while querySelector
+  # does not, so the helper could assert one element and dispatch on another
+  # (or none). +find+'s ElementNotFound is the loud failure.
+  #
   # @param scope [String, nil] CSS selector to dispatch from (bubbles to
   #   window); defaults to the window itself
   def press_escape(scope: nil)
-    # Capybara-wait semantics for a scope still rendering; the JS below
-    # covers the (tiny) race between this assertion and the dispatch.
-    assert_selector scope, visible: :all if scope
+    target = scope ? find(scope, visible: :all) : nil
 
-    dispatched = page.evaluate_script(<<~JS, scope)
-      (() => {
-        const target = arguments[0] ? document.querySelector(arguments[0]) : window;
-        if (!target) return false;
-        target.dispatchEvent(
+    if target
+      page.execute_script(<<~JS, target)
+        arguments[0].dispatchEvent(
           new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
         );
-        return true;
-      })()
-    JS
-
-    return if dispatched
-
-    flunk("press_escape(scope: #{scope.inspect}) matched no element — nothing was dispatched.")
+      JS
+    else
+      page.execute_script(<<~JS)
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
+        );
+      JS
+    end
   end
 
   # Stubs +window.confirm+ to always return true, then runs the block.

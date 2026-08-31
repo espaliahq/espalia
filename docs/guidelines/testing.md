@@ -458,6 +458,8 @@ press_escape(scope: "#evm-content")   # dispatch from an element; it bubbles
 
 Same principle as the `MouseEvent` rule below: dispatch the event where the listener actually is.
 
+**A supplied `scope:` must match.** The helper resolves it with Capybara (so it waits for an element still rendering) and fails the test if it never appears — it no longer falls back to a window dispatch. That fallback was invisible and self-defeating: a window dispatch still closes the modal, so a renamed id or a modal that never opened left the test passing while proving nothing about in-dialog dispatch.
+
 ## Click-Outside Listeners Need a Real `MouseEvent`
 
 **Dispatch outside-click events via `execute_script` with a constructed `MouseEvent`, not Selenium's pointer or `find(...).click`.** stimulus-use's `useClickOutside` registers a window capture-phase click listener. Selenium's synthetic pointer events do not reliably trigger that listener under headless Chrome load — the dropdown/sidebar/overlay never closes:
