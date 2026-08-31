@@ -136,6 +136,276 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  RequiresWhenFixture = Class.new(Operations::Base) do
+    parameter :evidence_type, String, required: true, allowed: %w[note other]
+    parameter :custom_type_label, String
+    parameter :mapping_type, String, allowed: %w[same evolved split]
+    parameter :to_stable_id, String
+    requires_when :custom_type_label, if: :evidence_type, equals: "other"
+    requires_when :to_stable_id, if: :mapping_type, in: %w[evolved split]
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "requires_when DSL" do
+    should "accept a call whose trigger doesn't match" do
+      out = RequiresWhenFixture.call(context: build_context, params: { evidence_type: "note" })
+      assert_nil out[:custom_type_label]
+    end
+
+    should "accept a call whose trigger is absent entirely" do
+      out = RequiresWhenFixture.call(context: build_context, params: { evidence_type: "note" })
+      assert_nil out[:mapping_type]
+    end
+
+    should "accept a matching trigger with the dependent supplied" do
+      out = RequiresWhenFixture.call(
+        context: build_context,
+        params: { evidence_type: "other", custom_type_label: "Retro note" }
+      )
+      assert_equal "Retro note", out[:custom_type_label]
+    end
+
+    should "raise when the equals trigger matches and the dependent is missing" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        RequiresWhenFixture.new(context: build_context, params: { evidence_type: "other" })
+      end
+      assert_match(/custom_type_label is required when evidence_type is "other"/, err.message)
+    end
+
+    # Conditionally required means conditionally mandatory — a blank value is
+    # the mistake being caught, not a partial-update clear.
+    should "raise when the dependent is supplied blank" do
+      assert_raises(Operations::Base::ParameterError) do
+        RequiresWhenFixture.new(
+          context: build_context, params: { evidence_type: "other", custom_type_label: "" }
+        )
+      end
+    end
+
+    should "raise when the dependent is whitespace-only" do
+      assert_raises(Operations::Base::ParameterError) do
+        RequiresWhenFixture.new(
+          context: build_context, params: { evidence_type: "other", custom_type_label: "   " }
+        )
+      end
+    end
+
+    should "raise naming the matched value for an in: group" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        RequiresWhenFixture.new(
+          context: build_context, params: { evidence_type: "note", mapping_type: "split" }
+        )
+      end
+      assert_match(/to_stable_id is required when mapping_type is "split"/, err.message)
+    end
+
+    should "accept an in: trigger outside the matched set" do
+      out = RequiresWhenFixture.call(
+        context: build_context, params: { evidence_type: "note", mapping_type: "same" }
+      )
+      assert_nil out[:to_stable_id]
+    end
+
+    # Web controllers flash `e.message` verbatim, so a rule with established
+    # domain copy can keep it instead of the generic parameter-speak.
+    MessageOverrideFixture = Class.new(Operations::Base) do
+      parameter :mapping_type, String, allowed: %w[same evolved split]
+      parameter :to_stable_id, String
+      parameter :note, String
+      parameter :kind, String, allowed: %w[a b]
+      requires_when :to_stable_id, if: :mapping_type, in: %w[evolved split],
+                                   message: ->(type) { "#{type} mapping needs a survivor" }
+      requires_when :note, if: :kind, equals: "b", message: "Tell us why"
+      def policy_check = nil
+      def perform = params
+    end
+
+    should "use a callable message override, passing the matched value" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        MessageOverrideFixture.new(context: build_context, params: { mapping_type: "split" })
+      end
+      assert_equal "split mapping needs a survivor", err.message
+    end
+
+    should "use a String message override" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        MessageOverrideFixture.new(context: build_context, params: { kind: "b" })
+      end
+      assert_equal "Tell us why", err.message
+    end
+
+    should "reject an undeclared dependent at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          requires_when :nope, if: :kind, equals: "x"
+        end
+      end
+      assert_match(/undeclared parameter/, err.message)
+    end
+
+    should "reject an undeclared trigger at load time" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :label, String
+          requires_when :label, if: :nope, equals: "x"
+        end
+      end
+    end
+
+    should "reject declaring both equals: and in:" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, equals: "x", in: %w[x y]
+        end
+      end
+      assert_match(/exactly one of equals: or in:/, err.message)
+    end
+
+    should "reject declaring neither equals: nor in:" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind
+        end
+      end
+    end
+
+    should "reject an empty in: set" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, in: []
+        end
+      end
+    end
+
+    # `Array(hash)` would turn this into `[[key, value]]` — a constraint that
+    # can never match anything.
+    should "reject a non-Array in:" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, in: { a: 1 }
+        end
+      end
+      assert_match(/in: needs an Array/, err.message)
+    end
+
+    # nil would arm the rule when the trigger is ABSENT — inexpressible in the
+    # emitted `if`, whose `required` names the trigger.
+    should "reject a nil match value" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, equals: nil
+        end
+      end
+      assert_match(/JSON primitives/, err.message)
+    end
+
+    # A Symbol desyncs runtime (`:other != "other"`) from the published schema.
+    should "reject a Symbol match value" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, in: [ :other ]
+        end
+      end
+    end
+
+    should "reject nil inside an in: set" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          requires_when :label, if: :kind, in: [ "a", nil ]
+        end
+      end
+    end
+
+    # The caller's array is often a shared constant — a later mutation must not
+    # change what is already enforced and advertised.
+    should "snapshot the in: set against later mutation" do
+      types = %w[evolved]
+      op = Class.new(Operations::Base) do
+        parameter :mapping_type, String
+        parameter :to_stable_id, String
+        requires_when :to_stable_id, if: :mapping_type, in: types
+        def policy_check = nil
+        def perform = params
+      end
+      types << "split"
+
+      assert_equal %w[evolved], op.conditional_requirements.first.values
+      out = op.call(context: build_context, params: { mapping_type: "split" })
+      assert_nil out[:to_stable_id]
+    end
+
+    # Freezing the array alone leaves its String elements shared with the
+    # caller — mutating one would change enforcement and the schema after load.
+    should "snapshot String match values against later mutation" do
+      equals_value = +"other"
+      in_value = +"evolved"
+      op = Class.new(Operations::Base) do
+        parameter :kind, String
+        parameter :label, String
+        parameter :mapping_type, String
+        parameter :to_stable_id, String
+        requires_when :label, if: :kind, equals: equals_value
+        requires_when :to_stable_id, if: :mapping_type, in: [ in_value ]
+      end
+      equals_value << "!"
+      in_value << "!"
+
+      assert_equal [ "other" ], op.conditional_requirements.first.values
+      assert_equal [ "evolved" ], op.conditional_requirements.last.values
+    end
+
+    # NaN/Infinity are Floats but have no JSON encoding (RFC 8259), so the
+    # schema could never publish them.
+    should "reject a non-finite Float match value" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :weight, Numeric
+          parameter :label, String
+          requires_when :label, if: :weight, equals: Float::NAN
+        end
+      end
+      assert_match(/JSON primitives/, err.message)
+    end
+
+    # A typo'd enum value declares a rule that can never fire — catch it at
+    # load time rather than shipping a dead constraint.
+    should "reject a matched value outside the trigger's allowed set" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String, allowed: %w[note other]
+          parameter :label, String
+          requires_when :label, if: :kind, equals: "otehr"
+        end
+      end
+      assert_match(/outside its allowed set/, err.message)
+    end
+
+    should "reject a parameter depending on itself" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          requires_when :kind, if: :kind, equals: "x"
+        end
+      end
+    end
+  end
+
   BlankFixture = Class.new(Operations::Base) do
     parameter :name, String, allow_blank: false
     parameter :description, String

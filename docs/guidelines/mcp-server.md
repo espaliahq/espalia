@@ -451,8 +451,8 @@ MCP configuration.
 that the operation then rejected. The gap is invisible until an MCP client
 trusts the schema.
 
-Two declarations close the common shapes; both enforce at the parameter
-boundary AND emit the matching JSON Schema, which is the point — a constraint
+Three declarations close the common shapes; each enforces at the parameter
+boundary AND emits the matching JSON Schema, which is the point — a constraint
 that lives in only one of those two places is the bug:
 
 - **`requires_any_of :a, :b`** — at least one of a group was supplied → `anyOf`
@@ -466,15 +466,43 @@ that lives in only one of those two places is the bug:
   Reach for it on names and ids; never on a description, which callers
   legitimately clear. Adopting `requires_any_of` without it silently turns
   "you must supply a name" into a no-op success.
+- **`requires_when :dependent, if: :trigger, equals: "x"`** (or `in: [...]`) —
+  required only when another parameter carries a given value → `if`/`then`
+  (`const` for one match — `equals:` or a one-value `in:` — and `enum` for
+  several). Unlike `requires_any_of`, this
+  demands the dependent be **supplied AND non-blank**, because a
+  conditionally-required field is conditionally *mandatory* — `""` there is the
+  mistake being caught, not a clear. So the `then` branch carries `required`
+  **plus** the type's non-blank keywords, and the runtime says the same. The
+  `if` branch must also `required` the trigger, or an instance omitting it
+  matches vacuously and gets held to `then`. Load-time guards catch a
+  match value outside the trigger's own `allowed:` set — a typo'd enum would
+  otherwise declare a rule that can never fire. Five operations shared two such
+  rules by copy-paste before this existed.
 
-Branches under `anyOf`/`allOf` must carry **only** `required`.
-`additionalProperties: false` doesn't see into subschemas, so a branch that
-also declared `properties` would have them rejected as additional.
+A subschema must not introduce a **new** property name:
+`additionalProperties: false` is evaluated against the top-level `properties`
+alone and never sees into subschemas. So an `anyOf` branch carries only
+`required` — while an `if`/`then` legitimately constrains a name the top level
+already declares.
 
-Still unexpressed, and the next thing worth declaring: *conditionally*
-required params (`custom_type_label` required when `evidence_type == "other"`
-— duplicated verbatim across four evidence operations), which want
-`dependentRequired` / `if`-`then`.
+Still unexpressed — a ledger, so the next round knows what it is buying:
+
+- **Conditionally *forbidden*, the mirror of `requires_when`.** The collaborator
+  `scope_type`/`scope_id` rules are the hard case: an all-or-nothing pair,
+  mandatory for scoped roles, forbidden for framework-wide ones, with
+  `scope_type`'s value pinned by `role` — wanting `if`/`then`/`not` and per-role
+  branching rather than a flat dependency. The survivor rule has a milder half
+  of the same shape: `to_stable_id` alongside `same`/`archived`/`new` is
+  *silently ignored* today, enforced nowhere and advertised as acceptable, so a
+  client can believe it mapped a survivor when nothing was recorded.
+- **`frameworks_suggest_create`'s `parent_id`** — conditionally required for
+  entity types that hang off a parent, conditionally forbidden for
+  framework-level ones. Both are enforced in `perform`; neither is advertised.
+  The forbidden half at least raises a `ParameterError`; the required half
+  falls through to `RecordNotFound` with a blank-interpolated id ("parent  for
+  capability not found"), so a client is told the parent doesn't exist rather
+  than that it never sent one.
 
 ## Approval declaration cheat sheet
 
@@ -500,7 +528,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 |------|---------|
 | **Operations layer (shared with web)** | |
 | `app/operations/operations.rb` | Module declaration |
-| `app/operations/operations/base.rb` | DSL (`parameter`, `requires_any_of`, `allow_blank:`) + `#call` pipeline + `authorize` helper |
+| `app/operations/operations/base.rb` | DSL (`parameter`, `requires_any_of`, `requires_when`, `allow_blank:`) + `#call` pipeline + `authorize` helper |
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
@@ -535,8 +563,8 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `config/routes.rb` | `/mcp`, `/oauth/*`, `/.well-known/*`, `/mcp/approvals/*` |
 | **Tests** | |
 | `test/operations/registry_test.rb` | Registry hygiene |
-| `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `allow_blank` |
-| `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf` and `minLength` |
+| `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `requires_when`, `allow_blank` |
+| `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf`, `if`/`then`, and `minLength` |
 | `test/mcp/tool_registry_snapshot_test.rb` | Tool surface snapshot (drift guard) |
 | `test/integration/mcp_server_test.rb` | JSON-RPC unit coverage of tools/* and resources/* |
 | `test/integration/mcp_discovery_test.rb` | Well-known docs + DCR + WWW-Authenticate header |

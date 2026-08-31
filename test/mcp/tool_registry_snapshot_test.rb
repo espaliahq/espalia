@@ -416,7 +416,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content valence],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **custom_type_label_conditional
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -500,7 +501,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "external_reference" => external_reference_schema
           },
           "required" => %w[request_id evidence_type content valence],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **custom_type_label_conditional
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -580,7 +582,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "external_reference" => external_reference_schema
           },
           "required" => %w[assignment_id evidence_id evidence_type content],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **custom_type_label_conditional
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -1106,7 +1109,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "mode" => { "type" => "string", "enum" => %w[editing suggesting] }
           },
           "required" => %w[framework_id capability_id],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **survivor_mapping_conditional
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1258,7 +1262,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "reason" => { "type" => "string" }
           },
           "required" => %w[framework_id from_stable_id mapping_type],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **survivor_mapping_conditional
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1956,6 +1961,39 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "metadata"    => { "type" => "object", "description" => "Free-form additional fields." }
       },
       "additionalProperties" => false
+    }
+  end
+
+  # `requires_when :custom_type_label, if: :evidence_type, equals: "other"` —
+  # shared by the three evidence-write tools that carry the rule.
+  def custom_type_label_conditional
+    {
+      "if" => {
+        "properties" => { "evidence_type" => { "const" => "other" } },
+        "required" => [ "evidence_type" ]
+      },
+      "then" => {
+        "required" => [ "custom_type_label" ],
+        "properties" => { "custom_type_label" => { "minLength" => 1, "pattern" => "\\S" } }
+      }
+    }
+  end
+
+  # `requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES` —
+  # shared by the two tools that stage a capability migration mapping. The
+  # matched set is spelled out rather than read from the constant: widening
+  # SURVIVOR_TYPES changes what these two tools advertise, and this snapshot
+  # exists to make that land in review.
+  def survivor_mapping_conditional
+    {
+      "if" => {
+        "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
+        "required" => [ "mapping_type" ]
+      },
+      "then" => {
+        "required" => [ "to_stable_id" ],
+        "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
+      }
     }
   end
 end

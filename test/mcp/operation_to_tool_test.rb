@@ -133,12 +133,112 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     end
 
     # additionalProperties: false does not see into anyOf/allOf subschemas, so a
-    # branch declaring `properties` would have them rejected as additional.
-    should "keep every branch to required alone" do
+    # branch declaring a NEW property name would have it rejected as additional.
+    # (An if/then subschema may constrain a name already declared at the top
+    # level — see the requires_when context below.)
+    should "keep every anyOf branch to required alone" do
       branches = schema_for(OneGroupFixture)[:anyOf] +
                  schema_for(TwoGroupFixture)[:allOf].flat_map { |g| g[:anyOf] }
 
       branches.each { |branch| assert_equal [ :required ], branch.keys }
+    end
+  end
+
+  ConditionalFixture = Class.new(Operations::Base) do
+    parameter :evidence_type, String, required: true, allowed: %w[note other]
+    parameter :custom_type_label, String
+    requires_when :custom_type_label, if: :evidence_type, equals: "other"
+    def policy_check = nil
+    def perform = nil
+  end
+
+  InSetConditionalFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved split]
+    parameter :to_stable_id, String
+    parameter :level_ordinal, Integer
+    requires_when :to_stable_id, if: :mapping_type, in: %w[evolved split]
+    requires_when :level_ordinal, if: :mapping_type, equals: "split"
+    def policy_check = nil
+    def perform = nil
+  end
+
+  OneValueInFixture = Class.new(Operations::Base) do
+    parameter :kind, String
+    parameter :label, String
+    requires_when :label, if: :kind, in: %w[b]
+    def policy_check = nil
+    def perform = nil
+  end
+
+  MixedConstraintFixture = Class.new(Operations::Base) do
+    parameter :kind, String, allowed: %w[a b]
+    parameter :label, String
+    parameter :name, String
+    requires_any_of :label, :name
+    requires_when :label, if: :kind, equals: "b"
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "requires_when" do
+    should "emit a bare if/then for a single equals declaration" do
+      schema = schema_for(ConditionalFixture)
+
+      assert_not schema.key?(:allOf)
+      assert_equal(
+        { properties: { "evidence_type" => { const: "other" } }, required: [ "evidence_type" ] },
+        schema[:if]
+      )
+    end
+
+    # The runtime demands present-and-non-blank, so the branch must say both —
+    # otherwise the schema accepts `custom_type_label: ""` the op then rejects.
+    should "require the dependent AND constrain it non-blank" do
+      assert_equal(
+        {
+          required: [ "custom_type_label" ],
+          properties: { "custom_type_label" => { minLength: 1, pattern: "\\S" } }
+        },
+        schema_for(ConditionalFixture)[:then]
+      )
+    end
+
+    # const and a single-entry enum say the same thing, so the shape follows the
+    # value count — `equals: "x"` and `in: ["x"]` publish identically.
+    should "emit enum for a multi-value match and const for a single-value one" do
+      branches = schema_for(InSetConditionalFixture)[:allOf]
+
+      assert_equal({ enum: %w[evolved split] }, branches.first[:if][:properties]["mapping_type"])
+      assert_equal({ const: "split" }, branches.last[:if][:properties]["mapping_type"])
+    end
+
+    should "publish a one-value in: identically to equals:" do
+      assert_equal({ const: "b" }, schema_for(OneValueInFixture)[:if][:properties]["kind"])
+    end
+
+    # minLength/pattern are meaningless for a non-string dependent.
+    should "omit string keywords for a non-string dependent" do
+      branch = schema_for(InSetConditionalFixture)[:allOf].last
+
+      assert_equal({ required: [ "level_ordinal" ] }, branch[:then])
+    end
+
+    should "nest a requires_any_of group and a conditional together under allOf" do
+      schema = schema_for(MixedConstraintFixture)
+
+      assert_not schema.key?(:anyOf)
+      assert_not schema.key?(:if)
+      assert_equal(
+        [ { anyOf: [ { required: [ "label" ] }, { required: [ "name" ] } ] } ],
+        schema[:allOf].select { |c| c.key?(:anyOf) }
+      )
+      assert_equal 1, schema[:allOf].count { |c| c.key?(:if) }
+    end
+
+    # An instance that omits the trigger must not match the `if` vacuously and
+    # get held to the `then` branch.
+    should "require the trigger key inside the if branch" do
+      assert_equal [ "evidence_type" ], schema_for(ConditionalFixture)[:if][:required]
     end
   end
 

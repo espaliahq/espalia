@@ -32,14 +32,19 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
   parameter :to_stable_id,  String
   parameter :mode,          String, allowed: %w[editing suggesting]
 
+  # A mapping is optional here (it can be deferred to the publish-review
+  # gate), but one that carries ratings to a survivor names it — the same
+  # rule DefineMigrationMapping declares, from its own list of types.
+  requires_when :to_stable_id, if: :mapping_type,
+                               in: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES,
+                               message: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_REQUIRED_MESSAGE
+
   def policy_check
     authorize framework, :suggest_edit?
   end
 
   # @return [Hash] { framework_id:, capability_id:, stable_id:, archived:, mapping_type: }
   def perform
-    validate_mapping_combo!
-
     archived = archive_directly?
     if archived
       handler.archive_capability(framework.framework_id, capability.capability_id, reason: params[:reason])
@@ -108,14 +113,6 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
 
   def can_define_mapping?
     FrameworkPolicy.new(context, framework).define_migration_mapping?
-  end
-
-  def validate_mapping_combo!
-    return unless Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES.include?(params[:mapping_type]) &&
-                  params[:to_stable_id].blank?
-
-    raise Operations::Base::ParameterError,
-          "#{params[:mapping_type]} mapping requires a surviving capability (to_stable_id)"
   end
 
   def define_mapping

@@ -36,6 +36,9 @@
 class Operations::Base
   CATEGORIES = %i[read write destructive].freeze
   APPROVALS  = %i[none mcp_client in_app].freeze
+  # Value types a `requires_when` match can hold: JSON primitives, so the
+  # runtime comparison and the emitted `const`/`enum` mean the same thing.
+  MATCHABLE_TYPES = [ String, Integer, Float, TrueClass, FalseClass ].freeze
 
   # Raised when input params fail declared shape/type/allowed-value rules.
   # Distinct from `Pundit::NotAuthorizedError` so callers can map the two
@@ -108,6 +111,30 @@ class Operations::Base
       BOOLEAN_CASTS.fetch(key) do
         raise ParameterError, "#{name} must be a boolean, got #{value.inspect}"
       end
+    end
+  end
+
+  # One `requires_when` declaration: `dependent` is required whenever the
+  # `trigger` parameter's validated value is in `values`. How it was declared
+  # (`equals:` / `in:`) isn't recorded — a one-value set advertises as `const`
+  # and a longer one as `enum`, which say the same thing in JSON Schema.
+  #
+  # `message` optionally replaces the generic wording — a String, or a callable
+  # taking the matched trigger value.
+  ConditionalRequirement = Struct.new(:dependent, :trigger, :values, :message, keyword_init: true) do
+    # @param value [Object] the trigger parameter's validated value
+    # @return [Boolean] whether this requirement is armed
+    def triggered_by?(value)
+      values.include?(value)
+    end
+
+    # @param value [Object] the trigger parameter's validated value
+    # @return [String] the ParameterError message, naming the value that armed it
+    def message_for(value)
+      return message.call(value) if message.respond_to?(:call)
+      return message if message
+
+      "#{dependent} is required when #{trigger} is #{value.inspect}"
     end
   end
 
@@ -210,6 +237,50 @@ class Operations::Base
       @parameter_constraints ||= []
     end
 
+    # Declares that `name` is required only when another parameter carries a
+    # particular value — the shape `required:` can't express at all, because it
+    # is unconditional.
+    #
+    #   requires_when :custom_type_label, if: :evidence_type, equals: "other"
+    #   requires_when :to_stable_id,      if: :mapping_type,  in: SURVIVOR_TYPES
+    #
+    # Unlike `requires_any_of` (which asks only whether the key ARRIVED), this
+    # demands a value that is actually there: the dependent must be supplied
+    # AND non-blank. That is deliberate — every rule this replaced guarded on
+    # `blank?`, and a conditionally-required field is conditionally *mandatory*,
+    # so `custom_type_label: ""` alongside `evidence_type: "other"` is the very
+    # mistake being caught, not a partial-update clear. `false` counts as
+    # supplied (a real boolean value, not an absence). The emitted schema says
+    # the same thing: the `then` branch carries `required` PLUS the type's
+    # non-blank keywords, so a validating client and this check agree.
+    #
+    # @param name [Symbol] the conditionally-required (dependent) parameter
+    # @param if [Symbol] the trigger parameter whose value decides
+    # @param equals [Object, nil] trigger value that makes `name` required
+    # @param in [Array, nil] trigger values that make `name` required
+    # @param message [String, #call, nil] replaces the generic parameter-speak
+    #   wording — pass a callable to vary it by trigger value. Worth it wherever
+    #   the message reaches a user: the web controllers flash `e.message`
+    #   verbatim, so a rule with established domain copy keeps it.
+    # @raise [ArgumentError] at load time for undeclared parameters, a missing
+    #   or doubled match clause, or a value outside the trigger's `allowed:` set
+    def requires_when(name, message: nil, **options)
+      trigger = options.fetch(:if) { raise ArgumentError, "requires_when needs if: <parameter>" }
+      values  = requires_when_values(**options)
+      name    = name.to_sym
+      trigger = trigger.to_sym
+
+      validate_requires_when!(name, trigger, values)
+      conditional_requirements << ConditionalRequirement.new(
+        dependent: name, trigger: trigger, values: values, message: message
+      )
+    end
+
+    # @return [Array<ConditionalRequirement>] one entry per `requires_when`
+    def conditional_requirements
+      @conditional_requirements ||= []
+    end
+
     # Convenience entry point. Forwards to a new instance's `#call`.
     def call(context:, params: {})
       new(context: context, params: params).call
@@ -222,6 +293,79 @@ class Operations::Base
     # own prompt and the policy check.
     def default_approval_for_category
       category == :destructive ? :in_app : :none
+    end
+
+    # `in:` must be a literal Array — `Array(hash)` would quietly turn it into
+    # `[[key, value]]`, a constraint that can never match. The result is
+    # deep-frozen (each String as well as the array — a shared string mutated
+    # later would change enforcement just like a mutated array) so nothing the
+    # caller keeps a reference to can change what is enforced and advertised.
+    #
+    # @return [Array] the trigger values that arm the requirement
+    def requires_when_values(**options)
+      has_equals = options.key?(:equals)
+      has_in     = options.key?(:in)
+      unless has_equals ^ has_in
+        raise ArgumentError, "requires_when needs exactly one of equals: or in:"
+      end
+
+      return freeze_requires_when_values([ options[:equals] ]) if has_equals
+
+      values = options[:in]
+      raise ArgumentError, "requires_when in: needs an Array of values" unless values.is_a?(Array)
+      raise ArgumentError, "requires_when in: needs at least one value" if values.empty?
+
+      freeze_requires_when_values(values)
+    end
+
+    def freeze_requires_when_values(values)
+      values.map { |value| value.is_a?(String) ? value.dup.freeze : value }.freeze
+    end
+
+    # Load-time guards: both parameters must exist and differ, every matched
+    # value must be a JSON primitive the schema can name, and — when the trigger
+    # declares an enum — one it can actually hold (a typo'd value would
+    # otherwise declare a rule that can never fire).
+    def validate_requires_when!(name, trigger, values)
+      unknown = [ name, trigger ] - parameters.keys
+      if unknown.any?
+        raise ArgumentError, "requires_when names undeclared parameter(s): #{unknown.join(', ')}"
+      end
+      raise ArgumentError, "requires_when cannot make a parameter depend on itself" if name == trigger
+
+      validate_requires_when_values!(trigger, values)
+    end
+
+    # A match value must be expressible as a JSON Schema `const`/`enum` entry
+    # AND comparable to the validated parameter value. `nil` fails both ways:
+    # it would arm the rule when the trigger is ABSENT, which the emitted `if`
+    # (whose `required` names the trigger) cannot say. A Symbol looks right in
+    # Ruby but desyncs the two — `:other != "other"` at runtime, while the
+    # schema would publish the string.
+    def validate_requires_when_values!(trigger, values)
+      # `unless invalid.empty?`, never `if invalid.any?` — the values this
+      # rejects include nil and false, and a blockless `any?` asks for a
+      # truthy element (`[nil].any?` is false).
+      # Non-finite Floats pass the Float type check but have no JSON encoding
+      # (RFC 8259 forbids NaN/Infinity), so the schema could never publish them.
+      invalid = values.reject do |value|
+        MATCHABLE_TYPES.any? { |type| value.is_a?(type) } &&
+          !(value.is_a?(Float) && !value.finite?)
+      end
+      unless invalid.empty?
+        raise ArgumentError,
+              "requires_when match values must be JSON primitives (String, number, true/false); " \
+              "got #{invalid.inspect}"
+      end
+
+      allowed = parameters[trigger].allowed
+      return unless allowed
+
+      outside = values - allowed
+      return if outside.empty?
+
+      raise ArgumentError,
+            "requires_when if: #{trigger} matches #{outside.inspect}, outside its allowed set #{allowed.inspect}"
     end
   end
 
@@ -308,6 +452,7 @@ class Operations::Base
       out[name] = parameter.validate!(symbolised[name])
     end
     validate_parameter_constraints!(validated)
+    validate_conditional_requirements!(validated)
     validated
   end
 
@@ -323,5 +468,27 @@ class Operations::Base
 
       raise ParameterError, "provide at least one of: #{names.join(', ')}"
     end
+  end
+
+  # Enforce each `requires_when` declaration: when the trigger holds a matched
+  # value, the dependent must carry a real one. Runs with the per-parameter
+  # checks (before policy_check), like every other input rule.
+  #
+  # @param validated [Hash{Symbol=>Object}]
+  # @raise [ParameterError] when an armed requirement's dependent is absent/blank
+  def validate_conditional_requirements!(validated)
+    self.class.conditional_requirements.each do |requirement|
+      trigger_value = validated[requirement.trigger]
+      next unless requirement.triggered_by?(trigger_value)
+      next if conditionally_supplied?(validated[requirement.dependent])
+
+      raise ParameterError, requirement.message_for(trigger_value)
+    end
+  end
+
+  # `false` is a supplied boolean value, not an absence — everything else uses
+  # `present?`, matching the emitted `then` branch (required + non-blank).
+  def conditionally_supplied?(value)
+    value == false || value.present?
   end
 end
