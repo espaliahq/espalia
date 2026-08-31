@@ -485,12 +485,23 @@ alone and never sees into subschemas. So an `anyOf` branch carries only
 `required` — while an `if`/`then` legitimately constrains a name the top level
 already declares.
 
-Still unexpressed, and the next thing worth declaring: a conditionally required
-*pair* that is also conditionally **forbidden** — the collaborator
-`scope_type`/`scope_id` rules (all-or-nothing, mandatory for scoped roles,
-forbidden for framework-wide ones, with `scope_type`'s value pinned by `role`),
-which want `if`/`then`/`not` and per-role branching rather than a flat
-dependency.
+Still unexpressed — a ledger, so the next round knows what it is buying:
+
+- **Conditionally *forbidden*, the mirror of `requires_when`.** The collaborator
+  `scope_type`/`scope_id` rules are the hard case: an all-or-nothing pair,
+  mandatory for scoped roles, forbidden for framework-wide ones, with
+  `scope_type`'s value pinned by `role` — wanting `if`/`then`/`not` and per-role
+  branching rather than a flat dependency. The survivor rule has a milder half
+  of the same shape: `to_stable_id` alongside `same`/`archived`/`new` is
+  *silently ignored* today, enforced nowhere and advertised as acceptable, so a
+  client can believe it mapped a survivor when nothing was recorded.
+- **`frameworks_suggest_create`'s `parent_id`** — conditionally required for
+  entity types that hang off a parent, conditionally forbidden for
+  framework-level ones. Both are enforced in `perform`; neither is advertised.
+  The forbidden half at least raises a `ParameterError`; the required half
+  falls through to `RecordNotFound` with a blank-interpolated id ("parent  for
+  capability not found"), so a client is told the parent doesn't exist rather
+  than that it never sent one.
 
 ## Approval declaration cheat sheet
 

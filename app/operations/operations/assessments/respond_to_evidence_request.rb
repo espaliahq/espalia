@@ -21,8 +21,7 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   parameter :title, String
   parameter :external_reference, Hash, schema: ExternalReference.json_schema
 
-  # The 'other' evidence_type carries a free-text label the read model
-  # requires — advertised as well as enforced, so a client can obey it.
+  # The read model requires a label for the 'other' type.
   requires_when :custom_type_label, if: :evidence_type, equals: "other"
 
   def policy_check

@@ -1980,15 +1980,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   end
 
   # `requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES` —
-  # shared by the two tools that stage a capability migration mapping.
+  # shared by the two tools that stage a capability migration mapping. The
+  # matched set is spelled out rather than read from the constant: widening
+  # SURVIVOR_TYPES changes what these two tools advertise, and this snapshot
+  # exists to make that land in review.
   def survivor_mapping_conditional
     {
       "if" => {
-        "properties" => {
-          "mapping_type" => {
-            "enum" => Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES
-          }
-        },
+        "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
         "required" => [ "mapping_type" ]
       },
       "then" => {
