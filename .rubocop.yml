@@ -17,6 +17,9 @@ SystemTests/FlakeProneClick:
   Include:
     - "test/system/**/*.rb"
     - "test/support/system/**/*.rb"
+    # The base class holding sign_in_as and friends — a flake-prone pattern
+    # added here propagates to every system test.
+    - "test/application_system_test_case.rb"
 
 GrowthOs/ControllersMustUseOperations:
   Enabled: true

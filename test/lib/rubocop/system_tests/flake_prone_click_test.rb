@@ -66,6 +66,16 @@ class RuboCop::Cop::SystemTests::FlakeProneClickTest < ActiveSupport::TestCase
       assert_equal 1, messages.size
     end
 
+    should "flag a scoped find with a data-action selector" do
+      # The receiver is deliberately unconstrained: a scoped find drops its
+      # click exactly like a top-level one.
+      messages = offenses_for(<<~RUBY)
+        row.find("[data-action='dropdown#toggle']").click
+      RUBY
+      assert_equal 1, messages.size
+      assert_match(/execute_script/, messages.first)
+    end
+
     should "not flag a click on a plain id selector" do
       messages = offenses_for(<<~RUBY)
         find("#evidence-card").click
@@ -76,6 +86,38 @@ class RuboCop::Cop::SystemTests::FlakeProneClickTest < ActiveSupport::TestCase
     should "not flag a JS-dispatched click" do
       messages = offenses_for(<<~'RUBY')
         page.execute_script("document.querySelector(\"[data-action='dropdown#toggle']\").click()")
+      RUBY
+      assert_empty messages
+    end
+  end
+
+  context "Escape key dispatch" do
+    should "flag send_keys(:escape)" do
+      messages = offenses_for(<<~RUBY)
+        find("body").send_keys(:escape)
+      RUBY
+      assert_equal 1, messages.size
+      assert_match(/press_escape/, messages.first)
+    end
+
+    should "flag :escape nested one array level deep" do
+      messages = offenses_for(<<~RUBY)
+        find("body").send_keys([ :shift, :escape ])
+      RUBY
+      assert_equal 1, messages.size
+      assert_match(/press_escape/, messages.first)
+    end
+
+    should "not flag send_keys with another key" do
+      messages = offenses_for(<<~RUBY)
+        find("body").send_keys(:tab)
+      RUBY
+      assert_empty messages
+    end
+
+    should "not flag send_keys with plain text" do
+      messages = offenses_for(<<~RUBY)
+        find("#search").send_keys("some text")
       RUBY
       assert_empty messages
     end
