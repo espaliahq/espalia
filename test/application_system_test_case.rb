@@ -184,48 +184,65 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # authentication, and land back on the sign-in form — indistinguishable
     # from the dropped click it exists to recover from. Assigning the values
     # makes this attempt genuinely different from the first, not a retry of
-    # the same fragile input path.
-    #
+    # the same fragile input path. +js_fill_in+ is that assignment, and it
+    # raises when the field is missing rather than leaving the credential
+    # silently empty — the same silent-miss class this method guards below.
+    js_fill_in "Email", with: email
+    js_fill_in "Password", with: password
+
     # The script reports whether it found the form: wrapping the body in a
     # bare `if (form)` made a selector miss (a Devise route remap moving the
     # action away from `sign_in`, a Turbo-frame-wrapped form) a silent no-op.
     # sign_in_as then failed at `assert_no_current_path` with a "still on the
     # sign-in page" error attributed to the dropped click this fallback exists
     # to recover from — with no hint the recovery itself never ran.
-    submitted = page.evaluate_script(<<~JS, email, password)
+    #
+    # The selector is passed as an argument, never interpolated into the
+    # script source: a selector containing a double quote would otherwise
+    # break the script at JS parse time, replacing the curated flunk with a
+    # cryptic SyntaxError.
+    submitted = page.evaluate_script(<<~JS, SIGN_IN_FORM_SELECTOR)
       (() => {
-        const form = document.querySelector("#{SIGN_IN_FORM_SELECTOR}");
+        const form = document.querySelector(arguments[0]);
         if (!form) return false;
 
-        const set = (sel, value) => {
-          const el = form.querySelector(sel);
-          if (!el) return;
-          el.value = value;
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-          el.dispatchEvent(new Event("change", { bubbles: true }));
-        };
-        set("input[type='email'], input[name*='email']", arguments[0]);
-        set("input[type='password']", arguments[1]);
-
         // Pass the submitter so a named submit button's name/value would be
-        // included, exactly as a real click submits it.
+        // included, exactly as a real click submits it. WebIDL treats an
+        // explicit `undefined` for an optional param as omitted; only null
+        // is hazardous.
         const btn = form.querySelector("button[type='submit'], input[type='submit']");
-        if (btn) {
-          form.requestSubmit(btn);
-        } else {
-          form.requestSubmit();
-        }
+        form.requestSubmit(btn ?? undefined);
         return true;
       })()
     JS
 
     return if submitted
 
+    # No form — but that is only a selector failure if we are still ON the
+    # sign-in page. On a starved runner the first click can be honoured with
+    # a Turbo round-trip slower than the wait window, so we enter this
+    # fallback and the delayed navigation commits mid-method: the form is
+    # gone because sign-in already succeeded. Returning lets the caller's
+    # assert_no_current_path confirm that.
+    return if left_sign_in_page?
+
     flunk(
       "sign-in JS fallback found no form matching #{SIGN_IN_FORM_SELECTOR.inspect} — " \
       "the Devise sign-in form's action or markup changed, so the recovery path " \
       "for a dropped submit click is dead. Update SIGN_IN_FORM_SELECTOR."
     )
+  rescue Capybara::ElementNotFound
+    # The same late-navigation race, caught one step earlier: the credential
+    # fields are gone because the first submit landed after all. Anything
+    # else is a genuine missing field and must stay loud.
+    raise unless left_sign_in_page?
+  end
+
+  # True once the browser has left the Devise sign-in page — i.e. a sign-in
+  # actually landed. Distinguishes a real markup/selector failure from the
+  # survivable race where a slow first submit commits mid-fallback.
+  def left_sign_in_page?
+    page.has_no_current_path?(new_user_session_path, wait: 0)
   end
 
   # Retries a block that makes the first Selenium call, rescuing the

@@ -301,6 +301,8 @@ setup do
 end
 ```
 
+**The JS re-submit fallback fails the test loudly if the Devise form stops matching its selector** (`SIGN_IN_FORM_SELECTOR` in `test/application_system_test_case.rb`). It used to no-op silently, so a view or route change surfaced as a generic "still on the sign-in page" failure blaming the dropped click the fallback exists to recover from. A Devise change now names itself; a slow first submit that lands mid-fallback is still tolerated.
+
 ## Stimulus Toggle Helpers (NON-NEGOTIABLE)
 
 **Use purpose-specific toggle helpers instead of bare `find(...).click` for Stimulus-driven toggles.** On slow CI runners, Selenium's synthetic pointer clicks have been observed to drop silently when Chrome's JS event loop is starved or when the target is momentarily obscured (sticky element, mid-flight layout, scroll position). These helpers dispatch the click via JS (`element.click()`) instead — synchronous, bypasses pointer hit-testing, the Stimulus action handler runs inline before the script returns. The primitive (`stimulus_toggle`) re-dispatches once if the visible state never appears, gated on the toggle still being un-toggled (avoids ping-pong). It also waits for `wait_for_turbo_idle` before and after the click so a mid-flight Turbo Frame replacement can't detach the just-toggled element.
