@@ -268,6 +268,62 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     end
   end
 
+  ProhibitionFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved archived]
+    parameter :to_stable_id, String
+    forbids_when :to_stable_id, if: :mapping_type, in: %w[same archived]
+    def policy_check = nil
+    def perform = nil
+  end
+
+  PairedConditionalFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved]
+    parameter :to_stable_id, String
+    requires_when :to_stable_id, if: :mapping_type, equals: "evolved"
+    forbids_when :to_stable_id, if: :mapping_type, equals: "same"
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "forbids_when" do
+    should "emit a bare if/then for a single declaration" do
+      schema = schema_for(ProhibitionFixture)
+
+      assert_not schema.key?(:allOf)
+      assert_equal(
+        { properties: { "mapping_type" => { enum: %w[same archived] } }, required: [ "mapping_type" ] },
+        schema[:if]
+      )
+    end
+
+    # `not: { required: [dep] }` objects to the property existing at all, which
+    # is exactly what the runtime rejects — no per-type "must be empty" weakening.
+    should "forbid the dependent outright in the then branch" do
+      assert_equal({ not: { required: [ "to_stable_id" ] } }, schema_for(ProhibitionFixture)[:then])
+    end
+
+    # The two halves of one parameter's rule are independent constraints that
+    # must BOTH hold, so they nest rather than flatten.
+    should "nest a paired requires_when and forbids_when under allOf" do
+      branches = schema_for(PairedConditionalFixture)[:allOf]
+
+      assert_equal 2, branches.size
+      assert_equal(
+        [ { required: [ "to_stable_id" ], properties: { "to_stable_id" => { minLength: 1, pattern: "\\S" } } },
+          { not: { required: [ "to_stable_id" ] } } ],
+        branches.map { |b| b[:then] }
+      )
+      assert_equal(
+        [ { const: "evolved" }, { const: "same" } ],
+        branches.map { |b| b[:if][:properties]["mapping_type"] }
+      )
+    end
+
+    should "require the trigger key inside the if branch" do
+      assert_equal [ "mapping_type" ], schema_for(ProhibitionFixture)[:if][:required]
+    end
+  end
+
   private
 
   # @param operation_class [Class<Operations::Base>]

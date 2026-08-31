@@ -406,6 +406,236 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  ForbidsWhenFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved split archived]
+    parameter :to_stable_id, String
+    parameter :kind, String, allowed: %w[a b]
+    parameter :note, String
+    forbids_when :to_stable_id, if: :mapping_type, in: %w[same archived]
+    forbids_when :note, if: :kind, equals: "a"
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "forbids_when DSL" do
+    should "accept a call whose trigger doesn't match" do
+      out = ForbidsWhenFixture.call(
+        context: build_context, params: { mapping_type: "evolved", to_stable_id: "cap_1" }
+      )
+      assert_equal "cap_1", out[:to_stable_id]
+    end
+
+    should "accept a matching trigger with the dependent omitted" do
+      out = ForbidsWhenFixture.call(context: build_context, params: { mapping_type: "same" })
+      assert_nil out[:to_stable_id]
+    end
+
+    # An explicit nil is how a controller compacts an inapplicable field, so it
+    # must read as "not supplied" — the same reading `requires_any_of` uses.
+    should "accept a matching trigger with the dependent explicitly nil" do
+      out = ForbidsWhenFixture.call(
+        context: build_context, params: { mapping_type: "archived", to_stable_id: nil }
+      )
+      assert_nil out[:to_stable_id]
+    end
+
+    should "raise when an in: trigger matches and the dependent is supplied" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidsWhenFixture.new(
+          context: build_context, params: { mapping_type: "same", to_stable_id: "cap_1" }
+        )
+      end
+      assert_match(/to_stable_id is not accepted when mapping_type is "same"/, err.message)
+    end
+
+    should "raise when an equals trigger matches and the dependent is supplied" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidsWhenFixture.new(context: build_context, params: { kind: "a", note: "why" })
+      end
+      assert_match(/note is not accepted when kind is "a"/, err.message)
+    end
+
+    # The emitted `not: { required: [dep] }` objects to the key EXISTING, so a
+    # blank value violates it too — an inapplicable field is one the caller
+    # should not send at all.
+    should "raise when the dependent is supplied blank" do
+      assert_raises(Operations::Base::ParameterError) do
+        ForbidsWhenFixture.new(
+          context: build_context, params: { mapping_type: "same", to_stable_id: "" }
+        )
+      end
+    end
+
+    ForbidMessageFixture = Class.new(Operations::Base) do
+      parameter :mapping_type, String, allowed: %w[same evolved]
+      parameter :to_stable_id, String
+      parameter :kind, String, allowed: %w[a b]
+      parameter :note, String
+      forbids_when :to_stable_id, if: :mapping_type, in: %w[same],
+                                  message: ->(type) { "a #{type} mapping takes no survivor" }
+      forbids_when :note, if: :kind, equals: "a", message: "No note for a"
+      def policy_check = nil
+      def perform = params
+    end
+
+    should "use a callable message override, passing the matched value" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidMessageFixture.new(
+          context: build_context, params: { mapping_type: "same", to_stable_id: "cap_1" }
+        )
+      end
+      assert_equal "a same mapping takes no survivor", err.message
+    end
+
+    should "use a String message override" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        ForbidMessageFixture.new(context: build_context, params: { kind: "a", note: "why" })
+      end
+      assert_equal "No note for a", err.message
+    end
+
+    should "reject an undeclared dependent at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          forbids_when :nope, if: :kind, equals: "x"
+        end
+      end
+      assert_match(/forbids_when names undeclared parameter/, err.message)
+    end
+
+    should "reject an undeclared trigger at load time" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :label, String
+          forbids_when :label, if: :nope, equals: "x"
+        end
+      end
+    end
+
+    should "reject a parameter forbidding itself" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          forbids_when :kind, if: :kind, equals: "x"
+        end
+      end
+    end
+
+    should "reject declaring both equals: and in:" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, equals: "x", in: %w[x y]
+        end
+      end
+      assert_match(/forbids_when needs exactly one of equals: or in:/, err.message)
+    end
+
+    should "reject declaring neither equals: nor in:" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind
+        end
+      end
+    end
+
+    should "reject a non-Array in:" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, in: { a: 1 }
+        end
+      end
+      assert_match(/forbids_when in: needs an Array/, err.message)
+    end
+
+    should "reject an empty in: set" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, in: []
+        end
+      end
+    end
+
+    should "reject a non-JSON-primitive match value" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String
+          parameter :label, String
+          forbids_when :label, if: :kind, equals: :other
+        end
+      end
+      assert_match(/JSON primitives/, err.message)
+    end
+
+    should "reject a non-finite Float match value" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :weight, Numeric
+          parameter :label, String
+          forbids_when :label, if: :weight, equals: Float::INFINITY
+        end
+      end
+    end
+
+    should "reject a matched value outside the trigger's allowed set" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :kind, String, allowed: %w[a b]
+          parameter :label, String
+          forbids_when :label, if: :kind, equals: "c"
+        end
+      end
+      assert_match(/outside its allowed set/, err.message)
+    end
+
+    should "snapshot the in: set against later mutation" do
+      types = %w[same]
+      op = Class.new(Operations::Base) do
+        parameter :mapping_type, String
+        parameter :to_stable_id, String
+        forbids_when :to_stable_id, if: :mapping_type, in: types
+        def policy_check = nil
+        def perform = params
+      end
+      types << "archived"
+
+      assert_equal %w[same], op.conditional_prohibitions.first.values
+      out = op.call(context: build_context, params: { mapping_type: "archived", to_stable_id: "x" })
+      assert_equal "x", out[:to_stable_id]
+    end
+
+    # The two declarations are independent rules on one parameter: requiring it
+    # for one trigger value must not weaken forbidding it for another.
+    should "compose with requires_when on the same parameter" do
+      op = Class.new(Operations::Base) do
+        parameter :mapping_type, String, allowed: %w[same evolved]
+        parameter :to_stable_id, String
+        requires_when :to_stable_id, if: :mapping_type, equals: "evolved"
+        forbids_when :to_stable_id, if: :mapping_type, equals: "same"
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { mapping_type: "evolved" })
+      end
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { mapping_type: "same", to_stable_id: "x" })
+      end
+      assert_equal "x", op.call(
+        context: build_context, params: { mapping_type: "evolved", to_stable_id: "x" }
+      )[:to_stable_id]
+    end
+  end
+
   BlankFixture = Class.new(Operations::Base) do
     parameter :name, String, allow_blank: false
     parameter :description, String

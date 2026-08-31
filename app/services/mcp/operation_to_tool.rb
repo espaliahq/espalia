@@ -72,10 +72,11 @@ class Mcp::OperationToTool
   # Cross-parameter constraints → JSON Schema, the only way to advertise rules
   # the flat `required` array above (an "all of") can't express.
   #
-  # Two kinds are emitted: `requires_any_of` groups as `anyOf`, and
-  # `requires_when` declarations as `if`/`then`. One constraint is merged
-  # bare; several must ALL hold, so they nest under `allOf` — flattening them
-  # would say "satisfy any one", which is weaker than declared.
+  # Three kinds are emitted: `requires_any_of` groups as `anyOf`, and both
+  # `requires_when` and `forbids_when` declarations as `if`/`then` (the latter
+  # with a `not`). One constraint is merged bare; several must ALL hold, so they
+  # nest under `allOf` — flattening them would say "satisfy any one", which is
+  # weaker than declared.
   #
   # A subschema names a property only where matching on its VALUE demands it
   # (`if`'s match, `then`'s non-blank keywords). `additionalProperties: false`
@@ -101,19 +102,22 @@ class Mcp::OperationToTool
     end
   end
 
-  # @return [Array<Hash>] one `if`/`then` per `requires_when` declaration
+  # @return [Array<Hash>] one `if`/`then` per `requires_when` / `forbids_when`
   def if_then_schemas
-    @operation_class.conditional_requirements.map do |requirement|
-      {
-        if: {
-          properties: { requirement.trigger.to_s => trigger_match(requirement) },
-          # Without this, an instance that omits the trigger entirely matches
-          # the `if` vacuously and gets held to the `then` branch.
-          required: [ requirement.trigger.to_s ]
-        },
-        then: then_branch(requirement)
-      }
-    end
+    @operation_class.conditional_requirements.map { |r| conditional_schema(r, then_required(r)) } +
+      @operation_class.conditional_prohibitions.map { |p| conditional_schema(p, then_forbidden(p)) }
+  end
+
+  def conditional_schema(rule, then_branch)
+    {
+      if: {
+        properties: { rule.trigger.to_s => trigger_match(rule) },
+        # Without this, an instance that omits the trigger entirely matches
+        # the `if` vacuously and gets held to the `then` branch.
+        required: [ rule.trigger.to_s ]
+      },
+      then: then_branch
+    }
   end
 
   # `const` and a single-entry `enum` are equivalent in JSON Schema, so the
@@ -127,12 +131,21 @@ class Mcp::OperationToTool
   # The dependent must be present AND non-blank — `requires_when` enforces
   # exactly that at the boundary, so the branch says both rather than the
   # weaker "the key arrived".
-  def then_branch(requirement)
+  def then_required(requirement)
     parameter = @operation_class.parameters.fetch(requirement.dependent)
     keywords = non_blank_keywords(TYPE_MAPPING.fetch(parameter.type, "string"))
     branch = { required: [ requirement.dependent.to_s ] }
     branch[:properties] = { requirement.dependent.to_s => keywords } if keywords.any?
     branch
+  end
+
+  # The dependent must be absent outright. `not: { required: [dep] }` objects to
+  # the property EXISTING, which is precisely what `forbids_when` rejects at the
+  # boundary — so an empty value is invalid here too, and there is deliberately
+  # no per-type "must be empty" weakening (that would contradict a top-level
+  # `minLength` the parameter's own `allow_blank: false` may already carry).
+  def then_forbidden(prohibition)
+    { not: { required: [ prohibition.dependent.to_s ] } }
   end
 
   # An explicit `schema:` fragment describes the param's SHAPE — it's how a
