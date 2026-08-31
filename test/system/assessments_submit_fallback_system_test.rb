@@ -104,9 +104,36 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  # Patches window.fetch to count and delay requests matching the fragment, so
+  # a second submission can be attempted while the first is still in flight.
+  def patch_fetch_to_delay(url_fragment, ms: 2000)
+    page.execute_script(<<~JS)
+      const of = window.fetch;
+      window.__matched = 0;
+      window.fetch = (url, ...a) => {
+        if (!String(url).includes(#{url_fragment.to_json})) return of(url, ...a);
+        window.__matched++;
+        return new Promise((resolve, reject) => {
+          setTimeout(() => of(url, ...a).then(resolve, reject), #{ms});
+        });
+      };
+    JS
+  end
+
   def open_evidence_modal
     page.execute_script(
       "document.querySelector(\"[data-evidence-modal-mode-param='new']\").click();"
+    )
+  end
+
+  def fill_evidence_form(text)
+    js_fill_in "#evm-content", with: text
+    js_fill_in "#evm-valence", with: "demonstrated"
+  end
+
+  def submit_evidence_form
+    page.execute_script(
+      "document.querySelector('#evidence-modal-overlay button[type=submit]').click();"
     )
   end
 
@@ -146,6 +173,53 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
       page.execute_script("document.querySelector('#evidence-modal-error button').click();")
 
       assert_selector "textarea#evm-content", visible: true
+    end
+  end
+
+  # One user action, one request (audit issue #335): the modal's submit button
+  # is disabled for the duration of the write, and a re-entrant submit while
+  # one is in flight never reaches the server.
+  context "submitting the evidence modal" do
+    setup do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "evidence-modal"
+      open_evidence_modal
+      assert_selector "textarea#evm-content", visible: true
+      wait_for_stimulus "submit-guard"
+    end
+
+    should "lock the submit button in flight and send exactly one save" do
+      patch_fetch_to_delay("/evidence/save")
+      fill_evidence_form("Feedback worth keeping")
+      submit_evidence_form
+
+      assert_selector "#evidence-modal-overlay button[type=submit][disabled]",
+        text: "Saving…", visible: true
+
+      # A second attempt — a click on the locked button AND a programmatic
+      # submit that bypasses it — must not reach the server.
+      submit_evidence_form
+      page.execute_script("document.querySelector('#evidence-modal-overlay form').requestSubmit();")
+
+      assert_text "Feedback worth keeping"
+      assert_equal 1, page.evaluate_script("window.__matched")
+    end
+
+    should "unlock the submit button when the save fails, so it can be retried" do
+      patch_fetch_to_fail("/evidence/save")
+      fill_evidence_form("Feedback worth keeping")
+      submit_evidence_form
+
+      assert_selector "#evidence-modal-overlay [data-submit-fallback-target='message']",
+        text: "Couldn't save your feedback", visible: true
+      assert_selector "#evidence-modal-overlay button[type=submit]:not([disabled])",
+        text: "Add feedback / evidence", visible: true
+
+      # And the retry genuinely goes through.
+      page.execute_script("window.__unpatchFetch();")
+      submit_evidence_form
+      assert_text "Feedback worth keeping"
     end
   end
 

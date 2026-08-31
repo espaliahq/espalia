@@ -75,7 +75,11 @@ class Views::Evidence::ModalForm < Views::Base
         # hub's redirect must navigate the page, and turbo_stream responses (the
         # assessment surface) still apply globally regardless of frame target.
         form_with(url: form_action, method: form_method, class: "space-y-3",
-                  data: { turbo_frame: "_top", action: "turbo:submit-end->modal#submitted" }) do
+                  data: { turbo_frame: "_top", controller: "submit-guard",
+                          action: "turbo:submit-end->modal#submitted " \
+                                  "submit->submit-guard#guard " \
+                                  "turbo:submit-start->submit-guard#start " \
+                                  "turbo:submit-end->submit-guard#end" }) do
           hidden_fields
           content_fields
           links_section
@@ -367,8 +371,10 @@ class Views::Evidence::ModalForm < Views::Base
   def footer
     div(class: "flex justify-end gap-2 pt-2") do
       button(type: "button", data: { action: "modal#close" }, class: SECONDARY_BTN) { "Cancel" }
-      button(type: "submit",
-             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { submit_label }
+      # `submit-guard` disables this while the write is in flight, so a
+      # double-click can't fire a second POST (audit issue #335).
+      button(type: "submit", data: { submit_guard_target: "button" },
+             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed") { submit_label }
     end
   end
 
