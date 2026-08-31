@@ -241,8 +241,8 @@ class Operations::Base
     #   NOT for one where "" is a legitimate clear (a description).
     def parameter(name, type, required: false, allowed: nil, schema: nil, allow_blank: true)
       parameters[name.to_sym] = Parameter.new(
-        name: name.to_sym, type: type, required: required, allowed: allowed, schema: schema,
-        allow_blank: allow_blank
+        name: name.to_sym, type: type, required: required, allowed: allowed,
+        schema: normalize_schema_fragment(schema), allow_blank: allow_blank
       )
     end
 
@@ -482,6 +482,33 @@ class Operations::Base
       raise ArgumentError, "#{declaration} in: needs at least one value" if values.empty?
 
       freeze_match_values(values)
+    end
+
+    # A `schema:` fragment may be authored with String or Symbol keys — both
+    # are ordinary JSON Schema — so it is symbolised HERE, at declaration time,
+    # leaving the descriptor's merge a plain one. Skip it and a String-keyed
+    # `"type"` lands ALONGSIDE the derived Symbol-keyed `:type`, serialising as
+    # a duplicate JSON key.
+    #
+    # `deep_symbolize_keys` returns fresh containers, so freezing them can't
+    # reach anything the caller still holds — worth doing because a fragment is
+    # often a shared constant (`ExternalReference.json_schema`) and a later
+    # mutation would silently change what is advertised. Strings inside ARE
+    # shared, so they are deliberately left alone.
+    #
+    # @return [Hash, nil]
+    def normalize_schema_fragment(fragment)
+      return nil if fragment.nil?
+
+      deep_freeze_containers(fragment.deep_symbolize_keys)
+    end
+
+    def deep_freeze_containers(value)
+      case value
+      when Hash  then value.each_value { |nested| deep_freeze_containers(nested) }.freeze
+      when Array then value.each { |nested| deep_freeze_containers(nested) }.freeze
+      else value
+      end
     end
 
     def freeze_match_values(values)

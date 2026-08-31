@@ -873,6 +873,36 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  context "an explicit schema: fragment" do
+    # Normalised at declaration time so the descriptor's merge is plain — a
+    # String-keyed "type" must override the derived :type, not sit beside it.
+    should "symbolise a string-keyed fragment" do
+      op = Class.new(Operations::Base) do
+        parameter :payload, Hash, schema: {
+          "type" => "object", "properties" => { "name" => { "type" => "string" } }
+        }
+      end
+
+      assert_equal(
+        { type: "object", properties: { name: { type: "string" } } },
+        op.parameters[:payload].schema
+      )
+    end
+
+    # Fragments are often shared constants; a later mutation must not change
+    # what is already advertised.
+    should "deep-freeze the fragment's containers" do
+      op = Class.new(Operations::Base) do
+        parameter :payload, Hash, schema: { type: "object", properties: { name: { type: "string" } } }
+      end
+      fragment = op.parameters[:payload].schema
+
+      assert fragment.frozen?
+      assert fragment[:properties].frozen?
+      assert fragment[:properties][:name].frozen?
+    end
+  end
+
   context "parameter validation" do
     should "raise when a required parameter is missing" do
       err = assert_raises(Operations::Base::ParameterError) do

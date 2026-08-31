@@ -177,19 +177,11 @@ class Mcp::OperationToTool
   # other flags rather than replacing them: an early return here silently drops
   # `enum` and the blank guard, shipping a schema that accepts input the
   # operation rejects (which is the whole class of bug this file guards).
+  # A plain merge: `Operations::Base.parameter` already symbolised the fragment
+  # at declaration time, so a String-keyed `"type"` overrides the derived
+  # `:type` here rather than sitting beside it as a duplicate JSON key.
   def property_for(parameter)
-    derived_property(parameter).merge(explicit_schema(parameter))
-  end
-
-  # A fragment may be authored with String or Symbol keys — both are ordinary
-  # JSON Schema — so normalise before merging. Without this, a String-keyed
-  # `"type"` lands ALONGSIDE the derived Symbol-keyed `:type` instead of
-  # overriding it, and the descriptor serialises with a duplicate JSON key
-  # (a warning today; an error under json 3.0).
-  #
-  # @return [Hash] the fragment with symbol keys throughout, or {} when absent
-  def explicit_schema(parameter)
-    parameter.schema&.deep_symbolize_keys || {}
+    derived_property(parameter).merge(parameter.schema || {})
   end
 
   def derived_property(parameter)
