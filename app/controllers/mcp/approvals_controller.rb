@@ -44,6 +44,14 @@ class Mcp::ApprovalsController < ApplicationController
     redirect_to mcp_approval_path(@approval), notice: "Operation approved and executed."
   rescue Pundit::NotAuthorizedError
     redirect_to mcp_approval_path(@approval), alert: "You are not authorized to perform this operation."
+  rescue Operations::Base::ParameterError => e
+    # Deliberately surfaced verbatim, unlike the blanket rescue below: a
+    # ParameterError message is authored for the caller (often established
+    # domain copy) and leaks nothing internal. Reachable for a row minted
+    # before the operation's input rules tightened — the arguments were valid
+    # when submitted and are not now, and "Could not execute operation" would
+    # leave the user with no idea why.
+    redirect_to mcp_approval_path(@approval), alert: e.message
   rescue StandardError => e
     # Surface a generic alert — exception messages can leak internal
     # state (record IDs, SQL fragments, etc) and the user has no way to

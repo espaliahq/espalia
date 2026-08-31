@@ -117,6 +117,38 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_equal @person.id, payload.dig("person", "id")
     end
 
+    # An :in_app deferral response looks like a success, so a malformed call
+    # only checked at approval time tells the client nothing AND mints an
+    # approval that can never execute.
+    should "reject invalid params on an :in_app tool instead of minting an approval" do
+      post_mcp({
+        jsonrpc: "2.0", id: 40, method: "tools/call",
+        params: {
+          name: "frameworks_add_collaborator",
+          arguments: { framework_id: "fw_1", person_id: "p_1", role: "editor", scope_id: "cap_1" }
+        }
+      })
+
+      assert_response :success
+      assert_equal(-32602, json_body.dig("error", "code"))
+      assert_match(/editor is framework-wide/, json_body.dig("error", "message"))
+      assert_equal 0, ActsAsTenant.without_tenant { Mcp::PendingApproval.count }
+    end
+
+    should "still defer a well-formed :in_app tool call to approval" do
+      post_mcp({
+        jsonrpc: "2.0", id: 41, method: "tools/call",
+        params: {
+          name: "frameworks_add_collaborator",
+          arguments: { framework_id: "fw_1", person_id: "p_1", role: "editor" }
+        }
+      })
+
+      assert_response :success
+      assert_nil json_body["error"]
+      assert_equal 1, ActsAsTenant.without_tenant { Mcp::PendingApproval.count }
+    end
+
     should "execute frameworks_list and return tenant-scoped framework rows" do
       ActsAsTenant.with_tenant(@tenant) do
         create(:framework_state, tenant: @tenant, framework_id: SecureRandom.uuid_v7,
