@@ -499,10 +499,22 @@ module StimulusHelpers
   # does not, so the helper could assert one element and dispatch on another
   # (or none). +find+'s ElementNotFound is the loud failure.
   #
+  # Resolution is VISIBLE-ONLY (Capybara's default), deliberately. Several
+  # modals are embedded in the initial render and merely hidden until opened,
+  # so +visible: :all+ would resolve the hidden panel after a dropped
+  # open-click: Esc dispatches from a hidden node, bubbles to window, and the
+  # caller's `assert_no_selector …, visible: true` passes vacuously against a
+  # modal that never opened. Visible-only makes that fail loudly too.
+  #
+  # So pass +scope+ only when the element is expected to be present AND
+  # visible at dispatch time. For a close-path sequence where it may already
+  # be gone (a second Esc, say), use bare +press_escape+ — the listener is on
+  # the window regardless.
+  #
   # @param scope [String, nil] CSS selector to dispatch from (bubbles to
   #   window); defaults to the window itself
   def press_escape(scope: nil)
-    target = scope ? find(scope, visible: :all) : nil
+    target = scope ? find(scope) : nil
 
     if target
       page.execute_script(<<~JS, target)
