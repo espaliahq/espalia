@@ -69,28 +69,66 @@ class Mcp::OperationToTool
     schema.merge(constraint_schema)
   end
 
-  # `requires_any_of` groups → JSON Schema, the only way to advertise a choice
-  # between parameters (the flat `required` array above is an "all of").
+  # Cross-parameter constraints → JSON Schema, the only way to advertise rules
+  # the flat `required` array above (an "all of") can't express.
   #
-  # One group is a bare `anyOf`. Several groups must ALL hold, so they nest
-  # under `allOf` — flattening their branches into one `anyOf` would say
-  # "satisfy any one group", which is weaker than declared.
+  # Two kinds are emitted: `requires_any_of` groups as `anyOf`, and
+  # `requires_when` declarations as `if`/`then`. One constraint is merged
+  # bare; several must ALL hold, so they nest under `allOf` — flattening them
+  # would say "satisfy any one", which is weaker than declared.
   #
-  # Each branch carries ONLY `required`. `additionalProperties: false` doesn't
-  # see into subschemas, so a branch that also declared `properties` would have
-  # them rejected as additional — keep branches to `required` alone.
+  # A subschema names a property only where matching on its VALUE demands it
+  # (`if`'s match, `then`'s non-blank keywords). `additionalProperties: false`
+  # is evaluated against the top-level `properties` alone and never sees into
+  # subschemas — which is why an `anyOf` branch must not introduce a property
+  # name, and why these two may constrain one already declared at the top level.
   #
   # @return [Hash] merged into the input schema (empty when unconstrained)
   def constraint_schema
-    groups = @operation_class.parameter_constraints.map do |names|
+    constraints = any_of_groups + conditional_requirements
+
+    case constraints.size
+    when 0 then {}
+    when 1 then constraints.first
+    else { allOf: constraints }
+    end
+  end
+
+  # @return [Array<Hash>] one `anyOf` per `requires_any_of` group
+  def any_of_groups
+    @operation_class.parameter_constraints.map do |names|
       { anyOf: names.map { |name| { required: [ name.to_s ] } } }
     end
+  end
 
-    case groups.size
-    when 0 then {}
-    when 1 then groups.first
-    else { allOf: groups }
+  # @return [Array<Hash>] one `if`/`then` per `requires_when` declaration
+  def conditional_requirements
+    @operation_class.conditional_requirements.map do |requirement|
+      {
+        if: {
+          properties: { requirement.trigger.to_s => trigger_match(requirement) },
+          # Without this, an instance that omits the trigger entirely matches
+          # the `if` vacuously and gets held to the `then` branch.
+          required: [ requirement.trigger.to_s ]
+        },
+        then: then_branch(requirement)
+      }
     end
+  end
+
+  def trigger_match(requirement)
+    requirement.match == :equals ? { const: requirement.values.first } : { enum: requirement.values }
+  end
+
+  # The dependent must be present AND non-blank — `requires_when` enforces
+  # exactly that at the boundary, so the branch says both rather than the
+  # weaker "the key arrived".
+  def then_branch(requirement)
+    parameter = @operation_class.parameters.fetch(requirement.dependent)
+    keywords = non_blank_keywords(TYPE_MAPPING.fetch(parameter.type, "string"))
+    branch = { required: [ requirement.dependent.to_s ] }
+    branch[:properties] = { requirement.dependent.to_s => keywords } if keywords.any?
+    branch
   end
 
   # An explicit `schema:` fragment describes the param's SHAPE — it's how a
@@ -124,6 +162,15 @@ class Mcp::OperationToTool
   def blank_constraint(parameter, type)
     return {} unless parameter.allow_blank == false
 
+    non_blank_keywords(type)
+  end
+
+  # The "not empty" keywords for a JSON Schema type. Shared with the
+  # `requires_when` `then` branch so the two ways of saying non-blank stay in
+  # step.
+  #
+  # @return [Hash] empty for a type with no emptiness keyword
+  def non_blank_keywords(type)
     case type
     when "string" then { minLength: 1, pattern: "\\S" }
     when "array"  then { minItems: 1 }

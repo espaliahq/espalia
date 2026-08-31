@@ -111,6 +111,24 @@ class Operations::Base
     end
   end
 
+  # One `requires_when` declaration: `dependent` is required whenever the
+  # `trigger` parameter's validated value is in `values`. `match` records how
+  # it was declared (`:equals` / `:in`) so the advertised schema can emit the
+  # matching keyword (`const` / `enum`).
+  ConditionalRequirement = Struct.new(:dependent, :trigger, :values, :match, keyword_init: true) do
+    # @param value [Object] the trigger parameter's validated value
+    # @return [Boolean] whether this requirement is armed
+    def triggered_by?(value)
+      values.include?(value)
+    end
+
+    # @param value [Object] the trigger parameter's validated value
+    # @return [String] the ParameterError message, naming the value that armed it
+    def message_for(value)
+      "#{dependent} is required when #{trigger} is #{value.inspect}"
+    end
+  end
+
   # Self-register every concrete subclass into Operations::Registry so the
   # MCP server can list them without an explicit manifest. Anonymous test
   # subclasses are filtered inside the registry.
@@ -210,6 +228,47 @@ class Operations::Base
       @parameter_constraints ||= []
     end
 
+    # Declares that `name` is required only when another parameter carries a
+    # particular value — the shape `required:` can't express at all, because it
+    # is unconditional.
+    #
+    #   requires_when :custom_type_label, if: :evidence_type, equals: "other"
+    #   requires_when :to_stable_id,      if: :mapping_type,  in: SURVIVOR_TYPES
+    #
+    # Unlike `requires_any_of` (which asks only whether the key ARRIVED), this
+    # demands a value that is actually there: the dependent must be supplied
+    # AND non-blank. That is deliberate — every rule this replaced guarded on
+    # `blank?`, and a conditionally-required field is conditionally *mandatory*,
+    # so `custom_type_label: ""` alongside `evidence_type: "other"` is the very
+    # mistake being caught, not a partial-update clear. `false` counts as
+    # supplied (a real boolean value, not an absence). The emitted schema says
+    # the same thing: the `then` branch carries `required` PLUS the type's
+    # non-blank keywords, so a validating client and this check agree.
+    #
+    # @param name [Symbol] the conditionally-required (dependent) parameter
+    # @param if [Symbol] the trigger parameter whose value decides
+    # @param equals [Object, nil] trigger value that makes `name` required
+    # @param in [Array, nil] trigger values that make `name` required
+    # @raise [ArgumentError] at load time for undeclared parameters, a missing
+    #   or doubled match clause, or a value outside the trigger's `allowed:` set
+    def requires_when(name, **options)
+      trigger = options.fetch(:if) { raise ArgumentError, "requires_when needs if: <parameter>" }
+      values  = requires_when_values(**options)
+      name    = name.to_sym
+      trigger = trigger.to_sym
+
+      validate_requires_when!(name, trigger, values)
+      conditional_requirements << ConditionalRequirement.new(
+        dependent: name, trigger: trigger, values: values,
+        match: options.key?(:equals) ? :equals : :in
+      )
+    end
+
+    # @return [Array<ConditionalRequirement>] one entry per `requires_when`
+    def conditional_requirements
+      @conditional_requirements ||= []
+    end
+
     # Convenience entry point. Forwards to a new instance's `#call`.
     def call(context:, params: {})
       new(context: context, params: params).call
@@ -222,6 +281,42 @@ class Operations::Base
     # own prompt and the policy check.
     def default_approval_for_category
       category == :destructive ? :in_app : :none
+    end
+
+    # @return [Array] the trigger values that arm the requirement
+    def requires_when_values(**options)
+      has_equals = options.key?(:equals)
+      has_in     = options.key?(:in)
+      unless has_equals ^ has_in
+        raise ArgumentError, "requires_when needs exactly one of equals: or in:"
+      end
+
+      return [ options[:equals] ] if has_equals
+
+      values = Array(options[:in])
+      raise ArgumentError, "requires_when in: needs at least one value" if values.empty?
+
+      values
+    end
+
+    # Load-time guards: both parameters must exist, they must differ, and every
+    # matched value must be one the trigger can actually hold — a typo'd enum
+    # value would otherwise declare a rule that can never fire.
+    def validate_requires_when!(name, trigger, values)
+      unknown = [ name, trigger ] - parameters.keys
+      if unknown.any?
+        raise ArgumentError, "requires_when names undeclared parameter(s): #{unknown.join(', ')}"
+      end
+      raise ArgumentError, "requires_when cannot make a parameter depend on itself" if name == trigger
+
+      allowed = parameters[trigger].allowed
+      return unless allowed
+
+      outside = values - allowed
+      return if outside.empty?
+
+      raise ArgumentError,
+            "requires_when if: #{trigger} matches #{outside.inspect}, outside its allowed set #{allowed.inspect}"
     end
   end
 
@@ -323,5 +418,27 @@ class Operations::Base
 
       raise ParameterError, "provide at least one of: #{names.join(', ')}"
     end
+    validate_conditional_requirements!(validated)
+  end
+
+  # Enforce each `requires_when` declaration: when the trigger holds a matched
+  # value, the dependent must carry a real one.
+  #
+  # @param validated [Hash{Symbol=>Object}]
+  # @raise [ParameterError] when an armed requirement's dependent is absent/blank
+  def validate_conditional_requirements!(validated)
+    self.class.conditional_requirements.each do |requirement|
+      trigger_value = validated[requirement.trigger]
+      next unless requirement.triggered_by?(trigger_value)
+      next if conditionally_supplied?(validated[requirement.dependent])
+
+      raise ParameterError, requirement.message_for(trigger_value)
+    end
+  end
+
+  # `false` is a supplied boolean value, not an absence — everything else uses
+  # `present?`, matching the emitted `then` branch (required + non-blank).
+  def conditionally_supplied?(value)
+    value == false || value.present?
   end
 end
