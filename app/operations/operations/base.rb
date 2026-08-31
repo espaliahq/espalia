@@ -502,13 +502,30 @@ class Operations::Base
               "got #{must_be.inspect}"
       end
 
-      allowed = parameters[name].allowed
+      parameter = parameters[name]
+      unless pin_matches_type?(parameter.type, must_be)
+        raise ArgumentError,
+              "#{declaration} must_be: #{must_be.inspect} is not a #{parameter.type} — " \
+              "#{name} could never carry it"
+      end
+
+      allowed = parameter.allowed
       if allowed && !allowed.include?(must_be)
         raise ArgumentError,
               "#{declaration} must_be: #{must_be.inspect} is outside #{name}'s allowed set #{allowed.inspect}"
       end
 
       freeze_match_values([ must_be ]).first
+    end
+
+    # A pin the dependent's declared type can never hold is a dead rule that
+    # also publishes a self-contradictory schema (`{type: "integer", const:
+    # "5"}`). `Numeric` covers Integer and Float by `is_a?`; `:boolean` is the
+    # sentinel for Ruby's missing Boolean class.
+    def pin_matches_type?(type, value)
+      return [ true, false ].include?(value) if type == :boolean
+
+      value.is_a?(type)
     end
 
     # Expressible as a JSON Schema `const`/`enum` entry AND comparable to a

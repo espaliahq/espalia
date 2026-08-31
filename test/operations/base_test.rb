@@ -449,6 +449,58 @@ class Operations::BaseTest < ActiveSupport::TestCase
       assert_match(/outside scope_type's allowed set/, err.message)
     end
 
+    # A pin the dependent can never hold publishes `{type: "integer", const:
+    # "5"}` — a schema that contradicts itself.
+    should "reject a pin the dependent's declared type can't hold" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :level_ordinal, Integer
+          requires_when :level_ordinal, if: :role, equals: "role_lead", must_be: "5"
+        end
+      end
+      assert_match(/is not a Integer/, err.message)
+    end
+
+    should "accept an Integer pin on a Numeric parameter" do
+      op = Class.new(Operations::Base) do
+        parameter :role, String
+        parameter :weight, Numeric
+        requires_when :weight, if: :role, equals: "role_lead", must_be: 1
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_equal 1, op.call(context: build_context, params: { role: "role_lead", weight: 1 })[:weight]
+    end
+
+    should "accept a boolean pin on a :boolean parameter" do
+      op = Class.new(Operations::Base) do
+        parameter :role, String
+        parameter :is_entry, :boolean
+        requires_when :is_entry, if: :role, equals: "role_lead", must_be: true
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { role: "role_lead", is_entry: false })
+      end
+      assert_equal true, op.call(
+        context: build_context, params: { role: "role_lead", is_entry: "1" }
+      )[:is_entry]
+    end
+
+    should "reject a non-boolean pin on a :boolean parameter" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :is_entry, :boolean
+          requires_when :is_entry, if: :role, equals: "role_lead", must_be: "yes"
+        end
+      end
+    end
+
     should "reject a non-JSON-primitive pin at load time" do
       err = assert_raises(ArgumentError) do
         Class.new(Operations::Base) do
