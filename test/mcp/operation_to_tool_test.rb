@@ -326,6 +326,23 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
       )
     end
 
+    FalsePinFixture = Class.new(Operations::Base) do
+      parameter :role, String
+      parameter :is_entry, :boolean
+      requires_when :is_entry, if: :role, equals: "role_lead", must_be: false
+      def policy_check = nil
+      def perform = nil
+    end
+
+    # `false` is a real pin, not the "no pin declared" nil — a truthiness check
+    # anywhere in the emission would silently downgrade it to non-blank keywords.
+    should "publish a false pin as const false" do
+      assert_equal(
+        { required: [ "is_entry" ], properties: { "is_entry" => { const: false } } },
+        schema_for(FalsePinFixture)[:then]
+      )
+    end
+
     # The pin lives in the `then` branch only — the property itself still
     # accepts either enum value, since another role may legitimately use one.
     should "leave the top-level property's enum intact" do

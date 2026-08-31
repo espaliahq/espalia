@@ -491,6 +491,26 @@ class Operations::BaseTest < ActiveSupport::TestCase
       )[:is_entry]
     end
 
+    # `false` must not be mistaken for "no pin declared" — every consumer
+    # nil-checks, and this pins that it stays so.
+    should "enforce a false pin, not discard it" do
+      op = Class.new(Operations::Base) do
+        parameter :role, String
+        parameter :is_entry, :boolean
+        requires_when :is_entry, if: :role, equals: "role_lead", must_be: false
+        def policy_check = nil
+        def perform = params
+      end
+
+      assert_equal false, op.conditional_requirements.first.must_be
+      assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { role: "role_lead", is_entry: true })
+      end
+      assert_equal false, op.call(
+        context: build_context, params: { role: "role_lead", is_entry: false }
+      )[:is_entry]
+    end
+
     should "reject a non-boolean pin on a :boolean parameter" do
       assert_raises(ArgumentError) do
         Class.new(Operations::Base) do

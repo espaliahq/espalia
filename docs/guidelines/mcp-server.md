@@ -513,7 +513,7 @@ alone and never sees into subschemas. So an `anyOf` branch carries only
 `required` — while an `if`/`then` legitimately constrains a name the top level
 already declares.
 
-Two rules of thumb when adopting these:
+Three rules of thumb when adopting these:
 
 - **Both halves, from one list.** Wherever a trigger enum splits the callers of
   a dependent, declare the required half AND the forbidden half, deriving the
