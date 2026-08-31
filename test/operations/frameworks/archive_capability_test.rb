@@ -96,6 +96,22 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
       end
     end
 
+    # And the forbidden half — a survivor alongside a mapping type that carries
+    # no ratings was accepted and dropped on the floor.
+    should "reject a non-survivor mapping_type that names a to_stable_id" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::ArchiveCapability.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, capability_id: @cap_id,
+                      mapping_type: "archived", to_stable_id: @survivor_stable }
+          )
+        end
+        assert_match(/archived mapping does not take a surviving capability/, error.message)
+        assert_equal "active", FrameworkState::Capability.find_by(capability_id: @cap_id).status
+      end
+    end
+
     should "archive without a mapping but then block publish (mapping required)" do
       ActsAsTenant.with_tenant(@tenant) do
         Operations::Frameworks::ArchiveCapability.call(

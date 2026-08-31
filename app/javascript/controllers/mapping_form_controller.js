@@ -24,5 +24,10 @@ export default class extends Controller {
 
     const needsSurvivor = this.survivorTypesValue.includes(this.typeTarget.value)
     this.survivorTarget.classList.toggle("hidden", !needsSurvivor)
+    // Disabled controls don't submit — so a hidden survivor never sends a stale
+    // to_stable_id (e.g. after switching Evolved → Archived on a saved mapping),
+    // which the operation now rejects rather than silently dropping.
+    const select = this.survivorTarget.querySelector("select")
+    if (select) select.disabled = !needsSurvivor
   }
 }

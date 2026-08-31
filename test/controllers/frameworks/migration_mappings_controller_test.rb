@@ -50,10 +50,34 @@ class Frameworks::MigrationMappingsControllerTest < ActionDispatch::IntegrationT
       assert_equal "archived", mappings.first.mapping_type
     end
 
+    # A blank survivor is how the form submits when the field doesn't apply —
+    # the controller compacts it, so the mapping saves.
+    should "treat a blank survivor on a non-survivor mapping as absent" do
+      sign_in @admin_user
+      post framework_migration_mappings_path(framework_id: @framework_id),
+           params: { migration_mapping: { from_stable_id: @from, mapping_type: "archived", to_stable_id: "" } }
+
+      assert_redirected_to new_framework_publication_path(@framework_id)
+      assert_equal "archived", mappings.first.mapping_type
+      assert_nil mappings.first.to_stable_id
+    end
+
+    # A real survivor id alongside a mapping type that carries no ratings used
+    # to be dropped silently; it now surfaces as a flash.
+    should "flash when a non-survivor mapping names a surviving capability" do
+      sign_in @admin_user
+      post framework_migration_mappings_path(framework_id: @framework_id),
+           params: { migration_mapping: { from_stable_id: @from, mapping_type: "archived", to_stable_id: @to } }
+
+      assert_redirected_to new_framework_publication_path(@framework_id)
+      assert_match(/does not take a surviving capability/, flash[:alert])
+      assert_equal 0, mappings.count
+    end
+
     should "redirect non-publisher members" do
       sign_in @member_user
       post framework_migration_mappings_path(framework_id: @framework_id),
-           params: { migration_mapping: { from_stable_id: @from, mapping_type: "same", to_stable_id: @to } }
+           params: { migration_mapping: { from_stable_id: @from, mapping_type: "same" } }
 
       assert_redirected_to root_path
       assert_equal 0, mappings.count

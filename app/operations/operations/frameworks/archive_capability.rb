@@ -28,16 +28,21 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
   parameter :framework_id,  String, required: true
   parameter :capability_id, String, required: true
   parameter :reason,        String
-  parameter :mapping_type,  String, allowed: %w[same evolved split archived new]
+  parameter :mapping_type,  String,
+                            allowed: Operations::Frameworks::DefineMigrationMapping::MAPPING_TYPES
   parameter :to_stable_id,  String
   parameter :mode,          String, allowed: %w[editing suggesting]
 
   # A mapping is optional here (it can be deferred to the publish-review
-  # gate), but one that carries ratings to a survivor names it — the same
-  # rule DefineMigrationMapping declares, from its own list of types.
+  # gate), but one that carries ratings to a survivor names it — and one that
+  # doesn't must not. Both halves come from DefineMigrationMapping's own lists,
+  # since the mapping this records is dispatched straight to it.
   requires_when :to_stable_id, if: :mapping_type,
                                in: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES,
                                message: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_REQUIRED_MESSAGE
+  forbids_when :to_stable_id, if: :mapping_type,
+                              in: Operations::Frameworks::DefineMigrationMapping::NON_SURVIVOR_TYPES,
+                              message: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_FORBIDDEN_MESSAGE
 
   def policy_check
     authorize framework, :suggest_edit?

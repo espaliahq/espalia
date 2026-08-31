@@ -1984,16 +1984,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   # matched set is spelled out rather than read from the constant: widening
   # SURVIVOR_TYPES changes what these two tools advertise, and this snapshot
   # exists to make that land in review.
+  # The survivor rule has two halves — required for the mapping types that
+  # carry ratings forward, forbidden for the ones that don't — so both `if`s
+  # nest under one `allOf`.
   def survivor_mapping_conditional
     {
-      "if" => {
-        "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
-        "required" => [ "mapping_type" ]
-      },
-      "then" => {
-        "required" => [ "to_stable_id" ],
-        "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
-      }
+      "allOf" => [
+        {
+          "if" => {
+            "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
+            "required" => [ "mapping_type" ]
+          },
+          "then" => {
+            "required" => [ "to_stable_id" ],
+            "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
+          }
+        },
+        {
+          "if" => {
+            "properties" => { "mapping_type" => { "enum" => %w[same archived new] } },
+            "required" => [ "mapping_type" ]
+          },
+          "then" => { "not" => { "required" => [ "to_stable_id" ] } }
+        }
+      ]
     }
   end
 end

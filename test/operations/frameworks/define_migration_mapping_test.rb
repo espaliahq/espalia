@@ -84,6 +84,48 @@ class Operations::Frameworks::DefineMigrationMappingTest < ActiveSupport::TestCa
         assert_equal 0, mappings.count
       end
     end
+
+    # The forbidden half of the same rule. A survivor was previously accepted
+    # and silently dropped, so a caller could believe it had mapped one.
+    should "reject a non-survivor mapping that names a surviving capability" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::DefineMigrationMapping.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, from_stable_id: @from,
+                      to_stable_id: @to, mapping_type: "archived" }
+          )
+        end
+        assert_match(/archived mapping does not take a surviving capability/, error.message)
+        assert_equal 0, mappings.count
+      end
+    end
+
+    should "accept a non-survivor mapping with the survivor omitted" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Operations::Frameworks::DefineMigrationMapping.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, from_stable_id: @from, mapping_type: "same" }
+        )
+
+        assert_equal "same", mappings.first.mapping_type
+        assert_nil mappings.first.to_stable_id
+      end
+    end
+
+    # How the web compacts an inapplicable field — it must read as absent, not
+    # as a violation.
+    should "accept a non-survivor mapping with an explicitly nil survivor" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Operations::Frameworks::DefineMigrationMapping.call(
+          context: @admin_ctx,
+          params: { framework_id: @framework_id, from_stable_id: @from,
+                    to_stable_id: nil, mapping_type: "archived" }
+        )
+
+        assert_equal "archived", mappings.first.mapping_type
+      end
+    end
   end
 
   context "as a plain tenant member" do
@@ -92,7 +134,7 @@ class Operations::Frameworks::DefineMigrationMappingTest < ActiveSupport::TestCa
         assert_raises(Pundit::NotAuthorizedError) do
           Operations::Frameworks::DefineMigrationMapping.call(
             context: @member_ctx,
-            params: { framework_id: @framework_id, from_stable_id: @from, to_stable_id: @to, mapping_type: "same" }
+            params: { framework_id: @framework_id, from_stable_id: @from, mapping_type: "same" }
           )
         end
       end
