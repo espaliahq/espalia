@@ -373,6 +373,8 @@ end
 
 These do one Capybara click, and if the destination text/selector doesn't appear within 8s, dispatch a synchronous `el.click()` via `execute_script` — bypasses Selenium pointer hit-testing entirely so the second attempt is guaranteed to fire.
 
+**Pass exactly one signal** — `expect_text:`, `expect_selector:` or `expect_no_text:`, never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
+
 ## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
 
 **Use `auto_confirm { ... }` for Turbo `data-turbo-confirm` form submissions where the test cares about the action, not the dialog text.** Capybara's `accept_confirm` registers a modal handler then yields the click block, then waits for the dialog. On slow CI, the click can fire before the modal handler is fully registered — the dialog appears, fires `confirm()` instantly with no listener, and is gone before Capybara polls. Even with retry, this can fail repeatedly because each attempt re-races the same registration window.

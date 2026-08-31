@@ -128,6 +128,8 @@ module StimulusHelpers
   # Turbo Drive navigation clicks and Turbo Frame link clicks that may be
   # silently dropped when Chrome's event loop is starved on slow CI runners.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param expect_text [String, nil] text that should appear after the click
   # @param expect_selector [String, nil] CSS selector that should appear
   #   after the click (alternative to +expect_text+)
@@ -138,7 +140,9 @@ module StimulusHelpers
   #     within("#scoring-panel") { click_on "Delivering" }
   #   end
   def click_with_retry(expect_text: nil, expect_selector: nil)
-    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+    assert_exactly_one_signal!(
+      "click_with_retry", expect_text: expect_text, expect_selector: expect_selector
+    )
 
     assert_signal_is_a_transition!(expect_text, expect_selector)
 
@@ -175,11 +179,15 @@ module StimulusHelpers
   # synchronous and bypasses pointer hit-testing entirely, so the second
   # attempt is guaranteed to fire.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param locator [String] the link text/locator
   # @param expect_text [String, nil] text expected on destination
   # @param expect_selector [String, nil] selector expected on destination
   def click_link_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
-    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+    assert_exactly_one_signal!(
+      "click_link_with_js_fallback", expect_text: expect_text, expect_selector: expect_selector
+    )
 
     assert_signal_is_a_transition!(expect_text, expect_selector)
 
@@ -215,11 +223,15 @@ module StimulusHelpers
   # destination signal doesn't land, a synchronous JS `el.click()` bypasses
   # Selenium pointer hit-testing entirely.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param selector [String] CSS selector of the element to click
   # @param expect_text [String, nil] text expected after the click
   # @param expect_selector [String, nil] selector expected after the click
   def click_selector_with_js_fallback(selector, expect_text: nil, expect_selector: nil)
-    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
+    assert_exactly_one_signal!(
+      "click_selector_with_js_fallback", expect_text: expect_text, expect_selector: expect_selector
+    )
 
     assert_signal_is_a_transition!(expect_text, expect_selector)
 
@@ -251,14 +263,17 @@ module StimulusHelpers
   # already on the page satisfies the landed-check instantly and the fallback
   # never arms, so a dropped click sails through to the caller's assertions.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param locator [String] button text/locator
   # @param expect_text [String, nil] text expected after the click
   # @param expect_selector [String, nil] selector expected after the click
   # @param expect_no_text [String, nil] text expected to DISAPPEAR after the click
   def click_button_with_js_fallback(locator, expect_text: nil, expect_selector: nil, expect_no_text: nil)
-    unless expect_text || expect_selector || expect_no_text
-      raise ArgumentError, "expect_text, expect_selector, or expect_no_text required"
-    end
+    assert_exactly_one_signal!(
+      "click_button_with_js_fallback",
+      expect_text: expect_text, expect_selector: expect_selector, expect_no_text: expect_no_text
+    )
 
     assert_signal_is_a_transition!(expect_text, expect_selector, expect_no_text)
 
@@ -379,15 +394,45 @@ module StimulusHelpers
     end
   end
 
+  # Refuses a call that supplies zero, or more than one, success signal.
+  #
+  # The guarded click helpers pick their signal by strict precedence
+  # (text > selector > no_text) in the landed-check AND in the final
+  # assertion, so a call passing two signals has all but the first
+  # SILENTLY IGNORED — never armed, never asserted. An author writing
+  # `expect_text: "Saved", expect_selector: "#draft-badge"` believing both
+  # are checked gets exactly the disarmed-fallback bug this machinery
+  # exists to catch, reintroduced through the ignored argument.
+  #
+  # Fails loudly at authoring time instead: one signal per call. When a
+  # click genuinely needs two assertions, assert the second yourself after
+  # the helper returns.
+  #
+  # @param helper [String] the calling helper's name (for the message)
+  # @param signals [Hash{Symbol=>String,nil}] only the signal kwargs that
+  #   helper accepts, in precedence order
+  def assert_exactly_one_signal!(helper, **signals)
+    supplied = signals.compact.keys
+    return if supplied.size == 1
+
+    accepted = signals.keys.map { |key| "#{key}:" }.join(", ")
+    given = supplied.empty? ? "none" : supplied.map { |key| "#{key}:" }.join(" + ")
+
+    raise ArgumentError,
+          "#{helper}: pass exactly one of #{accepted} (given: #{given}). " \
+          "The helper checks a single signal by precedence, so any extra one " \
+          "is silently ignored — never armed, never asserted."
+  end
+
   # Refuses a success signal that is ALREADY true before the click.
   #
-  # A JS-fallback helper decides "the click was dropped" by checking whether
+  # A guarded click helper decides "the click was dropped" by checking whether
   # its signal appeared. If the signal was on the page all along, that check
-  # succeeds instantly, the fallback never arms, and a dropped click sails
-  # through to the caller's real assertions — which is how a guarded test can
-  # still fail on CI (`expect_text: "Brand colors"` on a dashboard whose tile
-  # already read "Brand colors and typography for this tenant."). Same shape
-  # as `expect_selector: "body"`.
+  # succeeds instantly, the recovery (a retry, or the JS dispatch) never arms,
+  # and a dropped click sails through to the caller's real assertions — which
+  # is how a guarded test can still fail on CI (`expect_text: "Brand colors"`
+  # on a dashboard whose tile already read "Brand colors and typography for
+  # this tenant."). Same shape as `expect_selector: "body"`.
   #
   # Fails loudly at authoring time instead: pick a signal that only exists on
   # the far side of the click. See testing.md, "An Assertion a Dropped Click
@@ -396,15 +441,18 @@ module StimulusHelpers
     if expect_text && page.has_text?(expect_text, wait: 0)
       raise ArgumentError,
             "expect_text #{expect_text.inspect} is already on the page before the click, " \
-            "so the JS fallback can never arm. Pick text that only the destination renders."
+            "so the dropped-click detection can never arm. Pick text that only the " \
+            "destination renders."
     elsif expect_selector && page.has_css?(expect_selector, wait: 0)
       raise ArgumentError,
             "expect_selector #{expect_selector.inspect} already matches before the click, " \
-            "so the JS fallback can never arm. Pick a selector only the destination renders."
+            "so the dropped-click detection can never arm. Pick a selector only the " \
+            "destination renders."
     elsif expect_no_text && page.has_no_text?(expect_no_text, wait: 0)
       raise ArgumentError,
             "expect_no_text #{expect_no_text.inspect} is already absent before the click, " \
-            "so the JS fallback can never arm. Pick text that is visible until the click lands."
+            "so the dropped-click detection can never arm. Pick text that is visible " \
+            "until the click lands."
     end
   end
 
