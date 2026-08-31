@@ -1642,7 +1642,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "mode"      => { "type" => "string", "enum" => %w[editing suggesting] }
           },
           "required" => %w[framework_id entity_type proposed_attributes],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **parent_id_conditional
         },
         "annotations" => {
           "readOnlyHint"    => false,
@@ -1984,6 +1985,36 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   # matched set is spelled out rather than read from the constant: widening
   # SURVIVOR_TYPES changes what these two tools advertise, and this snapshot
   # exists to make that land in review.
+  # A parent is required for the entity types that hang off one and forbidden
+  # for the framework-level ones, so both `if`s nest under one `allOf`.
+  def parent_id_conditional
+    {
+      "allOf" => [
+        {
+          "if" => {
+            "properties" => {
+              "entity_type" => {
+                "enum" => %w[role_illustration behavioural_expectation capability role level]
+              }
+            },
+            "required" => [ "entity_type" ]
+          },
+          "then" => {
+            "required" => [ "parent_id" ],
+            "properties" => { "parent_id" => { "minLength" => 1, "pattern" => "\\S" } }
+          }
+        },
+        {
+          "if" => {
+            "properties" => { "entity_type" => { "enum" => %w[capability_category role_family] } },
+            "required" => [ "entity_type" ]
+          },
+          "then" => { "not" => { "required" => [ "parent_id" ] } }
+        }
+      ]
+    }
+  end
+
   # The survivor rule has two halves — required for the mapping types that
   # carry ratings forward, forbidden for the ones that don't — so both `if`s
   # nest under one `allOf`.

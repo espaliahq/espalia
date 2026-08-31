@@ -139,6 +139,44 @@ class Operations::Frameworks::SuggestCreateTest < ActiveSupport::TestCase
         assert_match(/takes no parent_id/, error.message)
       end
     end
+
+    # Previously this degraded to RecordNotFound with a blank-interpolated id
+    # ("parent  for capability not found"), telling the caller the parent
+    # doesn't exist rather than that they never sent one.
+    should "reject a missing parent_id on a parented entity type" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          suggest_create(@collab_ctx, {
+            framework_id: @framework_id, entity_type: "capability",
+            proposed_attributes: { "name" => "X" }
+          })
+        end
+        assert_match(/capability needs a parent_id/, error.message)
+      end
+    end
+
+    should "reject a blank parent_id on a parented entity type" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_raises(Operations::Base::ParameterError) do
+          suggest_create(@collab_ctx, {
+            framework_id: @framework_id, entity_type: "capability",
+            proposed_attributes: { "name" => "X" }, parent_id: "  "
+          })
+        end
+      end
+    end
+
+    # How the web compacts an inapplicable field — it must read as absent.
+    should "accept an explicitly nil parent_id on a framework-level type" do
+      ActsAsTenant.with_tenant(@tenant) do
+        result = suggest_create(@collab_ctx, {
+          framework_id: @framework_id, entity_type: "capability_category",
+          proposed_attributes: { "name" => "Delivery" }, parent_id: nil
+        })
+
+        assert result[:suggestion_id].present?
+      end
+    end
   end
 
   context "as plain member (no suggest rights)" do
