@@ -24,7 +24,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   parameter :level_ordinal,        Integer, required: true
   parameter :evidence_type, String, required: true,
                                     allowed: EvidenceItem::EVIDENCE_TYPES
-  parameter :custom_type_label, String   # required when evidence_type == "other"
+  parameter :custom_type_label, String
   parameter :title, String
   parameter :content, String, required: true
   # The origin link's valence — the recorder's judgment of what the
@@ -48,6 +48,10 @@ class Operations::Assessments::RecordEvidence < Operations::Base
     }
   }
 
+  # The 'other' evidence_type carries a free-text label the read model
+  # requires — advertised as well as enforced, so a client can obey it.
+  requires_when :custom_type_label, if: :evidence_type, equals: "other"
+
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
 
@@ -62,7 +66,6 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   #   (every active `{ capability_stable_id, level_ordinal, valence }` the
   #   item is attached to).
   def perform
-    validate_evidence_type_label!
     validate_external_reference!
     validate_level_ordinal!
     validate_capability_in_framework!(params[:capability_stable_id])
@@ -152,17 +155,6 @@ class Operations::Assessments::RecordEvidence < Operations::Base
 
     raise Operations::Base::ParameterError,
       "capability_stable_id does not belong to the assignment's framework"
-  end
-
-  # The 'other' evidence_type carries a free-text label; the read model
-  # requires it. Reject upfront with ParameterError so the failure maps
-  # to JSON-RPC -32602 rather than a generic command-handler raise.
-  def validate_evidence_type_label!
-    return unless params[:evidence_type] == "other"
-
-    if params[:custom_type_label].blank?
-      raise Operations::Base::ParameterError, "custom_type_label is required when evidence_type is 'other'"
-    end
   end
 
   # The external reference URL is validated upfront — same posture as

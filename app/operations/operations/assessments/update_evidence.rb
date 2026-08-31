@@ -22,10 +22,14 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
   parameter :evidence_id,   String, required: true
   parameter :evidence_type, String, required: true,
                                     allowed: EvidenceItem::EVIDENCE_TYPES
-  parameter :custom_type_label, String # required when evidence_type == "other"
+  parameter :custom_type_label, String
   parameter :title, String
   parameter :content, String, required: true
   parameter :external_reference, Hash, schema: ExternalReference.json_schema
+
+  # The 'other' evidence_type carries a free-text label the read model
+  # requires — advertised as well as enforced, so a client can obey it.
+  requires_when :custom_type_label, if: :evidence_type, equals: "other"
 
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
@@ -37,7 +41,6 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
   #   content, external_reference|nil, edited_at }` — the item's editable
   #   fields after the update.
   def perform
-    validate_evidence_type_label!
     validate_external_reference!
 
     PersonDevelopment::CommandHandler.new.update_evidence(
@@ -72,15 +75,6 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
 
   def evidence_item
     @evidence_item ||= EvidenceItem.find(params[:evidence_id])
-  end
-
-  # The 'other' evidence_type carries a free-text label the read model
-  # requires. Reject upfront so the failure maps to JSON-RPC -32602.
-  def validate_evidence_type_label!
-    return unless params[:evidence_type] == "other"
-    return if params[:custom_type_label].present?
-
-    raise Operations::Base::ParameterError, "custom_type_label is required when evidence_type is 'other'"
   end
 
   # Reject a malformed / unsafe external reference upfront — same posture as

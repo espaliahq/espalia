@@ -21,6 +21,10 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   parameter :title, String
   parameter :external_reference, Hash, schema: ExternalReference.json_schema
 
+  # The 'other' evidence_type carries a free-text label the read model
+  # requires — advertised as well as enforced, so a client can obey it.
+  requires_when :custom_type_label, if: :evidence_type, equals: "other"
+
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
 
@@ -29,7 +33,6 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
 
   # @return [Hash] { request_id, status, evidence_id }
   def perform
-    validate_type_label!
     validate_external_reference!
 
     evidence_id = SecureRandom.uuid_v7
@@ -68,13 +71,6 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   def derive_source
     assessee = Person.find_by(id: evidence_request.person_id)
     assessee&.managed_by?(context.person) ? "manager" : "peer"
-  end
-
-  def validate_type_label!
-    return unless params[:evidence_type] == "other"
-    return if params[:custom_type_label].present?
-
-    raise Operations::Base::ParameterError, "custom_type_label is required when evidence_type is 'other'"
   end
 
   def validate_external_reference!
