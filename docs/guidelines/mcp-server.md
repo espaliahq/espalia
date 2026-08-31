@@ -451,7 +451,7 @@ MCP configuration.
 that the operation then rejected. The gap is invisible until an MCP client
 trusts the schema.
 
-Four declarations close the common shapes; each enforces at the parameter
+Five declarations close the common shapes; each enforces at the parameter
 boundary AND emits the matching JSON Schema, which is the point — a constraint
 that lives in only one of those two places is the bug:
 
@@ -496,6 +496,16 @@ that lives in only one of those two places is the bug:
   and runtime could differ — JSON Schema counts it as present — but the
   property's own declared type rejects null first, so the two never actually
   disagree.
+- **`dependent_required :a, requires: :b`** — supplying `a` obliges `b`, with no
+  trigger VALUE involved → `dependentRequired: { "a": ["b"] }` (several
+  declarations merge into that one keyword rather than each taking a branch).
+  This closes the hole the two value-armed rules leave open: both fire on the
+  trigger's value, so **neither fires when the trigger is absent** — and an
+  operation that then ignores the orphaned dependent drops it silently, exactly
+  the bug they exist to stop. `archive_capability` shipped with that hole (a
+  `to_stable_id` with no `mapping_type` was discarded) while advertising the
+  combination as valid. Pointless on a `required:` parameter, so that is
+  rejected at load time rather than emitting a rule that can never fire.
 
 A subschema must not introduce a **new** property name:
 `additionalProperties: false` is evaluated against the top-level `properties`
@@ -514,6 +524,15 @@ Two rules of thumb when adopting these:
   silently dropped starts returning -32602. That is the point, but say so in the
   PR, and check the web callers: they must compact an inapplicable field to nil
   rather than send it blank or stale.
+- **Cover the trigger's absence, not just its values.** `requires_when` and
+  `forbids_when` both arm on a value, so a pair of them still says nothing about
+  a call that omits the trigger entirely. If the dependent is meaningless
+  without it, add `dependent_required` — otherwise the silent drop just moves.
+- **An `:in_app` operation is validated at `tools/call` too.** The request
+  handler instantiates it before minting the PendingApproval, so a tightened
+  rule reaches the MCP client as -32602 rather than becoming an approval that
+  fails when the user opens it. Approval-time ParameterErrors (a row whose
+  arguments predate the rule) surface their own message.
 
 Still unexpressed — a ledger, so the next round knows what it is buying:
 
@@ -566,14 +585,14 @@ recoverable; an MCP agent loop running unintended writes is not.
 |------|---------|
 | **Operations layer (shared with web)** | |
 | `app/operations/operations.rb` | Module declaration |
-| `app/operations/operations/base.rb` | DSL (`parameter`, `requires_any_of`, `requires_when` incl. `must_be:`, `forbids_when`, `allow_blank:`) + `#call` pipeline + `authorize` helper |
+| `app/operations/operations/base.rb` | DSL (`parameter`, `requires_any_of`, `requires_when` incl. `must_be:`, `forbids_when`, `dependent_required`, `allow_blank:`) + `#call` pipeline + `authorize` helper |
 | `app/operations/operations/frameworks/collaborator_scope_rules.rb` | `declare_collaborator_scope_rules` — the role/scope pairing as declarations, shared by add + change |
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |
-| `app/services/mcp/request_handler.rb` | JSON-RPC dispatch (initialize, tools/*, resources/*) |
+| `app/services/mcp/request_handler.rb` | JSON-RPC dispatch (initialize, tools/*, resources/*); validates an `:in_app` operation's parameters before deferring it to approval |
 | `app/services/mcp/framework_serializer.rb` | Shared shape source-of-truth |
 | `app/services/mcp/resource_registry.rb` | `framework://` / `assessment://` resource list + read |
 | `app/services/audit_metadata.rb` | Thread-local audit context, shared with web/HRIS |
@@ -602,8 +621,8 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `config/routes.rb` | `/mcp`, `/oauth/*`, `/.well-known/*`, `/mcp/approvals/*` |
 | **Tests** | |
 | `test/operations/registry_test.rb` | Registry hygiene |
-| `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `requires_when` (+ `must_be:`), `forbids_when`, `allow_blank` |
-| `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf`, `if`/`then`(/`not`), `const`, `minLength`, and string-vs-symbol `schema:` fragments |
+| `test/operations/base_test.rb` | Operations DSL — parameters, `requires_any_of`, `requires_when` (+ `must_be:`), `forbids_when`, `dependent_required`, `allow_blank`, `schema:` normalisation |
+| `test/mcp/operation_to_tool_test.rb` | Schema conversion rules, incl. `anyOf`/`allOf`, `if`/`then`(/`not`), `dependentRequired`, `const`, `minLength`, and string-vs-symbol `schema:` fragments |
 | `test/mcp/tool_registry_snapshot_test.rb` | Tool surface snapshot (drift guard) |
 | `test/integration/mcp_server_test.rb` | JSON-RPC unit coverage of tools/* and resources/* |
 | `test/integration/mcp_discovery_test.rb` | Well-known docs + DCR + WWW-Authenticate header |
