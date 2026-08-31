@@ -97,6 +97,32 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     end
   end
 
+  StringKeyedSchemaFixture = Class.new(Operations::Base) do
+    parameter :payload, Hash, schema: {
+      "type" => "object",
+      "properties" => { "name" => { "type" => "string" } },
+      "additionalProperties" => false
+    }
+    def policy_check = nil
+    def perform = nil
+  end
+
+  # A fragment written with String keys must merge exactly like a Symbol-keyed
+  # one. Left un-normalised, `"type"` sits ALONGSIDE the derived `:type` and the
+  # descriptor serialises with a duplicate JSON key.
+  context "a string-keyed schema fragment" do
+    should "override the derived key rather than duplicate it" do
+      assert_equal(
+        { type: "object", properties: { name: { type: "string" } }, additionalProperties: false },
+        schema_for(StringKeyedSchemaFixture)[:properties]["payload"]
+      )
+    end
+
+    should "serialise to JSON without a duplicate-key warning" do
+      assert_silent { Mcp::OperationToTool.call(StringKeyedSchemaFixture).to_json }
+    end
+  end
+
   context "cross-parameter constraints" do
     should "emit no anyOf when the operation declares none" do
       schema = schema_for(UnconstrainedFixture)
