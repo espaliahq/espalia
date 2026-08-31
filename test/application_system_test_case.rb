@@ -80,6 +80,12 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # Default password for users created via FactoryBot — used by sign_in_as.
   TEST_PASSWORD = "password123"
 
+  # The Devise sign-in form, for the JS submit fallback. Keyed on the action
+  # because the Phlex view (app/views/users/sessions/new_view.rb) gives the
+  # form no id or class of its own. A miss is fatal, not silent — see
+  # +submit_sign_in_form_via_js+.
+  SIGN_IN_FORM_SELECTOR = "form[action*='sign_in']"
+
   include AutoScreenshots
   include StimulusHelpers
 
@@ -179,9 +185,18 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # from the dropped click it exists to recover from. Assigning the values
     # makes this attempt genuinely different from the first, not a retry of
     # the same fragile input path.
-    page.execute_script(<<~JS, email, password)
-      const form = document.querySelector("form[action*='sign_in'], form#new_user");
-      if (form) {
+    #
+    # The script reports whether it found the form: wrapping the body in a
+    # bare `if (form)` made a selector miss (a Devise route remap moving the
+    # action away from `sign_in`, a Turbo-frame-wrapped form) a silent no-op.
+    # sign_in_as then failed at `assert_no_current_path` with a "still on the
+    # sign-in page" error attributed to the dropped click this fallback exists
+    # to recover from — with no hint the recovery itself never ran.
+    submitted = page.evaluate_script(<<~JS, email, password)
+      (() => {
+        const form = document.querySelector("#{SIGN_IN_FORM_SELECTOR}");
+        if (!form) return false;
+
         const set = (sel, value) => {
           const el = form.querySelector(sel);
           if (!el) return;
@@ -191,9 +206,26 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
         };
         set("input[type='email'], input[name*='email']", arguments[0]);
         set("input[type='password']", arguments[1]);
-        form.requestSubmit();
-      }
+
+        // Pass the submitter so a named submit button's name/value would be
+        // included, exactly as a real click submits it.
+        const btn = form.querySelector("button[type='submit'], input[type='submit']");
+        if (btn) {
+          form.requestSubmit(btn);
+        } else {
+          form.requestSubmit();
+        }
+        return true;
+      })()
     JS
+
+    return if submitted
+
+    flunk(
+      "sign-in JS fallback found no form matching #{SIGN_IN_FORM_SELECTOR.inspect} — " \
+      "the Devise sign-in form's action or markup changed, so the recovery path " \
+      "for a dropped submit click is dead. Update SIGN_IN_FORM_SELECTOR."
+    )
   end
 
   # Retries a block that makes the first Selenium call, rescuing the
