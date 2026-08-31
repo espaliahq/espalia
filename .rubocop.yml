@@ -16,10 +16,11 @@ SystemTests/FlakeProneClick:
   Enabled: true
   Include:
     - "test/system/**/*.rb"
-    - "test/support/system/**/*.rb"
-    # The base class holding sign_in_as and friends — a flake-prone pattern
-    # added here propagates to every system test.
-    - "test/application_system_test_case.rb"
+    # Patterns, not filenames: the base classes (application_system_test_case)
+    # and every shared helper are in scope, so extracting sign-in machinery to
+    # a new support file can't quietly reopen the gap.
+    - "test/*.rb"
+    - "test/support/**/*.rb"
 
 GrowthOs/ControllersMustUseOperations:
   Enabled: true
