@@ -297,8 +297,9 @@ class Operations::Base
 
     # `in:` must be a literal Array — `Array(hash)` would quietly turn it into
     # `[[key, value]]`, a constraint that can never match. The result is
-    # duplicated and frozen so a later mutation of the caller's array (often a
-    # shared constant) can't change what is already enforced and advertised.
+    # deep-frozen (each String as well as the array — a shared string mutated
+    # later would change enforcement just like a mutated array) so nothing the
+    # caller keeps a reference to can change what is enforced and advertised.
     #
     # @return [Array] the trigger values that arm the requirement
     def requires_when_values(**options)
@@ -308,13 +309,17 @@ class Operations::Base
         raise ArgumentError, "requires_when needs exactly one of equals: or in:"
       end
 
-      return [ options[:equals] ].freeze if has_equals
+      return freeze_requires_when_values([ options[:equals] ]) if has_equals
 
       values = options[:in]
       raise ArgumentError, "requires_when in: needs an Array of values" unless values.is_a?(Array)
       raise ArgumentError, "requires_when in: needs at least one value" if values.empty?
 
-      values.dup.freeze
+      freeze_requires_when_values(values)
+    end
+
+    def freeze_requires_when_values(values)
+      values.map { |value| value.is_a?(String) ? value.dup.freeze : value }.freeze
     end
 
     # Load-time guards: both parameters must exist and differ, every matched
@@ -341,7 +346,12 @@ class Operations::Base
       # `unless invalid.empty?`, never `if invalid.any?` — the values this
       # rejects include nil and false, and a blockless `any?` asks for a
       # truthy element (`[nil].any?` is false).
-      invalid = values.reject { |value| MATCHABLE_TYPES.any? { |type| value.is_a?(type) } }
+      # Non-finite Floats pass the Float type check but have no JSON encoding
+      # (RFC 8259 forbids NaN/Infinity), so the schema could never publish them.
+      invalid = values.reject do |value|
+        MATCHABLE_TYPES.any? { |type| value.is_a?(type) } &&
+          !(value.is_a?(Float) && !value.finite?)
+      end
       unless invalid.empty?
         raise ArgumentError,
               "requires_when match values must be JSON primitives (String, number, true/false); " \

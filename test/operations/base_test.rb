@@ -350,6 +350,39 @@ class Operations::BaseTest < ActiveSupport::TestCase
       assert_nil out[:to_stable_id]
     end
 
+    # Freezing the array alone leaves its String elements shared with the
+    # caller — mutating one would change enforcement and the schema after load.
+    should "snapshot String match values against later mutation" do
+      equals_value = +"other"
+      in_value = +"evolved"
+      op = Class.new(Operations::Base) do
+        parameter :kind, String
+        parameter :label, String
+        parameter :mapping_type, String
+        parameter :to_stable_id, String
+        requires_when :label, if: :kind, equals: equals_value
+        requires_when :to_stable_id, if: :mapping_type, in: [ in_value ]
+      end
+      equals_value << "!"
+      in_value << "!"
+
+      assert_equal [ "other" ], op.conditional_requirements.first.values
+      assert_equal [ "evolved" ], op.conditional_requirements.last.values
+    end
+
+    # NaN/Infinity are Floats but have no JSON encoding (RFC 8259), so the
+    # schema could never publish them.
+    should "reject a non-finite Float match value" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :weight, Numeric
+          parameter :label, String
+          requires_when :label, if: :weight, equals: Float::NAN
+        end
+      end
+      assert_match(/JSON primitives/, err.message)
+    end
+
     # A typo'd enum value declares a rule that can never fire — catch it at
     # load time rather than shipping a dead constraint.
     should "reject a matched value outside the trigger's allowed set" do

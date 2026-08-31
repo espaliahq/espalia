@@ -468,7 +468,8 @@ that lives in only one of those two places is the bug:
   "you must supply a name" into a no-op success.
 - **`requires_when :dependent, if: :trigger, equals: "x"`** (or `in: [...]`) —
   required only when another parameter carries a given value → `if`/`then`
-  (`const` for `equals:`, `enum` for `in:`). Unlike `requires_any_of`, this
+  (`const` for one match — `equals:` or a one-value `in:` — and `enum` for
+  several). Unlike `requires_any_of`, this
   demands the dependent be **supplied AND non-blank**, because a
   conditionally-required field is conditionally *mandatory* — `""` there is the
   mistake being caught, not a clear. So the `then` branch carries `required`
